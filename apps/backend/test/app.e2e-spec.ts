@@ -29,17 +29,27 @@ describe('AppController (e2e)', () => {
     return request(app.getHttpServer())
       .get('/nonexistent')
       .expect(404)
-      .then(response => {
-        expect(response.body).toHaveProperty('statusCode');
-        expect(response.body).toHaveProperty('message');
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body).toHaveProperty('path');
-        expect(response.body.statusCode).toBe(404);
-        expect(typeof response.body.message).toBe('string');
-        expect(typeof response.body.error).toBe('string');
-        expect(typeof response.body.timestamp).toBe('string');
-        expect(response.body.path).toBe('/nonexistent');
-      });
+      .then(
+        (response: {
+          body: {
+            statusCode: unknown;
+            message: unknown;
+            error: unknown;
+            timestamp: unknown;
+            path: unknown;
+          };
+        }) => {
+          expect(response.body).toHaveProperty('statusCode');
+          expect(response.body).toHaveProperty('message');
+          expect(response.body).toHaveProperty('error');
+          expect(response.body).toHaveProperty('timestamp');
+          expect(response.body).toHaveProperty('path');
+          expect(response.body.statusCode).toBe(404);
+          expect(typeof response.body.message).toBe('string');
+          expect(typeof response.body.error).toBe('string');
+          expect(typeof response.body.timestamp).toBe('string');
+          expect(response.body.path).toBe('/nonexistent');
+        },
+      );
   });
 });

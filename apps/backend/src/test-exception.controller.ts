@@ -4,7 +4,10 @@ import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
 export class TestExceptionController {
   @Get('http-exception')
   getHttpException() {
-    throw new HttpException('Test HTTP exception message', HttpStatus.BAD_REQUEST);
+    throw new HttpException(
+      'Test HTTP exception message',
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
   @Get('general-error')
@@ -15,6 +18,6 @@ export class TestExceptionController {
   @Get('internal-server-error')
   getInternalServerError() {
     // This will trigger the unknown error path
-    throw 'Unknown error type'; // Throwing a string to simulate unknown error type
+    throw new Error('Unknown error type'); // Throwing an Error object to simulate unknown error type
   }
 }
