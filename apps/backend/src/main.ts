@@ -11,8 +11,11 @@ async function bootstrap() {
     const connection = app.get<Connection>(getConnectionToken());
     if (connection.isConnected) {
       console.log('✅ TypeORM Connection established');
-      console.log(`📊 Database: ${connection.options.database}`);
-      console.log(`🔌 Host: ${connection.options.host}:${connection.options.port}`);
+      const database = String(connection.options.database || 'unknown');
+      const host = String(connection.options.host || 'unknown');
+      const port = connection.options.port || 5432;
+      console.log(`📊 Database: ${database}`);
+      console.log(`🔌 Host: ${host}:${port}`);
     }
   } catch (error) {
     console.error('❌ TypeORM Connection failed:', error);
@@ -22,4 +25,4 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`🚀 Application is running on: http://localhost:${port}`);
 }
-bootstrap();
+void bootstrap();
