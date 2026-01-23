@@ -11,11 +11,18 @@ async function bootstrap() {
     const connection = app.get<Connection>(getConnectionToken());
     if (connection.isConnected) {
       console.log('✅ TypeORM Connection established');
-      const database = String(connection.options.database || 'unknown');
-      const host = String(connection.options.host || 'unknown');
-      const port = Number(connection.options.port) || 5432;
-      console.log(`📊 Database: ${database}`);
-      console.log(`🔌 Host: ${host}:${port}`);
+      const options = connection.options;
+      const database = String(options.database || 'unknown');
+      
+      // Type guard for PostgreSQL connection options
+      if ('host' in options && 'port' in options) {
+        const host = String(options.host || 'unknown');
+        const port = Number(options.port) || 5432;
+        console.log(`📊 Database: ${database}`);
+        console.log(`🔌 Host: ${host}:${port}`);
+      } else {
+        console.log(`📊 Database: ${database}`);
+      }
     }
   } catch (error) {
     console.error('❌ TypeORM Connection failed:', error);
