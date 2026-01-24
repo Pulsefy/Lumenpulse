@@ -1,0 +1,25 @@
+# Git
+.git
+.gitignore
+
+# Python-specific
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.env
+.venv
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Distribution / Build
+dist/
+build/
+*.egg-info/
+
+# Docker/System
+Dockerfile
+.dockerignore
+.DS_Store
