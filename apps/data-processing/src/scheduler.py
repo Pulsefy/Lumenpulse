@@ -12,6 +12,7 @@ from sentiment import SentimentAnalyzer
 from trends import TrendCalculator
 from database import DatabaseService, AnalyticsRecord
 from anomaly_detector import AnomalyDetector, AnomalyResult
+from alertbot import AlertBot
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class MarketAnalyzer:
         self.trend_calculator = TrendCalculator()
         self.db_service = DatabaseService()
         self.anomaly_detector = AnomalyDetector(window_size_hours=24, z_threshold=2.5)
+        self.alert_bot = AlertBot()
 
     def run(self):
         """
@@ -90,6 +92,23 @@ class MarketAnalyzer:
             enhanced_sentiment_data = sentiment_summary.copy()
             enhanced_sentiment_data['anomalies_detected'] = len([a for a in anomalies if a.is_anomaly])
             enhanced_sentiment_data['anomaly_details'] = [a.to_dict() for a in anomalies]
+            
+            # Step 5.5: Check for high sentiment alerts
+            # Determine trend direction from calculated trends
+            trend_direction = "Unknown"
+            if trends:
+                primary_trend = trends[0]
+                trend_direction = getattr(primary_trend, 'trend_direction', 'Unknown')
+            
+            alert_sentiment_data = enhanced_sentiment_data.copy()
+            alert_sentiment_data['trend_direction'] = trend_direction
+            alert_sentiment_data['total_analyzed'] = len(news_items)
+            
+            self.alert_bot.check_and_alert(
+                analyzer_score=current_sentiment,
+                sentiment_data=alert_sentiment_data,
+                timestamp=datetime.utcnow()
+            )
             
             record = AnalyticsRecord(
                 timestamp=datetime.utcnow(),
