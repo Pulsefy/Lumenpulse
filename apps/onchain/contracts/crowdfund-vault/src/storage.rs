@@ -8,6 +8,8 @@ pub enum DataKey {
     ProjectBalance(u64, Address), // (project_id, token) -> i128
     MilestoneApproved(u64),       // project_id -> bool
     NextProjectId,                // -> u64
+    Contributor(Address),         // Address -> bool
+    Reputation(Address),          // Address -> i128
 }
 
 #[contracttype]

@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { GlobalExceptionFilter } from '../src/filters/global-exception.filter';
+import type { Server } from 'http';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication;
@@ -19,37 +20,37 @@ describe('AppController (e2e)', () => {
   });
 
   it('/ (GET)', () => {
-    return request(app.getHttpServer())
+    return request(app.getHttpServer() as unknown as Server)
       .get('/')
       .expect(200)
       .expect('Hello World!');
   });
 
   it('/nonexistent (GET) - should return standardized error response', () => {
-    return request(app.getHttpServer())
+    interface ErrorResponse {
+      statusCode: number;
+      message: string;
+      error: string;
+      timestamp: string;
+      path: string;
+    }
+
+    return request(app.getHttpServer() as unknown as Server)
       .get('/nonexistent')
       .expect(404)
-      .then(
-        (response: {
-          body: {
-            statusCode: unknown;
-            message: unknown;
-            error: unknown;
-            timestamp: unknown;
-            path: unknown;
-          };
-        }) => {
-          expect(response.body).toHaveProperty('statusCode');
-          expect(response.body).toHaveProperty('message');
-          expect(response.body).toHaveProperty('error');
-          expect(response.body).toHaveProperty('timestamp');
-          expect(response.body).toHaveProperty('path');
-          expect(response.body.statusCode).toBe(404);
-          expect(typeof response.body.message).toBe('string');
-          expect(typeof response.body.error).toBe('string');
-          expect(typeof response.body.timestamp).toBe('string');
-          expect(response.body.path).toBe('/nonexistent');
-        },
-      );
+      .then((response) => {
+        const body = response.body as ErrorResponse;
+
+        expect(body).toHaveProperty('statusCode');
+        expect(body).toHaveProperty('message');
+        expect(body).toHaveProperty('error');
+        expect(body).toHaveProperty('timestamp');
+        expect(body).toHaveProperty('path');
+        expect(body.statusCode).toBe(404);
+        expect(typeof body.message).toBe('string');
+        expect(typeof body.error).toBe('string');
+        expect(typeof body.timestamp).toBe('string');
+        expect(body.path).toBe('/nonexistent');
+      });
   });
 });

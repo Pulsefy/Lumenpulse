@@ -12,4 +12,6 @@ pub enum CrowdfundError {
     InsufficientBalance = 6,
     ProjectNotActive = 7,
     InvalidAmount = 8,
+    AlreadyRegistered = 9,
+    ContributorNotFound = 10,
 }
