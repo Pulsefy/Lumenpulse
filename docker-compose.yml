@@ -31,6 +31,19 @@ services:
       timeout: 5s
       retries: 5
 
+  data-processing:
+    build:
+      context: ./apps/data-processing
+      dockerfile: Dockerfile
+    environment:
+      - RUN_IMMEDIATELY=${RUN_IMMEDIATELY}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS}
+      - COINGECKO_API_KEY=${COINGECKO_API_KEY}
+      - NEWS_API_KEY=${NEWS_API_KEY}
+      - CRYPTOCOMPARE_API_KEY=${CRYPTOCOMPARE_API_KEY}
+      - NEWSAPI_API_KEY=${NEWSAPI_API_KEY}
+
 volumes:
   postgres_data:
   redis_data:
