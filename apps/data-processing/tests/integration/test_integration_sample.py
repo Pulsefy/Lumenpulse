@@ -1,6 +1,7 @@
 """
 Integration tests placeholder.
 """
+
 import pytest
 
 

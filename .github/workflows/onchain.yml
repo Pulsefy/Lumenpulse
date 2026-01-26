@@ -12,25 +12,35 @@ on:
 
 jobs:
   onchain-checks:
+    name: Test Suite
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./apps/onchain
 
     steps:
-    - name: Checkout repository
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Rust toolchain
+    - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
+        toolchain: stable
         targets: wasm32-unknown-unknown
 
-    - name: Install Soroban CLI
-      run: cargo install --locked soroban-cli --version 22.0.1
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: "apps/onchain"
+
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+
+    - name: Run clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
 
     - name: Build Contracts
       run: cargo build --target wasm32-unknown-unknown --release
 
-    - name: Run Tests
+    - name: Run tests
       run: cargo test
