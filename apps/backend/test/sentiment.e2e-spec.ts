@@ -100,4 +100,3 @@ describe('SentimentController (e2e)', () => {
     });
   });
 });
-

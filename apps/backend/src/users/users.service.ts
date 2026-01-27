@@ -33,13 +33,15 @@ export class UsersService {
     userId: string,
     updateUserDto: UpdateUserDto,
   ): Promise<User | null> {
-    const user = await this.findById(userId);
-    if (!user) return null;
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
 
-    // prevent password update
-    const { password, passwordHash, ...allowedUpdates } = updateUserDto as any;
+    if (!user) {
+      return null;
+    }
 
-    Object.assign(user, allowedUpdates);
+    Object.assign(user, updateUserDto);
     return this.usersRepository.save(user);
   }
 }

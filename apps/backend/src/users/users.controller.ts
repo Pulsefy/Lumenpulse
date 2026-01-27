@@ -1,17 +1,15 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Body,
-  Request,
-  UseGuards,
-  Param,
-} from '@nestjs/common';
-
+import { Controller, Get, Patch, Body, UseGuards, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dtos/update-user.dto';
-import { User } from './user.entity';
+
+interface JwtRequest extends Request {
+  user: {
+    userId: string;
+    email: string;
+  };
+}
 
 @Controller('users')
 export class UsersController {
@@ -19,23 +17,13 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  getProfile(@Request() req) {
+  getProfile(@Req() req: JwtRequest) {
     return this.usersService.findById(req.user.userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('me')
-  updateProfile(@Request() req, @Body() updateUserDto: UpdateUserDto) {
+  updateProfile(@Req() req: JwtRequest, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(req.user.userId, updateUserDto);
-  }
-
-  @Get()
-  async findAll(): Promise<User[]> {
-    return this.usersService.findAll();
-  }
-
-  @Get(':id')
-  async findById(@Param('id') id: string): Promise<User | null> {
-    return this.usersService.findById(id);
   }
 }

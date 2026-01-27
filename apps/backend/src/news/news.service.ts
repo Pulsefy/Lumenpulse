@@ -37,7 +37,10 @@ export class NewsService {
     });
   }
 
-  async update(id: string, updateArticleDto: UpdateArticleDto): Promise<News | null> {
+  async update(
+    id: string,
+    updateArticleDto: UpdateArticleDto,
+  ): Promise<News | null> {
     await this.newsRepository.update(id, updateArticleDto);
     return this.findOne(id);
   }

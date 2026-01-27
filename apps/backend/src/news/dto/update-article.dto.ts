@@ -1,4 +1,10 @@
-import { IsString, IsUrl, IsDateString, IsOptional, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsUrl,
+  IsDateString,
+  IsOptional,
+  IsNumber,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class UpdateArticleDto {

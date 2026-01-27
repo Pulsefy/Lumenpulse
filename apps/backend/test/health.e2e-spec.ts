@@ -23,7 +23,7 @@ describe('Health Check (e2e)', () => {
   // Step 2: Close the app after all tests
   afterAll(async () => {
     await app.close();
-    await new Promise(resolve => setTimeout(resolve, 500)); // optional small delay to allow cleanup
+    await new Promise((resolve) => setTimeout(resolve, 500)); // optional small delay to allow cleanup
   });
 
   // Step 3: The actual Health Check test
