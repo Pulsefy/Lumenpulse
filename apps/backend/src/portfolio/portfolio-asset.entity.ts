@@ -1,5 +1,11 @@
 // src/portfolio/portfolio-asset.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn} from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { User } from '../users/user.entity';
 
 @Entity('portfolio_assets')
@@ -22,8 +28,6 @@ export class PortfolioAsset {
   @ManyToOne(() => User, (user) => user.portfolioAssets, {
     onDelete: 'CASCADE',
   })
-
   @JoinColumn({ name: 'userId' })
   user: User;
-
 }

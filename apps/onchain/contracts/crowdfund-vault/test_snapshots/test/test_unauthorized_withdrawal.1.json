@@ -406,6 +406,153 @@
             "key": {
               "vec": [
                 {
+                  "symbol": "Contribution"
+                },
+                {
+                  "u64": "0"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "Contribution"
+                    },
+                    {
+                      "u64": "0"
+                    },
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "i128": "500000"
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "Contributor"
+                },
+                {
+                  "u64": "0"
+                },
+                {
+                  "u32": 0
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "Contributor"
+                    },
+                    {
+                      "u64": "0"
+                    },
+                    {
+                      "u32": 0
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "ContributorCount"
+                },
+                {
+                  "u64": "0"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "ContributorCount"
+                    },
+                    {
+                      "u64": "0"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 1
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+            "key": {
+              "vec": [
+                {
                   "symbol": "MilestoneApproved"
                 },
                 {
@@ -937,5 +1084,38 @@
       ]
     ]
   },
-  "events": []
+  "events": [
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "milestone_approved_event"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+              }
+            ],
+            "data": {
+              "map": [
+                {
+                  "key": {
+                    "symbol": "project_id"
+                  },
+                  "val": {
+                    "u64": "0"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    }
+  ]
 }
