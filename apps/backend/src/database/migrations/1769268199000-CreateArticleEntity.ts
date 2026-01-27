@@ -13,9 +13,7 @@ export class CreateArticleEntity1769268199000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DROP INDEX "public"."IDX_articles_url"`,
-    );
+    await queryRunner.query(`DROP INDEX "public"."IDX_articles_url"`);
     await queryRunner.query(`DROP TABLE "articles"`);
   }
 }
