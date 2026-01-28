@@ -1,6 +1,12 @@
 {
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0"
+  },
+  "dependencies": {
+    "@nestjs/jwt": "^11.0.2",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3"
   }
 }

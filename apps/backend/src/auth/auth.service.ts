@@ -1,34 +1,42 @@
 import { Injectable } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs'; // Use bcryptjs for proper types
 import { User } from '../users/entities/user.entity';
+
+export type SafeUser = Omit<User, 'passwordHash'>;
 
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
-    private jwtService: JwtService,
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
   ) {}
 
-  async validateUser(
-    email: string,
-    pass: string,
-  ): Promise<Omit<User, 'passwordHash'> | null> {
-    const user = await this.usersService.findByEmail(email);
+  /**
+   * Validate a user with email and password.
+   * Returns user without passwordHash if valid, otherwise null.
+   */
+  async validateUser(email: string, pass: string): Promise<SafeUser | null> {
+    const user: User | null = await this.usersService.findByEmail(email);
 
-    if (
-      user &&
-      user.passwordHash &&
-      (await bcrypt.compare(pass, user.passwordHash))
-    ) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { passwordHash, ...result } = user;
-      return result;
+    if (!user || !user.passwordHash) {
+      return null;
     }
-    return null;
+
+    const isMatch: boolean = await bcrypt.compare(pass, user.passwordHash);
+    if (!isMatch) {
+      return null;
+    }
+
+    // Remove passwordHash from returned object
+    const { passwordHash, ...result } = user;
+    return result;
   }
 
+  /**
+   * Generate JWT token for a user
+   */
   login(user: { id: string; email: string }) {
     const payload = { email: user.email, sub: user.id };
     return {

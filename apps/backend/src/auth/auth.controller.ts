@@ -1,18 +1,21 @@
 import {
   Controller,
-  Request,
   Post,
-  UseGuards,
   Get,
   Body,
   UnauthorizedException,
+  UseGuards,
   UseInterceptors,
   ClassSerializerInterceptor,
+  Req,
 } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import { Request } from 'express';
+import * as bcrypt from 'bcryptjs';
+
+import { AuthService, SafeUser } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { UsersService } from '../users/users.service';
-import * as bcrypt from 'bcrypt';
+
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ProfileDto } from './dto/profile.dto';
@@ -20,30 +23,41 @@ import { ProfileDto } from './dto/profile.dto';
 @Controller('auth')
 export class AuthController {
   constructor(
-    private authService: AuthService,
-    private usersService: UsersService,
+    private readonly authService: AuthService,
+    private readonly usersService: UsersService,
   ) {}
 
   @Post('login')
   async login(@Body() body: LoginDto) {
-    const user = await this.authService.validateUser(body.email, body.password);
+    const user: SafeUser | null = await this.authService.validateUser(
+      body.email,
+      body.password,
+    );
+
     if (!user) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException('Invalid credentials');
     }
-    return this.authService.login(user);
+
+    return this.authService.login({ id: user.id, email: user.email });
   }
 
   @Post('register')
   async register(@Body() body: RegisterDto) {
-    const hash = await bcrypt.hash(body.password, 10);
+    const passwordHash: string = await bcrypt.hash(body.password, 10);
 
-    return this.usersService.create({ email: body.email, passwordHash: hash });
+    const user = await this.usersService.create({
+      email: body.email,
+      passwordHash,
+    });
+
+    const { passwordHash: _, ...safeUser } = user; // Remove password hash
+    return safeUser;
   }
 
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
   @Get('profile')
-  getProfile(@Request() req: { user: ProfileDto }) {
+  getProfile(@Req() req: Request & { user: ProfileDto }) {
     return new ProfileDto(req.user);
   }
 }
