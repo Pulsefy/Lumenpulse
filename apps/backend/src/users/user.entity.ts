@@ -1,5 +1,11 @@
 // src/users/user.entity.ts
-import { Entity, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+} from 'typeorm';
 import { PortfolioAsset } from '../portfolio/portfolio-asset.entity'; // adjust path if needed
 
 @Entity('users')
@@ -14,6 +20,6 @@ export class User {
   updatedAt: Date;
 
   // Optional: One-to-Many relation to PortfolioAsset
-  @OneToMany(() => PortfolioAsset, asset => asset.user)
+  @OneToMany(() => PortfolioAsset, (asset) => asset.user)
   portfolioAssets: PortfolioAsset[];
 }
