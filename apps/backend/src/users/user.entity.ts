@@ -31,4 +31,8 @@ export class User {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  // Optional: One-to-Many relation to PortfolioAsset
+  @OneToMany(() => PortfolioAsset, (asset) => asset.user)
+  portfolioAssets: PortfolioAsset[];
 }

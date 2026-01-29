@@ -14,3 +14,45 @@ stellar-sdk>=8.2.0
 # For development/testing
 pytest>=7.0.0
 pytest-mock>=3.10.0
+
+# Code quality tools
+black==24.1.1
+mypy==1.8.0
+ruff==0.1.14
+pre-commit==3.6.0
+
+# Type stubs for better mypy coverage
+types-requests==2.31.0.20240125
+types-python-dateutil==2.8.19.20240106
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# requests
+# python-dotenv
+# fastapi
+# uvicorn
+# vaderSentiment
+# apscheduler
+# stellar-sdk
+# pytest
+# flake8
+# redis
+# numpy
+# stellar-sdk>=8.2.0  
+
+# # For development/testing
+# pytest>=7.0.0
+# pytest-mock>=3.10.0

@@ -8,3 +8,5 @@ FastAPI server that exposes sentiment analysis for Node.js backend integration.
 ```bash
 cd data-processing
 python -m uvicorn src.api.server:app --host 0.0.0.0 --port 8000 --reload
+```
+---
