@@ -5,7 +5,6 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
-  UpdateDate,
 } from 'typeorm';
 import { PortfolioAsset } from '../portfolio/portfolio-asset.entity';
 
