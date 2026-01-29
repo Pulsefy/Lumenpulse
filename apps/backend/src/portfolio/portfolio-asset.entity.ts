@@ -4,7 +4,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
-  JoinColumn,
+  CreateDateColumn,
 } from 'typeorm';
 import { User } from '../users/user.entity';
 
@@ -14,20 +14,16 @@ export class PortfolioAsset {
   id: string;
 
   @Column()
-  userId: string;
+  url: string;
 
   @Column()
-  assetCode: string; // e.g. XLM
+  type: string;
 
-  @Column({ nullable: true })
-  assetIssuer: string;
-
-  @Column('decimal', { precision: 18, scale: 8 })
-  amount: string;
-
-  @ManyToOne(() => User, (user) => user.portfolioAssets, {
+  @ManyToOne(() => User, (user: User) => user.portfolioAssets, {
     onDelete: 'CASCADE',
   })
-  @JoinColumn({ name: 'userId' })
   user: User;
+
+  @CreateDateColumn()
+  createdAt: Date;
 }

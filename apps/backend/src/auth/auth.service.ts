@@ -7,26 +7,26 @@ import { User } from '../users/entities/user.entity';
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
-    private jwtService: JwtService,
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
   ) {}
 
   async validateUser(
     email: string,
     pass: string,
   ): Promise<Omit<User, 'passwordHash'> | null> {
-    const user = await this.usersService.findByEmail(email);
+    const user: User | null = await this.usersService.findByEmail(email);
 
-    if (
-      user &&
-      user.passwordHash &&
-      (await bcrypt.compare(pass, user.passwordHash))
-    ) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { passwordHash, ...result } = user;
-      return result;
+    if (!user || !user.passwordHash) {
+      return null;
     }
-    return null;
+
+    const isMatch = await bcrypt.compare(pass, user.passwordHash);
+    if (!isMatch) return null;
+
+    const { passwordHash: _passwordHash, ...result } = user;
+
+    return result;
   }
 
   login(user: { id: string; email: string }) {
