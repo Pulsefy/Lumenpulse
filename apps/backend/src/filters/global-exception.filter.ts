@@ -35,37 +35,38 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         details: {
           limit: '3 requests per minute (test configuration)',
           retryAfter: '60 seconds',
-          tip: 'Rate limits are configurable via RATE_LIMIT_MAX_REQUESTS in .env'
-        }
+          tip: 'Rate limits are configurable via RATE_LIMIT_MAX_REQUESTS in .env',
+        },
       };
-      
-      this.logger.warn(
-        `Rate limit exceeded: ${request.ip} -> ${request.url}`
-      );
-      
+
+      this.logger.warn(`Rate limit exceeded: ${request.ip} -> ${request.url}`);
+
       response.status(429).json(errorResponse);
       return;
     }
 
     if (exception instanceof HttpException) {
       // Handle HTTP exceptions
-      const httpException = exception;
-      const status = httpException.getStatus();
-      const message = httpException.message || 'An error occurred';
+      const status = exception.getStatus();
+      const exceptionResponse = exception.getResponse();
 
-      // Get response data from the HttpException
-      const exceptionResponse = httpException.getResponse();
+      // Safely extract message
+      let message: string | string[] = 'An error occurred';
+      if (typeof exceptionResponse === 'string') {
+        message = exceptionResponse;
+      } else if (typeof exceptionResponse === 'object' && exceptionResponse) {
+        const responseObj = exceptionResponse as Record<string, unknown>;
+        if (Array.isArray(responseObj['message'])) {
+          message = responseObj['message'] as string[];
+        } else if (typeof responseObj['message'] === 'string') {
+          message = responseObj['message'];
+        }
+      }
 
       errorResponse = {
         statusCode: status,
-        message: Array.isArray(exceptionResponse)
-          ? exceptionResponse
-          : typeof exceptionResponse === 'object' && exceptionResponse
-            ? ((exceptionResponse as Record<string, unknown>)[
-                'message'
-              ] as string) || message
-            : message,
-        error: httpException.constructor.name || httpException.name,
+        message,
+        error: exception.constructor.name || exception.name,
         timestamp,
         path: request.url,
       };

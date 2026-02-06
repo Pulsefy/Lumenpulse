@@ -8,7 +8,7 @@ export class ThrottlerFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
-    
+
     // Custom error response
     response.status(429).json({
       statusCode: 429,
@@ -21,7 +21,7 @@ export class ThrottlerFilter {
       details: {
         limit: '3 requests per minute',
         suggestion: 'Please wait 1 minute before making more requests',
-      }
+      },
     });
   }
 }

@@ -12,7 +12,7 @@ import { SkipThrottle, Throttle } from '@nestjs/throttler';
 @Controller('test')
 export class TestController {
   private rateLimitTestCount = 0;
-  
+
   @Get('hello')
   getHello(): string {
     return 'Hello World!';
@@ -69,7 +69,7 @@ export class TestController {
   // ============================================
   // RATE LIMITING TEST ENDPOINTS
   // ============================================
-  
+
   @Get('rate-limit-test')
   testRateLimit() {
     this.rateLimitTestCount++;
@@ -78,10 +78,10 @@ export class TestController {
       message: `Rate limit test request #${this.rateLimitTestCount}`,
       timestamp: new Date().toISOString(),
       note: 'This endpoint is rate limited (3 requests per minute)',
-      instruction: 'Make 4 quick requests to see rate limiting in action'
+      instruction: 'Make 4 quick requests to see rate limiting in action',
     };
   }
-  
+
   @SkipThrottle()
   @Get('rate-limit/unlimited')
   unlimitedRateLimit() {
@@ -89,10 +89,10 @@ export class TestController {
       success: true,
       message: 'This endpoint has NO rate limiting',
       timestamp: new Date().toISOString(),
-      note: 'Use @SkipThrottle() decorator to bypass rate limits'
+      note: 'Use @SkipThrottle() decorator to bypass rate limits',
     };
   }
-  
+
   @Throttle(10, 60) // Custom limit: 10 requests per 60 seconds
   @Get('rate-limit/custom')
   customRateLimit() {
@@ -100,10 +100,10 @@ export class TestController {
       success: true,
       message: 'Custom rate limit: 10 requests per minute',
       timestamp: new Date().toISOString(),
-      note: 'Uses @Throttle(10, 60) decorator'
+      note: 'Uses @Throttle(10, 60) decorator',
     };
   }
-  
+
   @Get('rate-limit/info')
   getRateLimitInfo() {
     return {
@@ -115,11 +115,12 @@ export class TestController {
         configurableVia: 'Environment variables (.env)',
         envVariables: {
           RATE_LIMIT_MAX_REQUESTS: 'Maximum requests per time window',
-          RATE_LIMIT_TTL: 'Time window in milliseconds (default: 60000 = 1 minute)'
+          RATE_LIMIT_TTL:
+            'Time window in milliseconds (default: 60000 = 1 minute)',
         },
         productionDefault: '100 requests per minute',
-        errorCode: '429 Too Many Requests'
-      }
+        errorCode: '429 Too Many Requests',
+      },
     };
   }
 }

@@ -13,7 +13,8 @@ import { UsersModule } from './users/users.module';
 import databaseConfig from './database/database.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { TestController } from './test/test.controller';
-import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+// import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { GlobalExceptionFilter } from './filters/global-exception.filter';
 
 @Module({
   imports: [
@@ -56,11 +57,7 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
     AuthModule,
     UsersModule,
   ],
-  controllers: [
-    AppController, 
-    TestController, 
-    TestExceptionController,
-  ],
+  controllers: [AppController, TestController, TestExceptionController],
   providers: [
     AppService,
     // Apply ThrottlerGuard globally
@@ -72,7 +69,7 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
     {
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,
-    },
+    } as const,
   ],
 })
 export class AppModule implements NestModule {
