@@ -1,16 +1,2 @@
 requests
 python-dotenv
-fastapi
-uvicorn
-vaderSentiment
-apscheduler
-stellar-sdk
-pytest
-flake8
-redis
-numpy
-stellar-sdk>=8.2.0  
-
-# For development/testing
-pytest>=7.0.0
-pytest-mock>=3.10.0
