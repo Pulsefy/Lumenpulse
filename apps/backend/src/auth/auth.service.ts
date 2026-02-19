@@ -1,11 +1,27 @@
-import { Injectable, Logger, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  UnauthorizedException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
+import { User as EmailUser } from '../entities/user.entity';
+import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Keypair, Networks, TransactionBuilder, Operation, BASE_FEE, Account, Transaction } from 'stellar-sdk';
+import { Repository, IsNull } from 'typeorm';
+import {
+  Keypair,
+  Networks,
+  TransactionBuilder,
+  Operation,
+  BASE_FEE,
+  Account,
+  Transaction,
+} from 'stellar-sdk';
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 
@@ -18,33 +34,45 @@ interface ChallengeData {
 
 @Injectable()
 export class AuthService {
-
   private readonly logger = new Logger(AuthService.name);
   private readonly challengeStore = new Map<string, ChallengeData>();
   private readonly CHALLENGE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
   private readonly serverKeypair: Keypair;
   private readonly stellarNetwork: string;
 
+  private static readonly RESET_TOKEN_BYTES = 32;
+  private static readonly RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+  private static readonly BCRYPT_SALT_ROUNDS = 10;
+
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(EmailUser)
+    private readonly emailUserRepository: Repository<EmailUser>,
+    @InjectRepository(PasswordResetToken)
+    private readonly resetTokenRepository: Repository<PasswordResetToken>,
     private usersService: UsersService,
     private jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {
     // Initialize server keypair
-    const serverSecret = this.configService.get<string>('STELLAR_SERVER_SECRET');
+    const serverSecret = this.configService.get<string>(
+      'STELLAR_SERVER_SECRET',
+    );
     if (!serverSecret) {
       throw new Error('STELLAR_SERVER_SECRET is not configured');
     }
     this.serverKeypair = Keypair.fromSecret(serverSecret);
-    
+
     // Set Stellar network
-    this.stellarNetwork = this.configService.get<string>('STELLAR_NETWORK', 'testnet');
-    
+    this.stellarNetwork = this.configService.get<string>(
+      'STELLAR_NETWORK',
+      'testnet',
+    );
+
     // Start cleanup interval
     setInterval(() => this.cleanupExpiredChallenges(), 60000);
-    
+
     this.logger.log('AuthService initialized');
   }
 
@@ -86,9 +114,9 @@ export class AuthService {
     // Validate public key format
     try {
       Keypair.fromPublicKey(publicKey);
-    }catch{
-  throw new BadRequestException('Invalid Stellar public key format');
-}
+    } catch {
+      throw new BadRequestException('Invalid Stellar public key format');
+    }
 
     // Generate a random nonce
     const nonce = crypto.randomBytes(32).toString('hex');
@@ -96,11 +124,10 @@ export class AuthService {
 
     // Create a Stellar transaction as the challenge (SEP-10 standard)
     const sourceAccount = new Account(this.serverKeypair.publicKey(), '-1');
-    
-    const networkPassphrase = this.stellarNetwork === 'testnet' 
-      ? Networks.TESTNET 
-      : Networks.PUBLIC;
-    
+
+    const networkPassphrase =
+      this.stellarNetwork === 'testnet' ? Networks.TESTNET : Networks.PUBLIC;
+
     const transaction = new TransactionBuilder(sourceAccount, {
       fee: BASE_FEE,
       networkPassphrase,
@@ -114,14 +141,16 @@ export class AuthService {
           name: 'LumenPulse auth',
           value: Buffer.from(nonce),
           source: publicKey,
-        })
+        }),
       )
       .addOperation(
         Operation.manageData({
           name: 'web_auth_domain',
-          value: Buffer.from(this.configService.get<string>('DOMAIN', 'lumenpulse.io')),
+          value: Buffer.from(
+            this.configService.get<string>('DOMAIN', 'lumenpulse.io'),
+          ),
           source: this.serverKeypair.publicKey(),
-        })
+        }),
       )
       .build();
 
@@ -163,7 +192,7 @@ export class AuthService {
 
     if (!storedChallenge) {
       throw new UnauthorizedException(
-        'No challenge found for this public key. Please request a new challenge.'
+        'No challenge found for this public key. Please request a new challenge.',
       );
     }
 
@@ -171,26 +200,25 @@ export class AuthService {
     if (Date.now() > storedChallenge.expiresAt) {
       this.challengeStore.delete(publicKey);
       throw new UnauthorizedException(
-        'Challenge has expired. Please request a new challenge.'
+        'Challenge has expired. Please request a new challenge.',
       );
     }
 
     // Import the signed transaction
-    const networkPassphrase = this.stellarNetwork === 'testnet' 
-      ? Networks.TESTNET 
-      : Networks.PUBLIC;
-      
+    const networkPassphrase =
+      this.stellarNetwork === 'testnet' ? Networks.TESTNET : Networks.PUBLIC;
+
     let transaction: Transaction;
-    
+
     try {
       transaction = new Transaction(signedChallenge, networkPassphrase);
-    } catch{
+    } catch {
       this.challengeStore.delete(publicKey);
       throw new BadRequestException('Invalid transaction format');
     }
 
     // Verify the transaction was signed by the user
-    const userSignature = transaction.signatures.find(sig => {
+    const userSignature = transaction.signatures.find((sig) => {
       try {
         const keypair = Keypair.fromPublicKey(publicKey);
         return keypair.verify(transaction.hash(), sig.signature());
@@ -202,7 +230,7 @@ export class AuthService {
     if (!userSignature) {
       this.challengeStore.delete(publicKey);
       throw new UnauthorizedException(
-        'Invalid signature. Transaction was not signed by the provided public key.'
+        'Invalid signature. Transaction was not signed by the provided public key.',
       );
     }
 
@@ -242,9 +270,117 @@ export class AuthService {
       user: {
         id: user.id,
         passwordHash: user.id,
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
       },
     };
+  }
+
+  /**
+   * Initiate password reset by generating a one-time token.
+   * Always returns a success-style response to avoid leaking whether
+   * an email exists in the system.
+   */
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const user = await this.emailUserRepository.findOne({
+      where: { email: email.toLowerCase().trim() },
+    });
+
+    if (!user) {
+      // Do not reveal that the email doesn't exist
+      this.logger.debug('Password reset requested for non-existent email');
+      return {
+        message: 'If that email is registered, a reset link has been sent.',
+      };
+    }
+
+    // Invalidate any previous unused tokens for this user
+    await this.resetTokenRepository.update(
+      { userId: user.id, usedAt: IsNull() },
+      { usedAt: new Date() },
+    );
+
+    // Generate a cryptographically secure random token
+    const rawToken = crypto
+      .randomBytes(AuthService.RESET_TOKEN_BYTES)
+      .toString('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+
+    const resetToken = this.resetTokenRepository.create({
+      tokenHash,
+      userId: user.id,
+      expiresAt: new Date(Date.now() + AuthService.RESET_TOKEN_EXPIRY_MS),
+    });
+    await this.resetTokenRepository.save(resetToken);
+
+    // In production, send an email with the raw token embedded in a link.
+    // For now, log the token so the flow can be tested end-to-end.
+    this.logger.log(
+      `Password reset token generated for user ${user.id}. Token (mock email): ${rawToken}`,
+    );
+
+    return {
+      message: 'If that email is registered, a reset link has been sent.',
+    };
+  }
+
+  /**
+   * Validate a one-time reset token and update the user's password.
+   * The token is immediately invalidated after use.
+   */
+  async resetPassword(
+    rawToken: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+
+    const storedToken = await this.resetTokenRepository.findOne({
+      where: {
+        tokenHash,
+        usedAt: IsNull(),
+      },
+    });
+
+    if (!storedToken) {
+      throw new BadRequestException('Invalid or already-used reset token.');
+    }
+
+    if (new Date() > storedToken.expiresAt) {
+      // Mark expired token as used so it cannot be retried
+      storedToken.usedAt = new Date();
+      await this.resetTokenRepository.save(storedToken);
+      throw new BadRequestException(
+        'Reset token has expired. Please request a new one.',
+      );
+    }
+
+    const user = await this.emailUserRepository.findOne({
+      where: { id: storedToken.userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Associated user account no longer exists.');
+    }
+
+    // Hash and persist the new password
+    user.passwordHash = await bcrypt.hash(
+      newPassword,
+      AuthService.BCRYPT_SALT_ROUNDS,
+    );
+    await this.emailUserRepository.save(user);
+
+    // Invalidate the token
+    storedToken.usedAt = new Date();
+    await this.resetTokenRepository.save(storedToken);
+
+    this.logger.log(`Password successfully reset for user ${user.id}`);
+
+    return { message: 'Password has been reset successfully.' };
   }
 
   /**
@@ -253,14 +389,14 @@ export class AuthService {
   private cleanupExpiredChallenges(): void {
     const now = Date.now();
     let cleanedCount = 0;
-    
+
     for (const [key, value] of this.challengeStore.entries()) {
       if (now > value.expiresAt) {
         this.challengeStore.delete(key);
         cleanedCount++;
       }
     }
-    
+
     if (cleanedCount > 0) {
       this.logger.debug(`Cleaned up ${cleanedCount} expired challenges`);
     }
