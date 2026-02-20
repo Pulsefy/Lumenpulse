@@ -55,30 +55,27 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   // }
 
   handleRequest<TUser = any>(
-  err: unknown,
-  user: TUser,
-  info: unknown,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _context: ExecutionContext,
-   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _status?: unknown,
-): TUser {
-  if (err || !user) {
-    const message =
-      info instanceof Error
-        ? info.message
-        : typeof info === 'object' && info !== null && 'message' in info
-        ? String((info as { message: unknown }).message)
-        : 'Invalid or expired token';
+    err: unknown,
+    user: TUser,
+    info: unknown,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _context: ExecutionContext,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _status?: unknown,
+  ): TUser {
+    if (err || !user) {
+      const message =
+        info instanceof Error
+          ? info.message
+          : typeof info === 'object' && info !== null && 'message' in info
+            ? String((info as { message: unknown }).message)
+            : 'Invalid or expired token';
 
-    this.logger.warn(`Authentication failed: ${message}`);
+      this.logger.warn(`Authentication failed: ${message}`);
 
-    throw err instanceof Error
-      ? err
-      : new UnauthorizedException(message);
+      throw err instanceof Error ? err : new UnauthorizedException(message);
+    }
+
+    return user;
   }
-
-  return user;
-}
-
 }

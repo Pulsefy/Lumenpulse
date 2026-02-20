@@ -8,7 +8,7 @@ mod token;
 
 use errors::CrowdfundError;
 use math::{sqrt_scaled, unscale};
-use soroban_sdk::{contract, contractimpl, Address, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
 use storage::{DataKey, ProjectData};
 
 #[contract]
@@ -803,6 +803,59 @@ impl CrowdfundVaultContract {
             .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false)
+    }
+
+    /// Upgrade the contract WASM to a new hash.
+    ///
+    /// Only the stored admin may call this. Emits [`UpgradedEvent`] on success.
+    pub fn upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<(), CrowdfundError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(CrowdfundError::NotInitialized)?;
+        if caller != admin {
+            return Err(CrowdfundError::Unauthorized);
+        }
+        caller.require_auth();
+        env.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
+        events::UpgradedEvent {
+            admin: caller,
+            new_wasm_hash,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Transfer the admin role to `new_admin`.
+    ///
+    /// Requires authorization from the current admin. Emits [`AdminChangedEvent`].
+    pub fn set_admin(
+        env: Env,
+        current_admin: Address,
+        new_admin: Address,
+    ) -> Result<(), CrowdfundError> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(CrowdfundError::NotInitialized)?;
+        if current_admin != stored_admin {
+            return Err(CrowdfundError::Unauthorized);
+        }
+        current_admin.require_auth();
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        events::AdminChangedEvent {
+            old_admin: current_admin,
+            new_admin,
+        }
+        .publish(&env);
+        Ok(())
     }
 }
 

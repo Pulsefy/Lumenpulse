@@ -1,10 +1,11 @@
-import { 
-  Entity, 
-  PrimaryGeneratedColumn, 
-  Column, 
-  CreateDateColumn, 
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
   UpdateDateColumn,
-  Index ,OneToMany
+  Index,
+  OneToMany,
 } from 'typeorm';
 import { PortfolioAsset } from '../portfolio/portfolio-asset.entity'; // adjust path if needed
 @Entity('users')
@@ -29,7 +30,10 @@ export class User {
     bio?: string;
   };
 
-  @Column({ type: 'jsonb', default: { theme: 'dark', notifications: { email: true, push: true } } })
+  @Column({
+    type: 'jsonb',
+    default: { theme: 'dark', notifications: { email: true, push: true } },
+  })
   preferences: {
     theme: 'light' | 'dark' | 'auto';
     notifications: {

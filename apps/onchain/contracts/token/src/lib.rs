@@ -3,10 +3,12 @@
 mod admin;
 mod allowance;
 mod balance;
+mod events;
 mod metadata;
 mod test;
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String};
+use events::{AdminChangedEvent, UpgradedEvent};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
 
 #[contract]
 pub struct LumenToken;
@@ -27,10 +29,16 @@ impl LumenToken {
         balance::receive_balance(&e, to, amount);
     }
 
+    /// Transfer the admin role to `new_admin`. Emits [`AdminChangedEvent`].
     pub fn set_admin(e: Env, new_admin: Address) {
-        let admin = admin::read_administrator(&e);
-        admin.require_auth();
+        let old_admin = admin::read_administrator(&e);
+        old_admin.require_auth();
         admin::write_administrator(&e, &new_admin);
+        AdminChangedEvent {
+            old_admin,
+            new_admin,
+        }
+        .publish(&e);
     }
 
     pub fn freeze(e: Env, id: Address) {
@@ -61,8 +69,6 @@ impl LumenToken {
 
     pub fn transfer(e: Env, from: Address, to: Address, amount: i128) {
         from.require_auth();
-        // balance::spend_balance checks from is not frozen
-        // balance::receive_balance checks to is not frozen
         balance::spend_balance(&e, from.clone(), amount);
         balance::receive_balance(&e, to, amount);
     }
@@ -99,5 +105,23 @@ impl LumenToken {
 
     pub fn symbol(e: Env) -> String {
         metadata::read_symbol(&e)
+    }
+
+    /// Upgrade the contract WASM to a new hash.
+    ///
+    /// Only the stored admin may call this. Emits [`UpgradedEvent`] on success.
+    pub fn upgrade(e: Env, caller: Address, new_wasm_hash: BytesN<32>) {
+        let admin = admin::read_administrator(&e);
+        if caller != admin {
+            panic!("unauthorized");
+        }
+        caller.require_auth();
+        e.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
+        UpgradedEvent {
+            admin: caller,
+            new_wasm_hash,
+        }
+        .publish(&e);
     }
 }

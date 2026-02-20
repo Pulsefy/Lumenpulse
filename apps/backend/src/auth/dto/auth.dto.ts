@@ -9,7 +9,8 @@ export class GetChallengeDto {
   @IsString()
   @IsNotEmpty({ message: 'Public key is required' })
   @Matches(/^G[A-Z0-9]{55}$/, {
-    message: 'Invalid Stellar public key format. Must start with G and be 56 characters long',
+    message:
+      'Invalid Stellar public key format. Must start with G and be 56 characters long',
   })
   publicKey: string;
 }

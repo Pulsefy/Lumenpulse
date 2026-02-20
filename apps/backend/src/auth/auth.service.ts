@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
 import { User as EmailUser } from '../entities/user.entity';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
+import { RefreshToken } from './entities/refresh-token.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import {
@@ -43,6 +44,8 @@ export class AuthService {
   private static readonly RESET_TOKEN_BYTES = 32;
   private static readonly RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
   private static readonly BCRYPT_SALT_ROUNDS = 10;
+  private static readonly REFRESH_TOKEN_BYTES = 32;
+  private static readonly REFRESH_TOKEN_EXPIRY_DAYS = 30;
 
   constructor(
     @InjectRepository(User)
@@ -51,6 +54,8 @@ export class AuthService {
     private readonly emailUserRepository: Repository<EmailUser>,
     @InjectRepository(PasswordResetToken)
     private readonly resetTokenRepository: Repository<PasswordResetToken>,
+    @InjectRepository(RefreshToken)
+    private readonly refreshTokenRepository: Repository<RefreshToken>,
     private usersService: UsersService,
     private jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -94,10 +99,21 @@ export class AuthService {
     return null;
   }
 
-  login(user: { id: string; email: string }) {
+  async login(
+    user: { id: string; email: string },
+    deviceInfo?: string,
+    ipAddress?: string,
+  ) {
     const payload = { email: user.email, sub: user.id };
+    const accessToken = this.jwtService.sign(payload);
+
+    // Generate and store refresh token
+    const refreshToken = this.generateRefreshToken();
+    await this.storeRefreshToken(refreshToken, user.id, deviceInfo, ipAddress);
+
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: accessToken,
+      refresh_token: refreshToken,
     };
   }
 
@@ -185,6 +201,7 @@ export class AuthService {
   ): Promise<{
     success: boolean;
     token: string;
+    refresh_token: string;
     user: Partial<User>;
   }> {
     // Retrieve stored challenge
@@ -264,9 +281,14 @@ export class AuthService {
 
     const token = this.jwtService.sign(payload);
 
+    // Generate and store refresh token for Stellar auth
+    const refreshToken = this.generateRefreshToken();
+    await this.storeRefreshToken(refreshToken, user.id);
+
     return {
       success: true,
       token,
+      refresh_token: refreshToken,
       user: {
         id: user.id,
         passwordHash: user.id,
@@ -400,5 +422,155 @@ export class AuthService {
     if (cleanedCount > 0) {
       this.logger.debug(`Cleaned up ${cleanedCount} expired challenges`);
     }
+  }
+
+  /**
+   * Generate a cryptographically secure refresh token
+   */
+  private generateRefreshToken(): string {
+    return crypto.randomBytes(AuthService.REFRESH_TOKEN_BYTES).toString('hex');
+  }
+
+  /**
+   * Store refresh token in database
+   */
+  private async storeRefreshToken(
+    token: string,
+    userId: string,
+    deviceInfo?: string,
+    ipAddress?: string,
+  ): Promise<void> {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const refreshToken = this.refreshTokenRepository.create({
+      tokenHash,
+      userId,
+      expiresAt: new Date(
+        Date.now() +
+          AuthService.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+      ),
+      deviceInfo,
+      ipAddress,
+    });
+
+    await this.refreshTokenRepository.save(refreshToken);
+  }
+
+  /**
+   * Validate refresh token and return user
+   */
+  private async validateRefreshToken(
+    token: string,
+  ): Promise<{ user: User; refreshToken: RefreshToken }> {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const refreshToken = await this.refreshTokenRepository.findOne({
+      where: {
+        tokenHash,
+        revokedAt: IsNull(),
+      },
+      relations: ['user'],
+    });
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Invalid or revoked refresh token');
+    }
+
+    if (new Date() > refreshToken.expiresAt) {
+      // Mark expired token as revoked
+      refreshToken.revokedAt = new Date();
+      await this.refreshTokenRepository.save(refreshToken);
+      throw new UnauthorizedException('Refresh token has expired');
+    }
+
+    return { user: refreshToken.user, refreshToken };
+  }
+
+  /**
+   * Refresh access token using refresh token
+   */
+  async refreshToken(
+    refreshToken: string,
+    deviceInfo?: string,
+    ipAddress?: string,
+  ): Promise<{
+    access_token: string;
+    refresh_token?: string;
+  }> {
+    const { user, refreshToken: storedToken } =
+      await this.validateRefreshToken(refreshToken);
+
+    // Generate new access token
+    const payload = { email: user.email, sub: user.id };
+    const accessToken = this.jwtService.sign(payload);
+
+    // Token rotation: invalidate old refresh token and create new one
+    storedToken.revokedAt = new Date();
+    await this.refreshTokenRepository.save(storedToken);
+
+    // Generate new refresh token
+    const newRefreshToken = this.generateRefreshToken();
+    await this.storeRefreshToken(
+      newRefreshToken,
+      user.id,
+      deviceInfo,
+      ipAddress,
+    );
+
+    this.logger.log(`Token refreshed for user ${user.id}`);
+
+    return {
+      access_token: accessToken,
+      refresh_token: newRefreshToken,
+    };
+  }
+
+  /**
+   * Logout user by revoking refresh token
+   */
+  async logout(refreshToken: string): Promise<{ message: string }> {
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
+
+    const storedToken = await this.refreshTokenRepository.findOne({
+      where: { tokenHash },
+    });
+
+    if (!storedToken) {
+      // Token doesn't exist or already revoked - still return success for security
+      this.logger.debug('Logout attempted with non-existent refresh token');
+      return { message: 'Successfully logged out' };
+    }
+
+    if (storedToken.revokedAt) {
+      // Token already revoked
+      return { message: 'Successfully logged out' };
+    }
+
+    // Revoke the token
+    storedToken.revokedAt = new Date();
+    await this.refreshTokenRepository.save(storedToken);
+
+    this.logger.log(
+      `User logged out, refresh token revoked for user ${storedToken.userId}`,
+    );
+
+    return { message: 'Successfully logged out' };
+  }
+
+  /**
+   * Logout from all devices by revoking all refresh tokens for a user
+   */
+  async logoutAll(userId: string): Promise<{ message: string }> {
+    await this.refreshTokenRepository.update(
+      { userId, revokedAt: IsNull() },
+      { revokedAt: new Date() },
+    );
+
+    this.logger.log(`All refresh tokens revoked for user ${userId}`);
+
+    return { message: 'Successfully logged out from all devices' };
   }
 }
