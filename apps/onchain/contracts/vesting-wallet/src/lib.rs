@@ -16,6 +16,26 @@ pub struct VestingWalletContract;
 
 #[contractimpl]
 impl VestingWalletContract {
+    /// Helper function to calculate claimable amount for a vesting schedule
+    /// This is used by both get_claimable and claim to ensure consistency
+    fn calculate_claimable_amount(current_time: u64, vesting: &VestingData) -> i128 {
+        if current_time < vesting.start_time {
+            // Vesting hasn't started yet
+            0
+        } else if current_time >= vesting.start_time + vesting.duration {
+            // Vesting period has ended, all tokens are available
+            vesting.total_amount - vesting.claimed_amount
+        } else {
+            // Calculate linearly vested amount
+            let time_elapsed = current_time - vesting.start_time;
+            let total_vested = (vesting.total_amount as u128)
+                .checked_mul(time_elapsed as u128)
+                .and_then(|x| x.checked_div(vesting.duration as u128))
+                .unwrap_or(0) as i128;
+            total_vested - vesting.claimed_amount
+        }
+    }
+
     /// Initialize the contract with an admin address and token address
     pub fn initialize(env: Env, admin: Address, token: Address) -> Result<(), VestingError> {
         // Check if already initialized
@@ -135,23 +155,8 @@ impl VestingWalletContract {
         // Get current time
         let current_time = env.ledger().timestamp();
 
-        // Calculate available amount based on linear vesting
-        // claimed = total * (now - start) / duration
-        let available_amount = if current_time < vesting.start_time {
-            // Vesting hasn't started yet
-            0
-        } else if current_time >= vesting.start_time + vesting.duration {
-            // Vesting period has ended, all tokens are available
-            vesting.total_amount - vesting.claimed_amount
-        } else {
-            // Calculate linearly vested amount
-            let time_elapsed = current_time - vesting.start_time;
-            let total_vested = (vesting.total_amount as u128)
-                .checked_mul(time_elapsed as u128)
-                .and_then(|x| x.checked_div(vesting.duration as u128))
-                .unwrap_or(0) as i128;
-            total_vested - vesting.claimed_amount
-        };
+        // Calculate available amount using the helper function
+        let available_amount = Self::calculate_claimable_amount(current_time, &vesting);
 
         // Check if there's anything to claim
         if available_amount <= 0 {
@@ -184,6 +189,25 @@ impl VestingWalletContract {
         Ok(available_amount)
     }
 
+    /// Get the claimable amount for a beneficiary without modifying state
+    /// This is a pure view method that returns how much a beneficiary could claim at the current time
+    pub fn get_claimable(env: Env, beneficiary: Address) -> Result<i128, VestingError> {
+        // Get vesting data
+        let vesting: VestingData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Vesting(beneficiary))
+            .ok_or(VestingError::VestingNotFound)?;
+
+        // Get current time
+        let current_time = env.ledger().timestamp();
+
+        // Calculate claimable amount using the helper function
+        let claimable_amount = Self::calculate_claimable_amount(current_time, &vesting);
+
+        Ok(claimable_amount)
+    }
+
     /// Get vesting data for a beneficiary
     pub fn get_vesting(env: Env, beneficiary: Address) -> Result<VestingData, VestingError> {
         env.storage()
@@ -204,22 +228,8 @@ impl VestingWalletContract {
         // Get current time
         let current_time = env.ledger().timestamp();
 
-        // Calculate available amount based on linear vesting
-        let available_amount = if current_time < vesting.start_time {
-            // Vesting hasn't started yet
-            0
-        } else if current_time >= vesting.start_time + vesting.duration {
-            // Vesting period has ended, all tokens are available
-            vesting.total_amount - vesting.claimed_amount
-        } else {
-            // Calculate linearly vested amount
-            let time_elapsed = current_time - vesting.start_time;
-            let total_vested = (vesting.total_amount as u128)
-                .checked_mul(time_elapsed as u128)
-                .and_then(|x| x.checked_div(vesting.duration as u128))
-                .unwrap_or(0) as i128;
-            total_vested - vesting.claimed_amount
-        };
+        // Calculate available amount using the helper function
+        let available_amount = Self::calculate_claimable_amount(current_time, &vesting);
 
         Ok(available_amount)
     }
