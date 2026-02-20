@@ -29,3 +29,6 @@ yarn-error.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Documentation
+PR_PASSWORD_RESET.md
