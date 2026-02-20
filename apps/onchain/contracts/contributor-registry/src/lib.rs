@@ -1,10 +1,12 @@
 #![no_std]
 
 mod errors;
+mod events;
 mod storage;
 
 use errors::ContributorError;
-use soroban_sdk::{contract, contractimpl, Address, Env, String};
+use events::{AdminChangedEvent, UpgradedEvent};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
 use storage::{ContributorData, DataKey};
 
 #[contract]
@@ -14,17 +16,11 @@ pub struct ContributorRegistryContract;
 impl ContributorRegistryContract {
     /// Initialize the contract with an admin address
     pub fn initialize(env: Env, admin: Address) -> Result<(), ContributorError> {
-        // Check if already initialized
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(ContributorError::AlreadyInitialized);
         }
-
-        // Require admin authorization
         admin.require_auth();
-
-        // Store admin address
         env.storage().instance().set(&DataKey::Admin, &admin);
-
         Ok(())
     }
 
@@ -34,20 +30,13 @@ impl ContributorRegistryContract {
         address: Address,
         github_handle: String,
     ) -> Result<(), ContributorError> {
-        // Check if contract is initialized
         if !env.storage().instance().has(&DataKey::Admin) {
             return Err(ContributorError::NotInitialized);
         }
-
-        // Require contributor authorization
         address.require_auth();
-
-        // Validate GitHub handle (must not be empty)
         if github_handle.is_empty() {
             return Err(ContributorError::InvalidGitHubHandle);
         }
-
-        // Check if contributor already exists
         if env
             .storage()
             .persistent()
@@ -55,19 +44,13 @@ impl ContributorRegistryContract {
         {
             return Err(ContributorError::ContributorAlreadyExists);
         }
-
-        // Get current timestamp
         let timestamp = env.ledger().timestamp();
-
-        // Create contributor data
         let contributor = ContributorData {
             address: address.clone(),
             github_handle,
-            reputation_score: 0, // Start with 0 reputation
+            reputation_score: 0,
             registered_timestamp: timestamp,
         };
-
-        // Store contributor
         env.storage()
             .persistent()
             .set(&DataKey::Contributor(address), &contributor);
@@ -82,32 +65,21 @@ impl ContributorRegistryContract {
         contributor_address: Address,
         new_score: u64,
     ) -> Result<(), ContributorError> {
-        // Check if contract is initialized
         let stored_admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
             .ok_or(ContributorError::NotInitialized)?;
-
-        // Verify admin identity
         if admin != stored_admin {
             return Err(ContributorError::Unauthorized);
         }
-
-        // Require admin authorization
         admin.require_auth();
-
-        // Get contributor data
         let mut contributor: ContributorData = env
             .storage()
             .persistent()
             .get(&DataKey::Contributor(contributor_address.clone()))
             .ok_or(ContributorError::ContributorNotFound)?;
-
-        // Update reputation score
         contributor.reputation_score = new_score;
-
-        // Save updated contributor
         env.storage()
             .persistent()
             .set(&DataKey::Contributor(contributor_address), &contributor);
@@ -132,6 +104,59 @@ impl ContributorRegistryContract {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(ContributorError::NotInitialized)
+    }
+
+    /// Upgrade the contract WASM to a new hash.
+    ///
+    /// Only the stored admin may call this. Emits [`UpgradedEvent`] on success.
+    pub fn upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<(), ContributorError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ContributorError::NotInitialized)?;
+        if caller != admin {
+            return Err(ContributorError::Unauthorized);
+        }
+        caller.require_auth();
+        env.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
+        UpgradedEvent {
+            admin: caller,
+            new_wasm_hash,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Transfer the admin role to `new_admin`.
+    ///
+    /// Requires authorization from the current admin. Emits [`AdminChangedEvent`].
+    pub fn set_admin(
+        env: Env,
+        current_admin: Address,
+        new_admin: Address,
+    ) -> Result<(), ContributorError> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ContributorError::NotInitialized)?;
+        if current_admin != stored_admin {
+            return Err(ContributorError::Unauthorized);
+        }
+        current_admin.require_auth();
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        AdminChangedEvent {
+            old_admin: current_admin,
+            new_admin,
+        }
+        .publish(&env);
+        Ok(())
     }
 }
 

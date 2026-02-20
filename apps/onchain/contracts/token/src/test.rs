@@ -2,7 +2,7 @@
 extern crate std;
 
 use crate::{LumenToken, LumenTokenClient};
-use soroban_sdk::{testutils::Address as _, Address, Env, String};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
 #[test]
 fn test_token() {
@@ -62,4 +62,57 @@ fn test_freeze() {
     client.freeze(&user1);
 
     client.transfer(&user1, &user2, &100);
+}
+
+// ---------------------------------------------------------------------------
+// Upgradeability tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_set_admin_transfers_role() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    let contract_id = env.register(LumenToken, ());
+    let client = LumenTokenClient::new(&env, &contract_id);
+
+    client.initialize(
+        &admin,
+        &7,
+        &String::from_str(&env, "LumenPulse"),
+        &String::from_str(&env, "LMN"),
+    );
+
+    // Rotate admin
+    client.set_admin(&new_admin);
+
+    // Verify the new admin can mint (only admin can mint)
+    client.mint(&new_admin, &1000);
+    assert_eq!(client.balance(&new_admin), 1000);
+}
+
+#[test]
+#[should_panic]
+fn test_only_admin_can_upgrade() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+
+    let contract_id = env.register(LumenToken, ());
+    let client = LumenTokenClient::new(&env, &contract_id);
+
+    client.initialize(
+        &admin,
+        &7,
+        &String::from_str(&env, "LumenPulse"),
+        &String::from_str(&env, "LMN"),
+    );
+
+    let dummy: BytesN<32> = BytesN::from_array(&env, &[0u8; 32]);
+    client.upgrade(&non_admin, &dummy); // must panic
 }

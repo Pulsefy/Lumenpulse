@@ -257,3 +257,62 @@ fn test_reputation_can_be_updated_multiple_times() {
     client.update_reputation(&admin, &contributor, &25);
     assert_eq!(client.get_contributor(&contributor).reputation_score, 25);
 }
+
+// ---------------------------------------------------------------------------
+// Upgradeability tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_set_admin_transfers_role() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _) = setup_test(&env);
+    client.initialize(&admin);
+
+    let new_admin = soroban_sdk::Address::generate(&env);
+    client.set_admin(&admin, &new_admin);
+
+    assert_eq!(
+        client.get_admin(),
+        new_admin,
+        "admin must be updated after set_admin"
+    );
+}
+
+#[test]
+fn test_only_admin_can_upgrade() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _) = setup_test(&env);
+    client.initialize(&admin);
+
+    let non_admin = soroban_sdk::Address::generate(&env);
+    let dummy = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
+
+    let result = client.try_upgrade(&non_admin, &dummy);
+    assert_eq!(
+        result,
+        Err(Ok(crate::errors::ContributorError::Unauthorized))
+    );
+}
+
+#[test]
+fn test_old_admin_cannot_upgrade_after_rotation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _) = setup_test(&env);
+    client.initialize(&admin);
+
+    let new_admin = soroban_sdk::Address::generate(&env);
+    client.set_admin(&admin, &new_admin);
+
+    let dummy = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
+    let result = client.try_upgrade(&admin, &dummy);
+    assert_eq!(
+        result,
+        Err(Ok(crate::errors::ContributorError::Unauthorized))
+    );
+}
