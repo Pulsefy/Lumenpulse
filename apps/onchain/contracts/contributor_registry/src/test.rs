@@ -525,7 +525,7 @@ fn test_remove_contributor() {
     // Verify contributor exists
     let retrieved = client.get_contributor(&contributor);
     assert_eq!(retrieved.github_handle, github_handle);
-    
+
     let retrieved_by_handle = client.get_contributor_by_github(&github_handle);
     assert_eq!(retrieved_by_handle.address, contributor);
 
@@ -534,11 +534,17 @@ fn test_remove_contributor() {
 
     // Verify contributor no longer exists by address
     let result_addr = client.try_get_contributor(&contributor);
-    assert_eq!(result_addr, Err(Ok(ContributorError::ContributorNotFound)));
+    assert_eq!(
+        result_addr,
+        Err(Ok(ContributorError::ContributorNotFound))
+    );
 
     // Verify contributor no longer exists by GitHub handle
     let result_handle = client.try_get_contributor_by_github(&github_handle);
-    assert_eq!(result_handle, Err(Ok(ContributorError::ContributorNotFound)));
+    assert_eq!(
+        result_handle,
+        Err(Ok(ContributorError::ContributorNotFound))
+    );
 }
 
 #[test]

@@ -44,7 +44,7 @@ impl ContributorRegistryContract {
         {
             return Err(ContributorError::ContributorAlreadyExists);
         }
-        
+
         // Check if GitHub handle is already taken by a different address
         if let Some(existing_address) = env
             .storage()
@@ -56,7 +56,7 @@ impl ContributorRegistryContract {
                 return Err(ContributorError::GitHubHandleAlreadyExists);
             }
         }
-        
+
         let timestamp = env.ledger().timestamp();
         let contributor = ContributorData {
             address: address.clone(),
@@ -67,7 +67,7 @@ impl ContributorRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Contributor(address.clone()), &contributor);
-        
+
         // Store the reverse index (GitHub handle -> address)
         env.storage()
             .persistent()
@@ -146,13 +146,13 @@ impl ContributorRegistryContract {
         if github_handle.is_empty() {
             return Err(ContributorError::InvalidGitHubHandle);
         }
-        
+
         let address: Address = env
             .storage()
             .persistent()
             .get(&DataKey::GitHubIndex(github_handle))
             .ok_or(ContributorError::ContributorNotFound)?;
-        
+
         env.storage()
             .persistent()
             .get(&DataKey::Contributor(address))
@@ -168,16 +168,16 @@ impl ContributorRegistryContract {
         if new_github_handle.is_empty() {
             return Err(ContributorError::InvalidGitHubHandle);
         }
-        
+
         address.require_auth();
-        
+
         // Get current contributor data
         let mut contributor: ContributorData = env
             .storage()
             .persistent()
             .get(&DataKey::Contributor(address.clone()))
             .ok_or(ContributorError::ContributorNotFound)?;
-        
+
         // Check if the new GitHub handle is already taken by a different address
         if let Some(existing_address) = env
             .storage()
@@ -189,18 +189,18 @@ impl ContributorRegistryContract {
                 return Err(ContributorError::GitHubHandleAlreadyExists);
             }
         }
-        
+
         // Remove the old GitHub handle index
         env.storage()
             .persistent()
             .remove(&DataKey::GitHubIndex(contributor.github_handle.clone()));
-        
+
         // Update contributor data with new GitHub handle
         contributor.github_handle = new_github_handle.clone();
         env.storage()
             .persistent()
             .set(&DataKey::Contributor(address.clone()), &contributor);
-        
+
         // Add the new GitHub handle index
         env.storage()
             .persistent()
@@ -224,19 +224,19 @@ impl ContributorRegistryContract {
             return Err(ContributorError::Unauthorized);
         }
         admin.require_auth();
-        
+
         // Get contributor data to access the GitHub handle
         let contributor: ContributorData = env
             .storage()
             .persistent()
             .get(&DataKey::Contributor(contributor_address.clone()))
             .ok_or(ContributorError::ContributorNotFound)?;
-        
+
         // Remove the contributor entry
         env.storage()
             .persistent()
             .remove(&DataKey::Contributor(contributor_address));
-        
+
         // Remove the GitHub handle index
         env.storage()
             .persistent()
