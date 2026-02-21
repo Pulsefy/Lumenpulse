@@ -30,7 +30,9 @@ jobs:
     - name: Install Rust toolchain and components
       run: |
         rustup toolchain install stable
-        rustup component add rust-src rustfmt clippy
+        rustup component add rust-src
+        rustup component add rustfmt
+        rustup component add clippy
         rustup target add wasm32-unknown-unknown
 
     - name: Install Soroban CLI
@@ -89,7 +91,9 @@ jobs:
     - name: Install Rust toolchain and components
       run: |
         rustup toolchain install stable
-        rustup component add rust-src rustfmt clippy
+        rustup component add rust-src
+        rustup component add rustfmt
+        rustup component add clippy
         rustup target add wasm32-unknown-unknown
 
     - name: Install cargo deny
