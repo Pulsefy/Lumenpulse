@@ -1,9 +1,4 @@
 [licenses]
-unlicensed = "allow"
-allow-osi-fsf-free = "both"
-copyleft = "allow"
-
-# List of explicitly allowed licenses
 allow = [
     "MIT",
     "Apache-2.0",
@@ -15,11 +10,13 @@ allow = [
     "CC0-1.0",
 ]
 
-# List of explicitly denied licenses
 deny = [
     "GPL-2.0",
     "GPL-3.0",
 ]
+
+# Allow unlicensed crates
+confidence-threshold = 0.8
 
 [licenses.private]
 ignore = true
