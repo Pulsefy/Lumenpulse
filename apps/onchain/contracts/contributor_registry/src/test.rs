@@ -337,6 +337,230 @@ fn test_reputation_get_reputation() {
     assert_eq!(client.get_reputation(&contributor), 50);
 }
 
+#[test]
+fn test_get_contributor_by_github() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, contributor) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Register contributor
+    let github_handle = String::from_str(&env, "testuser");
+    client.register_contributor(&contributor, &github_handle);
+
+    // Verify we can get contributor by GitHub handle
+    let retrieved = client.get_contributor_by_github(&github_handle);
+    assert_eq!(retrieved.address, contributor);
+    assert_eq!(retrieved.github_handle, github_handle);
+    assert_eq!(retrieved.reputation_score, 0);
+}
+
+#[test]
+fn test_get_contributor_by_github_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Try to get non-existent contributor by GitHub handle
+    let github_handle = String::from_str(&env, "nonexistent");
+    let result = client.try_get_contributor_by_github(&github_handle);
+    assert_eq!(result, Err(Ok(ContributorError::ContributorNotFound)));
+}
+
+#[test]
+fn test_get_contributor_by_github_empty_handle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Try to get with empty GitHub handle
+    let empty_handle = String::from_str(&env, "");
+    let result = client.try_get_contributor_by_github(&empty_handle);
+    assert_eq!(result, Err(Ok(ContributorError::InvalidGitHubHandle)));
+}
+
+#[test]
+fn test_duplicate_github_handles_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, contributor1) = setup_test(&env);
+    let contributor2 = Address::generate(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Register first contributor
+    let github_handle = String::from_str(&env, "samehandle");
+    client.register_contributor(&contributor1, &github_handle);
+
+    // Try to register different contributor with same GitHub handle - should fail
+    let result = client.try_register_contributor(&contributor2, &github_handle);
+    assert_eq!(result, Err(Ok(ContributorError::GitHubHandleAlreadyExists)));
+}
+
+#[test]
+fn test_same_contributor_can_reregister_with_same_handle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, contributor) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Register contributor
+    let github_handle = String::from_str(&env, "samehandle");
+    client.register_contributor(&contributor, &github_handle);
+
+    // Try to register same contributor again with same GitHub handle - should fail as duplicate address
+    let result = client.try_register_contributor(&contributor, &github_handle);
+    assert_eq!(result, Err(Ok(ContributorError::ContributorAlreadyExists)));
+}
+
+#[test]
+fn test_update_github_handle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, contributor) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Register contributor with initial handle
+    let initial_handle = String::from_str(&env, "initialhandle");
+    client.register_contributor(&contributor, &initial_handle);
+
+    // Verify initial handle works
+    let retrieved = client.get_contributor_by_github(&initial_handle);
+    assert_eq!(retrieved.address, contributor);
+    assert_eq!(retrieved.github_handle, initial_handle);
+
+    // Update GitHub handle
+    let new_handle = String::from_str(&env, "newhandle");
+    client.update_github_handle(&contributor, &new_handle);
+
+    // Verify old handle no longer works
+    let result = client.try_get_contributor_by_github(&initial_handle);
+    assert_eq!(result, Err(Ok(ContributorError::ContributorNotFound)));
+
+    // Verify new handle works
+    let retrieved = client.get_contributor_by_github(&new_handle);
+    assert_eq!(retrieved.address, contributor);
+    assert_eq!(retrieved.github_handle, new_handle);
+
+    // Verify contributor data by address still works
+    let retrieved_by_addr = client.get_contributor(&contributor);
+    assert_eq!(retrieved_by_addr.github_handle, new_handle);
+}
+
+#[test]
+fn test_update_github_handle_duplicate() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, contributor1) = setup_test(&env);
+    let contributor2 = Address::generate(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Register two contributors with different handles
+    let handle1 = String::from_str(&env, "handle1");
+    let handle2 = String::from_str(&env, "handle2");
+    client.register_contributor(&contributor1, &handle1);
+    client.register_contributor(&contributor2, &handle2);
+
+    // Try to update contributor1 to use contributor2's handle - should fail
+    let result = client.try_update_github_handle(&contributor1, &handle2);
+    assert_eq!(result, Err(Ok(ContributorError::GitHubHandleAlreadyExists)));
+}
+
+#[test]
+fn test_update_github_handle_invalid() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, contributor) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Register contributor
+    let initial_handle = String::from_str(&env, "initialhandle");
+    client.register_contributor(&contributor, &initial_handle);
+
+    // Try to update to empty handle - should fail
+    let empty_handle = String::from_str(&env, "");
+    let result = client.try_update_github_handle(&contributor, &empty_handle);
+    assert_eq!(result, Err(Ok(ContributorError::InvalidGitHubHandle)));
+}
+
+#[test]
+fn test_remove_contributor() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, contributor) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Register contributor
+    let github_handle = String::from_str(&env, "testuser");
+    client.register_contributor(&contributor, &github_handle);
+
+    // Verify contributor exists
+    let retrieved = client.get_contributor(&contributor);
+    assert_eq!(retrieved.github_handle, github_handle);
+    
+    let retrieved_by_handle = client.get_contributor_by_github(&github_handle);
+    assert_eq!(retrieved_by_handle.address, contributor);
+
+    // Remove contributor
+    client.remove_contributor(&admin, &contributor);
+
+    // Verify contributor no longer exists by address
+    let result_addr = client.try_get_contributor(&contributor);
+    assert_eq!(result_addr, Err(Ok(ContributorError::ContributorNotFound)));
+
+    // Verify contributor no longer exists by GitHub handle
+    let result_handle = client.try_get_contributor_by_github(&github_handle);
+    assert_eq!(result_handle, Err(Ok(ContributorError::ContributorNotFound)));
+}
+
+#[test]
+fn test_remove_contributor_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, contributor) = setup_test(&env);
+    let unauthorized = Address::generate(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Register contributor
+    let github_handle = String::from_str(&env, "testuser");
+    client.register_contributor(&contributor, &github_handle);
+
+    // Try to remove contributor with unauthorized user - should fail
+    let result = client.try_remove_contributor(&unauthorized, &contributor);
+    assert_eq!(result, Err(Ok(ContributorError::Unauthorized)));
+}
+
 // ---------------------------------------------------------------------------
 // Upgradeability tests
 // ---------------------------------------------------------------------------
