@@ -29,5 +29,5 @@ multiple-versions = "allow"
 wildcards = "allow"
 
 [sources]
-allow-git = true
-allow-registry = "https://github.com/rust-lang/crates.io-index"
+allow-git = []
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
