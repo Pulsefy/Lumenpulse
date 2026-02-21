@@ -13,11 +13,21 @@ export class User {
   id: string;
 
   @Index({ unique: true })
-  @Column({ type: 'varchar', length: 255, unique: true })
+  @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
   email: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   passwordHash: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  firstName: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  lastName: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
+  stellarPublicKey: string;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

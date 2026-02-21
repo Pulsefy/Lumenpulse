@@ -30,10 +30,7 @@ describe('Portfolio Performance Utils', () => {
 
   describe('findClosestSnapshot', () => {
     it('should return null for empty snapshots array', () => {
-      const result = findClosestSnapshot(
-        [],
-        new Date('2026-02-20T12:00:00Z'),
-      );
+      const result = findClosestSnapshot([], new Date('2026-02-20T12:00:00Z'));
       expect(result).toBeNull();
     });
 
@@ -114,18 +111,17 @@ describe('Portfolio Performance Utils', () => {
 
   describe('calculateWindowPerformance', () => {
     it('should return hasData=false when baseline snapshot is null', () => {
-      const result = calculateWindowPerformance(
-        150.00,
-        null,
-        { window: '24h', hours: 24 },
-      );
+      const result = calculateWindowPerformance(150.0, null, {
+        window: '24h',
+        hours: 24,
+      });
 
       expect(result).toEqual({
         window: '24h',
         hasData: false,
         absolutePnl: null,
         percentageChange: null,
-        currentValueUsd: 150.00,
+        currentValueUsd: 150.0,
         baselineValueUsd: null,
         baselineDate: null,
       });
@@ -140,17 +136,16 @@ describe('Portfolio Performance Utils', () => {
         totalValueUsd: '100.00',
       };
 
-      const result = calculateWindowPerformance(
-        150.00,
-        baselineSnapshot,
-        { window: '24h', hours: 24 },
-      );
+      const result = calculateWindowPerformance(150.0, baselineSnapshot, {
+        window: '24h',
+        hours: 24,
+      });
 
       expect(result.hasData).toBe(true);
-      expect(result.absolutePnl).toBe(50.00);
+      expect(result.absolutePnl).toBe(50.0);
       expect(result.percentageChange).toBe(50.0);
-      expect(result.currentValueUsd).toBe(150.00);
-      expect(result.baselineValueUsd).toBe(100.00);
+      expect(result.currentValueUsd).toBe(150.0);
+      expect(result.baselineValueUsd).toBe(100.0);
       expect(result.baselineDate).toEqual(new Date('2026-02-19T12:00:00Z'));
     });
 
@@ -163,14 +158,13 @@ describe('Portfolio Performance Utils', () => {
         totalValueUsd: '200.00',
       };
 
-      const result = calculateWindowPerformance(
-        150.00,
-        baselineSnapshot,
-        { window: '24h', hours: 24 },
-      );
+      const result = calculateWindowPerformance(150.0, baselineSnapshot, {
+        window: '24h',
+        hours: 24,
+      });
 
       expect(result.hasData).toBe(true);
-      expect(result.absolutePnl).toBe(-50.00);
+      expect(result.absolutePnl).toBe(-50.0);
       expect(result.percentageChange).toBe(-25.0);
     });
 
@@ -183,14 +177,13 @@ describe('Portfolio Performance Utils', () => {
         totalValueUsd: '0.00',
       };
 
-      const result = calculateWindowPerformance(
-        100.00,
-        baselineSnapshot,
-        { window: '24h', hours: 24 },
-      );
+      const result = calculateWindowPerformance(100.0, baselineSnapshot, {
+        window: '24h',
+        hours: 24,
+      });
 
       expect(result.hasData).toBe(true);
-      expect(result.absolutePnl).toBe(100.00);
+      expect(result.absolutePnl).toBe(100.0);
       expect(result.percentageChange).toBe(0);
     });
 
@@ -203,11 +196,10 @@ describe('Portfolio Performance Utils', () => {
         totalValueUsd: '100.00',
       };
 
-      const result = calculateWindowPerformance(
-        133.333333,
-        baselineSnapshot,
-        { window: '24h', hours: 24 },
-      );
+      const result = calculateWindowPerformance(133.333333, baselineSnapshot, {
+        window: '24h',
+        hours: 24,
+      });
 
       expect(result.absolutePnl).toBe(33.33);
       expect(result.percentageChange).toBe(33.3333);
@@ -244,32 +236,32 @@ describe('Portfolio Performance Utils', () => {
 
       const result = calculatePortfolioPerformance(
         'user-1',
-        150.00,
+        150.0,
         snapshots,
         mockNow,
       );
 
       expect(result.userId).toBe('user-1');
-      expect(result.currentValueUsd).toBe(150.00);
+      expect(result.currentValueUsd).toBe(150.0);
       expect(result.calculatedAt).toEqual(mockNow);
       expect(result.windows).toHaveLength(3);
 
       // 24h window
       const window24h = result.windows.find((w) => w.window === '24h');
       expect(window24h?.hasData).toBe(true);
-      expect(window24h?.absolutePnl).toBe(50.00);
+      expect(window24h?.absolutePnl).toBe(50.0);
       expect(window24h?.percentageChange).toBe(50.0);
 
       // 7d window
       const window7d = result.windows.find((w) => w.window === '7d');
       expect(window7d?.hasData).toBe(true);
-      expect(window7d?.absolutePnl).toBe(70.00);
+      expect(window7d?.absolutePnl).toBe(70.0);
       expect(window7d?.percentageChange).toBe(87.5);
 
       // 30d window
       const window30d = result.windows.find((w) => w.window === '30d');
       expect(window30d?.hasData).toBe(true);
-      expect(window30d?.absolutePnl).toBe(100.00);
+      expect(window30d?.absolutePnl).toBe(100.0);
       expect(window30d?.percentageChange).toBe(200.0);
     });
 
@@ -286,7 +278,7 @@ describe('Portfolio Performance Utils', () => {
 
       const result = calculatePortfolioPerformance(
         'user-1',
-        150.00,
+        150.0,
         snapshots,
         mockNow,
       );
@@ -308,7 +300,7 @@ describe('Portfolio Performance Utils', () => {
     it('should handle empty snapshots array', () => {
       const result = calculatePortfolioPerformance(
         'user-1',
-        150.00,
+        150.0,
         [],
         mockNow,
       );
@@ -325,7 +317,7 @@ describe('Portfolio Performance Utils', () => {
       const snapshots: SnapshotData[] = [];
       const beforeTest = new Date();
 
-      const result = calculatePortfolioPerformance('user-1', 150.00, snapshots);
+      const result = calculatePortfolioPerformance('user-1', 150.0, snapshots);
 
       const afterTest = new Date();
       expect(result.calculatedAt.getTime()).toBeGreaterThanOrEqual(
@@ -339,13 +331,13 @@ describe('Portfolio Performance Utils', () => {
     it('should include current value in all windows even without historical data', () => {
       const result = calculatePortfolioPerformance(
         'user-1',
-        150.00,
+        150.0,
         [],
         mockNow,
       );
 
       result.windows.forEach((window) => {
-        expect(window.currentValueUsd).toBe(150.00);
+        expect(window.currentValueUsd).toBe(150.0);
       });
     });
   });

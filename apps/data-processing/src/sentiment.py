@@ -32,6 +32,7 @@ class SentimentResult:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "text": self.text,
             "compound_score": self.compound_score,
             "positive": self.positive,
             "negative": self.negative,
@@ -74,12 +75,12 @@ class SentimentAnalyzer:
                 )
                 # Convert dict back to SentimentResult
                 return SentimentResult(
-                    text=cached_result["text"],
-                    compound_score=cached_result["compound_score"],
-                    positive=cached_result["positive"],
-                    negative=cached_result["negative"],
-                    neutral=cached_result["neutral"],
-                    sentiment_label=cached_result["sentiment_label"],
+                    text=cached_result.get("text", text[:100]),
+                    compound_score=cached_result.get("compound_score", 0.0),
+                    positive=cached_result.get("positive", 0.0),
+                    negative=cached_result.get("negative", 0.0),
+                    neutral=cached_result.get("neutral", 1.0),
+                    sentiment_label=cached_result.get("sentiment_label", "neutral"),
                 )
 
         # Perform actual analysis if not cached

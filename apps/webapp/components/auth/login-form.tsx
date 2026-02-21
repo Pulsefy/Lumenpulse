@@ -37,6 +37,8 @@ const ArrowLeft = dynamic(
 import SignInForm from "./sign-in-form";
 import { SignUpForm } from "./sign-up-form";
 import { ResetPasskeyForm } from "./reset-passkey-form";
+import { AuthApiService } from "@/lib/auth-service";
+import { useToast } from "@/hooks/use-toast";
 
 // Memoized components that don't need frequent re-renders
 const FormTitle = memo(
@@ -95,6 +97,7 @@ function LoginFormComponent() {
   const [isLoading, setIsLoading] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
   const nodesRef = useRef<(HTMLDivElement | null)[]>([]);
+  const { toast } = useToast();
 
   // Animation for form elements - optimized
   useEffect(() => {
@@ -142,15 +145,45 @@ function LoginFormComponent() {
     };
   }, [formMode]);
 
-  const handleSubmit = (formData: any) => {
+  const handleSubmit = async (formData: any) => {
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      if (formMode === "signup") {
+        await AuthApiService.register(formData);
+        toast({
+          title: "Account Created",
+          description: "Your account has been successfully created. You can now sign in.",
+        });
+        setFormMode("signin");
+      } else if (formMode === "signin") {
+        const result = await AuthApiService.login({
+          email: formData.email,
+          password: formData.passkey, // SignInForm uses passkey as field name
+        });
+        localStorage.setItem("access_token", result.access_token);
+        toast({
+          title: "Welcome Back!",
+          description: "Successfully signed in.",
+        });
+        window.location.href = "/dashboard";
+      } else if (formMode === "reset") {
+        await AuthApiService.forgotPassword(formData.email);
+        toast({
+          title: "Email Sent",
+          description: "If that email is registered, a reset link has been sent.",
+        });
+        setFormMode("signin");
+      }
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "An unexpected error occurred.",
+      });
+    } finally {
       setIsLoading(false);
-      console.log("Form submitted:", formData);
-      // Handle form submission logic here
-    }, 2000);
+    }
   };
 
   const changeFormMode = (mode: "signin" | "signup" | "reset") => {

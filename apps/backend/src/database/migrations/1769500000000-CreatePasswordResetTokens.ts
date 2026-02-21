@@ -14,7 +14,7 @@ export class CreatePasswordResetTokens1769500000000 implements MigrationInterfac
         "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         CONSTRAINT "PK_password_reset_tokens" PRIMARY KEY ("id"),
         CONSTRAINT "FK_password_reset_tokens_user" FOREIGN KEY ("userId")
-          REFERENCES "user"("id") ON DELETE CASCADE
+          REFERENCES "users"("id") ON DELETE CASCADE
       )`,
     );
     await queryRunner.query(

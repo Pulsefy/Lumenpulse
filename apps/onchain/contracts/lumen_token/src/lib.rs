@@ -7,7 +7,7 @@ mod events;
 mod metadata;
 mod test;
 
-use events::{AdminChangedEvent, UpgradedEvent};
+use events::{AdminChangedEvent, BurnEvent, UpgradedEvent};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
 
 #[contract]
@@ -84,15 +84,17 @@ impl LumenToken {
 
     pub fn burn(e: Env, from: Address, amount: i128) {
         from.require_auth();
-        balance::spend_balance(&e, from, amount);
+        balance::check_not_frozen(&e, &from);
+        balance::spend_balance(&e, from.clone(), amount);
+        BurnEvent { from, amount }.publish(&e);
     }
 
     pub fn burn_from(e: Env, spender: Address, from: Address, amount: i128) {
         spender.require_auth();
         balance::check_not_frozen(&e, &spender);
-
         allowance::spend_allowance(&e, from.clone(), spender, amount);
-        balance::spend_balance(&e, from, amount);
+        balance::spend_balance(&e, from.clone(), amount);
+        BurnEvent { from, amount }.publish(&e);
     }
 
     pub fn decimals(e: Env) -> u32 {
