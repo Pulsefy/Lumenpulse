@@ -4,7 +4,7 @@ import {
   ExecutionContext,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { User } from 'src/entities/user.entity';
+import { User } from '../../users/entities/user.entity';
 
 /**
  * Decorator to mark routes as public (skip JWT authentication)

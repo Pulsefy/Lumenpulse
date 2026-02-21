@@ -10,8 +10,8 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
-import { User } from '../entities/user.entity';
-import { User as EmailUser } from '../users/entities/user.entity';
+import { EmailService } from '../email/email.service';
+import { User } from '../users/entities/user.entity';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 
@@ -51,11 +51,12 @@ afterAll(() => {
 
 describe('AuthService – Password Reset', () => {
   let service: AuthService;
-  let emailUserRepository: Record<string, jest.Mock>;
+  let userRepository: Record<string, jest.Mock>;
   let resetTokenRepository: Record<string, jest.Mock>;
+  let emailService: Record<string, jest.Mock>;
   let refreshTokenRepository: Record<string, jest.Mock>;
 
-  const mockUser: Partial<EmailUser> = {
+  const mockUser: Partial<User> = {
     id: 'user-uuid-1',
     email: 'alice@example.com',
     passwordHash: 'old-hashed-password',
@@ -64,9 +65,13 @@ describe('AuthService – Password Reset', () => {
   };
 
   beforeEach(async () => {
-    emailUserRepository = {
+    userRepository = {
       findOne: jest.fn(),
       save: jest.fn(),
+      create: jest
+        .fn()
+        .mockImplementation((dto: Record<string, unknown>) => ({ ...dto })),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
     };
 
     resetTokenRepository = {
@@ -78,6 +83,10 @@ describe('AuthService – Password Reset', () => {
       update: jest.fn().mockResolvedValue({ affected: 1 }),
     };
 
+    emailService = {
+      sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+    };
+
     refreshTokenRepository = {
       findOne: jest.fn(),
       create: jest
@@ -85,12 +94,6 @@ describe('AuthService – Password Reset', () => {
         .mockImplementation((dto: Record<string, unknown>) => ({ ...dto })),
       save: jest.fn().mockImplementation((entity) => Promise.resolve(entity)),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
-    };
-
-    const userRepository = {
-      findOne: jest.fn(),
-      create: jest.fn(),
-      save: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -101,12 +104,12 @@ describe('AuthService – Password Reset', () => {
           useValue: userRepository,
         },
         {
-          provide: getRepositoryToken(EmailUser),
-          useValue: emailUserRepository,
-        },
-        {
           provide: getRepositoryToken(PasswordResetToken),
           useValue: resetTokenRepository,
+        },
+        {
+          provide: EmailService,
+          useValue: emailService,
         },
         {
           provide: getRepositoryToken(RefreshToken),
@@ -147,7 +150,7 @@ describe('AuthService – Password Reset', () => {
 
   describe('forgotPassword', () => {
     it('should return generic message when email does not exist', async () => {
-      emailUserRepository.findOne.mockResolvedValue(null);
+      userRepository.findOne.mockResolvedValue(null);
 
       const result = await service.forgotPassword('unknown@example.com');
 
@@ -155,10 +158,11 @@ describe('AuthService – Password Reset', () => {
         'If that email is registered, a reset link has been sent.',
       );
       expect(resetTokenRepository.save).not.toHaveBeenCalled();
+      expect(emailService.sendPasswordResetEmail).not.toHaveBeenCalled();
     });
 
     it('should generate and persist a reset token for existing user', async () => {
-      emailUserRepository.findOne.mockResolvedValue(mockUser);
+      userRepository.findOne.mockResolvedValue(mockUser);
 
       const result = await service.forgotPassword('alice@example.com');
 
@@ -174,10 +178,14 @@ describe('AuthService – Password Reset', () => {
         }),
       );
       expect(resetTokenRepository.save).toHaveBeenCalled();
+      expect(emailService.sendPasswordResetEmail).toHaveBeenCalledWith(
+        'alice@example.com',
+        expect.any(String),
+      );
     });
 
     it('should invalidate previous tokens before creating a new one', async () => {
-      emailUserRepository.findOne.mockResolvedValue(mockUser);
+      userRepository.findOne.mockResolvedValue(mockUser);
 
       await service.forgotPassword('alice@example.com');
 
@@ -188,11 +196,11 @@ describe('AuthService – Password Reset', () => {
     });
 
     it('should normalise the email to lowercase and trim', async () => {
-      emailUserRepository.findOne.mockResolvedValue(null);
+      userRepository.findOne.mockResolvedValue(null);
 
       await service.forgotPassword('  Alice@Example.COM  ');
 
-      expect(emailUserRepository.findOne).toHaveBeenCalledWith({
+      expect(userRepository.findOne).toHaveBeenCalledWith({
         where: { email: 'alice@example.com' },
       });
     });
@@ -239,7 +247,7 @@ describe('AuthService – Password Reset', () => {
 
     it('should reject if user no longer exists', async () => {
       resetTokenRepository.findOne.mockResolvedValue({ ...validStoredToken });
-      emailUserRepository.findOne.mockResolvedValue(null);
+      userRepository.findOne.mockResolvedValue(null);
 
       await expect(
         service.resetPassword(rawToken, 'newPassword123'),
@@ -249,7 +257,7 @@ describe('AuthService – Password Reset', () => {
     it('should hash the new password and save user', async () => {
       const storedToken = { ...validStoredToken };
       resetTokenRepository.findOne.mockResolvedValue(storedToken);
-      emailUserRepository.findOne.mockResolvedValue({ ...mockUser });
+      userRepository.findOne.mockResolvedValue({ ...mockUser });
 
       mockedHash.mockResolvedValue('new-hashed-password');
 
@@ -257,7 +265,7 @@ describe('AuthService – Password Reset', () => {
 
       expect(result.message).toBe('Password has been reset successfully.');
       expect(mockedHash).toHaveBeenCalledWith('newPassword123', 10);
-      expect(emailUserRepository.save).toHaveBeenCalledWith(
+      expect(userRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({ passwordHash: 'new-hashed-password' }),
       );
     });
@@ -265,7 +273,7 @@ describe('AuthService – Password Reset', () => {
     it('should invalidate the token after successful reset', async () => {
       const storedToken = { ...validStoredToken };
       resetTokenRepository.findOne.mockResolvedValue(storedToken);
-      emailUserRepository.findOne.mockResolvedValue({ ...mockUser });
+      userRepository.findOne.mockResolvedValue({ ...mockUser });
       mockedHash.mockResolvedValue('hashed');
 
       await service.resetPassword(rawToken, 'newPassword123');
@@ -279,7 +287,7 @@ describe('AuthService – Password Reset', () => {
       // First call: token is valid
       const storedToken = { ...validStoredToken };
       resetTokenRepository.findOne.mockResolvedValueOnce(storedToken);
-      emailUserRepository.findOne.mockResolvedValueOnce({ ...mockUser });
+      userRepository.findOne.mockResolvedValueOnce({ ...mockUser });
       mockedHash.mockResolvedValue('hashed');
 
       await service.resetPassword(rawToken, 'newPassword123');
@@ -325,11 +333,6 @@ describe('AuthService – Refresh Tokens', () => {
       update: jest.fn().mockResolvedValue({ affected: 1 }),
     };
 
-    const emailUserRepository = {
-      findOne: jest.fn(),
-      save: jest.fn(),
-    };
-
     const resetTokenRepository = {
       findOne: jest.fn(),
       create: jest.fn(),
@@ -345,16 +348,16 @@ describe('AuthService – Refresh Tokens', () => {
           useValue: userRepository,
         },
         {
-          provide: getRepositoryToken(EmailUser),
-          useValue: emailUserRepository,
-        },
-        {
           provide: getRepositoryToken(PasswordResetToken),
           useValue: resetTokenRepository,
         },
         {
           provide: getRepositoryToken(RefreshToken),
           useValue: refreshTokenRepository,
+        },
+        {
+          provide: EmailService,
+          useValue: { sendPasswordResetEmail: jest.fn() },
         },
         {
           provide: UsersService,

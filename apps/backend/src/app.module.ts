@@ -9,6 +9,7 @@ import { SentimentModule } from './sentiment/sentiment.module';
 import { NewsModule } from './news/news.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { EmailModule } from './email/email.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
 import databaseConfig from './database/database.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
@@ -41,6 +42,7 @@ import { TestController } from './test/test.controller';
     NewsModule,
     AuthModule,
     UsersModule,
+    EmailModule,
     PortfolioModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
