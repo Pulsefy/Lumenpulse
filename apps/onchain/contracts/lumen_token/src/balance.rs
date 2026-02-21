@@ -1,10 +1,22 @@
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{symbol_short, Address, Env, Symbol};
 
 #[derive(Clone)]
 #[soroban_sdk::contracttype]
 pub enum DataKey {
     Balance(Address),
     State(Address), // true = frozen
+}
+
+fn total_supply_key() -> Symbol {
+    symbol_short!("TSUPPLY")
+}
+
+pub fn read_total_supply(e: &Env) -> i128 {
+    e.storage().instance().get(&total_supply_key()).unwrap_or(0)
+}
+
+fn write_total_supply(e: &Env, supply: i128) {
+    e.storage().instance().set(&total_supply_key(), &supply);
 }
 
 pub fn read_balance(e: &Env, addr: Address) -> i128 {
@@ -37,6 +49,8 @@ pub fn receive_balance(e: &Env, addr: Address, amount: i128) {
     check_not_frozen(e, &addr);
     let balance = read_balance(e, addr.clone());
     write_balance(e, addr, balance + amount);
+    write_total_supply(e, read_total_supply(e) + amount);
+    write_total_supply(e, read_total_supply(e) - amount);
 }
 
 pub fn spend_balance(e: &Env, addr: Address, amount: i128) {

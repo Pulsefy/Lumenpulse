@@ -15,3 +15,10 @@ pub struct AdminChangedEvent {
     pub old_admin: Address,
     pub new_admin: Address,
 }
+
+#[contractevent]
+pub struct BurnEvent {
+    #[topic]
+    pub from: Address,
+    pub amount: i128,
+}
