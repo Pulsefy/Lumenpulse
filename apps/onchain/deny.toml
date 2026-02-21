@@ -15,9 +15,9 @@ allow = [
 confidence-threshold = 0.8
 
 [advisories]
-vulnerability = "deny"
-unmaintained = "transitive"
-notice = "warn"
+unmaintained = "warn"
+unsound = "warn"
+yanked = "warn"
 
 [licenses.private]
 ignore = true
