@@ -534,10 +534,7 @@ fn test_remove_contributor() {
 
     // Verify contributor no longer exists by address
     let result_addr = client.try_get_contributor(&contributor);
-    assert_eq!(
-        result_addr,
-        Err(Ok(ContributorError::ContributorNotFound))
-    );
+    assert_eq!(result_addr, Err(Ok(ContributorError::ContributorNotFound)));
 
     // Verify contributor no longer exists by GitHub handle
     let result_handle = client.try_get_contributor_by_github(&github_handle);
