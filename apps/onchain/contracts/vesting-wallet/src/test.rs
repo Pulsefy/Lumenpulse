@@ -474,3 +474,154 @@ fn test_multiple_beneficiaries() {
     assert_eq!(claimed1, amount1 / 2);
     assert_eq!(claimed2, amount2 / 2);
 }
+
+#[test]
+fn test_get_claimable_view_method() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+
+    // Create vesting
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+
+    // Test before vesting starts
+    let claimable = client.get_claimable(&beneficiary);
+    assert_eq!(claimable, 0);
+
+    // Test at 25% through vesting
+    env.ledger().set_timestamp(start_time + (duration / 4));
+    let claimable = client.get_claimable(&beneficiary);
+    let expected = amount / 4;
+    assert_eq!(claimable, expected);
+
+    // Test at 50% through vesting
+    env.ledger().set_timestamp(start_time + (duration / 2));
+    let claimable = client.get_claimable(&beneficiary);
+    let expected = amount / 2;
+    assert_eq!(claimable, expected);
+
+    // Verify get_claimable matches get_available_amount
+    let available = client.get_available_amount(&beneficiary);
+    assert_eq!(claimable, available);
+
+    // Claim some tokens
+    let claimed = client.claim(&beneficiary);
+    assert_eq!(claimed, expected);
+
+    // Test that get_claimable returns 0 immediately after claim
+    let claimable_after = client.get_claimable(&beneficiary);
+    assert_eq!(claimable_after, 0);
+
+    // Test at 75% through vesting (after claiming at 50%)
+    env.ledger().set_timestamp(start_time + (duration * 3 / 4));
+    let claimable = client.get_claimable(&beneficiary);
+    let expected = (amount * 3 / 4) - (amount / 2); // 75% - 50% already claimed
+    assert_eq!(claimable, expected);
+
+    // Test after vesting period ends
+    env.ledger().set_timestamp(start_time + duration + 1000);
+    let claimable = client.get_claimable(&beneficiary);
+    let expected = amount - (amount / 2); // All remaining tokens
+    assert_eq!(claimable, expected);
+
+    // Verify get_claimable still matches get_available_amount
+    let available = client.get_available_amount(&beneficiary);
+    assert_eq!(claimable, available);
+}
+
+#[test]
+fn test_get_claimable_consistency_with_claim() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+
+    // Create vesting
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+
+    // Fast forward to middle of vesting
+    env.ledger().set_timestamp(start_time + duration / 2);
+
+    // Get claimable amount (view method - doesn't modify state)
+    let claimable_before = client.get_claimable(&beneficiary);
+
+    // Claim tokens (modifies state)
+    let claimed = client.claim(&beneficiary);
+
+    // Verify that claim returned the same amount as get_claimable predicted
+    assert_eq!(claimed, claimable_before);
+
+    // Verify get_claimable now returns 0 (no time has passed)
+    let claimable_after = client.get_claimable(&beneficiary);
+    assert_eq!(claimable_after, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Upgradeability tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_set_admin_transfers_role() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let new_admin = Address::generate(&env);
+    client.set_admin(&admin, &new_admin);
+
+    assert_eq!(
+        client.get_admin(),
+        new_admin,
+        "admin must be updated after set_admin"
+    );
+}
+
+#[test]
+fn test_only_admin_can_upgrade() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let non_admin = Address::generate(&env);
+    let dummy = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
+
+    let result = client.try_upgrade(&non_admin, &dummy);
+    assert_eq!(result, Err(Ok(crate::errors::VestingError::Unauthorized)));
+}
+
+#[test]
+fn test_old_admin_cannot_upgrade_after_rotation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let new_admin = Address::generate(&env);
+    client.set_admin(&admin, &new_admin);
+
+    let dummy = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
+    let result = client.try_upgrade(&admin, &dummy);
+    assert_eq!(result, Err(Ok(crate::errors::VestingError::Unauthorized)));
+}

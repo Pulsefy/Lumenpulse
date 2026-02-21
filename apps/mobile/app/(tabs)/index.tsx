@@ -1,28 +1,31 @@
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
+import ProtectedRoute from '../../components/ProtectedRoute';
 
 export default function HomeScreen() {
   return (
-    <View style={styles.container}>
-      <ExpoStatusBar style="light" />
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Lumenpulse Mobile</Text>
-          <Text style={styles.subtitle}>Decentralized Crypto Insights</Text>
-        </View>
-
-        <View style={styles.comingSoon}>
-          <View style={styles.glassCard}>
-            <Text style={styles.cardText}>Portfolio & News aggregation coming soon.</Text>
+    <ProtectedRoute>
+      <View style={styles.container}>
+        <ExpoStatusBar style="light" />
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Lumenpulse Mobile</Text>
+            <Text style={styles.subtitle}>Decentralized Crypto Insights</Text>
           </View>
-        </View>
 
-        <TouchableOpacity style={styles.button}>
-          <Text style={styles.buttonText}>Get Started</Text>
-        </TouchableOpacity>
+          <View style={styles.comingSoon}>
+            <View style={styles.glassCard}>
+              <Text style={styles.cardText}>Portfolio & News aggregation coming soon.</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.button}>
+            <Text style={styles.buttonText}>Get Started</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </ProtectedRoute>
   );
 }
 

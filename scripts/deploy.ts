@@ -29,15 +29,16 @@ async function main() {
         const adminPublicKey = adminKeypair.publicKey();
         console.log(`Using Admin Account: ${adminPublicKey}`);
 
-        const context: DeploymentContext = {
-            adminPublicKey,
-            networkPassphrase: NETWORK_PASSPHRASE
-        };
-
         const configs = getContractConfigs();
         const output: Record<string, string> = {
             network: NETWORK_PASSPHRASE,
             admin: adminPublicKey,
+        };
+
+        const context: DeploymentContext = {
+            adminPublicKey,
+            networkPassphrase: NETWORK_PASSPHRASE,
+            deployedContracts: output
         };
 
         for (const config of configs) {
@@ -60,6 +61,9 @@ async function main() {
             const contractId = await createContract(server, adminKeypair, NETWORK_PASSPHRASE, wasmHash);
             console.log(`Contract ID: ${contractId}`);
 
+            // Store contract ID before initialization so subsequent contracts can reference it
+            output[config.name] = contractId;
+
             // 4. Initialize
             if (config.init) {
                 console.log(`Initializing with function: ${config.init.fn}...`);
@@ -74,8 +78,6 @@ async function main() {
                 );
                 console.log('Initialized.');
             }
-
-            output[config.name] = contractId;
         }
 
         // Output to JSON

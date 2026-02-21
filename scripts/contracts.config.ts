@@ -4,6 +4,8 @@ import { Address } from '@stellar/stellar-sdk';
 export interface DeploymentContext {
     adminPublicKey: string;
     networkPassphrase: string;
+    /** Contract IDs of already deployed contracts, for cross-contract initialization */
+    deployedContracts: Record<string, string>;
 }
 
 export interface ContractConfig {
@@ -29,12 +31,55 @@ export function getContractConfigs(): ContractConfig[] {
 
     return [
         {
+            name: 'token',
+            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/lumen_token.wasm',
+            init: {
+                fn: 'initialize',
+                args: ({ adminPublicKey }) => {
+                    return [
+                        new Address(adminPublicKey).toScVal(),
+                        xdr.ScVal.scvU32(7), // decimal: 7
+                        xdr.ScVal.scvString('LumenToken'), // name
+                        xdr.ScVal.scvString('LUMEN'), // symbol
+                    ];
+                }
+            }
+        },
+        {
+            name: 'registry',
+            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/contributor_registry.wasm',
+            init: {
+                fn: 'initialize',
+                args: ({ adminPublicKey }) => {
+                    return [new Address(adminPublicKey).toScVal()];
+                }
+            }
+        },
+        {
             name: 'vault',
             wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/crowdfund_vault.wasm',
             init: {
                 fn: 'initialize',
                 args: ({ adminPublicKey }) => {
                     return [new Address(adminPublicKey).toScVal()];
+                }
+            }
+        },
+        {
+            name: 'vesting_wallet',
+            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/vesting_wallet.wasm',
+            init: {
+                fn: 'initialize',
+                args: ({ adminPublicKey, deployedContracts }) => {
+                    // Vesting wallet requires the token contract address
+                    const tokenAddress = deployedContracts['token'];
+                    if (!tokenAddress) {
+                        throw new Error('Token contract must be deployed before vesting wallet');
+                    }
+                    return [
+                        new Address(adminPublicKey).toScVal(),
+                        new Address(tokenAddress).toScVal(),
+                    ];
                 }
             }
         }

@@ -10,6 +10,7 @@ import { SentimentModule } from './sentiment/sentiment.module';
 import { NewsModule } from './news/news.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { PortfolioModule } from './portfolio/portfolio.module';
 import databaseConfig from './database/database.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { TestController } from './test/test.controller';
@@ -52,10 +53,12 @@ import { GlobalExceptionFilter } from './filters/global-exception.filter';
       }),
       inject: [ConfigService],
     }),
+    ScheduleModule.forRoot(),
     SentimentModule,
     NewsModule,
     AuthModule,
     UsersModule,
+    PortfolioModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

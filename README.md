@@ -175,8 +175,9 @@ We welcome contributions to evolve LumenPulse! See [CONTRIBUTING.md](CONTRIBUTIN
 ## License
 MIT License. See [LICENSE](LICENSE).
 
+
 ## Support & Community
-- Discord: [discord.gg/lumenpulse](https://discord.gg/lumenpulse).
-- Questions? Tag  @Cedarich in issues.
+- Join the [Lumenpulse Discord](https://discord.gg/gBmApTNVV) for real-time help, discussions, and updates.
+- Have questions? Open an issue or DM @pulsefy.
 
 Built with ❤️ by the LumenPulse Team. Powered by Stellar. 🚀

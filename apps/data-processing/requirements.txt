@@ -3,6 +3,7 @@ python-dotenv
 fastapi
 uvicorn
 vaderSentiment
+langdetect
 apscheduler
 stellar-sdk
 pytest
@@ -11,9 +12,16 @@ redis
 numpy
 stellar-sdk>=8.2.0  
 
+# Database
+asyncpg>=0.29.0
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+psycopg2-binary>=2.9.9
+
 # For development/testing
 pytest>=7.0.0
 pytest-mock>=3.10.0
+pytest-asyncio>=0.23.0
 
 # Code quality tools
 black==24.1.1
@@ -24,35 +32,3 @@ pre-commit==3.6.0
 # Type stubs for better mypy coverage
 types-requests==2.31.0.20240125
 types-python-dateutil==2.8.19.20240106
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# requests
-# python-dotenv
-# fastapi
-# uvicorn
-# vaderSentiment
-# apscheduler
-# stellar-sdk
-# pytest
-# flake8
-# redis
-# numpy
-# stellar-sdk>=8.2.0  
-
-# # For development/testing
-# pytest>=7.0.0
-# pytest-mock>=3.10.0
