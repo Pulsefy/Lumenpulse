@@ -12,9 +12,9 @@ allow = [
 confidence-threshold = 0.8
 
 [advisories]
-allow = [
-    { name = "derivative", advisory = "RUSTSEC-2024-0388" },
-    { name = "paste", advisory = "RUSTSEC-2024-0436" },
+ignore = [
+    "RUSTSEC-2024-0388",
+    "RUSTSEC-2024-0436",
 ]
 
 [licenses.private]
