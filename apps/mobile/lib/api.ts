@@ -1,11 +1,8 @@
-import Constants from 'expo-constants';
+import { apiClient, ApiResponse } from './api-client';
 
-// Get the backend URL from environment variables or use default
-const BACKEND_URL = 
-  Constants.expoConfig?.extra?.backendUrl || 
-  process.env.EXPO_PUBLIC_BACKEND_URL || 
-  'http://localhost:3000';
-
+/**
+ * Auth API Types
+ */
 export interface LoginCredentials {
   email: string;
   password: string;
@@ -27,56 +24,42 @@ export interface RegisterResponse {
   createdAt: string;
 }
 
-class ApiClient {
-  private baseUrl: string;
-
-  constructor() {
-    this.baseUrl = BACKEND_URL;
-  }
-
-  async login(credentials: LoginCredentials): Promise<LoginResponse> {
-    try {
-      const response = await fetch(`${this.baseUrl}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Login failed: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    }
-  }
-
-  async register(credentials: RegisterCredentials): Promise<RegisterResponse> {
-    try {
-      const response = await fetch(`${this.baseUrl}/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Registration failed: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Registration error:', error);
-      throw error;
-    }
-  }
+export interface HealthResponse {
+  status: string;
+  timestamp: string;
 }
 
-export const apiClient = new ApiClient();
+/**
+ * Auth API Service
+ * Uses the shared API client for all requests
+ */
+export const authApi = {
+  /**
+   * Login user
+   */
+  async login(credentials: LoginCredentials): Promise<ApiResponse<LoginResponse>> {
+    return apiClient.post<LoginResponse>('/auth/login', credentials);
+  },
+
+  /**
+   * Register new user
+   */
+  async register(credentials: RegisterCredentials): Promise<ApiResponse<RegisterResponse>> {
+    return apiClient.post<RegisterResponse>('/auth/register', credentials);
+  },
+};
+
+/**
+ * Health Check API
+ */
+export const healthApi = {
+  /**
+   * Check backend health
+   */
+  async check(): Promise<ApiResponse<HealthResponse>> {
+    return apiClient.get<HealthResponse>('/health');
+  },
+};
+
+// Re-export the client for direct use if needed
+export { apiClient };

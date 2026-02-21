@@ -6,7 +6,6 @@ use soroban_sdk::{
     token::{StellarAssetClient, TokenClient},
     Address, Env,
 };
-
 fn create_token_contract<'a>(
     env: &Env,
     admin: &Address,
@@ -1353,4 +1352,176 @@ fn test_old_admin_cannot_upgrade_after_rotation() {
     let dummy = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
     let result = client.try_upgrade(&admin, &dummy);
     assert_eq!(result, Err(Ok(crate::errors::CrowdfundError::Unauthorized)));
+}
+
+#[test]
+fn test_cancel_project() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    assert_eq!(project_id, 0);
+
+    client.cancel_project(&admin, &project_id);
+
+    // Verify project data
+    let project = client.get_project(&project_id);
+    assert_eq!(project.id, 0);
+    assert_eq!(project.owner, owner);
+    assert_eq!(project.target_amount, 1_000_000);
+    assert_eq!(project.total_deposited, 0);
+    assert_eq!(project.total_withdrawn, 0);
+    assert!(!project.is_active);
+}
+
+#[test]
+fn test_cancel_project_owner_can_cancel() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+    assert_eq!(project_id, 0);
+
+    let project = client.get_project(&project_id);
+    client.cancel_project(&project.owner, &project_id);
+
+    let project = client.get_project(&project_id);
+    assert!(!project.is_active);
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #7)")]
+fn test_cancel_project_cant_deposit() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+    assert_eq!(project_id, 0);
+
+    let project = client.get_project(&project_id);
+    client.cancel_project(&project.owner, &project_id);
+
+    client.deposit(&user, &project_id, &100);
+}
+
+#[test]
+fn test_cancel_projects() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let user3 = Address::generate(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    token_client.transfer(&user, &user1, &100_000);
+    token_client.transfer(&user, &user2, &200_000);
+    token_client.transfer(&user, &user3, &300_000);
+
+    // Deposit funds
+    let deposit_amount: i128 = 100_000;
+    client.deposit(&user1, &project_id, &deposit_amount);
+    // client.register_contributor(&user);
+
+    let deposit_amount_2: i128 = 200_000;
+    client.deposit(&user2, &project_id, &deposit_amount_2);
+    // client.register_contributor(&user2);
+
+    let deposit_amount_3: i128 = 300_000;
+    client.deposit(&user3, &project_id, &deposit_amount_3);
+
+    // Verify balance
+    assert_eq!(
+        client.get_balance(&project_id),
+        deposit_amount + deposit_amount_2 + deposit_amount_3
+    );
+
+    // Verify project data updated
+    let project = client.get_project(&project_id);
+    assert_eq!(
+        project.total_deposited,
+        deposit_amount + deposit_amount_2 + deposit_amount_3
+    );
+
+    client.cancel_project(&project.owner, &project_id);
+
+    client.refund_contributors(&project_id, &user);
+
+    assert_eq!(token_client.balance(&user1), deposit_amount);
+    assert_eq!(token_client.balance(&user2), deposit_amount_2);
+    assert_eq!(token_client.balance(&user3), deposit_amount_3);
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #13)")]
+fn test_cancel_project_failed() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Deposit funds
+    let deposit_amount: i128 = 100_000;
+    client.deposit(&user, &project_id, &deposit_amount);
+
+    // Verify balance
+    assert_eq!(client.get_balance(&project_id), deposit_amount);
+
+    client.refund_contributors(&project_id, &user);
 }

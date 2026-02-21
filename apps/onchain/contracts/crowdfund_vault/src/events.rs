@@ -92,3 +92,16 @@ pub struct AdminChangedEvent {
     pub old_admin: Address,
     pub new_admin: Address,
 }
+
+#[contractevent]
+pub struct ProjectCanceledEvent {
+    pub project_id: u64,
+    pub caller: Address,
+}
+
+#[contractevent]
+pub struct ContributionRefundedEvent {
+    pub project_id: u64,
+    pub contributor: Address,
+    pub amount: i128,
+}
