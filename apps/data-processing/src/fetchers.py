@@ -1,6 +1,7 @@
 """
 News fetcher module - fetches crypto/market news from various sources
 """
+
 import requests
 import logging
 from datetime import datetime, timedelta
@@ -11,7 +12,10 @@ logger = logging.getLogger(__name__)
 
 class NewsItem:
     """Data class representing a news item"""
-    def __init__(self, title: str, content: str, source: str, url: str, published_at: datetime):
+
+    def __init__(
+        self, title: str, content: str, source: str, url: str, published_at: datetime
+    ):
         self.title = title
         self.content = content
         self.source = source
@@ -26,7 +30,7 @@ class NewsItem:
             "source": self.source,
             "url": self.url,
             "published_at": self.published_at.isoformat(),
-            "fetched_at": self.fetched_at.isoformat()
+            "fetched_at": self.fetched_at.isoformat(),
         }
 
 
@@ -36,7 +40,7 @@ class NewsFetcher:
     def __init__(self):
         self.sources = {
             "crypto_news": "https://api.coingecko.com/api/v3/news",
-            "mock_market": "https://jsonplaceholder.typicode.com/posts"
+            "mock_market": "https://jsonplaceholder.typicode.com/posts",
         }
 
     def fetch_crypto_news(self) -> List[NewsItem]:
@@ -55,9 +59,15 @@ class NewsFetcher:
                         content=article.get("description", article.get("title", "")),
                         source="CoinGecko",
                         url=article.get("url", ""),
-                        published_at=datetime.fromisoformat(
-                            article.get("published_at", datetime.utcnow().isoformat()).replace("Z", "+00:00")
-                        ) if article.get("published_at") else datetime.utcnow()
+                        published_at=(
+                            datetime.fromisoformat(
+                                article.get(
+                                    "published_at", datetime.utcnow().isoformat()
+                                ).replace("Z", "+00:00")
+                            )
+                            if article.get("published_at")
+                            else datetime.utcnow()
+                        ),
                     )
                     news_items.append(news_item)
                 except Exception as e:
@@ -84,7 +94,8 @@ class NewsFetcher:
                     content=article.get("body", ""),
                     source="Mock Market Feed",
                     url=f"https://example.com/news/{article.get('id')}",
-                    published_at=datetime.utcnow() - timedelta(hours=article.get("id", 1) % 24)
+                    published_at=datetime.utcnow()
+                    - timedelta(hours=article.get("id", 1) % 24),
                 )
                 news_items.append(news_item)
 
@@ -98,8 +109,8 @@ class NewsFetcher:
         """Fetch news from all sources"""
         crypto_news = self.fetch_crypto_news()
         market_news = self.fetch_market_news()
-        
+
         all_news = crypto_news + market_news
         logger.info(f"Total news items fetched: {len(all_news)}")
-        
+
         return all_news

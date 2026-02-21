@@ -1,0 +1,18 @@
+{
+    "name": "deployment-scripts",
+    "version": "1.0.0",
+    "description": "Scripts to deploy Stellar contracts",
+    "main": "deploy.ts",
+    "scripts": {
+        "deploy": "ts-node deploy.ts"
+    },
+    "dependencies": {
+        "@stellar/stellar-sdk": "^14.4.3",
+        "dotenv": "^17.2.3"
+    },
+    "devDependencies": {
+        "@types/node": "^25.0.10",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.9.3"
+    }
+}

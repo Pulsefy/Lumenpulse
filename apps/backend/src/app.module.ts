@@ -1,21 +1,27 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TestExceptionController } from './test-exception.controller';
-import { StellarController } from './stellar/stellar.controller';
-import { StellarService } from './stellar/stellar.service';
-import stellarConfig from './stellar/config/stellar.config';
+import { SentimentModule } from './sentiment/sentiment.module';
+import { NewsModule } from './news/news.module';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { EmailModule } from './email/email.module';
+import { PortfolioModule } from './portfolio/portfolio.module';
+import databaseConfig from './database/database.config';
+import { LoggerMiddleware } from './common/middleware/logger.middleware';
+import { TestController } from './test/test.controller';
 
 @Module({
-  controllers: [AppController, TestExceptionController, StellarController],
-  providers: [AppService, StellarService],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
-      load: [stellarConfig],
+      load: [databaseConfig],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -27,12 +33,35 @@ import stellarConfig from './stellar/config/stellar.config';
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: false, // Always false for production, and recommended false when using migrations
+        synchronize: false,
         migrations: [__dirname + '/migrations/*{.ts,.js}'],
         logging: true,
       }),
       inject: [ConfigService],
     }),
+    ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100,
+    }]),
+    SentimentModule,
+    NewsModule,
+    AuthModule,
+    UsersModule,
+    EmailModule,
+    PortfolioModule,
+  ],
+  controllers: [AppController, TestController, TestExceptionController],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(LoggerMiddleware).forRoutes('*');
+  }
+}

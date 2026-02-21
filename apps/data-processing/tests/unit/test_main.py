@@ -1,6 +1,7 @@
 """
 Unit tests for main module.
 """
+
 import pytest
 
 
