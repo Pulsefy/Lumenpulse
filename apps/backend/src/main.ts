@@ -26,10 +26,8 @@ function getCorsOrigin(): string | string[] {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Register the global exception filter
-  app.useGlobalFilters(new GlobalExceptionFilter());
-
-  // Swagger Configuration
+  // Global filters are registered in AppModule via APP_FILTER provider
+  // which allows for dependency injection and better integration.
 
   app.use(
     helmet({
@@ -40,8 +38,6 @@ async function bootstrap() {
   app.enableCors({
     origin: getCorsOrigin(),
   });
-
-  app.useGlobalFilters(new GlobalExceptionFilter());
 
   const config = new DocumentBuilder()
     .setTitle('LumenPulse API')

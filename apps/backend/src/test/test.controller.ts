@@ -93,7 +93,7 @@ export class TestController {
     };
   }
 
-  @Throttle(10, 60) // Custom limit: 10 requests per 60 seconds
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // Custom limit: 10 requests per 60 seconds
   @Get('rate-limit/custom')
   customRateLimit() {
     return {
