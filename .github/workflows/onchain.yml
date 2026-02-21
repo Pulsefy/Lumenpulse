@@ -72,13 +72,13 @@ jobs:
     - name: Build contract
       run: |
         cd apps/onchain/contracts/contributor_registry
-        stellar contract build
+        cargo build --release --target wasm32-unknown-unknown
         echo "Checking target directory structure:"
-        find ../../../target -name "*.wasm" -type f 2>/dev/null || echo "No WASM files found"
+        find ./target -name "*.wasm" -type f 2>/dev/null || echo "No WASM files found"
         echo "Target directory contents:"
-        ls -la ../../../target/ || echo "No target directory"
-        ls -la ../../../target/wasm32v1-none/ || echo "No wasm32v1-none directory"
-        ls -la ../../../target/wasm32v1-none/release/ || echo "No release directory"
+        ls -la ./target/ || echo "No target directory"
+        ls -la ./target/wasm32-unknown-unknown/ || echo "No wasm32-unknown-unknown directory"
+        ls -la ./target/wasm32-unknown-unknown/release/ || echo "No release directory"
 
   lint:
     runs-on: ubuntu-latest
