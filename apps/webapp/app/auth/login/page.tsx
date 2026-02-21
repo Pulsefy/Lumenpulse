@@ -40,8 +40,8 @@ export default function LoginPage() {
                 style={{ zIndex: 50, isolation: "isolate" }}
               >
                 <Image
-                  src="/assets/starkpulse-04.svg"
-                  alt="StarkPulse"
+                  src="/assets/lumenpulse-04.svg"
+                  alt="Lumenpulse"
                   width={240}
                   height={82}
                   className="h-16 md:h-24 w-auto"
@@ -75,3 +75,6 @@ export default function LoginPage() {
     </div>
   );
 }
+
+
+

@@ -304,3 +304,4 @@ export function CryptoTable({ formatNumberAction }: CryptoTableProps) {
     </div>
   );
 }
+

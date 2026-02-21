@@ -53,3 +53,4 @@ export const animateLines = (selector: string, options = {}) => {
 export const createAnimationTimeline = (defaults = {}) => {
   return gsap.timeline({ defaults: { ease: "power2.out", ...defaults } });
 };
+

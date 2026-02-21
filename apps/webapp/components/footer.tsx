@@ -189,8 +189,8 @@ export function Footer() {
             <div className="mb-2">
               <div className="relative z-50 isolation-isolate flex justify-start">
                 <Image
-                  src="/assets/starkpulse-04.svg"
-                  alt="StarkPulse"
+                  src="/assets/lumenpulse-04.svg"
+                  alt="Lumenpulse"
                   width={360}
                   height={160}
                   className="h-16 sm:h-20 md:h-24 w-auto object-contain object-left"
@@ -316,7 +316,7 @@ export function Footer() {
         {/* Social icons and copyright section */}
         <div className="flex flex-col md:flex-row justify-between items-center pt-6 border-t border-primary/5">
           <p className="text-foreground/60 text-xs mb-4 md:mb-0 relative z-20">
-            © {new Date().getFullYear()} StarkPulse. All rights reserved.
+            © {new Date().getFullYear()} Lumenpulse. All rights reserved.
           </p>
 
           <div className="flex space-x-3 sm:space-x-4">
@@ -386,3 +386,5 @@ export function Footer() {
     </footer>
   );
 }
+
+

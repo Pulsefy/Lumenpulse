@@ -63,3 +63,4 @@ export function MultilingualWelcome({
     </h1>
   );
 }
+

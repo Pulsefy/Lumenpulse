@@ -1,4 +1,4 @@
-import { StarknetProvider } from "./providers";
+import { StellarProvider } from "./providers";
 import { StarsAnimation } from "@/components/stars-animation";
 import { PWAInstaller } from "@/components/pwa-installer";
 import "./globals.css";
@@ -46,12 +46,12 @@ const poppins = Poppins({
 
 // Enhanced PWA Metadata
 export const metadata: Metadata = {
-  title: "StarkPulse - Decentralized Crypto News Platform",
-  description: "Your trusted source for crypto news, trends, and insights powered by StarkNet.",
-  keywords: ["crypto", "blockchain", "StarkNet", "DeFi", "news", "cryptocurrency", "Web3"],
-  authors: [{ name: "StarkPulse Team" }],
-  creator: "StarkPulse",
-  publisher: "StarkPulse",
+  title: "Lumenpulse - Decentralized Crypto News Platform",
+  description: "Your trusted source for crypto news, trends, and insights powered by Stellar.",
+  keywords: ["crypto", "blockchain", "Stellar", "DeFi", "news", "cryptocurrency", "Web3"],
+  authors: [{ name: "Lumenpulse Team" }],
+  creator: "Lumenpulse",
+  publisher: "Lumenpulse",
   formatDetection: {
     email: false,
     address: false,
@@ -62,31 +62,31 @@ export const metadata: Metadata = {
   // Favicon and Icons
   icons: {
     icon: [
-      { url: "/assets/starkpulse-03.png", sizes: "71x71", type: "image/png" },
+      { url: "/assets/lumenpulse-03.png", sizes: "71x71", type: "image/png" },
       { url: "/assets/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
       { url: "/assets/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
     ],
     shortcut: [
-      { url: "/assets/starkpulse-03.png", sizes: "71x71", type: "image/png" }
+      { url: "/assets/lumenpulse-03.png", sizes: "71x71", type: "image/png" }
     ],
     apple: [
-      { url: "/assets/starkpulse-03.png", sizes: "71x71", type: "image/png" },
+      { url: "/assets/lumenpulse-03.png", sizes: "71x71", type: "image/png" },
       { url: "/assets/icons/icon-152x152.png", sizes: "152x152", type: "image/png" },
       { url: "/assets/icons/icon-180x180.png", sizes: "180x180", type: "image/png" },
     ],
   },
   // Open Graph
   openGraph: {
-    title: "StarkPulse - Decentralized Crypto News Platform",
-    description: "Your trusted source for crypto news, trends, and insights powered by StarkNet.",
-    url: "https://starkpulse.app",
-    siteName: "StarkPulse",
+    title: "Lumenpulse - Decentralized Crypto News Platform",
+    description: "Your trusted source for crypto news, trends, and insights powered by Stellar.",
+    url: "https://Lumenpulse.app",
+    siteName: "Lumenpulse",
     images: [
       {
-        url: "/assets/starkpulse-03.png",
+        url: "/assets/lumenpulse-03.png",
         width: 71,
         height: 71,
-        alt: "StarkPulse Logo",
+        alt: "Lumenpulse Logo",
       },
     ],
     locale: "en_US",
@@ -95,19 +95,19 @@ export const metadata: Metadata = {
   // Twitter
   twitter: {
     card: "summary_large_image",
-    title: "StarkPulse - Decentralized Crypto News Platform",
-    description: "Your trusted source for crypto news, trends, and insights powered by StarkNet.",
-    images: ["/assets/starkpulse-03.png"],
-    creator: "@starkpulse",
+    title: "Lumenpulse - Decentralized Crypto News Platform",
+    description: "Your trusted source for crypto news, trends, and insights powered by Stellar.",
+    images: ["/assets/lumenpulse-03.png"],
+    creator: "@Lumenpulse",
   },
   // PWA specific
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "StarkPulse",
+    title: "Lumenpulse",
     startupImage: [
       {
-        url: "/assets/starkpulse-03.png",
+        url: "/assets/lumenpulse-03.png",
         media: "(device-width: 768px) and (device-height: 1024px)",
       },
     ],
@@ -128,11 +128,11 @@ export default function RootLayout({
     <html lang="en">
       <head>
         {/* PWA Meta Tags */}
-        <meta name="application-name" content="StarkPulse" />
+        <meta name="application-name" content="Lumenpulse" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="StarkPulse" />
-        <meta name="description" content="Your trusted source for crypto news, trends, and insights powered by StarkNet." />
+        <meta name="apple-mobile-web-app-title" content="Lumenpulse" />
+        <meta name="description" content="Your trusted source for crypto news, trends, and insights powered by Stellar." />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="msapplication-config" content="/browserconfig.xml" />
@@ -141,11 +141,11 @@ export default function RootLayout({
         <meta name="theme-color" content="#db74cf" />
         
         {/* Favicon */}
-        <link rel="icon" type="image/png" sizes="71x71" href="/assets/starkpulse-03.png" />
-        <link rel="shortcut icon" href="/assets/starkpulse-03.png" />
+        <link rel="icon" type="image/png" sizes="71x71" href="/assets/lumenpulse-03.png" />
+        <link rel="shortcut icon" href="/assets/lumenpulse-03.png" />
         
         {/* Apple Touch Icons */}
-        <link rel="apple-touch-icon" href="/assets/starkpulse-03.png" />
+        <link rel="apple-touch-icon" href="/assets/lumenpulse-03.png" />
         <link rel="apple-touch-icon" sizes="152x152" href="/assets/icons/icon-152x152.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/icon-180x180.png" />
         
@@ -153,20 +153,23 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         
         {/* Splash Screens */}
-        <link rel="apple-touch-startup-image" href="/assets/starkpulse-03.png" />
+        <link rel="apple-touch-startup-image" href="/assets/lumenpulse-03.png" />
         
         {/* Microsoft */}
-        <meta name="msapplication-TileImage" content="/assets/starkpulse-03.png" />
+        <meta name="msapplication-TileImage" content="/assets/lumenpulse-03.png" />
       </head>
       <body
         className={`${inter.variable} ${orbitron.variable} ${spaceMono.variable} ${chakraPetch.variable} ${poppins.variable} font-inter bg-background text-foreground`}
       >
-        <StarknetProvider>
+        <StellarProvider>
           <StarsAnimation />
           {children}
           <PWAInstaller />
-        </StarknetProvider>
+        </StellarProvider>
       </body>
     </html>
   );
 }
+
+
+

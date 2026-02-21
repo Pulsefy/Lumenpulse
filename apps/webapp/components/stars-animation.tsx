@@ -121,3 +121,4 @@ export function StarsAnimation() {
     </div>
   );
 }
+
