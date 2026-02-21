@@ -20,12 +20,18 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: stable
-        targets: wasm32-unknown-unknown
-        components: rust-src,rustfmt,clippy
+    - name: Install rustup
+      run: |
+        if ! command -v rustup &>/dev/null; then
+          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused --location --silent --show-error --fail https://sh.rustup.rs | sh -s -- --default-toolchain none -y
+          echo "$CARGO_HOME/bin" >> $GITHUB_PATH
+        fi
+
+    - name: Install Rust toolchain and components
+      run: |
+        rustup toolchain install stable
+        rustup component add rust-src rustfmt clippy
+        rustup target add wasm32-unknown-unknown
 
     - name: Install Soroban CLI
       run: |
@@ -36,7 +42,7 @@ jobs:
       run: |
         rustc --version
         cargo --version
-        rustup target list --installed | grep wasm32-unknown-unknown
+        rustup target list --installed
 
     - name: Cache Cargo registry
       uses: actions/cache@v4
@@ -45,11 +51,6 @@ jobs:
           ~/.cargo/registry
           ~/.cargo/git
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Setup Rust toolchain
-      run: |
-        rustup target add wasm32-unknown-unknown
-        rustup component add rust-src,rustfmt,clippy
 
     - name: Check formatting
       run: |
@@ -78,14 +79,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: stable
-        components: rust-src,rustfmt,clippy
-
-    - name: Setup Rust toolchain
+    - name: Install rustup
       run: |
+        if ! command -v rustup &>/dev/null; then
+          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused --location --silent --show-error --fail https://sh.rustup.rs | sh -s -- --default-toolchain none -y
+          echo "$CARGO_HOME/bin" >> $GITHUB_PATH
+        fi
+
+    - name: Install Rust toolchain and components
+      run: |
+        rustup toolchain install stable
+        rustup component add rust-src rustfmt clippy
         rustup target add wasm32-unknown-unknown
 
     - name: Install cargo deny
@@ -100,7 +104,7 @@ jobs:
       run: |
         rustc --version
         cargo --version
-        rustup target list --installed | grep wasm32-unknown-unknown
+        rustup target list --installed
 
     - name: Run cargo deny check
       run: |
