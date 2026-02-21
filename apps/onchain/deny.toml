@@ -14,11 +14,6 @@ allow = [
 # Allow unlicensed crates
 confidence-threshold = 0.8
 
-[advisories]
-db-path = "~/.cargo/advisory-db"
-db-urls = ["https://github.com/rustsec/advisory-db/raw/main/db.json.gz"]
-vulnerability = "deny"
-
 [licenses.private]
 ignore = true
 
