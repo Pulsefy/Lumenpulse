@@ -49,7 +49,7 @@ jobs:
     - name: Setup Rust toolchain
       run: |
         rustup target add wasm32-unknown-unknown
-        rustup component add rust-src, rustfmt, clippy
+        rustup component add rust-src,rustfmt,clippy
 
     - name: Check formatting
       run: |
