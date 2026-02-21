@@ -15,4 +15,7 @@ pub enum CrowdfundError {
     AlreadyRegistered = 9,
     ContributorNotFound = 10,
     ContractPaused = 11,
+    ProjectAlreadyCanceled = 12,
+    ProjectNotCancellable = 13,
+    RefundFailed = 14,
 }

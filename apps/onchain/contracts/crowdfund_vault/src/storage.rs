@@ -15,6 +15,7 @@ pub enum DataKey {
     RegisteredContributor(Address), // Address -> bool
     Reputation(Address),            // Address -> i128
     Paused,
+    ProjectStatus(u64),
 }
 
 #[contracttype]
