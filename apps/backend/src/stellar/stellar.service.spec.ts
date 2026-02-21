@@ -1,11 +1,17 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-require-imports */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { Horizon, NotFoundError, NetworkError } from '@stellar/stellar-sdk';
 import { StellarService } from './stellar.service';
 import stellarConfig from './config/stellar.config';
-import { AccountNotFoundException, HorizonUnavailableException } from './exceptions/stellar.exceptions';
-import { InvalidPublicKeyException } from './exceptions/stellar.exceptions';
-import { validateStellarPublicKey } from './utils/stellar-validator';
+import {
+  AccountNotFoundException,
+  HorizonUnavailableException,
+  InvalidPublicKeyException,
+} from './exceptions/stellar.exceptions';
 
 // Mock the Stellar SDK
 jest.mock('@stellar/stellar-sdk', () => {
@@ -42,7 +48,8 @@ describe('StellarService', () => {
   let service: StellarService;
   let mockServer: jest.Mocked<Horizon.Server>;
 
-  const validPublicKey = 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
+  const validPublicKey =
+    'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -76,7 +83,9 @@ describe('StellarService', () => {
 
     it('should throw AccountNotFoundException for 404 errors', async () => {
       const notFoundError = new NotFoundError('Account not found');
-      (mockServer.loadAccount as jest.Mock).mockRejectedValueOnce(notFoundError);
+      (mockServer.loadAccount as jest.Mock).mockRejectedValueOnce(
+        notFoundError,
+      );
 
       await expect(service.getAccountBalances(validPublicKey)).rejects.toThrow(
         AccountNotFoundException,
@@ -94,9 +103,10 @@ describe('StellarService', () => {
 
     it('should validate public key format', async () => {
       const invalidKey = 'INVALID_KEY';
-      
+
       // Mock validator to throw
-      jest.spyOn(require('./utils/stellar-validator'), 'validateStellarPublicKey')
+      jest
+        .spyOn(require('./utils/stellar-validator'), 'validateStellarPublicKey')
         .mockImplementation(() => {
           throw new InvalidPublicKeyException(invalidKey);
         });
@@ -115,11 +125,12 @@ describe('StellarService', () => {
     });
 
     it('should return false when Horizon is unavailable', async () => {
-      (mockServer.root as jest.Mock).mockRejectedValueOnce(new Error('Connection failed'));
-      
+      (mockServer.root as jest.Mock).mockRejectedValueOnce(
+        new Error('Connection failed'),
+      );
+
       const isHealthy = await service.checkHealth();
       expect(isHealthy).toBe(false);
     });
   });
 });
-

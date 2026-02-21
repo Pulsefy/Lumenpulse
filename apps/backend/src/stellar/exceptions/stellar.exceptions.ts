@@ -50,4 +50,3 @@ export class HorizonUnavailableException extends HttpException {
     );
   }
 }
-

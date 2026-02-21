@@ -2,7 +2,8 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class AssetBalanceDto {
   @ApiProperty({
-    description: 'Asset type (native for XLM, or credit_alphanum4/credit_alphanum12 for tokens)',
+    description:
+      'Asset type (native for XLM, or credit_alphanum4/credit_alphanum12 for tokens)',
     example: 'native',
   })
   assetType: string;
@@ -69,4 +70,3 @@ export class AccountBalancesDto {
   })
   sequenceNumber?: string;
 }
-

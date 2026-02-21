@@ -6,12 +6,7 @@ import {
   HttpStatus,
   BadRequestException,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { StellarService } from './stellar.service';
 import { AccountBalancesDto } from './dto/balance.dto';
 import { Inject } from '@nestjs/common';
@@ -63,7 +58,8 @@ export class StellarController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Check Horizon API health',
-    description: 'Verifies if the Stellar Horizon API is available and responsive',
+    description:
+      'Verifies if the Stellar Horizon API is available and responsive',
   })
   @ApiResponse({
     status: 200,
@@ -81,9 +77,13 @@ export class StellarController {
     status: 503,
     description: 'Horizon API is unavailable',
   })
-  async checkHealth(): Promise<{ status: string; horizonUrl: string; network: string }> {
+  async checkHealth(): Promise<{
+    status: string;
+    horizonUrl: string;
+    network: string;
+  }> {
     const isHealthy = await this.stellarService.checkHealth();
-    
+
     if (!isHealthy) {
       throw new BadRequestException('Horizon API is unavailable');
     }
@@ -95,4 +95,3 @@ export class StellarController {
     };
   }
 }
-

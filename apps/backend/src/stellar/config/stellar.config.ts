@@ -9,8 +9,10 @@ export interface StellarConfig {
 }
 
 export default registerAs('stellar', (): StellarConfig => {
-  const network = (process.env.STELLAR_NETWORK || 'testnet') as 'testnet' | 'mainnet';
-  
+  const network = (process.env.STELLAR_NETWORK || 'testnet') as
+    | 'testnet'
+    | 'mainnet';
+
   const defaultHorizonUrls = {
     testnet: 'https://horizon-testnet.stellar.org',
     mainnet: 'https://horizon.stellar.org',
@@ -24,4 +26,3 @@ export default registerAs('stellar', (): StellarConfig => {
     retryDelay: parseInt(process.env.STELLAR_RETRY_DELAY || '1000', 10),
   };
 });
-

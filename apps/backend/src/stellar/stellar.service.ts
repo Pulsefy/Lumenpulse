@@ -1,9 +1,17 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { Horizon, NetworkError, NotFoundError } from '@stellar/stellar-sdk';
 import { AccountBalancesDto, AssetBalanceDto } from './dto/balance.dto';
 import stellarConfig, { StellarConfig } from './config/stellar.config';
-import { AccountNotFoundException, HorizonUnavailableException } from './exceptions/stellar.exceptions';
+import {
+  AccountNotFoundException,
+  HorizonUnavailableException,
+} from './exceptions/stellar.exceptions';
 import { validateStellarPublicKey } from './utils/stellar-validator';
 import { retryWithBackoff } from './utils/retry.util';
 
@@ -18,8 +26,8 @@ export class StellarService {
     config: ConfigType<typeof stellarConfig>,
   ) {
     this.config = config;
-    this.server = new Horizon.Server(config.horizonUrl);
-    
+    this.server = new Horizon.Server(config.horizonUrl) as Horizon.Server;
+
     this.logger.log(
       `StellarService initialized with ${config.network} Horizon API at ${config.horizonUrl}`,
     );
@@ -27,7 +35,7 @@ export class StellarService {
 
   /**
    * Fetches account balances from Stellar Horizon API
-   * 
+   *
    * @param publicKey - Stellar account public key (must be valid Ed25519 public key)
    * @returns Promise<AccountBalancesDto> - Account balances information
    * @throws AccountNotFoundException if account is not found (404)
@@ -42,7 +50,7 @@ export class StellarService {
 
     try {
       // Retry logic for network failures
-      const account = await retryWithBackoff(
+      const account: Horizon.AccountResponse = await retryWithBackoff(
         () => this.server.loadAccount(publicKey),
         this.config.retryAttempts,
         this.config.retryDelay,
@@ -90,7 +98,9 @@ export class StellarService {
       await this.server.root();
       return true;
     } catch (error) {
-      this.logger.warn(`Horizon health check failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.warn(
+        `Horizon health check failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
   }
@@ -99,12 +109,15 @@ export class StellarService {
    * Maps Horizon balance objects to DTOs
    * Optimized to reduce repeated type checks
    */
-  private mapBalancesToDto(balances: Horizon.AccountResponse['balances']): AssetBalanceDto[] {
-    return balances.map((balance) => {
+  private mapBalancesToDto(
+    balances: Horizon.AccountResponse['balances'],
+  ): AssetBalanceDto[] {
+    return balances.map((balance: Horizon.HorizonApi.BalanceLine) => {
       const assetType = balance.asset_type;
       const isLiquidityPool = assetType === 'liquidity_pool_shares';
-      const isCreditAsset = assetType === 'credit_alphanum4' || assetType === 'credit_alphanum12';
-      
+      const isCreditAsset =
+        assetType === 'credit_alphanum4' || assetType === 'credit_alphanum12';
+
       const assetBalance: AssetBalanceDto = {
         assetType,
         balance: balance.balance,
@@ -112,25 +125,46 @@ export class StellarService {
 
       // Add asset code and issuer for credit assets (single check)
       if (isCreditAsset) {
-        assetBalance.assetCode = balance.asset_code;
-        assetBalance.assetIssuer = balance.asset_issuer;
+        assetBalance.assetCode = (
+          balance as Horizon.HorizonApi.BalanceLineAsset
+        ).asset_code;
+        assetBalance.assetIssuer = (
+          balance as Horizon.HorizonApi.BalanceLineAsset
+        ).asset_issuer;
       }
 
       // Add optional fields if present (only for non-liquidity pool balances)
       if (!isLiquidityPool) {
-        if ('limit' in balance && balance.limit) {
-          assetBalance.limit = balance.limit;
+        if (
+          'limit' in balance &&
+          (balance as Horizon.HorizonApi.BalanceLineAsset).limit
+        ) {
+          assetBalance.limit = (
+            balance as Horizon.HorizonApi.BalanceLineAsset
+          ).limit;
         }
-        if ('buying_liabilities' in balance && balance.buying_liabilities) {
-          assetBalance.buyingLiabilities = balance.buying_liabilities;
+
+        if (
+          'buying_liabilities' in balance &&
+          (balance as Horizon.HorizonApi.BalanceLineAsset).buying_liabilities
+        ) {
+          assetBalance.buyingLiabilities = (
+            balance as Horizon.HorizonApi.BalanceLineAsset
+          ).buying_liabilities;
         }
-        if ('selling_liabilities' in balance && balance.selling_liabilities) {
-          assetBalance.sellingLiabilities = balance.selling_liabilities;
+
+        if (
+          'selling_liabilities' in balance &&
+          (balance as Horizon.HorizonApi.BalanceLineAsset).selling_liabilities
+        ) {
+          assetBalance.sellingLiabilities = (
+            balance as Horizon.HorizonApi.BalanceLineAsset
+          ).selling_liabilities;
         }
       }
 
       return assetBalance;
-    });
+    }) as AssetBalanceDto[];
   }
 
   /**
@@ -149,11 +183,17 @@ export class StellarService {
         `Network error fetching account balances for ${publicKey}:`,
         error.message,
       );
-      throw new HorizonUnavailableException(this.config.horizonUrl, error.message);
+      throw new HorizonUnavailableException(
+        this.config.horizonUrl,
+        error.message,
+      );
     }
 
     // Handle HTTP errors (check once)
-    const errorObj = error as { response?: { status?: number }; message?: string };
+    const errorObj = error as {
+      response?: { status?: number };
+      message?: string;
+    };
     const status = errorObj?.response?.status;
 
     if (status === 404) {
@@ -173,9 +213,10 @@ export class StellarService {
     }
 
     // Handle unknown errors (fallback)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
     const errorStack = error instanceof Error ? error.stack : String(error);
-    
+
     this.logger.error(
       `Unexpected error fetching account balances for ${publicKey}:`,
       errorStack,
