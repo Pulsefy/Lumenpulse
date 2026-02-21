@@ -32,7 +32,7 @@ export function getContractConfigs(): ContractConfig[] {
     return [
         {
             name: 'token',
-            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/lumen_token.wasm',
+            wasmPath: '../apps/onchain/target/wasm32v1-none/release/lumen_token.wasm',
             init: {
                 fn: 'initialize',
                 args: ({ adminPublicKey }) => {
@@ -47,7 +47,7 @@ export function getContractConfigs(): ContractConfig[] {
         },
         {
             name: 'registry',
-            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/contributor_registry.wasm',
+            wasmPath: '../apps/onchain/target/wasm32v1-none/release/contributor_registry.wasm',
             init: {
                 fn: 'initialize',
                 args: ({ adminPublicKey }) => {
@@ -57,7 +57,7 @@ export function getContractConfigs(): ContractConfig[] {
         },
         {
             name: 'vault',
-            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/crowdfund_vault.wasm',
+            wasmPath: '../apps/onchain/target/wasm32v1-none/release/crowdfund_vault.wasm',
             init: {
                 fn: 'initialize',
                 args: ({ adminPublicKey }) => {
@@ -67,7 +67,7 @@ export function getContractConfigs(): ContractConfig[] {
         },
         {
             name: 'vesting_wallet',
-            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/vesting_wallet.wasm',
+            wasmPath: '../apps/onchain/target/wasm32v1-none/release/vesting_wallet.wasm',
             init: {
                 fn: 'initialize',
                 args: ({ adminPublicKey, deployedContracts }) => {
