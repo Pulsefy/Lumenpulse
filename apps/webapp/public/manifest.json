@@ -1,7 +1,7 @@
 {
-  "name": "StarkPulse - Decentralized Crypto News Platform",
-  "short_name": "StarkPulse",
-  "description": "Your trusted source for crypto news, trends, and insights powered by StarkNet.",
+  "name": "Lumenpulse - Decentralized Crypto News Platform",
+  "short_name": "Lumenpulse",
+  "description": "Your trusted source for crypto news, trends, and insights powered by Stellar.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
@@ -12,7 +12,7 @@
   "categories": ["finance", "news", "productivity"],
   "icons": [
     {
-      "src": "/assets/starkpulse-03.png",
+      "src": "/assets/lumenpulse-03.png",
       "sizes": "71x71",
       "type": "image/png",
       "purpose": "any maskable"
@@ -74,7 +74,7 @@
       "url": "/news",
       "icons": [
         {
-          "src": "/assets/starkpulse-03.png",
+          "src": "/assets/lumenpulse-03.png",
           "sizes": "71x71"
         }
       ]
@@ -86,7 +86,7 @@
       "url": "/dashboard",
       "icons": [
         {
-          "src": "/assets/starkpulse-03.png",
+          "src": "/assets/lumenpulse-03.png",
           "sizes": "71x71"
         }
       ]

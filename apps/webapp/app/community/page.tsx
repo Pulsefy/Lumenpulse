@@ -29,7 +29,7 @@ export default function CommunityPage() {
   return (
     <div className="min-h-screen bg-black text-white p-8">
       <h1 className="text-3xl font-bold mb-6">Community</h1>
-      <p className="text-lg mb-4">Connect with other StarkPulse users!</p>
+      <p className="text-lg mb-4">Connect with other Lumenpulse users!</p>
 
       {/* Community content goes here */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
@@ -46,3 +46,5 @@ export default function CommunityPage() {
     </div>
   );
 }
+
+

@@ -182,3 +182,4 @@ export function NewsSection({ newsData: propNewsData, isLoading: propIsLoading, 
     </div>
   );
 }
+

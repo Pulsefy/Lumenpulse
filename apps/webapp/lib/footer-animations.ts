@@ -82,3 +82,4 @@ export const initFooterAnimations = (
     stagger: 0.3,
   });
 };
+

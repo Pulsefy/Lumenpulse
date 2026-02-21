@@ -17,8 +17,8 @@ export function Navbar() {
           <div className="flex-shrink-0 -ml-2">
             <Link href="/" className="flex items-center">
               <Image
-                src="/assets/starkpulse-03.svg"
-                alt="StarkPulse Logo"
+                src="/assets/lumenpulse-03.svg"
+                alt="Lumenpulse Logo"
                 width={36}
                 height={36}
                 className="h-28 w-auto ml-2 my-auto"
@@ -120,3 +120,5 @@ export function Navbar() {
     </nav>
   );
 }
+
+

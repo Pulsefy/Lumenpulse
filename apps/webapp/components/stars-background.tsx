@@ -116,3 +116,4 @@ export function StarsBackground() {
 
   return <div className="w-full h-full relative overflow-hidden">{stars}</div>;
 }
+

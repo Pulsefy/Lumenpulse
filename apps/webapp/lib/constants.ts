@@ -5,3 +5,4 @@ type DeepReadonly<T> = {
 export function defineConstants<T extends Record<string, any>>(obj: T): DeepReadonly<T> {
   return obj as DeepReadonly<T>;
 }
+

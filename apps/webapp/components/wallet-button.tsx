@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Wallet, LogOut, X } from 'lucide-react';
-import { useConnect, useAccount, useDisconnect, Connector } from '@starknet-react/core';
+import { useStellarWallet } from '@/app/providers';
 
 interface WalletButtonProps {
   className?: string;
@@ -13,9 +13,7 @@ export function WalletButton({
   className = '',
   size = 'md',
 }: WalletButtonProps) {
-  const { connect, connectors } = useConnect();
-  const { address, status } = useAccount();
-  const { disconnect } = useDisconnect();
+  const { address, isConnected, connect, disconnect } = useStellarWallet();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
@@ -37,27 +35,24 @@ export function WalletButton({
     };
   }, [isModalOpen]);
 
-  const availableConnectors = useMemo(() => {
-    if (!isClient) return [];
-    return connectors;
-  }, [connectors, isClient]);
-
   const sizeClasses = {
     sm: 'px-3 py-1.5 text-sm',
     md: 'px-4 py-2',
     lg: 'px-6 py-3 text-lg',
   };
 
-  const handleConnect = (connector: Connector) => {
-    connect({ connector });
-    setIsModalOpen(false);
+  const handleConnect = async () => {
+    const publicKey = await connect();
+    if (publicKey) {
+      setIsModalOpen(false);
+    }
   };
 
   const handleDisconnect = () => {
     disconnect();
   };
 
-  const truncateAddress = (addr: string | undefined) => {
+  const truncateAddress = (addr: string | null) => {
     if (!addr) return '';
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
@@ -92,7 +87,7 @@ export function WalletButton({
 
   return (
     <>
-      {status === 'connected' ? (
+      {isConnected ? (
         <div className='flex items-center gap-2'>
           <button
             onClick={() => {}}
@@ -194,43 +189,25 @@ export function WalletButton({
                 Connect Wallet
               </h2>
               <p className='text-gray-300 text-sm'>
-                Choose your preferred wallet to connect to StarkPulse
+                Choose your preferred wallet to connect to Lumenpulse
               </p>
             </div>
             
             {/* Wallet Options */}
             <div className='relative z-10 space-y-3'>
-              {availableConnectors.length > 0 ? (
-                availableConnectors.map((connector) => (
-                  <button
-                    key={connector.id}
-                    onClick={() => handleConnect(connector)}
-                    disabled={!connector.available()}
-                    className='w-full flex items-center justify-between px-6 py-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-[#db74cf]/50 hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group'
-                  >
-                    <div className='flex items-center gap-3'>
-                      <div className='w-8 h-8 bg-gradient-to-r from-[#db74cf]/30 to-blue-500/30 rounded-lg flex items-center justify-center'>
-                        <Wallet className='w-4 h-4 text-[#db74cf]' />
-                      </div>
-                      <span className='font-medium text-lg text-white group-hover:text-[#db74cf] transition-colors'>
-                        {connector.name}
-                      </span>
-                    </div>
-                    {!connector.available() && (
-                      <span className='text-xs text-red-400 bg-red-400/20 px-3 py-1 rounded-full border border-red-400/30'>
-                        Not Installed
-                      </span>
-                    )}
-                  </button>
-                ))
-              ) : (
-                <div className='text-center py-8'>
-                  <div className='text-gray-300 mb-2 text-lg'>No wallets detected</div>
-                  <div className='text-sm text-gray-400'>
-                    Please install a StarkNet wallet extension
+              <button
+                onClick={handleConnect}
+                className='w-full flex items-center justify-between px-6 py-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-[#db74cf]/50 hover:shadow-lg transition-all duration-200 group'
+              >
+                <div className='flex items-center gap-3'>
+                  <div className='w-8 h-8 bg-gradient-to-r from-[#db74cf]/30 to-blue-500/30 rounded-lg flex items-center justify-center'>
+                    <Wallet className='w-4 h-4 text-[#db74cf]' />
                   </div>
+                  <span className='font-medium text-lg text-white group-hover:text-[#db74cf] transition-colors'>
+                    Freighter
+                  </span>
                 </div>
-              )}
+              </button>
             </div>
             
             {/* Footer */}
@@ -248,3 +225,4 @@ export function WalletButton({
     </>
   );
 }
+

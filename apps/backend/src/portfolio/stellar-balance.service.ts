@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
-const StellarSdk = require('stellar-sdk');
+import { Horizon } from 'stellar-sdk';
 
 export interface StellarBalance {
   assetCode: string;
@@ -18,13 +17,11 @@ interface BalanceLine {
 @Injectable()
 export class StellarBalanceService {
   private readonly logger = new Logger(StellarBalanceService.name);
-
-  private readonly server: any;
+  private readonly server: Horizon.Server;
 
   constructor() {
     // Use public Stellar Horizon server
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    this.server = new StellarSdk.Server('https://horizon.stellar.org');
+    this.server = new Horizon.Server('https://horizon.stellar.org');
   }
 
   /**
@@ -32,11 +29,11 @@ export class StellarBalanceService {
    */
   async getAccountBalances(publicKey: string): Promise<StellarBalance[]> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      // Use proper Horizon.AccountResponse type if possible, but for now we keep it simple
       const account = await this.server.loadAccount(publicKey);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-      const balances: BalanceLine[] = account.balances;
+      // Cast balances to our expected type
+      const balances = account.balances as unknown as BalanceLine[];
 
       return balances
         .map((balance: BalanceLine) => {

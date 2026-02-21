@@ -12,7 +12,7 @@ export function HomeView() {
         </div>
         <div className="container relative z-10 text-center px-4">
           <h1 className="text-5xl font-bold mb-6 font-heading tracking-tight text-white">
-            Stark<span className="animate-pulse-text">Pulse</span>
+            Lumen<span className="animate-pulse-text">pulse</span>
           </h1>
           <p className="text-lg mb-8 max-w-xl mx-auto font-light leading-relaxed tracking-wide bg-clip-text text-transparent bg-gradient-to-r from-white/90 via-white to-white/90">
             Delivering real-time blockchain intelligence and cutting edge
@@ -25,3 +25,4 @@ export function HomeView() {
     </main>
   );
 }
+

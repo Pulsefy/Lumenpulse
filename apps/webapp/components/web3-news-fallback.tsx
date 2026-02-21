@@ -20,10 +20,10 @@ interface Web3NewsItem {
 const WEB3_NEWS_TEMPLATES = [
   {
     titleTemplates: [
-      "StarkNet Ecosystem Reaches New Milestone with {metric} Growth",
+      "Stellar Ecosystem Reaches New Milestone with {metric} Growth",
       "Layer 2 Solutions See {metric} Increase in Adoption",
       "Zero-Knowledge Proofs Drive {metric} Efficiency Gains",
-      "DeFi Protocols on StarkNet Report {metric} TVL Growth",
+      "DeFi Protocols on Stellar Report {metric} TVL Growth",
       "Cross-Chain Bridges Facilitate {metric} in Transaction Volume"
     ],
     excerptTemplates: [
@@ -42,7 +42,7 @@ const WEB3_NEWS_TEMPLATES = [
       { name: "Innovation", icon: <Rocket className="w-3 h-3" />, gradient: "from-pink-500 to-rose-500" }
     ],
     authors: [
-      "StarkNet Research Team",
+      "Stellar Research Team",
       "Blockchain Analytics",
       "DeFi Protocol Labs",
       "Zero-Knowledge Institute",
@@ -203,3 +203,4 @@ export function Web3NewsFallback() {
     </div>
   );
 }
+
