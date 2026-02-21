@@ -16,7 +16,7 @@ confidence-threshold = 0.8
 
 [advisories]
 vulnerability = "deny"
-unmaintained = "warn"
+unmaintained = "transitive"
 notice = "warn"
 
 [licenses.private]
