@@ -8,6 +8,7 @@ mod token;
 
 use errors::CrowdfundError;
 use math::{sqrt_scaled, unscale};
+use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
 use storage::{DataKey, ProjectData};
 
@@ -136,6 +137,118 @@ impl CrowdfundVaultContract {
         .publish(&env);
 
         Ok(project_id)
+    }
+
+    /// Cancel project (owner or admin only)
+    pub fn cancel_project(
+        env: Env,
+        caller: Address,
+        project_id: u64,
+    ) -> Result<(), CrowdfundError> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(CrowdfundError::NotInitialized)?;
+
+        let mut project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        let is_admin = caller == stored_admin;
+        let is_owner = caller == project.owner;
+
+        if !is_admin && !is_owner {
+            return Err(CrowdfundError::Unauthorized);
+        }
+
+        caller.require_auth();
+
+        if !project.is_active {
+            return Err(CrowdfundError::ProjectNotActive);
+        }
+
+        // Mark as canceled
+        project.is_active = false;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Project(project_id), &project);
+
+        env.storage().persistent().set(
+            &DataKey::ProjectStatus(project_id),
+            &Symbol::new(&env, "CANCELED"),
+        );
+
+        events::ProjectCanceledEvent { project_id, caller }.publish(&env);
+
+        Ok(())
+    }
+
+    /// Refund all contributors (anyone can call after cancel, but usually admin/owner)
+    pub fn refund_contributors(
+        env: Env,
+        project_id: u64,
+        caller: Address,
+    ) -> Result<(), CrowdfundError> {
+        caller.require_auth();
+        let project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        if project.is_active {
+            return Err(CrowdfundError::ProjectNotCancellable);
+        }
+
+        let status: Symbol = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ProjectStatus(project_id))
+            .unwrap_or(Symbol::new(&env, "ACTIVE"));
+
+        if status != Symbol::new(&env, "CANCELED") {
+            return Err(CrowdfundError::ProjectNotCancellable);
+        }
+
+        let count_key = DataKey::ContributorCount(project_id);
+        let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+
+        let contract_address = env.current_contract_address();
+        let token_client = TokenClient::new(&env, &project.token_address);
+
+        for i in 0..count {
+            let contrib_key = DataKey::Contributor(project_id, i);
+            let contributor: Address = env
+                .storage()
+                .persistent()
+                .get(&contrib_key)
+                .ok_or(CrowdfundError::ProjectNotFound)?;
+
+            let amount_key = DataKey::Contribution(project_id, contributor.clone());
+            let amount: i128 = env.storage().persistent().get(&amount_key).unwrap_or(0);
+
+            if amount > 0 {
+                token_client.transfer(&contract_address, &contributor, &amount);
+
+                env.storage().persistent().remove(&amount_key);
+
+                events::ContributionRefundedEvent {
+                    project_id,
+                    contributor,
+                    amount,
+                }
+                .publish(&env);
+            }
+        }
+
+        env.storage().persistent().remove(&count_key);
+        let balance_key = DataKey::ProjectBalance(project_id, project.token_address);
+        env.storage().persistent().set(&balance_key, &0i128);
+
+        Ok(())
     }
 
     /// Deposit funds into a project

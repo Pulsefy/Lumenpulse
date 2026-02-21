@@ -1,7 +1,34 @@
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import ProtectedRoute from '../../components/ProtectedRoute';
+import { healthApi } from '../../lib/api';
+import config from '../../lib/config';
+
+export default function HomeScreen() {
+  const [healthStatus, setHealthStatus] = useState<string>('Checking...');
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    testApiConnection();
+  }, []);
+
+  const testApiConnection = async () => {
+    console.log('🔌 Testing API connection to:', config.api.baseUrl);
+    setIsLoading(true);
+
+    const response = await healthApi.check();
+
+    if (response.success && response.data) {
+      console.log('✅ API Health Check Success:', response.data);
+      setHealthStatus(`Connected to ${config.api.baseUrl}`);
+    } else {
+      console.log('❌ API Health Check Failed:', response.error);
+      setHealthStatus(`Failed: ${response.error?.message || 'Unknown error'}`);
+    }
+
+    setIsLoading(false);
+  };
 import { useTheme } from '../../contexts/ThemeContext';
 
 export default function HomeScreen() {
@@ -29,6 +56,23 @@ export default function HomeScreen() {
               <Text style={[styles.cardText, { color: colors.text }]}>
                 Portfolio &amp; News aggregation coming soon.
               </Text>
+            </View>
+
+            {/* API Connection Status */}
+            <View style={[styles.glassCard, styles.statusCard]}>
+              <Text style={styles.statusLabel}>API Status:</Text>
+              {isLoading ? (
+                <ActivityIndicator color="#7a85ff" style={styles.loader} />
+              ) : (
+                <Text style={styles.statusText}>{healthStatus}</Text>
+              )}
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={testApiConnection}
+                disabled={isLoading}
+              >
+                <Text style={styles.retryButtonText}>Test Connection</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -96,6 +140,38 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#ffffff',
     fontSize: 18,
+    fontWeight: '600',
+  },
+  statusCard: {
+    marginTop: 16,
+  },
+  statusLabel: {
+    color: '#db74cf',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  statusText: {
+    color: '#ffffff',
+    fontSize: 12,
+    opacity: 0.8,
+    marginBottom: 12,
+  },
+  loader: {
+    marginVertical: 12,
+  },
+  retryButton: {
+    backgroundColor: 'rgba(122, 133, 255, 0.2)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(122, 133, 255, 0.3)',
+    alignSelf: 'center',
+  },
+  retryButtonText: {
+    color: '#7a85ff',
+    fontSize: 12,
     fontWeight: '600',
   },
 });
