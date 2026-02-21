@@ -36,6 +36,10 @@ describe('SentimentController (e2e)', () => {
     await app.close();
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   describe('POST /sentiment/analyze', () => {
     it('should analyze sentiment successfully', async () => {
       const mockResponse: SentimentResponse = { sentiment: 0.85 };
