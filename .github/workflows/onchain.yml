@@ -1,46 +1,108 @@
-name: Onchain CI
+name: Onchain Tests
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main, develop ]
     paths:
       - 'apps/onchain/**'
   pull_request:
-    branches: [ "main" ]
+    branches: [ main ]
     paths:
       - 'apps/onchain/**'
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  onchain-checks:
-    name: Test Suite
+  test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./apps/onchain
-
+    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
+    - uses: actions/checkout@v4
+    
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: stable
         targets: wasm32-unknown-unknown
+        components: rust-src,rustfmt,clippy
 
-    - name: Cache dependencies
-      uses: Swatinem/rust-cache@v2
+    - name: Install Soroban CLI
+      run: |
+        curl -L --proto '=https' --tlsv1.2 -sSf https://github.com/stellar/soroban-tools/releases/latest/download/soroban-cli-installer.sh | sh
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Verify Rust installation
+      run: |
+        rustc --version
+        cargo --version
+        rustup target list --installed | grep wasm32-unknown-unknown
+
+    - name: Cache Cargo registry
+      uses: actions/cache@v4
       with:
-        workspaces: "apps/onchain"
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Setup Rust toolchain
+      run: |
+        rustup target add wasm32-unknown-unknown
+        rustup component add rust-src, rustfmt, clippy
 
     - name: Check formatting
-      run: cargo fmt --all -- --check
+      run: |
+        cd apps/onchain/contracts/contributor_registry
+        cargo fmt --check
 
     - name: Run clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
-
-    - name: Build Contracts
-      run: cargo build --target wasm32-unknown-unknown --release
+      run: |
+        cd apps/onchain/contracts/contributor_registry
+        cargo clippy -- -D warnings
 
     - name: Run tests
-      run: cargo test
+      run: |
+        cd apps/onchain/contracts/contributor_registry
+        cargo test
+
+    - name: Build contract
+      run: |
+        cd apps/onchain/contracts/contributor_registry
+        cargo build --target wasm32-unknown-unknown --release
+        ls -la ./target/wasm32-unknown-unknown/release/
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
+        components: rust-src,rustfmt,clippy
+
+    - name: Setup Rust toolchain
+      run: |
+        rustup target add wasm32-unknown-unknown
+
+    - name: Install cargo deny
+      run: cargo install cargo-deny
+
+    - name: Install Soroban CLI
+      run: |
+        curl -L --proto '=https' --tlsv1.2 -sSf https://github.com/stellar/soroban-tools/releases/latest/download/soroban-cli-installer.sh | sh
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Verify Rust installation
+      run: |
+        rustc --version
+        cargo --version
+        rustup target list --installed | grep wasm32-unknown-unknown
+
+    - name: Run cargo deny check
+      run: |
+        cd apps/onchain
+        cargo deny check
