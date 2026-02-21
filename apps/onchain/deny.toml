@@ -10,11 +10,6 @@ allow = [
     "CC0-1.0",
 ]
 
-deny = [
-    "GPL-2.0",
-    "GPL-3.0",
-]
-
 # Allow unlicensed crates
 confidence-threshold = 0.8
 
