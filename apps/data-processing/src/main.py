@@ -17,6 +17,7 @@ from src.ingestion.news_fetcher import fetch_news
 from src.ingestion.stellar_fetcher import get_asset_volume, get_network_overview
 from src.analytics.market_analyzer import MarketAnalyzer, MarketData
 from src.analytics.market_analyzer import get_explanation
+from src.anomaly_detector import AnomalyDetector
 from scheduler import AnalyticsScheduler
 
 # Configure logging
@@ -30,6 +31,10 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+# Module-level detector so it accumulates rolling window data across
+# scheduled pipeline runs (meaningful baselines build up over time).
+anomaly_detector = AnomalyDetector(window_size_hours=24, z_threshold=2.5)
 
 # Global scheduler instance
 scheduler = None
@@ -121,12 +126,56 @@ def run_data_pipeline():
         explanation = get_explanation(score, trend)
         print(f"\nAnalysis: {explanation}")
 
-        # Step 4: Output summary
-        print("\n4. PIPELINE SUMMARY")
+        # Step 4: Anomaly Detection
+        print("\n4. ANOMALY DETECTION")
+        print("-" * 40)
+
+        current_volume = float(volume_24h["total_volume"])
+        now = datetime.utcnow()
+
+        # Feed current data point into the rolling window detector
+        anomaly_detector.add_data_point(
+            volume=current_volume,
+            sentiment_score=mock_sentiment,
+            timestamp=now,
+        )
+
+        # Run detection on both metrics
+        volume_anomaly = anomaly_detector.detect_volume_anomaly(current_volume, now)
+        sentiment_anomaly = anomaly_detector.detect_sentiment_anomaly(mock_sentiment, now)
+
+        anomalies_found = []
+
+        for result in [volume_anomaly, sentiment_anomaly]:
+            status = "⚠️  ANOMALY" if result.is_anomaly else "✓  Normal"
+            print(
+                f"{status} | {result.metric_name.capitalize():<10} | "
+                f"value={result.current_value:.4f} | "
+                f"z={result.z_score:.2f} | "
+                f"severity={result.severity_score:.2f}"
+            )
+            if result.is_anomaly:
+                anomalies_found.append(result.to_dict())
+                logger.warning(
+                    f"Anomaly detected — metric={result.metric_name}, "
+                    f"value={result.current_value:.4f}, "
+                    f"z_score={result.z_score:.2f}, "
+                    f"severity={result.severity_score:.2f}"
+                )
+
+        window_stats = anomaly_detector.get_window_stats()
+        print(f"Detector window: {window_stats['data_points_count']} data points")
+
+        if not anomalies_found:
+            print("No anomalies detected in current pipeline run.")
+
+        # Step 5: Output summary
+        print("\n5. PIPELINE SUMMARY")
         print("-" * 40)
         print(f"✓ News Articles Processed: {len(news_articles)}")
         print(f"✓ XLM Volume Analyzed: {volume_24h['total_volume']:,.2f}")
         print(f"✓ Market Trend: {trend.value.upper()}")
+        print(f"✓ Anomalies Detected: {len(anomalies_found)}")
         print(f"✓ Analysis Complete: {datetime.now().strftime('%H:%M:%S')}")
 
         result = {
@@ -135,6 +184,7 @@ def run_data_pipeline():
             "volume_xlm": volume_24h["total_volume"],
             "market_trend": trend.value,
             "health_score": score,
+            "anomalies": anomalies_found,
             "timestamp": datetime.now().isoformat(),
         }
 
