@@ -16,6 +16,9 @@ import { PortfolioModule } from './portfolio/portfolio.module';
 import databaseConfig from './database/database.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { TestController } from './test/test.controller';
+import { Module } from '@nestjs/common'; 
+import { StellarService } from './services/StellarService'; 
+import { StellarController } from './routes/stellar';
 
 @Module({
   imports: [
@@ -53,9 +56,9 @@ import { TestController } from './test/test.controller';
     EmailModule,
     PortfolioModule,
   ],
-  controllers: [AppController, TestController, TestExceptionController],
+  controllers: [AppController, TestController, TestExceptionController, StellarController],
   providers: [
-    AppService,
+    AppService, StellarService,
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
