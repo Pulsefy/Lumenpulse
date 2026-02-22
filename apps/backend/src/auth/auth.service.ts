@@ -21,7 +21,7 @@ import {
   BASE_FEE,
   Account,
   Transaction,
-} from 'stellar-sdk';
+} from '@stellar/stellar-sdk';
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { EmailService } from '../email/email.service';

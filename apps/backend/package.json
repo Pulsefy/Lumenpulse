@@ -46,7 +46,7 @@
     "pg": "^8.17.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "stellar-sdk": "^13.3.0"
+    "@stellar/stellar-sdk": "^14.4.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
