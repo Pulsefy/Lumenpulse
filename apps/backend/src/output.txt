@@ -1,0 +1,68 @@
+C:\Users\USER\OneDrive\Desktop\Open Source Projects\Lumenpulse\apps\backend\src
+├── app.controller.spec.ts
+├── app.controller.ts
+├── app.module.ts
+├── app.service.ts
+├── auth
+|  ├── auth.controller.ts
+|  ├── auth.module.ts
+|  ├── auth.service.spec.ts
+|  ├── auth.service.ts
+|  ├── decorators
+|  ├── dto
+|  ├── entities
+|  ├── jwt-auth.guard.ts
+|  └── jwt.strategy.ts
+├── common
+|  ├── config
+|  ├── middleware
+|  └── utils
+├── database
+|  ├── data-source.ts
+|  ├── database.config.ts
+|  └── migrations
+├── email
+|  ├── email.module.ts
+|  └── email.service.ts
+├── filters
+|  └── global-exception.filter.ts
+├── interfaces
+|  └── error-response.interface.ts
+├── main.ts
+├── news
+|  ├── dto
+|  ├── index.ts
+|  ├── interfaces
+|  ├── news-provider.service.spec.ts
+|  ├── news-provider.service.ts
+|  ├── news-sentiment.services.ts
+|  ├── news.controller.ts
+|  ├── news.entity.ts
+|  ├── news.module.ts
+|  └── news.service.ts
+├── portfolio
+|  ├── dto
+|  ├── entities
+|  ├── portfolio-asset.entity.ts
+|  ├── portfolio.controller.ts
+|  ├── portfolio.module.ts
+|  ├── portfolio.service.ts
+|  ├── stellar-balance.service.ts
+|  └── utils
+├── sentiment
+|  ├── sentiment.module.ts
+|  ├── sentiment.service.spec.ts
+|  └── sentiment.service.ts
+├── test
+|  └── test.controller.ts
+├── test-exception.controller.ts
+└── users
+   ├── entities
+   ├── user.entity.ts
+   ├── user.module.ts
+   ├── users.controller.ts
+   ├── users.module.ts
+   └── users.service.ts
+
+directory: 24 file: 40
+

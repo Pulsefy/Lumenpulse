@@ -25,8 +25,8 @@ export class News {
   @Column({ type: 'timestamp' })
   publishedAt: Date;
 
-  @Column({ type: 'decimal', precision: 10, scale: 4, nullable: true })
-  sentimentScore: number;
+  @Column({ type: 'float', nullable: true })
+  sentimentScore: number | null;
 
   @CreateDateColumn()
   createdAt: Date;

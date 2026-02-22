@@ -1,0 +1,40 @@
+C:\Users\USER\OneDrive\Desktop\Open Source Projects\Lumenpulse\apps\backend
+├── eslint.config.mjs
+├── nest-cli.json
+├── package-lock.json
+├── package.json
+├── PORTFOLIO_SNAPSHOT_IMPLEMENTATION.md
+├── PR_DESCRIPTION.md
+├── README.md
+├── scripts
+|  └── run_migrations.ts
+├── src
+|  ├── app.controller.spec.ts
+|  ├── app.controller.ts
+|  ├── app.module.ts
+|  ├── app.service.ts
+|  ├── auth
+|  ├── common
+|  ├── database
+|  ├── email
+|  ├── filters
+|  ├── interfaces
+|  ├── main.ts
+|  ├── news
+|  ├── portfolio
+|  ├── sentiment
+|  ├── test
+|  ├── test-exception.controller.ts
+|  └── users
+├── test
+|  ├── app.e2e-spec.ts
+|  ├── health.e2e-spec.ts
+|  ├── jest-e2e.json
+|  └── sentiment.e2e-spec.ts
+├── tsconfig.build.json
+├── tsconfig.json
+├── tsconfig.test.json
+└── verify_auth.ps1
+
+directory: 14 file: 22
+
