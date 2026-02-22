@@ -6,7 +6,7 @@ test: build
 	cargo test
 
 build:
-	cargo build --release --target wasm32-unknown-unknown
+	soroban contract build
 	@ls -l target/wasm32-unknown-unknown/release/*.wasm
 
 fmt:

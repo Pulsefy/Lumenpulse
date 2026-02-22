@@ -72,7 +72,7 @@ jobs:
     - name: Build contract
       run: |
         cd apps/onchain/contracts/contributor_registry
-        stellar contract build
+        soroban contract build
         ls -la ./target/wasm32-unknown-unknown/release/
 
   lint:
