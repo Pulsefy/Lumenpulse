@@ -1549,7 +1549,10 @@ fn test_analytics_views() {
     token_admin_client.mint(&user2, &200_000);
 
     // Initial checks
-    assert_eq!(client.get_project_status(&project_id), symbol_short!("ACTIVE"));
+    assert_eq!(
+        client.get_project_status(&project_id),
+        symbol_short!("ACTIVE")
+    );
     assert_eq!(client.get_total_contributions(&project_id), 0);
     assert_eq!(client.get_contributor_contribution(&project_id, &user), 0);
 
@@ -1559,11 +1562,23 @@ fn test_analytics_views() {
 
     // Verify analytics
     assert_eq!(client.get_total_contributions(&project_id), 300_000);
-    assert_eq!(client.get_contributor_contribution(&project_id, &user), 100_000);
-    assert_eq!(client.get_contributor_contribution(&project_id, &user2), 200_000);
-    assert_eq!(client.get_project_status(&project_id), symbol_short!("ACTIVE"));
+    assert_eq!(
+        client.get_contributor_contribution(&project_id, &user),
+        100_000
+    );
+    assert_eq!(
+        client.get_contributor_contribution(&project_id, &user2),
+        200_000
+    );
+    assert_eq!(
+        client.get_project_status(&project_id),
+        symbol_short!("ACTIVE")
+    );
 
     // Cancel project
     client.cancel_project(&owner, &project_id);
-    assert_eq!(client.get_project_status(&project_id), symbol_short!("CANCELED"));
+    assert_eq!(
+        client.get_project_status(&project_id),
+        symbol_short!("CANCELED")
+    );
 }

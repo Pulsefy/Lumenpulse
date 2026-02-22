@@ -931,7 +931,7 @@ impl CrowdfundVaultContract {
             .persistent()
             .get(&DataKey::Project(project_id))
             .ok_or(CrowdfundError::ProjectNotFound)?;
-            
+
         Ok(project.total_deposited)
     }
 
