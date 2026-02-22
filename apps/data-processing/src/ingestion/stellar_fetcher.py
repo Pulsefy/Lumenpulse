@@ -8,9 +8,12 @@ from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 import json
+import logging
 from stellar_sdk import Server, Asset
-from stellar_sdk.exceptions import NotFoundError, BadRequestError, ConnectionError
+from stellar_sdk.exceptions import NotFoundError, BadRequestError, ConnectionError as StellarConnectionError
 from stellar_sdk.call_builder.call_builder_async import PaymentsCallBuilder
+from src.utils.http_client import http_breaker
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
 
 
 @dataclass
@@ -96,6 +99,8 @@ class StellarDataFetcher:
     RETRY_DELAY = 1  # seconds
     REQUEST_TIMEOUT = 30  # seconds
 
+    logger = logging.getLogger(__name__)
+
     def __init__(
         self,
         horizon_url: Optional[str] = None,
@@ -179,7 +184,7 @@ class StellarDataFetcher:
                 # Small delay to be nice to the API
                 time.sleep(0.1)
 
-        except (ConnectionError, BadRequestError) as e:
+        except (StellarConnectionError, BadRequestError) as e:
             print(f"Error during pagination: {e}")
         except Exception as e:
             print(f"Unexpected error during pagination: {e}")
@@ -188,27 +193,22 @@ class StellarDataFetcher:
 
     def _retry_request(self, func, *args, **kwargs):
         """
-        Retry logic for failed requests.
-
-        Args:
-            func: Function to retry
-            *args, **kwargs: Arguments for the function
-
-        Returns:
-            Function result
+        Robust retry logic for failed requests using tenacity and circuit breaker.
         """
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                return func(*args, **kwargs)
-            except (ConnectionError, BadRequestError, Exception) as e:
-                if attempt < self.MAX_RETRIES - 1:
-                    print(
-                        f"Attempt {attempt + 1} failed: {e}. Retrying in {self.RETRY_DELAY}s..."
-                    )
-                    time.sleep(self.RETRY_DELAY * (attempt + 1))
-                else:
-                    print(f"All retry attempts failed for {func.__name__}")
-                    raise e
+
+        @retry(
+            stop=stop_after_attempt(self.MAX_RETRIES),
+            wait=wait_exponential(multiplier=1, min=2, max=10),
+            retry=retry_if_exception_type(
+                (StellarConnectionError, BadRequestError, Exception)
+            ),
+            before_sleep=before_sleep_log(self.logger, logging.WARNING),
+            reraise=True,
+        )
+        def _do_execute():
+            return http_breaker.call(func, *args, **kwargs)
+
+        return _do_execute()
 
     def get_asset_volume(self, asset_code: str, hours: int = 24) -> VolumeData:
         """

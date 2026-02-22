@@ -10,8 +10,7 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass, asdict
 from .news_deduplicator import NewsDeduplicator
 from datetime import datetime
-import requests
-from requests.exceptions import RequestException, Timeout
+from src.utils.http_client import RobustHTTPClient
 
 
 @dataclass
@@ -79,8 +78,8 @@ class NewsFetcher:
         if use_newsapi and not self.newsapi_key:
             raise ValueError("NEWSAPI_API_KEY environment variable not set")
 
-        # Session for connection pooling
-        self.session = requests.Session()
+        # Use RobustHTTPClient for reliability
+        self.http_client = RobustHTTPClient()
         self.last_request_time = 0
 
         # Cache for avoiding duplicate articles
@@ -99,16 +98,7 @@ class NewsFetcher:
 
         self.last_request_time = time.time()
 
-    def _handle_api_error(self, response: requests.Response, api_name: str) -> None:
-        """Handle API errors and raise appropriate exceptions"""
-        if response.status_code == 401:
-            raise PermissionError(f"{api_name} API: Invalid API key")
-        elif response.status_code == 429:
-            raise ConnectionError(f"{api_name} API: Rate limit exceeded")
-        elif response.status_code >= 500:
-            raise ConnectionError(f"{api_name} API: Server error")
-        else:
-            response.raise_for_status()
+    # Removed _handle_api_error as RobustHTTPClient handles common cases
 
     def _fetch_cryptocompare(self, limit: int) -> List[NewsArticle]:
         """Fetch news from CryptoCompare API"""
@@ -125,15 +115,19 @@ class NewsFetcher:
 
             headers = {"Authorization": f"Apikey {self.cryptocompare_key}"}
 
-            response = self.session.get(
+            response = self.http_client.get(
                 APIConfig.CRYPTOCOMPARE_URL,
                 params=params,
                 headers=headers,
                 timeout=APIConfig.TIMEOUT,
             )
 
-            if response.status_code != 200:
-                self._handle_api_error(response, "CryptoCompare")
+            # RobustHTTPClient raises for 5xx, we handle 401/429 specifically here if needed
+            if response.status_code == 401:
+                raise PermissionError("CryptoCompare API: Invalid API key")
+            elif response.status_code == 429:
+                print("Warning: CryptoCompare API Rate limit exceeded")
+                return []
 
             data = response.json()
 
@@ -174,7 +168,7 @@ class NewsFetcher:
                     print(f"Warning: Missing key in CryptoCompare data: {e}")
                     continue
 
-        except RequestException as e:
+        except Exception as e:
             print(f"Error fetching from CryptoCompare: {e}")
         except json.JSONDecodeError as e:
             print(f"Error parsing CryptoCompare JSON: {e}")
@@ -202,12 +196,17 @@ class NewsFetcher:
                 "apiKey": self.newsapi_key,
             }
 
-            response = self.session.get(
+            response = self.http_client.get(
                 APIConfig.NEWSAPI_URL, params=params, timeout=APIConfig.TIMEOUT
             )
 
-            if response.status_code != 200:
-                self._handle_api_error(response, "NewsAPI")
+            if response.status_code == 401:
+                raise PermissionError("NewsAPI: Invalid API key")
+            elif response.status_code == 429:
+                print("Warning: NewsAPI Rate limit exceeded")
+                return []
+            elif response.status_code != 200:
+                response.raise_for_status()
 
             data = response.json()
 
@@ -241,7 +240,7 @@ class NewsFetcher:
                     print(f"Warning: Error parsing NewsAPI article: {e}")
                     continue
 
-        except RequestException as e:
+        except Exception as e:
             print(f"Error fetching from NewsAPI: {e}")
         except json.JSONDecodeError as e:
             print(f"Error parsing NewsAPI JSON: {e}")
@@ -300,8 +299,8 @@ class NewsFetcher:
         self.seen_articles.clear()
 
     def close(self):
-        """Close the session"""
-        self.session.close()
+        """Close the HTTP client"""
+        self.http_client.close()
 
 
 # Utility function for easy usage
