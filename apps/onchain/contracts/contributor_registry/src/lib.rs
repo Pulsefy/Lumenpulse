@@ -44,16 +44,34 @@ impl ContributorRegistryContract {
         {
             return Err(ContributorError::ContributorAlreadyExists);
         }
+
+        // Check if GitHub handle is already taken by a different address
+        if let Some(existing_address) = env
+            .storage()
+            .persistent()
+            .get::<_, Address>(&DataKey::GitHubIndex(github_handle.clone()))
+        {
+            // GitHub handle already exists for a different address
+            if existing_address != address {
+                return Err(ContributorError::GitHubHandleAlreadyExists);
+            }
+        }
+
         let timestamp = env.ledger().timestamp();
         let contributor = ContributorData {
             address: address.clone(),
-            github_handle,
+            github_handle: github_handle.clone(),
             reputation_score: 0,
             registered_timestamp: timestamp,
         };
         env.storage()
             .persistent()
-            .set(&DataKey::Contributor(address), &contributor);
+            .set(&DataKey::Contributor(address.clone()), &contributor);
+
+        // Store the reverse index (GitHub handle -> address)
+        env.storage()
+            .persistent()
+            .set(&DataKey::GitHubIndex(github_handle), &address);
 
         Ok(())
     }
@@ -118,6 +136,113 @@ impl ContributorRegistryContract {
             .persistent()
             .get(&DataKey::Contributor(address))
             .ok_or(ContributorError::ContributorNotFound)
+    }
+
+    /// Get contributor data by GitHub handle
+    pub fn get_contributor_by_github(
+        env: Env,
+        github_handle: String,
+    ) -> Result<ContributorData, ContributorError> {
+        if github_handle.is_empty() {
+            return Err(ContributorError::InvalidGitHubHandle);
+        }
+
+        let address: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::GitHubIndex(github_handle))
+            .ok_or(ContributorError::ContributorNotFound)?;
+
+        env.storage()
+            .persistent()
+            .get(&DataKey::Contributor(address))
+            .ok_or(ContributorError::ContributorNotFound)
+    }
+
+    /// Update contributor's GitHub handle
+    pub fn update_github_handle(
+        env: Env,
+        address: Address,
+        new_github_handle: String,
+    ) -> Result<(), ContributorError> {
+        if new_github_handle.is_empty() {
+            return Err(ContributorError::InvalidGitHubHandle);
+        }
+
+        address.require_auth();
+
+        // Get current contributor data
+        let mut contributor: ContributorData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contributor(address.clone()))
+            .ok_or(ContributorError::ContributorNotFound)?;
+
+        // Check if the new GitHub handle is already taken by a different address
+        if let Some(existing_address) = env
+            .storage()
+            .persistent()
+            .get::<_, Address>(&DataKey::GitHubIndex(new_github_handle.clone()))
+        {
+            // If it's the same address, it's OK (updating own handle)
+            if existing_address != address {
+                return Err(ContributorError::GitHubHandleAlreadyExists);
+            }
+        }
+
+        // Remove the old GitHub handle index
+        env.storage()
+            .persistent()
+            .remove(&DataKey::GitHubIndex(contributor.github_handle.clone()));
+
+        // Update contributor data with new GitHub handle
+        contributor.github_handle = new_github_handle.clone();
+        env.storage()
+            .persistent()
+            .set(&DataKey::Contributor(address.clone()), &contributor);
+
+        // Add the new GitHub handle index
+        env.storage()
+            .persistent()
+            .set(&DataKey::GitHubIndex(new_github_handle), &address);
+
+        Ok(())
+    }
+
+    /// Remove a contributor (admin only)
+    pub fn remove_contributor(
+        env: Env,
+        admin: Address,
+        contributor_address: Address,
+    ) -> Result<(), ContributorError> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ContributorError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(ContributorError::Unauthorized);
+        }
+        admin.require_auth();
+
+        // Get contributor data to access the GitHub handle
+        let contributor: ContributorData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contributor(contributor_address.clone()))
+            .ok_or(ContributorError::ContributorNotFound)?;
+
+        // Remove the contributor entry
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Contributor(contributor_address));
+
+        // Remove the GitHub handle index
+        env.storage()
+            .persistent()
+            .remove(&DataKey::GitHubIndex(contributor.github_handle));
+
+        Ok(())
     }
 
     /// Get admin address

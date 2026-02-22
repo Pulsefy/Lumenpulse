@@ -11,4 +11,5 @@ pub enum ContributorError {
     ContributorAlreadyExists = 5,
     InvalidGitHubHandle = 6,
     ReputationOverflow = 7,
+    GitHubHandleAlreadyExists = 8,
 }

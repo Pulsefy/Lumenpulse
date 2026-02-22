@@ -6,8 +6,8 @@ test: build
 	cargo test
 
 build:
-	stellar contract build
-	@ls -l target/wasm32v1-none/release/*.wasm
+	soroban contract build
+	@ls -l target/wasm32-unknown-unknown/release/*.wasm
 
 fmt:
 	cargo fmt --all
