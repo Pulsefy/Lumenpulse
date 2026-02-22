@@ -18,6 +18,7 @@ from src.ingestion.stellar_fetcher import get_asset_volume, get_network_overview
 from src.analytics.market_analyzer import MarketAnalyzer, MarketData
 from src.analytics.market_analyzer import get_explanation
 from scheduler import AnalyticsScheduler
+from src.utils.keeper import KeeperIdentity
 
 # Configure logging
 logging.basicConfig(
@@ -206,9 +207,21 @@ def main():
         command = sys.argv[1].lower()
 
         if command == "run":
+            # Initialize Keeper
+            keeper = KeeperIdentity()
+            if not keeper.load_identity() or not keeper.validate_on_chain():
+                logger.error("Keeper identity validation failed. Exiting.")
+                sys.exit(1)
+            
             # Run pipeline once and exit
             return run_data_pipeline()
         elif command == "serve":
+            # Initialize Keeper
+            keeper = KeeperIdentity()
+            if not keeper.load_identity() or not keeper.validate_on_chain():
+                logger.error("Keeper identity validation failed. Exiting.")
+                sys.exit(1)
+                
             # Start scheduled service
             start_scheduler()
         elif command == "help":
