@@ -1,10 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-
+import { AxiosResponse } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { NewsService } from './news.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
+
+interface SentimentApiResponse {
+  sentiment: number;
+}
 
 @Injectable()
 export class NewsSentimentService {
@@ -16,32 +20,27 @@ export class NewsSentimentService {
     private readonly configService: ConfigService,
   ) {}
 
-  /**
-   * Calls Python sentiment API
-   */
   async analyzeSentiment(text: string): Promise<number | null> {
     try {
-      const response = await firstValueFrom(
-        this.httpService.post(
-          `${process.env.PYTHON_SERVICE_URL}/sentiment`,
-          { text },
-        ),
+      const baseUrl = this.configService.get<string>('PYTHON_SERVICE_URL');
+      const response = await firstValueFrom<
+        AxiosResponse<SentimentApiResponse>
+      >(
+        this.httpService.post<SentimentApiResponse>(`${baseUrl}/analyze`, {
+          text,
+        }),
       );
-
-      return response.data.score; // expects -1 to 1
-    } catch (error) {
+      return response.data.sentiment;
+    } catch {
+      // Non-blocking: return null if service is down
       this.logger.error('Sentiment service unavailable');
-      return null; // IMPORTANT: never throw
+      return null;
     }
   }
 
-  /**
-   * Bulk sentiment updater (Cron job)
-   */
-    @Cron(CronExpression.EVERY_10_MINUTES)
-  async updateMissingSentiments() {
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async updateMissingSentiments(): Promise<void> {
     this.logger.log('Running sentiment update job...');
-
 
     const articlesWithoutSentiment =
       await this.newsService.findUnscoredArticles();

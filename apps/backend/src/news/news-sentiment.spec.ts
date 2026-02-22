@@ -3,11 +3,39 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { of, throwError } from 'rxjs';
-import { News } from '../src/news/news.entity';
-import { NewsService } from '../src/news/news.service';
-import { NewsSentimentService } from '../src/news/news-sentiment.services';
+import { AxiosResponse } from 'axios';
+import { News } from './news.entity';
+import { NewsService } from './news.service';
+import { NewsSentimentService } from './news-sentiment.services';
 
+// ─── Types ───────────────────────────────────────────────────────────────────
 
+interface SentimentApiResponse {
+  sentiment: number;
+}
+
+interface RawOverallResult {
+  average: string | null;
+  totalArticles: string;
+}
+
+interface RawSourceResult {
+  source: string;
+  averageScore: string;
+  articleCount: string;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function makeAxiosResponse<T>(data: T): AxiosResponse<T> {
+  return {
+    data,
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    config: { headers: {} } as AxiosResponse['config'],
+  };
+}
 
 function makeArticle(overrides: Partial<News> = {}): News {
   return {
@@ -23,12 +51,14 @@ function makeArticle(overrides: Partial<News> = {}): News {
   };
 }
 
-// ─── NewsSentimentService Unit Tests ────────────────────────────────────────
+// ─── NewsSentimentService Unit Tests ─────────────────────────────────────────
 
 describe('NewsSentimentService', () => {
   let sentimentService: NewsSentimentService;
-  let newsService: jest.Mocked<NewsService>;
-  let httpService: jest.Mocked<HttpService>;
+  let newsService: jest.Mocked<
+    Pick<NewsService, 'findUnscoredArticles' | 'update'>
+  >;
+  let httpService: jest.Mocked<Pick<HttpService, 'post'>>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -54,34 +84,39 @@ describe('NewsSentimentService', () => {
       ],
     }).compile();
 
-    sentimentService = module.get(NewsSentimentService);
-    newsService = module.get(NewsService);
-    httpService = module.get(HttpService);
+    sentimentService = module.get<NewsSentimentService>(NewsSentimentService);
+    newsService = module.get<NewsService>(NewsService) as jest.Mocked<
+      Pick<NewsService, 'findUnscoredArticles' | 'update'>
+    >;
+    httpService = module.get<HttpService>(HttpService) as jest.Mocked<
+      Pick<HttpService, 'post'>
+    >;
   });
 
-  // ── analyzeSentiment ──────────────────────────────────────────────────────
+  // ── analyzeSentiment ───────────────────────────────────────────────────────
 
   describe('analyzeSentiment()', () => {
     it('should return score from Python service', async () => {
-      httpService.post.mockReturnValue(
-        of({ data: { sentiment: 0.75 } } as any),
-      );
+      const mockResponse = makeAxiosResponse<SentimentApiResponse>({
+        sentiment: 0.75,
+      });
+      (httpService.post as jest.Mock).mockReturnValue(of(mockResponse));
 
       const score = await sentimentService.analyzeSentiment('Bitcoin is up!');
       expect(score).toBe(0.75);
     });
 
     it('should return null when Python service is down (non-blocking)', async () => {
-      httpService.post.mockReturnValue(
+      (httpService.post as jest.Mock).mockReturnValue(
         throwError(() => new Error('ECONNREFUSED')),
       );
 
       const score = await sentimentService.analyzeSentiment('some text');
-      expect(score).toBeNull(); // must never throw
+      expect(score).toBeNull();
     });
 
     it('should return null on timeout', async () => {
-      httpService.post.mockReturnValue(
+      (httpService.post as jest.Mock).mockReturnValue(
         throwError(() => ({ code: 'ECONNABORTED' })),
       );
 
@@ -89,15 +124,18 @@ describe('NewsSentimentService', () => {
       expect(score).toBeNull();
     });
 
-    it('should handle score at boundary values (-1 and 1)', async () => {
-      httpService.post.mockReturnValueOnce(
-        of({ data: { sentiment: -1 } } as any),
-      );
+    it('should handle boundary values (-1 and 1)', async () => {
+      const negResponse = makeAxiosResponse<SentimentApiResponse>({
+        sentiment: -1,
+      });
+      const posResponse = makeAxiosResponse<SentimentApiResponse>({
+        sentiment: 1,
+      });
+
+      (httpService.post as jest.Mock).mockReturnValueOnce(of(negResponse));
       expect(await sentimentService.analyzeSentiment('terrible news')).toBe(-1);
 
-      httpService.post.mockReturnValueOnce(
-        of({ data: { sentiment: 1 } } as any),
-      );
+      (httpService.post as jest.Mock).mockReturnValueOnce(of(posResponse));
       expect(await sentimentService.analyzeSentiment('great news')).toBe(1);
     });
   });
@@ -107,44 +145,56 @@ describe('NewsSentimentService', () => {
   describe('updateMissingSentiments()', () => {
     it('should update articles that have no sentiment score', async () => {
       const articles = [makeArticle({ id: '1' }), makeArticle({ id: '2' })];
-      newsService.findUnscoredArticles.mockResolvedValue(articles);
-      httpService.post.mockReturnValue(
-        of({ data: { sentiment: 0.5 } } as any),
+      const mockResponse = makeAxiosResponse<SentimentApiResponse>({
+        sentiment: 0.5,
+      });
+
+      (newsService.findUnscoredArticles as jest.Mock).mockResolvedValue(
+        articles,
       );
+      (httpService.post as jest.Mock).mockReturnValue(of(mockResponse));
 
       await sentimentService.updateMissingSentiments();
 
       expect(newsService.update).toHaveBeenCalledTimes(2);
-      expect(newsService.update).toHaveBeenCalledWith('1', { sentimentScore: 0.5 });
-      expect(newsService.update).toHaveBeenCalledWith('2', { sentimentScore: 0.5 });
+      expect(newsService.update).toHaveBeenCalledWith('1', {
+        sentimentScore: 0.5,
+      });
+      expect(newsService.update).toHaveBeenCalledWith('2', {
+        sentimentScore: 0.5,
+      });
     });
 
-    it('should skip update for articles where sentiment service fails', async () => {
+    it('should skip update when sentiment service fails', async () => {
       const articles = [makeArticle({ id: '1' })];
-      newsService.findUnscoredArticles.mockResolvedValue(articles);
-      httpService.post.mockReturnValue(
+      (newsService.findUnscoredArticles as jest.Mock).mockResolvedValue(
+        articles,
+      );
+      (httpService.post as jest.Mock).mockReturnValue(
         throwError(() => new Error('service down')),
       );
 
       await sentimentService.updateMissingSentiments();
 
-      // Should NOT update when score is null
       expect(newsService.update).not.toHaveBeenCalled();
     });
 
     it('should not throw when all articles fail scoring', async () => {
       const articles = [makeArticle(), makeArticle({ id: 'article-uuid-2' })];
-      newsService.findUnscoredArticles.mockResolvedValue(articles);
-      httpService.post.mockReturnValue(
+      (newsService.findUnscoredArticles as jest.Mock).mockResolvedValue(
+        articles,
+      );
+      (httpService.post as jest.Mock).mockReturnValue(
         throwError(() => new Error('down')),
       );
 
-      // Must complete without throwing
-      await expect(sentimentService.updateMissingSentiments()).resolves.not.toThrow();
+      await expect(
+        sentimentService.updateMissingSentiments(),
+      ).resolves.not.toThrow();
     });
 
     it('should do nothing when no unscored articles exist', async () => {
-      newsService.findUnscoredArticles.mockResolvedValue([]);
+      (newsService.findUnscoredArticles as jest.Mock).mockResolvedValue([]);
 
       await sentimentService.updateMissingSentiments();
 
@@ -153,12 +203,12 @@ describe('NewsSentimentService', () => {
   });
 });
 
-// ─── NewsService Unit Tests ──────────────────────────────────────────────────
+// ─── NewsService Unit Tests ───────────────────────────────────────────────────
 
 describe('NewsService - sentiment methods', () => {
   let newsService: NewsService;
 
-  const mockQueryBuilder: any = {
+  const mockQueryBuilder = {
     select: jest.fn().mockReturnThis(),
     addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
@@ -186,7 +236,7 @@ describe('NewsService - sentiment methods', () => {
       ],
     }).compile();
 
-    newsService = module.get(NewsService);
+    newsService = module.get<NewsService>(NewsService);
     jest.clearAllMocks();
     mockRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
   });
@@ -217,14 +267,17 @@ describe('NewsService - sentiment methods', () => {
 
   describe('getSentimentSummary()', () => {
     it('should return overall and bySource breakdown', async () => {
-      mockQueryBuilder.getRawOne.mockResolvedValue({
+      const overallRaw: RawOverallResult = {
         average: '0.4200',
         totalArticles: '10',
-      });
-      mockQueryBuilder.getRawMany.mockResolvedValue([
+      };
+      const bySourceRaw: RawSourceResult[] = [
         { source: 'coindesk', averageScore: '0.6500', articleCount: '6' },
         { source: 'cointelegraph', averageScore: '0.1200', articleCount: '4' },
-      ]);
+      ];
+
+      mockQueryBuilder.getRawOne.mockResolvedValue(overallRaw);
+      mockQueryBuilder.getRawMany.mockResolvedValue(bySourceRaw);
 
       const result = await newsService.getSentimentSummary();
 
@@ -238,11 +291,13 @@ describe('NewsService - sentiment methods', () => {
       });
     });
 
-    it('should return 0 for overall when no articles are scored', async () => {
-      mockQueryBuilder.getRawOne.mockResolvedValue({
+    it('should return 0 when no articles are scored', async () => {
+      const overallRaw: RawOverallResult = {
         average: null,
         totalArticles: '0',
-      });
+      };
+
+      mockQueryBuilder.getRawOne.mockResolvedValue(overallRaw);
       mockQueryBuilder.getRawMany.mockResolvedValue([]);
 
       const result = await newsService.getSentimentSummary();
@@ -269,7 +324,6 @@ describe('NewsService - sentiment methods', () => {
       const result = await newsService.findBySentimentRange(0, 1);
       expect(result).toEqual([]);
 
-      // Verify IS NOT NULL guard was applied
       expect(mockQueryBuilder.where).toHaveBeenCalledWith(
         'news.sentimentScore IS NOT NULL',
       );

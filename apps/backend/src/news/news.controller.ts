@@ -88,10 +88,11 @@ export class NewsController {
     return this.newsProviderService.getCategories({ status });
   }
 
-
   @Get('sentiment-summary')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get aggregated sentiment scores across all articles' })
+  @ApiOperation({
+    summary: 'Get aggregated sentiment scores across all articles',
+  })
   @ApiResponse({
     status: 200,
     description: 'Overall sentiment and breakdown by source',
@@ -142,7 +143,4 @@ export class NewsController {
       limit ? parseInt(limit, 10) : undefined,
     );
   }
-
-;
-
 }
