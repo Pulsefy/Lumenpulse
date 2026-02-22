@@ -40,10 +40,12 @@ import { TestController } from './test/test.controller';
       inject: [ConfigService],
     }),
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 100,
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
     SentimentModule,
     NewsModule,
     AuthModule,
