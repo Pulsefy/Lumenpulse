@@ -21,7 +21,7 @@ jest.mock('bcrypt', () => ({
   compare: jest.fn(),
 }));
 
-jest.mock('stellar-sdk', () => ({
+jest.mock('@stellar/stellar-sdk', () => ({
   Keypair: {
     fromSecret: jest.fn().mockReturnValue({
       publicKey: jest.fn().mockReturnValue('GTEST'),

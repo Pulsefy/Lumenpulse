@@ -923,6 +923,41 @@ impl CrowdfundVaultContract {
         .publish(&env);
         Ok(())
     }
+
+    /// Get total contributions for a project
+    pub fn get_total_contributions(env: Env, project_id: u64) -> Result<i128, CrowdfundError> {
+        let project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        Ok(project.total_deposited)
+    }
+
+    /// Get a specific contributor's contribution to a project
+    pub fn get_contributor_contribution(
+        env: Env,
+        project_id: u64,
+        contributor: Address,
+    ) -> Result<i128, CrowdfundError> {
+        Self::get_contribution(env, project_id, contributor)
+    }
+
+    /// Get project status
+    pub fn get_project_status(env: Env, project_id: u64) -> Result<Symbol, CrowdfundError> {
+        // Check if project exists
+        env.storage()
+            .persistent()
+            .get::<_, ProjectData>(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::ProjectStatus(project_id))
+            .unwrap_or(Symbol::new(&env, "ACTIVE")))
+    }
 }
 
 #[cfg(test)]

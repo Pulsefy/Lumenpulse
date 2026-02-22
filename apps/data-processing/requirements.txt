@@ -11,6 +11,8 @@ flake8
 redis
 numpy
 stellar-sdk>=8.2.0  
+scikit-learn>=1.4.0
+pandas>=2.2.0
 
 # Database
 asyncpg>=0.29.0

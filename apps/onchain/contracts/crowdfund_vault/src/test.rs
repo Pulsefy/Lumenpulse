@@ -1525,3 +1525,60 @@ fn test_cancel_project_failed() {
 
     client.refund_contributors(&project_id, &user);
 }
+
+#[test]
+fn test_analytics_views() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    let user2 = Address::generate(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let (_, token_admin_client) = create_token_contract(&env, &admin);
+    token_admin_client.mint(&user2, &200_000);
+
+    // Initial checks
+    assert_eq!(
+        client.get_project_status(&project_id),
+        symbol_short!("ACTIVE")
+    );
+    assert_eq!(client.get_total_contributions(&project_id), 0);
+    assert_eq!(client.get_contributor_contribution(&project_id, &user), 0);
+
+    // Deposits
+    client.deposit(&user, &project_id, &100_000);
+    client.deposit(&user2, &project_id, &200_000);
+
+    // Verify analytics
+    assert_eq!(client.get_total_contributions(&project_id), 300_000);
+    assert_eq!(
+        client.get_contributor_contribution(&project_id, &user),
+        100_000
+    );
+    assert_eq!(
+        client.get_contributor_contribution(&project_id, &user2),
+        200_000
+    );
+    assert_eq!(
+        client.get_project_status(&project_id),
+        symbol_short!("ACTIVE")
+    );
+
+    // Cancel project
+    client.cancel_project(&owner, &project_id);
+    assert_eq!(
+        client.get_project_status(&project_id),
+        symbol_short!("CANCELED")
+    );
+}
