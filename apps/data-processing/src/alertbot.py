@@ -11,8 +11,7 @@ import logging
 import threading
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
-
-import requests
+from src.utils.http_client import RobustHTTPClient
 
 # Load environment variables from .env file if present
 try:
@@ -82,6 +81,7 @@ class AlertBot:
         self.channel_id = telegram_channel_id or os.getenv("TELEGRAM_CHANNEL_ID")
         self.dry_run = dry_run
         self._lock = threading.Lock()
+        self.http_client = RobustHTTPClient(timeout=self.REQUEST_TIMEOUT)
 
         # Validate configuration
         self._configured = bool(self.bot_token and self.channel_id)
@@ -133,92 +133,20 @@ class AlertBot:
 
     def _send_request(self, message: str) -> bool:
         """
-        Send message to Telegram with retry logic.
-
-        Args:
-            message: Message text to send
-
-        Returns:
-            True if message was sent successfully, False otherwise
+        Send message to Telegram using RobustHTTPClient.
         """
         url = self.API_BASE_URL.format(token=self.bot_token)
         payload = {"chat_id": self.channel_id, "text": message, "parse_mode": "HTML"}
 
-        retry_delay = self.INITIAL_RETRY_DELAY
-
-        for attempt in range(self.MAX_RETRIES + 1):
-            try:
-                response = requests.post(
-                    url, json=payload, timeout=self.REQUEST_TIMEOUT
-                )
-
-                if response.status_code == 200:
-                    logger.info("Alert sent successfully to Telegram")
-                    return True
-
-                elif response.status_code == 429:
-                    # Rate limited - extract retry_after if provided
-                    retry_after = (
-                        response.json()
-                        .get("parameters", {})
-                        .get("retry_after", retry_delay)
-                    )
-                    retry_delay = min(float(retry_after), self.MAX_RETRY_DELAY)
-
-                    if attempt < self.MAX_RETRIES:
-                        logger.warning(
-                            f"Rate limited by Telegram (429). Retrying in {retry_delay:.1f}s "
-                            f"(attempt {attempt + 1}/{self.MAX_RETRIES})"
-                        )
-                        time.sleep(retry_delay)
-                        retry_delay = min(retry_delay * 2, self.MAX_RETRY_DELAY)
-                        continue
-                    else:
-                        logger.error("Rate limit exceeded, max retries reached")
-                        return False
-
-                elif response.status_code in (401, 403):
-                    logger.error(
-                        f"Telegram authentication failed ({response.status_code}). "
-                        "Check TELEGRAM_BOT_TOKEN and ensure bot has channel permissions."
-                    )
-                    return False
-
-                else:
-                    error_desc = response.json().get("description", "Unknown error")
-                    logger.error(
-                        f"Telegram API error ({response.status_code}): {error_desc}"
-                    )
-                    return False
-
-            except requests.exceptions.Timeout:
-                if attempt < self.MAX_RETRIES:
-                    logger.warning(
-                        f"Request timeout. Retrying in {retry_delay:.1f}s "
-                        f"(attempt {attempt + 1}/{self.MAX_RETRIES})"
-                    )
-                    time.sleep(retry_delay)
-                    retry_delay = min(retry_delay * 2, self.MAX_RETRY_DELAY)
-                    continue
-                else:
-                    logger.error("Request timeout, max retries reached")
-                    return False
-
-            except requests.exceptions.ConnectionError as e:
-                logger.error(f"Connection error sending Telegram alert: {e}")
-                return False
-
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Request error sending Telegram alert: {e}")
-                return False
-
-            except Exception as e:
-                logger.error(
-                    f"Unexpected error sending Telegram alert: {e}", exc_info=True
-                )
-                return False
-
-        return False
+        try:
+            response = self.http_client.post(url, json=payload)
+            if response.status_code == 200:
+                logger.info("Alert sent successfully to Telegram")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Failed to send Telegram alert: {e}")
+            return False
 
     def send_alert(self, message: str) -> bool:
         """

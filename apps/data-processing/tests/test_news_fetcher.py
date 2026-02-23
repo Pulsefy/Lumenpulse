@@ -67,7 +67,7 @@ class TestNewsFetcher(unittest.TestCase):
         with self.assertRaises(ValueError):
             NewsFetcher(use_cryptocompare=True, use_newsapi=False)
 
-    @patch("src.ingestion.news_fetcher.requests.Session.get")
+    @patch("src.ingestion.news_fetcher.RobustHTTPClient.get")
     def test_fetch_cryptocompare_success(self, mock_get):
         """Test successful fetch from CryptoCompare"""
         # Mock the response
@@ -93,7 +93,7 @@ class TestNewsFetcher(unittest.TestCase):
 
         fetcher.close()
 
-    @patch("src.ingestion.news_fetcher.requests.Session.get")
+    @patch("src.ingestion.news_fetcher.RobustHTTPClient.get")
     def test_fetch_newsapi_success(self, mock_get):
         """Test successful fetch from NewsAPI"""
         # Mock the response
@@ -168,7 +168,7 @@ class TestNewsFetcher(unittest.TestCase):
 
         fetcher.close()
 
-    @patch("src.ingestion.news_fetcher.requests.Session.get")
+    @patch("src.ingestion.news_fetcher.RobustHTTPClient.get")
     def test_duplicate_prevention(self, mock_get):
         """Test that duplicate articles are filtered"""
         # Mock same article twice

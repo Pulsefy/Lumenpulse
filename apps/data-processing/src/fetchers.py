@@ -2,10 +2,10 @@
 News fetcher module - fetches crypto/market news from various sources
 """
 
-import requests
 import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
+from src.utils.http_client import RobustHTTPClient
 
 logger = logging.getLogger(__name__)
 
@@ -42,12 +42,12 @@ class NewsFetcher:
             "crypto_news": "https://api.coingecko.com/api/v3/news",
             "mock_market": "https://jsonplaceholder.typicode.com/posts",
         }
+        self.http_client = RobustHTTPClient()
 
     def fetch_crypto_news(self) -> List[NewsItem]:
         """Fetch crypto news from CoinGecko API"""
         try:
-            response = requests.get(self.sources["crypto_news"], timeout=10)
-            response.raise_for_status()
+            response = self.http_client.get(self.sources["crypto_news"], timeout=10)
             data = response.json()
 
             news_items = []
@@ -76,15 +76,14 @@ class NewsFetcher:
 
             logger.info(f"Fetched {len(news_items)} crypto news items")
             return news_items
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             logger.error(f"Error fetching crypto news: {e}")
             return []
 
     def fetch_market_news(self) -> List[NewsItem]:
         """Fetch market news from mock source"""
         try:
-            response = requests.get(self.sources["mock_market"], timeout=10)
-            response.raise_for_status()
+            response = self.http_client.get(self.sources["mock_market"], timeout=10)
             data = response.json()
 
             news_items = []
@@ -101,7 +100,7 @@ class NewsFetcher:
 
             logger.info(f"Fetched {len(news_items)} market news items")
             return news_items
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             logger.error(f"Error fetching market news: {e}")
             return []
 
@@ -114,3 +113,7 @@ class NewsFetcher:
         logger.info(f"Total news items fetched: {len(all_news)}")
 
         return all_news
+
+    def close(self):
+        """Close the HTTP client"""
+        self.http_client.close()
