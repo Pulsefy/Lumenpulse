@@ -27,8 +27,14 @@ import { GetChallengeDto, VerifyChallengeDto } from './dto/auth.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto, LogoutDto } from './dto/refresh-token.dto';
-import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
@@ -38,6 +44,25 @@ export class AuthController {
   ) {}
 
   @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login with email and password' })
+  @ApiResponse({
+    status: 200,
+    description: 'Login successful',
+    schema: {
+      properties: {
+        access_token: {
+          type: 'string',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        },
+        refresh_token: {
+          type: 'string',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() body: LoginDto) {
     const user = await this.authService.validateUser(body.email, body.password);
     if (!user) {
@@ -48,7 +73,7 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Register a new user with email and password' })
+  @ApiOperation({ summary: 'Register a new user account' })
   @ApiResponse({
     status: 201,
     description: 'User registered successfully',
@@ -56,19 +81,11 @@ export class AuthController {
       properties: {
         id: { type: 'string' },
         email: { type: 'string' },
-        role: { type: 'string' },
-        createdAt: { type: 'string' },
+        createdAt: { type: 'string', format: 'date-time' },
       },
     },
   })
-  @ApiResponse({
-    status: 409,
-    description: 'Email already registered',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid email format or password too short',
-  })
+  @ApiResponse({ status: 400, description: 'Email already exists' })
   async register(@Body() body: RegisterDto) {
     // Check if user already exists
     const existingUser = await this.usersService.findByEmail(body.email);
@@ -187,6 +204,14 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
   @Get('profile')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile retrieved successfully',
+    type: ProfileDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   getProfile(@Request() req: { user: ProfileDto }) {
     return new ProfileDto(req.user);
   }

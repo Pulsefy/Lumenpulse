@@ -56,10 +56,25 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('LumenPulse API')
     .setDescription(
-      'API documentation for LumenPulse - Interactive API docs for frontend developers',
+      'Comprehensive API documentation for LumenPulse - A decentralized crypto news aggregator and portfolio management platform built on Stellar blockchain',
     )
     .setVersion('1.0')
-    .addTag('lumenpulse')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Enter JWT token',
+      },
+      'JWT-auth',
+    )
+    .addTag('auth', 'Authentication and authorization endpoints')
+    .addTag('users', 'User profile and account management')
+    .addTag('news', 'Crypto news aggregation and sentiment analysis')
+    .addTag('portfolio', 'Portfolio tracking and performance metrics')
+    .addTag('stellar', 'Stellar blockchain integration')
+    .addServer('http://localhost:3000', 'Development')
+    .addServer('https://api.lumenpulse.io', 'Production')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
