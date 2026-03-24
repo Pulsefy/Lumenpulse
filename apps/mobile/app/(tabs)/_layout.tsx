@@ -32,15 +32,22 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="projects"
+        options={{
+          title: 'Projects',
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'rocket' : 'rocket-outline'} size={24} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
         name="portfolio"
         options={{
           title: 'Portfolio',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'briefcase' : 'briefcase-outline'}
-              size={24}
-              color={color}
-            />
+            <Ionicons name={focused ? 'briefcase' : 'briefcase-outline'} size={24} color={color} />
           ),
         }}
       />

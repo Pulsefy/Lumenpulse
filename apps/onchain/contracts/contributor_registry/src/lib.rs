@@ -148,10 +148,7 @@ impl ContributorRegistryContract {
                 Some(new_delta) => new_delta as u64,
                 None => 0,
             };
-            contributor
-                .reputation_score
-                .checked_sub(new_delta)
-                .unwrap_or_default()
+            contributor.reputation_score.saturating_sub(new_delta)
         };
         contributor.reputation_score = new_score;
         env.storage()

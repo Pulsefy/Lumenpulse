@@ -118,10 +118,10 @@ impl CrowdfundVaultContract {
         let balance_key = DataKey::ProjectBalance(project_id, token_address.clone());
         env.storage().persistent().set(&balance_key, &0i128);
 
-        // Initialize milestone approval status
+        // Initialize milestone approval status (first milestone is 0)
         env.storage()
             .persistent()
-            .set(&DataKey::MilestoneApproved(project_id), &false);
+            .set(&DataKey::MilestoneApproved(project_id, 0), &false);
 
         // Increment project ID counter
         env.storage()
@@ -368,6 +368,7 @@ impl CrowdfundVaultContract {
         env: Env,
         admin: Address,
         project_id: u64,
+        milestone_id: u32,
     ) -> Result<(), CrowdfundError> {
         // Verify admin (single check with helper)
         Self::verify_admin(&env, &admin)?;
@@ -382,7 +383,7 @@ impl CrowdfundVaultContract {
             return Err(CrowdfundError::ContractPaused);
         }
 
-        // Check if project exists (single get instead of has + get)
+        // Check if project exists
         env.storage()
             .persistent()
             .get::<_, ProjectData>(&DataKey::Project(project_id))
@@ -391,7 +392,7 @@ impl CrowdfundVaultContract {
         // Approve milestone
         env.storage()
             .persistent()
-            .set(&DataKey::MilestoneApproved(project_id), &true);
+            .set(&DataKey::MilestoneApproved(project_id, milestone_id), &true);
 
         // Emit milestone approval event
         events::MilestoneApprovedEvent { admin, project_id }.publish(&env);
@@ -399,8 +400,175 @@ impl CrowdfundVaultContract {
         Ok(())
     }
 
+    /// Start a vote for a milestone approval
+    pub fn start_milestone_vote(
+        env: Env,
+        project_id: u64,
+        milestone_id: u32,
+        duration_seconds: u64,
+    ) -> Result<(), CrowdfundError> {
+        // Get project
+        let project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        // Only project owner can start a vote
+        project.owner.require_auth();
+
+        // Check if already approved
+        let is_approved: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MilestoneApproved(project_id, milestone_id))
+            .unwrap_or(false);
+        if is_approved {
+            return Err(CrowdfundError::MilestoneAlreadyApproved);
+        }
+
+        // Set voting window
+        let end_time = env.ledger().timestamp() + duration_seconds;
+        env.storage().persistent().set(
+            &DataKey::MilestoneVoteWindow(project_id, milestone_id),
+            &end_time,
+        );
+
+        // Reset votes for this milestone if needed (though they should be 0)
+        env.storage().persistent().set(
+            &DataKey::MilestoneVotesFor(project_id, milestone_id),
+            &0i128,
+        );
+        env.storage().persistent().set(
+            &DataKey::MilestoneVotesAgainst(project_id, milestone_id),
+            &0i128,
+        );
+
+        // Emit event
+        events::MilestoneVoteStartedEvent {
+            project_id,
+            milestone_id,
+            end_time,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Cast a vote for a milestone
+    pub fn vote_milestone(
+        env: Env,
+        voter: Address,
+        project_id: u64,
+        milestone_id: u32,
+        support: bool,
+    ) -> Result<(), CrowdfundError> {
+        voter.require_auth();
+
+        // Check voting window
+        let end_time: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MilestoneVoteWindow(project_id, milestone_id))
+            .ok_or(CrowdfundError::VotingWindowNotStarted)?;
+
+        if env.ledger().timestamp() > end_time {
+            return Err(CrowdfundError::VotingWindowClosed);
+        }
+
+        // Check if already voted
+        if env.storage().persistent().has(&DataKey::MilestoneVote(
+            project_id,
+            milestone_id,
+            voter.clone(),
+        )) {
+            return Err(CrowdfundError::AlreadyVoted);
+        }
+
+        // Get contribution weight
+        let weight: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contribution(project_id, voter.clone()))
+            .unwrap_or(0);
+
+        if weight <= 0 {
+            return Err(CrowdfundError::InsufficientContributionToVote);
+        }
+
+        // Update vote count
+        if support {
+            let current_for: i128 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::MilestoneVotesFor(project_id, milestone_id))
+                .unwrap_or(0);
+            env.storage().persistent().set(
+                &DataKey::MilestoneVotesFor(project_id, milestone_id),
+                &(current_for + weight),
+            );
+        } else {
+            let current_against: i128 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::MilestoneVotesAgainst(project_id, milestone_id))
+                .unwrap_or(0);
+            env.storage().persistent().set(
+                &DataKey::MilestoneVotesAgainst(project_id, milestone_id),
+                &(current_against + weight),
+            );
+        }
+
+        // Mark as voted
+        env.storage().persistent().set(
+            &DataKey::MilestoneVote(project_id, milestone_id, voter.clone()),
+            &true,
+        );
+
+        // Emit event
+        events::VoteCastEvent {
+            project_id,
+            milestone_id,
+            voter,
+            weight,
+            support,
+        }
+        .publish(&env);
+
+        // Auto-approve if threshold met (> 50% of total deposited)
+        let project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        let current_for: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MilestoneVotesFor(project_id, milestone_id))
+            .unwrap_or(0);
+
+        if current_for > project.total_deposited / 2 {
+            env.storage()
+                .persistent()
+                .set(&DataKey::MilestoneApproved(project_id, milestone_id), &true);
+            events::MilestoneApprovedByVoteEvent {
+                project_id,
+                milestone_id,
+            }
+            .publish(&env);
+        }
+
+        Ok(())
+    }
+
     /// Withdraw funds from a project (owner only, requires milestone approval)
-    pub fn withdraw(env: Env, project_id: u64, amount: i128) -> Result<(), CrowdfundError> {
+    pub fn withdraw(
+        env: Env,
+        project_id: u64,
+        milestone_id: u32,
+        amount: i128,
+    ) -> Result<(), CrowdfundError> {
         // Check if contract is initialized
         if !env.storage().instance().has(&DataKey::Admin) {
             return Err(CrowdfundError::NotInitialized);
@@ -436,11 +604,11 @@ impl CrowdfundVaultContract {
             return Err(CrowdfundError::InvalidAmount);
         }
 
-        // Check milestone approval
+        // Check specific milestone approval
         let is_approved: bool = env
             .storage()
             .persistent()
-            .get(&DataKey::MilestoneApproved(project_id))
+            .get(&DataKey::MilestoneApproved(project_id, milestone_id))
             .unwrap_or(false);
 
         if !is_approved {
@@ -598,7 +766,11 @@ impl CrowdfundVaultContract {
     }
 
     /// Check if milestone is approved for a project
-    pub fn is_milestone_approved(env: Env, project_id: u64) -> Result<bool, CrowdfundError> {
+    pub fn is_milestone_approved(
+        env: Env,
+        project_id: u64,
+        milestone_id: u32,
+    ) -> Result<bool, CrowdfundError> {
         // Check if project exists (single get instead of has + get)
         env.storage()
             .persistent()
@@ -608,7 +780,7 @@ impl CrowdfundVaultContract {
         Ok(env
             .storage()
             .persistent()
-            .get(&DataKey::MilestoneApproved(project_id))
+            .get(&DataKey::MilestoneApproved(project_id, milestone_id))
             .unwrap_or(false))
     }
 

@@ -19,4 +19,9 @@ pub enum CrowdfundError {
     ProjectNotCancellable = 13,
     RefundFailed = 14,
     ContractNotPaused = 15,
+    VotingWindowNotStarted = 16,
+    VotingWindowClosed = 17,
+    AlreadyVoted = 18,
+    InsufficientContributionToVote = 19,
+    MilestoneAlreadyApproved = 20,
 }
