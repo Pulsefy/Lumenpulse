@@ -1,3 +1,5 @@
+import { UserPreferences } from '../entities/user.entity';
+
 export class ProfileResponseDto {
   id: string;
   email: string;
@@ -7,6 +9,7 @@ export class ProfileResponseDto {
   bio?: string;
   avatarUrl?: string;
   stellarPublicKey?: string;
+  preferences?: UserPreferences;
   createdAt: Date;
   updatedAt: Date;
 

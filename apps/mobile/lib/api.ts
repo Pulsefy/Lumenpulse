@@ -55,6 +55,53 @@ export interface SnapshotResponse {
   };
 }
 
+export interface NotificationPreferences {
+  priceAlerts: boolean;
+  newsAlerts: boolean;
+  securityAlerts: boolean;
+}
+
+export interface UserPreferences {
+  notifications: NotificationPreferences;
+}
+
+export interface UserProfileResponse {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
+  bio?: string;
+  avatarUrl?: string;
+  stellarPublicKey?: string;
+  preferences?: UserPreferences;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LinkedStellarAccount {
+  id: string;
+  publicKey: string;
+  label?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LinkStellarAccountPayload {
+  publicKey: string;
+  label?: string;
+}
+
+export interface UpdateProfilePayload {
+  displayName?: string;
+  bio?: string;
+  avatarUrl?: string;
+  preferences?: {
+    notifications?: Partial<NotificationPreferences>;
+  };
+}
+
 /**
  * Auth API Service
  * Uses the shared API client for all requests
@@ -104,6 +151,33 @@ export const portfolioApi = {
    */
   async createSnapshot(): Promise<ApiResponse<SnapshotResponse>> {
     return apiClient.post<SnapshotResponse>('/portfolio/snapshot');
+  },
+};
+
+/**
+ * User/Profile API Service
+ */
+export const usersApi = {
+  async getProfile(): Promise<ApiResponse<UserProfileResponse>> {
+    return apiClient.get<UserProfileResponse>('/users/me');
+  },
+
+  async updateProfile(payload: UpdateProfilePayload): Promise<ApiResponse<UserProfileResponse>> {
+    return apiClient.patch<UserProfileResponse>('/users/me', payload);
+  },
+
+  async getLinkedAccounts(): Promise<ApiResponse<LinkedStellarAccount[]>> {
+    return apiClient.get<LinkedStellarAccount[]>('/users/me/accounts');
+  },
+
+  async linkStellarAccount(
+    payload: LinkStellarAccountPayload,
+  ): Promise<ApiResponse<LinkedStellarAccount>> {
+    return apiClient.post<LinkedStellarAccount>('/users/me/accounts', payload);
+  },
+
+  async removeLinkedAccount(accountId: string): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(`/users/me/accounts/${accountId}`);
   },
 };
 

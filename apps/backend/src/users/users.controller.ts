@@ -12,6 +12,7 @@ import {
   HttpStatus,
   UsePipes,
   ValidationPipe,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -21,7 +22,11 @@ import {
 } from '@nestjs/swagger';
 import { Request } from 'express';
 import { UsersService } from './users.service';
-import { User } from './entities/user.entity';
+import {
+  NotificationPreferences,
+  User,
+  UserPreferences,
+} from './entities/user.entity';
 import { LinkStellarAccountDto } from './dto/link-stellar-account.dto';
 import { StellarAccountResponseDto } from './dto/stellar-account-response.dto';
 import { UpdateStellarAccountLabelDto } from './dto/update-stellar-account-label.dto';
@@ -44,6 +49,51 @@ interface RequestWithUser extends Request {
 @UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  private buildDefaultPreferences(): UserPreferences {
+    return {
+      notifications: {
+        priceAlerts: true,
+        newsAlerts: true,
+        securityAlerts: true,
+      },
+    };
+  }
+
+  /**
+   * Profile responses always include a complete preferences object so clients
+   * can render deterministic toggle state without guessing missing fields.
+   */
+  private resolvePreferences(
+    preferences?: Partial<UserPreferences>,
+  ): UserPreferences {
+    const defaults = this.buildDefaultPreferences();
+
+    return {
+      ...defaults,
+      ...preferences,
+      notifications: {
+        ...defaults.notifications,
+        ...(preferences?.notifications ?? {}),
+      },
+    };
+  }
+
+  private mapProfileResponse(user: User): ProfileResponseDto {
+    return new ProfileResponseDto({
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      displayName: user.displayName,
+      bio: user.bio,
+      avatarUrl: user.avatarUrl,
+      stellarPublicKey: user.stellarPublicKey,
+      preferences: this.resolvePreferences(user.preferences),
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    });
+  }
 
   // --- ADMIN/GENERAL ENDPOINTS ---
 
@@ -71,21 +121,10 @@ export class UsersController {
     const user = await this.usersService.findById(userId);
 
     if (!user) {
-      throw new Error('User not found');
+      throw new NotFoundException('User not found');
     }
 
-    return new ProfileResponseDto({
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      displayName: user.displayName,
-      bio: user.bio,
-      avatarUrl: user.avatarUrl,
-      stellarPublicKey: user.stellarPublicKey,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    });
+    return this.mapProfileResponse(user);
   }
 
   @Patch('me')
@@ -96,6 +135,11 @@ export class UsersController {
     @Body() updateProfileDto: UpdateProfileDto,
   ): Promise<ProfileResponseDto> {
     const userId = req.user.id;
+    const currentUser = await this.usersService.findById(userId);
+
+    if (!currentUser) {
+      throw new NotFoundException('User not found');
+    }
 
     const allowedUpdates: Partial<User> = {};
     if (updateProfileDto.displayName !== undefined)
@@ -104,21 +148,20 @@ export class UsersController {
       allowedUpdates.bio = updateProfileDto.bio;
     if (updateProfileDto.avatarUrl !== undefined)
       allowedUpdates.avatarUrl = updateProfileDto.avatarUrl;
+    if (updateProfileDto.preferences?.notifications) {
+      const nextNotifications: NotificationPreferences = {
+        ...this.resolvePreferences(currentUser.preferences).notifications,
+        ...updateProfileDto.preferences.notifications,
+      };
+      allowedUpdates.preferences = {
+        ...this.resolvePreferences(currentUser.preferences),
+        notifications: nextNotifications,
+      };
+    }
 
     const updatedUser = await this.usersService.update(userId, allowedUpdates);
 
-    return new ProfileResponseDto({
-      id: updatedUser.id,
-      email: updatedUser.email,
-      firstName: updatedUser.firstName,
-      lastName: updatedUser.lastName,
-      displayName: updatedUser.displayName,
-      bio: updatedUser.bio,
-      avatarUrl: updatedUser.avatarUrl,
-      stellarPublicKey: updatedUser.stellarPublicKey,
-      createdAt: updatedUser.createdAt,
-      updatedAt: updatedUser.updatedAt,
-    });
+    return this.mapProfileResponse(updatedUser);
   }
 
   // --- STELLAR ACCOUNT MANAGEMENT (From Feature Branch) ---

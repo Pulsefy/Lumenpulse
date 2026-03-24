@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
-import { User } from './entities/user.entity';
+import { User, UserRole } from './entities/user.entity';
 
 describe('UsersController', () => {
   let controller: UsersController;
@@ -16,6 +16,15 @@ describe('UsersController', () => {
     bio: 'Test user bio',
     avatarUrl: 'https://example.com/avatar.jpg',
     stellarPublicKey: 'GABC123',
+    role: UserRole.USER,
+    preferences: {
+      notifications: {
+        priceAlerts: true,
+        newsAlerts: true,
+        securityAlerts: true,
+      },
+    },
+    stellarAccounts: [],
     createdAt: new Date(),
     updatedAt: new Date(),
     passwordHash: 'hashed-password',
@@ -65,6 +74,7 @@ describe('UsersController', () => {
       expect(result.id).toBe('test-id');
       expect(result.email).toBe('test@example.com');
       expect(result.displayName).toBe('John Doe');
+      expect(result.preferences?.notifications.priceAlerts).toBe(true);
     });
   });
 
@@ -103,6 +113,37 @@ describe('UsersController', () => {
 
       expect(service.update).toHaveBeenCalledWith('test-id', {
         displayName: 'Updated Name',
+      });
+    });
+
+    it('should merge notification preferences without dropping existing values', async () => {
+      const mockRequest = {
+        user: { id: 'test-id', email: 'test@example.com' },
+      } as any;
+      const updateData = {
+        preferences: {
+          notifications: {
+            newsAlerts: false,
+          },
+        },
+      };
+
+      const result = await controller.updateProfile(mockRequest, updateData);
+
+      expect(result.preferences?.notifications).toEqual({
+        priceAlerts: true,
+        newsAlerts: false,
+        securityAlerts: true,
+      });
+
+      expect(service.update).toHaveBeenCalledWith('test-id', {
+        preferences: {
+          notifications: {
+            priceAlerts: true,
+            newsAlerts: false,
+            securityAlerts: true,
+          },
+        },
       });
     });
   });

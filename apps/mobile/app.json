@@ -28,9 +28,7 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "plugins": [
-      "expo-router"
-    ],
+    "plugins": ["expo-router", "expo-barcode-scanner"],
     "scheme": "mobile",
     "extra": {
       "backendUrl": "http://localhost:3000",

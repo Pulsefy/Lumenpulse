@@ -1,5 +1,50 @@
-import { IsString, IsOptional, IsUrl, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUrl,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+
+export class UpdateNotificationPreferencesDto {
+  @ApiPropertyOptional({
+    description: 'Enable price alert notifications',
+    example: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  priceAlerts?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Enable news alert notifications',
+    example: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  newsAlerts?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Enable security alert notifications',
+    example: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  securityAlerts?: boolean;
+}
+
+export class UpdatePreferencesDto {
+  @ApiPropertyOptional({
+    description: 'Notification preference set',
+    type: UpdateNotificationPreferencesDto,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateNotificationPreferencesDto)
+  notifications?: UpdateNotificationPreferencesDto;
+}
 
 export class UpdateProfileDto {
   @ApiPropertyOptional({
@@ -28,4 +73,13 @@ export class UpdateProfileDto {
   @IsUrl()
   @MaxLength(500)
   avatarUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'User preference updates',
+    type: UpdatePreferencesDto,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdatePreferencesDto)
+  preferences?: UpdatePreferencesDto;
 }

@@ -10,9 +10,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
-import { StatusBar } from 'react-native';
-import { useRouter, Link } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -63,7 +63,7 @@ const LoginScreen = () => {
       console.error('Login error:', error);
       Alert.alert(
         'Login Failed',
-        error.message || 'An error occurred during login. Please try again.'
+        error.message || 'An error occurred during login. Please try again.',
       );
     } finally {
       setLoading(false);
@@ -79,7 +79,7 @@ const LoginScreen = () => {
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
         <View style={styles.content}>
           <Text style={[styles.title, { color: colors.text }]}>Welcome Back</Text>
-          <Text style={[styles.subtitle, { color: colors.primary }]}>Sign in to your account</Text>
+          <Text style={[styles.subtitle, { color: colors.accent }]}>Sign in to your account</Text>
 
           <View style={styles.form}>
             <View style={styles.inputContainer}>
@@ -90,7 +90,7 @@ const LoginScreen = () => {
                   {
                     backgroundColor: colors.surface,
                     color: colors.text,
-                    borderColor: `${colors.primary}33`,
+                    borderColor: `${colors.accent}33`,
                   },
                 ]}
                 value={email}
@@ -112,7 +112,7 @@ const LoginScreen = () => {
                   {
                     backgroundColor: colors.surface,
                     color: colors.text,
-                    borderColor: `${colors.primary}33`,
+                    borderColor: `${colors.accent}33`,
                   },
                 ]}
                 value={password}
@@ -128,7 +128,7 @@ const LoginScreen = () => {
             <TouchableOpacity
               style={[
                 styles.button,
-                { backgroundColor: colors.primary, shadowColor: colors.primary },
+                { backgroundColor: colors.accent, shadowColor: colors.accent },
                 loading && styles.disabledButton,
               ]}
               onPress={handleLogin}
@@ -146,7 +146,8 @@ const LoginScreen = () => {
               onPress={() => router.push('/auth/register')}
             >
               <Text style={[styles.linkText, { color: colors.textSecondary }]}>
-                Don't have an account? <Text style={[styles.linkHighlight, { color: colors.primary }]}>Sign Up</Text>
+                Don&apos;t have an account?{' '}
+                <Text style={[styles.linkHighlight, { color: colors.accent }]}>Sign Up</Text>
               </Text>
             </TouchableOpacity>
 
@@ -155,7 +156,10 @@ const LoginScreen = () => {
               onPress={() => router.replace('/(tabs)')}
             >
               <Text style={[styles.linkText, { color: colors.textSecondary, fontSize: 14 }]}>
-                (Debug) <Text style={{ color: colors.primary, fontWeight: 'bold' }}>Bypass Login to Dashboard</Text>
+                (Debug){' '}
+                <Text style={{ color: colors.accent, fontWeight: 'bold' }}>
+                  Bypass Login to Dashboard
+                </Text>
               </Text>
             </TouchableOpacity>
           </View>
