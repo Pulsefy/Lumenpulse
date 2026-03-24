@@ -698,7 +698,8 @@ pub struct MockVaultWithMilestones;
 impl MockVaultWithMilestones {
     pub fn is_milestone_approved(env: Env, project_id: u64) -> Result<bool, soroban_sdk::Error> {
         let key = soroban_sdk::Symbol::new(&env, "status");
-        Ok(env.storage()
+        Ok(env
+            .storage()
             .instance()
             .get::<_, bool>(&(project_id, key))
             .unwrap_or(false))
