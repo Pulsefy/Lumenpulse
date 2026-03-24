@@ -7,7 +7,7 @@ mod token;
 
 use errors::VestingError;
 use events::{AdminChangedEvent, UpgradedEvent};
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal, Symbol};
 use storage::{DataKey, VestingData};
 use token::transfer;
 
@@ -37,7 +37,7 @@ impl VestingWalletContract {
     }
 
     /// Helper function to check if a milestone is met
-    fn is_milestone_met(env: &Env, milestone_id: Option<u64>) -> bool {
+    fn is_milestone_met(env: Env, milestone_id: Option<u64>) -> bool {
         match milestone_id {
             None => true,
             Some(id) => {
@@ -45,8 +45,8 @@ impl VestingWalletContract {
 
                 let result: Result<bool, soroban_sdk::Error> = env.invoke_contract(
                     &vault_address,
-                    &soroban_sdk::symbol_short!("is_milestone_approved"),
-                    soroban_sdk::vec![env, id.into()],
+                    &soroban_sdk::Symbol::new(env, "is_milestone_approved"),
+                    soroban_sdk::vec![env, id.into_val(env)],
                 );
 
                 match result {
@@ -192,7 +192,7 @@ impl VestingWalletContract {
             .ok_or(VestingError::VestingNotFound)?;
 
         // If there's a milestone_id, check if it's approved in the vault
-        if !Self::is_milestone_met(&env, vesting.milestone_id) {
+        if !Self::is_milestone_met(env.clone(), vesting.milestone_id) {
             return Err(VestingError::NothingToClaim);
         }
 
@@ -253,7 +253,7 @@ impl VestingWalletContract {
             .ok_or(VestingError::VestingNotFound)?;
 
         // Check milestone
-        if !Self::is_milestone_met(&env, vesting.milestone_id) {
+        if !Self::is_milestone_met(env.clone(), vesting.milestone_id) {
             return Ok(0);
         }
 
@@ -284,7 +284,7 @@ impl VestingWalletContract {
             .ok_or(VestingError::VestingNotFound)?;
 
         // Check milestone
-        if !Self::is_milestone_met(&env, vesting.milestone_id) {
+        if !Self::is_milestone_met(env.clone(), vesting.milestone_id) {
             return Ok(0);
         }
 
