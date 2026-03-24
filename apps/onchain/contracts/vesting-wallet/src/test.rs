@@ -17,6 +17,18 @@ fn create_token_contract<'a>(
     )
 }
 
+#[contract]
+pub struct MockVault;
+
+#[contractimpl]
+impl MockVault {
+    pub fn is_milestone_approved(_env: Env, _project_id: u64) -> bool {
+        // By default return true for simplicity in existing tests,
+        // but we can override this behavior if we want more complex tests
+        true
+    }
+}
+
 fn setup_test<'a>(
     env: &Env,
 ) -> (
@@ -25,6 +37,7 @@ fn setup_test<'a>(
     Address,
     TokenClient<'a>,
     soroban_sdk::Address,
+    Address,
 ) {
     let admin = Address::generate(env);
     let beneficiary = Address::generate(env);
@@ -35,11 +48,14 @@ fn setup_test<'a>(
     // Mint tokens to admin for vesting
     token_admin_client.mint(&admin, &10_000_000);
 
+    // Register vault
+    let vault_id = env.register(MockVault, ());
+
     // Register contract
     let contract_id = env.register(VestingWalletContract, ());
     let client = VestingWalletContractClient::new(env, &contract_id);
 
-    (client, admin, beneficiary, token_client, contract_id)
+    (client, admin, beneficiary, token_client, contract_id, vault_id)
 }
 
 #[test]
@@ -47,10 +63,10 @@ fn test_initialize() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, _, token_client, _) = setup_test(&env);
+    let (client, admin, _, token_client, _, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     // Verify admin and token are set
     assert_eq!(client.get_admin(), admin);
@@ -62,13 +78,13 @@ fn test_double_initialization_fails() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, _, token_client, _) = setup_test(&env);
+    let (client, admin, _, token_client, _, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     // Try to initialize again - should fail
-    let result = client.try_initialize(&admin, &token_client.address);
+    let result = client.try_initialize(&admin, &token_client.address, &vault);
     assert_eq!(result, Err(Ok(VestingError::AlreadyInitialized)));
 }
 
@@ -77,10 +93,10 @@ fn test_create_vesting() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, contract_id) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     // Get current time
     let current_time = env.ledger().timestamp();
@@ -89,7 +105,7 @@ fn test_create_vesting() {
     let amount: i128 = 1_000_000;
 
     // Create vesting
-    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration, &None);
 
     // Verify vesting data
     let vesting = client.get_vesting(&beneficiary);
@@ -108,7 +124,7 @@ fn test_create_vesting_not_initialized() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, _, _) = setup_test(&env);
+    let (client, admin, beneficiary, _, _, vault) = setup_test(&env);
 
     // Try to create vesting without initializing
     let current_time = env.ledger().timestamp();
@@ -118,6 +134,7 @@ fn test_create_vesting_not_initialized() {
         &1_000_000,
         &(current_time + 1000),
         &10_000,
+        &None,
     );
     assert_eq!(result, Err(Ok(VestingError::NotInitialized)));
 }
@@ -127,14 +144,14 @@ fn test_create_vesting_invalid_amount() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
     client.initialize(&admin, &token_client.address);
 
     let current_time = env.ledger().timestamp();
     let result =
-        client.try_create_vesting(&admin, &beneficiary, &0, &(current_time + 1000), &10_000);
+        client.try_create_vesting(&admin, &beneficiary, &0, &(current_time + 1000), &10_000, &None);
     assert_eq!(result, Err(Ok(VestingError::InvalidAmount)));
 }
 
@@ -143,14 +160,14 @@ fn test_create_vesting_invalid_duration() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
     let result =
-        client.try_create_vesting(&admin, &beneficiary, &1_000_000, &(current_time + 1000), &0);
+        client.try_create_vesting(&admin, &beneficiary, &1_000_000, &(current_time + 1000), &0, &None);
     assert_eq!(result, Err(Ok(VestingError::InvalidDuration)));
 }
 
@@ -159,10 +176,10 @@ fn test_create_vesting_invalid_start_time() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
     // Try to set start time in the past (ensure it's definitely less than current_time)
@@ -171,7 +188,7 @@ fn test_create_vesting_invalid_start_time() {
     if current_time == 0 {
         return;
     }
-    let result = client.try_create_vesting(&admin, &beneficiary, &1_000_000, &past_time, &10_000);
+    let result = client.try_create_vesting(&admin, &beneficiary, &1_000_000, &past_time, &10_000, &None);
     assert_eq!(result, Err(Ok(VestingError::InvalidStartTime)));
 }
 
@@ -180,10 +197,10 @@ fn test_create_vesting_unauthorized() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     // Non-admin tries to create vesting
     let non_admin = Address::generate(&env);
@@ -194,6 +211,7 @@ fn test_create_vesting_unauthorized() {
         &1_000_000,
         &(current_time + 1000),
         &10_000,
+        &None,
     );
     assert_eq!(result, Err(Ok(VestingError::Unauthorized)));
 }
@@ -203,10 +221,10 @@ fn test_claim_before_start_time() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
     let start_time = current_time + 10_000; // Start in 10,000 seconds
@@ -214,7 +232,7 @@ fn test_claim_before_start_time() {
     let amount: i128 = 1_000_000;
 
     // Create vesting
-    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration, &None);
 
     // Try to claim before start time - should fail
     let result = client.try_claim(&beneficiary);
@@ -229,10 +247,10 @@ fn test_claim_partial_vesting() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
     let start_time = current_time + 100; // Start in 100 seconds
@@ -240,7 +258,7 @@ fn test_claim_partial_vesting() {
     let amount: i128 = 1_000_000;
 
     // Create vesting
-    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration, &None);
 
     // Fast forward to 25% through vesting period
     env.ledger().set_timestamp(start_time + duration / 4);
@@ -266,10 +284,10 @@ fn test_claim_full_vesting() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
     let start_time = current_time + 100;
@@ -277,7 +295,7 @@ fn test_claim_full_vesting() {
     let amount: i128 = 1_000_000;
 
     // Create vesting
-    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration, &None);
 
     // Fast forward past vesting period
     env.ledger().set_timestamp(start_time + duration + 1000);
@@ -302,10 +320,10 @@ fn test_claim_multiple_times() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
     let start_time = current_time + 100;
@@ -313,7 +331,7 @@ fn test_claim_multiple_times() {
     let amount: i128 = 1_000_000;
 
     // Create vesting
-    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration, &None);
 
     // First claim at 25%
     env.ledger().set_timestamp(start_time + duration / 4);
@@ -338,10 +356,10 @@ fn test_claim_vesting_not_found() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, _, token_client, _) = setup_test(&env);
+    let (client, admin, _, token_client, _, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     // Try to claim for non-existent vesting
     let beneficiary = Address::generate(&env);
@@ -354,10 +372,10 @@ fn test_claim_unauthorized() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
     let start_time = current_time + 100;
@@ -365,7 +383,7 @@ fn test_claim_unauthorized() {
     let amount: i128 = 1_000_000;
 
     // Create vesting
-    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration, &None);
 
     // Fast forward to allow claiming
     env.ledger().set_timestamp(start_time + duration / 2);
@@ -383,10 +401,10 @@ fn test_get_available_amount_linear_calculation() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
     let start_time = current_time + 100;
@@ -394,7 +412,7 @@ fn test_get_available_amount_linear_calculation() {
     let amount: i128 = 1_000_000;
 
     // Create vesting
-    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration, &None);
 
     // Test at 30% through vesting
     env.ledger().set_timestamp(start_time + (duration * 3 / 10));
@@ -414,10 +432,10 @@ fn test_update_vesting() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
     let start_time = current_time + 1000;
@@ -425,11 +443,11 @@ fn test_update_vesting() {
     let amount1: i128 = 1_000_000;
 
     // Create first vesting
-    client.create_vesting(&admin, &beneficiary, &amount1, &start_time, &duration);
+    client.create_vesting(&admin, &beneficiary, &amount1, &start_time, &duration, &None);
 
     // Update vesting with new amount (overwrites existing)
     let amount2: i128 = 2_000_000;
-    client.create_vesting(&admin, &beneficiary, &amount2, &start_time, &duration);
+    client.create_vesting(&admin, &beneficiary, &amount2, &start_time, &duration, &None);
 
     // Verify vesting was updated
     let vesting = client.get_vesting(&beneficiary);
@@ -442,11 +460,11 @@ fn test_multiple_beneficiaries() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary1, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary1, token_client, contract_id, vault) = setup_test(&env);
     let beneficiary2 = Address::generate(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
     let start_time = current_time + 100;
@@ -455,8 +473,8 @@ fn test_multiple_beneficiaries() {
     let amount2: i128 = 2_000_000;
 
     // Create vestings for two beneficiaries
-    client.create_vesting(&admin, &beneficiary1, &amount1, &start_time, &duration);
-    client.create_vesting(&admin, &beneficiary2, &amount2, &start_time, &duration);
+    client.create_vesting(&admin, &beneficiary1, &amount1, &start_time, &duration, &None);
+    client.create_vesting(&admin, &beneficiary2, &amount2, &start_time, &duration, &None);
 
     // Verify both vestings exist
     let vesting1 = client.get_vesting(&beneficiary1);
@@ -480,10 +498,10 @@ fn test_get_claimable_view_method() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
     let start_time = current_time + 100;
@@ -491,7 +509,7 @@ fn test_get_claimable_view_method() {
     let amount: i128 = 1_000_000;
 
     // Create vesting
-    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration, &None);
 
     // Test before vesting starts
     let claimable = client.get_claimable(&beneficiary);
@@ -543,10 +561,10 @@ fn test_get_claimable_consistency_with_claim() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (client, admin, beneficiary, token_client, contract_id, vault) = setup_test(&env);
 
     // Initialize contract
-    client.initialize(&admin, &token_client.address);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
     let start_time = current_time + 100;
@@ -554,7 +572,7 @@ fn test_get_claimable_consistency_with_claim() {
     let amount: i128 = 1_000_000;
 
     // Create vesting
-    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration, &None);
 
     // Fast forward to middle of vesting
     env.ledger().set_timestamp(start_time + duration / 2);
@@ -582,8 +600,8 @@ fn test_set_admin_transfers_role() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, _, token_client, _) = setup_test(&env);
-    client.initialize(&admin, &token_client.address);
+    let (client, admin, _, token_client, _, vault) = setup_test(&env);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let new_admin = Address::generate(&env);
     client.set_admin(&admin, &new_admin);
@@ -600,8 +618,8 @@ fn test_only_admin_can_upgrade() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, _, token_client, _) = setup_test(&env);
-    client.initialize(&admin, &token_client.address);
+    let (client, admin, _, token_client, _, vault) = setup_test(&env);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let non_admin = Address::generate(&env);
     let dummy = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
@@ -615,8 +633,8 @@ fn test_old_admin_cannot_upgrade_after_rotation() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, _, token_client, _) = setup_test(&env);
-    client.initialize(&admin, &token_client.address);
+    let (client, admin, _, token_client, _, vault) = setup_test(&env);
+    client.initialize(&admin, &token_client.address, &vault);
 
     let new_admin = Address::generate(&env);
     client.set_admin(&admin, &new_admin);
@@ -624,4 +642,59 @@ fn test_old_admin_cannot_upgrade_after_rotation() {
     let dummy = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
     let result = client.try_upgrade(&admin, &dummy);
     assert_eq!(result, Err(Ok(crate::errors::VestingError::Unauthorized)));
+}
+#[contract]
+pub struct MockVaultWithMilestones;
+
+#[contractimpl]
+impl MockVaultWithMilestones {
+    pub fn is_milestone_approved(env: Env, project_id: u64) -> bool {
+        let key = soroban_sdk::Symbol::new(&env, "status");
+        env.storage().instance().get::<_, bool>(&(project_id, key)).unwrap_or(false)
+    }
+
+    pub fn set_milestone_approved(env: Env, project_id: u64, approved: bool) {
+        let key = soroban_sdk::Symbol::new(&env, "status");
+        env.storage().instance().set(&(project_id, key), &approved);
+    }
+}
+
+#[test]
+fn test_claim_with_milestone() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let beneficiary = Address::generate(&env);
+    let (token_client, token_admin_client) = create_token_contract(&env, &admin);
+    token_admin_client.mint(&admin, &10_000_000);
+
+    let vault_id = env.register(MockVaultWithMilestones, ());
+    let vault_client = MockVaultWithMilestonesClient::new(&env, &vault_id);
+
+    let contract_id = env.register(VestingWalletContract, ());
+    let client = VestingWalletContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin, &token_client.address, &vault_id);
+
+    let start_time = env.ledger().timestamp() + 100;
+    let duration = 10_000;
+    let amount = 1_000_000;
+    let milestone_id = 42u64;
+
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration, &Some(milestone_id));
+
+    // Fast forward to middle
+    env.ledger().set_timestamp(start_time + duration / 2);
+
+    // Try to claim - should fail because milestone not approved
+    let result = client.try_claim(&beneficiary);
+    assert_eq!(result, Err(Ok(VestingError::NothingToClaim)));
+
+    // Approve milestone
+    vault_client.set_milestone_approved(&milestone_id, &true);
+
+    // Try to claim again - should succeed
+    let claimed = client.claim(&beneficiary);
+    assert_eq!(claimed, amount / 2);
 }

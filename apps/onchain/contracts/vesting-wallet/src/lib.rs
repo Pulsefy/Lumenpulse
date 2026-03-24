@@ -36,8 +36,33 @@ impl VestingWalletContract {
         }
     }
 
+    /// Helper function to check if a milestone is met
+    fn is_milestone_met(env: &Env, milestone_id: Option<u64>) -> bool {
+        match milestone_id {
+            None => true,
+            Some(id) => {
+                let vault_address: Address = env
+                    .storage()
+                    .instance()
+                    .get(&DataKey::Vault)
+                    .unwrap(); // Should be set if initialized
+
+                env.invoke_contract(
+                    &vault_address,
+                    &soroban_sdk::symbol_short!("is_milestone_approved"),
+                    soroban_sdk::vec![env, id.into()],
+                )
+            }
+        }
+    }
+
     /// Initialize the contract with an admin address and token address
-    pub fn initialize(env: Env, admin: Address, token: Address) -> Result<(), VestingError> {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        token: Address,
+        vault: Address,
+    ) -> Result<(), VestingError> {
         // Check if already initialized
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(VestingError::AlreadyInitialized);
@@ -46,9 +71,10 @@ impl VestingWalletContract {
         // Require admin authorization
         admin.require_auth();
 
-        // Store admin address and token address
+        // Store admin address, token address and vault address
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Token, &token);
+        env.storage().instance().set(&DataKey::Vault, &vault);
 
         Ok(())
     }
@@ -61,6 +87,7 @@ impl VestingWalletContract {
         amount: i128,
         start_time: u64,
         duration: u64,
+        milestone_id: Option<u64>,
     ) -> Result<(), VestingError> {
         // Check if contract is initialized
         let stored_admin: Address = env
@@ -125,6 +152,7 @@ impl VestingWalletContract {
             start_time,
             duration,
             claimed_amount: 0,
+            milestone_id,
         };
 
         // Store vesting data
@@ -138,6 +166,7 @@ impl VestingWalletContract {
             amount: vesting.total_amount,
             start_time: vesting.start_time,
             duration: vesting.duration,
+            milestone_id: vesting.milestone_id,
         }
         .publish(&env);
 
@@ -160,6 +189,11 @@ impl VestingWalletContract {
             .persistent()
             .get(&DataKey::Vesting(beneficiary.clone()))
             .ok_or(VestingError::VestingNotFound)?;
+
+        // If there's a milestone_id, check if it's approved in the vault
+        if !Self::is_milestone_met(&env, vesting.milestone_id) {
+            return Err(VestingError::NothingToClaim);
+        }
 
         // Get current time
         let current_time = env.ledger().timestamp();
@@ -217,6 +251,11 @@ impl VestingWalletContract {
             .get(&DataKey::Vesting(beneficiary))
             .ok_or(VestingError::VestingNotFound)?;
 
+        // Check milestone
+        if !Self::is_milestone_met(&env, vesting.milestone_id) {
+            return Ok(0);
+        }
+
         // Get current time
         let current_time = env.ledger().timestamp();
 
@@ -243,6 +282,11 @@ impl VestingWalletContract {
             .get(&DataKey::Vesting(beneficiary))
             .ok_or(VestingError::VestingNotFound)?;
 
+        // Check milestone
+        if !Self::is_milestone_met(&env, vesting.milestone_id) {
+            return Ok(0);
+        }
+
         // Get current time
         let current_time = env.ledger().timestamp();
 
@@ -265,6 +309,14 @@ impl VestingWalletContract {
         env.storage()
             .instance()
             .get(&DataKey::Token)
+            .ok_or(VestingError::NotInitialized)
+    }
+
+    /// Get vault address
+    pub fn get_vault(env: Env) -> Result<Address, VestingError> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Vault)
             .ok_or(VestingError::NotInitialized)
     }
 

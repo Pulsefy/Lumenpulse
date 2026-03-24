@@ -5,6 +5,7 @@ use soroban_sdk::{contracttype, Address};
 pub enum DataKey {
     Admin,            // -> Address
     Token,            // -> Address
+    Vault,            // -> Address
     Vesting(Address), // beneficiary -> VestingData
 }
 
@@ -16,4 +17,5 @@ pub struct VestingData {
     pub start_time: u64,
     pub duration: u64,
     pub claimed_amount: i128,
+    pub milestone_id: Option<u64>,
 }

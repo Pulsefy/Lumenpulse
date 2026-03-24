@@ -8,6 +8,7 @@ pub struct VestingCreatedEvent {
     pub amount: i128,
     pub start_time: u64,
     pub duration: u64,
+    pub milestone_id: Option<u64>,
 }
 
 #[contractevent]
