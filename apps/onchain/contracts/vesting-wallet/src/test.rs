@@ -22,10 +22,10 @@ pub struct MockVault;
 
 #[contractimpl]
 impl MockVault {
-    pub fn is_milestone_approved(_env: Env, _project_id: u64) -> bool {
+    pub fn is_milestone_approved(_env: Env, _project_id: u64) -> Result<bool, soroban_sdk::Error> {
         // By default return true for simplicity in existing tests,
         // but we can override this behavior if we want more complex tests
-        true
+        Ok(true)
     }
 }
 
@@ -55,7 +55,14 @@ fn setup_test<'a>(
     let contract_id = env.register(VestingWalletContract, ());
     let client = VestingWalletContractClient::new(env, &contract_id);
 
-    (client, admin, beneficiary, token_client, contract_id, vault_id)
+    (
+        client,
+        admin,
+        beneficiary,
+        token_client,
+        contract_id,
+        vault_id,
+    )
 }
 
 #[test]
@@ -150,8 +157,14 @@ fn test_create_vesting_invalid_amount() {
     client.initialize(&admin, &token_client.address);
 
     let current_time = env.ledger().timestamp();
-    let result =
-        client.try_create_vesting(&admin, &beneficiary, &0, &(current_time + 1000), &10_000, &None);
+    let result = client.try_create_vesting(
+        &admin,
+        &beneficiary,
+        &0,
+        &(current_time + 1000),
+        &10_000,
+        &None,
+    );
     assert_eq!(result, Err(Ok(VestingError::InvalidAmount)));
 }
 
@@ -166,8 +179,14 @@ fn test_create_vesting_invalid_duration() {
     client.initialize(&admin, &token_client.address, &vault);
 
     let current_time = env.ledger().timestamp();
-    let result =
-        client.try_create_vesting(&admin, &beneficiary, &1_000_000, &(current_time + 1000), &0, &None);
+    let result = client.try_create_vesting(
+        &admin,
+        &beneficiary,
+        &1_000_000,
+        &(current_time + 1000),
+        &0,
+        &None,
+    );
     assert_eq!(result, Err(Ok(VestingError::InvalidDuration)));
 }
 
@@ -188,7 +207,8 @@ fn test_create_vesting_invalid_start_time() {
     if current_time == 0 {
         return;
     }
-    let result = client.try_create_vesting(&admin, &beneficiary, &1_000_000, &past_time, &10_000, &None);
+    let result =
+        client.try_create_vesting(&admin, &beneficiary, &1_000_000, &past_time, &10_000, &None);
     assert_eq!(result, Err(Ok(VestingError::InvalidStartTime)));
 }
 
@@ -443,11 +463,25 @@ fn test_update_vesting() {
     let amount1: i128 = 1_000_000;
 
     // Create first vesting
-    client.create_vesting(&admin, &beneficiary, &amount1, &start_time, &duration, &None);
+    client.create_vesting(
+        &admin,
+        &beneficiary,
+        &amount1,
+        &start_time,
+        &duration,
+        &None,
+    );
 
     // Update vesting with new amount (overwrites existing)
     let amount2: i128 = 2_000_000;
-    client.create_vesting(&admin, &beneficiary, &amount2, &start_time, &duration, &None);
+    client.create_vesting(
+        &admin,
+        &beneficiary,
+        &amount2,
+        &start_time,
+        &duration,
+        &None,
+    );
 
     // Verify vesting was updated
     let vesting = client.get_vesting(&beneficiary);
@@ -473,8 +507,22 @@ fn test_multiple_beneficiaries() {
     let amount2: i128 = 2_000_000;
 
     // Create vestings for two beneficiaries
-    client.create_vesting(&admin, &beneficiary1, &amount1, &start_time, &duration, &None);
-    client.create_vesting(&admin, &beneficiary2, &amount2, &start_time, &duration, &None);
+    client.create_vesting(
+        &admin,
+        &beneficiary1,
+        &amount1,
+        &start_time,
+        &duration,
+        &None,
+    );
+    client.create_vesting(
+        &admin,
+        &beneficiary2,
+        &amount2,
+        &start_time,
+        &duration,
+        &None,
+    );
 
     // Verify both vestings exist
     let vesting1 = client.get_vesting(&beneficiary1);
@@ -648,9 +696,12 @@ pub struct MockVaultWithMilestones;
 
 #[contractimpl]
 impl MockVaultWithMilestones {
-    pub fn is_milestone_approved(env: Env, project_id: u64) -> bool {
+    pub fn is_milestone_approved(env: Env, project_id: u64) -> Result<bool, soroban_sdk::Error> {
         let key = soroban_sdk::Symbol::new(&env, "status");
-        env.storage().instance().get::<_, bool>(&(project_id, key)).unwrap_or(false)
+        Ok(env.storage()
+            .instance()
+            .get::<_, bool>(&(project_id, key))
+            .unwrap_or(false))
     }
 
     pub fn set_milestone_approved(env: Env, project_id: u64, approved: bool) {
@@ -682,7 +733,14 @@ fn test_claim_with_milestone() {
     let amount = 1_000_000;
     let milestone_id = 42u64;
 
-    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration, &Some(milestone_id));
+    client.create_vesting(
+        &admin,
+        &beneficiary,
+        &amount,
+        &start_time,
+        &duration,
+        &Some(milestone_id),
+    );
 
     // Fast forward to middle
     env.ledger().set_timestamp(start_time + duration / 2);

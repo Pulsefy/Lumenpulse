@@ -41,17 +41,18 @@ impl VestingWalletContract {
         match milestone_id {
             None => true,
             Some(id) => {
-                let vault_address: Address = env
-                    .storage()
-                    .instance()
-                    .get(&DataKey::Vault)
-                    .unwrap(); // Should be set if initialized
+                let vault_address: Address = env.storage().instance().get(&DataKey::Vault).unwrap(); // Should be set if initialized
 
-                env.invoke_contract(
+                let result: Result<bool, soroban_sdk::Error> = env.invoke_contract(
                     &vault_address,
                     &soroban_sdk::symbol_short!("is_milestone_approved"),
                     soroban_sdk::vec![env, id.into()],
-                )
+                );
+
+                match result {
+                    Ok(is_approved) => is_approved,
+                    Err(_) => false, // Default to false if contract call fails
+                }
             }
         }
     }
