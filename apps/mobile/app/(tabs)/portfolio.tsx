@@ -65,7 +65,12 @@ function TotalBalanceHeader({
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
   return (
-    <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+    <View
+      style={[
+        styles.headerCard,
+        { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+      ]}
+    >
       <Text style={[styles.headerLabel, { color: colors.textSecondary }]}>Total Balance</Text>
       <Text style={[styles.headerBalance, { color: colors.text }]}>
         {formatUsd(summary.totalValueUsd)}
@@ -74,7 +79,8 @@ function TotalBalanceHeader({
         <View style={styles.updatedRow}>
           <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
           <Text style={[styles.updatedText, { color: colors.textSecondary }]}>
-            {' '}Updated {formatRelativeTime(summary.lastUpdated)}
+            {' '}
+            Updated {formatRelativeTime(summary.lastUpdated)}
           </Text>
         </View>
       )}
@@ -93,9 +99,7 @@ function AssetRow({
   return (
     <View style={[styles.assetRow, { borderBottomColor: colors.border }]}>
       <View style={[styles.assetIcon, { backgroundColor: `${color}22` }]}>
-        <Text style={[styles.assetIconText, { color }]}>
-          {asset.assetCode.charAt(0)}
-        </Text>
+        <Text style={[styles.assetIconText, { color }]}>{asset.assetCode.charAt(0)}</Text>
       </View>
       <View style={styles.assetInfo}>
         <Text style={[styles.assetCode, { color: colors.text }]}>{asset.assetCode}</Text>
@@ -104,9 +108,7 @@ function AssetRow({
         </Text>
       </View>
       <View style={styles.assetValue}>
-        <Text style={[styles.assetUsd, { color: colors.text }]}>
-          {formatUsd(asset.valueUsd)}
-        </Text>
+        <Text style={[styles.assetUsd, { color: colors.text }]}>{formatUsd(asset.valueUsd)}</Text>
       </View>
     </View>
   );
@@ -174,8 +176,15 @@ export default function PortfolioScreen() {
   if (!isAuthenticated) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background, padding: 32 }]}>
-        <Ionicons name="lock-closed-outline" size={56} color={colors.accent} style={{ marginBottom: 20 }} />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>Sign in to view your portfolio</Text>
+        <Ionicons
+          name="lock-closed-outline"
+          size={56}
+          color={colors.accent}
+          style={{ marginBottom: 20 }}
+        />
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>
+          Sign in to view your portfolio
+        </Text>
         <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
           Track your Stellar assets and total balance in one place.
         </Text>
@@ -195,22 +204,53 @@ export default function PortfolioScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <Text style={[styles.screenTitle, { color: colors.text }]}>Portfolio</Text>
-        <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-          <View style={[styles.skeleton, { width: 120, height: 16, marginBottom: 12, backgroundColor: colors.border }]} />
-          <View style={[styles.skeleton, { width: 180, height: 36, marginBottom: 8, backgroundColor: colors.border }]} />
-          <View style={[styles.skeleton, { width: 100, height: 12, backgroundColor: colors.border }]} />
+        <View
+          style={[
+            styles.headerCard,
+            { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+          ]}
+        >
+          <View
+            style={[
+              styles.skeleton,
+              { width: 120, height: 16, marginBottom: 12, backgroundColor: colors.border },
+            ]}
+          />
+          <View
+            style={[
+              styles.skeleton,
+              { width: 180, height: 36, marginBottom: 8, backgroundColor: colors.border },
+            ]}
+          />
+          <View
+            style={[styles.skeleton, { width: 100, height: 12, backgroundColor: colors.border }]}
+          />
         </View>
         {[1, 2, 3].map((i) => (
-          <View
-            key={i}
-            style={[styles.assetRow, { borderBottomColor: colors.border }]}
-          >
-            <View style={[styles.skeleton, { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.border }]} />
+          <View key={i} style={[styles.assetRow, { borderBottomColor: colors.border }]}>
+            <View
+              style={[
+                styles.skeleton,
+                { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.border },
+              ]}
+            />
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <View style={[styles.skeleton, { width: 60, height: 14, marginBottom: 6, backgroundColor: colors.border }]} />
-              <View style={[styles.skeleton, { width: 100, height: 12, backgroundColor: colors.border }]} />
+              <View
+                style={[
+                  styles.skeleton,
+                  { width: 60, height: 14, marginBottom: 6, backgroundColor: colors.border },
+                ]}
+              />
+              <View
+                style={[
+                  styles.skeleton,
+                  { width: 100, height: 12, backgroundColor: colors.border },
+                ]}
+              />
             </View>
-            <View style={[styles.skeleton, { width: 70, height: 18, backgroundColor: colors.border }]} />
+            <View
+              style={[styles.skeleton, { width: 70, height: 18, backgroundColor: colors.border }]}
+            />
           </View>
         ))}
       </SafeAreaView>
@@ -221,8 +261,15 @@ export default function PortfolioScreen() {
   if (error && !summary) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background, padding: 32 }]}>
-        <Ionicons name="cloud-offline-outline" size={56} color={colors.danger} style={{ marginBottom: 20 }} />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn't load portfolio</Text>
+        <Ionicons
+          name="cloud-offline-outline"
+          size={56}
+          color={colors.danger}
+          style={{ marginBottom: 20 }}
+        />
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>
+          Couldn&apos;t load portfolio
+        </Text>
         <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{error}</Text>
         <TouchableOpacity
           style={[styles.ctaButton, { backgroundColor: colors.accent }]}
@@ -241,7 +288,12 @@ export default function PortfolioScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <Text style={[styles.screenTitle, { color: colors.text }]}>Portfolio</Text>
         <View style={[styles.center, { flex: 1, padding: 32 }]}>
-          <Ionicons name="briefcase-outline" size={56} color={colors.accent} style={{ marginBottom: 20 }} />
+          <Ionicons
+            name="briefcase-outline"
+            size={56}
+            color={colors.accent}
+            style={{ marginBottom: 20 }}
+          />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No linked accounts</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
             Link a Stellar account to start tracking your assets and balances in real time.
@@ -280,8 +332,12 @@ export default function PortfolioScreen() {
             {summary && <TotalBalanceHeader summary={summary} colors={colors} />}
             {summary && summary.assets.length > 0 && (
               <View style={[styles.assetsSectionHeader, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.assetsSectionLabel, { color: colors.textSecondary }]}>Assets</Text>
-                <Text style={[styles.assetsSectionLabel, { color: colors.textSecondary }]}>Value</Text>
+                <Text style={[styles.assetsSectionLabel, { color: colors.textSecondary }]}>
+                  Assets
+                </Text>
+                <Text style={[styles.assetsSectionLabel, { color: colors.textSecondary }]}>
+                  Value
+                </Text>
               </View>
             )}
           </>
@@ -289,7 +345,12 @@ export default function PortfolioScreen() {
         ListEmptyComponent={
           !isLoading ? (
             <View style={[styles.center, { paddingVertical: 40 }]}>
-              <Ionicons name="wallet-outline" size={48} color={colors.textSecondary} style={{ marginBottom: 12 }} />
+              <Ionicons
+                name="wallet-outline"
+                size={48}
+                color={colors.textSecondary}
+                style={{ marginBottom: 12 }}
+              />
               <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                 No assets found in this account.
               </Text>

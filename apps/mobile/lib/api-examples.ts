@@ -1,6 +1,6 @@
 /**
  * API Client Usage Examples
- * 
+ *
  * This file demonstrates common patterns for using the API client.
  * These are examples only - not meant to be imported or executed directly.
  */
@@ -73,13 +73,13 @@ async function exampleAuthLogin() {
 
   if (response.success && response.data) {
     const { access_token, refresh_token } = response.data;
-    
+
     // Store tokens (use your storage service)
     console.log('Login successful');
-    
+
     // Set token for future requests
     apiClient.setAuthToken(access_token);
-    
+
     return { access_token, refresh_token };
   } else {
     console.error('Login failed:', response.error?.message);
@@ -92,7 +92,7 @@ async function exampleAuthLogin() {
 // ============================================================================
 async function exampleHealthCheck() {
   console.log('Checking API health at:', config.api.baseUrl);
-  
+
   const response = await healthApi.check();
 
   if (response.success && response.data) {
@@ -238,13 +238,17 @@ async function exampleRetryLogic<T>(
     }
 
     // Don't retry on client errors (4xx)
-    if (response.error?.statusCode && response.error.statusCode >= 400 && response.error.statusCode < 500) {
+    if (
+      response.error?.statusCode &&
+      response.error.statusCode >= 400 &&
+      response.error.statusCode < 500
+    ) {
       throw new Error(response.error.message);
     }
 
     // Wait before retrying (exponential backoff)
     if (attempt < maxRetries - 1) {
-      await new Promise(resolve => setTimeout(resolve, delayMs * (attempt + 1)));
+      await new Promise((resolve) => setTimeout(resolve, delayMs * (attempt + 1)));
     }
   }
 

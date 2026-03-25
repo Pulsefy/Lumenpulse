@@ -44,15 +44,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      
+
       // Import here to avoid circular dependencies
       const { authApi, apiClient } = await import('../lib/api');
       const response = await authApi.login({ email, password });
-      
+
       if (!response.success || !response.data) {
         throw new Error(response.error?.message || 'Login failed');
       }
-      
+
       await storage.storeTokens(response.data.access_token, response.data.refresh_token);
       apiClient.setAuthToken(response.data.access_token);
       setIsAuthenticated(true);
@@ -67,15 +67,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const register = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      
+
       // Import here to avoid circular dependencies
       const { authApi } = await import('../lib/api');
       const response = await authApi.register({ email, password });
-      
+
       if (!response.success) {
         throw new Error(response.error?.message || 'Registration failed');
       }
-      
+
       // After registration, log the user in
       await login(email, password);
     } catch (error) {
@@ -109,11 +109,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
