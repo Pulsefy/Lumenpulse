@@ -13,6 +13,30 @@ export interface CrowdfundProject {
   totalWithdrawn: string;
   isActive: boolean;
   contributorCount: number;
+  /** Optional rich description returned by backend (may be absent for older projects) */
+  description?: string;
+  /** Optional banner image URL for the project hero */
+  imageUrl?: string;
+}
+
+/**
+ * A single milestone entry in a project's roadmap
+ */
+export interface RoadmapMilestone {
+  id: number;
+  title: string;
+  description?: string;
+  status: 'completed' | 'active' | 'upcoming';
+  targetDate?: string;
+}
+
+/**
+ * Aggregated contributor record shown in the detail screen
+ */
+export interface ContributorSummary {
+  contributor: string;
+  totalAmount: string;
+  lastContributionAt: string;
 }
 
 /**
@@ -90,5 +114,19 @@ export const crowdfundApi = {
    */
   async getProjectBalance(projectId: number): Promise<ApiResponse<{ balance: string }>> {
     return apiClient.get<{ balance: string }>(`/crowdfund/projects/${projectId}/balance`);
+  },
+
+  /**
+   * Fetch the aggregated contributor list for a project (most recent first)
+   */
+  async getContributors(projectId: number): Promise<ApiResponse<ContributorSummary[]>> {
+    return apiClient.get<ContributorSummary[]>(`/crowdfund/projects/${projectId}/contributors`);
+  },
+
+  /**
+   * Fetch the roadmap milestones for a project
+   */
+  async getRoadmap(projectId: number): Promise<ApiResponse<RoadmapMilestone[]>> {
+    return apiClient.get<RoadmapMilestone[]>(`/crowdfund/projects/${projectId}/roadmap`);
   },
 };
