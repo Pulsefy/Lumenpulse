@@ -18,6 +18,7 @@ import databaseConfig from './database/database.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { TestController } from './test/test.controller';
 import { SnapshotsModule } from './snapshot/snapshot.module';
+import { ModelRetrainingModule } from './model-retraining/model-retraining.module';
 import { DataSource, DataSourceOptions } from 'typeorm';
 import stellarConfig from './stellar/config/stellar.config';
 
@@ -69,6 +70,7 @@ const appLogger = new Logger('TypeORM');
     EmailModule,
     PortfolioModule,
     SnapshotsModule,
+    ModelRetrainingModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
