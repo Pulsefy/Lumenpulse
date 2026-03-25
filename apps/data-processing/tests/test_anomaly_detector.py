@@ -21,14 +21,23 @@ class TestAnomalyDetector(unittest.TestCase):
         detector = AnomalyDetector()
         self.assertEqual(detector.window_size_hours, 24)
         self.assertEqual(detector.z_threshold, 2.5)
+        self.assertEqual(detector.contamination, 0.1)
+        self.assertEqual(detector.detection_method, "isolation_forest")
         self.assertEqual(len(detector.volume_data), 0)
         self.assertEqual(len(detector.sentiment_data), 0)
 
     def test_custom_parameters(self):
         """Test detector initialization with custom parameters"""
-        detector = AnomalyDetector(window_size_hours=12, z_threshold=3.0)
+        detector = AnomalyDetector(
+            window_size_hours=12,
+            z_threshold=3.0,
+            contamination=0.2,
+            detection_method="zscore",
+        )
         self.assertEqual(detector.window_size_hours, 12)
         self.assertEqual(detector.z_threshold, 3.0)
+        self.assertEqual(detector.contamination, 0.2)
+        self.assertEqual(detector.detection_method, "zscore")
 
     def test_add_data_point(self):
         """Test adding data points to the detector"""
@@ -153,6 +162,8 @@ class TestAnomalyDetector(unittest.TestCase):
         self.assertGreater(result.severity_score, 0.8)  # High severity for 500% spike
         self.assertGreater(abs(result.z_score), self.detector.z_threshold)
         self.assertEqual(result.current_value, spike_volume)
+        self.assertIn("zscore", result.comparison)
+        self.assertIn("isolation_forest", result.comparison)
 
     def test_sentiment_anomaly_detection_extreme(self):
         """Test detection of extreme sentiment anomaly"""
@@ -312,6 +323,9 @@ class TestAnomalyDetector(unittest.TestCase):
         # Check structure
         self.assertIn("window_size_hours", stats)
         self.assertIn("data_points_count", stats)
+        self.assertIn("contamination", stats)
+        self.assertIn("detection_method", stats)
+        self.assertIn("comparison_stats", stats)
         self.assertIn("volume_stats", stats)
         self.assertIn("sentiment_stats", stats)
 
@@ -320,6 +334,23 @@ class TestAnomalyDetector(unittest.TestCase):
         self.assertEqual(stats["data_points_count"], 20)
         self.assertGreater(stats["volume_stats"]["mean"], 1000.0)
         self.assertGreater(stats["sentiment_stats"]["mean"], 0.1)
+
+    def test_comparison_stats_are_recorded(self):
+        """Test comparison metrics between Isolation Forest and Z-score."""
+        base_time = datetime.utcnow()
+        for i in range(20):
+            timestamp = base_time - timedelta(minutes=(20 - i) * 15)
+            self.detector.add_data_point(
+                volume=1000.0 + (i % 5) * 50,
+                sentiment_score=-0.1 + (i % 4) * 0.1,
+                timestamp=timestamp,
+            )
+
+        self.detector.detect_volume_anomaly(4500.0)
+        stats = self.detector.get_window_stats()["comparison_stats"]
+
+        self.assertEqual(stats["total_evaluations"], 1)
+        self.assertGreaterEqual(stats["agreement_count"] + stats["disagreement_count"], 1)
 
 
 class TestSpikeDetectionFunction(unittest.TestCase):

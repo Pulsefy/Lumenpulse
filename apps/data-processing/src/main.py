@@ -177,16 +177,12 @@ def run_data_pipeline():
         current_volume = float(volume_24h["total_volume"])
         now = datetime.utcnow()
 
-        # Feed current data point into the rolling window detector
-        anomaly_detector.add_data_point(
+        # Run detection on the existing baseline, then fold the sample into the window
+        volume_anomaly, sentiment_anomaly = anomaly_detector.detect_anomalies(
             volume=current_volume,
             sentiment_score=mock_sentiment,
             timestamp=now,
         )
-
-        # Run detection on both metrics
-        volume_anomaly = anomaly_detector.detect_volume_anomaly(current_volume, now)
-        sentiment_anomaly = anomaly_detector.detect_sentiment_anomaly(mock_sentiment, now)
 
         anomalies_found = []
 
@@ -203,6 +199,7 @@ def run_data_pipeline():
                 logger.warning(
                     f"Anomaly detected — metric={result.metric_name}, "
                     f"value={result.current_value:.4f}, "
+                    f"method={result.detection_method}, "
                     f"z_score={result.z_score:.2f}, "
                     f"severity={result.severity_score:.2f}"
                 )

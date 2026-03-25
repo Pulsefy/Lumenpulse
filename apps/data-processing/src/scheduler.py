@@ -84,14 +84,16 @@ class MarketAnalyzer:
                 if anomaly.is_anomaly:
                     logger.warning(
                         f"🚨 ANOMALY DETECTED: {anomaly.metric_name} "
-                        f"(Severity: {anomaly.severity_score:.2f}, "
+                        f"(Method: {anomaly.detection_method}, "
+                        f"Severity: {anomaly.severity_score:.2f}, "
                         f"Z-Score: {anomaly.z_score:.2f})"
                     )
                     anomaly_alerts.append(anomaly.to_dict())
                 else:
                     logger.debug(
                         f"Normal {anomaly.metric_name} behavior "
-                        f"(Z-Score: {anomaly.z_score:.2f})"
+                        f"(Method: {anomaly.detection_method}, "
+                        f"Z-Score: {anomaly.z_score:.2f})"
                     )
 
             # Step 5: Save to Database
