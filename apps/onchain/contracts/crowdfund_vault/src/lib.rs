@@ -5,6 +5,7 @@ mod events;
 mod math;
 mod storage;
 mod token;
+mod yield_provider;
 
 use errors::CrowdfundError;
 use math::{sqrt_scaled, unscale};
@@ -217,6 +218,13 @@ impl CrowdfundVaultContract {
 
         let count_key = DataKey::ContributorCount(project_id);
         let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+
+        // Check if we need to divest funds before refunding
+        let invested_key = DataKey::ProjectInvestedBalance(project_id);
+        let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
+        if current_invested > 0 {
+            Self::divest_funds_internal(&env, project_id, current_invested)?;
+        }
 
         let contract_address = env.current_contract_address();
         let token_client = TokenClient::new(&env, &project.token_address);
@@ -687,26 +695,64 @@ impl CrowdfundVaultContract {
 
         // Construct balance key once
         let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
-        let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+        let total_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
 
-        if current_balance < amount {
+        if total_balance < amount {
             return Err(CrowdfundError::InsufficientBalance);
         }
 
-        // Transfer tokens from contract to owner
+        // Check if we need to divest funds
+        let invested_key = DataKey::ProjectInvestedBalance(project_id);
+        let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
+        let local_balance = total_balance - current_invested;
+
+        if local_balance < amount {
+            let amount_to_divest = amount - local_balance;
+            Self::divest_funds_internal(&env, project_id, amount_to_divest)?;
+        }
+
         let contract_address = env.current_contract_address();
+
+        // Calculate and deduct fee
+        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
+        let treasury: Option<Address> = env.storage().instance().get(&DataKey::Treasury);
+
+        let fee_amount = if treasury.is_some() && fee_bps > 0 {
+            (amount.checked_mul(fee_bps as i128).unwrap_or(0)) / 10_000
+        } else {
+            0
+        };
+
+        let withdraw_amount = amount - fee_amount;
+
+        if fee_amount > 0 {
+            token::transfer(
+                &env,
+                &project.token_address,
+                &contract_address,
+                &treasury.clone().unwrap(),
+                &fee_amount,
+            );
+            events::ProtocolFeeDeductedEvent {
+                project_id,
+                amount: fee_amount,
+            }
+            .publish(&env);
+        }
+
+        // Transfer remaining tokens from contract to owner
         token::transfer(
             &env,
             &project.token_address,
             &contract_address,
             &project.owner,
-            &amount,
+            &withdraw_amount,
         );
 
         // Update project balance
         env.storage()
             .persistent()
-            .set(&balance_key, &(current_balance - amount));
+            .set(&balance_key, &(total_balance - amount));
 
         // Update project total withdrawn
         project.total_withdrawn += amount;
@@ -718,7 +764,7 @@ impl CrowdfundVaultContract {
         events::WithdrawEvent {
             owner: project.owner,
             project_id,
-            amount,
+            amount: withdraw_amount,
         }
         .publish(&env);
 
@@ -980,6 +1026,35 @@ impl CrowdfundVaultContract {
             return Ok(0);
         }
 
+        // Calculate fee
+        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
+        let treasury: Option<Address> = env.storage().instance().get(&DataKey::Treasury);
+
+        let fee_amount = if treasury.is_some() && fee_bps > 0 {
+            (actual_match.checked_mul(fee_bps as i128).unwrap_or(0)) / 10_000
+        } else {
+            0
+        };
+
+        let match_after_fee = actual_match - fee_amount;
+
+        // Transfer fee to treasury if any
+        if fee_amount > 0 {
+            let contract_address = env.current_contract_address();
+            token::transfer(
+                &env,
+                &project.token_address,
+                &contract_address,
+                &treasury.unwrap(),
+                &fee_amount,
+            );
+            events::ProtocolFeeDeductedEvent {
+                project_id,
+                amount: fee_amount,
+            }
+            .publish(&env);
+        }
+
         // Update matching pool balance
         env.storage()
             .persistent()
@@ -990,16 +1065,16 @@ impl CrowdfundVaultContract {
         let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
         env.storage()
             .persistent()
-            .set(&balance_key, &(current_balance + actual_match));
+            .set(&balance_key, &(current_balance + match_after_fee));
 
         // Update project total deposited (matching funds count as deposits)
         let mut project = project;
-        project.total_deposited += actual_match;
+        project.total_deposited += match_after_fee;
         env.storage()
             .persistent()
             .set(&DataKey::Project(project_id), &project);
 
-        Ok(actual_match)
+        Ok(match_after_fee)
     }
 
     /// Get matching pool balance for a token
@@ -1166,6 +1241,32 @@ impl CrowdfundVaultContract {
         Ok(())
     }
 
+    /// Set protocol fee configuration
+    pub fn set_fee_config(
+        env: Env,
+        admin: Address,
+        fee_bps: u32,
+        treasury: Address,
+    ) -> Result<(), CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+
+        if fee_bps > 10_000 {
+            return Err(CrowdfundError::InvalidAmount);
+        }
+
+        env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
+        env.storage().instance().set(&DataKey::Treasury, &treasury);
+
+        events::FeeConfigChangedEvent {
+            admin,
+            fee_bps,
+            treasury,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
     /// Get total contributions for a project
     pub fn get_total_contributions(env: Env, project_id: u64) -> Result<i128, CrowdfundError> {
         let project: ProjectData = env
@@ -1200,7 +1301,169 @@ impl CrowdfundVaultContract {
             .get(&DataKey::ProjectStatus(project_id))
             .unwrap_or(Symbol::new(&env, "ACTIVE")))
     }
+
+    /// Set yield provider for a token (admin only)
+    pub fn set_yield_provider(
+        env: Env,
+        admin: Address,
+        token_address: Address,
+        yield_provider: Address,
+    ) -> Result<(), CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::YieldProvider(token_address), &yield_provider);
+
+        Ok(())
+    }
+
+    /// Invest idle funds into the yield provider
+    pub fn invest_idle_funds(
+        env: Env,
+        caller: Address,
+        project_id: u64,
+        amount: i128,
+    ) -> Result<(), CrowdfundError> {
+        caller.require_auth();
+
+        let project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        if !project.is_active {
+            return Err(CrowdfundError::ProjectNotActive);
+        }
+
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(CrowdfundError::NotInitialized)?;
+
+        if caller != stored_admin && caller != project.owner {
+            return Err(CrowdfundError::Unauthorized);
+        }
+
+        Self::invest_funds_internal(&env, project_id, amount)
+    }
+
+    /// Divest funds from the yield provider
+    pub fn divest_funds(
+        env: Env,
+        caller: Address,
+        project_id: u64,
+        amount: i128,
+    ) -> Result<(), CrowdfundError> {
+        caller.require_auth();
+
+        let project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(CrowdfundError::NotInitialized)?;
+
+        if caller != stored_admin && caller != project.owner {
+            return Err(CrowdfundError::Unauthorized);
+        }
+
+        Self::divest_funds_internal(&env, project_id, amount)
+    }
+
+    /// Internal function to invest funds
+    fn invest_funds_internal(
+        env: &Env,
+        project_id: u64,
+        amount: i128,
+    ) -> Result<(), CrowdfundError> {
+        let project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        let yield_provider_addr: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::YieldProvider(project.token_address.clone()))
+            .ok_or(CrowdfundError::YieldProviderNotFound)?;
+
+        let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+        let total_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+
+        let invested_key = DataKey::ProjectInvestedBalance(project_id);
+        let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
+
+        let local_balance = total_balance - current_invested;
+        if local_balance < amount {
+            return Err(CrowdfundError::InsufficientBalance);
+        }
+
+        // Transfer tokens from contract to yield provider
+        let contract_address = env.current_contract_address();
+        let token_client = TokenClient::new(env, &project.token_address);
+        token_client.transfer(&contract_address, &yield_provider_addr, &amount);
+
+        // Call yield provider deposit
+        let yield_client = yield_provider::YieldProviderClient::new(env, &yield_provider_addr);
+        yield_client.deposit(&contract_address, &amount);
+
+        // Update invested balance
+        env.storage()
+            .persistent()
+            .set(&invested_key, &(current_invested + amount));
+
+        Ok(())
+    }
+
+    /// Internal function to divest funds
+    fn divest_funds_internal(
+        env: &Env,
+        project_id: u64,
+        amount: i128,
+    ) -> Result<(), CrowdfundError> {
+        let project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        let yield_provider_addr: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::YieldProvider(project.token_address.clone()))
+            .ok_or(CrowdfundError::YieldProviderNotFound)?;
+
+        let invested_key = DataKey::ProjectInvestedBalance(project_id);
+        let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
+
+        if current_invested < amount {
+            return Err(CrowdfundError::InsufficientBalance);
+        }
+
+        // Call yield provider withdraw
+        let contract_address = env.current_contract_address();
+        let yield_client = yield_provider::YieldProviderClient::new(env, &yield_provider_addr);
+        yield_client.withdraw(&contract_address, &amount);
+
+        // Update invested balance
+        env.storage()
+            .persistent()
+            .set(&invested_key, &(current_invested - amount));
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_yield;
