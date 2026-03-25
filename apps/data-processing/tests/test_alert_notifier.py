@@ -72,3 +72,39 @@ class TestAlertNotifier(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+    @patch('requests.post')
+    def test_webhook_retries_then_succeeds(self, mock_post):
+        # Telegram succeeds immediately; webhook fails twice then succeeds.
+        telegram_ok = MagicMock()
+        telegram_ok.status_code = 200
+
+        webhook_fail_1 = MagicMock()
+        webhook_fail_1.status_code = 500
+        webhook_fail_2 = MagicMock()
+        webhook_fail_2.status_code = 502
+        webhook_ok = MagicMock()
+        webhook_ok.status_code = 200
+
+        mock_post.side_effect = [telegram_ok, webhook_fail_1, webhook_fail_2, webhook_ok]
+
+        result = AnomalyResult(
+            is_anomaly=True,
+            severity_score=0.95,
+            metric_name="volume",
+            current_value=175000.0,
+            baseline_mean=50000.0,
+            baseline_std=10000.0,
+            z_score=12.5,
+            timestamp=datetime.now()
+        )
+
+        with patch('time.sleep') as mock_sleep:
+            self.notifier.notify_anomaly(result)
+
+        webhook_calls = [c for c in mock_post.call_args_list if 'test.webhook.com' in c.args[0]]
+        self.assertEqual(len(webhook_calls), 3, "Webhook delivery should retry twice before succeeding")
+
+        # Exponential backoff should sleep between retries (2 retries -> 2 sleeps)
+        self.assertEqual(mock_sleep.call_count, 2)
