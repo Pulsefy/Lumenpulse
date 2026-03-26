@@ -120,7 +120,7 @@ mod reentrancy_tests {
 
         // Simulate nested call
         reentrancy_guard::lock(&env);
-        let result = client.try_create_vesting(&admin, &beneficiary, &2000, &(current_time + 100), &2000);
+        let result = client.try_create_vesting(&admin, &beneficiary, &1000, &(current_time + 100), &1000);
         assert_eq!(result, Err(Ok(VestingError::ReentrancyDetected)));
     }
 }
