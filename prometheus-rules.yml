@@ -177,3 +177,160 @@ groups:
       - record: 'job:http:latency:p99'
         expr: |
           histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))
+
+  # ==================================
+  # AI / GPU Resource Monitoring Rules
+  # ==================================
+  - name: lumenpulse_ai_alerts
+    interval: 30s
+    rules:
+      # ── Inference Latency ──────────────────────────────
+
+      - alert: AiHighInferenceLatencyP95
+        expr: |
+          histogram_quantile(0.95, rate(ai_inference_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: 'High AI inference P95 latency'
+          description: '{{ .Labels.model }} P95 inference latency > 5s (current: {{ $value | humanizeDuration }})'
+
+      - alert: AiCriticalInferenceLatencyP99
+        expr: |
+          histogram_quantile(0.99, rate(ai_inference_duration_seconds_bucket[5m])) > 15
+        for: 3m
+        labels:
+          severity: critical
+          service: ai
+        annotations:
+          summary: 'Critical AI inference P99 latency'
+          description: '{{ .Labels.model }} P99 inference latency > 15s (current: {{ $value | humanizeDuration }})'
+
+      # ── Error Rate ─────────────────────────────────────
+
+      - alert: AiHighErrorRate
+        expr: |
+          (rate(ai_inference_errors_total[5m]) / rate(ai_inference_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: 'High AI inference error rate'
+          description: 'AI error rate > 5% (current: {{ $value | humanizePercentage }})'
+
+      - alert: AiCriticalErrorRate
+        expr: |
+          (rate(ai_inference_errors_total[5m]) / rate(ai_inference_requests_total[5m])) > 0.15
+        for: 2m
+        labels:
+          severity: critical
+          service: ai
+        annotations:
+          summary: 'Critical AI inference error rate'
+          description: 'AI error rate > 15% (current: {{ $value | humanizePercentage }})'
+
+      # ── Memory / VRAM Pressure ─────────────────────────
+
+      - alert: AiHighRamUsage
+        expr: ai_system_memory_usage_ratio > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: 'AI layer RAM usage high'
+          description: 'System RAM usage at {{ $value | humanizePercentage }}'
+
+      - alert: AiCriticalRamUsage
+        expr: ai_system_memory_usage_ratio > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          service: ai
+        annotations:
+          summary: 'AI layer RAM critically high'
+          description: 'System RAM usage at {{ $value | humanizePercentage }} — throttling likely active'
+
+      - alert: AiHighVramUsage
+        expr: ai_gpu_vram_usage_ratio > 0.85 and ai_gpu_vram_usage_ratio >= 0
+        for: 5m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: 'GPU VRAM usage high'
+          description: 'GPU VRAM usage at {{ $value | humanizePercentage }}'
+
+      - alert: AiCriticalVramUsage
+        expr: ai_gpu_vram_usage_ratio > 0.95 and ai_gpu_vram_usage_ratio >= 0
+        for: 2m
+        labels:
+          severity: critical
+          service: ai
+        annotations:
+          summary: 'GPU VRAM critically high'
+          description: 'GPU VRAM at {{ $value | humanizePercentage }} — models may OOM'
+
+      # ── Throttling ─────────────────────────────────────
+
+      - alert: AiRequestsThrottled
+        expr: rate(ai_throttled_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: 'AI requests are being throttled'
+          description: 'Throttle rate: {{ $value | humanize }}/sec — system under resource pressure'
+
+      # ── Concurrency ────────────────────────────────────
+
+      - alert: AiHighConcurrency
+        expr: ai_concurrent_inferences > 8
+        for: 5m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: 'High AI inference concurrency'
+          description: '{{ $value }} concurrent AI inferences running'
+
+      # ── Model Load Time ────────────────────────────────
+
+      - alert: AiSlowModelLoad
+        expr: |
+          histogram_quantile(0.95, rate(ai_model_load_duration_seconds_bucket[1h])) > 60
+        for: 5m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: 'AI model load times are slow'
+          description: 'P95 model load time > 60s (current: {{ $value | humanizeDuration }})'
+
+      # ── Recording Rules (pre-computed AI metrics) ──────
+
+      - record: 'job:ai:inference:rate5m'
+        expr: 'rate(ai_inference_requests_total[5m])'
+
+      - record: 'job:ai:errors:rate5m'
+        expr: 'rate(ai_inference_errors_total[5m])'
+
+      - record: 'job:ai:error_rate:ratio'
+        expr: |
+          rate(ai_inference_errors_total[5m]) / rate(ai_inference_requests_total[5m])
+
+      - record: 'job:ai:latency:p95'
+        expr: |
+          histogram_quantile(0.95, rate(ai_inference_duration_seconds_bucket[5m]))
+
+      - record: 'job:ai:latency:p99'
+        expr: |
+          histogram_quantile(0.99, rate(ai_inference_duration_seconds_bucket[5m]))
+
+      - record: 'job:ai:throttle:rate5m'
+        expr: 'rate(ai_throttled_requests_total[5m])'
+

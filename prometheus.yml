@@ -45,3 +45,19 @@ scrape_configs:
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
+
+  # LumenPulse AI Metrics
+  - job_name: 'lumenpulse-ai'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: '/ai/metrics/prometheus'
+
+    static_configs:
+      - targets: ['backend:3000']
+        labels:
+          layer: 'ai'
+
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+

@@ -19,6 +19,7 @@ import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { TestController } from './test/test.controller';
 import { SnapshotsModule } from './snapshot/snapshot.module';
 import { ModelRetrainingModule } from './model-retraining/model-retraining.module';
+import { AiMetricsModule } from './ai-metrics/ai-metrics.module';
 import { DataSource, DataSourceOptions } from 'typeorm';
 import stellarConfig from './stellar/config/stellar.config';
 
@@ -71,6 +72,7 @@ const appLogger = new Logger('TypeORM');
     PortfolioModule,
     SnapshotsModule,
     ModelRetrainingModule,
+    AiMetricsModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
