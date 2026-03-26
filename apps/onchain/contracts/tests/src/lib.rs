@@ -72,13 +72,70 @@ fn test_lumenpulse_protocol_e2e() {
 
     // 8. WITHDRAWAL FLOW
     // Admin must approve the milestone before withdrawal is possible
-    vault_client.approve_milestone(&admin, &project_id);
+    vault_client.approve_milestone(&admin, &project_id, &0u32);
 
     // Project owner withdraws 2,000 tokens
-    vault_client.withdraw(&project_id, &2000i128);
+    vault_client.withdraw(&project_id, &0u32, &2000i128);
 
     // Project owner should now have 2,000 tokens in their wallet
     assert_eq!(token_client.balance(&project_owner), 2000i128);
 
     std::println!("🚀 CI-Ready Integration Test Passed Successfully!");
+}
+
+#[test]
+fn test_notification_flow() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contributor = Address::generate(&env);
+    let project_owner = Address::generate(&env);
+
+    let token_id = env.register(LumenToken, ());
+    let reg_id = env.register(ContributorRegistryContract, ());
+    let vault_id = env.register(CrowdfundVaultContract, ());
+
+    let token_client = TokenClient::new(&env, &token_id);
+    let reg_client = RegistryClient::new(&env, &reg_id);
+    let vault_client = VaultClient::new(&env, &vault_id);
+
+    token_client.initialize(
+        &admin,
+        &7u32,
+        &String::from_str(&env, "Lumen"),
+        &String::from_str(&env, "LUM"),
+    );
+    reg_client.initialize(&admin);
+    vault_client.initialize(&admin);
+
+    // Register contributor
+    reg_client.register_contributor(&contributor, &String::from_str(&env, "cedarich"));
+
+    // Initial reputation should be 0
+    assert_eq!(reg_client.get_reputation(&contributor), 0);
+
+    // Register registry as a subscriber to the vault
+    vault_client.add_subscriber(&admin, &reg_id);
+
+    // Setup project and deposit
+    token_client.mint(&contributor, &10000i128);
+    let project_id = vault_client.create_project(
+        &project_owner,
+        &Symbol::new(&env, "DevTools"),
+        &5000i128,
+        &token_id,
+    );
+
+    // Contributor deposits into the project
+    vault_client.deposit(&contributor, &project_id, &1000i128);
+
+    // Reputation should have increased to 1 due to notification
+    assert_eq!(reg_client.get_reputation(&contributor), 1);
+
+    // Another deposit should increase it to 2
+    vault_client.deposit(&contributor, &project_id, &1000i128);
+    assert_eq!(reg_client.get_reputation(&contributor), 2);
+
+    std::println!("📡 Cross-contract Notification Flow Passed Successfully!");
 }

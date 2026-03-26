@@ -2,6 +2,8 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { GlobalExceptionFilter } from './filters/global-exception.filter';
+import { CustomValidationPipe } from './common/pipes/validation.pipe';
+import { SanitizationPipe } from './common/pipes/sanitization.pipe';
 import helmet from 'helmet';
 
 function getCorsOrigin(): string | string[] {
@@ -29,6 +31,14 @@ async function bootstrap() {
   // Register the global exception filter
   app.useGlobalFilters(new GlobalExceptionFilter());
 
+  // Register global validation pipe with security defaults
+  // Runs before sanitization to validate structure first
+  app.useGlobalPipes(
+    new CustomValidationPipe(),
+    // Sanitization pipe should run after validation
+    new SanitizationPipe(),
+  );
+
   // Swagger Configuration
 
   app.use(
@@ -46,10 +56,25 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('LumenPulse API')
     .setDescription(
-      'API documentation for LumenPulse - Interactive API docs for frontend developers',
+      'Comprehensive API documentation for LumenPulse - A decentralized crypto news aggregator and portfolio management platform built on Stellar blockchain',
     )
     .setVersion('1.0')
-    .addTag('lumenpulse')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Enter JWT token',
+      },
+      'JWT-auth',
+    )
+    .addTag('auth', 'Authentication and authorization endpoints')
+    .addTag('users', 'User profile and account management')
+    .addTag('news', 'Crypto news aggregation and sentiment analysis')
+    .addTag('portfolio', 'Portfolio tracking and performance metrics')
+    .addTag('stellar', 'Stellar blockchain integration')
+    .addServer('http://localhost:3000', 'Development')
+    .addServer('https://api.lumenpulse.io', 'Production')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

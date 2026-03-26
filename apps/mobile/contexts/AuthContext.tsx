@@ -26,7 +26,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const checkAuthStatus = async () => {
     try {
       const token = await storage.getAccessToken();
-      setIsAuthenticated(!!token);
+      if (token) {
+        const { apiClient } = await import('../lib/api');
+        apiClient.setAuthToken(token);
+        setIsAuthenticated(true);
+      } else {
+        setIsAuthenticated(false);
+      }
     } catch (error) {
       console.error('Error checking auth status:', error);
       setIsAuthenticated(false);
@@ -40,10 +46,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       
       // Import here to avoid circular dependencies
-      const { apiClient } = await import('../lib/api');
-      const response = await apiClient.login({ email, password });
+      const { authApi, apiClient } = await import('../lib/api');
+      const response = await authApi.login({ email, password });
       
-      await storage.storeTokens(response.access_token, response.refresh_token);
+      if (!response.success || !response.data) {
+        throw new Error(response.error?.message || 'Login failed');
+      }
+      
+      await storage.storeTokens(response.data.access_token, response.data.refresh_token);
+      apiClient.setAuthToken(response.data.access_token);
       setIsAuthenticated(true);
     } catch (error) {
       console.error('Login error:', error);
@@ -58,8 +69,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       
       // Import here to avoid circular dependencies
-      const { apiClient } = await import('../lib/api');
-      await apiClient.register({ email, password });
+      const { authApi } = await import('../lib/api');
+      const response = await authApi.register({ email, password });
+      
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Registration failed');
+      }
       
       // After registration, log the user in
       await login(email, password);
@@ -74,7 +89,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     try {
       setIsLoading(true);
+      const { apiClient } = await import('../lib/api');
       await storage.removeTokens();
+      apiClient.setAuthToken(null);
       setIsAuthenticated(false);
     } catch (error) {
       console.error('Logout error:', error);

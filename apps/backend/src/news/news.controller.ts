@@ -14,6 +14,7 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import { NewsProviderService } from './news-provider.service';
+import { NewsService } from './news.service';
 import {
   NewsArticlesResponseDto,
   NewsSearchResponseDto,
@@ -24,7 +25,10 @@ import {
 @ApiTags('news')
 @Controller('news')
 export class NewsController {
-  constructor(private readonly newsProviderService: NewsProviderService) {}
+  constructor(
+    private readonly newsProviderService: NewsProviderService,
+    private readonly newsService: NewsService,
+  ) {}
 
   @Get()
   @HttpCode(HttpStatus.OK)
@@ -82,6 +86,28 @@ export class NewsController {
     @Query('status') status?: 'ACTIVE' | 'INACTIVE' | 'ALL',
   ): Promise<NewsCategoriesResponseDto> {
     return this.newsProviderService.getCategories({ status });
+  }
+
+  @Get('sentiment-summary')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get aggregated sentiment scores across all articles',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Overall sentiment and breakdown by source',
+    schema: {
+      example: {
+        overall: { averageSentiment: 0.42, totalArticles: 120 },
+        bySource: [
+          { source: 'coindesk', averageScore: 0.65, articleCount: 40 },
+          { source: 'cointelegraph', averageScore: 0.31, articleCount: 80 },
+        ],
+      },
+    },
+  })
+  async sentimentSummary() {
+    return this.newsService.getSentimentSummary();
   }
 
   @Get('article')

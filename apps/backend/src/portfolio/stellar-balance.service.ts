@@ -24,7 +24,7 @@ export class StellarBalanceService {
   constructor() {
     // Use public Stellar Horizon server
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    this.server = new StellarSdk.Server('https://horizon.stellar.org');
+    this.server = new StellarSdk.Horizon.Server('https://horizon.stellar.org');
   }
 
   /**

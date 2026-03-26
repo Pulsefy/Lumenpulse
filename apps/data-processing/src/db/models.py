@@ -24,6 +24,10 @@ class NewsInsight(Base):
     article_url = Column(Text, nullable=True)
     source = Column(String(100), nullable=True)
     
+    # Asset information
+    asset_codes = Column(JSON, nullable=True)  # Array of asset codes mentioned in article
+    primary_asset = Column(String(20), nullable=True, index=True)  # Primary asset being discussed
+    
     # Sentiment scores
     sentiment_score = Column(Float, nullable=False)  # compound score -1 to 1
     positive_score = Column(Float, nullable=False)
@@ -49,10 +53,12 @@ class NewsInsight(Base):
         Index("idx_news_insights_analyzed_at", "analyzed_at"),
         Index("idx_news_insights_sentiment_label", "sentiment_label"),
         Index("idx_news_insights_source", "source"),
+        Index("idx_news_insights_primary_asset", "primary_asset"),
+        Index("idx_news_insights_asset_sentiment", "primary_asset", "sentiment_label"),
     )
 
     def __repr__(self):
-        return f"<NewsInsight(id={self.id}, sentiment={self.sentiment_label}, score={self.sentiment_score})>"
+        return f"<NewsInsight(id={self.id}, asset={self.primary_asset}, sentiment={self.sentiment_label}, score={self.sentiment_score})>"
 
 
 class AssetTrend(Base):

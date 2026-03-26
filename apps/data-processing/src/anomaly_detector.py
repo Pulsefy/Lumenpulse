@@ -4,14 +4,15 @@ using statistical methods (Z-Score) to identify outliers that deviate significan
 from baseline statistics.
 """
 
-import logging
+from src.utils.logger import setup_logger
+from src.utils.metrics import ANOMALIES_DETECTED_TOTAL
 from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime, timedelta
 from collections import deque
 import numpy as np
 from dataclasses import dataclass
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 @dataclass
@@ -223,6 +224,9 @@ class AnomalyDetector:
             severity = self._calculate_severity_score(z_score)
             is_anomaly = abs(z_score) > self.z_threshold
 
+            if is_anomaly:
+                ANOMALIES_DETECTED_TOTAL.labels(metric_name="volume").inc()
+
             return AnomalyResult(
                 is_anomaly=is_anomaly,
                 severity_score=severity,
@@ -282,6 +286,9 @@ class AnomalyDetector:
             z_score = self._calculate_z_score(current_sentiment, mean, std)
             severity = self._calculate_severity_score(z_score)
             is_anomaly = abs(z_score) > self.z_threshold
+
+            if is_anomaly:
+                ANOMALIES_DETECTED_TOTAL.labels(metric_name="sentiment").inc()
 
             return AnomalyResult(
                 is_anomaly=is_anomaly,

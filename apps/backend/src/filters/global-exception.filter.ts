@@ -24,24 +24,63 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       // Handle HTTP exceptions
       const httpException = exception;
       const status = httpException.getStatus();
-      const message = httpException.message || 'An error occurred';
-
-      // Get response data from the HttpException
       const exceptionResponse = httpException.getResponse();
 
-      errorResponse = {
-        statusCode: status,
-        message: Array.isArray(exceptionResponse)
-          ? exceptionResponse
-          : typeof exceptionResponse === 'object' && exceptionResponse
-            ? ((exceptionResponse as Record<string, unknown>)[
-                'message'
-              ] as string) || message
-            : message,
-        error: httpException.constructor.name || httpException.name,
-        timestamp,
-        path: request.url,
-      };
+      // Handle BadRequestException with validation errors
+      if (
+        status === 400 &&
+        typeof exceptionResponse === 'object' &&
+        exceptionResponse
+      ) {
+        const response = exceptionResponse as Record<string, unknown>;
+
+        // Check if this is a validation error response from our CustomValidationPipe
+        if (response.error === 'Validation Failed') {
+          const message: string | string[] =
+            (response.message as string | string[]) || 'Validation failed';
+          errorResponse = {
+            statusCode: status,
+            message,
+            error: 'ValidationError',
+            timestamp,
+            path: request.url,
+          };
+        } else {
+          // Standard HTTP exception
+          const msg: string | string[] =
+            response['message']?.toString() ||
+            httpException.message ||
+            'Bad Request';
+          errorResponse = {
+            statusCode: status,
+            message: msg,
+            error: httpException.constructor.name || httpException.name,
+            timestamp,
+            path: request.url,
+          };
+        }
+      } else {
+        // Other HTTP exceptions
+        const message = httpException.message || 'An error occurred';
+        let msg: string | string[] = message;
+
+        if (Array.isArray(exceptionResponse) && exceptionResponse.length > 0) {
+          msg = exceptionResponse;
+        } else if (typeof exceptionResponse === 'object' && exceptionResponse) {
+          const msgFromResponse = (
+            exceptionResponse as Record<string, unknown>
+          )['message'] as string | undefined;
+          msg = msgFromResponse || message;
+        }
+
+        errorResponse = {
+          statusCode: status,
+          message: msg,
+          error: httpException.constructor.name || httpException.name,
+          timestamp,
+          path: request.url,
+        };
+      }
     } else if (exception instanceof Error) {
       // Handle general errors
       this.logger.error(

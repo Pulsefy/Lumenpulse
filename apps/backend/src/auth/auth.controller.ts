@@ -13,6 +13,7 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  ConflictException,
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
@@ -26,8 +27,14 @@ import { GetChallengeDto, VerifyChallengeDto } from './dto/auth.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto, LogoutDto } from './dto/refresh-token.dto';
-import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
@@ -37,6 +44,25 @@ export class AuthController {
   ) {}
 
   @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login with email and password' })
+  @ApiResponse({
+    status: 200,
+    description: 'Login successful',
+    schema: {
+      properties: {
+        access_token: {
+          type: 'string',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        },
+        refresh_token: {
+          type: 'string',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() body: LoginDto) {
     const user = await this.authService.validateUser(body.email, body.password);
     if (!user) {
@@ -46,10 +72,40 @@ export class AuthController {
   }
 
   @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register a new user account' })
+  @ApiResponse({
+    status: 201,
+    description: 'User registered successfully',
+    schema: {
+      properties: {
+        id: { type: 'string' },
+        email: { type: 'string' },
+        createdAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Email already exists' })
   async register(@Body() body: RegisterDto) {
+    // Check if user already exists
+    const existingUser = await this.usersService.findByEmail(body.email);
+    if (existingUser) {
+      throw new ConflictException('Email already registered');
+    }
+
+    // Hash password with bcrypt
     const hash = await bcrypt.hash(body.password, 10);
 
-    return this.usersService.create({ email: body.email, passwordHash: hash });
+    // Create user
+    const user = await this.usersService.create({
+      email: body.email,
+      passwordHash: hash,
+    });
+
+    // Return user without password - exclude passwordHash from response
+    const { passwordHash: _, ...result } = user;
+    void _; // Mark as intentionally unused
+    return result;
   }
 
   @Post('forgot-password')
@@ -148,6 +204,14 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
   @Get('profile')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile retrieved successfully',
+    type: ProfileDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   getProfile(@Request() req: { user: ProfileDto }) {
     return new ProfileDto(req.user);
   }

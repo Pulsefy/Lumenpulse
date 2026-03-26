@@ -241,6 +241,14 @@
                     "storage": [
                       {
                         "key": {
+                          "symbol": "TSUPPLY"
+                        },
+                        "val": {
+                          "i128": "0"
+                        }
+                      },
+                      {
+                        "key": {
                           "vec": [
                             {
                               "symbol": "Admin"

@@ -1,0 +1,179 @@
+# prometheus-rules.yml
+# Alert rules for LumenPulse backend monitoring
+#
+# These rules define when alerts should fire based on metric conditions
+# Place this file in the root directory and reference it in prometheus.yml
+
+groups:
+  - name: lumenpulse_alerts
+    interval: 30s
+    rules:
+      # ===================
+      # HTTP Error Alerts
+      # ===================
+
+      - alert: HighErrorRate
+        expr: |
+          (rate(http_errors_total[5m]) / rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: 'High error rate detected'
+          description: '{{ .Labels.instance }} has error rate > 5% (current: {{ $value | humanizePercentage }})'
+          runbook: 'https://wiki.example.com/runbooks/high-error-rate'
+
+      - alert: CriticalErrorRate
+        expr: |
+          (rate(http_errors_total[5m]) / rate(http_requests_total[5m])) > 0.10
+        for: 2m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: 'Critical error rate detected'
+          description: '{{ .Labels.instance }} has error rate > 10% (current: {{ $value | humanizePercentage }})'
+          runbook: 'https://wiki.example.com/runbooks/critical-error-rate'
+
+      # ===================
+      # Latency Alerts
+      # ===================
+
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: 'High P95 latency detected'
+          description: '{{ .Labels.instance }} P95 latency > 1s (current: {{ $value | humanizeDuration }})'
+          runbook: 'https://wiki.example.com/runbooks/high-latency'
+
+      - alert: HighLatencyP99
+        expr: |
+          histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 3
+        for: 5m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: 'Critical P99 latency detected'
+          description: '{{ .Labels.instance }} P99 latency > 3s (current: {{ $value | humanizeDuration }})'
+          runbook: 'https://wiki.example.com/runbooks/critical-latency'
+
+      # ====================
+      # Job Queue Alerts
+      # ====================
+
+      - alert: QueueBacklogWarning
+        expr: job_queue_size > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: 'Job queue backlog warning'
+          description: '{{ .Labels.queue_name }} queue has {{ $value }} jobs pending'
+
+      - alert: QueueBacklogCritical
+        expr: job_queue_size > 1000
+        for: 5m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: 'Critical job queue backlog'
+          description: '{{ .Labels.queue_name }} queue has {{ $value }} jobs (critical backlog)'
+
+      - alert: JobFailureRate
+        expr: |
+          rate(jobs_failed_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: 'High job failure rate'
+          description: '{{ .Labels.queue_name }} has > 10% job failures (current: {{ $value | humanize }}/sec)'
+
+      # ====================
+      # Request Rate Alerts
+      # ====================
+
+      - alert: UnusuallyLowRequestRate
+        expr: |
+          rate(http_requests_total[5m]) < 0.1
+        for: 10m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: 'Unusually low request rate'
+          description: '{{ .Labels.instance }} request rate is abnormally low ({{ $value | humanize }}/sec)'
+
+      - alert: NoRequests
+        expr: |
+          increase(http_requests_total[5m]) == 0
+        for: 10m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: 'No requests detected'
+          description: '{{ .Labels.instance }} has received no requests in the last 5 minutes'
+
+      # ====================
+      # Memory Alerts
+      # ====================
+
+      - alert: HighMemoryUsage
+        expr: |
+          (process_resident_memory_bytes / node_memory_MemTotal_bytes) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: 'High memory usage detected'
+          description: '{{ .Labels.instance }} is using > 80% of available memory'
+
+      # ====================
+      # Health Checks
+      # ====================
+
+      - alert: InstanceDown
+        expr: |
+          up{job="lumenpulse-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: 'Instance is down'
+          description: '{{ .Labels.instance }} has been down for more than 1 minute'
+
+      # ====================
+      # Recording Rules (Pre-computed metrics)
+      # ====================
+
+      # These compute common values once to improve dashboard performance
+      - record: 'job:http:requests:rate5m'
+        expr: 'rate(http_requests_total[5m])'
+
+      - record: 'job:http:errors:rate5m'
+        expr: 'rate(http_errors_total[5m])'
+
+      - record: 'job:http:error_rate:ratio'
+        expr: |
+          rate(http_errors_total[5m]) / rate(http_requests_total[5m])
+
+      - record: 'job:http:latency:p95'
+        expr: |
+          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+      - record: 'job:http:latency:p99'
+        expr: |
+          histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))

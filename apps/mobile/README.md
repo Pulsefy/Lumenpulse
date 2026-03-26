@@ -51,4 +51,49 @@ Lumenpulse Mobile is the cross-platform mobile client for the Lumenpulse ecosyst
 
 ## Architecture
 
-The app follows a modern Expo Router structure (optional) or `App.tsx` entry point. Styling is handled via standard `StyleSheet` with a custom dark theme design system.
+The app follows a modern Expo Router structure with the following key components:
+
+### Directory Structure
+
+- `app/` - Expo Router pages and navigation
+- `components/` - Reusable UI components
+- `contexts/` - React Context providers (Auth, etc.)
+- `lib/` - Core utilities and services
+  - `api-client.ts` - HTTP client with typed methods
+  - `api.ts` - Domain-specific API services
+  - `config.ts` - Environment configuration
+  - `storage.ts` - Secure storage utilities
+
+### API Client
+
+The app uses a centralized API client for all backend communication. See [lib/API_CLIENT_README.md](./lib/API_CLIENT_README.md) for detailed documentation.
+
+Quick example:
+
+```typescript
+import { apiClient } from '@/lib/api-client';
+import { authApi, healthApi } from '@/lib/api';
+
+// Health check
+const response = await healthApi.check();
+if (response.success) {
+  console.log('Backend is healthy:', response.data);
+}
+
+// Login
+const loginResponse = await authApi.login({
+  email: 'user@example.com',
+  password: 'password',
+});
+```
+
+Key features:
+- Typed HTTP methods (GET, POST, PUT, PATCH, DELETE)
+- Consistent error handling with normalized error shapes
+- Environment-based configuration (no hardcoded URLs)
+- Automatic auth token management
+- Request timeout and cancellation support
+
+### Styling
+
+Styling is handled via standard `StyleSheet` with a custom dark theme design system.

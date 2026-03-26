@@ -9,6 +9,7 @@ import { StellarBalanceService } from './stellar-balance.service';
 import {
   PortfolioHistoryResponseDto,
   PortfolioSnapshotDto,
+  PortfolioSummaryResponseDto,
 } from './dto/portfolio-snapshot.dto';
 import { PortfolioPerformanceResponseDto } from './dto/portfolio-performance.dto';
 import { calculatePortfolioPerformance } from './utils/portfolio-performance.utils';
@@ -138,6 +139,37 @@ export class PortfolioService {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Get portfolio summary (latest snapshot) for the mobile dashboard
+   * Returns total USD value and individual asset balances
+   */
+  async getPortfolioSummary(
+    userId: string,
+  ): Promise<PortfolioSummaryResponseDto> {
+    this.logger.log(`Fetching portfolio summary for user ${userId}`);
+
+    const latestSnapshot = await this.snapshotRepository.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!latestSnapshot) {
+      return {
+        totalValueUsd: '0.00',
+        assets: [],
+        lastUpdated: null,
+        hasLinkedAccount: false,
+      };
+    }
+
+    return {
+      totalValueUsd: latestSnapshot.totalValueUsd,
+      assets: latestSnapshot.assetBalances,
+      lastUpdated: latestSnapshot.createdAt,
+      hasLinkedAccount: true,
     };
   }
 

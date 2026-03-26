@@ -92,3 +92,61 @@ pub struct AdminChangedEvent {
     pub old_admin: Address,
     pub new_admin: Address,
 }
+
+#[contractevent]
+pub struct ProjectCanceledEvent {
+    pub project_id: u64,
+    pub caller: Address,
+}
+
+#[contractevent]
+pub struct ContributionRefundedEvent {
+    pub project_id: u64,
+    pub contributor: Address,
+    pub amount: i128,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProtocolFeeDeductedEvent {
+    #[topic]
+    pub project_id: u64,
+    pub amount: i128,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneVoteStartedEvent {
+    #[topic]
+    pub project_id: u64,
+    pub milestone_id: u32,
+    pub end_time: u64,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeConfigChangedEvent {
+    #[topic]
+    pub admin: Address,
+    pub fee_bps: u32,
+    pub treasury: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VoteCastEvent {
+    #[topic]
+    pub project_id: u64,
+    pub milestone_id: u32,
+    pub voter: Address,
+    pub weight: i128,
+    pub support: bool,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneApprovedByVoteEvent {
+    #[topic]
+    pub project_id: u64,
+    pub milestone_id: u32,
+}

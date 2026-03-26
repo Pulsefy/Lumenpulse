@@ -6,6 +6,7 @@ import { NewsController } from './news.controller';
 import { NewsProviderService } from './news-provider.service';
 import { NewsService } from './news.service';
 import { News } from './news.entity';
+import { NewsSentimentService } from './news-sentiment.services';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { News } from './news.entity';
     TypeOrmModule.forFeature([News]),
   ],
   controllers: [NewsController],
-  providers: [NewsProviderService, NewsService],
-  exports: [NewsProviderService, NewsService],
+  providers: [NewsProviderService, NewsService, NewsSentimentService],
+  exports: [NewsProviderService, NewsService, NewsSentimentService],
 })
 export class NewsModule {}

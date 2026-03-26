@@ -131,7 +131,7 @@ def demo_500_percent_spike():
     spike_multiplier = 5.0
     spike_volume = baseline_mean * spike_multiplier
 
-    print(f"Testing {spike_multiplier*100}% spike:")
+    print(f"Testing {spike_multiplier * 100}% spike:")
     print(f"  Normal baseline: {baseline_mean:.0f}")
     print(f"  Spike volume: {spike_volume:.0f} ({spike_multiplier}x increase)")
     print()

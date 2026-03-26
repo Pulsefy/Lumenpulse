@@ -195,7 +195,7 @@ class HistoricalNewsFetcher:
         for item in data.get("articles", [])[:limit]:
             articles.append(
                 {
-                    "id": f"na_{hash(item.get('url', '')) & 0xffffffff}",
+                    "id": f"na_{hash(item.get('url', '')) & 0xFFFFFFFF}",
                     "title": item.get("title", ""),
                     "content": item.get("content", ""),
                     "summary": item.get("description", ""),

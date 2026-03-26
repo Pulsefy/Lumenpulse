@@ -223,6 +223,64 @@ class TestAnomalyDetector(unittest.TestCase):
         self.assertTrue(volume_result.is_anomaly)
         self.assertTrue(sentiment_result.is_anomaly)
 
+    def test_five_sigma_outlier_detection(self):
+        """
+        Test that a synthetic time series with one point exactly 5σ away from
+        the mean is correctly identified as an anomaly with maximum severity.
+
+        Issue #370 requirement: synthetic time series where one point is 5σ away.
+        """
+        # Build a controlled baseline: mean=100, std≈10
+        # Using 20 evenly spaced values so sample std is predictable
+        base_time = datetime.utcnow()
+        baseline_mean = 100.0
+        baseline_std = 10.0
+
+        # 20 points symmetrically distributed around the mean
+        # values: 81, 83, 85, ..., 119 (step=2) -> mean=100, std≈12
+        # Use a simpler set: 10 points below, 10 points above
+        baseline_values = [baseline_mean + (i - 10) * baseline_std / 10 for i in range(20)]
+        # That gives: 0, 10, 20 ... wait, let me be more precise
+        # We want ~20 points where mean≈100 and std≈10
+        baseline_values = [90, 91, 92, 93, 94, 95, 96, 97, 98, 99,
+                           101, 102, 103, 104, 105, 106, 107, 108, 109, 110]
+
+        for i, vol in enumerate(baseline_values):
+            ts = base_time - timedelta(minutes=(len(baseline_values) - i) * 15)
+            self.detector.add_data_point(volume=vol, sentiment_score=0.0, timestamp=ts)
+
+        # Calculate the actual mean and std of what we fed in
+        import numpy as np
+        actual_mean = float(np.mean(baseline_values))
+        actual_std = float(np.std(baseline_values, ddof=1))
+
+        # Construct a value exactly 5σ above the mean
+        five_sigma_value = actual_mean + 5 * actual_std
+
+        # Detect anomaly
+        result = self.detector.detect_volume_anomaly(five_sigma_value)
+
+        # Must be flagged as anomaly
+        self.assertTrue(
+            result.is_anomaly,
+            f"A 5σ outlier ({five_sigma_value:.2f}) must be detected as an anomaly"
+        )
+        # Z-score should be 5σ within floating-point tolerance
+        self.assertTrue(
+            math.isclose(abs(result.z_score), 5.0, rel_tol=1e-12, abs_tol=1e-12),
+            f"Z-score should be ~5.0, got {result.z_score:.16f}",
+        )
+        # Maximum severity (1.0) since 5σ >> 2*threshold (2*2.5=5.0)
+        self.assertAlmostEqual(
+            result.severity_score,
+            1.0,
+            places=12,
+            msg=f"Severity should be 1.0 for a 5σ outlier, got {result.severity_score}",
+        )
+        # Sanity check: the reported baseline stats match what we fed in
+        self.assertAlmostEqual(result.baseline_mean, actual_mean, places=5)
+        self.assertAlmostEqual(result.baseline_std, actual_std, places=5)
+
     def test_reset_functionality(self):
         """Test detector reset functionality"""
         # Add some data

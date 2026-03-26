@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -21,7 +20,7 @@ jest.mock('bcrypt', () => ({
   compare: jest.fn(),
 }));
 
-jest.mock('stellar-sdk', () => ({
+jest.mock('@stellar/stellar-sdk', () => ({
   Keypair: {
     fromSecret: jest.fn().mockReturnValue({
       publicKey: jest.fn().mockReturnValue('GTEST'),
