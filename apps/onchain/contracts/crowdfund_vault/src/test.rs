@@ -1735,3 +1735,58 @@ fn test_already_voted_fails() {
     let result = client.try_vote_milestone(&user, &project_id, &0, &true);
     assert_eq!(result, Err(Ok(CrowdfundError::AlreadyVoted)));
 }
+
+// ===== Protocol Fee Model Tests =====
+#[test]
+fn test_fee_configuration() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, _) = setup_test(&env);
+    client.initialize(&admin);
+
+    let treasury = Address::generate(&env);
+
+    // Set valid fee
+    client.set_fee_config(&admin, &500, &treasury);
+
+    // Try setting invalid fee (>10,000 bps)
+    let result = client.try_set_fee_config(&admin, &10001, &treasury);
+    assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
+}
+
+#[test]
+fn test_withdraw_with_fee() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let treasury = Address::generate(&env);
+    client.set_fee_config(&admin, &500, &treasury); // 5% fee
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Test"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let deposit_amount = 500_000;
+    client.deposit(&user, &project_id, &deposit_amount);
+
+    client.approve_milestone(&admin, &project_id, &0);
+
+    // Withdraw amount
+    client.withdraw(&project_id, &0, &100_000);
+
+    // 5% of 100,000 = 5,000
+    // Owner should get 95,000
+    // Treasury should get 5,000
+    assert_eq!(token_client.balance(&treasury), 5_000);
+    assert_eq!(token_client.balance(&owner), 95_000);
+
+    // Check remaining project balance reflects gross deduction
+    assert_eq!(client.get_balance(&project_id), 400_000);
+}

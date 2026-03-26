@@ -6,6 +6,8 @@ import os
 import sys
 import logging
 import signal
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -18,6 +20,7 @@ from src.ingestion.stellar_fetcher import get_asset_volume, get_network_overview
 from src.validators import validate_news_article, validate_onchain_metric
 from src.analytics.market_analyzer import MarketAnalyzer, MarketData
 from src.analytics.market_analyzer import get_explanation
+from src.sentiment import SentimentAnalyzer
 from src.anomaly_detector import AnomalyDetector
 from src.alert_notifier import notifier
 from scheduler import AnalyticsScheduler
@@ -68,12 +71,25 @@ def run_data_pipeline():
     print()
 
     try:
-        # Step 1: Fetch news data
-        print("1. FETCHING CRYPTO NEWS")
+        pipeline_start = time.perf_counter()
+
+        # ── Step 1 & 2: Fetch news + on-chain data concurrently ──────
+        print("1. FETCHING DATA (news + on-chain in parallel)")
         print("-" * 40)
 
-        raw_news_articles = fetch_news(limit=5)
-        print(f"Fetched {len(raw_news_articles)} news articles (raw)")
+        with ThreadPoolExecutor(max_workers=4) as io_pool:
+            news_future = io_pool.submit(fetch_news, limit=5)
+            vol_24h_future = io_pool.submit(get_asset_volume, "XLM", hours=24)
+            vol_48h_future = io_pool.submit(get_asset_volume, "XLM", hours=48)
+            network_future = io_pool.submit(get_network_overview)
+
+            raw_news_articles = news_future.result()
+            raw_volume_24h = vol_24h_future.result()
+            raw_volume_48h = vol_48h_future.result()
+            network_stats = network_future.result()
+
+        fetch_elapsed = time.perf_counter() - pipeline_start
+        print(f"All fetches completed in {fetch_elapsed:.2f}s (parallel)")
 
         # Validate and sanitize news articles
         news_articles = []
@@ -84,24 +100,34 @@ def run_data_pipeline():
             else:
                 logger.warning(f"Dropped invalid news article at index {idx}")
 
-        print(f"Validated {len(news_articles)} news articles")
+        print(f"Fetched {len(raw_news_articles)} raw → {len(news_articles)} validated articles")
 
-        # Calculate average sentiment (mock - in real scenario, use sentiment engine)
-        if news_articles:
-            # Mock sentiment calculation (replace with actual sentiment analysis)
-            mock_sentiment = 0.3  # Placeholder
-            print(f"Mock sentiment score: {mock_sentiment:.2f}")
-        else:
-            mock_sentiment = 0.0
-            print("No valid news articles, using neutral sentiment")
-
-        # Step 2: Fetch Stellar on-chain data
-        print("\n2. FETCHING STELLAR ON-CHAIN DATA")
+        # ── Sentiment analysis (parallel for large batches) ──────────
+        print("\n2. SENTIMENT ANALYSIS")
         print("-" * 40)
 
+        sentiment_analyzer = SentimentAnalyzer()
+        if news_articles:
+            article_texts = [
+                (a.get("title", "") + " " + a.get("summary", "")).strip()
+                for a in news_articles
+            ]
+            sentiment_results = sentiment_analyzer.analyze_batch_parallel(article_texts)
+            summary = sentiment_analyzer.get_sentiment_summary(sentiment_results)
+            avg_sentiment = summary["average_compound_score"]
+            print(f"Avg sentiment: {avg_sentiment:.4f} "
+                  f"(+{summary['positive_count']} / "
+                  f"-{summary['negative_count']} / "
+                  f"~{summary['neutral_count']})")
+        else:
+            avg_sentiment = 0.0
+            sentiment_results = []
+            print("No valid articles, using neutral sentiment")
 
-        # Get XLM volume for last 24 hours
-        raw_volume_24h = get_asset_volume("XLM", hours=24)
+        # ── Validate on-chain metrics ────────────────────────────────
+        print("\n3. STELLAR ON-CHAIN DATA")
+        print("-" * 40)
+
         validated_volume_24h = validate_onchain_metric({
             "metric_id": "xlm_volume_24h",
             "value": raw_volume_24h.get("total_volume", 0.0),
@@ -118,8 +144,6 @@ def run_data_pipeline():
         print(f"XLM Volume (24h): {volume_24h.get('total_volume', 0.0):,.2f}")
         print(f"Transactions: {volume_24h.get('transaction_count', 0)}")
 
-        # Get XLM volume for last 48 hours for comparison
-        raw_volume_48h = get_asset_volume("XLM", hours=48)
         validated_volume_48h = validate_onchain_metric({
             "metric_id": "xlm_volume_48h",
             "value": raw_volume_48h.get("total_volume", 0.0),
@@ -143,19 +167,17 @@ def run_data_pipeline():
             volume_change = 0.0
             print("Insufficient data for volume change calculation")
 
-        # Get network overview
-        network_stats = get_network_overview()
         if network_stats:
             print(f"Latest Ledger: {network_stats.get('latest_ledger', 'N/A')}")
             print(f"Transaction Count: {network_stats.get('transaction_count', 0)}")
 
-        # Step 3: Market Analysis
-        print("\n3. MARKET ANALYSIS")
+        # Step 4: Market Analysis
+        print("\n4. MARKET ANALYSIS")
         print("-" * 40)
 
         # Create market data
         market_data = MarketData(
-            sentiment_score=mock_sentiment, volume_change=volume_change
+            sentiment_score=avg_sentiment, volume_change=volume_change
         )
 
         # Analyze market trend
@@ -170,8 +192,8 @@ def run_data_pipeline():
         explanation = get_explanation(score, trend)
         print(f"\nAnalysis: {explanation}")
 
-        # Step 4: Anomaly Detection
-        print("\n4. ANOMALY DETECTION")
+        # Step 5: Anomaly Detection
+        print("\n5. ANOMALY DETECTION")
         print("-" * 40)
 
         current_volume = float(volume_24h["total_volume"])
@@ -180,13 +202,13 @@ def run_data_pipeline():
         # Feed current data point into the rolling window detector
         anomaly_detector.add_data_point(
             volume=current_volume,
-            sentiment_score=mock_sentiment,
+            sentiment_score=avg_sentiment,
             timestamp=now,
         )
 
         # Run detection on both metrics
         volume_anomaly = anomaly_detector.detect_volume_anomaly(current_volume, now)
-        sentiment_anomaly = anomaly_detector.detect_sentiment_anomaly(mock_sentiment, now)
+        sentiment_anomaly = anomaly_detector.detect_sentiment_anomaly(avg_sentiment, now)
 
         anomalies_found = []
 
@@ -217,13 +239,16 @@ def run_data_pipeline():
         if not anomalies_found:
             print("No anomalies detected in current pipeline run.")
 
-        # Step 5: Output summary
-        print("\n5. PIPELINE SUMMARY")
+        # Step 6: Output summary
+        total_elapsed = time.perf_counter() - pipeline_start
+        print("\n6. PIPELINE SUMMARY")
         print("-" * 40)
         print(f"✓ News Articles Processed: {len(news_articles)}")
+        print(f"✓ Sentiment Scores Computed: {len(sentiment_results)}")
         print(f"✓ XLM Volume Analyzed: {volume_24h['total_volume']:,.2f}")
         print(f"✓ Market Trend: {trend.value.upper()}")
         print(f"✓ Anomalies Detected: {len(anomalies_found)}")
+        print(f"✓ Total Pipeline Time: {total_elapsed:.2f}s")
         print(f"✓ Analysis Complete: {datetime.now().strftime('%H:%M:%S')}")
 
         result = {

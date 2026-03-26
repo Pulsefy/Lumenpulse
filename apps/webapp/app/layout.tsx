@@ -1,4 +1,4 @@
-import { StarknetProvider } from "./providers";
+import { StellarProvider } from "./providers";
 import { StarsAnimation } from "@/components/stars-animation";
 import { PWAInstaller } from "@/components/pwa-installer";
 import "./globals.css";
@@ -46,12 +46,12 @@ const poppins = Poppins({
 
 // Enhanced PWA Metadata
 export const metadata: Metadata = {
-  title: "StarkPulse - Decentralized Crypto News Platform",
-  description: "Your trusted source for crypto news, trends, and insights powered by StarkNet.",
-  keywords: ["crypto", "blockchain", "StarkNet", "DeFi", "news", "cryptocurrency", "Web3"],
-  authors: [{ name: "StarkPulse Team" }],
-  creator: "StarkPulse",
-  publisher: "StarkPulse",
+  title: "LumenPulse - Decentralized Crypto News Platform",
+  description: "Your trusted source for crypto news, trends, and insights powered by Stellar.",
+  keywords: ["crypto", "blockchain", "Stellar", "DeFi", "news", "cryptocurrency", "Web3"],
+  authors: [{ name: "LumenPulse Team" }],
+  creator: "LumenPulse",
+  publisher: "LumenPulse",
   formatDetection: {
     email: false,
     address: false,
@@ -77,16 +77,16 @@ export const metadata: Metadata = {
   },
   // Open Graph
   openGraph: {
-    title: "StarkPulse - Decentralized Crypto News Platform",
-    description: "Your trusted source for crypto news, trends, and insights powered by StarkNet.",
-    url: "https://starkpulse.app",
-    siteName: "StarkPulse",
+    title: "LumenPulse - Decentralized Crypto News Platform",
+    description: "Your trusted source for crypto news, trends, and insights powered by Stellar.",
+    url: "https://lumenpulse.app",
+    siteName: "LumenPulse",
     images: [
       {
         url: "/assets/starkpulse-03.png",
         width: 71,
         height: 71,
-        alt: "StarkPulse Logo",
+        alt: "LumenPulse Logo",
       },
     ],
     locale: "en_US",
@@ -95,16 +95,16 @@ export const metadata: Metadata = {
   // Twitter
   twitter: {
     card: "summary_large_image",
-    title: "StarkPulse - Decentralized Crypto News Platform",
-    description: "Your trusted source for crypto news, trends, and insights powered by StarkNet.",
+    title: "LumenPulse - Decentralized Crypto News Platform",
+    description: "Your trusted source for crypto news, trends, and insights powered by Stellar.",
     images: ["/assets/starkpulse-03.png"],
-    creator: "@starkpulse",
+    creator: "@lumenpulse",
   },
   // PWA specific
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "StarkPulse",
+    title: "LumenPulse",
     startupImage: [
       {
         url: "/assets/starkpulse-03.png",
@@ -128,11 +128,11 @@ export default function RootLayout({
     <html lang="en">
       <head>
         {/* PWA Meta Tags */}
-        <meta name="application-name" content="StarkPulse" />
+        <meta name="application-name" content="LumenPulse" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="StarkPulse" />
-        <meta name="description" content="Your trusted source for crypto news, trends, and insights powered by StarkNet." />
+        <meta name="apple-mobile-web-app-title" content="LumenPulse" />
+        <meta name="description" content="Your trusted source for crypto news, trends, and insights powered by Stellar." />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="msapplication-config" content="/browserconfig.xml" />
@@ -161,11 +161,11 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${orbitron.variable} ${spaceMono.variable} ${chakraPetch.variable} ${poppins.variable} font-inter bg-background text-foreground`}
       >
-        <StarknetProvider>
+        <StellarProvider>
           <StarsAnimation />
           {children}
           <PWAInstaller />
-        </StarknetProvider>
+        </StellarProvider>
       </body>
     </html>
   );

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'starkpulse-v1';
+const CACHE_NAME = 'lumenpulse-v1';
 const urlsToCache = [
   '/',
   '/news',
@@ -88,7 +88,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification('StarkPulse', options)
+    self.registration.showNotification('LumenPulse', options)
   );
 });
 

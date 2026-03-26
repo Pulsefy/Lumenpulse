@@ -15,6 +15,7 @@ scikit-learn>=1.4.0
 pandas>=2.2.0
 python-json-logger>=2.0.0
 prometheus-client>=0.20.0
+slowapi>=0.1.9
 
 # Database
 asyncpg>=0.29.0

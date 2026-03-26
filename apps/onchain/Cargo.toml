@@ -4,9 +4,11 @@ members = [
   "contracts/contributor_registry",
   "contracts/crowdfund_vault",
   "contracts/lumen_token",
+  "contracts/notification_interface",
   "contracts/upgradable-contract",
   "contracts/vesting-wallet",
 ]
+exclude = ["contracts/tests"]
 
 [workspace.dependencies]
 soroban-sdk = "23"

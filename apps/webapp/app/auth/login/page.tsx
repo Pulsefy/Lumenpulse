@@ -41,7 +41,7 @@ export default function LoginPage() {
               >
                 <Image
                   src="/assets/starkpulse-04.svg"
-                  alt="StarkPulse"
+                  alt="LumenPulse"
                   width={240}
                   height={82}
                   className="h-16 md:h-24 w-auto"

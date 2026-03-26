@@ -7,6 +7,7 @@ from src.utils.metrics import JOBS_RUN_TOTAL
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.job import Job
 
 from fetchers import NewsFetcher
@@ -15,6 +16,7 @@ from trends import TrendCalculator
 from database import DatabaseService, AnalyticsRecord
 from anomaly_detector import AnomalyDetector, AnomalyResult
 from alertbot import AlertBot
+from src.ml.retraining_pipeline import run_retraining, get_last_run_status
 
 logger = setup_logger(__name__)
 
@@ -154,30 +156,62 @@ class MarketAnalyzer:
             logger.error(f"Error in MarketAnalyzer job: {e}", exc_info=True)
 
 
+def _retraining_job() -> None:
+    """
+    Scheduled retraining job wrapper.
+    Runs the full retraining pipeline and logs the outcome.
+    Errors are caught so a failed retrain never crashes the scheduler.
+    """
+    logger.info("Scheduled model retraining job triggered")
+    try:
+        result = run_retraining()
+        if result.get("status") == "completed":
+            logger.info(
+                f"Scheduled retraining completed in "
+                f"{result.get('duration_seconds', 0):.1f}s — "
+                f"models: {list(result.get('models', {}).keys())}"
+            )
+        else:
+            logger.warning(f"Scheduled retraining ended with status: {result.get('status')}")
+    except Exception as exc:
+        logger.error(f"Scheduled retraining job raised an exception: {exc}", exc_info=True)
+
+
 class AnalyticsScheduler:
     """Manages the APScheduler scheduler for analytics jobs"""
 
-    def __init__(self):
+    def __init__(self, pipeline_fn=None):
         self.scheduler = BackgroundScheduler()
         self.analyzer = MarketAnalyzer()
+        # Allow injecting a custom pipeline function (used by main.py)
+        self._pipeline_fn = pipeline_fn
 
     def start(self):
-        """Start the scheduler"""
+        """Start the scheduler with all registered jobs."""
         try:
-            # Add the MarketAnalyzer job to run every hour
-            job = self.scheduler.add_job(
-                func=self.analyzer.run,
+            # ── Market Analyzer: every hour ──────────────────────────────
+            run_fn = self._pipeline_fn if self._pipeline_fn else self.analyzer.run
+            market_job = self.scheduler.add_job(
+                func=run_fn,
                 trigger=IntervalTrigger(hours=1),
                 id="market_analyzer_hourly",
                 name="Market Analyzer - Hourly Analytics",
                 replace_existing=True,
             )
 
+            # ── Model Retraining: daily at 02:00 UTC ─────────────────────
+            retrain_job = self.scheduler.add_job(
+                func=_retraining_job,
+                trigger=CronTrigger(hour=2, minute=0, timezone="UTC"),
+                id="model_retraining_daily",
+                name="Automated Model Retraining - Daily",
+                replace_existing=True,
+            )
+
             self.scheduler.start()
             logger.info("✓ Analytics scheduler started")
-            logger.info(f"  - Job: {job.name}")
-            logger.info(f"  - Schedule: Every 1 hour")
-            logger.info(f"  - Next run: {job.next_run_time}")
+            logger.info(f"  - Job: {market_job.name} | Next: {market_job.next_run_time}")
+            logger.info(f"  - Job: {retrain_job.name} | Next: {retrain_job.next_run_time}")
         except Exception as e:
             logger.error(f"Error starting scheduler: {e}")
             raise
@@ -185,7 +219,15 @@ class AnalyticsScheduler:
     def run_immediately(self):
         """Run the analyzer job immediately (useful for testing)"""
         logger.info("Running MarketAnalyzer immediately...")
-        self.analyzer.run()
+        if self._pipeline_fn:
+            self._pipeline_fn()
+        else:
+            self.analyzer.run()
+
+    def trigger_retraining(self, force: bool = False) -> dict:
+        """Manually trigger a retraining run (e.g. from the API)."""
+        logger.info(f"Manual retraining triggered (force={force})")
+        return run_retraining(force=force)
 
     def stop(self):
         """Stop the scheduler"""
@@ -206,7 +248,11 @@ class AnalyticsScheduler:
             return {
                 "id": job.id,
                 "name": job.name,
-                "next_run_time": job.next_run_time,
+                "next_run_time": str(job.next_run_time),
                 "trigger": str(job.trigger),
             }
         return None
+
+    def get_retraining_status(self) -> dict:
+        """Return the last retraining run metadata."""
+        return get_last_run_status()
