@@ -3,7 +3,8 @@ use soroban_sdk::{contracttype, Address, Symbol};
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
-    Admin,                            // -> Address
+    Admin,
+    ProtocolStats,                    // -> ProtocolStats (instance storage)
     Project(u64),                     // -> ProjectData
     ProjectBalance(u64, Address),     // (project_id, token) -> i128
     MilestoneApproved(u64, u32),      // (project_id, milestone_id) -> bool
@@ -25,6 +26,13 @@ pub enum DataKey {
     FeeBps,                      // -> u32
     Treasury,                    // -> Address
     Subscribers,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProtocolStats {
+    pub tvl: i128,
+    pub cumulative_volume: i128,
 }
 
 #[contracttype]

@@ -24,6 +24,8 @@ from src.security import (
     setup_rate_limiter,
     get_rate_limit_decorator,
 )
+from src.ml.retraining_pipeline import run_retraining, get_last_run_status
+from src.ml.model_registry import get_registry_status
 
 # Initialize structured logger
 logger = setup_logger(__name__)
@@ -262,4 +264,71 @@ if __name__ == "__main__":
         host="0.0.0.0",  # Listen on all interfaces
         port=8000,  # Default FastAPI port
         reload=True,  # Auto-reload during development
+    )
+
+
+# ---------------------------------------------------------------------------
+# Model retraining endpoints (Issue #454)
+# ---------------------------------------------------------------------------
+
+class RetrainRequest(BaseModel):
+    force: bool = False  # Skip quality gates when True
+
+
+class RetrainResponse(BaseModel):
+    status: str
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    models: Dict[str, Any] = {}
+    registry: Dict[str, Any] = {}
+    error: Optional[str] = None
+
+
+class ModelStatusResponse(BaseModel):
+    last_run: Dict[str, Any]
+    registry: Dict[str, Any]
+
+
+@app.post("/retrain", response_model=RetrainResponse)
+@limiter.limit("5/minute") if limiter else lambda x: x
+async def trigger_retraining(
+    body: RetrainRequest,
+    request_context: Request,
+) -> RetrainResponse:
+    """
+    Trigger an immediate model retraining run.
+
+    Runs synchronously in a thread pool so the HTTP response is returned
+    only after retraining completes (or fails). For long-running production
+    retrains, consider making this async with a task queue.
+
+    Requires X-API-Key header.
+    """
+    import asyncio
+
+    logger.info(
+        f"Retraining triggered via API | force={body.force} | "
+        f"client_ip={request_context.client.host}"
+    )
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, lambda: run_retraining(force=body.force)
+    )
+
+    return RetrainResponse(**{k: result.get(k) for k in RetrainResponse.model_fields if k in result})
+
+
+@app.get("/model/status", response_model=ModelStatusResponse)
+@limiter.limit("30/minute") if limiter else lambda x: x
+async def model_status(request_context: Request) -> ModelStatusResponse:
+    """
+    Return the current model registry state and last retraining run metadata.
+
+    Requires X-API-Key header.
+    """
+    return ModelStatusResponse(
+        last_run=get_last_run_status(),
+        registry=get_registry_status(),
     )
