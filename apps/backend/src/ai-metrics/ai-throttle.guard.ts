@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { AiMetricsService } from './ai-metrics.service';
 
 /**
@@ -32,7 +33,7 @@ export class AiThrottleGuard implements CanActivate {
       this.aiMetrics.recordThrottledRequest();
       this.logger.warn(`AI request throttled — ${reason}`);
 
-      const response = context.switchToHttp().getResponse();
+      const response = context.switchToHttp().getResponse<Response>();
       response.setHeader('Retry-After', '30');
 
       throw new HttpException(

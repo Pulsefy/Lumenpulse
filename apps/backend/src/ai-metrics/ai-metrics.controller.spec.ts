@@ -52,9 +52,7 @@ describe('AiMetricsController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AiMetricsController],
-      providers: [
-        { provide: AiMetricsService, useValue: aiMetricsService },
-      ],
+      providers: [{ provide: AiMetricsService, useValue: aiMetricsService }],
     }).compile();
 
     controller = module.get<AiMetricsController>(AiMetricsController);
@@ -95,7 +93,11 @@ describe('AiMetricsController', () => {
     it('should return Prometheus text format', async () => {
       const send = jest.fn();
       const set = jest.fn();
-      const res = { set, send, status: jest.fn().mockReturnValue({ json: jest.fn() }) } as any;
+      const res = {
+        set,
+        send,
+        status: jest.fn().mockReturnValue({ json: jest.fn() }),
+      } as any;
 
       await controller.getPrometheusMetrics(res);
 

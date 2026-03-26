@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
+import type { Request } from 'express';
 import { AiMetricsService } from './ai-metrics.service';
 
 /**
@@ -27,9 +28,9 @@ export class AiMetricsInterceptor implements NestInterceptor {
   constructor(private readonly aiMetrics: AiMetricsService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<Request>();
     const modelName =
-      request.headers['x-ai-model'] ||
+      (request.headers['x-ai-model'] as string | undefined) ||
       this.extractModelFromRoute(request.path);
 
     const tracker = this.aiMetrics.startInference(modelName);

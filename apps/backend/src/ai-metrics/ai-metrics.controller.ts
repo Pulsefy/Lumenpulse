@@ -86,10 +86,7 @@ export class AiMetricsController {
   async getPrometheusMetrics(@Res() response: Response): Promise<void> {
     try {
       const metrics = await this.aiMetricsService.getPrometheusMetrics();
-      response.set(
-        'Content-Type',
-        'text/plain; version=0.0.4; charset=utf-8',
-      );
+      response.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
       response.send(metrics);
     } catch (error) {
       this.logger.error('Error getting Prometheus AI metrics:', error);

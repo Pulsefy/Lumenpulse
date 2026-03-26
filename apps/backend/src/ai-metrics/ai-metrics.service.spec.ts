@@ -295,8 +295,8 @@ describe('AiMetricsService', () => {
   // ── lifecycle ─────────────────────────────────────────────────
 
   describe('onModuleInit', () => {
-    it('should not throw', async () => {
-      await expect(service.onModuleInit()).resolves.not.toThrow();
+    it('should not throw', () => {
+      expect(() => service.onModuleInit()).not.toThrow();
     });
   });
 

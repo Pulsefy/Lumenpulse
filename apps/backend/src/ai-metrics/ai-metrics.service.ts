@@ -1,13 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  Counter,
-  Histogram,
-  Gauge,
-  Summary,
-  register,
-} from 'prom-client';
+import { Counter, Histogram, Gauge, Summary, register } from 'prom-client';
 import * as os from 'os';
+import { execSync } from 'child_process';
 
 /**
  * Snapshot of current system resource utilisation.
@@ -276,7 +271,7 @@ export class AiMetricsService implements OnModuleInit {
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     // Take an initial resource reading
     this.sampleResources();
 
@@ -350,9 +345,7 @@ export class AiMetricsService implements OnModuleInit {
 
         if (status === 'error') {
           this.totalInferenceErrors++;
-          this.aiErrorCounter
-            .labels(modelName, errorType ?? 'unknown')
-            .inc();
+          this.aiErrorCounter.labels(modelName, errorType ?? 'unknown').inc();
         }
 
         this.logger.debug(
@@ -515,14 +508,15 @@ export class AiMetricsService implements OnModuleInit {
    */
   private probeGpu(): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { execSync } = require('child_process');
-      const output: string = execSync(
+      const output = execSync(
         'nvidia-smi --query-gpu=memory.total,memory.used,memory.free --format=csv,noheader,nounits',
         { timeout: 5000, encoding: 'utf-8' },
-      ).toString();
+      );
 
-      const parts = output.trim().split(',').map((s: string) => s.trim());
+      const parts = output
+        .trim()
+        .split(',')
+        .map((s: string) => s.trim());
       if (parts.length >= 3) {
         const totalMiB = parseFloat(parts[0]);
         const usedMiB = parseFloat(parts[1]);

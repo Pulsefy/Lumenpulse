@@ -63,8 +63,7 @@ describe('AiThrottleGuard', () => {
     });
 
     const ctx = mockExecutionContext();
-    const setHeader =
-      ctx.switchToHttp().getResponse<any>().setHeader;
+    const setHeader = ctx.switchToHttp().getResponse<any>().setHeader;
 
     try {
       guard.canActivate(ctx);

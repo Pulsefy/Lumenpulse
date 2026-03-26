@@ -53,7 +53,10 @@ export class PortfolioSummaryResponseDto {
   })
   totalValueUsd: string;
 
-  @ApiProperty({ description: 'Individual asset balances', type: [AssetBalanceDto] })
+  @ApiProperty({
+    description: 'Individual asset balances',
+    type: [AssetBalanceDto],
+  })
   assets: AssetBalanceDto[];
 
   @ApiProperty({
@@ -64,7 +67,8 @@ export class PortfolioSummaryResponseDto {
   lastUpdated: Date | null;
 
   @ApiProperty({
-    description: 'Indicates whether the user has a linked Stellar account with snapshots',
+    description:
+      'Indicates whether the user has a linked Stellar account with snapshots',
     example: true,
   })
   hasLinkedAccount: boolean;
