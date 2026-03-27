@@ -6,7 +6,9 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  UseInterceptors,
 } from '@nestjs/common';
+import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { StellarService } from './stellar.service';
 import { AccountBalancesDto } from './dto/balance.dto';
@@ -102,6 +104,8 @@ export class StellarController {
 
   @Get('assets')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(600_000)
   @ApiOperation({
     summary: 'Discover Stellar assets',
     description:

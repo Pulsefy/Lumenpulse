@@ -22,6 +22,8 @@ import { ModelRetrainingModule } from './model-retraining/model-retraining.modul
 import { DataSource, DataSourceOptions } from 'typeorm';
 import stellarConfig from './stellar/config/stellar.config';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { AppCacheModule } from './cache/cache.module';
+import { StellarModule } from './stellar/stellar.module';
 
 const appLogger = new Logger('TypeORM');
 
@@ -63,9 +65,11 @@ const appLogger = new Logger('TypeORM');
         limit: 100,
       },
     ]),
+    AppCacheModule,
     MetricsModule,
     SentimentModule,
     NewsModule,
+    StellarModule,
     AuthModule,
     UsersModule,
     EmailModule,

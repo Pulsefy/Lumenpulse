@@ -9,8 +9,9 @@ historical news articles, handling API rate limits gracefully.
 Usage:
     python scripts/backfill.py --days 30
     python scripts/backfill.py --days 1  # For testing
+    python scripts/backfill.py --days 30 --save-to-db  # Save to PostgreSQL
 
-GitHub Issue: #273
+GitHub Issue: #456
 Author: LumenPulse Team
 """
 
@@ -244,19 +245,32 @@ class BackfillService:
     Main service for running the historical data backfill process.
     """
 
-    def __init__(self, days: int):
+    def __init__(self, days: int, save_to_db: bool = False):
         """
         Initialize the backfill service.
 
         Args:
             days: Number of days to backfill
+            save_to_db: Whether to save data to PostgreSQL database
         """
         self.days = days
+        self.save_to_db = save_to_db
         self.fetcher = HistoricalNewsFetcher()
         self.data_dir = BackfillConfig.DATA_DIR
+        self.db_service = None
 
         # Ensure data directory exists
         self.data_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialize database service if needed
+        if self.save_to_db:
+            try:
+                from db import PostgresService
+                self.db_service = PostgresService()
+                logger.info("Database service initialized for backfill")
+            except Exception as e:
+                logger.warning(f"Failed to initialize database service: {e}. Will save to files only.")
+                self.save_to_db = False
 
     def run(self) -> dict:
         """
@@ -273,6 +287,7 @@ class BackfillService:
         logger.info(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info(f"Days to backfill: {self.days}")
         logger.info(f"Data directory: {self.data_dir}")
+        logger.info(f"Save to database: {self.save_to_db}")
         logger.info("")
 
         # Track statistics
@@ -282,6 +297,7 @@ class BackfillService:
             "days_failed": 0,
             "start_time": datetime.now().isoformat(),
             "end_time": None,
+            "saved_to_db": 0,
         }
 
         # Calculate date range
@@ -298,6 +314,11 @@ class BackfillService:
 
                 # Save articles to file
                 self._save_articles(current_date, articles)
+
+                # Save to database if enabled
+                if self.save_to_db and self.db_service and articles:
+                    saved_count = self._save_to_database(articles)
+                    stats["saved_to_db"] += saved_count
 
                 logger.info(
                     f"✓ {current_date.strftime('%Y-%m-%d')}: {len(articles)} articles saved"
@@ -328,6 +349,7 @@ class BackfillService:
         logger.info(f"Days processed: {stats['days_processed']}")
         logger.info(f"Days failed: {stats['days_failed']}")
         logger.info(f"Total articles: {stats['total_articles']}")
+        logger.info(f"Saved to database: {stats['saved_to_db']}")
         logger.info(f"Data saved to: {self.data_dir}")
 
         # Save summary
@@ -386,6 +408,27 @@ class BackfillService:
         with open(output_file, "w") as f:
             json.dump(data, f, indent=2)
 
+    def _save_to_database(self, articles: list) -> int:
+        """
+        Save articles to PostgreSQL database.
+
+        Args:
+            articles: List of article dictionaries
+
+        Returns:
+            Number of articles saved to database
+        """
+        if not self.db_service:
+            return 0
+
+        try:
+            saved_count = self.db_service.save_articles_batch(articles)
+            logger.debug(f"Saved {saved_count} articles to database")
+            return saved_count
+        except Exception as e:
+            logger.warning(f"Failed to save articles to database: {e}")
+            return 0
+
 
 def parse_args():
     """Parse command line arguments"""
@@ -397,11 +440,18 @@ Examples:
   python scripts/backfill.py --days 30    # Backfill last 30 days
   python scripts/backfill.py --days 1     # Test with 1 day
   python scripts/backfill.py --days 7     # Backfill last week
+  python scripts/backfill.py --days 30 --save-to-db  # Save to PostgreSQL
         """,
     )
 
     parser.add_argument(
         "--days", type=int, default=30, help="Number of days to backfill (default: 30)"
+    )
+
+    parser.add_argument(
+        "--save-to-db",
+        action="store_true",
+        help="Save articles to PostgreSQL database (default: False)",
     )
 
     parser.add_argument(
@@ -434,7 +484,7 @@ def main():
 
     # Run backfill
     try:
-        service = BackfillService(days=args.days)
+        service = BackfillService(days=args.days, save_to_db=args.save_to_db)
         stats = service.run()
 
         # Exit with appropriate code

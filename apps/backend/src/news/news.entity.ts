@@ -28,6 +28,12 @@ export class News {
   @Column({ type: 'float', nullable: true })
   sentimentScore: number | null;
 
+  @Column('text', { array: true, nullable: true, default: [] })
+  tags: string[];
+
+  @Column({ nullable: true })
+  category: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

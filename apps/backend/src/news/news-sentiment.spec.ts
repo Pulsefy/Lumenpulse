@@ -8,6 +8,7 @@ import { News } from './news.entity';
 import { NewsService } from './news.service';
 import { NewsSentimentService } from './news-sentiment.services';
 import { NewsProviderService } from './news-provider.service';
+import { CacheService } from '../cache/cache.service';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -244,6 +245,10 @@ describe('NewsService - sentiment methods', () => {
         {
           provide: NewsProviderService,
           useValue: mockNewsProviderService,
+        },
+        {
+          provide: CacheService,
+          useValue: { invalidateNewsCache: jest.fn() },
         },
       ],
     }).compile();

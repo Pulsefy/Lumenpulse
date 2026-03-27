@@ -13,7 +13,8 @@ export class AnalyticsController {
   @Get('chart-data')
   @ApiOperation({
     summary: 'Get bucketed sentiment/chart data',
-    description: 'Returns sentiment data bucketed by hour or day for time-series charts (e.g., Recharts).',
+    description:
+      'Returns sentiment data bucketed by hour or day for time-series charts (e.g., Recharts).',
   })
   @ApiResponse({
     status: 200,
@@ -21,7 +22,9 @@ export class AnalyticsController {
     type: ChartDataPointDto,
     isArray: true,
   })
-  async getChartData(@Query() query: ChartDataQueryDto): Promise<ChartDataPointDto[]> {
+  async getChartData(
+    @Query() query: ChartDataQueryDto,
+  ): Promise<ChartDataPointDto[]> {
     return this.analyticsService.getChartData(query);
   }
 }

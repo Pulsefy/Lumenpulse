@@ -4,16 +4,170 @@ Database models for analytics data persistence
 
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Text, Index
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Text, Index, BigInteger
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
 Base = declarative_base()
 
 
+class Article(Base):
+    """
+    Stores news articles with full content and metadata
+    """
+
+    __tablename__ = "articles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    article_id = Column(String(255), unique=True, nullable=False, index=True)
+    title = Column(Text, nullable=False)
+    content = Column(Text, nullable=True)
+    summary = Column(Text, nullable=True)
+    source = Column(String(100), nullable=True, index=True)
+    url = Column(Text, nullable=True)
+    
+    # Asset information
+    asset_codes = Column(JSON, nullable=True)  # Array of asset codes mentioned in article
+    primary_asset = Column(String(20), nullable=True, index=True)  # Primary asset being discussed
+    categories = Column(JSON, nullable=True)  # Article categories
+    
+    # Sentiment scores
+    sentiment_score = Column(Float, nullable=True)  # compound score -1 to 1
+    positive_score = Column(Float, nullable=True)
+    negative_score = Column(Float, nullable=True)
+    neutral_score = Column(Float, nullable=True)
+    sentiment_label = Column(String(20), nullable=True, index=True)  # positive/negative/neutral
+    
+    # Keywords and metadata
+    keywords = Column(JSON, nullable=True)  # Array of keywords
+    language = Column(String(10), nullable=True)
+    
+    # Timestamps
+    published_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    fetched_at = Column(DateTime(timezone=True), nullable=True)
+    analyzed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    # Indexes for efficient querying
+    __table_args__ = (
+        Index("idx_articles_published_at", "published_at"),
+        Index("idx_articles_sentiment_label", "sentiment_label"),
+        Index("idx_articles_source", "source"),
+        Index("idx_articles_primary_asset", "primary_asset"),
+        Index("idx_articles_asset_sentiment", "primary_asset", "sentiment_label"),
+        Index("idx_articles_created_at", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<Article(id={self.article_id}, title={self.title[:50]}, asset={self.primary_asset}, sentiment={self.sentiment_label})>"
+
+
+class SocialPost(Base):
+    """
+    Stores social media posts (Twitter, Reddit, etc.)
+    """
+
+    __tablename__ = "social_posts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    post_id = Column(String(255), unique=True, nullable=False, index=True)
+    platform = Column(String(50), nullable=False, index=True)  # twitter, reddit, etc.
+    content = Column(Text, nullable=False)
+    author = Column(String(255), nullable=True)
+    url = Column(Text, nullable=True)
+    
+    # Engagement metrics
+    likes = Column(Integer, default=0)
+    comments = Column(Integer, default=0)
+    shares = Column(Integer, default=0)
+    
+    # Asset information
+    asset_codes = Column(JSON, nullable=True)  # Array of asset codes mentioned
+    primary_asset = Column(String(20), nullable=True, index=True)
+    hashtags = Column(JSON, nullable=True)  # Array of hashtags
+    subreddit = Column(String(100), nullable=True)  # For Reddit posts
+    
+    # Sentiment scores
+    sentiment_score = Column(Float, nullable=True)  # compound score -1 to 1
+    positive_score = Column(Float, nullable=True)
+    negative_score = Column(Float, nullable=True)
+    neutral_score = Column(Float, nullable=True)
+    sentiment_label = Column(String(20), nullable=True, index=True)
+    
+    # Timestamps
+    posted_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    fetched_at = Column(DateTime(timezone=True), nullable=True)
+    analyzed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    # Indexes for efficient querying
+    __table_args__ = (
+        Index("idx_social_posts_platform", "platform"),
+        Index("idx_social_posts_posted_at", "posted_at"),
+        Index("idx_social_posts_sentiment_label", "sentiment_label"),
+        Index("idx_social_posts_primary_asset", "primary_asset"),
+        Index("idx_social_posts_platform_asset", "platform", "primary_asset"),
+        Index("idx_social_posts_created_at", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<SocialPost(id={self.post_id}, platform={self.platform}, asset={self.primary_asset}, sentiment={self.sentiment_label})>"
+
+
+class AnalyticsRecord(Base):
+    """
+    Stores computed analytics and aggregated metrics
+    """
+
+    __tablename__ = "analytics_records"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    record_type = Column(String(50), nullable=False, index=True)  # sentiment_summary, trend, etc.
+    asset = Column(String(50), nullable=True, index=True)  # Asset symbol (e.g., 'XLM', 'BTC')
+    metric_name = Column(String(100), nullable=False)  # e.g., 'sentiment_score', 'volume'
+    window = Column(String(20), nullable=True)  # e.g., '1h', '24h', '7d'
+    
+    # Metric values
+    value = Column(Float, nullable=False)
+    previous_value = Column(Float, nullable=True)
+    change_percentage = Column(Float, nullable=True)
+    trend_direction = Column(String(20), nullable=True)  # up/down/stable
+    
+    # Additional data
+    extra_data = Column(JSON, nullable=True)  # Additional metadata
+    
+    # Timestamps
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Indexes for efficient querying
+    __table_args__ = (
+        Index("idx_analytics_records_type", "record_type"),
+        Index("idx_analytics_records_asset", "asset"),
+        Index("idx_analytics_records_timestamp", "timestamp"),
+        Index("idx_analytics_records_type_asset", "record_type", "asset"),
+        Index("idx_analytics_records_asset_metric", "asset", "metric_name"),
+    )
+
+    def __repr__(self):
+        return f"<AnalyticsRecord(type={self.record_type}, asset={self.asset}, metric={self.metric_name}, value={self.value})>"
+
+
 class NewsInsight(Base):
     """
-    Stores sentiment analysis results for news articles
+    Stores sentiment analysis results for news articles (legacy table, kept for backward compatibility)
     """
 
     __tablename__ = "news_insights"
@@ -63,7 +217,7 @@ class NewsInsight(Base):
 
 class AssetTrend(Base):
     """
-    Stores calculated trends for assets and metrics
+    Stores calculated trends for assets and metrics (legacy table, kept for backward compatibility)
     """
 
     __tablename__ = "asset_trends"

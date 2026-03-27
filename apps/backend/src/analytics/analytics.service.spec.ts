@@ -50,7 +50,7 @@ describe('AnalyticsService', () => {
       const result = await service.getChartData(query);
 
       expect(dataSource.query).toHaveBeenCalledWith(
-        expect.stringContaining('date_trunc(\'hour\', analyzed_at)'),
+        expect.stringContaining("date_trunc('hour', analyzed_at)"),
         expect.arrayContaining([expect.any(Date), 'XLM']),
       );
       expect(result[0].sentiment).toBe(0.5);
@@ -66,7 +66,11 @@ describe('AnalyticsService', () => {
       };
 
       const mockData = [
-        { bucket: new Date('2024-03-25T00:00:00Z'), sentiment: 0.6, count: 100 },
+        {
+          bucket: new Date('2024-03-25T00:00:00Z'),
+          sentiment: 0.6,
+          count: 100,
+        },
       ];
       dataSource.query.mockResolvedValue(mockData);
 

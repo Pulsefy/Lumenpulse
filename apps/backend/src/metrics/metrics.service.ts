@@ -128,7 +128,9 @@ export class MetricsService implements OnModuleInit {
   }
 
   onModuleInit(): void {
-    this.logger.log('MetricsService ready — unified Prometheus registry active');
+    this.logger.log(
+      'MetricsService ready — unified Prometheus registry active',
+    );
   }
 
   // Scrape helpers (MetricsController) //
@@ -153,7 +155,7 @@ export class MetricsService implements OnModuleInit {
   }
 
   // HTTP instrumentation (MetricsInterceptor)//
- recordHttpRequest(
+  recordHttpRequest(
     method: string,
     route: string,
     statusCode: number,
@@ -167,7 +169,7 @@ export class MetricsService implements OnModuleInit {
     }
   }
 
-  // Job-queue instrumentation 
+  // Job-queue instrumentation
 
   setJobQueueSize(queueName: string, size: number): void {
     this.jobQueueSize.labels(queueName).set(size);
@@ -262,7 +264,7 @@ export class MetricsService implements OnModuleInit {
     this.fetchErrorsCounter.inc({ source, error_code: errorCode });
   }
 
-  //Dynamic metric helpers (legacy API) 
+  //Dynamic metric helpers (legacy API)
 
   getOrCreateGauge(
     name: string,
