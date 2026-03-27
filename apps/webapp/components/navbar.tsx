@@ -18,7 +18,7 @@ export function Navbar() {
             <Link href="/" className="flex items-center">
               <Image
                 src="/assets/starkpulse-03.svg"
-                alt="StarkPulse Logo"
+                alt="LumenPulse Logo"
                 width={36}
                 height={36}
                 className="h-28 w-auto ml-2 my-auto"

@@ -21,6 +21,7 @@ import { SnapshotsModule } from './snapshot/snapshot.module';
 import { ModelRetrainingModule } from './model-retraining/model-retraining.module';
 import { DataSource, DataSourceOptions } from 'typeorm';
 import stellarConfig from './stellar/config/stellar.config';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 const appLogger = new Logger('TypeORM');
 
@@ -71,6 +72,7 @@ const appLogger = new Logger('TypeORM');
     PortfolioModule,
     SnapshotsModule,
     ModelRetrainingModule,
+    AnalyticsModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

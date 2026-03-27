@@ -7,6 +7,7 @@ pub enum DataKey {
     Admin,
     Contributor(Address),
     GitHubIndex(String),
+    RegistrationNonce(Address),
 
     // ── Multisig keys ─────────────────────────────────────────
     MultisigConfig,

@@ -6,14 +6,16 @@ mod multisig;
 mod storage;
 
 use errors::ContributorError;
-use events::{AdminChangedEvent, MultisigConfiguredEvent, UpgradedEvent};
+use events::{AdminChangedEvent, GaslessRegistrationEvent, MultisigConfiguredEvent, UpgradedEvent};
 use multisig::{
     cancel, consume_approval, expire, get_config, get_proposal, propose, sign, validate_config,
     MultisigConfig, ProposalAction, ProposalStatus, Signer,
 };
 use notification_interface::{Notification, NotificationReceiverTrait};
 use soroban_sdk::xdr::FromXdr;
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
+};
 use storage::{ContributorData, DataKey};
 
 #[contract]
@@ -22,6 +24,54 @@ pub struct ContributorRegistryContract;
 #[contractimpl]
 impl ContributorRegistryContract {
     // ── Helpers ──────────────────────────────────────────────
+
+    fn ensure_initialized(env: &Env) -> Result<(), ContributorError> {
+        if !env.storage().instance().has(&DataKey::MultisigConfig) {
+            return Err(ContributorError::NotInitialized);
+        }
+        Ok(())
+    }
+
+    fn registration_nonce_of(env: &Env, address: &Address) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RegistrationNonce(address.clone()))
+            .unwrap_or(0)
+    }
+
+    fn write_contributor(
+        env: &Env,
+        address: &Address,
+        github_handle: &String,
+    ) -> Result<(), ContributorError> {
+        if github_handle.is_empty() {
+            return Err(ContributorError::InvalidGitHubHandle);
+        }
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Contributor(address.clone()))
+        {
+            return Err(ContributorError::ContributorAlreadyExists);
+        }
+        Self::ensure_github_handle_available(env, github_handle, address)?;
+
+        let timestamp = env.ledger().timestamp();
+        let contributor = ContributorData {
+            address: address.clone(),
+            github_handle: github_handle.clone(),
+            reputation_score: 0,
+            registered_timestamp: timestamp,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::Contributor(address.clone()), &contributor);
+        env.storage()
+            .persistent()
+            .set(&DataKey::GitHubIndex(github_handle.clone()), address);
+
+        Ok(())
+    }
 
     fn ensure_github_handle_available(
         env: &Env,
@@ -145,34 +195,78 @@ impl ContributorRegistryContract {
         address: Address,
         github_handle: String,
     ) -> Result<(), ContributorError> {
-        if !env.storage().instance().has(&DataKey::MultisigConfig) {
-            return Err(ContributorError::NotInitialized);
-        }
+        Self::ensure_initialized(&env)?;
         address.require_auth();
-        if github_handle.is_empty() {
-            return Err(ContributorError::InvalidGitHubHandle);
+        Self::write_contributor(&env, &address, &github_handle)
+    }
+
+    /// Gasless / meta-transaction registration.
+    ///
+    /// The caller (relayer) submits the transaction and pays fees.  The user
+    /// never touches a wallet or holds XLM.  Instead the user signs a
+    /// `SorobanAuthorizationEntry` off-chain that commits to:
+    ///
+    ///   `("register_contributor_with_sig", github_handle, address, nonce)`
+    ///
+    /// The signed entry is attached to the transaction by the relayer.  Soroban's
+    /// host verifies the user's Ed25519 signature and consumes the host-managed
+    /// nonce automatically.  The contract also advances its own per-address
+    /// `RegistrationNonce` counter as an independent replay-guard so that even if
+    /// an auth-entry nonce were somehow reused, the contract-layer nonce change
+    /// would make re-registration fail with `ContributorAlreadyExists` (and for
+    /// future mutable operations, with `InvalidNonce`).
+    ///
+    /// The `signature` parameter is a caller-visible artifact — arbitrary bytes
+    /// that the user may include in their off-chain commitment.  It is NOT part
+    /// of the `require_auth_for_args` scope (to avoid the circular dependency
+    /// where the user would have to sign their own signature).
+    pub fn register_contributor_with_sig(
+        env: Env,
+        github_handle: String,
+        address: Address,
+        signature: Bytes,
+    ) -> Result<(), ContributorError> {
+        Self::ensure_initialized(&env)?;
+        if signature.is_empty() {
+            return Err(ContributorError::InvalidSignature);
         }
-        if env
-            .storage()
-            .persistent()
-            .has(&DataKey::Contributor(address.clone()))
-        {
-            return Err(ContributorError::ContributorAlreadyExists);
-        }
-        Self::ensure_github_handle_available(&env, &github_handle, &address)?;
-        let timestamp = env.ledger().timestamp();
-        let contributor = ContributorData {
-            address: address.clone(),
-            github_handle: github_handle.clone(),
-            reputation_score: 0,
-            registered_timestamp: timestamp,
-        };
+
+        // Read the current contract-layer nonce before mutating state.
+        let nonce = Self::registration_nonce_of(&env, &address);
+
+        // Require that `address` has authorised this specific invocation.
+        // The authorisation scope binds the function name, the handle being
+        // registered, the caller address, and the current nonce — preventing
+        // cross-user, cross-handle, and replay attacks.
+        // NOTE: `signature` is intentionally excluded from this scope; it is
+        // the SorobanAuthorizationEntry itself that carries the cryptographic
+        // proof, not a raw bytes argument.
+        address.require_auth_for_args(
+            (
+                Symbol::new(&env, "register_contributor_with_sig"),
+                github_handle.clone(),
+                address.clone(),
+                nonce,
+            )
+                .into_val(&env),
+        );
+
+        Self::write_contributor(&env, &address, &github_handle)?;
+
+        // Advance the contract-layer nonce so every future signed intent must
+        // reference a strictly higher value.
+        let new_nonce = nonce + 1;
         env.storage()
             .persistent()
-            .set(&DataKey::Contributor(address.clone()), &contributor);
-        env.storage()
-            .persistent()
-            .set(&DataKey::GitHubIndex(github_handle), &address);
+            .set(&DataKey::RegistrationNonce(address.clone()), &new_nonce);
+
+        GaslessRegistrationEvent {
+            contributor: address,
+            github_handle,
+            consumed_nonce: nonce,
+        }
+        .publish(&env);
+
         Ok(())
     }
 
@@ -319,6 +413,10 @@ impl ContributorRegistryContract {
         get_config(&env)
     }
 
+    pub fn get_registration_nonce(env: Env, address: Address) -> u64 {
+        Self::registration_nonce_of(&env, &address)
+    }
+
     pub fn get_proposal(
         env: Env,
         proposal_id: u64,
@@ -365,6 +463,7 @@ mod test {
     use soroban_sdk::{
         testutils::{Address as TestAddress, Ledger}, // Ledger trait for set_timestamp
         Address,
+        Bytes,
         Env,
         Vec,
     };
@@ -544,6 +643,85 @@ mod test {
 
         let proposal = client.get_proposal(&id);
         assert_eq!(proposal.status, ProposalStatus::Pending);
+    }
+
+    // ── Gasless registration ─────────────────────────────────
+
+    #[test]
+    fn test_register_contributor_with_sig_increments_nonce() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "gasless_dev");
+        let signature = Bytes::from_slice(&s.env, &[1u8; 64]);
+
+        assert_eq!(client.get_registration_nonce(&contributor), 0);
+        client.register_contributor_with_sig(&handle, &contributor, &signature);
+        assert_eq!(client.get_registration_nonce(&contributor), 1);
+
+        let data = client.get_contributor(&contributor);
+        assert_eq!(data.github_handle, handle);
+    }
+
+    #[test]
+    fn test_register_contributor_with_sig_rejects_empty_signature() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "gasless_dev");
+        let empty_signature = Bytes::new(&s.env);
+
+        let result =
+            client.try_register_contributor_with_sig(&handle, &contributor, &empty_signature);
+        assert_eq!(result, Err(Ok(ContributorError::InvalidSignature)));
+        // Nonce must NOT advance on failure.
+        assert_eq!(client.get_registration_nonce(&contributor), 0);
+    }
+
+    /// A relayer cannot replay a successful gasless registration with the same
+    /// signed intent.  After the first call succeeds the address is already
+    /// stored (`ContributorAlreadyExists`) and the nonce has advanced, so the
+    /// old auth-entry's nonce no longer matches — two independent guards.
+    #[test]
+    fn test_gasless_registration_replay_is_rejected() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "replay_dev");
+        let signature = Bytes::from_slice(&s.env, &[0xABu8; 64]);
+
+        // First call succeeds; nonce advances to 1.
+        client.register_contributor_with_sig(&handle, &contributor, &signature);
+        assert_eq!(client.get_registration_nonce(&contributor), 1);
+
+        // Second call with the same arguments must be rejected because the
+        // contributor already exists (and the nonce has changed).
+        let result = client.try_register_contributor_with_sig(&handle, &contributor, &signature);
+        assert_eq!(result, Err(Ok(ContributorError::ContributorAlreadyExists)));
+
+        // Nonce must NOT advance on the failed replay attempt.
+        assert_eq!(client.get_registration_nonce(&contributor), 1);
+    }
+
+    /// The `get_registration_nonce` query returns 0 for an unknown address and
+    /// the correct incremented value after a successful gasless registration.
+    #[test]
+    fn test_get_registration_nonce_query() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let unknown = Address::generate(&s.env);
+        assert_eq!(client.get_registration_nonce(&unknown), 0);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "nonce_check_dev");
+        let signature = Bytes::from_slice(&s.env, &[0x01u8; 64]);
+
+        client.register_contributor_with_sig(&handle, &contributor, &signature);
+        assert_eq!(client.get_registration_nonce(&contributor), 1);
     }
 
     // ── Execute ───────────────────────────────────────────────

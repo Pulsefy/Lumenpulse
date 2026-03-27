@@ -1,4 +1,4 @@
-use soroban_sdk::{contractevent, Address, BytesN};
+use soroban_sdk::{contractevent, Address, BytesN, String};
 
 use crate::multisig::{ProposalAction, ProposalStatus};
 
@@ -57,4 +57,17 @@ pub struct MultisigConfiguredEvent {
     pub configured_by: Address,
     pub threshold: u32,
     pub signer_count: u32,
+}
+
+/// Emitted when a contributor is registered via a gasless (relayer-submitted)
+/// meta-transaction.  Relayers and indexers can use this to track gasless
+/// registrations separately from direct ones.
+#[contractevent]
+pub struct GaslessRegistrationEvent {
+    #[topic]
+    pub contributor: Address,
+    pub github_handle: String,
+    /// The nonce that was consumed by this registration.  The next valid nonce
+    /// for this address is `consumed_nonce + 1`.
+    pub consumed_nonce: u64,
 }

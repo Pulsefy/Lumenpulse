@@ -19,4 +19,6 @@ pub enum ContributorError {
     ProposalExpired = 13,
     AlreadySigned = 14,
     BelowThreshold = 15,
+    InvalidNonce = 16,
+    InvalidSignature = 17,
 }

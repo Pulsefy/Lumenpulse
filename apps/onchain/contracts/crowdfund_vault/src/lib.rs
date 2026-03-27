@@ -13,7 +13,7 @@ use notification_interface::{Notification, NotificationReceiverClient};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
-use storage::{DataKey, ProjectData};
+use storage::{DataKey, ProjectData, ProtocolStats};
 
 #[contract]
 pub struct CrowdfundVaultContract;
@@ -55,6 +55,15 @@ impl CrowdfundVaultContract {
 
         // Initialize project ID counter
         env.storage().instance().set(&DataKey::NextProjectId, &0u64);
+
+        // Initialize protocol stats
+        let initial_stats = ProtocolStats {
+            tvl: 0i128,
+            cumulative_volume: 0i128,
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::ProtocolStats, &initial_stats);
 
         // Emit initialization event
         events::InitializedEvent { admin }.publish(&env);
@@ -361,6 +370,21 @@ impl CrowdfundVaultContract {
         env.storage()
             .persistent()
             .set(&DataKey::Project(project_id), &project);
+
+        // Update global protocol stats
+        let mut stats: ProtocolStats = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProtocolStats)
+            .unwrap_or(ProtocolStats {
+                tvl: 0,
+                cumulative_volume: 0,
+            });
+        stats.tvl += amount;
+        stats.cumulative_volume += amount;
+        env.storage()
+            .instance()
+            .set(&DataKey::ProtocolStats, &stats);
 
         // Emit deposit event
         events::DepositEvent {
@@ -759,6 +783,20 @@ impl CrowdfundVaultContract {
         env.storage()
             .persistent()
             .set(&DataKey::Project(project_id), &project);
+
+        // Update global protocol stats - withdraw reduces TVL only
+        let mut stats: ProtocolStats = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProtocolStats)
+            .unwrap_or(ProtocolStats {
+                tvl: 0,
+                cumulative_volume: 0,
+            });
+        stats.tvl -= amount;
+        env.storage()
+            .instance()
+            .set(&DataKey::ProtocolStats, &stats);
 
         // Emit withdraw event
         events::WithdrawEvent {
