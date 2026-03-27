@@ -67,7 +67,7 @@ impl CrowdfundVaultContract {
             .set(&DataKey::ProtocolStats, &initial_stats);
 
         // Emit initialization event
-        events::InitializedEvent { admin }.publish(&env);
+        events::InitializedEvent { admin }; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(())
     }
@@ -147,7 +147,7 @@ impl CrowdfundVaultContract {
             token_address,
             project_id,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(project_id)
     }
@@ -194,7 +194,7 @@ impl CrowdfundVaultContract {
             &Symbol::new(&env, "CANCELED"),
         );
 
-        events::ProjectCanceledEvent { project_id, caller }.publish(&env);
+        events::ProjectCanceledEvent { project_id, caller }; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(())
     }
@@ -260,7 +260,7 @@ impl CrowdfundVaultContract {
                     contributor,
                     amount,
                 }
-                .publish(&env);
+                ; env.events().publish(("event", .publish(&env);self), ());
             }
         }
 
@@ -398,7 +398,7 @@ impl CrowdfundVaultContract {
                 project_id,
                 amount,
             }
-            .publish(&env);
+            ; env.events().publish(("event", .publish(&env);self), ());
 
             // Notify subscribers
             Self::notify_subscribers(
@@ -507,7 +507,7 @@ impl CrowdfundVaultContract {
             .set(&DataKey::MilestoneApproved(project_id, milestone_id), &true);
 
         // Emit milestone approval event
-        events::MilestoneApprovedEvent { admin, project_id }.publish(&env);
+        events::MilestoneApprovedEvent { admin, project_id }; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(())
     }
@@ -562,7 +562,7 @@ impl CrowdfundVaultContract {
             milestone_id,
             end_time,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(())
     }
@@ -645,7 +645,7 @@ impl CrowdfundVaultContract {
             weight,
             support,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
 
         // Auto-approve if threshold met (> 50% of total deposited)
         let project: ProjectData = env
@@ -668,7 +668,7 @@ impl CrowdfundVaultContract {
                 project_id,
                 milestone_id,
             }
-            .publish(&env);
+            ; env.events().publish(("event", .publish(&env);self), ());
         }
 
         Ok(())
@@ -776,7 +776,7 @@ impl CrowdfundVaultContract {
                     project_id,
                     amount: fee_amount,
                 }
-                .publish(&env);
+                ; env.events().publish(("event", .publish(&env);self), ());
             }
 
             // Transfer remaining tokens from contract to owner
@@ -819,7 +819,7 @@ impl CrowdfundVaultContract {
                 project_id,
                 amount: withdraw_amount,
             }
-            .publish(&env);
+            ; env.events().publish(("event", .publish(&env);self), ());
 
             Ok(())
         })();
@@ -853,7 +853,7 @@ impl CrowdfundVaultContract {
             .set(&DataKey::Reputation(contributor.clone()), &0i128);
 
         // Emit registration event
-        events::ContributorRegisteredEvent { contributor }.publish(&env);
+        events::ContributorRegisteredEvent { contributor }; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(())
     }
@@ -896,7 +896,7 @@ impl CrowdfundVaultContract {
             old_reputation,
             new_reputation,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(())
     }
@@ -1109,7 +1109,7 @@ impl CrowdfundVaultContract {
                 project_id,
                 amount: fee_amount,
             }
-            .publish(&env);
+            ; env.events().publish(("event", .publish(&env);self), ());
         }
 
         // Update matching pool balance
@@ -1217,7 +1217,7 @@ impl CrowdfundVaultContract {
             paused: true,
             timestamp: env.ledger().timestamp(),
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(true)
     }
@@ -1245,7 +1245,7 @@ impl CrowdfundVaultContract {
             paused: false,
             timestamp: env.ledger().timestamp(),
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(true)
     }
@@ -1274,7 +1274,7 @@ impl CrowdfundVaultContract {
             admin: caller,
             new_wasm_hash,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
         Ok(())
     }
 
@@ -1294,7 +1294,7 @@ impl CrowdfundVaultContract {
             old_admin: current_admin,
             new_admin,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
         Ok(())
     }
 
@@ -1319,7 +1319,7 @@ impl CrowdfundVaultContract {
             fee_bps,
             treasury,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(())
     }

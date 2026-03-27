@@ -11,7 +11,7 @@ members = [
 exclude = ["contracts/tests"]
 
 [workspace.dependencies]
-soroban-sdk = "20.5.0"
+soroban-sdk = "21.0.0"
 
 
 

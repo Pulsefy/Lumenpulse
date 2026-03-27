@@ -54,7 +54,7 @@ impl UpgradableContract {
             admin: caller,
             new_wasm_hash,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
     }
 
     /// Transfer the admin role to `new_admin`.
@@ -80,7 +80,7 @@ impl UpgradableContract {
             old_admin: current_admin,
             new_admin,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
     }
 
     /// Return the current admin address.

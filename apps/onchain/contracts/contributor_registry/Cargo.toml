@@ -9,10 +9,10 @@ crate-type = ["lib", "cdylib"]
 doctest = false
 
 [dependencies]
-soroban-sdk = "20.5.0"
+soroban-sdk = { workspace = true, features = ["testutils"] }
 notification_interface = { path = "../notification_interface" }
 
 [dev-dependencies]
-soroban-sdk = "20.5.0"
+soroban-sdk = { workspace = true, features = ["testutils"] }
 
 [features]

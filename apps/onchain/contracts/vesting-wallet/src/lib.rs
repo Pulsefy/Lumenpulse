@@ -145,7 +145,7 @@ impl VestingWalletContract {
                 start_time: vesting.start_time,
                 duration: vesting.duration,
             }
-            .publish(&env);
+            ; env.events().publish(("event", .publish(&env);self), ());
 
             Ok(())
         })();
@@ -217,7 +217,7 @@ impl VestingWalletContract {
                 amount_claimed: available_amount,
                 remaining,
             }
-            .publish(&env);
+            ; env.events().publish(("event", .publish(&env);self), ());
 
             Ok(available_amount)
         })();
@@ -310,7 +310,7 @@ impl VestingWalletContract {
             admin: caller,
             new_wasm_hash,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
         Ok(())
     }
 
@@ -336,7 +336,7 @@ impl VestingWalletContract {
             old_admin: current_admin,
             new_admin,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
         Ok(())
     }
 }

@@ -124,7 +124,7 @@ impl ContributorRegistryContract {
             threshold,
             signer_count: signers.len(), // no cast needed, already u32 in Soroban Vec
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(())
     }
@@ -183,7 +183,7 @@ impl ContributorRegistryContract {
             threshold: new_threshold,
             signer_count: new_signers.len(), // no cast needed
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(())
     }
@@ -265,7 +265,7 @@ impl ContributorRegistryContract {
             github_handle,
             consumed_nonce: nonce,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(())
     }
@@ -357,7 +357,7 @@ impl ContributorRegistryContract {
             admin: executor,
             new_wasm_hash,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(())
     }
@@ -376,7 +376,7 @@ impl ContributorRegistryContract {
             old_admin: executor,
             new_admin,
         }
-        .publish(&env);
+        ; env.events().publish(("event", .publish(&env);self), ());
 
         Ok(())
     }
