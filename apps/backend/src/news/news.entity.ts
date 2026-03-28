@@ -9,6 +9,10 @@ import {
 
 @Entity('articles')
 @Index('IDX_articles_url', ['url'], { unique: true })
+@Index(['publishedAt'])
+@Index(['source'])
+@Index(['sentimentScore'])
+@Index(['source', 'publishedAt'])
 export class News {
   @PrimaryGeneratedColumn('uuid')
   id: string;
