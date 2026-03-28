@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { User, UserRole } from './entities/user.entity';
+import { AuditService } from '../audit/audit.service';
 
 describe('UsersController', () => {
   let controller: UsersController;
@@ -43,12 +44,20 @@ describe('UsersController', () => {
         }),
     };
 
+    const mockAuditService = {
+      logAction: jest.fn().mockResolvedValue({}),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UsersController],
       providers: [
         {
           provide: UsersService,
           useValue: mockUsersService,
+        },
+        {
+          provide: AuditService,
+          useValue: mockAuditService,
         },
       ],
     }).compile();
@@ -82,6 +91,8 @@ describe('UsersController', () => {
     it('should update user profile', async () => {
       const mockRequest = {
         user: { id: 'test-id', email: 'test@example.com' },
+        ip: '127.0.0.1',
+        headers: { 'user-agent': 'test-agent' },
       } as any;
       const updateData = {
         displayName: 'Updated Name',
@@ -103,6 +114,8 @@ describe('UsersController', () => {
     it('should not allow password updates', async () => {
       const mockRequest = {
         user: { id: 'test-id', email: 'test@example.com' },
+        ip: '127.0.0.1',
+        headers: { 'user-agent': 'test-agent' },
       } as any;
       const updateData = {
         displayName: 'Updated Name',
@@ -119,6 +132,8 @@ describe('UsersController', () => {
     it('should merge notification preferences without dropping existing values', async () => {
       const mockRequest = {
         user: { id: 'test-id', email: 'test@example.com' },
+        ip: '127.0.0.1',
+        headers: { 'user-agent': 'test-agent' },
       } as any;
       const updateData = {
         preferences: {

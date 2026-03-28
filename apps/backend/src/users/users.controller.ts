@@ -33,6 +33,8 @@ import { UpdateStellarAccountLabelDto } from './dto/update-stellar-account-label
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileResponseDto } from './dto/profile-response.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction } from '../audit/entities/audit-log.entity';
 
 // Unified Authenticated Request Interface
 interface RequestWithUser extends Request {
@@ -48,7 +50,10 @@ interface RequestWithUser extends Request {
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly auditService: AuditService,
+  ) {}
 
   private buildDefaultPreferences(): UserPreferences {
     return {
@@ -161,6 +166,16 @@ export class UsersController {
 
     const updatedUser = await this.usersService.update(userId, allowedUpdates);
 
+    // Log profile update
+    await this.auditService.logAction(
+      userId,
+      AuditAction.PROFILE_UPDATE,
+      req.ip,
+      req.headers['user-agent'],
+      { updatedFields: Object.keys(allowedUpdates) },
+      'success',
+    );
+
     return this.mapProfileResponse(updatedUser);
   }
 
@@ -173,7 +188,19 @@ export class UsersController {
     @Req() req: RequestWithUser,
     @Body() dto: LinkStellarAccountDto,
   ): Promise<StellarAccountResponseDto> {
-    return this.usersService.addStellarAccount(req.user.id, dto);
+    const result = await this.usersService.addStellarAccount(req.user.id, dto);
+
+    // Log account linking
+    await this.auditService.logAction(
+      req.user.id,
+      AuditAction.ACCOUNT_LINK,
+      req.ip,
+      req.headers['user-agent'],
+      { publicKey: dto.publicKey, label: dto.label },
+      'success',
+    );
+
+    return result;
   }
 
   @Get('me/accounts')
@@ -202,7 +229,20 @@ export class UsersController {
     @Req() req: RequestWithUser,
     @Param('id') accountId: string,
   ): Promise<void> {
+    // Get account details before deletion for audit log
+    const account = await this.usersService.getStellarAccount(req.user.id, accountId);
+
     await this.usersService.removeStellarAccount(req.user.id, accountId);
+
+    // Log account unlinking
+    await this.auditService.logAction(
+      req.user.id,
+      AuditAction.ACCOUNT_UNLINK,
+      req.ip,
+      req.headers['user-agent'],
+      { accountId, publicKey: account.publicKey },
+      'success',
+    );
   }
 
   @Patch('me/accounts/:id/label')

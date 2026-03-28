@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from '../users/users.module';
 import { EmailModule } from '../email/email.module';
+import { AuditModule } from '../audit/audit.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
@@ -18,6 +19,7 @@ import { RefreshToken } from './entities/refresh-token.entity';
     TypeOrmModule.forFeature([User, PasswordResetToken, RefreshToken]),
     UsersModule,
     EmailModule,
+    AuditModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

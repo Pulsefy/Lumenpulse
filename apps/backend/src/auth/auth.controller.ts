@@ -20,6 +20,8 @@ import type { Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { UsersService } from '../users/users.service';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction } from '../audit/entities/audit-log.entity';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -42,6 +44,7 @@ export class AuthController {
   constructor(
     private authService: AuthService,
     private usersService: UsersService,
+    private auditService: AuditService,
   ) {}
 
   @Post('login')
@@ -64,11 +67,40 @@ export class AuthController {
     },
   })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(@Body() body: LoginDto) {
+  async login(
+    @Body() body: LoginDto,
+    @Request() req: ExpressRequest,
+  ) {
     const user = await this.authService.validateUser(body.email, body.password);
+    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
     if (!user) {
+      // Log failed login attempt
+      const existingUser = await this.usersService.findByEmail(body.email);
+      if (existingUser) {
+        await this.auditService.logAction(
+          existingUser.id,
+          AuditAction.LOGIN_FAILED,
+          ipAddress,
+          userAgent,
+          { reason: 'Invalid credentials', email: body.email },
+          'failed',
+        );
+      }
       throw new UnauthorizedException();
     }
+
+    // Log successful login
+    await this.auditService.logAction(
+      user.id,
+      AuditAction.LOGIN,
+      ipAddress,
+      userAgent,
+      { method: 'email_password', email: body.email },
+      'success',
+    );
+
     return this.authService.login(user);
   }
 
@@ -137,8 +169,16 @@ export class AuthController {
     status: 400,
     description: 'Invalid, expired, or already-used token',
   })
-  async resetPassword(@Body() body: ResetPasswordDto) {
-    return this.authService.resetPassword(body.token, body.newPassword);
+  async resetPassword(
+    @Body() body: ResetPasswordDto,
+    @Request() req: ExpressRequest,
+  ) {
+    const result = await this.authService.resetPassword(body.token, body.newPassword);
+
+    // Note: We can't easily get userId here since the token is hashed
+    // The audit log for password reset is handled in the service or can be enhanced later
+
+    return result;
   }
 
   @Post('refresh')
@@ -182,8 +222,27 @@ export class AuthController {
       },
     },
   })
-  async logout(@Body() body: LogoutDto) {
-    return this.authService.logout(body.refreshToken);
+  async logout(
+    @Body() body: LogoutDto,
+    @Request() req: { user?: { sub: string } } & ExpressRequest,
+  ) {
+    const result = await this.authService.logout(body.refreshToken);
+
+    // Log logout if user is available from token
+    if (req.user?.sub) {
+      const ipAddress = req.ip || req.connection?.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+      await this.auditService.logAction(
+        req.user.sub,
+        AuditAction.LOGOUT,
+        ipAddress,
+        userAgent,
+        { method: 'single_device' },
+        'success',
+      );
+    }
+
+    return result;
   }
 
   @UseGuards(JwtAuthGuard)
@@ -194,8 +253,23 @@ export class AuthController {
     status: 200,
     description: 'Logout from all devices successful',
   })
-  async logoutAll(@Request() req: { user: { sub: string } }) {
-    return this.authService.logoutAll(req.user.sub);
+  async logoutAll(
+    @Request() req: { user: { sub: string } } & ExpressRequest,
+  ) {
+    const result = await this.authService.logoutAll(req.user.sub);
+
+    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    await this.auditService.logAction(
+      req.user.sub,
+      AuditAction.LOGOUT,
+      ipAddress,
+      userAgent,
+      { method: 'all_devices' },
+      'success',
+    );
+
+    return result;
   }
 
   @UseGuards(JwtAuthGuard)
@@ -288,7 +362,10 @@ export class AuthController {
     status: 401,
     description: 'Invalid signature or expired challenge',
   })
-  async verifyChallenge(@Body() verifyChallengeDto: VerifyChallengeDto) {
+  async verifyChallenge(
+    @Body() verifyChallengeDto: VerifyChallengeDto,
+    @Request() req: ExpressRequest,
+  ) {
     try {
       this.logger.log(
         `Verification requested for public key: ${verifyChallengeDto.publicKey}`,
@@ -300,6 +377,18 @@ export class AuthController {
       );
 
       this.logger.log(`Authentication successful for user: ${result.user.id}`);
+
+      // Log successful Stellar wallet login
+      const ipAddress = req.ip || req.connection?.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+      await this.auditService.logAction(
+        result.user.id as string,
+        AuditAction.LOGIN,
+        ipAddress,
+        userAgent,
+        { method: 'stellar_wallet', publicKey: verifyChallengeDto.publicKey },
+        'success',
+      );
 
       return result;
     } catch (error) {
