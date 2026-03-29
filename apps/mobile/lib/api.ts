@@ -46,6 +46,20 @@ export interface PortfolioSummary {
   hasLinkedAccount: boolean;
 }
 
+export interface PortfolioHistorySnapshot {
+  id: string;
+  createdAt: string;
+  totalValueUsd: string;
+}
+
+export interface PortfolioHistoryResponse {
+  snapshots: PortfolioHistorySnapshot[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export interface SnapshotResponse {
   success: boolean;
   snapshot: {
@@ -151,6 +165,13 @@ export const portfolioApi = {
    */
   async createSnapshot(): Promise<ApiResponse<SnapshotResponse>> {
     return apiClient.post<SnapshotResponse>('/portfolio/snapshot');
+  },
+
+  /**
+   * Get portfolio history for charting
+   */
+  async getHistory(range: string = '1D'): Promise<ApiResponse<PortfolioHistoryResponse>> {
+    return apiClient.get<PortfolioHistoryResponse>(`/portfolio/history?range=${range}&limit=100`);
   },
 };
 

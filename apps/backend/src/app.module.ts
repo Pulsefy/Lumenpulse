@@ -40,7 +40,7 @@ const appLogger = new Logger('TypeORM');
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: false,
+        synchronize: true,
         migrations: [__dirname + '/migrations/*{.ts,.js}'],
         logging: true,
       }),

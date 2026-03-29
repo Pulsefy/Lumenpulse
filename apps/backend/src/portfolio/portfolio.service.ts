@@ -1,12 +1,13 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Between, MoreThanOrEqual, Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PortfolioSnapshot } from './entities/portfolio-snapshot.entity';
 import { PortfolioAsset } from './portfolio-asset.entity';
 import { User } from '../users/entities/user.entity';
 import { StellarBalanceService } from './stellar-balance.service';
 import {
+  PortfolioHistoryRange,
   PortfolioHistoryResponseDto,
   PortfolioSnapshotDto,
   PortfolioSummaryResponseDto,
@@ -109,17 +110,32 @@ export class PortfolioService {
   }
 
   /**
-   * Get portfolio history for a user with pagination
+   * Get portfolio history for a user with pagination and optional range
    */
   async getPortfolioHistory(
     userId: string,
     page: number = 1,
     limit: number = 10,
+    range?: PortfolioHistoryRange,
   ): Promise<PortfolioHistoryResponseDto> {
     const skip = (page - 1) * limit;
+    const now = new Date();
+    const where: any = { userId };
+
+    if (range && range !== PortfolioHistoryRange.ALL) {
+      const startDate = new Date();
+      if (range === PortfolioHistoryRange['1D']) {
+        startDate.setHours(now.getHours() - 24);
+      } else if (range === PortfolioHistoryRange['1W']) {
+        startDate.setDate(now.getDate() - 7);
+      } else if (range === PortfolioHistoryRange['1M']) {
+        startDate.setMonth(now.getMonth() - 1);
+      }
+      where.createdAt = MoreThanOrEqual(startDate);
+    }
 
     const [snapshots, total] = await this.snapshotRepository.findAndCount({
-      where: { userId },
+      where,
       order: { createdAt: 'DESC' },
       skip,
       take: limit,

@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { portfolioApi, AssetBalance, PortfolioSummary } from '../../lib/api';
+import PortfolioChart from '../../components/PortfolioChart';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -277,6 +278,7 @@ export default function PortfolioScreen() {
         ListHeaderComponent={
           <>
             <Text style={[styles.screenTitle, { color: colors.text }]}>Portfolio</Text>
+            {summary && <PortfolioChart />}
             {summary && <TotalBalanceHeader summary={summary} colors={colors} />}
             {summary && summary.assets.length > 0 && (
               <View style={[styles.assetsSectionHeader, { borderBottomColor: colors.border }]}>

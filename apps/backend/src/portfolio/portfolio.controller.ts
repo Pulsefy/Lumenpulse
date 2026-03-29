@@ -75,6 +75,7 @@ export class PortfolioController {
       userId,
       query.page,
       query.limit,
+      query.range,
     );
   }
 

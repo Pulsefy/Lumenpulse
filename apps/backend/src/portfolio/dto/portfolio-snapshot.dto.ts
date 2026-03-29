@@ -1,6 +1,13 @@
-import { IsNumber, IsOptional, Min } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export enum PortfolioHistoryRange {
+  '1D' = '1D',
+  '1W' = '1W',
+  '1M' = '1M',
+  'ALL' = 'ALL',
+}
 
 export class AssetBalanceDto {
   @ApiProperty({ description: 'Asset code', example: 'XLM' })
@@ -94,6 +101,15 @@ export class GetPortfolioHistoryDto {
   @IsNumber()
   @Min(1)
   limit?: number = 10;
+
+  @ApiPropertyOptional({
+    description: 'Time range for history',
+    enum: PortfolioHistoryRange,
+    example: PortfolioHistoryRange['1D'],
+  })
+  @IsOptional()
+  @IsEnum(PortfolioHistoryRange)
+  range?: PortfolioHistoryRange;
 }
 
 export class PortfolioHistoryResponseDto {
