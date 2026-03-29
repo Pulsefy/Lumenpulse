@@ -1,6 +1,7 @@
 requests
 python-dotenv
 fastapi
+httpx>=0.27.0
 uvicorn
 vaderSentiment
 transformers>=4.36.0

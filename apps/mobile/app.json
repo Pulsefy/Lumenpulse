@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.starkpulse.mobile"
+      "bundleIdentifier": "com.starkpulse.mobile",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Use Face ID to quickly and securely unlock Lumenpulse."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -28,7 +31,7 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "plugins": ["expo-router", "expo-barcode-scanner"],
+    "plugins": ["expo-router", "expo-barcode-scanner", "expo-local-authentication"],
     "scheme": "mobile",
     "extra": {
       "backendUrl": "http://localhost:3000",
