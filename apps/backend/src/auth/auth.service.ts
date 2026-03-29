@@ -25,6 +25,9 @@ import {
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { EmailService } from '../email/email.service';
+import { authenticator } from 'otplib';
+import * as QRCode from 'qrcode';
+import { encrypt, decrypt } from '../utils/encryption';
 
 interface ChallengeData {
   nonce: string;
@@ -567,5 +570,195 @@ export class AuthService {
     this.logger.log(`All refresh tokens revoked for user ${userId}`);
 
     return { message: 'Successfully logged out from all devices' };
+  }
+
+  /**
+   * Generate a new TOTP secret and QR code for 2FA setup
+   */
+  async generateTwoFactorSecret(
+    userId: string,
+  ): Promise<{ otpauthUri: string; qrCode: string }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.twoFactorEnabled) {
+      throw new BadRequestException({
+        message: 'Two-factor authentication is already enabled',
+        error: 'TOTP_ALREADY_ENABLED',
+      });
+    }
+
+    // Generate new secret
+    const secret = authenticator.generateSecret();
+
+    // Encrypt and store secret, mark as pending
+    const encryptedSecret = encrypt(secret);
+    user.twoFactorSecret = encryptedSecret;
+    user.twoFactorPending = true;
+    await this.userRepository.save(user);
+
+    // Generate otpauth URI
+    const otpauthUri = authenticator.keyuri(
+      user.email || user.id,
+      'Lumenpulse',
+      secret,
+    );
+
+    // Generate QR code
+    const qrCode = await QRCode.toDataURL(otpauthUri);
+
+    this.logger.log(`Generated 2FA secret for user ${userId}`);
+
+    return { otpauthUri, qrCode };
+  }
+
+  /**
+   * Verify TOTP token and enable 2FA for the user
+   */
+  async enableTwoFactor(
+    userId: string,
+    token: string,
+  ): Promise<{ message: string }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.twoFactorPending || !user.twoFactorSecret) {
+      throw new BadRequestException({
+        message: 'Generate a 2FA secret first',
+        error: 'TOTP_NOT_PENDING',
+      });
+    }
+
+    if (user.twoFactorEnabled) {
+      throw new BadRequestException({
+        message: 'Two-factor authentication is already enabled',
+        error: 'TOTP_ALREADY_ENABLED',
+      });
+    }
+
+    // Decrypt secret and verify token
+    const secret = decrypt(user.twoFactorSecret);
+    const isValid = authenticator.verify({ token, secret });
+
+    if (!isValid) {
+      throw new BadRequestException({
+        message: 'Invalid or expired token',
+        error: 'TOTP_INVALID_TOKEN',
+      });
+    }
+
+    // Enable 2FA
+    user.twoFactorEnabled = true;
+    user.twoFactorPending = false;
+    await this.userRepository.save(user);
+
+    this.logger.log(`Enabled 2FA for user ${userId}`);
+
+    return { message: '2FA enabled successfully' };
+  }
+
+  /**
+   * Verify TOTP during login flow
+   * Note: Rate limiting should be applied to this endpoint in production
+   */
+  async verifyTwoFactor(
+    userId: string,
+    token: string,
+    deviceInfo?: string,
+    ipAddress?: string,
+  ): Promise<{
+    access_token: string;
+    refresh_token: string;
+  }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    // Do not leak whether user exists or has 2FA enabled
+    if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) {
+      throw new BadRequestException({
+        message: 'Invalid request',
+        error: 'TOTP_INVALID_REQUEST',
+      });
+    }
+
+    // Decrypt secret and verify token
+    const secret = decrypt(user.twoFactorSecret);
+    const isValid = authenticator.verify({ token, secret });
+
+    if (!isValid) {
+      throw new BadRequestException({
+        message: 'Invalid or expired token',
+        error: 'TOTP_INVALID_TOKEN',
+      });
+    }
+
+    // Double-check 2FA is still enabled
+    if (!user.twoFactorEnabled) {
+      throw new BadRequestException({
+        message: 'Invalid request',
+        error: 'TOTP_INVALID_REQUEST',
+      });
+    }
+
+    // Issue tokens
+    const payload = { email: user.email, sub: user.id, role: user.role };
+    const accessToken = this.jwtService.sign(payload);
+
+    const refreshToken = this.generateRefreshToken();
+    await this.storeRefreshToken(refreshToken, user.id, deviceInfo, ipAddress);
+
+    this.logger.log(`Successful 2FA verification for user ${userId}`);
+
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    };
+  }
+
+  /**
+   * Disable 2FA for the user after verifying their TOTP
+   */
+  async disableTwoFactor(
+    userId: string,
+    token: string,
+  ): Promise<{ message: string }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.twoFactorEnabled || !user.twoFactorSecret) {
+      throw new BadRequestException({
+        message: 'Two-factor authentication is not enabled',
+        error: 'TOTP_NOT_ENABLED',
+      });
+    }
+
+    // Decrypt secret and verify token
+    const secret = decrypt(user.twoFactorSecret);
+    const isValid = authenticator.verify({ token, secret });
+
+    if (!isValid) {
+      throw new BadRequestException({
+        message: 'Invalid token',
+        error: 'TOTP_INVALID_TOKEN',
+      });
+    }
+
+    // Disable 2FA and clear secret
+    user.twoFactorEnabled = false;
+    user.twoFactorPending = false;
+    user.twoFactorSecret = null;
+    await this.userRepository.save(user);
+
+    this.logger.log(`Disabled 2FA for user ${userId}`);
+
+    return { message: '2FA disabled successfully' };
   }
 }
