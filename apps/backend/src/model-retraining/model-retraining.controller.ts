@@ -11,7 +11,11 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
-import { ModelRetrainingService, RetrainResult, ModelStatusResult } from './model-retraining.service';
+import {
+  ModelRetrainingService,
+  RetrainResult,
+  ModelStatusResult,
+} from './model-retraining.service';
 
 class TriggerRetrainDto {
   force?: boolean;

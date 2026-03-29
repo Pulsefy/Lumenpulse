@@ -1,10 +1,12 @@
 import { NestFactory } from '@nestjs/core';
+import 'dotenv/config';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { GlobalExceptionFilter } from './filters/global-exception.filter';
 import { CustomValidationPipe } from './common/pipes/validation.pipe';
 import { SanitizationPipe } from './common/pipes/sanitization.pipe';
 import helmet from 'helmet';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 
 function getCorsOrigin(): string | string[] {
   const isProduction = process.env.NODE_ENV === 'production';
@@ -22,12 +24,16 @@ function getCorsOrigin(): string | string[] {
     );
   }
 
-  return ['http://localhost:3000', 'http://localhost:3001'];
+  return [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:8081',
+  ];
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
+  const app = await NestFactory.create(AppModule, { rawBody: true });
+  app.useWebSocketAdapter(new IoAdapter(app));
   // Register the global exception filter
   app.useGlobalFilters(new GlobalExceptionFilter());
 

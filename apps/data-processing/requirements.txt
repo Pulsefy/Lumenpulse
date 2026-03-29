@@ -3,6 +3,8 @@ python-dotenv
 fastapi
 uvicorn
 vaderSentiment
+transformers>=4.36.0
+torch>=2.0.0
 langdetect
 apscheduler
 stellar-sdk
@@ -10,12 +12,14 @@ pytest
 flake8
 redis
 numpy
+prophet>=1.1.5
 stellar-sdk>=8.2.0  
 scikit-learn>=1.4.0
 pandas>=2.2.0
 python-json-logger>=2.0.0
 prometheus-client>=0.20.0
 slowapi>=0.1.9
+spacy>=3.7.0,<3.8.0
 
 # Database
 asyncpg>=0.29.0

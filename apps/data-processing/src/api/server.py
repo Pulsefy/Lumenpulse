@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, Request, Response, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
+from datetime import datetime
 
 # Import your existing SentimentAnalyzer
 import sys
@@ -26,6 +27,8 @@ from src.security import (
 )
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
 from src.ml.model_registry import get_registry_status
+from src.analytics.correlation_engine import CorrelationEngine
+from src.db import PostgresService
 
 # Initialize structured logger
 logger = setup_logger(__name__)
@@ -78,6 +81,12 @@ async def metrics_and_logging_middleware(request: Request, call_next):
 # Initialize your existing SentimentAnalyzer
 sentiment_analyzer = SentimentAnalyzer()
 
+try:
+    postgres_service = PostgresService()
+except Exception as exc:
+    postgres_service = None
+    logger.warning("PostgreSQL service unavailable for /news endpoint: %s", exc)
+
 
 # Request/Response models
 class AnalyzeRequest(BaseModel):
@@ -105,6 +114,21 @@ class HealthResponse(BaseModel):
     timestamp: str
     service: str
 
+
+class NewsArticleResponse(BaseModel):
+    article_id: str
+    title: str
+    content: Optional[str] = None
+    summary: Optional[str] = None
+    source: Optional[str] = None
+    url: Optional[str] = None
+    published_at: Optional[str] = None
+    primary_asset: Optional[str] = None
+    asset_codes: List[str] = []
+    categories: List[str] = []
+    keywords: List[str] = []
+    detected_entities: List[str] = []
+
 @app.get("/metrics")
 async def metrics():
     """Expose Prometheus metrics"""
@@ -120,6 +144,7 @@ async def root(request: Request) -> Dict[str, Any]:
         "endpoints": {
             "GET /health": "Health check (no auth required)",
             "GET /metrics": "Prometheus metrics (no auth required)",
+            "GET /news": "Get recent news with optional ?entity=... filter (requires X-API-Key header)",
             "POST /analyze": "Analyze text sentiment (requires X-API-Key header)",
             "GET /analyze": "Get asset-specific sentiment analysis (requires X-API-Key header)",
             "POST /analyze-batch": "Batch analyze multiple texts (requires X-API-Key header)",
@@ -133,13 +158,68 @@ async def root(request: Request) -> Dict[str, Any]:
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def health_check(request: Request) -> HealthResponse:
     """Health check endpoint for monitoring"""
-    from datetime import datetime
-
     return HealthResponse(
         status="healthy",
         timestamp=datetime.now().isoformat(),
         service="sentiment-analysis",
     )
+
+
+@app.get("/news", response_model=List[NewsArticleResponse])
+@limiter.limit("30/minute") if limiter else lambda x: x
+async def get_news(
+    request_context: Request,
+    limit: int = Query(50, ge=1, le=500),
+    hours: int = Query(24, ge=1, le=168),
+    asset: Optional[str] = Query(None, description="Optional primary asset code filter"),
+    entity: Optional[str] = Query(
+        None,
+        description="Optional detected entity filter (example: Soroban)",
+    ),
+) -> List[NewsArticleResponse]:
+    """Return recent articles with optional asset and entity filters."""
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    try:
+        articles = postgres_service.get_recent_articles(
+            limit=limit,
+            hours=hours,
+            asset=asset,
+            entity=entity,
+        )
+
+        logger.info(
+            "Retrieved %d news articles | hours=%d | asset=%s | entity=%s | client_ip=%s",
+            len(articles),
+            hours,
+            asset,
+            entity,
+            request_context.client.host,
+        )
+
+        return [
+            NewsArticleResponse(
+                article_id=article.article_id,
+                title=article.title,
+                content=article.content,
+                summary=article.summary,
+                source=article.source,
+                url=article.url,
+                published_at=(
+                    article.published_at.isoformat() if article.published_at else None
+                ),
+                primary_asset=article.primary_asset,
+                asset_codes=article.asset_codes or [],
+                categories=article.categories or [],
+                keywords=article.keywords or [],
+                detected_entities=article.detected_entities or [],
+            )
+            for article in articles
+        ]
+    except Exception as exc:
+        logger.error("Error retrieving news: %s", str(exc), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch news articles")
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
@@ -331,4 +411,176 @@ async def model_status(request_context: Request) -> ModelStatusResponse:
     return ModelStatusResponse(
         last_run=get_last_run_status(),
         registry=get_registry_status(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Predictive analytics endpoint (forecast market trends)
+# ---------------------------------------------------------------------------
+
+
+class ForecastResponse(BaseModel):
+    predicted_trend_24h: str
+    predicted_trend_48h: str
+    confidence_24h: float
+    confidence_48h: float
+    sentiment_velocity: float
+    forecast_score_24h: float
+    forecast_score_48h: float
+    model_backend: str
+    data_points_used: int
+    generated_at: str
+
+
+@app.get("/analytics/forecast", response_model=ForecastResponse)
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def get_forecast(request_context: Request) -> ForecastResponse:
+    """
+    Predict market trends (Bullish / Bearish / Neutral) for the next 24-48 hours.
+
+    Uses historical sentiment data from *analytics.jsonl* to train a
+    SentimentForecaster (Prophet when installed, sklearn Ridge otherwise)
+    and returns predicted health scores together with a Sentiment Velocity
+    value that measures how fast the market mood is changing.
+
+    Requires X-API-Key header.
+    """
+    import asyncio
+
+    logger.info(f"Forecast requested | client_ip={request_context.client.host}")
+
+    def _run_forecast():
+        from src.analytics.forecaster import SentimentForecaster
+
+        forecaster = SentimentForecaster()
+        return forecaster.run()
+
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(None, _run_forecast)
+    except Exception as exc:
+        logger.error(f"Forecast failed: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Forecast error: {exc}")
+
+    return ForecastResponse(**result.to_dict())
+
+
+# ---------------------------------------------------------------------------
+# Correlation Analysis endpoints (Issue #452)
+# ---------------------------------------------------------------------------
+
+
+class CorrelationDataPoint(BaseModel):
+    timestamp: str
+    score: float
+
+
+class MetricDataPoint(BaseModel):
+    timestamp: str
+    value: float
+
+
+class CorrelationRequest(BaseModel):
+    sentiment_data: List[CorrelationDataPoint]
+    price_data: Optional[List[MetricDataPoint]] = None
+    volume_data: Optional[List[MetricDataPoint]] = None
+    lag_hours: int = 0
+
+
+class CorrelationResponse(BaseModel):
+    price_correlation: Optional[Dict[str, Any]] = None
+    volume_correlation: Optional[Dict[str, Any]] = None
+    summary: Dict[str, Any]
+
+
+class LagAnalysisRequest(BaseModel):
+    sentiment_data: List[CorrelationDataPoint]
+    metric_data: List[MetricDataPoint]
+    metric_type: str = "volume"
+    max_lag_hours: int = 24
+
+
+class LagAnalysisResponse(BaseModel):
+    best_lag_hours: int
+    best_correlation: float
+    lag_analysis: List[Dict[str, Any]]
+    recommendation: str
+
+
+@app.post("/correlation/analyze", response_model=CorrelationResponse)
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def analyze_correlation(
+    body: CorrelationRequest,
+    request_context: Request,
+) -> CorrelationResponse:
+    """
+    Analyze correlation between sentiment and price/volume data.
+
+    Returns correlation scores (-1 to 1) and scatter plot data points.
+    Requires X-API-Key header.
+    """
+    sentiment_list = [{"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data]
+    price_list = (
+        [{"timestamp": dp.timestamp, "value": dp.value} for dp in body.price_data]
+        if body.price_data
+        else []
+    )
+    volume_list = (
+        [{"timestamp": dp.timestamp, "value": dp.value} for dp in body.volume_data]
+        if body.volume_data
+        else []
+    )
+
+    logger.info(
+        f"Correlation analysis requested | sentiment_points={len(sentiment_list)} | "
+        f"price_points={len(price_list)} | volume_points={len(volume_list)} | "
+        f"lag_hours={body.lag_hours} | client_ip={request_context.client.host}"
+    )
+
+    result = CorrelationEngine.full_analysis(
+        sentiment_data=sentiment_list,
+        price_data=price_list,
+        volume_data=volume_list,
+        lag_hours=body.lag_hours,
+    )
+
+    return CorrelationResponse(
+        price_correlation=result.get("price_correlation"),
+        volume_correlation=result.get("volume_correlation"),
+        summary=result.get("summary", {}),
+    )
+
+
+@app.post("/correlation/lag-analysis", response_model=LagAnalysisResponse)
+@limiter.limit("10/minute") if limiter else lambda x: x
+async def analyze_lag_correlation(
+    body: LagAnalysisRequest,
+    request_context: Request,
+) -> LagAnalysisResponse:
+    """
+    Analyze correlation across multiple time lags to find optimal lead time.
+
+    Returns the best lag hours and correlation strength for predicting market changes.
+    Requires X-API-Key header.
+    """
+    sentiment_list = [{"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data]
+    metric_list = [{"timestamp": dp.timestamp, "value": dp.value} for dp in body.metric_data]
+
+    logger.info(
+        f"Lag correlation analysis | metric_type={body.metric_type} | "
+        f"max_lag={body.max_lag_hours}h | client_ip={request_context.client.host}"
+    )
+
+    result = CorrelationEngine.analyze_with_lags(
+        sentiment_data=sentiment_list,
+        metric_data=metric_list,
+        metric_type=body.metric_type,
+        max_lag_hours=body.max_lag_hours,
+    )
+
+    return LagAnalysisResponse(
+        best_lag_hours=result["best_lag_hours"],
+        best_correlation=result["best_correlation"],
+        lag_analysis=result["lag_analysis"],
+        recommendation=result["recommendation"],
     )

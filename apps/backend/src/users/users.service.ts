@@ -207,6 +207,7 @@ export class UsersService {
       id: account.id,
       publicKey: account.publicKey,
       label: account.label,
+      isPrimary: account.isPrimary,
       isActive: account.isActive,
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,

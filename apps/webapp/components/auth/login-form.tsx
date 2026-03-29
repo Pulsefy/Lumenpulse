@@ -225,7 +225,7 @@ function LoginFormComponent() {
       case "reset":
         return "Enter your email to receive reset instructions";
       default:
-        return "Access your StarkPulse dashboard";
+        return "Access your LumenPulse dashboard";
     }
   };
 

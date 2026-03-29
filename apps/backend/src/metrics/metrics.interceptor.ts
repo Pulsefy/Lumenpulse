@@ -11,85 +11,84 @@ import type { Request, Response } from 'express';
 import { MetricsService } from './metrics.service';
 
 /**
- * Interceptor that captures HTTP metrics for all requests
- * Records request count, latency, and error rates
+ * MetricsInterceptor
+ *
+ * Applied globally via APP_INTERCEPTOR in MetricsModule.
+ * Automatically records HTTP request count, latency, and status for every
+ * route handled by NestJS — no per-controller decoration needed.
+ *
+ * Route normalisation prevents label cardinality explosion:
+ *   GET /articles/123          → /articles/:id
+ *   GET /articles/550e8400-…   → /articles/:id
  */
 @Injectable()
 export class MetricsInterceptor implements NestInterceptor {
   private readonly logger = new Logger(MetricsInterceptor.name);
 
-  constructor(private metricsService: MetricsService) {}
+  constructor(private readonly metricsService: MetricsService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
-
     const startTime = Date.now();
     const method = request.method;
-    // Remove query parameters and IDs for better metric grouping
     const route = this.normalizeRoute(request.path);
 
     return next.handle().pipe(
       tap({
         next: () => {
-          this.recordMetrics(method, route, response.statusCode, startTime);
+          this.record(method, route, response.statusCode, startTime);
         },
-        error: (error: unknown) => {
-          // For errors, try to get status code from error or use 500
-          const statusCode =
-            (error as Record<string, unknown>)?.status ||
-            (error as Record<string, unknown>)?.statusCode ||
+        error: (err: unknown) => {
+          const status =
+            (err as Record<string, unknown>)?.status ??
+            (err as Record<string, unknown>)?.statusCode ??
             500;
-          this.recordMetrics(method, route, statusCode as number, startTime);
+          this.record(method, route, status as number, startTime);
         },
       }),
     );
   }
 
   /**
-   * Normalize the route by removing IDs and variable parameters
-   * Converts /users/123/posts/456 to /users/:id/posts/:id
-   * This prevents metric cardinality explosion
+   * Replace dynamic path segments with placeholders.
+   * Prevents an unbounded number of time-series labels in Prometheus.
+   *
+   * Examples:
+   *   /users/42/posts/7        → /users/:id/posts/:id
+   *   /orders/550e8400-e29b-…  → /orders/:id
    */
   private normalizeRoute(path: string): string {
-    // Remove query parameters
-    const cleanPath = path.split('?')[0];
-
-    // Replace UUIDs and numeric IDs with placeholders
-    // UUID pattern: 8-4-4-4-12 hex digits
-    const normalized = cleanPath
-      .replace(
-        /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
-        ':id',
-      )
-      .replace(/\/\d+([/?#]|$)/g, '/:id$1') // Replace numeric IDs
-      .replace(/\/$/, ''); // Remove trailing slash
-
-    return normalized || '/';
+    const clean = path.split('?')[0]; // strip query-string
+    return (
+      clean
+        // UUIDs (8-4-4-4-12)
+        .replace(
+          /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
+          ':id',
+        )
+        // Pure numeric segments
+        .replace(/\/\d+([/?#]|$)/g, '/:id$1')
+        // Trailing slash
+        .replace(/\/$/, '') || '/'
+    );
   }
 
-  /**
-   * Record metrics for the request
-   */
-  private recordMetrics(
+  private record(
     method: string,
     route: string,
     statusCode: number,
     startTime: number,
   ): void {
-    const duration = Date.now() - startTime;
     try {
       this.metricsService.recordHttpRequest(
         method,
         route,
         statusCode,
-        duration,
+        Date.now() - startTime,
       );
-    } catch (error) {
-      this.logger.error(
-        `Failed to record metrics for ${method} ${route}:`,
-        error,
-      );
+    } catch (err) {
+      this.logger.error(`Failed to record metrics for ${method} ${route}`, err);
     }
   }
 }

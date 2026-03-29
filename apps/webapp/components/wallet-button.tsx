@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Wallet, LogOut, X } from 'lucide-react';
-import { useConnect, useAccount, useDisconnect, Connector } from '@starknet-react/core';
+import { useStellarWallet } from '@/app/providers';
 
 interface WalletButtonProps {
   className?: string;
@@ -13,9 +13,7 @@ export function WalletButton({
   className = '',
   size = 'md',
 }: WalletButtonProps) {
-  const { connect, connectors } = useConnect();
-  const { address, status } = useAccount();
-  const { disconnect } = useDisconnect();
+  const { publicKey, status, connect, disconnect, error } = useStellarWallet();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
@@ -30,17 +28,12 @@ export function WalletButton({
     } else {
       document.body.style.overflow = 'unset';
     }
-    
+
     // Cleanup on unmount
     return () => {
       document.body.style.overflow = 'unset';
     };
   }, [isModalOpen]);
-
-  const availableConnectors = useMemo(() => {
-    if (!isClient) return [];
-    return connectors;
-  }, [connectors, isClient]);
 
   const sizeClasses = {
     sm: 'px-3 py-1.5 text-sm',
@@ -48,8 +41,8 @@ export function WalletButton({
     lg: 'px-6 py-3 text-lg',
   };
 
-  const handleConnect = (connector: Connector) => {
-    connect({ connector });
+  const handleConnect = async () => {
+    await connect();
     setIsModalOpen(false);
   };
 
@@ -57,7 +50,7 @@ export function WalletButton({
     disconnect();
   };
 
-  const truncateAddress = (addr: string | undefined) => {
+  const truncateAddress = (addr: string | null) => {
     if (!addr) return '';
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
@@ -111,7 +104,7 @@ export function WalletButton({
                     : 'w-4 h-4'
                 }`}
               />
-              {truncateAddress(address)}
+              {truncateAddress(publicKey)}
             </span>
           </button>
           <button
@@ -146,7 +139,7 @@ export function WalletButton({
 
       {/* Enhanced Modal with perfect centering and strong backdrop blur */}
       {isModalOpen && (
-        <div 
+        <div
           className='fixed inset-0 z-[9999]'
           style={{
             backgroundColor: 'rgba(0, 0, 0, 0.85)',
@@ -162,7 +155,7 @@ export function WalletButton({
           onClick={handleBackdropClick}
         >
           {/* Modal Content */}
-          <div 
+          <div
             className='relative bg-black/95 border-2 border-[#db74cf]/50 rounded-2xl p-8 w-full max-w-md shadow-2xl transform transition-all duration-300 ease-out'
             style={{
               backdropFilter: 'blur(30px)',
@@ -175,7 +168,7 @@ export function WalletButton({
           >
             {/* Stronger gradient background overlay */}
             <div className='absolute inset-0 bg-gradient-to-br from-[#db74cf]/15 via-black/50 to-blue-500/15 rounded-2xl'></div>
-            
+
             {/* Close button */}
             <button
               onClick={() => setIsModalOpen(false)}
@@ -184,7 +177,7 @@ export function WalletButton({
             >
               <X className='w-5 h-5 group-hover:rotate-90 transition-transform duration-200' />
             </button>
-            
+
             {/* Modal Header */}
             <div className='relative z-10 text-center mb-8'>
               <div className='inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-[#db74cf] to-blue-500 rounded-full mb-4 shadow-lg'>
@@ -194,45 +187,50 @@ export function WalletButton({
                 Connect Wallet
               </h2>
               <p className='text-gray-300 text-sm'>
-                Choose your preferred wallet to connect to StarkPulse
+                Choose your preferred wallet to connect to LumenPulse
               </p>
             </div>
-            
+
             {/* Wallet Options */}
             <div className='relative z-10 space-y-3'>
-              {availableConnectors.length > 0 ? (
-                availableConnectors.map((connector) => (
-                  <button
-                    key={connector.id}
-                    onClick={() => handleConnect(connector)}
-                    disabled={!connector.available()}
-                    className='w-full flex items-center justify-between px-6 py-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-[#db74cf]/50 hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group'
-                  >
-                    <div className='flex items-center gap-3'>
-                      <div className='w-8 h-8 bg-gradient-to-r from-[#db74cf]/30 to-blue-500/30 rounded-lg flex items-center justify-center'>
-                        <Wallet className='w-4 h-4 text-[#db74cf]' />
-                      </div>
-                      <span className='font-medium text-lg text-white group-hover:text-[#db74cf] transition-colors'>
-                        {connector.name}
-                      </span>
-                    </div>
-                    {!connector.available() && (
-                      <span className='text-xs text-red-400 bg-red-400/20 px-3 py-1 rounded-full border border-red-400/30'>
-                        Not Installed
-                      </span>
-                    )}
-                  </button>
-                ))
-              ) : (
-                <div className='text-center py-8'>
-                  <div className='text-gray-300 mb-2 text-lg'>No wallets detected</div>
-                  <div className='text-sm text-gray-400'>
-                    Please install a StarkNet wallet extension
+              <button
+                onClick={handleConnect}
+                disabled={status === 'connecting'}
+                className='w-full flex items-center justify-between px-6 py-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-[#db74cf]/50 hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group'
+              >
+                <div className='flex items-center gap-3'>
+                  <div className='w-8 h-8 bg-gradient-to-r from-[#db74cf]/30 to-blue-500/30 rounded-lg flex items-center justify-center'>
+                    <Wallet className='w-4 h-4 text-[#db74cf]' />
                   </div>
+                  <span className='font-medium text-lg text-white group-hover:text-[#db74cf] transition-colors'>
+                    {status === 'connecting' ? 'Connecting...' : 'Freighter'}
+                  </span>
+                </div>
+              </button>
+
+              {error && (
+                <div className='text-center py-3'>
+                  <div className='text-sm text-red-400 mb-2'>
+                    {error}
+                  </div>
+                  {error.includes('not detected') && (
+                    <div className='text-sm text-gray-400'>
+                      Install{' '}
+                      <a
+                        href='https://www.freighter.app/'
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        className='text-[#db74cf] hover:underline'
+                      >
+                        Freighter
+                      </a>
+                      {' '}to connect a Stellar wallet
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-            
+
             {/* Footer */}
             <div className='relative z-10 mt-6 pt-4 border-t border-white/20'>
               <p className='text-xs text-gray-400 text-center'>

@@ -8,13 +8,15 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { portfolioApi, AssetBalance, PortfolioSummary } from '../../lib/api';
-import PortfolioChart from '../../components/PortfolioChart';
+import { transactionApi } from '../../lib/transaction';
+import { Transaction, TransactionType, TransactionStatus } from '../../lib/types/transaction';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -32,7 +34,6 @@ function formatUsd(value: string | number): string {
 function formatAmount(amount: string): string {
   const num = parseFloat(amount);
   if (isNaN(num)) return '0';
-  // Show up to 6 decimal places but trim trailing zeros
   return num.toLocaleString('en-US', { maximumFractionDigits: 6 });
 }
 
@@ -46,6 +47,54 @@ function formatRelativeTime(iso: string | null): string {
   const diffHrs = Math.floor(diffMins / 60);
   if (diffHrs < 24) return `${diffHrs}h ago`;
   return date.toLocaleDateString();
+}
+
+function formatTransactionDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString();
+}
+
+function formatTransactionAmount(amount: string, assetCode: string): string {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return '0';
+  return `${num.toLocaleString()} ${assetCode}`;
+}
+
+function getTransactionIcon(type: TransactionType): string {
+  switch (type) {
+    case TransactionType.PAYMENT:
+      return 'send-outline';
+    case TransactionType.SWAP:
+      return 'swap-horizontal-outline';
+    case TransactionType.TRUSTLINE:
+      return 'shield-checkmark-outline';
+    case TransactionType.CREATE_ACCOUNT:
+      return 'person-add-outline';
+    case TransactionType.ACCOUNT_MERGE:
+      return 'merge-outline';
+    default:
+      return 'document-text-outline';
+  }
+}
+
+function getTransactionColor(type: TransactionType, colors: any): string {
+  switch (type) {
+    case TransactionType.PAYMENT:
+      return colors.accent;
+    case TransactionType.SWAP:
+      return '#f7b731';
+    case TransactionType.TRUSTLINE:
+      return '#4ecdc4';
+    default:
+      return colors.textSecondary;
+  }
 }
 
 // Returns a stable accent color for an asset code
@@ -113,6 +162,65 @@ function AssetRow({
   );
 }
 
+function RecentTransactionItem({
+  transaction,
+  onPress,
+  colors,
+}: {
+  transaction: Transaction;
+  onPress: () => void;
+  colors: any;
+}) {
+  const icon = getTransactionIcon(transaction.type);
+  const iconColor = getTransactionColor(transaction.type, colors);
+  const isReceived = transaction.to.includes(transaction.from) ? false : true;
+  
+  return (
+    <TouchableOpacity 
+      style={[styles.recentTransactionItem, { borderBottomColor: colors.border }]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.recentIconContainer, { backgroundColor: `${iconColor}22` }]}>
+        <Ionicons name={icon as any} size={20} color={iconColor} />
+      </View>
+      
+      <View style={styles.recentTransactionInfo}>
+        <Text style={[styles.recentTransactionType, { color: colors.text }]}>
+          {transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
+        </Text>
+        <Text style={[styles.recentTransactionDate, { color: colors.textSecondary }]}>
+          {formatTransactionDate(transaction.date)}
+        </Text>
+      </View>
+      
+      <View style={styles.recentTransactionRight}>
+        <Text style={[
+          styles.recentTransactionAmount,
+          { color: isReceived ? '#4ecdc4' : colors.text }
+        ]}>
+          {isReceived ? '+' : '-'}{formatTransactionAmount(transaction.amount, transaction.assetCode)}
+        </Text>
+        <View style={[
+          styles.recentStatusBadge,
+          { 
+            backgroundColor: transaction.status === TransactionStatus.SUCCESS 
+              ? '#4ecdc422' 
+              : '#ff6b6b22'
+          }
+        ]}>
+          <Text style={[
+            styles.recentStatusText,
+            { color: transaction.status === TransactionStatus.SUCCESS ? '#4ecdc4' : '#ff6b6b' }
+          ]}>
+            {transaction.status === TransactionStatus.SUCCESS ? '✓' : '✗'}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function PortfolioScreen() {
@@ -121,32 +229,37 @@ export default function PortfolioScreen() {
   const router = useRouter();
 
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSummary = useCallback(async (triggeredByRefresh = false) => {
+  const fetchData = useCallback(async (triggeredByRefresh = false) => {
     if (triggeredByRefresh) {
       setIsRefreshing(true);
-      // Trigger a live Stellar snapshot first so we get fresh balances
-      try {
-        const { portfolioApi: pa } = await import('../../lib/api');
-        await pa.createSnapshot();
-      } catch {
-        // Non-fatal — summary fetch below will still return the latest stored snapshot
-      }
     } else {
       setIsLoading(true);
     }
     setError(null);
 
     try {
+      // Fetch portfolio summary
       const { portfolioApi: pa } = await import('../../lib/api');
-      const response = await pa.getSummary();
-      if (response.success && response.data) {
-        setSummary(response.data);
+      const portfolioResponse = await pa.getSummary();
+      if (portfolioResponse.success && portfolioResponse.data) {
+        setSummary(portfolioResponse.data);
       } else {
-        setError(response.error?.message ?? 'Failed to load portfolio.');
+        setError(portfolioResponse.error?.message ?? 'Failed to load portfolio.');
+      }
+
+      // Fetch recent transactions (last 5)
+      try {
+        const transactionsResponse = await transactionApi.getHistory(5);
+        if (transactionsResponse.transactions) {
+          setRecentTransactions(transactionsResponse.transactions.slice(0, 5));
+        }
+      } catch (txError) {
+        console.log('Failed to fetch transactions:', txError);
       }
     } catch {
       setError('Something went wrong. Please try again.');
@@ -158,9 +271,21 @@ export default function PortfolioScreen() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      void fetchSummary(false);
+      void fetchData(false);
     }
-  }, [isAuthenticated, fetchSummary]);
+  }, [isAuthenticated, fetchData]);
+
+  const handleViewAllTransactions = () => {
+    router.push('/(tabs)/transaction-history');
+  };
+
+  const handleTransactionPress = (transaction: Transaction) => {
+    // Navigate to transaction detail or show modal
+    router.push({
+      pathname: '/(tabs)/transaction-history',
+      params: { transactionId: transaction.id }
+    });
+  };
 
   // ── Auth loading ────────────────────────────────────────────────────────────
   if (authLoading) {
@@ -227,7 +352,7 @@ export default function PortfolioScreen() {
         <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{error}</Text>
         <TouchableOpacity
           style={[styles.ctaButton, { backgroundColor: colors.accent }]}
-          onPress={() => void fetchSummary(false)}
+          onPress={() => void fetchData(false)}
           activeOpacity={0.8}
         >
           <Text style={styles.ctaButtonText}>Retry</Text>
@@ -260,47 +385,69 @@ export default function PortfolioScreen() {
     );
   }
 
-  // ── Populated portfolio ─────────────────────────────────────────────────────
+  // ── Populated portfolio with recent transactions ─────────────────────────────
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <FlatList
-        data={summary?.assets ?? []}
-        keyExtractor={(item, index) => `${item.assetCode}-${index}`}
-        contentContainerStyle={styles.listContent}
+      <ScrollView
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
-            onRefresh={() => void fetchSummary(true)}
+            onRefresh={() => void fetchData(true)}
             tintColor={colors.accent}
             colors={[colors.accent]}
           />
         }
-        ListHeaderComponent={
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={[styles.screenTitle, { color: colors.text }]}>Portfolio</Text>
+        
+        {summary && <TotalBalanceHeader summary={summary} colors={colors} />}
+        
+        {/* Assets Section */}
+        {summary && summary.assets.length > 0 && (
           <>
-            <Text style={[styles.screenTitle, { color: colors.text }]}>Portfolio</Text>
-            {summary && <PortfolioChart />}
-            {summary && <TotalBalanceHeader summary={summary} colors={colors} />}
-            {summary && summary.assets.length > 0 && (
-              <View style={[styles.assetsSectionHeader, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.assetsSectionLabel, { color: colors.textSecondary }]}>Assets</Text>
-                <Text style={[styles.assetsSectionLabel, { color: colors.textSecondary }]}>Value</Text>
-              </View>
-            )}
-          </>
-        }
-        ListEmptyComponent={
-          !isLoading ? (
-            <View style={[styles.center, { paddingVertical: 40 }]}>
-              <Ionicons name="wallet-outline" size={48} color={colors.textSecondary} style={{ marginBottom: 12 }} />
-              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                No assets found in this account.
-              </Text>
+            <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Assets</Text>
             </View>
-          ) : null
-        }
-        renderItem={({ item }) => <AssetRow asset={item} colors={colors} />}
-        ItemSeparatorComponent={() => null}
-      />
+            {summary.assets.map((asset, index) => (
+              <AssetRow key={`${asset.assetCode}-${index}`} asset={asset} colors={colors} />
+            ))}
+          </>
+        )}
+
+        {/* Recent Transactions Section */}
+        {recentTransactions.length > 0 && (
+          <>
+            <View style={[styles.sectionHeader, { borderBottomColor: colors.border, marginTop: 24 }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Transactions</Text>
+              <TouchableOpacity onPress={handleViewAllTransactions}>
+                <Text style={[styles.viewAllText, { color: colors.accent }]}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            {recentTransactions.map((transaction) => (
+              <RecentTransactionItem
+                key={transaction.id}
+                transaction={transaction}
+                onPress={() => handleTransactionPress(transaction)}
+                colors={colors}
+              />
+            ))}
+          </>
+        )}
+
+        {/* No transactions placeholder */}
+        {recentTransactions.length === 0 && !isLoading && summary?.hasLinkedAccount && (
+          <View style={[styles.center, { paddingVertical: 40 }]}>
+            <Ionicons name="receipt-outline" size={48} color={colors.textSecondary} style={{ marginBottom: 12 }} />
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+              No transactions yet
+            </Text>
+            <Text style={[styles.emptySubSubtitle, { color: colors.textSecondary }]}>
+              Your transactions will appear here
+            </Text>
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -315,9 +462,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  listContent: {
-    paddingBottom: 40,
   },
   screenTitle: {
     fontSize: 28,
@@ -362,19 +506,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  /* Asset list section header */
-  assetsSectionHeader: {
+  /* Section Header */
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  assetsSectionLabel: {
-    fontSize: 12,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  viewAllText: {
+    fontSize: 14,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
   },
 
   /* Asset row */
@@ -416,6 +563,53 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  /* Recent Transaction Styles */
+  recentTransactionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  recentIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  recentTransactionInfo: {
+    flex: 1,
+  },
+  recentTransactionType: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  recentTransactionDate: {
+    fontSize: 11,
+  },
+  recentTransactionRight: {
+    alignItems: 'flex-end',
+  },
+  recentTransactionAmount: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  recentStatusBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recentStatusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+
   /* Empty / error states */
   emptyTitle: {
     fontSize: 20,
@@ -427,7 +621,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 28,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+  },
+  emptySubSubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
     paddingHorizontal: 12,
   },
   ctaButton: {

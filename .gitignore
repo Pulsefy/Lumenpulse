@@ -36,3 +36,6 @@ PR_PASSWORD_RESET.md
 .agent/
 .agents/
 issue.md
+
+# python env
+myenv/

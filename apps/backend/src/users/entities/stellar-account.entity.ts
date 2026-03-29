@@ -32,6 +32,9 @@ export class StellarAccount {
   @Column({ type: 'varchar', length: 100, nullable: true })
   label: string | null;
 
+  @Column({ default: false })
+  isPrimary: boolean;
+
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
 
