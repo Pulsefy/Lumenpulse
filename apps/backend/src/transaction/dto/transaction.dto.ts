@@ -51,6 +51,9 @@ export class TransactionDto {
 
   @ApiProperty({ required: false })
   fee?: string;
+
+  @ApiProperty({ description: 'Human-readable description of the transaction' })
+  description: string;
 }
 
 export class TransactionHistoryResponseDto {
@@ -60,6 +63,6 @@ export class TransactionHistoryResponseDto {
   @ApiProperty()
   total: number;
 
-  @ApiProperty()
+  @ApiProperty({ required: false })
   nextPage?: string;
 }

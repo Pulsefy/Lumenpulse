@@ -21,6 +21,17 @@ interface HorizonOperation {
   asset_type?: string;
   asset_code?: string;
   asset_issuer?: string;
+  starting_balance?: string;
+  funder?: string;
+  account?: string;
+  trustor?: string;
+  trustee?: string;
+  limit?: string;
+  offer_id?: string;
+  buying_asset_code?: string;
+  selling_asset_code?: string;
+  buying_asset_type?: string;
+  selling_asset_type?: string;
   [key: string]: unknown;
 }
 
@@ -107,6 +118,7 @@ export class TransactionService {
       const horizonData = data as HorizonResponse;
       const transactions = await this.processTransactions(
         horizonData._embedded.records,
+        publicKey,
       );
       let nextPage: string | undefined;
 
@@ -126,6 +138,7 @@ export class TransactionService {
 
   private async processTransactions(
     records: HorizonTransaction[],
+    publicKey: string,
   ): Promise<TransactionDto[]> {
     const transactions: TransactionDto[] = [];
 
@@ -133,7 +146,11 @@ export class TransactionService {
       const operations = await this.getTransactionOperations(record.id);
 
       for (const operation of operations) {
-        const transaction = this.mapToTransactionDto(operation, record);
+        const transaction = this.mapToTransactionDto(
+          operation,
+          record,
+          publicKey,
+        );
         if (transaction) {
           transactions.push(transaction);
         }
@@ -164,18 +181,25 @@ export class TransactionService {
   private mapToTransactionDto(
     operation: HorizonOperation,
     transaction: HorizonTransaction,
+    publicKey: string,
   ): TransactionDto | null {
     const type = this.mapTransactionType(operation.type);
     if (!type) return null;
 
+    const amount = this.getAmountFromOperation(operation);
+    const assetCode = this.getAssetCode(operation);
+    const from =
+      operation.source_account || operation.from || operation.funder || '';
+    const to = operation.to || operation.into || operation.account || '';
+
     const dto: TransactionDto = {
       id: operation.id,
       type,
-      amount: this.getAmountFromOperation(operation),
-      assetCode: this.getAssetCode(operation),
+      amount,
+      assetCode,
       assetIssuer: this.getAssetIssuer(operation),
-      from: operation.source_account || operation.from || '',
-      to: operation.to || operation.into || '',
+      from,
+      to,
       date: operation.created_at,
       status: transaction.successful
         ? TransactionStatus.SUCCESS
@@ -183,6 +207,15 @@ export class TransactionService {
       transactionHash: transaction.id,
       memo: transaction.memo,
       fee: transaction.fee_charged,
+      description: this.buildDescription(
+        operation,
+        type,
+        amount,
+        assetCode,
+        publicKey,
+        from,
+        to,
+      ),
     };
 
     return dto;
@@ -197,6 +230,8 @@ export class TransactionService {
         return TransactionType.PAYMENT;
       case 'manage_offer':
       case 'create_passive_offer':
+      case 'manage_buy_offer':
+      case 'manage_sell_offer':
         return TransactionType.SWAP;
       case 'change_trust':
         return TransactionType.TRUSTLINE;
@@ -204,13 +239,72 @@ export class TransactionService {
         return TransactionType.CREATE_ACCOUNT;
       case 'account_merge':
         return TransactionType.ACCOUNT_MERGE;
+      case 'inflation':
+        return TransactionType.INFLATION;
       default:
         return null;
     }
   }
 
+  private buildDescription(
+    operation: HorizonOperation,
+    type: TransactionType,
+    amount: string,
+    assetCode: string,
+    publicKey: string,
+    from: string,
+    to: string,
+  ): string {
+    const short = (key: string) =>
+      key ? `${key.slice(0, 4)}...${key.slice(-4)}` : 'unknown';
+
+    switch (type) {
+      case TransactionType.PAYMENT:
+        if (from === publicKey) {
+          return `Sent ${amount} ${assetCode} to ${short(to)}`;
+        }
+        return `Received ${amount} ${assetCode} from ${short(from)}`;
+
+      case TransactionType.SWAP: {
+        const selling =
+          operation.selling_asset_type === 'native'
+            ? 'XLM'
+            : (operation.selling_asset_code as string) || 'unknown';
+        const buying =
+          operation.buying_asset_type === 'native'
+            ? 'XLM'
+            : (operation.buying_asset_code as string) || 'unknown';
+        return `Swapped ${amount} ${selling} for ${buying}`;
+      }
+
+      case TransactionType.TRUSTLINE: {
+        const asset = assetCode !== 'XLM' ? assetCode : 'asset';
+        const limit = operation.limit;
+        if (limit === '0') {
+          return `Removed trustline for ${asset}`;
+        }
+        return `Added trustline for ${asset}`;
+      }
+
+      case TransactionType.CREATE_ACCOUNT:
+        return `Created account ${short(to)} with ${amount} XLM`;
+
+      case TransactionType.ACCOUNT_MERGE:
+        return `Merged account into ${short(to)}`;
+
+      case TransactionType.INFLATION:
+        return `Received inflation payout of ${amount} XLM`;
+
+      default:
+        return `${String(type)} operation`;
+    }
+  }
+
   private getAmountFromOperation(operation: HorizonOperation): string {
-    const amount = operation.amount ?? operation.amount_charged;
+    const amount =
+      operation.amount ??
+      operation.amount_charged ??
+      operation.starting_balance;
     return amount ?? '0';
   }
 

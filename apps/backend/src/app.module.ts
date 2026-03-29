@@ -1,31 +1,25 @@
-import { Module, NestModule, MiddlewareConsumer, Logger } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TestExceptionController } from './test-exception.controller';
+
 import { SentimentModule } from './sentiment/sentiment.module';
-import { NewsModule } from './news/news.module';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
-import { EmailModule } from './email/email.module';
-import { PortfolioModule } from './portfolio/portfolio.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { AppCacheModule } from './cache/cache.module';
+import { StellarModule } from './stellar/stellar.module';
+import { PriceModule } from './price/price.module';
+import { WebhookModule } from './webhook/webhook.module';
+import { NotificationModule } from './notification/notification.module';
+
 import databaseConfig from './database/database.config';
+import stellarConfig from './stellar/config/stellar.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { TestController } from './test/test.controller';
-import { SnapshotsModule } from './snapshot/snapshot.module';
-import { ModelRetrainingModule } from './model-retraining/model-retraining.module';
-import { DataSource, DataSourceOptions } from 'typeorm';
-import stellarConfig from './stellar/config/stellar.config';
-import { TransactionModule } from './transaction/transaction.module';
-import { AnalyticsModule } from './analytics/analytics.module';
-import { AppCacheModule } from './cache/cache.module';
-import { StellarModule } from './stellar/stellar.module'
-const appLogger = new Logger('TypeORM');
 
 @Module({
   imports: [
@@ -33,51 +27,23 @@ const appLogger = new Logger('TypeORM');
       isGlobal: true,
       load: [databaseConfig, stellarConfig],
     }),
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService): DataSourceOptions => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT'),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_DATABASE'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: false,
-        migrations: [__dirname + '/migrations/*{.ts,.js}'],
-        logging: true,
-      }),
-      dataSourceFactory: async (options) => {
-        if (!options) {
-          throw new Error('TypeORM options are not defined');
-        }
-        const dataSource = new DataSource(options);
-        await dataSource.initialize();
-        appLogger.log('TypeORM Connection established');
-        return dataSource;
-      },
-      inject: [ConfigService],
-    }),
+
     ScheduleModule.forRoot(),
+
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
         limit: 100,
       },
     ]),
+
     AppCacheModule,
     MetricsModule,
     SentimentModule,
-    NewsModule,
     StellarModule,
-    AuthModule,
-    UsersModule,
-    EmailModule,
-    PortfolioModule,
-    SnapshotsModule,
-    TransactionModule,
-    ModelRetrainingModule,
-    AnalyticsModule,
+    PriceModule,
+    NotificationModule,
+    WebhookModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

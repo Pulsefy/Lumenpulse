@@ -33,11 +33,13 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/platform-socket.io": "^11.1.17",
     "@nestjs/schedule": "^6.1.1",
     "@nestjs/swagger": "^11.2.6",
     "@nestjs/terminus": "^11.1.1",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.0",
+    "@nestjs/websockets": "^11.1.17",
     "@stellar/stellar-sdk": "^14.4.3",
     "axios": "^1.13.6",
     "bcrypt": "^6.0.0",
@@ -55,6 +57,8 @@
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "stellar-sdk": "^13.3.0"
   },
   "devDependencies": {
