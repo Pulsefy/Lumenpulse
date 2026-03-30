@@ -17,6 +17,7 @@ import { WebhookModule } from './webhook/webhook.module';
 import { NotificationModule } from './notification/notification.module';
 import { QueueModule } from './queue/queue.module';
 import { StellarSyncModule } from './stellar-sync/stellar-sync.module';
+import { HealthModule } from './health/health.module';
 
 import databaseConfig from './database/database.config';
 import stellarConfig from './stellar/config/stellar.config';
@@ -41,6 +42,7 @@ import { TestController } from './test/test.controller';
 
     AppCacheModule,
     MetricsModule,
+    HealthModule,
     SentimentModule,
     StellarModule,
     PriceModule,
