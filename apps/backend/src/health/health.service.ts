@@ -1,23 +1,26 @@
-import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
-import { HealthIndicator, HealthIndicatorResult } from '@nestjs/terminus';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Inject } from '@nestjs/common';
 import { Cache } from 'cache-manager';
 import { Horizon } from '@stellar/stellar-sdk';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
+
+interface HealthCheckResult {
+  [key: string]: {
+    status: 'up' | 'down';
+    message?: string;
+    url?: string;
+  };
+}
 
 @Injectable()
-export class HealthService extends HealthIndicator {
+export class HealthService {
   private readonly logger = new Logger(HealthService.name);
 
   constructor(
     private configService: ConfigService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
-    private httpService: HttpService,
-  ) {
-    super();
-  }
+  ) {}
 
   /**
    * Check database connectivity
