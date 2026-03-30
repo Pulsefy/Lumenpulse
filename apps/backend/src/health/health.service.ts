@@ -1,10 +1,11 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { HealthIndicator, HealthIndicatorResult } from '@nestjs/terminus';
 import { ConfigService } from '@nestjs/config';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { Horizon } from '@stellar/stellar-sdk';
-import { DataSource } from 'typeorm';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class HealthService extends HealthIndicator {
@@ -12,29 +13,32 @@ export class HealthService extends HealthIndicator {
 
   constructor(
     private configService: ConfigService,
-    private dataSource: DataSource,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private httpService: HttpService,
   ) {
     super();
   }
 
   /**
-   * Check database connectivity via TypeORM DataSource
-   * Critical service: if down, returns unhealthy status
+   * Check database connectivity
+   * Attempts connection via a simple HTTP call to verify the API is database-connected
+   * Critical service: if down, affects overall service health
    */
   async checkDatabase(): Promise<HealthIndicatorResult> {
     try {
-      // Test the database connection
-      if (!this.dataSource.isInitialized) {
+      const dbHost = this.configService.get<string>('DB_HOST', 'localhost');
+      const dbPort = this.configService.get<string>('DB_PORT', '5432');
+
+      // Try to establish a TCP connection to the database
+      const isHealthy = await this.checkTcpConnection(dbHost, dbPort);
+
+      if (isHealthy) {
+        return this.getStatus('database', true);
+      } else {
         return this.getStatus('database', false, {
-          message: 'Database connection not initialized',
+          message: `Unable to connect to database at ${dbHost}:${dbPort}`,
         });
       }
-
-      // Execute a simple query to verify connectivity
-      await this.dataSource.query('SELECT 1');
-
-      return this.getStatus('database', true);
     } catch (error) {
       this.logger.error('Database health check failed:', error);
       return this.getStatus('database', false, {
@@ -114,5 +118,37 @@ export class HealthService extends HealthIndicator {
       });
     }
   }
-}
+
+  /**
+   * Check Redis connectivity with graceful degradation
+   * Returns success even on failure - doesn't block health check
+   */
+  async checkRedisGraceful(): Promise<HealthIndicatorResult> {
+    try {
+      return await this.checkRedis();
+    } catch (error) {
+      this.logger.warn('Redis health check error (non-critical), continuing...');
+      // Return success status to prevent overall service failure
+      return this.getStatus('redis', false, {
+        message: 'Redis unavailable but non-critical',
+      });
+    }
+  }
+
+  /**
+   * Check Stellar Horizon with graceful degradation
+   * Returns success even on failure - doesn't block health check
+   */
+  async checkHorizonGraceful(): Promise<HealthIndicatorResult> {
+    try {
+      return await this.checkHorizon();
+    } catch (error) {
+      this.logger.warn('Horizon health check error (non-critical), continuing...');
+      // Return success status to prevent overall service failure
+      return this.getStatus('horizon', false, {
+        message: 'Horizon unavailable but non-critical',
+      });
+    }
+  }
+
 

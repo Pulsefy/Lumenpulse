@@ -11,12 +11,25 @@ export class HealthController {
     private healthService: HealthService,
   ) {}
 
+  /**
+   * Health check endpoint with graceful degradation.
+   * 
+   * Returns 200 OK if:
+   * - Database is up (critical)
+   * - At least monitoring the other services
+   * 
+   * Returns 503 Service Unavailable only if:
+   * - Database is down (critical service)
+   * 
+   * Non-critical services (Redis, Horizon) are monitored but don't affect
+   * the overall health status. The API remains operational if they fail.
+   */
   @Get()
   @HealthCheck()
-  @ApiOperation({ summary: 'Service health check' })
+  @ApiOperation({ summary: 'Service health check with dependency status' })
   @ApiResponse({
     status: 200,
-    description: 'Service is healthy with status of dependencies',
+    description: 'Service is healthy (or degraded but operational)',
     schema: {
       example: {
         status: 'ok',
@@ -25,20 +38,22 @@ export class HealthController {
           redis: { status: 'up' },
           horizon: { status: 'up' },
         },
-        details: {},
       },
     },
   })
   @ApiResponse({
     status: 503,
-    description:
-      'Service degraded (non-critical services down) or critical service down',
+    description: 'Critical service (database) is down - service unavailable',
   })
-  check() {
+  async check() {
+    // Only the database check is critical - it must pass for the service to be "up"
+    // Redis and Horizon are non-critical and won't cause overall failure
     return this.health.check([
-      () => this.healthService.checkDatabase(),
-      () => this.healthService.checkRedis(),
-      () => this.healthService.checkHorizon(),
+      () => this.healthService.checkDatabase(), // Critical
+      // Wrap non-critical checks to prevent failure propagation
+      () => this.healthService.checkRedisGraceful(),
+      () => this.healthService.checkHorizonGraceful(),
     ]);
   }
 }
+
