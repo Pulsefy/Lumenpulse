@@ -13,6 +13,10 @@ import {
   UsePipes,
   ValidationPipe,
   NotFoundException,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  FileTypeValidator,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -33,6 +37,8 @@ import { UpdateStellarAccountLabelDto } from './dto/update-stellar-account-label
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileResponseDto } from './dto/profile-response.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { SharpPipe } from '../common/pipes/sharp.pipe';
 
 // Unified Authenticated Request Interface
 interface RequestWithUser extends Request {
@@ -217,6 +223,28 @@ export class UsersController {
       accountId,
       dto,
     );
+  }
+
+  @Patch('me/avatar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Upload user profile image' })
+  @UseInterceptors(FileInterceptor('avatar'))
+  async uploadAvatar(
+    @Param('id') accountId: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new FileTypeValidator({
+            fileType: /^image\/(png|jpeg|webp|svg\+xml)$/,
+            skipMagicNumbersValidation: true,
+          }),
+        ],
+      }),
+      new SharpPipe(),
+    )
+    file: Buffer,
+  ) {
+    return await this.usersService.updateUserProfilePicture(file, accountId);
   }
 
   @Post('me/accounts/:id/primary')

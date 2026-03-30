@@ -6,13 +6,21 @@ import { PortfolioSnapshot } from './entities/portfolio-snapshot.entity';
 import { PortfolioAsset } from './portfolio-asset.entity';
 import { User } from '../users/entities/user.entity';
 import { StellarBalanceService } from './stellar-balance.service';
+import { StellarService } from '../stellar/stellar.service';
+import { PriceService } from '../price/price.service';
 import {
   PortfolioHistoryResponseDto,
   PortfolioSnapshotDto,
   PortfolioSummaryResponseDto,
 } from './dto/portfolio-snapshot.dto';
+import {
+  PortfolioSummaryWithCurrencyResponseDto,
+  AssetBalanceWithCurrencyDto,
+  CurrencyCode,
+} from './dto/portfolio-currency.dto';
 import { PortfolioPerformanceResponseDto } from './dto/portfolio-performance.dto';
 import { calculatePortfolioPerformance } from './utils/portfolio-performance.utils';
+import { ExchangeRatesService } from '../exchange-rates/exchange-rates.service';
 
 @Injectable()
 export class PortfolioService {
@@ -26,6 +34,9 @@ export class PortfolioService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly stellarBalanceService: StellarBalanceService,
+    private readonly exchangeRatesService: ExchangeRatesService,
+    private readonly stellarService: StellarService,
+    private readonly priceService: PriceService,
   ) {}
 
   /**
@@ -54,22 +65,23 @@ export class PortfolioService {
         await this.stellarBalanceService.getAccountBalances(user.id);
 
       // Calculate USD values for each asset
-      assetBalances = stellarBalances.map((balance) => {
-        const valueUsd = this.stellarBalanceService.getAssetValueUsd(
-          balance.assetCode,
-          balance.assetIssuer,
-          balance.balance,
-        );
+      assetBalances = await Promise.all(
+        stellarBalances.map(async (balance) => {
+          const price = await this.priceService.getCurrentPrice(
+            balance.assetCode,
+          );
+          const valueUsd = parseFloat(balance.balance) * price;
 
-        totalValueUsd += valueUsd;
+          totalValueUsd += valueUsd;
 
-        return {
-          assetCode: balance.assetCode,
-          assetIssuer: balance.assetIssuer,
-          amount: balance.balance,
-          valueUsd,
-        };
-      });
+          return {
+            assetCode: balance.assetCode,
+            assetIssuer: balance.assetIssuer,
+            amount: balance.balance,
+            valueUsd,
+          };
+        }),
+      );
     } catch {
       this.logger.warn(
         `Failed to fetch Stellar balances for user ${userId}, using portfolio assets as fallback`,
@@ -80,22 +92,23 @@ export class PortfolioService {
         where: { userId },
       });
 
-      assetBalances = portfolioAssets.map((asset) => {
-        const valueUsd = this.stellarBalanceService.getAssetValueUsd(
-          asset.assetCode,
-          asset.assetIssuer,
-          asset.amount,
-        );
+      assetBalances = await Promise.all(
+        portfolioAssets.map(async (asset) => {
+          const price = await this.priceService.getCurrentPrice(
+            asset.assetCode,
+          );
+          const valueUsd = parseFloat(asset.amount) * price;
 
-        totalValueUsd += valueUsd;
+          totalValueUsd += valueUsd;
 
-        return {
-          assetCode: asset.assetCode,
-          assetIssuer: asset.assetIssuer,
-          amount: asset.amount,
-          valueUsd,
-        };
-      });
+          return {
+            assetCode: asset.assetCode,
+            assetIssuer: asset.assetIssuer,
+            amount: asset.amount,
+            valueUsd,
+          };
+        }),
+      );
     }
 
     // Create and save snapshot
@@ -191,6 +204,68 @@ export class PortfolioService {
       assets: latestSnapshot.assetBalances,
       lastUpdated: latestSnapshot.createdAt,
       hasLinkedAccount: true,
+    };
+  }
+
+  /**
+   * Get portfolio summary in a specific currency
+   */
+  async getPortfolioSummaryInCurrency(
+    userId: string,
+    currency: CurrencyCode = CurrencyCode.USD,
+  ): Promise<PortfolioSummaryWithCurrencyResponseDto> {
+    this.logger.log(
+      `Fetching portfolio summary for user ${userId} in currency ${currency}`,
+    );
+
+    // Get base USD summary
+    const usdSummary = await this.getPortfolioSummary(userId);
+
+    // If USD or no assets, return as is
+    if (currency === CurrencyCode.USD || usdSummary.assets.length === 0) {
+      return {
+        totalValue: usdSummary.totalValueUsd,
+        currency: CurrencyCode.USD,
+        totalValueUsd: usdSummary.totalValueUsd,
+        assets: usdSummary.assets.map((asset) => ({
+          assetCode: asset.assetCode,
+          assetIssuer: asset.assetIssuer,
+          amount: asset.amount,
+          value: asset.valueUsd,
+          valueUsd: asset.valueUsd,
+        })),
+        lastUpdated: usdSummary.lastUpdated,
+        hasLinkedAccount: usdSummary.hasLinkedAccount,
+        exchangeRate: 1,
+      };
+    }
+
+    // Convert to requested currency
+    const totalUsd = parseFloat(usdSummary.totalValueUsd);
+    const exchangeRate = await this.exchangeRatesService.getExchangeRate(
+      CurrencyCode.USD,
+      currency,
+    );
+
+    const convertedTotal = Math.round(totalUsd * exchangeRate * 100) / 100;
+
+    const convertedAssets: AssetBalanceWithCurrencyDto[] =
+      usdSummary.assets.map((asset) => ({
+        assetCode: asset.assetCode,
+        assetIssuer: asset.assetIssuer,
+        amount: asset.amount,
+        value: Math.round(asset.valueUsd * exchangeRate * 100) / 100,
+        valueUsd: asset.valueUsd,
+      }));
+
+    return {
+      totalValue: convertedTotal.toFixed(2),
+      currency,
+      totalValueUsd: usdSummary.totalValueUsd,
+      assets: convertedAssets,
+      lastUpdated: usdSummary.lastUpdated,
+      hasLinkedAccount: usdSummary.hasLinkedAccount,
+      exchangeRate,
     };
   }
 
@@ -321,5 +396,115 @@ export class PortfolioService {
       currentValueUsd,
       historicalSnapshots,
     );
+  }
+
+  /**
+   * Get portfolio asset allocation breakdown.
+   *
+   * Aggregates assets across all linked Stellar accounts for a user,
+   * calculates the USD value of each asset, and determines its percentage
+   * of the total portfolio value.
+   *
+   * @param userId The ID of the user.
+   * @returns An object with the total portfolio value and an array of assets with their allocation details.
+   */
+  async getAssetAllocation(userId: string): Promise<{
+    totalValueUsd: number;
+    allocation: Array<{
+      assetCode: string;
+      assetIssuer: string | null;
+      amount: string;
+      valueUsd: number;
+      percentage: number;
+    }>;
+  }> {
+    this.logger.log(`Fetching asset allocation for user ${userId}`);
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['stellarAccounts'],
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    if (!user.stellarAccounts || user.stellarAccounts.length === 0) {
+      this.logger.log(`User ${userId} has no linked Stellar accounts`);
+      return { totalValueUsd: 0, allocation: [] };
+    }
+
+    const aggregatedBalances: Map<
+      string,
+      { amount: number; assetCode: string; assetIssuer: string | null }
+    > = new Map();
+
+    // Fetch balances for all linked accounts concurrently
+    const balancePromises = user.stellarAccounts.map((account) =>
+      this.stellarBalanceService
+        .getAccountBalances(account.publicKey)
+        .catch((error) => {
+          this.logger.warn(
+            `Failed to fetch balances for account ${account.publicKey}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+          return []; // Return empty array on failure to not break Promise.all
+        }),
+    );
+
+    const accountsBalances = await Promise.all(balancePromises);
+
+    // Aggregate balances from all accounts
+    for (const balances of accountsBalances) {
+      for (const balance of balances) {
+        const key = `${balance.assetCode}:${balance.assetIssuer || 'native'}`;
+        const existing = aggregatedBalances.get(key);
+        const currentAmount = parseFloat(balance.balance);
+
+        if (existing) {
+          existing.amount += currentAmount;
+        } else {
+          aggregatedBalances.set(key, {
+            amount: currentAmount,
+            assetCode: balance.assetCode,
+            assetIssuer: balance.assetIssuer,
+          });
+        }
+      }
+    }
+
+    // Calculate USD value for each aggregated asset concurrently
+    const allocationWithValue = await Promise.all(
+      Array.from(aggregatedBalances.values()).map(async (asset) => {
+        const valueUsd = await this.stellarBalanceService.getAssetValueUsd(
+          asset.assetCode,
+          asset.assetIssuer,
+          asset.amount.toString(),
+        );
+        return {
+          assetCode: asset.assetCode,
+          assetIssuer: asset.assetIssuer,
+          amount: asset.amount.toString(),
+          valueUsd,
+        };
+      }),
+    );
+
+    // Calculate total value from the results
+    const totalValueUsd = allocationWithValue.reduce(
+      (sum, asset) => sum + asset.valueUsd,
+      0,
+    );
+
+    // Calculate percentage for each asset, handling division by zero
+    const finalAllocation = allocationWithValue.map((asset) => ({
+      ...asset,
+      percentage:
+        totalValueUsd > 0 ? (asset.valueUsd / totalValueUsd) * 100 : 0,
+    }));
+
+    return {
+      totalValueUsd,
+      allocation: finalAllocation,
+    };
   }
 }

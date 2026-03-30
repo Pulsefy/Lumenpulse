@@ -5,6 +5,8 @@ import {
   Optional,
   PipeTransform,
 } from '@nestjs/common';
+import { ErrorCode } from '../enums/error-code.enum';
+import { ErrorDetail } from '../../interfaces/error-response.interface';
 
 /**
  * Global validation pipe with enhanced security and error formatting.
@@ -28,13 +30,12 @@ export class CustomValidationPipe
       },
       stopAtFirstError: false, // Collect all errors for better feedback
       exceptionFactory: (errors: ValidationError[]) => {
-        const messages = CustomValidationPipe.extractMessages(errors);
+        const details = CustomValidationPipe.extractMessages(errors);
 
         return new BadRequestException({
-          statusCode: 400,
-          message: messages,
-          error: 'Validation Failed',
-          timestamp: new Date().toISOString(),
+          code: ErrorCode.SYS_VALIDATION_FAILED,
+          message: 'Validation failed',
+          details,
         });
       },
     });
@@ -46,8 +47,8 @@ export class CustomValidationPipe
   private static extractMessages(
     errors: ValidationError[],
     parentPath = '',
-  ): string[] {
-    const messages: string[] = [];
+  ): ErrorDetail[] {
+    const messages: ErrorDetail[] = [];
 
     for (const error of errors) {
       const path = parentPath
@@ -57,7 +58,10 @@ export class CustomValidationPipe
       if (error.constraints) {
         // Add constraint messages with property path
         Object.values(error.constraints).forEach((constraint) => {
-          messages.push(`${path}: ${constraint}`);
+          messages.push({
+            field: path,
+            message: constraint,
+          });
         });
       }
 

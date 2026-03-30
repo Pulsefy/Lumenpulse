@@ -16,6 +16,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -34,6 +35,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { ProfileResponseDto } from '../users/dto/profile-response.dto';
+import { getAuthThrottleOverride } from '../common/rate-limit/rate-limit.config';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -45,6 +47,7 @@ export class AuthController {
   ) {}
 
   @Post('login')
+  @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({
@@ -73,6 +76,7 @@ export class AuthController {
   }
 
   @Post('register')
+  @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new user account' })
   @ApiResponse({
@@ -106,6 +110,7 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request a password reset token' })
   @ApiResponse({
@@ -122,6 +127,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
+  @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password using a one-time token' })
   @ApiResponse({
@@ -142,6 +148,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
   @ApiResponse({
@@ -272,6 +279,7 @@ export class AuthController {
   }
 
   @Post('verify')
+  @Throttle(getAuthThrottleOverride())
   @ApiOperation({ summary: 'Verify signed challenge and issue JWT' })
   @ApiResponse({
     status: 200,
