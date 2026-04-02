@@ -48,4 +48,19 @@ export class PriceService implements OnModuleInit {
       }
     }, 3000);
   }
+
+  /**
+   * Get the current USD price of an asset.
+   * Currently using mock prices; to be replaced with a real price feed (e.g., CoinGecko).
+   */
+  getCurrentPrice(assetCode: string): Promise<number> {
+    const mockPrices: Record<string, number> = {
+      XLM: 0.12,
+      USDC: 1.0,
+      BTC: 45000.0,
+      ETH: 2500.0,
+    };
+
+    return Promise.resolve(mockPrices[assetCode] || 0);
+  }
 }

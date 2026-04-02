@@ -23,10 +23,7 @@ export class WebhookService {
     private readonly configService: ConfigService,
     private readonly notificationService: NotificationService,
   ) {
-    this.webhookSecret = this.configService.get<string>(
-      'WEBHOOK_SECRET',
-      '',
-    );
+    this.webhookSecret = this.configService.get<string>('WEBHOOK_SECRET', '');
   }
 
   verifySignature(rawBody: Buffer, signatureHeader: string): void {
@@ -67,8 +64,14 @@ export class WebhookService {
   async handleDataProcessingEvent(
     payload: DataProcessingWebhookDto,
   ): Promise<Notification> {
-    const { type, metric_name, severity_score, current_value, baseline_mean, z_score } =
-      payload;
+    const {
+      type,
+      metric_name,
+      severity_score,
+      current_value,
+      baseline_mean,
+      z_score,
+    } = payload;
 
     if (type !== 'anomaly' && type !== 'sentiment_spike') {
       throw new BadRequestException(`Unsupported event type: ${type}`);

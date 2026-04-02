@@ -119,3 +119,122 @@ export class PortfolioHistoryResponseDto {
   @ApiProperty({ description: 'Total number of pages', example: 15 })
   totalPages: number;
 }
+
+export class PortfolioSnapshotBatchStatusDto {
+  @ApiProperty({
+    description: 'Batch identifier for the snapshot job',
+    example: '9b3b4a07-5b35-4f8c-9f26-8f3ac77e5b41',
+  })
+  batchId: string;
+
+  @ApiProperty({
+    description: 'Current status of the snapshot batch job',
+    example: 'running',
+  })
+  status:
+    | 'queued'
+    | 'running'
+    | 'completed'
+    | 'completed_with_errors'
+    | 'failed';
+
+  @ApiProperty({
+    description: 'Total users scheduled for snapshot generation',
+    example: 1250,
+  })
+  total: number;
+
+  @ApiProperty({
+    description: 'Number of snapshots completed successfully',
+    example: 600,
+  })
+  completed: number;
+
+  @ApiProperty({
+    description: 'Number of snapshots that failed after retries',
+    example: 12,
+  })
+  failed: number;
+
+  @ApiProperty({
+    description: 'Completion percentage for the batch',
+    example: 48,
+  })
+  progressPercent: number;
+
+  @ApiProperty({
+    description: 'Trigger source',
+    example: 'manual',
+  })
+  triggeredBy: 'cron' | 'manual' | 'unknown';
+
+  @ApiProperty({
+    description: 'Timestamp when the batch was requested',
+    example: '2026-03-29T10:30:00Z',
+    nullable: true,
+  })
+  requestedAt: string | null;
+
+  @ApiProperty({
+    description: 'Timestamp when processing started',
+    example: '2026-03-29T10:31:10Z',
+    nullable: true,
+  })
+  startedAt: string | null;
+
+  @ApiProperty({
+    description: 'Timestamp when processing finished',
+    example: '2026-03-29T10:42:10Z',
+    nullable: true,
+  })
+  finishedAt: string | null;
+}
+
+export class TriggerSnapshotBatchResponseDto {
+  @ApiProperty({
+    description: 'Message confirming the batch was queued',
+    example: 'Snapshot creation queued',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Batch identifier for tracking progress',
+    example: '9b3b4a07-5b35-4f8c-9f26-8f3ac77e5b41',
+  })
+  batchId: string;
+
+  @ApiProperty({
+    description: 'Current status of the batch job',
+    example: 'queued',
+  })
+  status:
+    | 'queued'
+    | 'running'
+    | 'completed'
+    | 'completed_with_errors'
+    | 'failed';
+
+  @ApiProperty({
+    description: 'Total users scheduled for snapshot generation',
+    example: 1250,
+  })
+  total: number;
+
+  @ApiProperty({
+    description: 'Number of snapshots completed successfully',
+    example: 0,
+  })
+  completed: number;
+
+  @ApiProperty({
+    description: 'Number of snapshots that failed after retries',
+    example: 0,
+  })
+  failed: number;
+
+  @ApiProperty({
+    description: 'Completion percentage for the batch',
+    example: 0,
+  })
+  progressPercent: number;
+}

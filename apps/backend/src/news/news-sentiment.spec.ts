@@ -40,19 +40,19 @@ function makeAxiosResponse<T>(data: T): AxiosResponse<T> {
 }
 
 function makeArticle(overrides: Partial<News> = {}): News {
-return {
-  id: 'article-uuid-1',
-  title: 'Bitcoin hits new high',
-  url: 'https://example.com/btc',
-  source: 'coindesk',
-  publishedAt: new Date(),
-  sentimentScore: null,
-  tags: [],
-  category: null, // ✅ ADD THIS
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-};
+  return {
+    id: 'article-uuid-1',
+    title: 'Bitcoin hits new high',
+    url: 'https://example.com/btc',
+    source: 'coindesk',
+    publishedAt: new Date(),
+    sentimentScore: null,
+    tags: [],
+    category: null, // ✅ ADD THIS
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
 }
 
 // ─── NewsSentimentService Unit Tests ─────────────────────────────────────────
@@ -89,12 +89,14 @@ describe('NewsSentimentService', () => {
     }).compile();
 
     sentimentService = module.get<NewsSentimentService>(NewsSentimentService);
-    newsService = module.get<NewsService>(NewsService) as unknown as jest.Mocked<
-  Pick<NewsService, 'findUnscoredArticles' | 'update'>
->;
-    httpService = module.get<HttpService>(HttpService) as unknown as jest.Mocked<
-  Pick<HttpService, 'post'>
->;
+    newsService = module.get<NewsService>(
+      NewsService,
+    ) as unknown as jest.Mocked<
+      Pick<NewsService, 'findUnscoredArticles' | 'update'>
+    >;
+    httpService = module.get<HttpService>(
+      HttpService,
+    ) as unknown as jest.Mocked<Pick<HttpService, 'post'>>;
   });
 
   // ── analyzeSentiment ───────────────────────────────────────────────────────

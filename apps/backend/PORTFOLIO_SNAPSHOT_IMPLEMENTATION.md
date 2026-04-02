@@ -26,8 +26,9 @@ Implemented periodic portfolio snapshots to track historical performance over ti
 #### PortfolioService
 - `createSnapshot(userId)`: Creates a snapshot for a specific user
 - `getPortfolioHistory(userId, page, limit)`: Retrieves paginated snapshot history
-- `createSnapshotsForAllUsers()`: Scheduled job that runs daily at midnight
-- `triggerSnapshotCreation()`: Manual trigger for testing/admin use
+- `createSnapshotsForAllUsers()`: Scheduled job that queues a batch for all users
+- `triggerSnapshotCreation()`: Manual trigger that queues a batch and returns progress metadata
+- `getSnapshotBatchStatus(batchId)`: Returns progress for a queued batch
 
 ### 3. API Endpoints
 
@@ -85,17 +86,43 @@ Admin endpoint to trigger snapshot creation for all users.
 **Response:**
 ```json
 {
-  "message": "Snapshot creation triggered",
-  "success": 15,
-  "failed": 0
+  "message": "Snapshot creation queued",
+  "batchId": "uuid",
+  "status": "queued",
+  "total": 0,
+  "completed": 0,
+  "failed": 0,
+  "progressPercent": 0
+}
+```
+
+#### GET /portfolio/snapshots/status
+Query snapshot batch progress for a previously queued job.
+
+**Query Parameters:**
+- `batchId` (required): Batch job identifier
+
+**Response:**
+```json
+{
+  "batchId": "uuid",
+  "status": "running",
+  "total": 1250,
+  "completed": 600,
+  "failed": 12,
+  "progressPercent": 48,
+  "triggeredBy": "manual",
+  "requestedAt": "2026-03-29T10:30:00Z",
+  "startedAt": "2026-03-29T10:31:10Z",
+  "finishedAt": null
 }
 ```
 
 ### 4. Scheduled Jobs
 - **Daily Snapshots**: Runs every day at midnight (00:00)
 - Uses `@nestjs/schedule` with cron expressions
-- Automatically creates snapshots for all users
-- Logs success/failure counts
+- Queues a BullMQ batch job for all users
+- Individual snapshot jobs are processed in parallel with retries
 
 ### 5. Data Flow
 
@@ -127,6 +154,16 @@ Migration file: `1769600000000-CreatePortfolioSnapshot.ts`
 ## Dependencies Added
 
 - `@nestjs/schedule`: For cron job scheduling
+- `bullmq`: Job queue for batch processing
+- `ioredis`: Redis client for BullMQ and progress tracking
+
+## Configuration
+
+Optional environment variables (defaults shown):
+- `PORTFOLIO_SNAPSHOT_CONCURRENCY=25`
+- `PORTFOLIO_SNAPSHOT_BATCH_SIZE=500`
+- `PORTFOLIO_SNAPSHOT_ATTEMPTS=3`
+- `PORTFOLIO_SNAPSHOT_RETRY_DELAY_MS=5000`
 
 ## Testing
 

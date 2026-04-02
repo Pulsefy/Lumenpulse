@@ -76,7 +76,9 @@ describe('CacheService', () => {
     });
 
     it('does not throw when cache deletion fails', async () => {
-      mockCacheManager.del.mockRejectedValue(new Error('Redis connection lost'));
+      mockCacheManager.del.mockRejectedValue(
+        new Error('Redis connection lost'),
+      );
       await expect(service.invalidateNewsCache()).resolves.not.toThrow();
     });
   });

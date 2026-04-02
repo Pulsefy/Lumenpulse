@@ -16,7 +16,9 @@ export class DatabasePerformanceIndexes1769800000000 implements MigrationInterfa
     await queryRunner.query(
       `CREATE INDEX "IDX_articles_publishedAt" ON "articles" ("publishedAt")`,
     );
-    await queryRunner.query(`CREATE INDEX "IDX_articles_source" ON "articles" ("source")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_articles_source" ON "articles" ("source")`,
+    );
     await queryRunner.query(
       `CREATE INDEX "IDX_articles_sentimentScore" ON "articles" ("sentimentScore")`,
     );
@@ -25,8 +27,12 @@ export class DatabasePerformanceIndexes1769800000000 implements MigrationInterfa
     );
 
     // User (users table) Indexes
-    await queryRunner.query(`CREATE INDEX "IDX_users_role" ON "users" ("role")`);
-    await queryRunner.query(`CREATE INDEX "IDX_users_createdAt" ON "users" ("createdAt")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_users_role" ON "users" ("role")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_users_createdAt" ON "users" ("createdAt")`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
@@ -42,6 +48,8 @@ export class DatabasePerformanceIndexes1769800000000 implements MigrationInterfa
 
     // Drop PortfolioAsset Indexes
     await queryRunner.query(`DROP INDEX "IDX_portfolio_assets_userId"`);
-    await queryRunner.query(`DROP INDEX "IDX_portfolio_assets_userId_assetCode"`);
+    await queryRunner.query(
+      `DROP INDEX "IDX_portfolio_assets_userId_assetCode"`,
+    );
   }
 }

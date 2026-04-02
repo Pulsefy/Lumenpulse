@@ -38,3 +38,5 @@ npm run start:dev
 - `npm run test` passes (and `npm run test:e2e` when endpoints change).
 - API-facing changes include DTO/docs updates.
 - Relevant docs are updated.
+- Security-facing API changes keep the standardized error contract aligned with `{ code, message, details, requestId }`.
+- Public endpoint changes document any rate-limit env vars and include throttling or validation coverage when behavior changes.

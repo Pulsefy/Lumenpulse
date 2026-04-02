@@ -56,6 +56,9 @@ export class User {
     lastClaim?: Date;
   };
 
+  @Column({ nullable: true })
+  avatar_url?: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
