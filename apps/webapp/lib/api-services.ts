@@ -117,3 +117,64 @@ export const transformNewsData = (apiData: NewsApiData, index: number) => ({
   }),
   imageUrl: apiData.urlToImage || 'https://picsum.photos/seed/crypto/800/450',
 });
+
+// Stellar Horizon API Service
+export interface StellarBalance {
+  balance: string;
+  asset_type: string;
+  asset_code?: string;
+  asset_issuer?: string;
+}
+
+export interface StellarTransaction {
+  id: string;
+  type: string;
+  created_at: string;
+  amount?: string;
+  asset_code?: string;
+  from?: string;
+  to?: string;
+  starting_balance?: string;
+}
+
+export class StellarApiService {
+  private static readonly HORIZON_URL = 'https://horizon.stellar.org';
+
+  static async getAccountInfo(publicKey: string): Promise<{ balances: StellarBalance[] } | null> {
+    try {
+      const response = await fetch(`${this.HORIZON_URL}/accounts/${publicKey}`);
+      if (!response.ok) {
+        if (response.status === 404) return { balances: [] }; // Account not funded yet
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching Stellar account info:', error);
+      return null;
+    }
+  }
+
+  static async getRecentTransactions(publicKey: string, limit: number = 5): Promise<StellarTransaction[]> {
+    try {
+      const response = await fetch(`${this.HORIZON_URL}/accounts/${publicKey}/operations?limit=${limit}&order=desc`);
+      if (!response.ok) {
+        if (response.status === 404) return [];
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return (data._embedded?.records || []).map((op: any) => ({
+        id: op.id,
+        type: op.type,
+        created_at: op.created_at,
+        amount: op.amount,
+        asset_code: op.asset_code || (op.asset_type === 'native' ? 'XLM' : undefined),
+        from: op.from || op.funder,
+        to: op.to || op.account,
+        starting_balance: op.starting_balance,
+      }));
+    } catch (error) {
+      console.error('Error fetching Stellar operations:', error);
+      return [];
+    }
+  }
+}
