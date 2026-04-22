@@ -40,7 +40,7 @@ export function Navbar() {
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
             <Link
-              href="#"
+              href="/community"
               className="px-3 py-2 text-sm font-medium text-white hover:text-white transition-all flex items-center gap-2 group relative"
             >
               <Users className="w-4 h-4 text-primary group-hover:text-white transition-colors" />
@@ -92,7 +92,7 @@ export function Navbar() {
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
             <Link
-              href="#"
+              href="/community"
               className="flex items-center gap-3 p-3 rounded-lg text-white hover:bg-white/5 transition-all relative group"
               onClick={() => setIsMenuOpen(false)}
             >
