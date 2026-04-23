@@ -41,6 +41,20 @@ fn setup_test<'a>(
     let contract_id = env.register(CrowdfundVaultContract, ());
     let client = CrowdfundVaultContractClient::new(env, &contract_id);
 
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Deploy price oracle
+    let oracle_id = env.register(crate::price_oracle::PriceOracleContract, ());
+    let oracle_client = soroban_sdk::contract::Client::new(env, &oracle_id);
+    oracle_client.invoke::<()>("initialize", (admin.clone(),));
+
+    // Set price for the token (assume 1 token = 1 XLM for simplicity)
+    oracle_client.invoke::<()>("set_price", (admin.clone(), token_client.address.clone(), 10_000_000i128));
+
+    // Set oracle address in vault
+    client.set_price_oracle(&admin, &oracle_id);
+
     (client, admin, owner, user, token_client)
 }
 
@@ -87,9 +101,6 @@ fn test_initialize() {
 
     let (client, admin, _, _, _) = setup_test(&env);
 
-    // Initialize contract
-    client.initialize(&admin);
-
     // Verify admin is set
     assert_eq!(client.get_admin(), admin);
     assert_eq!(client.get_storage_version(), 1);
@@ -100,7 +111,11 @@ fn test_double_initialization_fails() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin, _, _, _) = setup_test(&env);
+    let admin = Address::generate(&env);
+
+    // Register contract
+    let contract_id = env.register(CrowdfundVaultContract, ());
+    let client = CrowdfundVaultContractClient::new(&env, &contract_id);
 
     // Initialize contract
     client.initialize(&admin);

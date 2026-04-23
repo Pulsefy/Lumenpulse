@@ -80,6 +80,25 @@ async function main() {
             }
         }
 
+        // Post-deployment setup
+        console.log('\n--- Post-deployment Setup ---');
+
+        // Set price oracle in vault
+        const vaultId = output['vault'];
+        const oracleId = output['price_oracle'];
+        if (vaultId && oracleId) {
+            console.log('Setting price oracle in vault...');
+            await initializeContract(
+                server,
+                adminKeypair,
+                NETWORK_PASSPHRASE,
+                vaultId,
+                'set_price_oracle',
+                [new Address(adminPublicKey).toScVal(), new Address(oracleId).toScVal()]
+            );
+            console.log('Price oracle set in vault.');
+        }
+
         // Output to JSON
         const outputPath = path.join(__dirname, 'contract-ids.json');
         fs.writeFileSync(outputPath, JSON.stringify(output, null, 2));

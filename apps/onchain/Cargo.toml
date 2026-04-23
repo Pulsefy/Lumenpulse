@@ -5,6 +5,7 @@ members = [
   "contracts/crowdfund_vault",
   "contracts/lumen_token",
   "contracts/notification_interface",
+  "contracts/price_oracle",
   "contracts/upgradable-contract",
   "contracts/vesting-wallet",
 ]

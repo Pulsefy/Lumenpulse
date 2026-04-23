@@ -6,6 +6,7 @@ mod math;
 mod storage;
 mod token;
 mod yield_provider;
+mod price_oracle;
 
 use errors::CrowdfundError;
 use math::{sqrt_scaled, unscale};
@@ -236,6 +237,13 @@ impl CrowdfundVaultContract {
         Self::require_current_storage_version(&env)
     }
 
+    /// Set the price oracle address (admin only)
+    pub fn set_price_oracle(env: Env, admin: Address, oracle_address: Address) -> Result<(), CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+        env.storage().instance().set(&DataKey::PriceOracle, &oracle_address);
+        Ok(())
+    }
+
     /// Create a new project
     pub fn create_project(
         env: Env,
@@ -279,6 +287,7 @@ impl CrowdfundVaultContract {
             target_amount,
             token_address: token_address.clone(),
             total_deposited: 0,
+            normalized_total_deposited: 0,
             total_withdrawn: 0,
             is_active: true,
         };
@@ -410,6 +419,7 @@ impl CrowdfundVaultContract {
         let contract_address = env.current_contract_address();
         let token_client = TokenClient::new(&env, &project.token_address);
         let mut total_refunded = 0i128;
+        let mut normalized_refunded = 0i128;
 
         for i in 0..count {
             let contrib_key = DataKey::Contributor(project_id, i);
@@ -422,11 +432,17 @@ impl CrowdfundVaultContract {
             let amount_key = DataKey::Contribution(project_id, contributor.clone());
             let amount: i128 = env.storage().persistent().get(&amount_key).unwrap_or(0);
 
+            let normalized_amount_key = DataKey::NormalizedContribution(project_id, contributor.clone());
+            let normalized_amount: i128 = env.storage().persistent().get(&normalized_amount_key).unwrap_or(0);
+
             if amount > 0 {
                 token_client.transfer(&contract_address, &contributor, &amount);
 
                 env.storage().persistent().remove(&amount_key);
+                env.storage().persistent().remove(&normalized_amount_key);
                 total_refunded += amount;
+                project.normalized_total_deposited -= normalized_amount;
+                normalized_refunded += normalized_amount;
 
                 events::ContributionRefundedEvent {
                     project_id,
@@ -443,7 +459,12 @@ impl CrowdfundVaultContract {
         env.storage()
             .persistent()
             .remove(&DataKey::ProjectRefundWindowDeadline(project_id));
-        Self::reduce_protocol_tvl(&env, total_refunded);
+        Self::reduce_protocol_tvl(&env, normalized_refunded);
+
+        // Update project normalized total
+        env.storage()
+            .persistent()
+            .set(&DataKey::Project(project_id), &project);
 
         Ok(())
     }
@@ -490,6 +511,9 @@ impl CrowdfundVaultContract {
             return Err(CrowdfundError::InsufficientBalance);
         }
 
+        let normalized_amount_key = DataKey::NormalizedContribution(project_id, contributor.clone());
+        let normalized_amount: i128 = env.storage().persistent().get(&normalized_amount_key).unwrap_or(0);
+
         let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
         let total_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
         let invested_key = DataKey::ProjectInvestedBalance(project_id);
@@ -510,10 +534,18 @@ impl CrowdfundVaultContract {
         );
 
         env.storage().persistent().remove(&amount_key);
+        env.storage().persistent().remove(&normalized_amount_key);
         env.storage()
             .persistent()
             .set(&balance_key, &(total_balance - amount));
-        Self::reduce_protocol_tvl(&env, amount);
+        Self::reduce_protocol_tvl(&env, normalized_amount);
+
+        // Update project totals
+        project.total_deposited -= amount;
+        project.normalized_total_deposited -= normalized_amount;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Project(project_id), &project);
 
         events::ContributionClawedBackEvent {
             project_id,
@@ -567,6 +599,19 @@ impl CrowdfundVaultContract {
             return Err(CrowdfundError::ProjectNotActive);
         }
 
+        // Get price from oracle
+        let oracle_address: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::PriceOracle)
+            .ok_or(CrowdfundError::OracleNotSet)?;
+        let price = price_oracle::get_price(&env, &oracle_address, &project.token_address);
+        if price <= 0 {
+            return Err(CrowdfundError::InvalidPrice);
+        }
+        const PRICE_SCALE: i128 = 10_000_000; // 7 decimals
+        let normalized_amount = (amount * price) / PRICE_SCALE;
+
         // Transfer tokens from user to contract if they have sufficient balance
         let contract_address = env.current_contract_address();
         let user_balance = token::balance(&env, &project.token_address, &user);
@@ -595,6 +640,14 @@ impl CrowdfundVaultContract {
             .get(&contribution_key)
             .unwrap_or(0);
 
+        // Track normalized contribution
+        let normalized_contribution_key = DataKey::NormalizedContribution(project_id, user.clone());
+        let current_normalized_contribution: i128 = env
+            .storage()
+            .persistent()
+            .get(&normalized_contribution_key)
+            .unwrap_or(0);
+
         // If this is a new contributor, add them to the contributors list
         if current_contribution == 0 {
             let contributor_count_key = DataKey::ContributorCount(project_id);
@@ -620,8 +673,14 @@ impl CrowdfundVaultContract {
             .persistent()
             .set(&contribution_key, &(current_contribution + amount));
 
+        // Update normalized contribution
+        env.storage()
+            .persistent()
+            .set(&normalized_contribution_key, &(current_normalized_contribution + normalized_amount));
+
         // Update project total deposited
         project.total_deposited += amount;
+        project.normalized_total_deposited += normalized_amount;
         env.storage()
             .persistent()
             .set(&DataKey::Project(project_id), &project);
@@ -635,8 +694,8 @@ impl CrowdfundVaultContract {
                 tvl: 0,
                 cumulative_volume: 0,
             });
-        stats.tvl += amount;
-        stats.cumulative_volume += amount;
+        stats.tvl += normalized_amount;
+        stats.cumulative_volume += normalized_amount;
         env.storage()
             .instance()
             .set(&DataKey::ProtocolStats, &stats);
@@ -863,11 +922,11 @@ impl CrowdfundVaultContract {
             return Err(CrowdfundError::AlreadyVoted);
         }
 
-        // Get contribution weight
+        // Get contribution weight (normalized for fair voting)
         let weight: i128 = env
             .storage()
             .persistent()
-            .get(&DataKey::Contribution(project_id, voter.clone()))
+            .get(&DataKey::NormalizedContribution(project_id, voter.clone()))
             .unwrap_or(0);
 
         if weight <= 0 {
@@ -1309,8 +1368,8 @@ impl CrowdfundVaultContract {
                 .get(&contributor_key)
                 .ok_or(CrowdfundError::ProjectNotFound)?;
 
-            // Get contribution amount
-            let contribution_key = DataKey::Contribution(project_id, contributor);
+            // Get normalized contribution amount
+            let contribution_key = DataKey::NormalizedContribution(project_id, contributor);
             let contribution: i128 = env
                 .storage()
                 .persistent()

@@ -56,11 +56,26 @@ export function getContractConfigs(): ContractConfig[] {
             }
         },
         {
+            name: 'price_oracle',
+            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/price_oracle.wasm',
+            init: {
+                fn: 'initialize',
+                args: ({ adminPublicKey }) => {
+                    return [new Address(adminPublicKey).toScVal()];
+                }
+            }
+        },
+        {
             name: 'vault',
             wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/crowdfund_vault.wasm',
             init: {
                 fn: 'initialize',
-                args: ({ adminPublicKey }) => {
+                args: ({ adminPublicKey, deployedContracts }) => {
+                    // Vault requires the price oracle
+                    const oracleAddress = deployedContracts['price_oracle'];
+                    if (!oracleAddress) {
+                        throw new Error('Price oracle must be deployed before vault');
+                    }
                     return [new Address(adminPublicKey).toScVal()];
                 }
             }

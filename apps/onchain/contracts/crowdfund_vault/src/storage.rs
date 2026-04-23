@@ -17,6 +17,7 @@ pub enum DataKey {
     MilestoneVoteWindow(u64, u32),    // (project_id, milestone_id) -> u64 (timestamp)
     NextProjectId,                    // -> u64
     Contribution(u64, Address),       // (project_id, contributor) -> i128
+    NormalizedContribution(u64, Address), // (project_id, contributor) -> i128 (in XLM)
     ContributorCount(u64),            // project_id -> u32
     Contributor(u64, u32),            // (project_id, index) -> Address
     MatchingPool(Address),            // token_address -> i128
@@ -30,6 +31,7 @@ pub enum DataKey {
     FeeBps,                      // -> u32
     Treasury,                    // -> Address
     Subscribers,
+    PriceOracle,                 // -> Address
 }
 
 #[contracttype]
@@ -48,6 +50,7 @@ pub struct ProjectData {
     pub target_amount: i128,
     pub token_address: Address,
     pub total_deposited: i128,
+    pub normalized_total_deposited: i128, // in XLM equivalent
     pub total_withdrawn: i128,
     pub is_active: bool,
 }
