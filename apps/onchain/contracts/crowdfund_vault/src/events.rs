@@ -28,6 +28,17 @@ pub struct DepositEvent {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DepositIntentExecutedEvent {
+    #[topic]
+    pub user: Address,
+    pub project_id: u64,
+    pub amount: i128,
+    pub relayer: Address,
+    pub consumed_nonce: u64,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MilestoneApprovedEvent {
     #[topic]
     pub admin: Address,

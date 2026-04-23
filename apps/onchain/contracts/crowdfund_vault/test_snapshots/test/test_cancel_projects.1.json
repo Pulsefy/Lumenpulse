@@ -1160,6 +1160,35 @@
                         "val": {
                           "bool": false
                         }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "ProtocolStats"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "cumulative_volume"
+                              },
+                              "val": {
+                                "i128": "600000"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "tvl"
+                              },
+                              "val": {
+                                "i128": "600000"
+                              }
+                            }
+                          ]
+                        }
                       }
                     ]
                   }
