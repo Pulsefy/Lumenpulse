@@ -12,7 +12,7 @@ use math::{sqrt_scaled, unscale};
 use notification_interface::{Notification, NotificationReceiverClient};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, vec, Address, Bytes, BytesN, Env, IntoVal, Symbol, Vec};
 use storage::{DataKey, ProjectData, ProtocolStats};
 
 #[contract]
@@ -20,6 +20,128 @@ pub struct CrowdfundVaultContract;
 
 #[contractimpl]
 impl CrowdfundVaultContract {
+    fn deposit_nonce_of(env: &Env, user: &Address) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::DepositNonce(user.clone()))
+            .unwrap_or(0)
+    }
+
+    fn apply_deposit(
+        env: &Env,
+        user: Address,
+        project_id: u64,
+        amount: i128,
+    ) -> Result<(), CrowdfundError> {
+        // Check Emergency Pause State (single read)
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            return Err(CrowdfundError::ContractPaused);
+        }
+
+        // Validate amount
+        if amount <= 0 {
+            return Err(CrowdfundError::InvalidAmount);
+        }
+
+        // Get project
+        let mut project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        // Check if project is active
+        if !project.is_active {
+            return Err(CrowdfundError::ProjectNotActive);
+        }
+
+        // Transfer tokens from user to contract if they have sufficient balance
+        let contract_address = env.current_contract_address();
+        let user_balance = token::balance(env, &project.token_address, &user);
+        if user_balance >= amount {
+            token::transfer(env, &project.token_address, &user, &contract_address, &amount);
+        }
+
+        // Construct balance key once and reuse
+        let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+        let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&balance_key, &(current_balance + amount));
+
+        // Track individual contribution for quadratic funding
+        let contribution_key = DataKey::Contribution(project_id, user.clone());
+        let current_contribution: i128 = env.storage().persistent().get(&contribution_key).unwrap_or(0);
+
+        // If this is a new contributor, add them to the contributors list
+        if current_contribution == 0 {
+            let contributor_count_key = DataKey::ContributorCount(project_id);
+            let contributor_count: u32 = env
+                .storage()
+                .persistent()
+                .get(&contributor_count_key)
+                .unwrap_or(0);
+
+            // Store contributor at index
+            env.storage()
+                .persistent()
+                .set(&DataKey::Contributor(project_id, contributor_count), &user);
+
+            // Increment contributor count
+            env.storage()
+                .persistent()
+                .set(&contributor_count_key, &(contributor_count + 1));
+        }
+
+        // Update contribution amount
+        env.storage()
+            .persistent()
+            .set(&contribution_key, &(current_contribution + amount));
+
+        // Update project total deposited
+        project.total_deposited += amount;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Project(project_id), &project);
+
+        // Update global protocol stats
+        let mut stats: ProtocolStats = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProtocolStats)
+            .unwrap_or(ProtocolStats {
+                tvl: 0,
+                cumulative_volume: 0,
+            });
+        stats.tvl += amount;
+        stats.cumulative_volume += amount;
+        env.storage()
+            .instance()
+            .set(&DataKey::ProtocolStats, &stats);
+
+        // Emit deposit event
+        events::DepositEvent {
+            user: user.clone(),
+            project_id,
+            amount,
+        }
+        .publish(env);
+
+        // Notify subscribers
+        Self::notify_subscribers(
+            env,
+            Symbol::new(env, "deposit"),
+            (user, project_id, amount).to_xdr(env),
+        );
+
+        Ok(())
+    }
+
     /// Helper function to verify admin authorization
     /// Reduces code duplication and ensures consistent admin checks
     fn verify_admin(env: &Env, caller: &Address) -> Result<(), CrowdfundError> {
@@ -285,121 +407,60 @@ impl CrowdfundVaultContract {
         // Require user authorization
         user.require_auth();
 
-        // Check Emergency Pause State (single read)
-        let is_paused: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Paused)
-            .unwrap_or(false);
-        if is_paused {
-            return Err(CrowdfundError::ContractPaused);
+        Self::apply_deposit(&env, user, project_id, amount)
+    }
+
+    /// Execute a deposit using a signed user intent and a relayer-submitted tx.
+    pub fn deposit_with_sig(
+        env: Env,
+        relayer: Address,
+        user: Address,
+        project_id: u64,
+        amount: i128,
+        nonce: u64,
+        signature: Bytes,
+    ) -> Result<(), CrowdfundError> {
+        // Check if contract is initialized
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(CrowdfundError::NotInitialized);
         }
 
-        // Validate amount
-        if amount <= 0 {
-            return Err(CrowdfundError::InvalidAmount);
+        if signature.is_empty() {
+            return Err(CrowdfundError::InvalidSignature);
         }
 
-        // Get project
-        let mut project: ProjectData = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Project(project_id))
-            .ok_or(CrowdfundError::ProjectNotFound)?;
+        relayer.require_auth();
 
-        // Check if project is active
-        if !project.is_active {
-            return Err(CrowdfundError::ProjectNotActive);
+        let expected_nonce = Self::deposit_nonce_of(&env, &user);
+        if nonce != expected_nonce {
+            return Err(CrowdfundError::InvalidNonce);
         }
 
-        // Transfer tokens from user to contract if they have sufficient balance
-        let contract_address = env.current_contract_address();
-        let user_balance = token::balance(&env, &project.token_address, &user);
-        if user_balance >= amount {
-            token::transfer(
-                &env,
-                &project.token_address,
-                &user,
-                &contract_address,
-                &amount,
-            );
-        }
+        user.require_auth_for_args(
+            (
+                Symbol::new(&env, "deposit_with_sig"),
+                user.clone(),
+                project_id,
+                amount,
+                nonce,
+            )
+                .into_val(&env),
+        );
 
-        // Construct balance key once and reuse
-        let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
-        let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+        Self::apply_deposit(&env, user.clone(), project_id, amount)?;
+
         env.storage()
             .persistent()
-            .set(&balance_key, &(current_balance + amount));
+            .set(&DataKey::DepositNonce(user.clone()), &(nonce + 1));
 
-        // Track individual contribution for quadratic funding
-        let contribution_key = DataKey::Contribution(project_id, user.clone());
-        let current_contribution: i128 = env
-            .storage()
-            .persistent()
-            .get(&contribution_key)
-            .unwrap_or(0);
-
-        // If this is a new contributor, add them to the contributors list
-        if current_contribution == 0 {
-            let contributor_count_key = DataKey::ContributorCount(project_id);
-            let contributor_count: u32 = env
-                .storage()
-                .persistent()
-                .get(&contributor_count_key)
-                .unwrap_or(0);
-
-            // Store contributor at index
-            env.storage()
-                .persistent()
-                .set(&DataKey::Contributor(project_id, contributor_count), &user);
-
-            // Increment contributor count
-            env.storage()
-                .persistent()
-                .set(&contributor_count_key, &(contributor_count + 1));
-        }
-
-        // Update contribution amount
-        env.storage()
-            .persistent()
-            .set(&contribution_key, &(current_contribution + amount));
-
-        // Update project total deposited
-        project.total_deposited += amount;
-        env.storage()
-            .persistent()
-            .set(&DataKey::Project(project_id), &project);
-
-        // Update global protocol stats
-        let mut stats: ProtocolStats = env
-            .storage()
-            .instance()
-            .get(&DataKey::ProtocolStats)
-            .unwrap_or(ProtocolStats {
-                tvl: 0,
-                cumulative_volume: 0,
-            });
-        stats.tvl += amount;
-        stats.cumulative_volume += amount;
-        env.storage()
-            .instance()
-            .set(&DataKey::ProtocolStats, &stats);
-
-        // Emit deposit event
-        events::DepositEvent {
-            user: user.clone(),
+        events::DepositIntentExecutedEvent {
+            user,
             project_id,
             amount,
+            relayer,
+            consumed_nonce: nonce,
         }
         .publish(&env);
-
-        // Notify subscribers
-        Self::notify_subscribers(
-            &env,
-            Symbol::new(&env, "deposit"),
-            (user, project_id, amount).to_xdr(&env),
-        );
 
         Ok(())
     }
@@ -944,6 +1005,11 @@ impl CrowdfundVaultContract {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(CrowdfundError::NotInitialized)
+    }
+
+    /// Get current deposit intent nonce for a user.
+    pub fn get_deposit_nonce(env: Env, user: Address) -> Result<u64, CrowdfundError> {
+        Ok(Self::deposit_nonce_of(&env, &user))
     }
 
     /// Fund the matching pool (admin only)

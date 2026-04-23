@@ -4,7 +4,7 @@ use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Events, Ledger},
     token::{StellarAssetClient, TokenClient},
-    Address, Env,
+    Address, Bytes, Env,
 };
 fn create_token_contract<'a>(
     env: &Env,
@@ -171,6 +171,52 @@ fn test_deposit_invalid_amount() {
     // Try to deposit zero
     let result = client.try_deposit(&user, &project_id, &0);
     assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
+}
+
+#[test]
+fn test_deposit_with_sig() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    let relayer = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let sig = Bytes::from_slice(&env, &[1, 2, 3, 4]);
+    client.deposit_with_sig(&relayer, &user, &project_id, &200_000, &0, &sig);
+
+    assert_eq!(client.get_balance(&project_id), 200_000);
+    assert_eq!(client.get_deposit_nonce(&user), 1);
+}
+
+#[test]
+fn test_deposit_with_sig_invalid_nonce() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    let relayer = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let sig = Bytes::from_slice(&env, &[9, 9, 9]);
+    let result = client.try_deposit_with_sig(&relayer, &user, &project_id, &200_000, &1, &sig);
+    assert_eq!(result, Err(Ok(CrowdfundError::InvalidNonce)));
 }
 
 #[test]
