@@ -95,4 +95,14 @@ export class TransactionController {
       cursor,
     );
   }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get transaction detail by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns detailed transaction information',
+  })
+  async getTransactionDetail(@Param('id') id: string) {
+    return this.transactionService.getTransactionDetail(id);
+  }
 }

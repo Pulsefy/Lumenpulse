@@ -66,3 +66,20 @@ export class TransactionHistoryResponseDto {
   @ApiProperty({ required: false })
   nextPage?: string;
 }
+
+export class TransactionDetailDto extends TransactionDto {
+  @ApiProperty({ description: 'Stellar network (testnet or public)' })
+  network: string;
+
+  @ApiProperty({ description: 'Block/ledger number' })
+  ledger?: number;
+
+  @ApiProperty({ description: 'Number of operations in transaction' })
+  operationCount?: number;
+
+  @ApiProperty({ description: 'Transaction source account' })
+  sourceAccount: string;
+
+  @ApiProperty({ description: 'Transaction signatures count' })
+  signatureCount?: number;
+}

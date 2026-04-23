@@ -136,6 +136,44 @@ export class TransactionService {
     }
   }
 
+  async getTransactionDetail(transactionId: string): Promise<any> {
+    this.logger.log(`Fetching transaction detail for ${transactionId}`);
+
+    if (this.useMockData) {
+      const { transactions } = getMockTransactions(100);
+      const transaction = transactions.find((t) => t.id === transactionId);
+      if (transaction) {
+        return {
+          ...transaction,
+          network: this.configService.get('STELLAR_NETWORK', 'testnet'),
+          ledger: Math.floor(Math.random() * 1000000),
+          operationCount: 1,
+          sourceAccount: transaction.from,
+          signatureCount: 1,
+        };
+      }
+      return null;
+    }
+
+    try {
+      const url = `${this.horizonUrl}/transactions/${transactionId}`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      return {
+        ...data,
+        network: this.configService.get('STELLAR_NETWORK', 'testnet'),
+      };
+    } catch (error) {
+      this.logger.error(`Failed to fetch transaction detail: ${error}`);
+      return null;
+    }
+  }
+
   private async processTransactions(
     records: HorizonTransaction[],
     publicKey: string,

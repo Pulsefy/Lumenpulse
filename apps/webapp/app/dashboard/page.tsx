@@ -54,9 +54,15 @@ export default function DashboardPage() {
 
         <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
           <h2 className="text-xl font-semibold mb-4">Recent Transactions</h2>
-          <p className="text-gray-400">
-            Your transactions will appear here.
+          <p className="text-gray-400 mb-4">
+            View your transaction history
           </p>
+          <a
+            href="/transactions"
+            className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
+          >
+            View All Transactions
+          </a>
         </div>
 
         <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
