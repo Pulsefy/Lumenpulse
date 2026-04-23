@@ -13,4 +13,5 @@ pub enum VestingError {
     InvalidStartTime = 7,
     NothingToClaim = 8,
     InsufficientBalance = 9,
+    ReentrantCall = 10,
 }

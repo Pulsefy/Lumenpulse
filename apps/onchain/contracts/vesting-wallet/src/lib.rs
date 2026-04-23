@@ -7,6 +7,7 @@ mod token;
 
 use errors::VestingError;
 use events::{AdminChangedEvent, UpgradedEvent};
+use reentrancy_guard::ReentrancyGuard;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
 use storage::{DataKey, VestingData};
 use token::transfer;
@@ -34,6 +35,10 @@ impl VestingWalletContract {
                 .unwrap_or(0) as i128;
             total_vested - vesting.claimed_amount
         }
+    }
+
+    fn enter_reentrancy_guard(env: &Env) -> Result<ReentrancyGuard, VestingError> {
+        ReentrancyGuard::enter(env).map_err(|_| VestingError::ReentrantCall)
     }
 
     /// Initialize the contract with an admin address and token address
@@ -76,7 +81,7 @@ impl VestingWalletContract {
 
         // Require admin authorization
         admin.require_auth();
-
+        let _guard = Self::enter_reentrancy_guard(&env)?;
         // Validate amount
         if amount <= 0 {
             return Err(VestingError::InvalidAmount);
@@ -153,6 +158,7 @@ impl VestingWalletContract {
 
         // Require beneficiary authorization
         beneficiary.require_auth();
+        let _guard = Self::enter_reentrancy_guard(&env)?;
 
         // Get vesting data
         let mut vesting: VestingData = env

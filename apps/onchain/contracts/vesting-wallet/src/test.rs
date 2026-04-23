@@ -1,10 +1,79 @@
 use crate::errors::VestingError;
 use crate::{VestingWalletContract, VestingWalletContractClient};
 use soroban_sdk::{
+    contract, contractimpl, contracttype,
     testutils::{Address as _, Ledger},
     token::{StellarAssetClient, TokenClient},
-    Address, Env,
+    Address, Env, Symbol,
 };
+
+#[contracttype]
+#[derive(Clone)]
+enum MaliciousDataKey {
+    Vault,
+    Beneficiary,
+    ReentryFailed,
+    Balance(Address),
+}
+
+#[contract]
+pub struct MaliciousToken;
+
+#[contractimpl]
+impl MaliciousToken {
+    pub fn initialize(env: Env, vault: Address, beneficiary: Address) {
+        env.storage().instance().set(&MaliciousDataKey::Vault, &vault);
+        env.storage()
+            .instance()
+            .set(&MaliciousDataKey::Beneficiary, &beneficiary);
+        env.storage()
+            .instance()
+            .set(&MaliciousDataKey::ReentryFailed, &false);
+    }
+
+    pub fn get_reentry_failed(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&MaliciousDataKey::ReentryFailed)
+            .unwrap_or(false)
+    }
+}
+
+#[contractimpl]
+impl MaliciousToken {
+    pub fn balance(env: Env, id: Address) -> i128 {
+        env.storage()
+            .instance()
+            .get(&MaliciousDataKey::Balance(id))
+            .unwrap_or(0)
+    }
+
+    pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
+        let vault: Address = env
+            .storage()
+            .instance()
+            .get(&MaliciousDataKey::Vault)
+            .unwrap();
+        let beneficiary: Address = env
+            .storage()
+            .instance()
+            .get(&MaliciousDataKey::Beneficiary)
+            .unwrap();
+        let vault_client = VestingWalletContractClient::new(&env, &vault);
+        let result = vault_client.claim(&beneficiary);
+        let failed = matches!(result, Err(Ok(VestingError::ReentrantCall)));
+        env.storage().instance().set(&MaliciousDataKey::ReentryFailed, &failed);
+
+        let current: i128 = env
+            .storage()
+            .instance()
+            .get(&MaliciousDataKey::Balance(to.clone()))
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&MaliciousDataKey::Balance(to), &(current + amount));
+    }
+}
 
 fn create_token_contract<'a>(
     env: &Env,
@@ -42,6 +111,33 @@ fn setup_test<'a>(
     (client, admin, beneficiary, token_client, contract_id)
 }
 
+fn setup_malicious_token_test<'a>(
+    env: &Env,
+) -> (
+    VestingWalletContractClient<'a>,
+    Address,
+    Address,
+    TokenClient<'a>,
+    MaliciousTokenClient<'a>,
+    soroban_sdk::Address,
+) {
+    let admin = Address::generate(env);
+    let beneficiary = Address::generate(env);
+
+    // Register malicious token contract
+    let malicious_token_id = env.register(MaliciousToken, ());
+    let token_client = TokenClient::new(env, &malicious_token_id);
+    let malicious_token_client = MaliciousTokenClient::new(env, &malicious_token_id);
+
+    // Register vested wallet contract
+    let contract_id = env.register(VestingWalletContract, ());
+    let client = VestingWalletContractClient::new(env, &contract_id);
+
+    malicious_token_client.initialize(&contract_id, &beneficiary);
+
+    (client, admin, beneficiary, token_client, malicious_token_client, contract_id)
+}
+
 #[test]
 fn test_initialize() {
     let env = Env::default();
@@ -70,6 +166,31 @@ fn test_double_initialization_fails() {
     // Try to initialize again - should fail
     let result = client.try_initialize(&admin, &token_client.address);
     assert_eq!(result, Err(Ok(VestingError::AlreadyInitialized)));
+}
+
+#[test]
+fn test_claim_reentrancy_guard_blocks_nested_calls() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, malicious_token_client, contract_id) =
+        setup_malicious_token_test(&env);
+
+    client.initialize(&admin, &token_client.address);
+
+    // Create vesting schedule for beneficiary
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time - 1;
+    let duration = 1;
+    let amount: i128 = 1_000_000;
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+
+    // Claim tokens and verify the nested reentry attempt was blocked
+    let claimed = client.claim(&beneficiary);
+    assert_eq!(claimed, amount);
+    assert!(malicious_token_client.get_reentry_failed());
+    assert_eq!(token_client.balance(&beneficiary), amount);
+    assert_eq!(token_client.balance(&contract_id), 0);
 }
 
 #[test]

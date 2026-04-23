@@ -1,3 +1,4 @@
+use crate::errors::CrowdfundError;
 use crate::yield_provider::YieldProviderTrait;
 use crate::{CrowdfundVaultContract, CrowdfundVaultContractClient};
 use soroban_sdk::{
@@ -58,6 +59,56 @@ impl YieldProviderTrait for MockYieldProvider {
     }
 }
 
+#[contract]
+pub struct MaliciousYieldProvider;
+
+#[contractimpl]
+impl MaliciousYieldProvider {
+    pub fn initialize(env: Env, vault: Address, project_id: u64) {
+        env.storage().instance().set(&symbol_short!("vault"), &vault);
+        env.storage().instance().set(&symbol_short!("project_id"), &project_id);
+        env.storage().instance().set(&symbol_short!("reentry_failed"), &false);
+    }
+
+    pub fn get_reentry_failed(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&symbol_short!("reentry_failed"))
+            .unwrap_or(false)
+    }
+}
+
+#[contractimpl]
+impl YieldProviderTrait for MaliciousYieldProvider {
+    fn deposit(env: Env, from: Address, amount: i128) {
+        let vault: Address = env.storage().instance().get(&symbol_short!("vault")).unwrap();
+        let project_id: u64 = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("project_id"))
+            .unwrap();
+        let vault_client = CrowdfundVaultContractClient::new(&env, &vault);
+        let result = vault_client.invest_idle_funds(&from, &project_id, &amount);
+        let failed = matches!(result, Err(Ok(CrowdfundError::ReentrantCall)));
+        env.storage().instance().set(&symbol_short!("reentry_failed"), &failed);
+
+        let current: i128 = env.storage().persistent().get(&from).unwrap_or(0);
+        env.storage().persistent().set(&from, &(current + amount));
+    }
+
+    fn withdraw(env: Env, to: Address, amount: i128) {
+        let current: i128 = env.storage().persistent().get(&to).unwrap_or(0);
+        if current < amount {
+            panic!("insufficient balance in malicious provider");
+        }
+        env.storage().persistent().set(&to, &(current - amount));
+    }
+
+    fn balance(env: Env, address: Address) -> i128 {
+        env.storage().persistent().get(&address).unwrap_or(0)
+    }
+}
+
 fn setup_yield_test<'a>(
     env: &Env,
 ) -> (
@@ -95,6 +146,68 @@ fn setup_yield_test<'a>(
     token_admin_client.mint(&yield_id, &10_000_000);
 
     (vault_client, admin, owner, user, token_client, yield_id)
+}
+
+fn setup_malicious_yield_test<'a>(
+    env: &Env,
+) -> (
+    CrowdfundVaultContractClient<'a>,
+    Address,
+    Address,
+    Address,
+    TokenClient<'a>,
+    Address,
+) {
+    let admin = Address::generate(env);
+    let owner = Address::generate(env);
+    let user = Address::generate(env);
+
+    // Create token
+    let token_admin = Address::generate(env);
+    let token_addr = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_client = TokenClient::new(env, &token_addr.address());
+    let token_admin_client = StellarAssetClient::new(env, &token_addr.address());
+
+    // Mint tokens to user for deposits
+    token_admin_client.mint(&user, &10_000_000);
+
+    // Register vault contract
+    let vault_id = env.register(CrowdfundVaultContract, ());
+    let vault_client = CrowdfundVaultContractClient::new(env, &vault_id);
+
+    // Register malicious yield provider
+    let yield_id = env.register(MaliciousYieldProvider, ());
+    let malicious_yield_client = MaliciousYieldProviderClient::new(env, &yield_id);
+    malicious_yield_client.initialize(&vault_id, &0u64);
+
+    // Give some tokens to the yield provider so it can fulfill withdrawals
+    token_admin_client.mint(&yield_id, &10_000_000);
+
+    (vault_client, admin, owner, user, token_client, yield_id)
+}
+
+#[test]
+fn test_invest_idle_funds_reentrancy_guard_blocks_nested_calls() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client, yield_id) = setup_malicious_yield_test(&env);
+
+    client.initialize(&admin);
+    client.set_yield_provider(&admin, &token_client.address, &yield_id);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("YieldPrj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &500_000);
+    client.invest_idle_funds(&owner, &project_id, &300_000).unwrap();
+
+    let malicious_yield_client = MaliciousYieldProviderClient::new(&env, &yield_id);
+    assert!(malicious_yield_client.get_reentry_failed());
 }
 
 #[test]

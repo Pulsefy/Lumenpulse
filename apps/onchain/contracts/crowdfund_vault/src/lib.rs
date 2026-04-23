@@ -10,6 +10,7 @@ mod yield_provider;
 use errors::CrowdfundError;
 use math::{sqrt_scaled, unscale};
 use notification_interface::{Notification, NotificationReceiverClient};
+use reentrancy_guard::ReentrancyGuard;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
@@ -162,6 +163,10 @@ impl CrowdfundVaultContract {
 
         caller.require_auth();
         Ok(())
+    }
+
+    fn enter_reentrancy_guard(env: &Env) -> Result<ReentrancyGuard, CrowdfundError> {
+        ReentrancyGuard::enter(env).map_err(|_| CrowdfundError::ReentrantCall)
     }
 
     /// Initialize the contract with an admin address
@@ -376,6 +381,7 @@ impl CrowdfundVaultContract {
         caller: Address,
     ) -> Result<(), CrowdfundError> {
         Self::require_current_storage_version(&env)?;
+        let _guard = Self::enter_reentrancy_guard(&env)?;
         caller.require_auth();
         let mut project: ProjectData = env
             .storage()
@@ -454,6 +460,7 @@ impl CrowdfundVaultContract {
         contributor: Address,
     ) -> Result<i128, CrowdfundError> {
         Self::require_current_storage_version(&env)?;
+        let _guard = Self::enter_reentrancy_guard(&env)?;
         contributor.require_auth();
 
         let mut project: ProjectData = env
@@ -534,6 +541,7 @@ impl CrowdfundVaultContract {
         amount: i128,
     ) -> Result<(), CrowdfundError> {
         Self::require_current_storage_version(&env)?;
+        let _guard = Self::enter_reentrancy_guard(&env)?;
 
         // Require user authorization
         user.require_auth();
@@ -1232,6 +1240,7 @@ impl CrowdfundVaultContract {
         token_address: Address,
         amount: i128,
     ) -> Result<(), CrowdfundError> {
+        let _guard = Self::enter_reentrancy_guard(&env)?;
         // Verify admin (single check with helper)
         Self::verify_admin(&env, &admin)?;
 
@@ -1257,6 +1266,7 @@ impl CrowdfundVaultContract {
         token_address: Address,
         amount: i128,
     ) -> Result<(), CrowdfundError> {
+        let _guard = Self::enter_reentrancy_guard(&env)?;
         // Verify admin (single check with helper)
         Self::verify_admin(&env, &admin)?;
 
@@ -1336,6 +1346,7 @@ impl CrowdfundVaultContract {
     /// Distribute matching funds from matching pool to project balance
     pub fn distribute_match(env: Env, project_id: u64) -> Result<i128, CrowdfundError> {
         Self::require_current_storage_version(&env)?;
+        let _guard = Self::enter_reentrancy_guard(&env)?;
 
         // Check Emergency Pause State (single read)
         let is_paused: bool = env
@@ -1460,6 +1471,7 @@ impl CrowdfundVaultContract {
         token_address: Address,
         recipients: Vec<(Address, i128)>,
     ) -> Result<(), CrowdfundError> {
+        let _guard = Self::enter_reentrancy_guard(&env)?;
         // Verify admin (single check with helper)
         Self::verify_admin(&env, &admin)?;
 
@@ -1749,6 +1761,7 @@ impl CrowdfundVaultContract {
         amount: i128,
     ) -> Result<(), CrowdfundError> {
         Self::require_current_storage_version(&env)?;
+        let _guard = Self::enter_reentrancy_guard(&env)?;
         caller.require_auth();
 
         let project: ProjectData = env
@@ -1778,6 +1791,7 @@ impl CrowdfundVaultContract {
         amount: i128,
     ) -> Result<(), CrowdfundError> {
         Self::require_current_storage_version(&env)?;
+        let _guard = Self::enter_reentrancy_guard(&env)?;
         caller.require_auth();
 
         let project: ProjectData = env
