@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Demo script to compare Z-score vs Isolation Forest for anomaly detection.
 Demonstrates detection of pump-and-dump patterns.

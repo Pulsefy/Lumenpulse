@@ -48,3 +48,6 @@ sqlalchemy
 psycopg2-binary
 pandas
 pytest
+
+joblib>=1.1.0
+matplotlib>=3.5.0

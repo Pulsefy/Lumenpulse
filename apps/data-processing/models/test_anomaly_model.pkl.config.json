@@ -1,0 +1,1 @@
+{"contamination": 0.1, "n_estimators": 100, "max_samples": "auto", "feature_columns": ["volume", "sentiment", "volume_change_rate", "sentiment_change_rate"]}

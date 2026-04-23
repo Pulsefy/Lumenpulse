@@ -211,18 +211,19 @@ class TestAnomalyDetector(unittest.TestCase):
 
         results = self.detector.detect_anomalies(spike_volume, extreme_sentiment)
 
-        # Should return two results
-        self.assertEqual(len(results), 2)
-
+        # Should return a dictionary with volume_anomaly and sentiment_anomaly
+        self.assertIn('volume_anomaly', results)
+        self.assertIn('sentiment_anomaly', results)
+        
         # Both should be detected as anomalies
-        volume_result = results[0]
-        sentiment_result = results[1]
+        volume_result = results['volume_anomaly']
+        sentiment_result = results['sentiment_anomaly']
 
         self.assertEqual(volume_result.metric_name, "volume")
         self.assertEqual(sentiment_result.metric_name, "sentiment")
         self.assertTrue(volume_result.is_anomaly)
         self.assertTrue(sentiment_result.is_anomaly)
-
+        
     def test_five_sigma_outlier_detection(self):
         """
         Test that a synthetic time series with one point exactly 5σ away from
