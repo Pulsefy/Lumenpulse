@@ -66,6 +66,22 @@ fn test_register_contributor() {
 }
 
 #[test]
+fn test_get_contributor_by_github() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, contributor) = setup_test(&env);
+    client.initialize(&admin);
+
+    let github_handle = String::from_str(&env, "testuser");
+    client.register_contributor(&contributor, &github_handle);
+
+    let by_address = client.get_contributor(&contributor);
+    let by_github = client.get_contributor_by_github(&github_handle);
+    assert_eq!(by_github, by_address);
+}
+
+#[test]
 fn test_register_contributor_not_initialized() {
     let env = Env::default();
     env.mock_all_auths();
@@ -111,6 +127,66 @@ fn test_duplicate_registration_fails() {
     // Try to register again - should fail
     let result = client.try_register_contributor(&contributor, &github_handle);
     assert_eq!(result, Err(Ok(ContributorError::ContributorAlreadyExists)));
+}
+
+#[test]
+fn test_duplicate_github_handle_fails_for_second_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, contributor1) = setup_test(&env);
+    let contributor2 = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    let github_handle = String::from_str(&env, "testuser");
+    client.register_contributor(&contributor1, &github_handle);
+
+    let result = client.try_register_contributor(&contributor2, &github_handle);
+    assert_eq!(result, Err(Ok(ContributorError::GitHubHandleTaken)));
+}
+
+#[test]
+fn test_update_contributor_github_handle_updates_index() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, contributor) = setup_test(&env);
+    client.initialize(&admin);
+
+    let old_handle = String::from_str(&env, "old_handle");
+    let new_handle = String::from_str(&env, "new_handle");
+
+    client.register_contributor(&contributor, &old_handle);
+    client.update_contributor(&contributor, &new_handle);
+
+    let old_lookup = client.try_get_contributor_by_github(&old_handle);
+    assert_eq!(old_lookup, Err(Ok(ContributorError::ContributorNotFound)));
+
+    let new_lookup = client.get_contributor_by_github(&new_handle);
+    assert_eq!(new_lookup.address, contributor);
+    assert_eq!(new_lookup.github_handle, new_handle);
+}
+
+#[test]
+fn test_update_contributor_clears_stale_github_index_entry() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, contributor1) = setup_test(&env);
+    let contributor2 = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    let old_handle = String::from_str(&env, "old_handle");
+    let new_handle = String::from_str(&env, "new_handle");
+    client.register_contributor(&contributor1, &old_handle);
+    client.update_contributor(&contributor1, &new_handle);
+
+    // If the old index entry were stale, this registration would fail.
+    client.register_contributor(&contributor2, &old_handle);
+    let contributor2_data = client.get_contributor_by_github(&old_handle);
+    assert_eq!(contributor2_data.address, contributor2);
 }
 
 #[test]

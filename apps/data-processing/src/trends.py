@@ -2,9 +2,10 @@
 Trend calculator module - calculates market trends from sentiment and data
 """
 
+import json
 import logging
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -36,33 +37,39 @@ class TrendCalculator:
     """Calculates trends from sentiment analysis and market data"""
 
     def __init__(self):
-        self.trend_history = {}
+        self.trend_history: Dict[str, Any] = {}
+        self.cache: object | None = None
+        try:
+            from cache_manager import CacheManager
+        except ImportError:
+            logger.info("CacheManager unavailable - trends caching disabled")
+        else:
+            try:
+                self.cache = CacheManager(namespace="trends")
+            except Exception as e:
+                logger.warning("Redis unavailable - trends caching disabled: %s", e)
+            else:
+                logger.info("Trends cache ready")
 
-    def calculate_sentiment_trend(self, sentiment_summary: Dict[str, Any]) -> Trend:
-        """
-        Calculate trend from sentiment analysis results
+    @staticmethod
+    def _summary_cache_key(sentiment_summary: Dict[str, Any]) -> str:
+        """Deterministic key from a sentiment summary dict."""
+        return json.dumps(sentiment_summary, sort_keys=True, default=str)
 
-        Args:
-            sentiment_summary: Summary from SentimentAnalyzer
-
-        Returns:
-            Trend object
-        """
-        current_sentiment_score = sentiment_summary.get("average_compound_score", 0)
-        metric_name = "sentiment_score"
-
-        # Get previous value or use current as baseline
+    def _compute_trend(
+        self,
+        metric_name: str,
+        current_value: float,
+    ) -> Trend:
         previous_value = self.trend_history.get(metric_name, {}).get(
-            "value", current_sentiment_score
+            "value", current_value
         )
 
         # Calculate change
         if previous_value != 0:
-            change_pct = (
-                (current_sentiment_score - previous_value) / abs(previous_value)
-            ) * 100
+            change_pct = ((current_value - previous_value) / abs(previous_value)) * 100
         else:
-            change_pct = 0
+            change_pct = 0.0
 
         # Determine trend direction
         if change_pct > 2:
@@ -72,127 +79,38 @@ class TrendCalculator:
         else:
             direction = "stable"
 
-        # Update history
+        # Update trend history
         self.trend_history[metric_name] = {
-            "value": current_sentiment_score,
-            "timestamp": datetime.utcnow(),
+            "value": current_value,
+            "timestamp": datetime.now(timezone.utc),
         }
 
         trend = Trend(
             metric_name=metric_name,
-            current_value=round(current_sentiment_score, 4),
+            current_value=round(current_value, 4),
             previous_value=round(previous_value, 4),
             change_percentage=round(change_pct, 2),
             trend_direction=direction,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
-
-        logger.info(f"Sentiment trend: {trend.trend_direction} ({change_pct:.2f}%)")
+        logger.info("%s trend: %s (%.2f%%)", metric_name, direction, change_pct)
         return trend
+
+    def calculate_sentiment_trend(self, sentiment_summary: Dict[str, Any]) -> Trend:
+        current = sentiment_summary.get("average_compound_score", 0)
+        return self._compute_trend("sentiment_score", current)
 
     def calculate_positive_sentiment_trend(
         self, sentiment_summary: Dict[str, Any]
     ) -> Trend:
-        """
-        Calculate trend for positive sentiment percentage
-
-        Args:
-            sentiment_summary: Summary from SentimentAnalyzer
-
-        Returns:
-            Trend object
-        """
-        current_positive = sentiment_summary.get("sentiment_distribution", {}).get(
-            "positive", 0
-        )
-        metric_name = "positive_sentiment_percentage"
-
-        previous_value = self.trend_history.get(metric_name, {}).get(
-            "value", current_positive
-        )
-
-        if previous_value != 0:
-            change_pct = ((current_positive - previous_value) / previous_value) * 100
-        else:
-            change_pct = 0
-
-        if change_pct > 2:
-            direction = "up"
-        elif change_pct < -2:
-            direction = "down"
-        else:
-            direction = "stable"
-
-        self.trend_history[metric_name] = {
-            "value": current_positive,
-            "timestamp": datetime.utcnow(),
-        }
-
-        trend = Trend(
-            metric_name=metric_name,
-            current_value=round(current_positive, 4),
-            previous_value=round(previous_value, 4),
-            change_percentage=round(change_pct, 2),
-            trend_direction=direction,
-            timestamp=datetime.utcnow(),
-        )
-
-        logger.info(
-            f"Positive sentiment trend: {trend.trend_direction} ({change_pct:.2f}%)"
-        )
-        return trend
+        current = sentiment_summary.get("sentiment_distribution", {}).get("positive", 0)
+        return self._compute_trend("positive_sentiment_percentage", current)
 
     def calculate_negative_sentiment_trend(
         self, sentiment_summary: Dict[str, Any]
     ) -> Trend:
-        """
-        Calculate trend for negative sentiment percentage
-
-        Args:
-            sentiment_summary: Summary from SentimentAnalyzer
-
-        Returns:
-            Trend object
-        """
-        current_negative = sentiment_summary.get("sentiment_distribution", {}).get(
-            "negative", 0
-        )
-        metric_name = "negative_sentiment_percentage"
-
-        previous_value = self.trend_history.get(metric_name, {}).get(
-            "value", current_negative
-        )
-
-        if previous_value != 0:
-            change_pct = ((current_negative - previous_value) / previous_value) * 100
-        else:
-            change_pct = 0
-
-        if change_pct > 2:
-            direction = "up"
-        elif change_pct < -2:
-            direction = "down"
-        else:
-            direction = "stable"
-
-        self.trend_history[metric_name] = {
-            "value": current_negative,
-            "timestamp": datetime.utcnow(),
-        }
-
-        trend = Trend(
-            metric_name=metric_name,
-            current_value=round(current_negative, 4),
-            previous_value=round(previous_value, 4),
-            change_percentage=round(change_pct, 2),
-            trend_direction=direction,
-            timestamp=datetime.utcnow(),
-        )
-
-        logger.info(
-            f"Negative sentiment trend: {trend.trend_direction} ({change_pct:.2f}%)"
-        )
-        return trend
+        current = sentiment_summary.get("sentiment_distribution", {}).get("negative", 0)
+        return self._compute_trend("negative_sentiment_percentage", current)
 
     def calculate_all_trends(self, sentiment_summary: Dict[str, Any]) -> List[Trend]:
         """
@@ -204,11 +122,32 @@ class TrendCalculator:
         Returns:
             List of Trend objects
         """
+        cache_key = self._summary_cache_key(sentiment_summary)
+
+        # Check cache for cached results
+        if self.cache:
+            cached = self.cache.get(cache_key)
+            if cached:
+                return [
+                    Trend(
+                        metric_name=t["metric_name"],
+                        current_value=t["current_value"],
+                        previous_value=t["previous_value"],
+                        change_percentage=t["change_percentage"],
+                        trend_direction=t["trend_direction"],
+                        timestamp=datetime.fromisoformat(t["timestamp"]),
+                    )
+                    for t in cached
+                ]
+
         trends = [
             self.calculate_sentiment_trend(sentiment_summary),
             self.calculate_positive_sentiment_trend(sentiment_summary),
             self.calculate_negative_sentiment_trend(sentiment_summary),
         ]
 
-        logger.info(f"Calculated {len(trends)} trends")
+        if self.cache:
+            self.cache.set(cache_key, [t.to_dict() for t in trends])
+
+        logger.info("Calculated %d trends", len(trends))
         return trends

@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
+  ActivityIndicator,
+  Alert,
   SafeAreaView,
-  TouchableOpacity,
   ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
@@ -13,6 +16,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRouter } from 'expo-router';
 import { ThemeMode } from '../../theme/colors';
+import {
+  authenticateBiometricPrompt,
+  getBiometricLockEnabled,
+  isBiometricEnrolled,
+  isBiometricLockSupported,
+  setBiometricLockEnabled,
+} from '../../lib/biometric-lock';
 
 const THEME_OPTIONS: { label: string; value: ThemeMode; icon: string }[] = [
   { label: 'System', value: 'system', icon: 'phone-portrait-outline' },
@@ -24,9 +34,22 @@ export default function SettingsScreen() {
   const { logout, isAuthenticated } = useAuth();
   const { colors, mode, setMode } = useTheme();
   const router = useRouter();
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(true);
+  const [biometricSaving, setBiometricSaving] = useState(false);
 
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
   const appEnv = Constants.expoConfig?.extra?.environment ?? 'development';
+
+  useEffect(() => {
+    const loadBiometricPreference = async () => {
+      const enabled = await getBiometricLockEnabled();
+      setBiometricEnabled(enabled);
+      setBiometricLoading(false);
+    };
+
+    void loadBiometricPreference();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -37,13 +60,133 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleBiometricToggle = async (nextValue: boolean) => {
+    if (biometricSaving) {
+      return;
+    }
+
+    setBiometricSaving(true);
+
+    try {
+      if (nextValue) {
+        const supported = await isBiometricLockSupported();
+        if (!supported) {
+          Alert.alert(
+            'Biometric Not Supported',
+            'This device does not support biometric authentication.',
+          );
+          return;
+        }
+
+        const enrolled = await isBiometricEnrolled();
+        if (!enrolled) {
+          Alert.alert(
+            'No Biometrics Enrolled',
+            'Set up Face ID or fingerprint in your device settings before enabling this lock.',
+          );
+          return;
+        }
+
+        const result = await authenticateBiometricPrompt('Confirm biometric lock');
+        if (!result.success) {
+          return;
+        }
+      }
+
+      await setBiometricLockEnabled(nextValue);
+      setBiometricEnabled(nextValue);
+    } catch (error) {
+      console.error('Error updating biometric lock setting:', error);
+      Alert.alert('Update Failed', 'Could not update biometric lock preference. Please try again.');
+    } finally {
+      setBiometricSaving(false);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
 
-        {/* ── Theme Section ── */}
-        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View
+          style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        >
+          <View style={styles.sectionHeader}>
+            <Ionicons name="options-outline" size={20} color={colors.accent} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Account & Preferences</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.navRow}
+            activeOpacity={0.75}
+            onPress={() => router.push('/settings/manage-accounts')}
+          >
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="wallet-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]}>Manage Accounts</Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]}>
+                  Add linked Stellar public keys with QR and remove them when needed.
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <TouchableOpacity
+            style={styles.navRow}
+            activeOpacity={0.75}
+            onPress={() => router.push('/settings/notification-settings')}
+          >
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]}>Notification Settings</Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]}>
+                  Control price, news, and security alerts individually.
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <View style={styles.preferenceRow}>
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]}>Enable Biometric Lock</Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]}>
+                  Require Face ID, fingerprint, or passcode on every cold app start.
+                </Text>
+              </View>
+            </View>
+
+            {biometricLoading || biometricSaving ? (
+              <ActivityIndicator color={colors.accent} />
+            ) : (
+              <Switch
+                value={biometricEnabled}
+                onValueChange={(value) => void handleBiometricToggle(value)}
+                trackColor={{ false: colors.cardBorder, true: colors.accent }}
+                thumbColor="#ffffff"
+              />
+            )}
+          </View>
+        </View>
+
+        <View
+          style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        >
           <View style={styles.sectionHeader}>
             <Ionicons name="color-palette-outline" size={20} color={colors.accent} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Appearance</Text>
@@ -70,12 +213,7 @@ export default function SettingsScreen() {
                     size={20}
                     color={isActive ? '#ffffff' : colors.textSecondary}
                   />
-                  <Text
-                    style={[
-                      styles.themeLabel,
-                      { color: isActive ? '#ffffff' : colors.text },
-                    ]}
-                  >
+                  <Text style={[styles.themeLabel, { color: isActive ? '#ffffff' : colors.text }]}>
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
@@ -84,8 +222,9 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* ── App Info Section ── */}
-        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View
+          style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        >
           <View style={styles.sectionHeader}>
             <Ionicons name="information-circle-outline" size={20} color={colors.accent} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>App Info</Text>
@@ -100,7 +239,12 @@ export default function SettingsScreen() {
 
           <View style={styles.infoRow}>
             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Environment</Text>
-            <View style={[styles.envBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <View
+              style={[
+                styles.envBadge,
+                { backgroundColor: colors.card, borderColor: colors.cardBorder },
+              ]}
+            >
               <Text style={[styles.envBadgeText, { color: colors.accent }]}>
                 {appEnv === 'production' ? 'Production' : 'Contributor Build'}
               </Text>
@@ -115,7 +259,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* ── Logout ── */}
         {isAuthenticated && (
           <TouchableOpacity
             style={[styles.logoutButton, { backgroundColor: colors.danger }]}
@@ -148,8 +291,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     letterSpacing: -0.5,
   },
-
-  /* Sections */
   section: {
     borderRadius: 16,
     padding: 16,
@@ -166,8 +307,45 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-
-  /* Theme Selector */
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  preferenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  navRowCopy: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  navIconShell: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navTextWrap: {
+    flex: 1,
+  },
+  navTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  navDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
   themeRow: {
     flexDirection: 'row',
     gap: 10,
@@ -185,8 +363,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-
-  /* App Info */
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -202,6 +378,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
+    marginVertical: 14,
   },
   envBadge: {
     paddingHorizontal: 10,
@@ -213,8 +390,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-
-  /* Logout */
   logoutButton: {
     flexDirection: 'row',
     height: 56,

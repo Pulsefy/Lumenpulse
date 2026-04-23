@@ -9,6 +9,10 @@ import {
 
 @Entity('articles')
 @Index('IDX_articles_url', ['url'], { unique: true })
+@Index(['publishedAt'])
+@Index(['source'])
+@Index(['sentimentScore'])
+@Index(['source', 'publishedAt'])
 export class News {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -25,8 +29,14 @@ export class News {
   @Column({ type: 'timestamp' })
   publishedAt: Date;
 
-  @Column({ type: 'decimal', precision: 10, scale: 4, nullable: true })
-  sentimentScore: number;
+  @Column({ type: 'float', nullable: true })
+  sentimentScore: number | null;
+
+  @Column('text', { array: true, nullable: true, default: [] })
+  tags: string[];
+
+  @Column({ nullable: true })
+  category: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

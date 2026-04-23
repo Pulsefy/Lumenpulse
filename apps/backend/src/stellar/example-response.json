@@ -1,0 +1,22 @@
+{
+  "publicKey": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+  "balances": [
+    {
+      "assetType": "native",
+      "balance": "1000.0000000",
+      "buyingLiabilities": "0.0000000",
+      "sellingLiabilities": "0.0000000"
+    },
+    {
+      "assetType": "credit_alphanum4",
+      "assetCode": "USDC",
+      "assetIssuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "balance": "500.0000000",
+      "limit": "922337203685.4775807",
+      "buyingLiabilities": "0.0000000",
+      "sellingLiabilities": "0.0000000"
+    }
+  ],
+  "sequenceNumber": "123456789"
+}
+

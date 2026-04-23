@@ -1,7 +1,7 @@
 {
-  "name": "StarkPulse - Decentralized Crypto News Platform",
-  "short_name": "StarkPulse",
-  "description": "Your trusted source for crypto news, trends, and insights powered by StarkNet.",
+  "name": "LumenPulse - Decentralized Crypto News Platform",
+  "short_name": "LumenPulse",
+  "description": "Your trusted source for crypto news, trends, and insights powered by Stellar.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",

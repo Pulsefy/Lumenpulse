@@ -7,6 +7,7 @@ import json
 import logging
 import os
 from typing import Any, Optional
+
 import redis
 
 logger = logging.getLogger(__name__)
@@ -22,153 +23,114 @@ class CacheManager:
 
     def __init__(
         self,
-        host: str = None,
-        port: int = None,
-        db: int = None,
-        ttl_seconds: int = None,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        db: Optional[int] = None,
+        ttl_seconds: Optional[int] = None,
+        namespace: str = "cache",
     ):
+        self.host = host if host is not None else os.getenv("REDIS_HOST", "localhost")
+        self.port = port if port is not None else int(os.getenv("REDIS_PORT", "6379"))
+        self.db = db if db is not None else int(os.getenv("REDIS_DB", "0"))
+        self.ttl_seconds = (
+            ttl_seconds
+            if ttl_seconds is not None
+            else int(os.getenv("CACHE_TTL_SECONDS", str(self.DEFAULT_TTL_SECONDS)))
+        )
+        self.namespace = namespace
+
+        self.redis_client = redis.Redis(
+            host=self.host,
+            port=self.port,
+            db=self.db,
+            decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=5,
+        )
+        self.redis_client.ping()
+        logger.info(
+            "Connected to Redis at %s:%s/%s (namespace=%s, ttl=%ss)",
+            self.host,
+            self.port,
+            self.db,
+            self.namespace,
+            self.ttl_seconds,
+        )
+
+    def _generate_key(self, raw_key: str) -> str:
+        """Return ``namespace:sha256(raw_key)``."""
+        digest = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+        return f"{self.namespace}:{digest}"
+
+    @staticmethod
+    def make_key(*parts: Any) -> str:
+        """Build a deterministic cache key from arbitrary ordered parts."""
+        return "|".join(str(p) for p in parts)
+
+    def get(self, raw_key: str) -> Optional[Any]:
         """
-        Initialize the cache manager with Redis connection parameters.
+        Return deserialised value for raw_key, or None on miss.
 
         Args:
-            host: Redis host (defaults to REDIS_HOST env var or 'localhost')
-            port: Redis port (defaults to REDIS_PORT env var or 6379)
-            db: Redis database number (defaults to REDIS_DB env var or 0)
-            ttl_seconds: Time-to-live in seconds (defaults to 24 hours)
-        """
-        self.host = host or os.getenv("REDIS_HOST", "localhost")
-        self.port = port or int(os.getenv("REDIS_PORT", 6379))
-        self.db = db or int(os.getenv("REDIS_DB", 0))
-        self.ttl_seconds = ttl_seconds or self.DEFAULT_TTL_SECONDS
-
-        # Create Redis connection
-        try:
-            self.redis_client = redis.Redis(
-                host=self.host,
-                port=self.port,
-                db=self.db,
-                decode_responses=True,
-                socket_connect_timeout=5,
-                socket_timeout=5,
-            )
-
-            # Test the connection
-            self.redis_client.ping()
-            logger.info(f"Connected to Redis at {self.host}:{self.port}, DB: {self.db}")
-        except redis.ConnectionError as e:
-            logger.error(f"Failed to connect to Redis: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error connecting to Redis: {e}")
-            raise
-
-    def _generate_key(self, text: str) -> str:
-        """
-        Generate a unique key for the given text using SHA-256 hash.
-
-        Args:
-            text: Text to generate cache key for
-
-        Returns:
-            Hashed key string
-        """
-        # Create a hash of the text to use as cache key
-        text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        return f"sentiment:{text_hash}"
-
-    def get(self, text: str) -> Optional[Any]:
-        """
-        Retrieve cached result for the given text.
-
-        Args:
-            text: Text to look up in cache
+            raw_key: Key to retrieve the result from
 
         Returns:
             Cached result if found, None otherwise
         """
         try:
-            key = self._generate_key(text)
-            cached_result = self.redis_client.get(key)
-
-            if cached_result:
-                logger.debug(f"Cache HIT for text: {text[:50]}...")
-                return json.loads(cached_result)
-            else:
-                logger.debug(f"Cache MISS for text: {text[:50]}...")
-                return None
+            key = self._generate_key(raw_key)
+            cached = self.redis_client.get(key)
+            if cached is not None:
+                logger.info("CACHE HIT  [%s] %s", self.namespace, raw_key[:80])
+                return json.loads(cached)
+            logger.debug("CACHE MISS [%s] %s", self.namespace, raw_key[:80])
+            return None
         except Exception as e:
-            logger.error(f"Error retrieving from cache: {e}")
+            logger.error("Cache get error: %s", e)
             return None
 
-    def set(self, text: str, result: Any) -> bool:
+    def set(self, raw_key: str, value: Any) -> bool:
         """
         Store result in cache with TTL.
 
         Args:
-            text: Original text that was analyzed
-            result: Result to cache
+            raw_key: Key to store the result under
+            value: Result to store in cache
 
         Returns:
             True if successful, False otherwise
         """
         try:
-            key = self._generate_key(text)
-            serialized_result = json.dumps(
-                result, default=str
-            )  # default=str handles datetime serialization
-            success = self.redis_client.setex(key, self.ttl_seconds, serialized_result)
-
-            if success:
+            key = self._generate_key(raw_key)
+            serialised = json.dumps(value, default=str)
+            ok = self.redis_client.setex(key, self.ttl_seconds, serialised)
+            if ok:
                 logger.debug(
-                    f"Cache SET for text: {text[:50]}... (TTL: {self.ttl_seconds}s)"
+                    "CACHE SET  [%s] ttl=%ss", self.namespace, self.ttl_seconds
                 )
-                return True
-            else:
-                logger.warning(f"Failed to set cache for text: {text[:50]}...")
-                return False
+            return bool(ok)
         except Exception as e:
-            logger.error(f"Error storing in cache: {e}")
+            logger.error("Cache set error: %s", e)
             return False
 
-    def delete(self, text: str) -> bool:
-        """
-        Delete cached result for the given text.
-
-        Args:
-            text: Text to remove from cache
-
-        Returns:
-            True if successful, False otherwise
-        """
+    def delete(self, raw_key: str) -> bool:
+        """Remove a single entry."""
         try:
-            key = self._generate_key(text)
-            deleted_count = self.redis_client.delete(key)
-            return deleted_count > 0
+            return self.redis_client.delete(self._generate_key(raw_key)) > 0
         except Exception as e:
-            logger.error(f"Error deleting from cache: {e}")
+            logger.error("Cache delete error: %s", e)
             return False
 
-    def clear_all_sentiment_cache(self) -> int:
-        """
-        Clear all sentiment-related cache entries.
-
-        Returns:
-            Number of entries deleted
-        """
+    def clear_namespace(self) -> int:
+        """Delete every key that belongs to this namespace."""
         try:
-            # Use pattern to find all sentiment cache keys
-            pattern = "sentiment:*"
-            keys = self.redis_client.keys(pattern)
-
-            if keys:
-                deleted_count = self.redis_client.delete(*keys)
-                logger.info(f"Cleared {deleted_count} sentiment cache entries")
-                return deleted_count
-            else:
-                logger.info("No sentiment cache entries found to clear")
-                return 0
+            keys = list(self.redis_client.scan_iter(match=f"{self.namespace}:*"))
+            count = self.redis_client.delete(*keys) if keys else 0
+            if count:
+                logger.info("Cleared %d entries from [%s]", count, self.namespace)
+            return count
         except Exception as e:
-            logger.error(f"Error clearing sentiment cache: {e}")
+            logger.error("Cache clear error: %s", e)
             return 0
 
     def ping(self) -> bool:

@@ -37,3 +37,4 @@ lerna-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+COMMIT_MSG.md

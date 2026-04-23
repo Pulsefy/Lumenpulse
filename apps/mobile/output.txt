@@ -1,0 +1,42 @@
+C:\Users\USER\OneDrive\Desktop\Open Source Projects\Lumenpulse\apps\mobile
+├── app
+|  ├── (tabs)
+|  ├── +not-found.tsx
+|  ├── auth
+|  ├── login.tsx
+|  └── _layout.tsx
+├── app.json
+├── assets
+|  ├── adaptive-icon.png
+|  ├── favicon.png
+|  ├── icon.png
+|  └── splash-icon.png
+├── babel.config.js
+├── components
+|  └── ProtectedRoute.tsx
+├── contexts
+|  ├── AuthContext.tsx
+|  └── ThemeContext.tsx
+├── CONTRIBUTOR_README.md
+├── eslint.config.mjs
+├── IMPLEMENTATION_SUMMARY.md
+├── lib
+|  ├── api-client.ts
+|  ├── api-examples.ts
+|  ├── api.ts
+|  ├── API_CLIENT_README.md
+|  ├── config.ts
+|  ├── storage.ts
+|  └── __tests__
+├── package-lock.json
+├── package.json
+├── pnpm-lock.yaml
+├── README.md
+├── src
+|  └── context
+├── theme
+|  └── colors.ts
+└── tsconfig.json
+
+directory: 11 file: 27
+

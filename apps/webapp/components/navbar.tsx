@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { Menu, X, Layers, Users, LayoutDashboard } from "lucide-react";
 import { WalletButton } from "./wallet-button";
+import { ThemeSelector } from "./theme-selector";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -18,7 +19,7 @@ export function Navbar() {
             <Link href="/" className="flex items-center">
               <Image
                 src="/assets/starkpulse-03.svg"
-                alt="StarkPulse Logo"
+                alt="LumenPulse Logo"
                 width={36}
                 height={36}
                 className="h-28 w-auto ml-2 my-auto"
@@ -40,7 +41,7 @@ export function Navbar() {
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
             <Link
-              href="#"
+              href="/community"
               className="px-3 py-2 text-sm font-medium text-white hover:text-white transition-all flex items-center gap-2 group relative"
             >
               <Users className="w-4 h-4 text-primary group-hover:text-white transition-colors" />
@@ -50,7 +51,7 @@ export function Navbar() {
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
             <Link
-              href="#"
+              href="/dashboard"
               className="px-3 py-2 text-sm font-medium text-white hover:text-white transition-all flex items-center gap-2 group relative"
             >
               <LayoutDashboard className="w-4 h-4 text-primary group-hover:text-white transition-colors" />
@@ -59,6 +60,11 @@ export function Navbar() {
               </span>
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
+          </div>
+
+          {/* Theme Selector */}
+          <div className="hidden md:block mr-4">
+            <ThemeSelector variant="segmented" />
           </div>
 
           {/* Wallet Button */}
@@ -92,7 +98,7 @@ export function Navbar() {
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
             <Link
-              href="#"
+              href="/community"
               className="flex items-center gap-3 p-3 rounded-lg text-white hover:bg-white/5 transition-all relative group"
               onClick={() => setIsMenuOpen(false)}
             >
@@ -101,7 +107,7 @@ export function Navbar() {
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
             <Link
-              href="#"
+              href="/dashboard"
               className="flex items-center gap-3 p-3 rounded-lg text-white hover:bg-white/5 transition-all relative group"
               onClick={() => setIsMenuOpen(false)}
             >
@@ -113,6 +119,13 @@ export function Navbar() {
             {/* Wallet connect in mobile menu */}
             <div className="w-full mt-2">
               <WalletButton className="w-full justify-center" />
+            </div>
+
+            {/* Theme Selector in mobile menu */}
+            <div className="w-full mt-4 pt-4 border-t border-primary/20">
+              <div className="flex justify-center">
+                <ThemeSelector variant="segmented" />
+              </div>
             </div>
           </div>
         </div>

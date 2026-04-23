@@ -219,7 +219,7 @@ class NewsFetcher:
                     )
 
                     article = NewsArticle(
-                        id=f"na_{hash(item['url']) & 0xffffffff}",
+                        id=f"na_{hash(item['url']) & 0xFFFFFFFF}",
                         title=item.get("title", ""),
                         content=item.get("content", ""),
                         summary=item.get("description", ""),

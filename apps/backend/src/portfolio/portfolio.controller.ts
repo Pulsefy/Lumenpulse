@@ -8,24 +8,87 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { PortfolioService } from './portfolio.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import {
   GetPortfolioHistoryDto,
   PortfolioHistoryResponseDto,
+  PortfolioSnapshotBatchStatusDto,
+  TriggerSnapshotBatchResponseDto,
 } from './dto/portfolio-snapshot.dto';
+import {
+  GetPortfolioSummaryQueryDto,
+  PortfolioSummaryWithCurrencyResponseDto,
+  CurrencyCode,
+} from './dto/portfolio-currency.dto';
 import { PortfolioPerformanceResponseDto } from './dto/portfolio-performance.dto';
+import {
+  getPortfolioReadThrottleOverride,
+  getPortfolioWriteThrottleOverride,
+} from '../common/rate-limit/rate-limit.config';
 
+@ApiTags('portfolio')
+@ApiBearerAuth('JWT-auth')
 @Controller('portfolio')
 @UseGuards(JwtAuthGuard)
 export class PortfolioController {
   constructor(private readonly portfolioService: PortfolioService) {}
 
-  /**
-   * GET /portfolio/history
-   * Returns portfolio snapshots for the authenticated user with pagination
-   */
+  @Get('summary')
+  @Throttle(getPortfolioReadThrottleOverride())
+  @ApiOperation({
+    summary: 'Get portfolio summary',
+    description:
+      'Returns the latest portfolio snapshot with total value in specified currency and individual asset balances',
+  })
+  @ApiQuery({
+    name: 'currency',
+    required: false,
+    enum: CurrencyCode,
+    description: 'Target currency for portfolio valuation (default: USD)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Portfolio summary retrieved successfully',
+    type: PortfolioSummaryWithCurrencyResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getPortfolioSummary(
+    @Request() req: any,
+    @Query() query: GetPortfolioSummaryQueryDto,
+  ): Promise<PortfolioSummaryWithCurrencyResponseDto> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const userId = req.user.sub as string;
+    const currency = query.currency || CurrencyCode.USD;
+    return this.portfolioService.getPortfolioSummaryInCurrency(
+      userId,
+      currency,
+    );
+  }
+
   @Get('history')
+  @Throttle(getPortfolioReadThrottleOverride())
+  @ApiOperation({
+    summary: 'Get portfolio history',
+    description:
+      'Returns portfolio snapshots for the authenticated user with pagination',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiResponse({
+    status: 200,
+    description: 'Portfolio history retrieved successfully',
+    type: PortfolioHistoryResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getPortfolioHistory(
     @Request() req: any,
     @Query() query: GetPortfolioHistoryDto,
@@ -39,12 +102,35 @@ export class PortfolioController {
     );
   }
 
-  /**
-   * POST /portfolio/snapshot
-   * Manually trigger snapshot creation for the authenticated user
-   */
   @Post('snapshot')
+  @Throttle(getPortfolioWriteThrottleOverride())
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create portfolio snapshot',
+    description:
+      'Manually trigger snapshot creation for the authenticated user',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Snapshot created successfully',
+    schema: {
+      properties: {
+        success: { type: 'boolean', example: true },
+        snapshot: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              example: '123e4567-e89b-12d3-a456-426614174000',
+            },
+            createdAt: { type: 'string', format: 'date-time' },
+            totalValueUsd: { type: 'string', example: '15420.50' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async createSnapshot(@Request() req: any) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const userId = req.user.sub as string;
@@ -59,32 +145,105 @@ export class PortfolioController {
     };
   }
 
-  /**
-   * POST /portfolio/snapshots/trigger
-   * Admin endpoint to manually trigger snapshot creation for all users
-   * In production, this should be protected with admin guard
-   */
   @Post('snapshots/trigger')
+  @Throttle(getPortfolioWriteThrottleOverride())
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Trigger snapshot creation for all users (Admin)',
+    description:
+      'Manually trigger snapshot creation for all users. In production, this should be protected with admin guard',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Snapshot creation queued',
+    type: TriggerSnapshotBatchResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async triggerSnapshotCreation() {
     const result = await this.portfolioService.triggerSnapshotCreation();
     return {
-      message: 'Snapshot creation triggered',
-      success: result.success,
+      message: 'Snapshot creation queued',
+      batchId: result.batchId,
+      status: result.status,
+      total: result.total,
+      completed: result.completed,
       failed: result.failed,
+      progressPercent: result.progressPercent,
     };
   }
 
-  /**
-   * GET /portfolio/performance
-   * Returns portfolio performance metrics (24h, 7d, 30d) for the authenticated user
-   */
+  @Get('snapshots/status')
+  @ApiOperation({
+    summary: 'Get snapshot batch status',
+    description:
+      'Returns progress information for a queued snapshot batch job.',
+  })
+  @ApiQuery({
+    name: 'batchId',
+    required: true,
+    type: String,
+    example: '9b3b4a07-5b35-4f8c-9f26-8f3ac77e5b41',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Snapshot batch status retrieved',
+    type: PortfolioSnapshotBatchStatusDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getSnapshotBatchStatus(
+    @Query('batchId') batchId: string,
+  ): Promise<PortfolioSnapshotBatchStatusDto> {
+    const status = await this.portfolioService.getSnapshotBatchStatus(batchId);
+    return {
+      batchId: status.batchId,
+      status: status.status,
+      total: status.total,
+      completed: status.completed,
+      failed: status.failed,
+      progressPercent: status.progressPercent,
+      requestedAt: status.requestedAt ?? null,
+      startedAt: status.startedAt ?? null,
+      finishedAt: status.finishedAt ?? null,
+      triggeredBy: status.triggeredBy ?? 'unknown',
+    };
+  }
+
   @Get('performance')
+  @Throttle(getPortfolioReadThrottleOverride())
+  @ApiOperation({
+    summary: 'Get portfolio performance',
+    description:
+      'Returns portfolio performance metrics (24h, 7d, 30d) for the authenticated user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Portfolio performance retrieved successfully',
+    type: PortfolioPerformanceResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getPortfolioPerformance(
     @Request() req: any,
   ): Promise<PortfolioPerformanceResponseDto> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const userId = req.user.sub as string;
     return this.portfolioService.getPortfolioPerformance(userId);
+  }
+
+  @Get('allocation')
+  @Throttle(getPortfolioReadThrottleOverride())
+  @ApiOperation({
+    summary: 'Get portfolio asset allocation',
+    description:
+      'Returns the asset allocation breakdown across all linked accounts for the authenticated user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Asset allocation retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getAssetAllocation(@Request() req: any) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const userId = req.user.sub as string;
+    return this.portfolioService.getAssetAllocation(userId);
   }
 }

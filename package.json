@@ -12,6 +12,7 @@
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
+<<<<<<< HEAD
     "tsconfig-paths": "^4.2.0"
   },
   "dependencies": {
@@ -21,5 +22,9 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "stellar-sdk": "^13.3.0"
+=======
+    "tsconfig-paths": "^4.2.0",
+    "turbo": "^2.9.6"
+>>>>>>> 32ecf6ba4de3e51a30acc180ef439b0291d4ebf9
   }
 }

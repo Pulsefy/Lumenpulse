@@ -26,7 +26,8 @@ def run_example():
     print("\n1. BULLISH SCENARIO:")
     print("-" * 40)
     bullish_data = MarketData(
-        sentiment_score=0.75, volume_change=0.45  # Very positive news  # Volume up 45%
+        sentiment_score=0.75,
+        volume_change=0.45,  # Very positive news  # Volume up 45%
     )
 
     trend, score, metrics = MarketAnalyzer.analyze_trend(bullish_data)
@@ -46,7 +47,8 @@ def run_example():
     print("\n\n2. BEARISH SCENARIO:")
     print("-" * 40)
     bearish_data = MarketData(
-        sentiment_score=-0.65, volume_change=-0.25  # Negative news  # Volume down 25%
+        sentiment_score=-0.65,
+        volume_change=-0.25,  # Negative news  # Volume down 25%
     )
 
     trend, score, metrics = MarketAnalyzer.analyze_trend(bearish_data)

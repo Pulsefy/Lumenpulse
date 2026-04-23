@@ -18,6 +18,16 @@ export const config = {
   },
 
   /**
+   * Stellar / Soroban Configuration
+   */
+  stellar: {
+    network: process.env.EXPO_PUBLIC_STELLAR_NETWORK || 'testnet',
+    sorobanRpcUrl: process.env.EXPO_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org',
+    crowdfundContractId: process.env.EXPO_PUBLIC_CROWDFUND_CONTRACT_ID || '',
+    explorerUrl: process.env.EXPO_PUBLIC_STELLAR_EXPLORER_URL || 'https://stellar.expert/explorer',
+  },
+
+  /**
    * App Configuration
    */
   app: {

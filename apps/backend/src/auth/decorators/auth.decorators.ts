@@ -4,7 +4,21 @@ import {
   ExecutionContext,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { User } from '../../users/entities/user.entity';
+import { User, UserRole } from '../../users/entities/user.entity';
+
+export const ROLES_KEY = 'roles';
+
+/**
+ * Restrict a route to users with specific roles.
+ * Must be combined with JwtAuthGuard + RolesGuard.
+ *
+ * @example
+ * @Roles(UserRole.ADMIN)
+ * @UseGuards(JwtAuthGuard, RolesGuard)
+ * @Post()
+ * create(@Body() dto: CreateDto) { ... }
+ */
+export const Roles = (...roles: UserRole[]) => SetMetadata(ROLES_KEY, roles);
 
 /**
  * Decorator to mark routes as public (skip JWT authentication)

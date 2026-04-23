@@ -256,6 +256,7 @@ checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 name = "contributor_registry"
 version = "0.0.0"
 dependencies = [
+ "notification_interface",
  "soroban-sdk",
 ]
 
@@ -289,6 +290,7 @@ dependencies = [
 name = "crowdfund_vault"
 version = "0.0.0"
 dependencies = [
+ "notification_interface",
  "soroban-sdk",
 ]
 
@@ -873,6 +875,13 @@ name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
+
+[[package]]
+name = "notification_interface"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
 
 [[package]]
 name = "num-bigint"

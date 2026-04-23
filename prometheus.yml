@@ -1,0 +1,47 @@
+# prometheus.yml
+# Example Prometheus configuration for scraping LumenPulse backend metrics
+# 
+# Place this file in the root directory of the project
+# Usage: docker-compose -f docker-compose.monitoring.yml up -d
+
+global:
+  scrape_interval: 15s          # How often to scrape targets by default
+  scrape_timeout: 10s           # How long until a scrape request times out
+  evaluation_interval: 15s      # How often to evaluate rules
+  external_labels:
+    cluster: 'lumenpulse-dev'
+    environment: 'development'
+
+# Alert configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            # - 'alertmanager:9093'
+
+# Rule files
+rule_files:
+  - './prometheus-rules.yml'
+
+scrape_configs:
+  # LumenPulse Backend Metrics
+  - job_name: 'lumenpulse-backend'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'
+    
+    # Service discovery using docker-compose service name
+    static_configs:
+      - targets: ['backend:3000']
+    
+    # Relabel to add additional labels
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [__scheme__]
+        target_label: scheme
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

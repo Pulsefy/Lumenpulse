@@ -100,7 +100,7 @@ export function PWAInstaller() {
           </div>
           <div className="flex-1">
             <h3 className="text-white font-semibold text-sm mb-1">
-              Install StarkPulse
+              Install LumenPulse
             </h3>
             <p className="text-gray-300 text-xs mb-3">
               Get the full app experience with offline access and push notifications.

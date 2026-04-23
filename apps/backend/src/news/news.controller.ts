@@ -5,6 +5,7 @@ import {
   Param,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -13,7 +14,10 @@ import {
   ApiParam,
   ApiResponse,
 } from '@nestjs/swagger';
+import { CacheInterceptor, CacheKey, CacheTTL } from '@nestjs/cache-manager';
+import { NEWS_CACHE_KEY } from '../cache/cache.service';
 import { NewsProviderService } from './news-provider.service';
+import { NewsService } from './news.service';
 import {
   NewsArticlesResponseDto,
   NewsSearchResponseDto,
@@ -24,18 +28,66 @@ import {
 @ApiTags('news')
 @Controller('news')
 export class NewsController {
-  constructor(private readonly newsProviderService: NewsProviderService) {}
+  constructor(
+    private readonly newsProviderService: NewsProviderService,
+    private readonly newsService: NewsService,
+  ) {}
 
   @Get()
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(CacheInterceptor)
+  @CacheKey(NEWS_CACHE_KEY)
+  @CacheTTL(300_000)
   @ApiOperation({ summary: 'Get latest crypto news articles' })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'lang', required: false, type: String, example: 'EN' })
+  @ApiQuery({
+    name: 'tag',
+    required: false,
+    type: String,
+    example: 'stellar',
+    description: 'Filter by article tag',
+  })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    type: String,
+    example: 'DeFi',
+    description: 'Filter by article category',
+  })
   @ApiResponse({ status: 200, type: NewsArticlesResponseDto })
   async getLatestArticles(
     @Query('limit') limit?: string,
     @Query('lang') lang?: string,
+    @Query('tag') tag?: string,
+    @Query('category') category?: string,
   ): Promise<NewsArticlesResponseDto> {
+    if (tag || category) {
+      const articles = await this.newsService.findAll({ tag, category });
+      return {
+        articles: articles.map((a) => ({
+          id: a.id,
+          guid: '',
+          title: a.title,
+          subtitle: null,
+          body: '',
+          url: a.url,
+          imageUrl: null,
+          authors: '',
+          source: a.source,
+          sourceKey: '',
+          sourceImageUrl: null,
+          categories: a.category ? [a.category] : [],
+          keywords: a.tags ?? [],
+          sentiment: 'NEUTRAL',
+          publishedAt: a.publishedAt.toISOString(),
+          relatedCoins: [],
+        })),
+        totalCount: articles.length,
+        fetchedAt: new Date().toISOString(),
+      };
+    }
+
     return this.newsProviderService.getLatestArticles({
       limit: limit ? parseInt(limit, 10) : undefined,
       lang,
@@ -82,6 +134,28 @@ export class NewsController {
     @Query('status') status?: 'ACTIVE' | 'INACTIVE' | 'ALL',
   ): Promise<NewsCategoriesResponseDto> {
     return this.newsProviderService.getCategories({ status });
+  }
+
+  @Get('sentiment-summary')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get aggregated sentiment scores across all articles',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Overall sentiment and breakdown by source',
+    schema: {
+      example: {
+        overall: { averageSentiment: 0.42, totalArticles: 120 },
+        bySource: [
+          { source: 'coindesk', averageScore: 0.65, articleCount: 40 },
+          { source: 'cointelegraph', averageScore: 0.31, articleCount: 80 },
+        ],
+      },
+    },
+  })
+  async sentimentSummary() {
+    return this.newsService.getSentimentSummary();
   }
 
   @Get('article')

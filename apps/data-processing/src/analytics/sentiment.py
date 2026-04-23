@@ -1,6 +1,8 @@
+import logging
+import os
 import re
 import unicodedata
-from typing import Optional, Set
+from typing import Any, Dict, Optional, Set, Tuple
 
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
@@ -14,6 +16,10 @@ except ImportError:
 
     class LangDetectException(Exception):
         """Fallback exception when langdetect is unavailable."""
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_FINBERT_MODEL = "ProsusAI/finbert"
 
 
 class SentimentScore(float):
@@ -57,15 +63,41 @@ class SentimentScore(float):
         return self.to_dict().get(key, default)
 
 
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 class SentimentAnalyzer:
     """
-    Analyze sentiment of a given text using VADER.
-    Returns a compound sentiment score between -1.0 and 1.0.
+    Analyze sentiment using a financial FinBERT model for English when available,
+    with VADER (and crypto keyword hints) as fallback if transformers fail or are disabled.
+    Spanish and Portuguese use lightweight keyword scoring.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        enable_transformer: Optional[bool] = None,
+        transformer_model: Optional[str] = None,
+    ) -> None:
         self.analyzer = SentimentIntensityAnalyzer()
         self.supported_languages: Set[str] = {"en", "es", "pt"}
+
+        env_off = _env_flag("SENTIMENT_DISABLE_TRANSFORMER")
+        if enable_transformer is None:
+            self._transformer_enabled = not env_off
+        else:
+            self._transformer_enabled = bool(enable_transformer) and not env_off
+
+        self._transformer_model_name = (
+            transformer_model
+            or os.environ.get("SENTIMENT_TRANSFORMER_MODEL", _DEFAULT_FINBERT_MODEL).strip()
+            or _DEFAULT_FINBERT_MODEL
+        )
+
+        self._transformer_model: Any = None
+        self._transformer_tokenizer: Any = None
+        self._transformer_load_failed = False
 
         self.negative_keywords_en = {
             "crash",
@@ -119,6 +151,79 @@ class SentimentAnalyzer:
             "baixista",
         }
 
+    def _load_transformer(self) -> bool:
+        if not self._transformer_enabled or self._transformer_load_failed:
+            return False
+        if self._transformer_model is not None:
+            return True
+        try:
+            from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+            model_name = self._transformer_model_name
+            self._transformer_tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self._transformer_model = AutoModelForSequenceClassification.from_pretrained(
+                model_name
+            )
+            self._transformer_model.eval()
+            logger.info("Loaded transformer sentiment model: %s", model_name)
+            return True
+        except Exception as e:
+            logger.warning(
+                "Transformer sentiment unavailable, using VADER fallback: %s", e
+            )
+            self._transformer_load_failed = True
+            return False
+
+    def _finbert_compound(self, text: str) -> Optional[float]:
+        if not self._load_transformer():
+            return None
+        try:
+            import torch
+
+            inputs = self._transformer_tokenizer(
+                text,
+                return_tensors="pt",
+                truncation=True,
+                max_length=512,
+                padding=True,
+            )
+            with torch.no_grad():
+                logits = self._transformer_model(**inputs).logits
+            probs = torch.softmax(logits, dim=-1)[0]
+
+            id2label = self._transformer_model.config.id2label
+            pos_idx: Optional[int] = None
+            neg_idx: Optional[int] = None
+            for key, label in id2label.items():
+                idx = int(key) if not isinstance(key, int) else key
+                low = str(label).lower()
+                if low == "positive":
+                    pos_idx = idx
+                elif low == "negative":
+                    neg_idx = idx
+            if pos_idx is None or neg_idx is None:
+                return None
+
+            p_pos = float(probs[pos_idx].item())
+            p_neg = float(probs[neg_idx].item())
+            return max(-1.0, min(1.0, p_pos - p_neg))
+        except Exception as e:
+            logger.warning("FinBERT inference failed, falling back to VADER: %s", e)
+            return None
+
+    def _vader_english_compound(self, text: str) -> float:
+        cleaned = text.lower()
+        scores = self.analyzer.polarity_scores(cleaned)
+        compound = float(scores.get("compound", 0.0))
+
+        if compound == 0.0:
+            if any(word in cleaned for word in self.negative_keywords_en):
+                return -0.4
+            if any(word in cleaned for word in self.positive_keywords_en):
+                return 0.4
+
+        return compound
+
     def analyze_text(
         self, text: Optional[str], lang_hint: Optional[str] = None
     ) -> SentimentScore:
@@ -157,18 +262,10 @@ class SentimentAnalyzer:
         return SentimentScore(score, language, True, False)
 
     def _analyze_english(self, text: str) -> float:
-        cleaned = text.lower()
-
-        scores = self.analyzer.polarity_scores(cleaned)
-        compound = float(scores.get("compound", 0.0))
-
-        if compound == 0.0:
-            if any(word in cleaned for word in self.negative_keywords_en):
-                return -0.4
-            if any(word in cleaned for word in self.positive_keywords_en):
-                return 0.4
-
-        return compound
+        finbert_score = self._finbert_compound(text)
+        if finbert_score is not None:
+            return finbert_score
+        return self._vader_english_compound(text)
 
     def _keyword_sentiment_score(
         self, text: str, positive_keywords: Set[str], negative_keywords: Set[str]
@@ -249,3 +346,43 @@ class SentimentAnalyzer:
         if re.search(r"[\u0600-\u06ff]", text):
             return "ar"
         return None
+
+
+def benchmark_vader_vs_transformer(
+    texts: Tuple[str, ...],
+) -> Tuple[Dict[str, Tuple[float, Optional[float]]], Dict[str, Any]]:
+    """
+    Run the same English headlines through VADER-only and FinBERT paths.
+
+    Returns:
+        (per_text_scores, summary) where each value is (vader_compound, transformer_compound).
+        transformer_compound is None if the model could not be loaded or inference failed.
+    """
+    vader_analyzer = SentimentAnalyzer(enable_transformer=False)
+    full_analyzer = SentimentAnalyzer(enable_transformer=True)
+
+    rows: Dict[str, Tuple[float, Optional[float]]] = {}
+    tf_ok = 0
+    agreement = 0
+    n = 0
+
+    for raw in texts:
+        t = raw.strip()
+        if not t:
+            continue
+        v = vader_analyzer._vader_english_compound(t)
+        tf = full_analyzer._finbert_compound(t)
+        rows[t] = (v, tf)
+        n += 1
+        if tf is not None:
+            tf_ok += 1
+            if (v >= 0) == (tf >= 0):
+                agreement += 1
+
+    summary = {
+        "samples": n,
+        "transformer_inferences_ok": tf_ok,
+        "sign_agreement_with_vader": agreement,
+        "sign_agreement_rate": (agreement / tf_ok) if tf_ok else 0.0,
+    }
+    return rows, summary

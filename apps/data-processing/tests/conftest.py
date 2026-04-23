@@ -2,6 +2,11 @@
 Pytest configuration and shared fixtures for LumenPulse data processing tests.
 """
 
+import os
+
+# Skip FinBERT download/load in default test runs (CI and local pytest).
+os.environ.setdefault("SENTIMENT_DISABLE_TRANSFORMER", "1")
+
 import pytest
 import sys
 import os
