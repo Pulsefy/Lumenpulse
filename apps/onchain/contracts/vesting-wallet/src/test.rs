@@ -1,9 +1,11 @@
 use crate::errors::VestingError;
+use crate::storage::MilestoneLink;
 use crate::{VestingWalletContract, VestingWalletContractClient};
+use crowdfund_vault::{CrowdfundVaultContract, CrowdfundVaultContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token::{StellarAssetClient, TokenClient},
-    Address, Env,
+    Address, Env, Symbol,
 };
 
 fn create_token_contract<'a>(
@@ -40,6 +42,14 @@ fn setup_test<'a>(
     let client = VestingWalletContractClient::new(env, &contract_id);
 
     (client, admin, beneficiary, token_client, contract_id)
+}
+
+fn setup_vault<'a>(env: &Env, admin: &Address) -> (CrowdfundVaultContractClient<'a>, Address) {
+    let contract_id = env.register(CrowdfundVaultContract, ());
+    let client = CrowdfundVaultContractClient::new(env, &contract_id);
+    client.initialize(admin);
+
+    (client, contract_id)
 }
 
 #[test]
@@ -98,9 +108,53 @@ fn test_create_vesting() {
     assert_eq!(vesting.start_time, start_time);
     assert_eq!(vesting.duration, duration);
     assert_eq!(vesting.claimed_amount, 0);
+    assert_eq!(vesting.milestone_vault, None);
+    assert_eq!(vesting.milestone_project_id, None);
+    assert_eq!(vesting.milestone_id, None);
 
     // Verify tokens were transferred to contract
     assert_eq!(token_client.balance(&contract_id), amount);
+}
+
+#[test]
+fn test_create_vesting_with_milestone() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (vault_client, vault_id) = setup_vault(&env, &admin);
+
+    client.initialize(&admin, &token_client.address);
+
+    let project_owner = Address::generate(&env);
+    let project_id = vault_client.create_project(
+        &project_owner,
+        &Symbol::new(&env, "Milestone"),
+        &5_000i128,
+        &token_client.address,
+    );
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 1000;
+    let duration = 10_000;
+
+    client.create_vesting_with_milestone(
+        &admin,
+        &beneficiary,
+        &1_000_000,
+        &start_time,
+        &duration,
+        &MilestoneLink {
+            vault: vault_id.clone(),
+            project_id,
+            milestone_id: 0,
+        },
+    );
+
+    let vesting = client.get_vesting(&beneficiary);
+    assert_eq!(vesting.milestone_vault, Some(vault_id));
+    assert_eq!(vesting.milestone_project_id, Some(project_id));
+    assert_eq!(vesting.milestone_id, Some(0));
 }
 
 #[test]
@@ -571,6 +625,61 @@ fn test_get_claimable_consistency_with_claim() {
     // Verify get_claimable now returns 0 (no time has passed)
     let claimable_after = client.get_claimable(&beneficiary);
     assert_eq!(claimable_after, 0);
+}
+
+#[test]
+fn test_claim_waits_for_milestone_completion() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (vault_client, vault_id) = setup_vault(&env, &admin);
+
+    client.initialize(&admin, &token_client.address);
+
+    let project_owner = Address::generate(&env);
+    let project_id = vault_client.create_project(
+        &project_owner,
+        &Symbol::new(&env, "Dynamic"),
+        &5_000i128,
+        &token_client.address,
+    );
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+
+    client.create_vesting_with_milestone(
+        &admin,
+        &beneficiary,
+        &amount,
+        &start_time,
+        &duration,
+        &MilestoneLink {
+            vault: vault_id.clone(),
+            project_id,
+            milestone_id: 0,
+        },
+    );
+
+    env.ledger().set_timestamp(start_time + duration / 2);
+
+    assert_eq!(client.get_claimable(&beneficiary), 0);
+    assert_eq!(client.get_available_amount(&beneficiary), 0);
+    assert_eq!(
+        client.try_claim(&beneficiary),
+        Err(Ok(VestingError::NothingToClaim))
+    );
+
+    vault_client.approve_milestone(&admin, &project_id, &0u32);
+
+    let claimable_after_approval = client.get_claimable(&beneficiary);
+    assert_eq!(claimable_after_approval, amount / 2);
+
+    let claimed = client.claim(&beneficiary);
+    assert_eq!(claimed, amount / 2);
+    assert_eq!(token_client.balance(&beneficiary), amount / 2);
 }
 
 // ---------------------------------------------------------------------------

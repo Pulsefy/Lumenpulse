@@ -10,6 +10,8 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
+crowdfund_vault = { path = "../crowdfund_vault" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+crowdfund_vault = { path = "../crowdfund_vault", features = ["testutils"] }

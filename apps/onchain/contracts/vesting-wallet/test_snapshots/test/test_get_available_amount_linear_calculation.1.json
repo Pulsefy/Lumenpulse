@@ -357,6 +357,24 @@
                     },
                     {
                       "key": {
+                        "symbol": "milestone_id"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "symbol": "milestone_project_id"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "symbol": "milestone_vault"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
                         "symbol": "start_time"
                       },
                       "val": {

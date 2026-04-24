@@ -5,10 +5,11 @@ mod events;
 mod storage;
 mod token;
 
+use crowdfund_vault::CrowdfundVaultContractClient;
 use errors::VestingError;
 use events::{AdminChangedEvent, UpgradedEvent};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
-use storage::{DataKey, VestingData};
+use storage::{DataKey, MilestoneLink, VestingData};
 use token::transfer;
 
 #[contract]
@@ -16,6 +17,22 @@ pub struct VestingWalletContract;
 
 #[contractimpl]
 impl VestingWalletContract {
+    fn is_milestone_completed(env: &Env, vesting: &VestingData) -> Result<bool, VestingError> {
+        let (Some(vault), Some(project_id), Some(milestone_id)) = (
+            vesting.milestone_vault.clone(),
+            vesting.milestone_project_id,
+            vesting.milestone_id,
+        ) else {
+            return Ok(true);
+        };
+
+        let vault_client = CrowdfundVaultContractClient::new(env, &vault);
+        match vault_client.try_is_milestone_approved(&project_id, &milestone_id) {
+            Ok(is_approved) => is_approved.map_err(|_| VestingError::MilestoneCheckFailed),
+            Err(_) => Err(VestingError::MilestoneCheckFailed),
+        }
+    }
+
     /// Helper function to calculate claimable amount for a vesting schedule
     /// This is used by both get_claimable and claim to ensure consistency
     fn calculate_claimable_amount(current_time: u64, vesting: &VestingData) -> i128 {
@@ -34,6 +51,99 @@ impl VestingWalletContract {
                 .unwrap_or(0) as i128;
             total_vested - vesting.claimed_amount
         }
+    }
+
+    fn calculate_available_amount(
+        env: &Env,
+        current_time: u64,
+        vesting: &VestingData,
+    ) -> Result<i128, VestingError> {
+        if !Self::is_milestone_completed(env, vesting)? {
+            return Ok(0);
+        }
+
+        Ok(Self::calculate_claimable_amount(current_time, vesting))
+    }
+
+    fn create_vesting_internal(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+        amount: i128,
+        start_time: u64,
+        duration: u64,
+        milestone_link: Option<MilestoneLink>,
+    ) -> Result<(), VestingError> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(VestingError::NotInitialized)?;
+
+        if admin != stored_admin {
+            return Err(VestingError::Unauthorized);
+        }
+
+        admin.require_auth();
+
+        if amount <= 0 {
+            return Err(VestingError::InvalidAmount);
+        }
+
+        if duration == 0 {
+            return Err(VestingError::InvalidDuration);
+        }
+
+        let current_time = env.ledger().timestamp();
+        if start_time < current_time {
+            return Err(VestingError::InvalidStartTime);
+        }
+
+        let token: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Token)
+            .ok_or(VestingError::NotInitialized)?;
+
+        let contract_address = env.current_contract_address();
+
+        if let Some(existing_vesting) = env
+            .storage()
+            .persistent()
+            .get::<_, VestingData>(&DataKey::Vesting(beneficiary.clone()))
+        {
+            let remaining = existing_vesting.total_amount - existing_vesting.claimed_amount;
+            if remaining > 0 {
+                transfer(&env, &token, &contract_address, &admin, &remaining);
+            }
+        }
+
+        transfer(&env, &token, &admin, &contract_address, &amount);
+
+        let vesting = VestingData {
+            beneficiary: beneficiary.clone(),
+            total_amount: amount,
+            start_time,
+            duration,
+            claimed_amount: 0,
+            milestone_vault: milestone_link.as_ref().map(|link| link.vault.clone()),
+            milestone_project_id: milestone_link.as_ref().map(|link| link.project_id),
+            milestone_id: milestone_link.as_ref().map(|link| link.milestone_id),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Vesting(beneficiary), &vesting);
+
+        events::VestingCreatedEvent {
+            beneficiary: vesting.beneficiary.clone(),
+            amount: vesting.total_amount,
+            start_time: vesting.start_time,
+            duration: vesting.duration,
+        }
+        .publish(&env);
+
+        Ok(())
     }
 
     /// Initialize the contract with an admin address and token address
@@ -62,86 +172,36 @@ impl VestingWalletContract {
         start_time: u64,
         duration: u64,
     ) -> Result<(), VestingError> {
-        // Check if contract is initialized
-        let stored_admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .ok_or(VestingError::NotInitialized)?;
-
-        // Verify admin identity
-        if admin != stored_admin {
-            return Err(VestingError::Unauthorized);
-        }
-
-        // Require admin authorization
-        admin.require_auth();
-
-        // Validate amount
-        if amount <= 0 {
-            return Err(VestingError::InvalidAmount);
-        }
-
-        // Validate duration
-        if duration == 0 {
-            return Err(VestingError::InvalidDuration);
-        }
-
-        // Validate start time (should be in the future or current time)
-        let current_time = env.ledger().timestamp();
-        if start_time < current_time {
-            return Err(VestingError::InvalidStartTime);
-        }
-
-        // Get token address
-        let token: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Token)
-            .ok_or(VestingError::NotInitialized)?;
-
-        let contract_address = env.current_contract_address();
-
-        // If vesting already exists, return remaining tokens to admin
-        // (total_amount - claimed_amount)
-        if let Some(existing_vesting) = env
-            .storage()
-            .persistent()
-            .get::<_, VestingData>(&DataKey::Vesting(beneficiary.clone()))
-        {
-            let remaining = existing_vesting.total_amount - existing_vesting.claimed_amount;
-            if remaining > 0 {
-                transfer(&env, &token, &contract_address, &admin, &remaining);
-            }
-        }
-
-        // Transfer tokens from admin to contract
-        transfer(&env, &token, &admin, &contract_address, &amount);
-
-        // Create vesting data
-        let vesting = VestingData {
-            beneficiary: beneficiary.clone(),
-            total_amount: amount,
+        Self::create_vesting_internal(
+            env,
+            admin,
+            beneficiary,
+            amount,
             start_time,
             duration,
-            claimed_amount: 0,
-        };
+            None,
+        )
+    }
 
-        // Store vesting data
-        env.storage()
-            .persistent()
-            .set(&DataKey::Vesting(beneficiary), &vesting);
-
-        // Emit VestingCreated event
-        events::VestingCreatedEvent {
-            beneficiary: vesting.beneficiary.clone(),
-            amount: vesting.total_amount,
-            start_time: vesting.start_time,
-            duration: vesting.duration,
-        }
-        .publish(&env);
-
-        Ok(())
+    /// Create a vesting schedule that only unlocks once a linked vault milestone is approved.
+    pub fn create_vesting_with_milestone(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+        amount: i128,
+        start_time: u64,
+        duration: u64,
+        milestone_link: MilestoneLink,
+    ) -> Result<(), VestingError> {
+        Self::create_vesting_internal(
+            env,
+            admin,
+            beneficiary,
+            amount,
+            start_time,
+            duration,
+            Some(milestone_link),
+        )
     }
 
     /// Claim available tokens based on linear vesting schedule
@@ -165,7 +225,7 @@ impl VestingWalletContract {
         let current_time = env.ledger().timestamp();
 
         // Calculate available amount using the helper function
-        let available_amount = Self::calculate_claimable_amount(current_time, &vesting);
+        let available_amount = Self::calculate_available_amount(&env, current_time, &vesting)?;
 
         // Check if there's anything to claim
         if available_amount <= 0 {
@@ -221,7 +281,7 @@ impl VestingWalletContract {
         let current_time = env.ledger().timestamp();
 
         // Calculate claimable amount using the helper function
-        let claimable_amount = Self::calculate_claimable_amount(current_time, &vesting);
+        let claimable_amount = Self::calculate_available_amount(&env, current_time, &vesting)?;
 
         Ok(claimable_amount)
     }
@@ -247,7 +307,7 @@ impl VestingWalletContract {
         let current_time = env.ledger().timestamp();
 
         // Calculate available amount using the helper function
-        let available_amount = Self::calculate_claimable_amount(current_time, &vesting);
+        let available_amount = Self::calculate_available_amount(&env, current_time, &vesting)?;
 
         Ok(available_amount)
     }
