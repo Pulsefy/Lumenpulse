@@ -38,10 +38,6 @@ import {
 import { TestController } from './test/test.controller';
 import { SnapshotsModule } from './snapshot/snapshot.module';
 import { NotificationsModule } from './notifications/notifications.module';
-import { DataSource, DataSourceOptions } from 'typeorm';
-import stellarConfig from './stellar/config/stellar.config';
-
-const appLogger = new Logger('TypeORM');
 import { UploadModule } from './upload/upload.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
