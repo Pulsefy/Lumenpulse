@@ -1,11 +1,5 @@
-import React from "react";
-import {
-  FlatList,
-  RefreshControl,
-  View,
-  Text,
-  ActivityIndicator,
-} from "react-native";
+import React from 'react';
+import { FlatList, RefreshControl, View, Text, ActivityIndicator } from 'react-native';
 
 type Props<T> = {
   data: T[];
@@ -38,9 +32,9 @@ export default function StandardList<T>({
   if (error) {
     return (
       <View style={{ padding: 16 }}>
-        <Text style={{ color: "red", marginBottom: 8 }}>{error}</Text>
+        <Text style={{ color: 'red', marginBottom: 8 }}>{error}</Text>
         {onRetry && (
-          <Text style={{ color: "#7a85ff" }} onPress={onRetry}>
+          <Text style={{ color: '#7a85ff' }} onPress={onRetry}>
             Retry
           </Text>
         )}
@@ -57,7 +51,7 @@ export default function StandardList<T>({
             key={i}
             style={{
               height: 60,
-              backgroundColor: "#222",
+              backgroundColor: '#222',
               marginBottom: 10,
               borderRadius: 8,
             }}
@@ -72,14 +66,9 @@ export default function StandardList<T>({
       data={data}
       renderItem={renderItem}
       keyExtractor={keyExtractor}
-
       onEndReached={onEndReached}
       onEndReachedThreshold={0.5}
-
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       ListEmptyComponent={
         ListEmptyComponent || (
           <View style={{ padding: 16 }}>
@@ -87,14 +76,10 @@ export default function StandardList<T>({
           </View>
         )
       }
-
       // 🔽 Pagination loader
       ListFooterComponent={
-        loading && data.length > 0 ? (
-          <ActivityIndicator style={{ margin: 20 }} />
-        ) : null
+        loading && data.length > 0 ? <ActivityIndicator style={{ margin: 20 }} /> : null
       }
-
       // ⚡ Performance
       initialNumToRender={10}
       maxToRenderPerBatch={10}

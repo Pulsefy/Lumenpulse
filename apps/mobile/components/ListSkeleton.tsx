@@ -1,4 +1,4 @@
-import { View } from "react-native";
+import { View } from 'react-native';
 
 export default function ListSkeleton() {
   return (
@@ -8,7 +8,7 @@ export default function ListSkeleton() {
           key={i}
           style={{
             height: 60,
-            backgroundColor: "#222",
+            backgroundColor: '#222',
             marginBottom: 10,
             borderRadius: 8,
           }}

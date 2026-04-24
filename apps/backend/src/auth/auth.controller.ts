@@ -15,6 +15,7 @@ import {
   Logger,
   ConflictException,
   NotFoundException,
+  Param,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request as ExpressRequest } from 'express';
@@ -36,6 +37,10 @@ import {
 } from '@nestjs/swagger';
 import { ProfileResponseDto } from '../users/dto/profile-response.dto';
 import { getAuthThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import {
+  ActiveSessionsResponseDto,
+  RevokeSessionResponseDto,
+} from './dto/session.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -324,5 +329,35 @@ export class AuthController {
         HttpStatus.UNAUTHORIZED,
       );
     }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('sessions')
+  @ApiOperation({ summary: 'Get active sessions for current user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Active sessions retrieved successfully',
+    type: ActiveSessionsResponseDto,
+  })
+  async getActiveSessions(@Request() req: { user: { id: string } }) {
+    const sessions = await this.authService.getActiveSessions(req.user.id);
+    return sessions;
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('sessions/:id/revoke')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Revoke a specific session' })
+  @ApiResponse({
+    status: 200,
+    description: 'Session revoked successfully',
+    type: RevokeSessionResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  async revokeSession(
+    @Request() req: { user: { id: string } },
+    @Param('id') sessionId: string,
+  ): Promise<{ message: string; sessionId: string }> {
+    return this.authService.revokeSession(sessionId, req.user.id);
   }
 }

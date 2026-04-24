@@ -70,10 +70,6 @@ export default function OnboardingModal() {
     }
   }, [state.step]);
 
-  const currentStep = steps[state.step - 1];
-
-  if (!state.isOpen || state.step === 0 || state.step === 4) return null;
-
   const handleNextOrConnect = useCallback(() => {
     if (state.step === 2 && walletStatus !== 'connected') {
       connectWallet();
@@ -89,6 +85,10 @@ export default function OnboardingModal() {
       handleNextOrConnect();
     }
   }, [state.step, handleNextOrConnect, completeOnboarding]);
+
+  if (!state.isOpen || state.step < 1 || state.step > steps.length) return null;
+
+  const currentStep = steps[state.step - 1];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
