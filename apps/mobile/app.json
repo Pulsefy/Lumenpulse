@@ -31,8 +31,8 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "plugins": ["expo-router", "expo-barcode-scanner", "expo-local-authentication"],
-    "scheme": "mobile",
+    "plugins": ["expo-router", "expo-barcode-scanner", "expo-local-authentication", ["expo-notifications", { "icon": "./assets/icon.png", "color": "#ffffff" }]],
+    "scheme": "lumenpulse",
     "extra": {
       "backendUrl": "http://localhost:3000",
       "environment": "development"

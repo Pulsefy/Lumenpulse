@@ -1,6 +1,7 @@
 import { Providers } from "./providers";
 import { StarsAnimation } from "@/components/stars-animation";
 import { PWAInstaller } from "@/components/pwa-installer";
+import { WebForegroundNotificationBanner } from "@/components/web-notification-banner";
 import { getThemeInitScriptHTML } from "@/lib/theme-init-script";
 import "./globals.css";
 import type { Metadata } from "next";
@@ -170,6 +171,7 @@ export default function RootLayout({
           <StarsAnimation />
           {children}
           <PWAInstaller />
+          <WebForegroundNotificationBanner />
         </Providers>
       </body>
     </html>
