@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 function hasAuthToken() {
-  if (typeof document === "undefined") return false;
+  if (typeof window === "undefined") return false;
+
+  const localToken = window.localStorage?.getItem("access_token");
+  if (localToken && localToken.trim().length > 0) return true;
 
   return document.cookie
     .split(";")

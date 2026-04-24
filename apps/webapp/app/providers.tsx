@@ -8,6 +8,8 @@ import {
   useEffect,
   useState,
 } from "react";
+import { ThemeProvider } from "@/components/theme-provider";
+import { OnboardingProvider } from "@/lib/onboarding";
 import {
   isConnected as freighterIsConnected,
   getAddress as freighterGetAddress,
@@ -184,5 +186,15 @@ export function StellarProvider({ children }: { children: ReactNode }) {
     >
       {children}
     </StellarWalletContext.Provider>
+  );
+}
+
+export function Providers({ children }: { children: ReactNode }) {
+  return (
+    <ThemeProvider defaultTheme="system" enableTransitions={true}>
+      <OnboardingProvider>
+        <StellarProvider>{children}</StellarProvider>
+      </OnboardingProvider>
+    </ThemeProvider>
   );
 }

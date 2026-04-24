@@ -6,8 +6,17 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { detectSystemTheme } from './theme-utils';
-import { DEFAULT_RESOLVED_THEME } from './theme-constants';
+import {
+  clearThemePreference,
+  detectSystemTheme,
+  readThemePreference,
+  saveThemePreference,
+} from './theme-utils';
+import { DEFAULT_RESOLVED_THEME, DEFAULT_STORAGE_KEY } from './theme-constants';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('detectSystemTheme', () => {
   // Store original window.matchMedia to restore after tests
@@ -194,9 +203,6 @@ describe('detectSystemTheme', () => {
 });
 
 describe('saveThemePreference', () => {
-  const { saveThemePreference } = require('./theme-utils');
-  const { DEFAULT_STORAGE_KEY } = require('./theme-constants');
-
   beforeEach(() => {
     // Clear localStorage before each test
     localStorage.clear();
@@ -324,9 +330,6 @@ describe('saveThemePreference', () => {
 });
 
 describe('readThemePreference', () => {
-  const { readThemePreference } = require('./theme-utils');
-  const { DEFAULT_STORAGE_KEY } = require('./theme-constants');
-
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
@@ -449,8 +452,6 @@ describe('readThemePreference', () => {
 
   describe('integration with saveThemePreference', () => {
     it('should read what was saved', () => {
-      const { saveThemePreference } = require('./theme-utils');
-      
       saveThemePreference('dark');
       const result = readThemePreference();
       
@@ -458,8 +459,6 @@ describe('readThemePreference', () => {
     });
 
     it('should handle multiple save and read cycles', () => {
-      const { saveThemePreference } = require('./theme-utils');
-      
       saveThemePreference('light');
       expect(readThemePreference()).toBe('light');
       
@@ -473,9 +472,6 @@ describe('readThemePreference', () => {
 });
 
 describe('clearThemePreference', () => {
-  const { clearThemePreference, saveThemePreference } = require('./theme-utils');
-  const { DEFAULT_STORAGE_KEY } = require('./theme-constants');
-
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();

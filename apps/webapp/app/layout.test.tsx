@@ -4,12 +4,37 @@
  * Validates Requirements 9.1, 9.2, 9.3 - Theme initialization script injection
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { render } from '@testing-library/react';
-import RootLayout from './layout';
 import { getThemeInitScript } from '@/lib/theme-init-script';
 
+vi.mock('next/font/google', () => ({
+  Inter: () => ({ className: '', variable: '--font-inter' }),
+  Orbitron: () => ({ className: '', variable: '--font-orbitron' }),
+  Space_Mono: () => ({ className: '', variable: '--font-space-mono' }),
+  Chakra_Petch: () => ({ className: '', variable: '--font-chakra' }),
+  Poppins: () => ({ className: '', variable: '--font-poppins' }),
+}));
+
+vi.mock('@/components/stars-animation', () => ({
+  StarsAnimation: () => null,
+}));
+
+vi.mock('@/components/pwa-installer', () => ({
+  PWAInstaller: () => null,
+}));
+
+vi.mock('./providers', () => ({
+  Providers: ({ children }: { children: any }) => children,
+}));
+
 describe('RootLayout - Theme Script Injection', () => {
+  let RootLayout: typeof import('./layout').default;
+
+  beforeAll(async () => {
+    RootLayout = (await import('./layout')).default;
+  });
+
   /**
    * Requirement 9.1: Theme script must be present in head
    * Requirement 9.3: Script must be inline (not external)

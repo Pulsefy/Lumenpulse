@@ -7,6 +7,7 @@
  * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 10.1
  */
 
+import { vi } from 'vitest';
 import { getThemeInitScript, getThemeInitScriptHTML } from './theme-init-script';
 
 describe('Theme Initialization Script', () => {
@@ -86,7 +87,7 @@ describe('Theme Initialization Script', () => {
   describe('Script execution simulation', () => {
     let originalLocalStorage: Storage;
     let originalMatchMedia: typeof window.matchMedia;
-    let mockDocumentElement: { setAttribute: jest.Mock };
+    let mockDocumentElement: { setAttribute: ReturnType<typeof vi.fn> };
 
     beforeEach(() => {
       // Save originals
@@ -95,7 +96,7 @@ describe('Theme Initialization Script', () => {
 
       // Mock document.documentElement
       mockDocumentElement = {
-        setAttribute: jest.fn(),
+        setAttribute: vi.fn(),
       };
       Object.defineProperty(document, 'documentElement', {
         value: mockDocumentElement,
@@ -112,7 +113,7 @@ describe('Theme Initialization Script', () => {
 
     it('should apply light theme when preference is light', () => {
       // Mock localStorage
-      const mockGetItem = jest.fn().mockReturnValue('light');
+      const mockGetItem = vi.fn().mockReturnValue('light');
       Object.defineProperty(global, 'localStorage', {
         value: { getItem: mockGetItem },
         writable: true,
@@ -129,7 +130,7 @@ describe('Theme Initialization Script', () => {
 
     it('should apply dark theme when preference is dark', () => {
       // Mock localStorage
-      const mockGetItem = jest.fn().mockReturnValue('dark');
+      const mockGetItem = vi.fn().mockReturnValue('dark');
       Object.defineProperty(global, 'localStorage', {
         value: { getItem: mockGetItem },
         writable: true,
@@ -146,7 +147,7 @@ describe('Theme Initialization Script', () => {
 
     it('should detect system theme when preference is system and system prefers dark', () => {
       // Mock localStorage
-      const mockGetItem = jest.fn().mockReturnValue('system');
+      const mockGetItem = vi.fn().mockReturnValue('system');
       Object.defineProperty(global, 'localStorage', {
         value: { getItem: mockGetItem },
         writable: true,
@@ -154,7 +155,7 @@ describe('Theme Initialization Script', () => {
       });
 
       // Mock matchMedia to return dark preference
-      window.matchMedia = jest.fn().mockReturnValue({
+      window.matchMedia = vi.fn().mockReturnValue({
         matches: true,
       }) as any;
 
@@ -168,7 +169,7 @@ describe('Theme Initialization Script', () => {
 
     it('should detect system theme when preference is system and system prefers light', () => {
       // Mock localStorage
-      const mockGetItem = jest.fn().mockReturnValue('system');
+      const mockGetItem = vi.fn().mockReturnValue('system');
       Object.defineProperty(global, 'localStorage', {
         value: { getItem: mockGetItem },
         writable: true,
@@ -176,7 +177,7 @@ describe('Theme Initialization Script', () => {
       });
 
       // Mock matchMedia to return light preference
-      window.matchMedia = jest.fn().mockReturnValue({
+      window.matchMedia = vi.fn().mockReturnValue({
         matches: false,
       }) as any;
 
@@ -190,7 +191,7 @@ describe('Theme Initialization Script', () => {
 
     it('should default to system (then light) when no preference is stored', () => {
       // Mock localStorage with no stored value
-      const mockGetItem = jest.fn().mockReturnValue(null);
+      const mockGetItem = vi.fn().mockReturnValue(null);
       Object.defineProperty(global, 'localStorage', {
         value: { getItem: mockGetItem },
         writable: true,
@@ -198,7 +199,7 @@ describe('Theme Initialization Script', () => {
       });
 
       // Mock matchMedia to return light preference
-      window.matchMedia = jest.fn().mockReturnValue({
+      window.matchMedia = vi.fn().mockReturnValue({
         matches: false,
       }) as any;
 
@@ -212,7 +213,7 @@ describe('Theme Initialization Script', () => {
 
     it('should default to system when invalid preference is stored', () => {
       // Mock localStorage with invalid value
-      const mockGetItem = jest.fn().mockReturnValue('invalid-theme');
+      const mockGetItem = vi.fn().mockReturnValue('invalid-theme');
       Object.defineProperty(global, 'localStorage', {
         value: { getItem: mockGetItem },
         writable: true,
@@ -220,7 +221,7 @@ describe('Theme Initialization Script', () => {
       });
 
       // Mock matchMedia to return light preference
-      window.matchMedia = jest.fn().mockReturnValue({
+      window.matchMedia = vi.fn().mockReturnValue({
         matches: false,
       }) as any;
 
@@ -234,7 +235,7 @@ describe('Theme Initialization Script', () => {
 
     it('should handle localStorage errors gracefully', () => {
       // Mock localStorage to throw error
-      const mockGetItem = jest.fn().mockImplementation(() => {
+      const mockGetItem = vi.fn().mockImplementation(() => {
         throw new Error('Storage access denied');
       });
       Object.defineProperty(global, 'localStorage', {
@@ -244,7 +245,7 @@ describe('Theme Initialization Script', () => {
       });
 
       // Mock matchMedia
-      window.matchMedia = jest.fn().mockReturnValue({
+      window.matchMedia = vi.fn().mockReturnValue({
         matches: false,
       }) as any;
 
@@ -258,7 +259,7 @@ describe('Theme Initialization Script', () => {
 
     it('should handle matchMedia errors gracefully', () => {
       // Mock localStorage
-      const mockGetItem = jest.fn().mockReturnValue('system');
+      const mockGetItem = vi.fn().mockReturnValue('system');
       Object.defineProperty(global, 'localStorage', {
         value: { getItem: mockGetItem },
         writable: true,
@@ -266,7 +267,7 @@ describe('Theme Initialization Script', () => {
       });
 
       // Mock matchMedia to throw error
-      window.matchMedia = jest.fn().mockImplementation(() => {
+      window.matchMedia = vi.fn().mockImplementation(() => {
         throw new Error('matchMedia not supported');
       }) as any;
 
@@ -287,14 +288,14 @@ describe('Theme Initialization Script', () => {
       const startTime = performance.now();
       
       // Mock minimal environment
-      const mockGetItem = jest.fn().mockReturnValue('light');
+      const mockGetItem = vi.fn().mockReturnValue('light');
       Object.defineProperty(global, 'localStorage', {
         value: { getItem: mockGetItem },
         writable: true,
         configurable: true,
       });
       
-      const mockDocElement = { setAttribute: jest.fn() };
+      const mockDocElement = { setAttribute: vi.fn() };
       Object.defineProperty(document, 'documentElement', {
         value: mockDocElement,
         writable: true,

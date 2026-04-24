@@ -192,11 +192,11 @@ describe('ThemeSelector', () => {
   });
 
   describe('Default Behavior', () => {
-    it('should default to segmented variant when no variant is specified', () => {
+    it('should default to dropdown variant when no variant is specified', () => {
       render(<ThemeSelector />);
       
-      const tablist = screen.getByRole('tablist');
-      expect(tablist).toBeInTheDocument();
+      const select = screen.getByRole('combobox', { name: /select theme preference/i });
+      expect(select).toBeInTheDocument();
     });
 
     it('should default to showLabels=false when not specified', () => {

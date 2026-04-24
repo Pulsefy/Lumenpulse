@@ -1,35 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import StellarBalancesPanel from "@/components/stellar-balances-panel";
+import StellarTransactionHistoryPanel from "@/components/stellar-transaction-history-panel";
 import AssetDetail from "@/components/asset-detail";
 import AuthGate from "@/components/auth/AuthGate";
+import { useStellarWallet } from "@/app/providers";
 
 export default function DashboardPage() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const { publicKey } = useStellarWallet();
   const [selectedAsset, setSelectedAsset] = useState<{
     code: string;
     issuer?: string;
     balance: string;
   } | null>(null);
-
-  useEffect(() => {
-    // TODO: replace this with real user wallet later
-    // For now, we simulate "no wallet connected"
-    // In a real app, we would fetch the public key from the session/profile
-    setPublicKey(null);
-
-    setIsLoading(false);
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
 
   return (
     <AuthGate>
@@ -67,12 +51,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
-                <h2 className="text-xl font-semibold mb-4">
-                  Recent Transactions
-                </h2>
-                <p className="text-gray-400">
-                  Your transactions will appear here.
-                </p>
+                <StellarTransactionHistoryPanel publicKey={publicKey} />
               </div>
 
               <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
