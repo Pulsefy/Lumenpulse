@@ -7,8 +7,6 @@ on:
       - 'apps/backend/**'
   pull_request:
     branches: [ "main" ]
-    paths:
-      - 'apps/backend/**'
 
 jobs:
   backend-checks:
@@ -21,7 +19,20 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Detect backend changes
+      id: changes
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          backend:
+            - 'apps/backend/**'
+
+    - name: No backend changes
+      if: steps.changes.outputs.backend != 'true'
+      run: echo "No changes in apps/backend; skipping backend checks."
+
     - name: Setup Node.js
+      if: steps.changes.outputs.backend == 'true'
       uses: actions/setup-node@v4
       with:
         node-version: '20.x'
@@ -29,17 +40,22 @@ jobs:
         cache-dependency-path: './apps/backend/package-lock.json'
 
     - name: Install dependencies
+      if: steps.changes.outputs.backend == 'true'
       run: npm ci
 
     - name: Lint
+      if: steps.changes.outputs.backend == 'true'
       run: npm run lint
 
     - name: Type Check
+      if: steps.changes.outputs.backend == 'true'
       # Check if script exists to avoid failure if not set up yet
       run: if npm run | grep -q "type-check"; then npm run type-check; else echo "No type-check script found, skipping"; fi
 
     - name: Run Tests
+      if: steps.changes.outputs.backend == 'true'
       run: npm run test
 
     - name: Build
+      if: steps.changes.outputs.backend == 'true'
       run: npm run build

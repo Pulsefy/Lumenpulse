@@ -7,12 +7,10 @@ on:
       - 'apps/onchain/**'
   pull_request:
     branches: [ "main" ]
-    paths:
-      - 'apps/onchain/**'
 
 jobs:
   onchain-checks:
-    name: Test Suite
+    name: onchain-checks
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -22,25 +20,43 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Detect onchain changes
+      id: changes
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          onchain:
+            - 'apps/onchain/**'
+
+    - name: No onchain changes
+      if: steps.changes.outputs.onchain != 'true'
+      run: echo "No changes in apps/onchain; skipping onchain checks."
+
     - name: Install Rust
+      if: steps.changes.outputs.onchain == 'true'
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
         targets: wasm32-unknown-unknown
 
     - name: Cache dependencies
+      if: steps.changes.outputs.onchain == 'true'
       uses: Swatinem/rust-cache@v2
       with:
         workspaces: "apps/onchain"
 
     - name: Check formatting
+      if: steps.changes.outputs.onchain == 'true'
       run: cargo fmt --all -- --check
 
     - name: Run clippy
+      if: steps.changes.outputs.onchain == 'true'
       run: cargo clippy --all-targets --all-features -- -D warnings
 
     - name: Build Contracts
+      if: steps.changes.outputs.onchain == 'true'
       run: cargo build --target wasm32-unknown-unknown --release
 
     - name: Run tests
+      if: steps.changes.outputs.onchain == 'true'
       run: cargo test

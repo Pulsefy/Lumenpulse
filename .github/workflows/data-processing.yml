@@ -7,8 +7,6 @@ on:
       - 'apps/data-processing/**'
   pull_request:
     branches: [ "main" ]
-    paths:
-      - 'apps/data-processing/**'
 
 jobs:
   data-processing-checks:
@@ -21,19 +19,34 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Detect data-processing changes
+      id: changes
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          data_processing:
+            - 'apps/data-processing/**'
+
+    - name: No data-processing changes
+      if: steps.changes.outputs.data_processing != 'true'
+      run: echo "No changes in apps/data-processing; skipping data-processing checks."
+
     - name: Set up Python 3.9
+      if: steps.changes.outputs.data_processing == 'true'
       uses: actions/setup-python@v5
       with:
         python-version: "3.9"
         cache: 'pip'
 
     - name: Install dependencies
+      if: steps.changes.outputs.data_processing == 'true'
       run: |
         python -m pip install --upgrade pip
         pip install flake8 pytest
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
     - name: Lint with flake8
+      if: steps.changes.outputs.data_processing == 'true'
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
@@ -41,6 +54,7 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Test with pytest
+      if: steps.changes.outputs.data_processing == 'true'
       # Checks if tests folder exists before running to prevent failure on empty repo
       run: |
         if [ -d "tests" ]; then
