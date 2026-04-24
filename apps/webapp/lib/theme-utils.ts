@@ -43,6 +43,7 @@ export function detectSystemTheme(): ResolvedTheme {
     // Requirement 2.1: Detect system theme using prefers-color-scheme media query
     // Requirement 2.3: Use the prefers-color-scheme media query
     const mediaQuery = window.matchMedia(SYSTEM_THEME_MEDIA_QUERY);
+    if (!mediaQuery) return DEFAULT_RESOLVED_THEME;
     
     // If the media query matches, the system prefers dark mode
     if (mediaQuery.matches) {
