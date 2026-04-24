@@ -348,7 +348,7 @@ class RedditFetcher:
         """Initialize Reddit fetcher"""
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": "StarkPulseSentimentBot/1.0 (cryptocurrency sentiment analysis)"
+            "User-Agent": "LumenPulseSentimentBot/1.0 (cryptocurrency sentiment analysis)"
         })
 
         self.rate_limiter = RateLimiter(

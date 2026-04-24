@@ -1,5 +1,5 @@
 [package]
-name = "crowdfund_vault"
+name = "matching_pool"
 version = "0.0.0"
 edition = "2021"
 publish = false
@@ -10,11 +10,9 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-notification_interface = { path = "../notification_interface" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-proptest = "1"
 
 [features]
 testutils = ["soroban-sdk/testutils"]
