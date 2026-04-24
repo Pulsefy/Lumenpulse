@@ -4,7 +4,7 @@ Database models for analytics data persistence
 
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Text, Index, BigInteger
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Text, Index, BigInteger, Boolean
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
@@ -255,3 +255,86 @@ class AssetTrend(Base):
 
     def __repr__(self):
         return f"<AssetTrend(asset={self.asset}, metric={self.metric_name}, trend={self.trend_direction})>"
+
+
+class TelegramSubscription(Base):
+    """
+    Stores user and channel subscriptions for Telegram bot notifications
+    """
+
+    __tablename__ = "telegram_subscriptions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chat_id = Column(BigInteger, nullable=False, index=True)  # Telegram chat ID (user or channel)
+    chat_type = Column(String(20), nullable=False)  # 'private', 'group', 'supergroup', 'channel'
+    username = Column(String(255), nullable=True)  # Telegram username (if available)
+    first_name = Column(String(255), nullable=True)
+    last_name = Column(String(255), nullable=True)
+    
+    # Subscription preferences
+    is_active = Column(Boolean, default=True, nullable=False)  # Master subscription switch
+    sentiment_alerts = Column(Boolean, default=True, nullable=False)
+    price_alerts = Column(Boolean, default=True, nullable=False)
+    trend_alerts = Column(Boolean, default=True, nullable=False)
+    news_alerts = Column(Boolean, default=True, nullable=False)
+    
+    # Silence/mute functionality
+    is_silenced = Column(Boolean, default=False, nullable=False)
+    silence_until = Column(DateTime(timezone=True), nullable=True)  # When silence period ends
+    
+    # Asset-specific preferences (JSON for flexibility)
+    subscribed_assets = Column(JSON, nullable=True)  # ["XLM", "BTC", "ETH"] or null for all
+    alert_thresholds = Column(JSON, nullable=True)  # {"sentiment": 0.8, "price_change": 5.0}
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    last_interaction = Column(DateTime(timezone=True), nullable=True)
+
+    # Indexes for efficient querying
+    __table_args__ = (
+        Index("idx_telegram_subscriptions_chat_id", "chat_id"),
+        Index("idx_telegram_subscriptions_is_active", "is_active"),
+        Index("idx_telegram_subscriptions_is_silenced", "is_silenced"),
+        Index("idx_telegram_subscriptions_created_at", "created_at"),
+        Index("idx_telegram_subscriptions_last_interaction", "last_interaction"),
+    )
+
+    def __repr__(self):
+        return f"<TelegramSubscription(chat_id={self.chat_id}, active={self.is_active}, silenced={self.is_silenced})>"
+
+
+class TelegramCommand(Base):
+    """
+    Stores Telegram command history for analytics and debugging
+    """
+
+    __tablename__ = "telegram_commands"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chat_id = Column(BigInteger, nullable=False, index=True)
+    command = Column(String(50), nullable=False)  # /status, /sentiment, etc.
+    args = Column(Text, nullable=True)  # Command arguments (e.g., "XLM" for /price XLM)
+    
+    # Command processing info
+    response_sent = Column(Boolean, default=False, nullable=False)
+    response_text = Column(Text, nullable=True)
+    processing_time_ms = Column(Integer, nullable=True)  # Processing time in milliseconds
+    
+    # Error handling
+    error_message = Column(Text, nullable=True)
+    error_type = Column(String(50), nullable=True)  # validation, processing, etc.
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Indexes for efficient querying
+    __table_args__ = (
+        Index("idx_telegram_commands_chat_id", "chat_id"),
+        Index("idx_telegram_commands_command", "command"),
+        Index("idx_telegram_commands_created_at", "created_at"),
+        Index("idx_telegram_commands_chat_command", "chat_id", "command"),
+    )
+
+    def __repr__(self):
+        return f"<TelegramCommand(chat_id={self.chat_id}, command={self.command}, success={self.response_sent})>"

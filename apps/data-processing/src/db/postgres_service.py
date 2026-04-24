@@ -9,11 +9,11 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, select, and_, desc
+from sqlalchemy import create_engine, select, and_, desc, func
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
-from .models import Base, Article, SocialPost, AnalyticsRecord, NewsInsight, AssetTrend
+from .models import Base, Article, SocialPost, AnalyticsRecord, NewsInsight, AssetTrend, TelegramSubscription, TelegramCommand
 from src.analytics.ner_service import NERService
 
 logger = logging.getLogger(__name__)
@@ -1064,3 +1064,143 @@ class PostgresService:
                 "news_insights": 0,
                 "asset_trends": 0,
             }
+
+    # Telegram subscription management methods
+    def create_telegram_subscription(self, subscription: TelegramSubscription) -> TelegramSubscription:
+        """Create a new Telegram subscription."""
+        try:
+            with self.get_session() as session:
+                session.add(subscription)
+                session.flush()
+                session.refresh(subscription)
+                return subscription
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to create telegram subscription: {e}")
+            raise
+
+    def get_telegram_subscription(self, chat_id: int) -> Optional[TelegramSubscription]:
+        """Get Telegram subscription by chat ID."""
+        try:
+            with self.get_session() as session:
+                return session.query(TelegramSubscription).filter(
+                    TelegramSubscription.chat_id == chat_id
+                ).first()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get telegram subscription for {chat_id}: {e}")
+            return None
+
+    def update_telegram_subscription(self, subscription: TelegramSubscription) -> TelegramSubscription:
+        """Update an existing Telegram subscription."""
+        try:
+            with self.get_session() as session:
+                session.merge(subscription)
+                return subscription
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to update telegram subscription: {e}")
+            raise
+
+    def get_active_subscribers(self, alert_type: str = None) -> List[TelegramSubscription]:
+        """Get all active subscribers, optionally filtered by alert type."""
+        try:
+            with self.get_session() as session:
+                query = session.query(TelegramSubscription).filter(
+                    and_(
+                        TelegramSubscription.is_active == True,
+                        TelegramSubscription.is_silenced == False
+                    )
+                )
+
+                # Filter by alert type if specified
+                if alert_type:
+                    if alert_type == "sentiment":
+                        query = query.filter(TelegramSubscription.sentiment_alerts == True)
+                    elif alert_type == "price":
+                        query = query.filter(TelegramSubscription.price_alerts == True)
+                    elif alert_type == "trend":
+                        query = query.filter(TelegramSubscription.trend_alerts == True)
+                    elif alert_type == "news":
+                        query = query.filter(TelegramSubscription.news_alerts == True)
+
+                return query.all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get active subscribers: {e}")
+            return []
+
+    def create_telegram_command(self, command: TelegramCommand) -> TelegramCommand:
+        """Create a new Telegram command record."""
+        try:
+            with self.get_session() as session:
+                session.add(command)
+                session.flush()
+                session.refresh(command)
+                return command
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to create telegram command: {e}")
+            raise
+
+    def get_telegram_command_stats(self, hours: int = 24) -> Dict[str, Any]:
+        """Get Telegram command statistics for the last N hours."""
+        try:
+            with self.get_session() as session:
+                cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+                
+                # Total commands
+                total_commands = session.query(TelegramCommand).filter(
+                    TelegramCommand.created_at >= cutoff_time
+                ).count()
+                
+                # Commands by type
+                command_stats = {}
+                commands = session.query(
+                    TelegramCommand.command,
+                    func.count(TelegramCommand.id).label('count')
+                ).filter(
+                    TelegramCommand.created_at >= cutoff_time
+                ).group_by(TelegramCommand.command).all()
+                
+                for cmd, count in commands:
+                    command_stats[cmd] = count
+                
+                # Success rate
+                successful_commands = session.query(TelegramCommand).filter(
+                    and_(
+                        TelegramCommand.created_at >= cutoff_time,
+                        TelegramCommand.response_sent == True
+                    )
+                ).count()
+                
+                success_rate = (successful_commands / total_commands * 100) if total_commands > 0 else 0
+                
+                return {
+                    "total_commands": total_commands,
+                    "successful_commands": successful_commands,
+                    "success_rate": round(success_rate, 2),
+                    "command_breakdown": command_stats,
+                    "hours": hours
+                }
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get telegram command stats: {e}")
+            return {
+                "total_commands": 0,
+                "successful_commands": 0,
+                "success_rate": 0,
+                "command_breakdown": {},
+                "hours": hours
+            }
+
+    def cleanup_old_telegram_data(self, days: int = 30) -> Dict[str, int]:
+        """Clean up old Telegram command data."""
+        try:
+            with self.get_session() as session:
+                cutoff_date = datetime.utcnow() - timedelta(days=days)
+                
+                # Delete old commands
+                commands_deleted = session.query(TelegramCommand).filter(
+                    TelegramCommand.created_at < cutoff_date
+                ).delete()
+                
+                logger.info(f"Cleaned up {commands_deleted} old telegram commands")
+                return {"commands_deleted": commands_deleted}
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to cleanup old telegram data: {e}")
+            return {"commands_deleted": 0}
