@@ -72,6 +72,20 @@ export class UsersService {
     return url;
   }
 
+  // --- 2FA MANAGEMENT ---
+
+  async setTwoFactorAuthenticationSecret(secret: string, userId: string) {
+    return this.usersRepository.update(userId, {
+      twoFactorAuthenticationSecret: secret,
+    });
+  }
+
+  async turnOnTwoFactorAuthentication(userId: string) {
+    return this.usersRepository.update(userId, {
+      isTwoFactorAuthenticationEnabled: true,
+    });
+  }
+
   // --- STELLAR ACCOUNT MANAGEMENT ---
 
   async addStellarAccount(

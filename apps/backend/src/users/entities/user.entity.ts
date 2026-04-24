@@ -58,6 +58,12 @@ export class User {
   @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
   stellarPublicKey: string;
 
+  @Column({ nullable: true })
+  twoFactorAuthenticationSecret?: string;
+
+  @Column({ default: false })
+  isTwoFactorAuthenticationEnabled: boolean;
+
   @Column({
     type: 'enum',
     enum: UserRole,

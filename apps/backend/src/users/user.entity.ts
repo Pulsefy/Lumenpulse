@@ -59,6 +59,12 @@ export class User {
   @Column({ nullable: true })
   avatar_url?: string;
 
+  @Column({ nullable: true })
+  twoFactorAuthenticationSecret?: string;
+
+  @Column({ default: false })
+  isTwoFactorAuthenticationEnabled: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

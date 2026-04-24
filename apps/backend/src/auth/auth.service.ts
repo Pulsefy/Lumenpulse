@@ -25,7 +25,8 @@ import {
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { EmailService } from '../email/email.service';
-
+import * as speakeasy from 'speakeasy';
+import { toDataURL } from 'qrcode';
 interface ChallengeData {
   nonce: string;
   timestamp: number;
@@ -627,5 +628,75 @@ export class AuthService {
     this.logger.log(`Session ${sessionId} revoked for user ${userId}`);
 
     return { message: 'Session revoked successfully', sessionId };
+  }
+
+  // --- 2FA LOGIC ---
+
+  public async generateTwoFactorAuthenticationSecret(user: User) {
+    const appName = this.configService.get<string>('DOMAIN', 'lumenpulse.io');
+    const identifier = user.email || user.id.toString();
+
+    const secretData = speakeasy.generateSecret({
+      name: `${appName} (${identifier})`,
+    });
+
+    const secret = secretData.base32;
+    const otpauthUrl = secretData.otpauth_url;
+
+    await this.usersService.setTwoFactorAuthenticationSecret(secret, user.id.toString());
+
+    return {
+      secret,
+      otpauthUrl: otpauthUrl as string,
+    };
+  }
+
+  public async generateQrCodeDataURL(otpAuthUrl: string) {
+    return toDataURL(otpAuthUrl);
+  }
+
+  public isTwoFactorAuthenticationCodeValid(twoFactorAuthenticationCode: string, user: User) {
+    if (!user.twoFactorAuthenticationSecret) return false;
+    
+    return speakeasy.totp.verify({
+      secret: user.twoFactorAuthenticationSecret,
+      encoding: 'base32',
+      token: twoFactorAuthenticationCode,
+    });
+  }
+
+  public async getTwoFactorAuthToken(user: { id: string; email: string }) {
+    const payload = { 
+      email: user.email, 
+      sub: user.id, 
+      isTwoFactorAuth: true 
+    };
+    return this.jwtService.sign(payload, { expiresIn: '5m' });
+  }
+
+  public async verifyTwoFactorAuthLogin(tempToken: string, code: string) {
+    try {
+      const payload = this.jwtService.verify(tempToken);
+      if (!payload.isTwoFactorAuth) {
+        throw new UnauthorizedException('Invalid 2FA token type');
+      }
+
+      const user = await this.usersService.findById(payload.sub);
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      const isCodeValid = this.isTwoFactorAuthenticationCodeValid(code, user);
+      if (!isCodeValid) {
+        throw new UnauthorizedException('Wrong authentication code');
+      }
+
+      return this.login(user);
+    } catch (e) {
+      if (e instanceof UnauthorizedException) {
+        throw e;
+      }
+      throw new UnauthorizedException('Invalid or expired 2FA token');
+    }
   }
 }

@@ -29,6 +29,7 @@ import { GetChallengeDto, VerifyChallengeDto } from './dto/auth.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto, LogoutDto } from './dto/refresh-token.dto';
+import { TwoFactorAuthCodeDto, VerifyTwoFactorAuthDto } from './dto/two-factor-auth.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -77,6 +78,15 @@ export class AuthController {
     if (!user) {
       throw new UnauthorizedException();
     }
+
+    if (user.isTwoFactorAuthenticationEnabled) {
+      const tempToken = await this.authService.getTwoFactorAuthToken(user);
+      return {
+        requires2fa: true,
+        tempToken,
+      };
+    }
+
     return this.authService.login(user);
   }
 
@@ -359,5 +369,47 @@ export class AuthController {
     @Param('id') sessionId: string,
   ): Promise<{ message: string; sessionId: string }> {
     return this.authService.revokeSession(sessionId, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/generate')
+  @ApiOperation({ summary: 'Generate a new 2FA secret' })
+  async generate2faSecret(@Request() req: { user: { id: string } }) {
+    const user = await this.usersService.findById(req.user.id);
+    if (!user) throw new NotFoundException('User not found');
+    const { otpauthUrl } = await this.authService.generateTwoFactorAuthenticationSecret(user);
+    const qrCodeDataUrl = await this.authService.generateQrCodeDataURL(otpauthUrl);
+    return { qrCodeDataUrl };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/enable')
+  @ApiOperation({ summary: 'Enable 2FA for the logged-in user' })
+  async enable2fa(@Request() req: { user: { id: string } }, @Body() body: TwoFactorAuthCodeDto) {
+    const user = await this.usersService.findById(req.user.id);
+    if (!user) throw new NotFoundException('User not found');
+
+    const isCodeValid = this.authService.isTwoFactorAuthenticationCodeValid(
+      body.twoFactorAuthenticationCode,
+      user,
+    );
+
+    if (!isCodeValid) {
+      throw new UnauthorizedException('Wrong authentication code');
+    }
+
+    await this.usersService.turnOnTwoFactorAuthentication(user.id.toString());
+    return { message: '2FA successfully enabled' };
+  }
+
+  @Post('2fa/verify')
+  @Throttle(getAuthThrottleOverride())
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify 2FA code to complete login' })
+  async verify2fa(@Body() body: VerifyTwoFactorAuthDto) {
+    return this.authService.verifyTwoFactorAuthLogin(
+      body.tempToken,
+      body.twoFactorAuthenticationCode,
+    );
   }
 }
