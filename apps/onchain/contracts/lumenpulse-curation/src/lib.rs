@@ -1,9 +1,3 @@
-// Lumenpulse — Decentralized Project Curation & Whitelisting
-// Issue #434 | Branch: feat/community-curation
-//
-// Prevents spam projects from siphoning matching pool funds by letting
-// the community decide which projects earn "Lumenpulse Verified" status.
-
 #![no_std]
 
 mod errors;
@@ -14,12 +8,10 @@ mod types;
 pub use errors::CurationError;
 pub use types::{ProjectMetadata, ProjectStatus, ProposalState, VoteRecord};
 
-use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
-use errors::*;
 use events::*;
 use storage::*;
-use types::*;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -298,7 +290,7 @@ impl CommunityCurationContract {
 
     /// Check whether YES votes cross the threshold; update status in place.
     /// Returns `true` if status changed.
-    fn evaluate_threshold(env: &Env, proposal: &mut ProposalState) -> bool {
+    fn evaluate_threshold(_env: &Env, proposal: &mut ProposalState) -> bool {
         let total = proposal.total_voting_power_snapshot;
         if total == 0 {
             return false;
@@ -350,10 +342,10 @@ impl CommunityCurationContract {
 // ─── Metadata Validation ─────────────────────────────────────────────────────
 
 fn validate_metadata(m: &ProjectMetadata) -> Result<(), CurationError> {
-    if m.name.len() == 0 || m.name.len() > 100 {
+    if m.name.is_empty() || m.name.len() > 100 {
         return Err(CurationError::InvalidMetadata);
     }
-    if m.description.len() == 0 || m.description.len() > 1000 {
+    if m.description.is_empty() || m.description.len() > 1000 {
         return Err(CurationError::InvalidMetadata);
     }
     Ok(())
