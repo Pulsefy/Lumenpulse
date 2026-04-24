@@ -43,6 +43,17 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="grants"
+        options={{
+          title: 'Grants',
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'trophy' : 'trophy-outline'} size={24} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
         name="discover"
         options={{
           title: 'Discover',

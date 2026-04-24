@@ -51,7 +51,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     fetchNotifications();
-    
+
     // Register for push notifications
     registerForPushNotificationsAsync();
 
@@ -91,48 +91,44 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     // When a notification is received while the app is in foreground
     // We'll add it to our notifications list
     const { title, body, data } = notification.request.content;
-    
+
     // Create a new notification object
     const newNotification: Notification = {
       id: Date.now(), // Temporary ID, will be replaced when fetched from server
       title: title ?? 'Notification',
       message: body ?? '',
       read: false,
-      data: data || {}
+      data: data || {},
     };
 
     // Add to notifications list
-    setNotifications(prev => [newNotification, ...prev]);
-    
+    setNotifications((prev) => [newNotification, ...prev]);
+
     // If the app is in foreground, we might want to show an alert or handle differently
     // For now, we'll just add it to the list
-    
+
     // If notification data contains deep link info, we could navigate here
     // but typically we handle navigation when user taps the notification
   }, []);
 
   const markAsRead = useCallback(async (id: number) => {
     // Update local state first
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
-    
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+
     try {
       // Call API to mark as read
       await markAsReadApi(id);
     } catch (err) {
       console.error('Failed to mark as read:', err);
       // Revert local state on failure
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read: false } : n))
-      );
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: false } : n)));
     }
   }, []);
 
   const markAllAsRead = useCallback(async () => {
     // Update local state first
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    
+
     try {
       // Call API to mark all as read
       // await Promise.all(notifications.filter(n => !n.read).map(n => markAsReadApi(n.id)));
@@ -146,29 +142,32 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   // Set up notification listeners
   useEffect(() => {
     // Listen for incoming notifications (when app is in foreground)
-    notificationListenerRef.current = Notifications.addNotificationReceivedListener(handleNotification);
-    
+    notificationListenerRef.current =
+      Notifications.addNotificationReceivedListener(handleNotification);
+
     // Listen for notification responses (when user taps on notification)
-    responseListenerRef.current = Notifications.addNotificationResponseReceivedListener((response) => {
-      const { notification, actionIdentifier } = response;
-      const { data } = notification.request.content;
-      
-      // Handle deep linking based on notification data
-      if (data) {
-        // Example: if notification data contains a screen to navigate to
-        if (typeof data.screen === 'string') {
-          router.push(data.screen as any);
-        } else if (data.type === 'alert' && data.alertId) {
-          // Navigate to alert details screen
-          router.push(`/alerts/${data.alertId}` as any);
-        } else if (data.type === 'transaction' && data.transactionId) {
-          // Navigate to transaction details screen
-          router.push(`/transactions/${data.transactionId}` as any);
+    responseListenerRef.current = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const { notification, actionIdentifier } = response;
+        const { data } = notification.request.content;
+
+        // Handle deep linking based on notification data
+        if (data) {
+          // Example: if notification data contains a screen to navigate to
+          if (typeof data.screen === 'string') {
+            router.push(data.screen as any);
+          } else if (data.type === 'alert' && data.alertId) {
+            // Navigate to alert details screen
+            router.push(`/alerts/${data.alertId}` as any);
+          } else if (data.type === 'transaction' && data.transactionId) {
+            // Navigate to transaction details screen
+            router.push(`/transactions/${data.transactionId}` as any);
+          }
+          // Add more deep link handling as needed
         }
-        // Add more deep link handling as needed
-      }
-    });
-    
+      },
+    );
+
     // Clean up listeners on unmount
     return () => {
       if (notificationListenerRef.current) {
@@ -182,16 +181,16 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   return (
     <NotificationsContext.Provider
-      value={{ 
-        notifications, 
-        unreadCount, 
-        fetchNotifications, 
-        markAsRead, 
+      value={{
+        notifications,
+        unreadCount,
+        fetchNotifications,
+        markAsRead,
         markAllAsRead,
         registerForPushNotificationsAsync,
         handleNotification,
         notificationListener: notificationListenerRef.current!,
-        responseListener: responseListenerRef.current!
+        responseListener: responseListenerRef.current!,
       }}
     >
       {children}

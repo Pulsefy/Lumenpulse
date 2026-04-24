@@ -189,7 +189,7 @@ export function Footer() {
             <div className="mb-2">
               <div className="relative z-50 isolation-isolate flex justify-start">
                 <Image
-                  src="/assets/starkpulse-04.svg"
+                  src="/assets/lumenpulse-04.svg"
                   alt="LumenPulse"
                   width={360}
                   height={160}

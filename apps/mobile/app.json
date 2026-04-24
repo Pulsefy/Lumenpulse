@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.starkpulse.mobile",
+      "bundleIdentifier": "com.lumenpulse.mobile",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use Face ID to quickly and securely unlock Lumenpulse."
       }

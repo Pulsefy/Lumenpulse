@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type User = {
   id: string;
@@ -28,15 +28,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const loadToken = async () => {
     try {
-      const storedToken = await AsyncStorage.getItem("token");
-      const storedUser = await AsyncStorage.getItem("user");
+      const storedToken = await AsyncStorage.getItem('token');
+      const storedUser = await AsyncStorage.getItem('user');
 
       if (storedToken && storedUser) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
       }
     } catch (error) {
-      console.log("Error loading auth state", error);
+      console.log('Error loading auth state', error);
     } finally {
       setLoading(false);
     }
@@ -46,22 +46,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(user);
     setToken(token);
 
-    await AsyncStorage.setItem("token", token);
-    await AsyncStorage.setItem("user", JSON.stringify(user));
+    await AsyncStorage.setItem('token', token);
+    await AsyncStorage.setItem('user', JSON.stringify(user));
   };
 
   const logout = async () => {
     setUser(null);
     setToken(null);
 
-    await AsyncStorage.removeItem("token");
-    await AsyncStorage.removeItem("user");
+    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('user');
   };
 
   return (
-    <AuthContext.Provider
-      value={{ user, token, login, logout, setUser, loading }}
-    >
+    <AuthContext.Provider value={{ user, token, login, logout, setUser, loading }}>
       {children}
     </AuthContext.Provider>
   );
@@ -70,7 +68,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
+    throw new Error('useAuth must be used within AuthProvider');
   }
   return context;
 };

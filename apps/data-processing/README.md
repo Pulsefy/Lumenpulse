@@ -1,6 +1,6 @@
 # LumenPulse Data Processing Service
 
-This service handles compute-heavy tasks such as sentiment analysis and market trend prediction for the StarkPulse project.
+This service handles compute-heavy tasks such as sentiment analysis and market trend prediction for the LumenPulse project.
 
 ## Project Structure
 

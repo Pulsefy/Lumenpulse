@@ -1,12 +1,6 @@
 /* eslint-disable prettier/prettier */
 import React, { useCallback } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNotifications, Notification } from '../contexts/NotificationsContext';
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -18,26 +12,29 @@ export default function NotificationsScreen() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const router = useRouter();
 
-  const renderItem = useCallback(({ item }: { item: Notification }) => (
-    <TouchableOpacity
-      style={[
-        styles.item,
-        {
-          backgroundColor: item.read ? colors.card : colors.accentSecondary,
-          borderColor: item.read ? colors.cardBorder : 'transparent',
-        },
-      ]}
-      onPress={() => markAsRead(item.id)}
-      accessibilityLabel={`${item.title}. ${item.read ? 'Read' : 'Unread'}. Tap to mark as read.`}
-    >
-      {!item.read && <View style={styles.unreadDot} />}
-      <Text style={[styles.itemTitle, { color: colors.text }]}>{item.title}</Text>
-      <Text style={[styles.itemMessage, { color: colors.text }]}>{item.message}</Text>
-      <Text style={[styles.itemStatus, { color: colors.text }]}>
-        {item.read ? '✓ Read' : '● Unread'}
-      </Text>
-    </TouchableOpacity>
-  ), [colors, markAsRead]);
+  const renderItem = useCallback(
+    ({ item }: { item: Notification }) => (
+      <TouchableOpacity
+        style={[
+          styles.item,
+          {
+            backgroundColor: item.read ? colors.card : colors.accentSecondary,
+            borderColor: item.read ? colors.cardBorder : 'transparent',
+          },
+        ]}
+        onPress={() => markAsRead(item.id)}
+        accessibilityLabel={`${item.title}. ${item.read ? 'Read' : 'Unread'}. Tap to mark as read.`}
+      >
+        {!item.read && <View style={styles.unreadDot} />}
+        <Text style={[styles.itemTitle, { color: colors.text }]}>{item.title}</Text>
+        <Text style={[styles.itemMessage, { color: colors.text }]}>{item.message}</Text>
+        <Text style={[styles.itemStatus, { color: colors.text }]}>
+          {item.read ? '✓ Read' : '● Unread'}
+        </Text>
+      </TouchableOpacity>
+    ),
+    [colors, markAsRead],
+  );
 
   return (
     <ProtectedRoute>
@@ -57,9 +54,7 @@ export default function NotificationsScreen() {
             <Text style={[styles.screenTitle, { color: colors.text }]}>Notifications</Text>
             {unreadCount > 0 && (
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </Text>
+                <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
               </View>
             )}
           </View>
@@ -67,12 +62,10 @@ export default function NotificationsScreen() {
           {/* Mark all read — keeps the header balanced */}
           {unreadCount > 0 ? (
             <TouchableOpacity onPress={markAllAsRead} style={styles.markAllButton}>
-              <Text style={[styles.markAllText, { color: colors.accent }]}>
-                Mark all
-              </Text>
+              <Text style={[styles.markAllText, { color: colors.accent }]}>Mark all</Text>
             </TouchableOpacity>
           ) : (
-            <View style={styles.markAllButton} /> 
+            <View style={styles.markAllButton} />
           )}
         </View>
 
