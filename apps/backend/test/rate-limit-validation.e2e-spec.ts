@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
+import { Server } from 'http';
 import { Throttle, ThrottlerModule } from '@nestjs/throttler';
 import { IsInt, IsNotEmpty, IsString, Min } from 'class-validator';
 import request from 'supertest';
@@ -94,6 +95,8 @@ describe('Security hardening (e2e)', () => {
   let originalTrackByApiKey: string | undefined;
   let originalCorsOrigin: string | undefined;
 
+  const getHttpServer = (): Server => app.getHttpServer() as Server;
+
   beforeAll(async () => {
     originalNodeEnv = process.env.NODE_ENV;
     originalTrackByApiKey = process.env.RATE_LIMIT_TRACK_BY_API_KEY;
@@ -119,7 +122,7 @@ describe('Security hardening (e2e)', () => {
   });
 
   it('returns a standardized 400 response for invalid DTO payloads', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await request(getHttpServer())
       .post('/security-test/validate')
       .send({
         name: '',
@@ -146,16 +149,16 @@ describe('Security hardening (e2e)', () => {
   it('returns 429 after repeated requests from the same api key', async () => {
     const apiKey = 'test-public-key';
 
-    await request(app.getHttpServer())
+    await request(getHttpServer())
       .get('/security-test/limited')
       .set('x-api-key', apiKey)
       .expect(200);
-    await request(app.getHttpServer())
+    await request(getHttpServer())
       .get('/security-test/limited')
       .set('x-api-key', apiKey)
       .expect(200);
 
-    const response = await request(app.getHttpServer())
+    const response = await request(getHttpServer())
       .get('/security-test/limited')
       .set('x-api-key', apiKey)
       .expect(429);
@@ -172,7 +175,7 @@ describe('Security hardening (e2e)', () => {
   });
 
   it('does not expose internal error details in production mode', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await request(getHttpServer())
       .get('/security-test/error')
       .expect(500);
 
