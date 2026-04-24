@@ -119,6 +119,7 @@ describe('Security hardening (e2e)', () => {
   });
 
   it('returns a standardized 400 response for invalid DTO payloads', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const response = await request(app.getHttpServer())
       .post('/security-test/validate')
       .send({
@@ -146,15 +147,18 @@ describe('Security hardening (e2e)', () => {
   it('returns 429 after repeated requests from the same api key', async () => {
     const apiKey = 'test-public-key';
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await request(app.getHttpServer())
       .get('/security-test/limited')
       .set('x-api-key', apiKey)
       .expect(200);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await request(app.getHttpServer())
       .get('/security-test/limited')
       .set('x-api-key', apiKey)
       .expect(200);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const response = await request(app.getHttpServer())
       .get('/security-test/limited')
       .set('x-api-key', apiKey)
@@ -172,6 +176,7 @@ describe('Security hardening (e2e)', () => {
   });
 
   it('does not expose internal error details in production mode', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const response = await request(app.getHttpServer())
       .get('/security-test/error')
       .expect(500);

@@ -36,6 +36,8 @@ import {
   getRateLimitSettings,
 } from './common/rate-limit/rate-limit.config';
 import { TestController } from './test/test.controller';
+import { SnapshotsModule } from './snapshot/snapshot.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { UploadModule } from './upload/upload.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -94,6 +96,10 @@ import { GrantsModule } from './grants/grants.module';
     UploadModule,
     AuthModule,
     UsersModule,
+    EmailModule,
+    PortfolioModule,
+    SnapshotsModule,
+    NotificationsModule,
     QueueModule,
     StellarSyncModule,
     ExchangeRatesModule,

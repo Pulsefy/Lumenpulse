@@ -2,7 +2,8 @@
 import React, { useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
-import { useNotifications, Notification } from '../contexts/NotificationsContext';
+import { useNotifications } from '../contexts/NotificationsContext';
+import type { Notification } from '../lib/notifications';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
