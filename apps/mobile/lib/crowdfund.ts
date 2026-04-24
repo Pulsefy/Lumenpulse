@@ -13,6 +13,15 @@ export interface CrowdfundProject {
   totalWithdrawn: string;
   isActive: boolean;
   contributorCount: number;
+  description?: string;
+  tagline?: string;
+  category?: string;
+  heroImageUrl?: string | null;
+  milestones?: Array<{
+    title: string;
+    detail?: string;
+    status?: 'complete' | 'current' | 'upcoming';
+  }>;
 }
 
 /**
@@ -43,6 +52,15 @@ export interface ContributionRecord {
   amount: string;
   timestamp: string;
   transactionHash: string;
+}
+
+export interface ProjectContributor {
+  id: string;
+  name: string;
+  handle?: string;
+  amount?: string;
+  avatarUrl?: string | null;
+  contributedAt?: string;
 }
 
 /**
@@ -90,5 +108,12 @@ export const crowdfundApi = {
    */
   async getProjectBalance(projectId: number): Promise<ApiResponse<{ balance: string }>> {
     return apiClient.get<{ balance: string }>(`/crowdfund/projects/${projectId}/balance`);
+  },
+
+  /**
+   * Fetch recent contributors for a project when the backend provides them.
+   */
+  async getProjectContributors(projectId: number): Promise<ApiResponse<ProjectContributor[]>> {
+    return apiClient.get<ProjectContributor[]>(`/crowdfund/projects/${projectId}/contributors`);
   },
 };
