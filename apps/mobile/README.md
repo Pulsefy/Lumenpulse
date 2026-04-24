@@ -88,6 +88,7 @@ const loginResponse = await authApi.login({
 ```
 
 Key features:
+
 - Typed HTTP methods (GET, POST, PUT, PATCH, DELETE)
 - Consistent error handling with normalized error shapes
 - Environment-based configuration (no hardcoded URLs)

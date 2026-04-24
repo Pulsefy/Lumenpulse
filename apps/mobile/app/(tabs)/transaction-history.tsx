@@ -15,7 +15,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { transactionApi } from '../../lib/transaction';
 import { Transaction, TransactionType, TransactionStatus } from '../../lib/types/transaction';
-import StandardList from "@/components/StandardList";
+import StandardList from '@/components/StandardList';
 
 /* ================= Helpers ================= */
 
@@ -58,10 +58,7 @@ function TransactionItem({
   colors: any;
 }) {
   return (
-    <TouchableOpacity
-      style={[styles.item, { borderBottomColor: colors.border }]}
-      onPress={onPress}
-    >
+    <TouchableOpacity style={[styles.item, { borderBottomColor: colors.border }]} onPress={onPress}>
       <Ionicons
         name={getTransactionIcon(transaction.type) as any}
         size={22}
@@ -69,9 +66,7 @@ function TransactionItem({
       />
 
       <View style={{ flex: 1, marginLeft: 10 }}>
-        <Text style={{ color: colors.text }}>
-          {transaction.type}
-        </Text>
+        <Text style={{ color: colors.text }}>{transaction.type}</Text>
         <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
           {formatDate(transaction.date)}
         </Text>
@@ -84,24 +79,15 @@ function TransactionItem({
   );
 }
 
-function TransactionDetailModal({
-  transaction,
-  visible,
-  onClose,
-  colors,
-}: any) {
+function TransactionDetailModal({ transaction, visible, onClose, colors }: any) {
   if (!transaction) return null;
 
   return (
     <Modal visible={visible} animationType="slide">
       <View style={[styles.modal, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text, fontSize: 18 }}>
-          Transaction Details
-        </Text>
+        <Text style={{ color: colors.text, fontSize: 18 }}>Transaction Details</Text>
 
-        <Text style={{ color: colors.textSecondary }}>
-          {transaction.transactionHash}
-        </Text>
+        <Text style={{ color: colors.textSecondary }}>{transaction.transactionHash}</Text>
 
         <TouchableOpacity onPress={onClose}>
           <Text style={{ color: colors.accent }}>Close</Text>
@@ -127,27 +113,30 @@ export default function TransactionHistoryScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [nextPage, setNextPage] = useState<string | undefined>();
 
-  const fetchTransactions = useCallback(async (refresh = false) => {
-    refresh ? setIsRefreshing(true) : setIsLoading(true);
-    setError(null);
+  const fetchTransactions = useCallback(
+    async (refresh = false) => {
+      refresh ? setIsRefreshing(true) : setIsLoading(true);
+      setError(null);
 
-    try {
-      const res = await transactionApi.getHistory(20, refresh ? undefined : nextPage);
+      try {
+        const res = await transactionApi.getHistory(20, refresh ? undefined : nextPage);
 
-      if (refresh) {
-        setTransactions(res.transactions);
-      } else {
-        setTransactions(prev => [...prev, ...res.transactions]);
+        if (refresh) {
+          setTransactions(res.transactions);
+        } else {
+          setTransactions((prev) => [...prev, ...res.transactions]);
+        }
+
+        setNextPage(res.nextPage);
+      } catch {
+        setError('Failed to load transactions');
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
       }
-
-      setNextPage(res.nextPage);
-    } catch {
-      setError("Failed to load transactions");
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [nextPage]);
+    },
+    [nextPage],
+  );
 
   useEffect(() => {
     if (isAuthenticated) fetchTransactions(true);
@@ -176,11 +165,7 @@ export default function TransactionHistoryScreen() {
         data={transactions}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <TransactionItem
-            transaction={item}
-            onPress={() => handlePress(item)}
-            colors={colors}
-          />
+          <TransactionItem transaction={item} onPress={() => handlePress(item)} colors={colors} />
         )}
         refreshing={isRefreshing}
         onRefresh={() => fetchTransactions(true)}
@@ -205,20 +190,20 @@ export default function TransactionHistoryScreen() {
 const styles = StyleSheet.create({
   center: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   item: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
   },
 
   modal: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

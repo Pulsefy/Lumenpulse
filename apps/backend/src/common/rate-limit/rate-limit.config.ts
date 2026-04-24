@@ -13,6 +13,8 @@ export interface RateLimitSettings {
   auth: RateLimitProfile;
   portfolioRead: RateLimitProfile;
   portfolioWrite: RateLimitProfile;
+  watchlistRead: RateLimitProfile;
+  watchlistWrite: RateLimitProfile;
   tracker: {
     useIp: boolean;
     useApiKey: boolean;
@@ -28,18 +30,24 @@ const DEFAULTS = {
     auth: { limit: 15, ttl: 60_000, blockDuration: 300_000 },
     portfolioRead: { limit: 180, ttl: 60_000, blockDuration: 60_000 },
     portfolioWrite: { limit: 20, ttl: 60_000, blockDuration: 120_000 },
+    watchlistRead: { limit: 200, ttl: 60_000, blockDuration: 60_000 },
+    watchlistWrite: { limit: 30, ttl: 60_000, blockDuration: 120_000 },
   },
   staging: {
     global: { limit: 180, ttl: 60_000, blockDuration: 60_000 },
     auth: { limit: 10, ttl: 60_000, blockDuration: 300_000 },
     portfolioRead: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
     portfolioWrite: { limit: 12, ttl: 60_000, blockDuration: 120_000 },
+    watchlistRead: { limit: 150, ttl: 60_000, blockDuration: 60_000 },
+    watchlistWrite: { limit: 20, ttl: 60_000, blockDuration: 120_000 },
   },
   production: {
     global: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
     auth: { limit: 8, ttl: 60_000, blockDuration: 300_000 },
     portfolioRead: { limit: 90, ttl: 60_000, blockDuration: 60_000 },
     portfolioWrite: { limit: 10, ttl: 60_000, blockDuration: 120_000 },
+    watchlistRead: { limit: 100, ttl: 60_000, blockDuration: 60_000 },
+    watchlistWrite: { limit: 15, ttl: 60_000, blockDuration: 120_000 },
   },
 } as const;
 
@@ -76,7 +84,7 @@ function getEnvironmentName(nodeEnv: string | undefined): EnvironmentName {
 
 function resolveProfile(
   env: NodeJS.ProcessEnv,
-  key: 'global' | 'auth' | 'portfolioRead' | 'portfolioWrite',
+  key: 'global' | 'auth' | 'portfolioRead' | 'portfolioWrite' | 'watchlistRead' | 'watchlistWrite',
 ): RateLimitProfile {
   const profileDefaults = DEFAULTS[getEnvironmentName(env.NODE_ENV)][key];
   const envKeyPrefix = key
@@ -107,6 +115,8 @@ export function getRateLimitSettings(
     auth: resolveProfile(env, 'auth'),
     portfolioRead: resolveProfile(env, 'portfolioRead'),
     portfolioWrite: resolveProfile(env, 'portfolioWrite'),
+    watchlistRead: resolveProfile(env, 'watchlistRead'),
+    watchlistWrite: resolveProfile(env, 'watchlistWrite'),
     tracker: {
       useIp: parseBoolean(env.RATE_LIMIT_TRACK_BY_IP, true),
       useApiKey: parseBoolean(env.RATE_LIMIT_TRACK_BY_API_KEY, false),
@@ -186,5 +196,17 @@ export function getPortfolioReadThrottleOverride() {
 export function getPortfolioWriteThrottleOverride() {
   return {
     default: getRateLimitSettings().portfolioWrite,
+  };
+}
+
+export function getWatchlistReadThrottleOverride() {
+  return {
+    default: getRateLimitSettings().watchlistRead,
+  };
+}
+
+export function getWatchlistWriteThrottleOverride() {
+  return {
+    default: getRateLimitSettings().watchlistWrite,
   };
 }

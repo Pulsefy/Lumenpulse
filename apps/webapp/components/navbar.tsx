@@ -3,9 +3,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import { Menu, X, Layers, Users, LayoutDashboard } from "lucide-react";
+import { Menu, X, Layers, Users, LayoutDashboard, Trophy } from "lucide-react";
 import { WalletButton } from "./wallet-button";
 import { ThemeSelector } from "./theme-selector";
+import { WalletSwitcher } from "@/components/wallet-switcher";
+
+// inside the navbar JSX, next to existing nav items:
+<WalletSwitcher />
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -18,7 +22,7 @@ export function Navbar() {
           <div className="flex-shrink-0 -ml-2">
             <Link href="/" className="flex items-center">
               <Image
-                src="/assets/starkpulse-03.svg"
+                src="/assets/lumenpulse-03.svg"
                 alt="LumenPulse Logo"
                 width={36}
                 height={36}
@@ -47,6 +51,16 @@ export function Navbar() {
               <Users className="w-4 h-4 text-primary group-hover:text-white transition-colors" />
               <span className="group-hover:translate-x-0.5 transition-transform">
                 Community
+              </span>
+              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
+            </Link>
+            <Link
+              href="/grants"
+              className="px-3 py-2 text-sm font-medium text-white hover:text-white transition-all flex items-center gap-2 group relative"
+            >
+              <Trophy className="w-4 h-4 text-primary group-hover:text-white transition-colors" />
+              <span className="group-hover:translate-x-0.5 transition-transform">
+                Grants
               </span>
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
@@ -104,6 +118,15 @@ export function Navbar() {
             >
               <Users className="w-5 h-5 text-primary" />
               <span>Community</span>
+              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
+            </Link>
+            <Link
+              href="/grants"
+              className="flex items-center gap-3 p-3 rounded-lg text-white hover:bg-white/5 transition-all relative group"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              <Trophy className="w-5 h-5 text-primary" />
+              <span>Grants</span>
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
             <Link

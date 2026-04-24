@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Text,
   StyleSheet,
@@ -7,34 +7,47 @@ import {
   TouchableOpacity,
   SafeAreaView,
   View,
+  RefreshControl,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { apiClient } from '@/lib/api-client';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Article } from '@/lib/types/news';
+import { useCachedData } from '@/hooks/useCachedData';
+import { CACHE_CONFIGS } from '@/lib/cache';
 
 export default function NewsScreen() {
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { colors } = useTheme();
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetchNews();
-  }, []);
+  // Use cached data for news
+  const {
+    data: articles,
+    loading,
+    error,
+    refresh,
+    isStale,
+  } = useCachedData({
+    key: 'news_1_20',
+    fetcher: async () => {
+      const response = await apiClient.get<Article[]>('/news');
+      if (response.success && response.data) {
+        return response.data;
+      }
+      throw new Error(response.error?.message || 'Failed to load news');
+    },
+    ...CACHE_CONFIGS.NEWS,
+  });
 
-  const fetchNews = async () => {
-    setLoading(true);
-    setError(null);
-    const response = await apiClient.get<Article[]>('/news');
-    if (response.success && response.data) {
-      setArticles(response.data);
-    } else {
-      setError(response.error?.message || 'Failed to load news.');
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
     }
-    setLoading(false);
   };
 
   const renderItem = ({ item }: { item: Article }) => (
@@ -60,8 +73,8 @@ export default function NewsScreen() {
   if (error) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={styles.error}>{error}</Text>
-        <TouchableOpacity onPress={fetchNews} style={styles.retryButton}>
+        <Text style={styles.error}>{error.message}</Text>
+        <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
           <Text style={styles.retryText}>Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -82,11 +95,31 @@ export default function NewsScreen() {
           ),
         }}
       />
+
+      {/* Stale data indicator */}
+      {isStale && (
+        <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}>
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
+          <Text style={[styles.staleText, { color: colors.warning }]}>
+            Showing cached news - Pull to refresh
+          </Text>
+        </View>
+      )}
+
       <FlatList
-        data={articles}
+        data={articles || []}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 16 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.center}>
+              <Text style={{ color: colors.text }}>No news available</Text>
+            </View>
+          ) : null
+        }
+        ListFooterComponent={loading ? <ActivityIndicator style={{ margin: 20 }} /> : null}
       />
     </SafeAreaView>
   );
@@ -127,5 +160,20 @@ const styles = StyleSheet.create({
   retryText: {
     color: '#ffffff',
     fontWeight: '600',
+  },
+  staleIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
+  },
+  staleText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 6,
   },
 });
