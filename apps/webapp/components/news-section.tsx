@@ -5,7 +5,7 @@ import Image from "next/image";
 import { NewsCarousel } from "@/components/news-carousel";
 import { Web3NewsFallback } from "@/components/web3-news-fallback";
 import { useState, useEffect, useMemo } from "react";
-import { NewsApiService, transformNewsData } from "@/lib/api-services";
+import { fetchCryptoNews } from "@/lib/news-client";
 import { ExploreFilters } from "./explore-filters";
 
 interface NewsData {
@@ -55,29 +55,14 @@ export function NewsSection({ newsData: propNewsData, isLoading: propIsLoading, 
       setIsUsingFallback(false);
       
       try {
-        const apiData = await NewsApiService.getCryptoNews(20); // Fetch more for better filtering
+        const newsData = await fetchCryptoNews(20);
         
-        if (apiData.length === 0) {
+        if (newsData.length === 0) {
           console.log('Using Web3 fallback news generator');
           setIsUsingFallback(true);
           setAllNewsData([]);
         } else {
-          const transformedData = apiData.map((item, idx) => {
-            const transformed = transformNewsData(item, idx);
-            // Add mock data for sentiment and funding status
-            const sentiments: ("Bullish" | "Bearish" | "Neutral")[] = ["Bullish", "Bearish", "Neutral"];
-            const fundingStatuses: ("Funded" | "Seeking Funding" | "Closed")[] = ["Funded", "Seeking Funding", "Closed"];
-            const categories = ["DeFi", "Layer 2", "Infrastructure", "Security", "AI", "Gaming"];
-            
-            return {
-              ...transformed,
-              category: categories[Math.floor(Math.random() * categories.length)],
-              sentiment: sentiments[Math.floor(Math.random() * sentiments.length)],
-              fundingStatus: fundingStatuses[Math.floor(Math.random() * fundingStatuses.length)],
-              timestamp: new Date(item.publishedAt).getTime(),
-            };
-          });
-          setAllNewsData(transformedData);
+          setAllNewsData(newsData);
           setIsUsingFallback(false);
         }
       } catch (err) {
