@@ -1,6 +1,6 @@
 import { Clock, User, Zap, TrendingUp, Shield, Coins, Globe, Rocket, TrendingDown, Minus, DollarSign } from "lucide-react";
 import Image from "next/image";
-import { useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 interface Web3NewsItem {
   id: number;
@@ -246,4 +246,4 @@ export function Web3NewsFallback({ filters, sortOrder }: Web3NewsFallbackProps) 
       ))}
     </div>
   );
-}
+}

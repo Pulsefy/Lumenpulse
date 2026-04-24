@@ -3,6 +3,7 @@ import { StarsAnimation } from "@/components/stars-animation";
 import { PWAInstaller } from "@/components/pwa-installer";
 import { getThemeInitScriptHTML } from "@/lib/theme-init-script";
 import "./globals.css";
+
 import type { Metadata } from "next";
 import {
   Inter,

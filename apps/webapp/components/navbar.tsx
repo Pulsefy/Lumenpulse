@@ -6,6 +6,10 @@ import { useState } from "react";
 import { Menu, X, Layers, Users, LayoutDashboard } from "lucide-react";
 import { WalletButton } from "./wallet-button";
 import { ThemeSelector } from "./theme-selector";
+import { WalletSwitcher } from "@/components/wallet-switcher";
+
+// inside the navbar JSX, next to existing nav items:
+<WalletSwitcher />
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);

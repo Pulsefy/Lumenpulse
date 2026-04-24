@@ -1,5 +1,12 @@
 "use client";
 
+import { WalletProvider } from "@/contexts/WalletContext";
+
+// inside your existing providers tree, add:
+<WalletProvider>
+  {children}
+</WalletProvider>
+
 import {
   ReactNode,
   createContext,
