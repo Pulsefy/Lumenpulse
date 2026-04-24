@@ -37,7 +37,7 @@ export class PushToken {
   platform: PushTokenPlatform;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  deviceName: string;
+  deviceName: string | null;
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
