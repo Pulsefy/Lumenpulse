@@ -712,6 +712,121 @@ fn test_milestone_approval_status() {
     assert!(client.is_milestone_approved(&project_id, &0));
 }
 
+#[test]
+fn test_dispute_escrows_withdrawal_until_resolved() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Dispute"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &500_000);
+    client.approve_milestone(&admin, &project_id, &0);
+
+    client.dispute_milestone(&user, &project_id, &0, &symbol_short!("quality"));
+
+    assert!(client.is_milestone_disputed(&project_id, &0));
+
+    let blocked = client.try_withdraw(&project_id, &0, &100_000);
+    assert_eq!(blocked, Err(Ok(CrowdfundError::MilestoneEscrowed)));
+
+    client.resolve_milestone_dispute(&admin, &project_id, &0, &true);
+
+    assert!(!client.is_milestone_disputed(&project_id, &0));
+    client.withdraw(&project_id, &0, &100_000);
+    assert_eq!(client.get_balance(&project_id), 400_000);
+}
+
+#[test]
+fn test_dispute_resolution_can_revoke_approval() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Dispute"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &500_000);
+    client.approve_milestone(&admin, &project_id, &0);
+    client.dispute_milestone(&user, &project_id, &0, &symbol_short!("quality"));
+
+    client.resolve_milestone_dispute(&admin, &project_id, &0, &false);
+
+    assert!(!client.is_milestone_approved(&project_id, &0));
+
+    let blocked = client.try_withdraw(&project_id, &0, &100_000);
+    assert_eq!(blocked, Err(Ok(CrowdfundError::MilestoneNotApproved)));
+}
+
+#[test]
+fn test_only_contributors_can_dispute_milestones() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    let outsider = Address::generate(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Dispute"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &500_000);
+    client.approve_milestone(&admin, &project_id, &0);
+
+    let result =
+        client.try_dispute_milestone(&outsider, &project_id, &0, &symbol_short!("quality"));
+    assert_eq!(
+        result,
+        Err(Ok(CrowdfundError::InsufficientContributionToVote))
+    );
+}
+
+#[test]
+fn test_duplicate_dispute_is_rejected_and_metadata_is_readable() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Dispute"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &500_000);
+    client.approve_milestone(&admin, &project_id, &0);
+    client.dispute_milestone(&user, &project_id, &0, &symbol_short!("quality"));
+
+    let dispute = client.get_milestone_dispute(&project_id, &0);
+    assert_eq!(dispute.project_id, project_id);
+    assert_eq!(dispute.milestone_id, 0);
+    assert_eq!(dispute.challenger, user);
+    assert_eq!(dispute.reason, symbol_short!("quality"));
+
+    let result = client.try_dispute_milestone(&user, &project_id, &0, &symbol_short!("scope"));
+    assert_eq!(result, Err(Ok(CrowdfundError::MilestoneAlreadyDisputed)));
+}
+
 // ===== get_balance after operations =====
 #[test]
 fn test_balance_tracking() {

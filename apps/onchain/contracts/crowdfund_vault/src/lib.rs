@@ -13,7 +13,7 @@ use notification_interface::{Notification, NotificationReceiverClient};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
-use storage::{DataKey, ProjectData, ProtocolStats};
+use storage::{DataKey, MilestoneDispute, ProjectData, ProtocolStats};
 
 const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
@@ -751,9 +751,18 @@ impl CrowdfundVaultContract {
         env.storage()
             .persistent()
             .set(&DataKey::MilestoneApproved(project_id, milestone_id), &true);
+        env.storage().persistent().set(
+            &DataKey::MilestoneDisputed(project_id, milestone_id),
+            &false,
+        );
 
         // Emit milestone approval event
-        events::MilestoneApprovedEvent { admin, project_id }.publish(&env);
+        events::MilestoneApprovedEvent {
+            admin,
+            project_id,
+            milestone_id,
+        }
+        .publish(&env);
 
         Ok(())
     }
@@ -924,6 +933,10 @@ impl CrowdfundVaultContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::MilestoneApproved(project_id, milestone_id), &true);
+            env.storage().persistent().set(
+                &DataKey::MilestoneDisputed(project_id, milestone_id),
+                &false,
+            );
             events::MilestoneApprovedByVoteEvent {
                 project_id,
                 milestone_id,
@@ -984,6 +997,15 @@ impl CrowdfundVaultContract {
 
         if !is_approved {
             return Err(CrowdfundError::MilestoneNotApproved);
+        }
+
+        let is_disputed: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MilestoneDisputed(project_id, milestone_id))
+            .unwrap_or(false);
+        if is_disputed {
+            return Err(CrowdfundError::MilestoneEscrowed);
         }
 
         // Construct balance key once
@@ -1079,6 +1101,113 @@ impl CrowdfundVaultContract {
             owner: project.owner,
             project_id,
             amount: withdraw_amount,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Formally challenge a completed milestone and escrow further payouts.
+    pub fn dispute_milestone(
+        env: Env,
+        challenger: Address,
+        project_id: u64,
+        milestone_id: u32,
+        reason: Symbol,
+    ) -> Result<(), CrowdfundError> {
+        challenger.require_auth();
+
+        env.storage()
+            .persistent()
+            .get::<_, ProjectData>(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        let is_approved: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MilestoneApproved(project_id, milestone_id))
+            .unwrap_or(false);
+        if !is_approved {
+            return Err(CrowdfundError::MilestoneNotApproved);
+        }
+
+        let contribution: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contribution(project_id, challenger.clone()))
+            .unwrap_or(0);
+        if contribution <= 0 {
+            return Err(CrowdfundError::InsufficientContributionToVote);
+        }
+
+        let is_disputed: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MilestoneDisputed(project_id, milestone_id))
+            .unwrap_or(false);
+        if is_disputed {
+            return Err(CrowdfundError::MilestoneAlreadyDisputed);
+        }
+
+        let dispute = MilestoneDispute {
+            project_id,
+            milestone_id,
+            challenger: challenger.clone(),
+            opened_at: env.ledger().timestamp(),
+            reason,
+        };
+
+        env.storage().persistent().set(
+            &DataKey::MilestoneDispute(project_id, milestone_id),
+            &dispute,
+        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::MilestoneDisputed(project_id, milestone_id), &true);
+
+        events::MilestoneDisputedEvent {
+            project_id,
+            milestone_id,
+            challenger,
+            reason: dispute.reason.clone(),
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Resolve a milestone dispute and either restore or revoke payout eligibility.
+    pub fn resolve_milestone_dispute(
+        env: Env,
+        admin: Address,
+        project_id: u64,
+        milestone_id: u32,
+        upheld_completion: bool,
+    ) -> Result<(), CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+
+        env.storage()
+            .persistent()
+            .get::<_, MilestoneDispute>(&DataKey::MilestoneDispute(project_id, milestone_id))
+            .ok_or(CrowdfundError::MilestoneNotDisputed)?;
+
+        env.storage().persistent().set(
+            &DataKey::MilestoneDisputed(project_id, milestone_id),
+            &false,
+        );
+        env.storage()
+            .persistent()
+            .remove(&DataKey::MilestoneDispute(project_id, milestone_id));
+        env.storage().persistent().set(
+            &DataKey::MilestoneApproved(project_id, milestone_id),
+            &upheld_completion,
+        );
+
+        events::MilestoneDisputeResolvedEvent {
+            admin,
+            project_id,
+            milestone_id,
+            upheld_completion,
         }
         .publish(&env);
 
@@ -1217,6 +1346,39 @@ impl CrowdfundVaultContract {
             .persistent()
             .get(&DataKey::MilestoneApproved(project_id, milestone_id))
             .unwrap_or(false))
+    }
+
+    pub fn is_milestone_disputed(
+        env: Env,
+        project_id: u64,
+        milestone_id: u32,
+    ) -> Result<bool, CrowdfundError> {
+        env.storage()
+            .persistent()
+            .get::<_, ProjectData>(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::MilestoneDisputed(project_id, milestone_id))
+            .unwrap_or(false))
+    }
+
+    pub fn get_milestone_dispute(
+        env: Env,
+        project_id: u64,
+        milestone_id: u32,
+    ) -> Result<MilestoneDispute, CrowdfundError> {
+        env.storage()
+            .persistent()
+            .get::<_, ProjectData>(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        env.storage()
+            .persistent()
+            .get(&DataKey::MilestoneDispute(project_id, milestone_id))
+            .ok_or(CrowdfundError::MilestoneNotDisputed)
     }
 
     /// Get admin address
