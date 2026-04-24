@@ -4,6 +4,7 @@ import {
   IsDateString,
   IsOptional,
   IsNumber,
+  IsArray,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -28,4 +29,13 @@ export class UpdateArticleDto {
   @Type(() => Number)
   @IsNumber()
   sentimentScore?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @IsOptional()
+  @IsString()
+  category?: string;
 }

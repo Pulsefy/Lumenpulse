@@ -3,9 +3,16 @@ use soroban_sdk::{contracttype, Address, String};
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
-    Admin,                // -> Address
-    Contributor(Address), // -> ContributorData
-    GitHubIndex(String),  // -> Address
+    // ── Existing keys (unchanged) ─────────────────────────────
+    Admin,
+    Contributor(Address),
+    GitHubIndex(String),
+    RegistrationNonce(Address),
+
+    // ── Multisig keys ─────────────────────────────────────────
+    MultisigConfig,
+    Proposal(u64),
+    NextProposalId,
 }
 
 #[contracttype]

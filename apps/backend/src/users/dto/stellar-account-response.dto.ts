@@ -11,6 +11,9 @@ export class StellarAccountResponseDto {
   label?: string | null; // Allow both undefined and null
 
   @ApiProperty()
+  isPrimary?: boolean;
+
+  @ApiProperty()
   isActive: boolean;
 
   @ApiProperty()

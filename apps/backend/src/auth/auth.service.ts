@@ -12,7 +12,7 @@ import { User } from '../users/entities/user.entity';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, MoreThan } from 'typeorm';
 import {
   Keypair,
   Networks,
@@ -567,5 +567,65 @@ export class AuthService {
     this.logger.log(`All refresh tokens revoked for user ${userId}`);
 
     return { message: 'Successfully logged out from all devices' };
+  }
+
+  /**
+   * Get all active sessions for a user
+   */
+  async getActiveSessions(
+    userId: string,
+  ): Promise<{ sessions: any[]; total: number }> {
+    const now = new Date();
+
+    const tokens = await this.refreshTokenRepository.find({
+      where: {
+        userId,
+        revokedAt: IsNull(),
+        expiresAt: MoreThan(now),
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    const sessions = tokens.map((token) => ({
+      id: token.id,
+      deviceInfo: token.deviceInfo,
+      ipAddress: token.ipAddress,
+      createdAt: token.createdAt,
+      expiresAt: token.expiresAt,
+      isCurrent: false, // Will be set by controller if session ID from JWT is available
+    }));
+
+    return {
+      sessions,
+      total: sessions.length,
+    };
+  }
+
+  /**
+   * Revoke a specific session (refresh token)
+   */
+  async revokeSession(
+    sessionId: string,
+    userId: string,
+  ): Promise<{ message: string; sessionId: string }> {
+    const token = await this.refreshTokenRepository.findOne({
+      where: { id: sessionId, userId },
+    });
+
+    if (!token) {
+      throw new NotFoundException('Session not found');
+    }
+
+    if (token.revokedAt) {
+      // Already revoked - idempotent, still return success
+      return { message: 'Session revoked successfully', sessionId };
+    }
+
+    token.revokedAt = new Date();
+    await this.refreshTokenRepository.save(token);
+
+    this.logger.log(`Session ${sessionId} revoked for user ${userId}`);
+
+    return { message: 'Session revoked successfully', sessionId };
   }
 }

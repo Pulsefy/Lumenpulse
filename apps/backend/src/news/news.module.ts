@@ -7,6 +7,7 @@ import { NewsProviderService } from './news-provider.service';
 import { NewsService } from './news.service';
 import { News } from './news.entity';
 import { NewsSentimentService } from './news-sentiment.services';
+import { AppCacheModule } from '../cache/cache.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { NewsSentimentService } from './news-sentiment.services';
       maxRedirects: 3,
     }),
     TypeOrmModule.forFeature([News]),
+    AppCacheModule,
   ],
   controllers: [NewsController],
   providers: [NewsProviderService, NewsService, NewsSentimentService],

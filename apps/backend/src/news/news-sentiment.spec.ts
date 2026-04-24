@@ -8,6 +8,7 @@ import { News } from './news.entity';
 import { NewsService } from './news.service';
 import { NewsSentimentService } from './news-sentiment.services';
 import { NewsProviderService } from './news-provider.service';
+import { CacheService } from '../cache/cache.service';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,8 @@ function makeArticle(overrides: Partial<News> = {}): News {
     source: 'coindesk',
     publishedAt: new Date(),
     sentimentScore: null,
+    tags: [],
+    category: null, // ✅ ADD THIS
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -86,12 +89,14 @@ describe('NewsSentimentService', () => {
     }).compile();
 
     sentimentService = module.get<NewsSentimentService>(NewsSentimentService);
-    newsService = module.get<NewsService>(NewsService) as jest.Mocked<
+    newsService = module.get<NewsService>(
+      NewsService,
+    ) as unknown as jest.Mocked<
       Pick<NewsService, 'findUnscoredArticles' | 'update'>
     >;
-    httpService = module.get<HttpService>(HttpService) as jest.Mocked<
-      Pick<HttpService, 'post'>
-    >;
+    httpService = module.get<HttpService>(
+      HttpService,
+    ) as unknown as jest.Mocked<Pick<HttpService, 'post'>>;
   });
 
   // ── analyzeSentiment ───────────────────────────────────────────────────────
@@ -244,6 +249,10 @@ describe('NewsService - sentiment methods', () => {
         {
           provide: NewsProviderService,
           useValue: mockNewsProviderService,
+        },
+        {
+          provide: CacheService,
+          useValue: { invalidateNewsCache: jest.fn() },
         },
       ],
     }).compile();

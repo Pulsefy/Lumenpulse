@@ -1,11 +1,28 @@
-import React from 'react';
-import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRouter } from 'expo-router';
 import { ThemeMode } from '../../theme/colors';
+import {
+  authenticateBiometricPrompt,
+  getBiometricLockEnabled,
+  isBiometricEnrolled,
+  isBiometricLockSupported,
+  setBiometricLockEnabled,
+} from '../../lib/biometric-lock';
 
 const THEME_OPTIONS: { label: string; value: ThemeMode; icon: string }[] = [
   { label: 'System', value: 'system', icon: 'phone-portrait-outline' },
@@ -17,9 +34,22 @@ export default function SettingsScreen() {
   const { logout, isAuthenticated } = useAuth();
   const { colors, mode, setMode } = useTheme();
   const router = useRouter();
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(true);
+  const [biometricSaving, setBiometricSaving] = useState(false);
 
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
   const appEnv = Constants.expoConfig?.extra?.environment ?? 'development';
+
+  useEffect(() => {
+    const loadBiometricPreference = async () => {
+      const enabled = await getBiometricLockEnabled();
+      setBiometricEnabled(enabled);
+      setBiometricLoading(false);
+    };
+
+    void loadBiometricPreference();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -27,6 +57,49 @@ export default function SettingsScreen() {
       router.replace('/auth/login');
     } catch (error) {
       console.error('Logout error:', error);
+    }
+  };
+
+  const handleBiometricToggle = async (nextValue: boolean) => {
+    if (biometricSaving) {
+      return;
+    }
+
+    setBiometricSaving(true);
+
+    try {
+      if (nextValue) {
+        const supported = await isBiometricLockSupported();
+        if (!supported) {
+          Alert.alert(
+            'Biometric Not Supported',
+            'This device does not support biometric authentication.',
+          );
+          return;
+        }
+
+        const enrolled = await isBiometricEnrolled();
+        if (!enrolled) {
+          Alert.alert(
+            'No Biometrics Enrolled',
+            'Set up Face ID or fingerprint in your device settings before enabling this lock.',
+          );
+          return;
+        }
+
+        const result = await authenticateBiometricPrompt('Confirm biometric lock');
+        if (!result.success) {
+          return;
+        }
+      }
+
+      await setBiometricLockEnabled(nextValue);
+      setBiometricEnabled(nextValue);
+    } catch (error) {
+      console.error('Error updating biometric lock setting:', error);
+      Alert.alert('Update Failed', 'Could not update biometric lock preference. Please try again.');
+    } finally {
+      setBiometricSaving(false);
     }
   };
 
@@ -82,6 +155,33 @@ export default function SettingsScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <View style={styles.preferenceRow}>
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]}>Enable Biometric Lock</Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]}>
+                  Require Face ID, fingerprint, or passcode on every cold app start.
+                </Text>
+              </View>
+            </View>
+
+            {biometricLoading || biometricSaving ? (
+              <ActivityIndicator color={colors.accent} />
+            ) : (
+              <Switch
+                value={biometricEnabled}
+                onValueChange={(value) => void handleBiometricToggle(value)}
+                trackColor={{ false: colors.cardBorder, true: colors.accent }}
+                thumbColor="#ffffff"
+              />
+            )}
+          </View>
         </View>
 
         <View
@@ -208,6 +308,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  preferenceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

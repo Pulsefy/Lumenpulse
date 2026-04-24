@@ -6,10 +6,13 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 
 @Entity('portfolio_assets')
+@Index(['userId', 'assetCode'])
+@Index(['userId'])
 export class PortfolioAsset {
   @PrimaryGeneratedColumn('uuid')
   id: string;

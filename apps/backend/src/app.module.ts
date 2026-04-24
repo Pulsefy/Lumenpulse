@@ -1,21 +1,40 @@
-import { Module, NestModule, MiddlewareConsumer, Logger } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { MulterModule } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TestExceptionController } from './test-exception.controller';
+
 import { SentimentModule } from './sentiment/sentiment.module';
-import { NewsModule } from './news/news.module';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
-import { EmailModule } from './email/email.module';
-import { PortfolioModule } from './portfolio/portfolio.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { AppCacheModule } from './cache/cache.module';
+import { PortfolioModule } from './portfolio/portfolio.module';
+import { StellarModule } from './stellar/stellar.module';
+import { PriceModule } from './price/price.module';
+import { WebhookModule } from './webhook/webhook.module';
+import { NotificationModule } from './notification/notification.module';
+import { QueueModule } from './queue/queue.module';
+import { StellarSyncModule } from './stellar-sync/stellar-sync.module';
+import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module';
+import { WatchlistModule } from './watchlist/watchlist.module';
+
 import databaseConfig from './database/database.config';
+import stellarConfig from './stellar/config/stellar.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
+import { RateLimitModule } from './common/rate-limit/rate-limit.module';
+import { RateLimitStorageService } from './common/rate-limit/rate-limit.storage';
+import {
+  createThrottlerOptions,
+  getRateLimitSettings,
+} from './common/rate-limit/rate-limit.config';
 import { TestController } from './test/test.controller';
 import { SnapshotsModule } from './snapshot/snapshot.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -23,6 +42,9 @@ import { DataSource, DataSourceOptions } from 'typeorm';
 import stellarConfig from './stellar/config/stellar.config';
 
 const appLogger = new Logger('TypeORM');
+import { UploadModule } from './upload/upload.module';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -30,59 +52,73 @@ const appLogger = new Logger('TypeORM');
       isGlobal: true,
       load: [databaseConfig, stellarConfig],
     }),
+
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService): DataSourceOptions => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT'),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_DATABASE'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: false,
-        migrations: [__dirname + '/migrations/*{.ts,.js}'],
-        logging: true,
-      }),
-      dataSourceFactory: async (options) => {
-        if (!options) {
-          throw new Error('TypeORM options are not defined');
-        }
-        const dataSource = new DataSource(options);
-        await dataSource.initialize();
-        appLogger.log('TypeORM Connection established');
-        return dataSource;
-      },
       inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const databaseConfig =
+          configService.get<Record<string, unknown>>('database');
+        return {
+          ...databaseConfig,
+          autoLoadEntities: true,
+        };
+      },
     }),
+
     ScheduleModule.forRoot(),
+
+    RateLimitModule,
+
+    ThrottlerModule.forRootAsync({
+      imports: [RateLimitModule],
+      inject: [RateLimitStorageService],
+      useFactory: (storageService: RateLimitStorageService) =>
+        createThrottlerOptions(getRateLimitSettings(), storageService),
+    }),
+
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
         limit: 100,
       },
     ]),
+    MulterModule.register({
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+    }),
+    AppCacheModule,
     MetricsModule,
     SentimentModule,
-    NewsModule,
+    PortfolioModule,
+    StellarModule,
+    PriceModule,
+    NotificationModule,
+    WebhookModule,
+    UploadModule,
     AuthModule,
     UsersModule,
     EmailModule,
     PortfolioModule,
     SnapshotsModule,
     NotificationsModule,
+    QueueModule,
+    StellarSyncModule,
+    ExchangeRatesModule,
+    WatchlistModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
     AppService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: RateLimitGuard,
     },
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(LoggerMiddleware).forRoutes('*');
+    consumer.apply(RequestIdMiddleware, LoggerMiddleware).forRoutes('*');
   }
 }

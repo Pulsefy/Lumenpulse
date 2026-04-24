@@ -46,3 +46,12 @@ export const notificationsApi = {
     return apiClient.post<{ success: boolean }>('/notifications/mark-all-read');
   },
 };
+export async function markAsRead(id: number) {
+  try {
+    await axios.post(`${config.api.baseUrl}/notifications/${id}/read`);
+    return true;
+  } catch (err) {
+    console.error('Failed to mark notification as read', err);
+    return false;
+  }
+}

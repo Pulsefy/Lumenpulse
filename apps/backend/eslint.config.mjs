@@ -33,6 +33,17 @@ export default tseslint.config(
     },
   },
 
+    // ✅ Override for transaction service
+  {
+    files: ['src/transaction/transaction.service.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+
   // ✅ Dedicated override JUST for test files
   {
     files: ['**/*.spec.ts', '**/*.test.ts'],

@@ -14,7 +14,10 @@ import {
   HttpStatus,
   Logger,
   ConflictException,
+  NotFoundException,
+  Param,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -22,7 +25,6 @@ import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import { ProfileDto } from './dto/profile.dto';
 import { GetChallengeDto, VerifyChallengeDto } from './dto/auth.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -33,6 +35,12 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { ProfileResponseDto } from '../users/dto/profile-response.dto';
+import { getAuthThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import {
+  ActiveSessionsResponseDto,
+  RevokeSessionResponseDto,
+} from './dto/session.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -44,6 +52,7 @@ export class AuthController {
   ) {}
 
   @Post('login')
+  @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({
@@ -72,6 +81,7 @@ export class AuthController {
   }
 
   @Post('register')
+  @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new user account' })
   @ApiResponse({
@@ -87,28 +97,25 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Email already exists' })
   async register(@Body() body: RegisterDto) {
-    // Check if user already exists
     const existingUser = await this.usersService.findByEmail(body.email);
     if (existingUser) {
       throw new ConflictException('Email already registered');
     }
 
-    // Hash password with bcrypt
     const hash = await bcrypt.hash(body.password, 10);
 
-    // Create user
     const user = await this.usersService.create({
       email: body.email,
       passwordHash: hash,
     });
 
-    // Return user without password - exclude passwordHash from response
     const { passwordHash: _, ...result } = user;
-    void _; // Mark as intentionally unused
+    void _;
     return result;
   }
 
   @Post('forgot-password')
+  @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request a password reset token' })
   @ApiResponse({
@@ -125,6 +132,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
+  @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password using a one-time token' })
   @ApiResponse({
@@ -145,6 +153,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
   @ApiResponse({
@@ -209,11 +218,28 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: 'Profile retrieved successfully',
-    type: ProfileDto,
+    type: ProfileResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  getProfile(@Request() req: { user: ProfileDto }) {
-    return new ProfileDto(req.user);
+  async getProfile(@Request() req: { user: { id: string } }) {
+    const user = await this.usersService.findById(req.user.id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      displayName: user.displayName,
+      bio: user.bio,
+      avatarUrl: user.avatarUrl,
+      stellarPublicKey: user.stellarPublicKey,
+      preferences: user.preferences,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   }
 
   @Get('challenge')
@@ -258,6 +284,7 @@ export class AuthController {
   }
 
   @Post('verify')
+  @Throttle(getAuthThrottleOverride())
   @ApiOperation({ summary: 'Verify signed challenge and issue JWT' })
   @ApiResponse({
     status: 200,
@@ -302,5 +329,35 @@ export class AuthController {
         HttpStatus.UNAUTHORIZED,
       );
     }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('sessions')
+  @ApiOperation({ summary: 'Get active sessions for current user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Active sessions retrieved successfully',
+    type: ActiveSessionsResponseDto,
+  })
+  async getActiveSessions(@Request() req: { user: { id: string } }) {
+    const sessions = await this.authService.getActiveSessions(req.user.id);
+    return sessions;
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('sessions/:id/revoke')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Revoke a specific session' })
+  @ApiResponse({
+    status: 200,
+    description: 'Session revoked successfully',
+    type: RevokeSessionResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  async revokeSession(
+    @Request() req: { user: { id: string } },
+    @Param('id') sessionId: string,
+  ): Promise<{ message: string; sessionId: string }> {
+    return this.authService.revokeSession(sessionId, req.user.id);
   }
 }

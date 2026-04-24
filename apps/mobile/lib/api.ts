@@ -181,5 +181,34 @@ export const usersApi = {
   },
 };
 
+/**
+ * Stellar Asset Discovery Types
+ */
+export interface StellarAsset {
+  code: string;
+  name: string;
+  issuer: string | null;
+  priceUsd: number;
+  change24h: number; // percentage, e.g. 2.5 or -1.3
+  iconUrl?: string | null;
+}
+
+export interface StellarAssetsResponse {
+  assets: StellarAsset[];
+}
+
+/**
+ * Stellar Asset Discovery API Service
+ */
+export const stellarApi = {
+  /**
+   * Fetch a list of popular/discoverable Stellar assets with price data.
+   * Maps to GET /stellar/assets on the backend.
+   */
+  async getAssets(): Promise<ApiResponse<StellarAssetsResponse>> {
+    return apiClient.get<StellarAssetsResponse>('/stellar/assets');
+  },
+};
+
 // Re-export the client for direct use if needed
 export { apiClient };

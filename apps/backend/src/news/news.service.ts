@@ -7,6 +7,7 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { NewsProviderService } from './news-provider.service';
 import { NewsArticleDto } from './dto/news-article.dto';
+import { CacheService } from '../cache/cache.service';
 
 interface RawOverallResult {
   average: string | null;
@@ -27,17 +28,37 @@ export class NewsService {
     @InjectRepository(News)
     private newsRepository: Repository<News>,
     private readonly newsProviderService: NewsProviderService,
+    private readonly cacheService: CacheService,
   ) {}
 
   async create(createArticleDto: CreateArticleDto): Promise<News> {
     const news = this.newsRepository.create(createArticleDto);
-    return this.newsRepository.save(news);
+    const saved = await this.newsRepository.save(news);
+    await this.cacheService.invalidateNewsCache();
+    return saved;
   }
 
-  async findAll(): Promise<News[]> {
-    return this.newsRepository.find({
-      order: { publishedAt: 'DESC' },
-    });
+  async findAll(filters?: {
+    tag?: string;
+    category?: string;
+  }): Promise<News[]> {
+    const qb = this.newsRepository
+      .createQueryBuilder('news')
+      .orderBy('news.publishedAt', 'DESC');
+
+    if (filters?.tag) {
+      qb.andWhere(':tag = ANY(news.tags)', {
+        tag: filters.tag.toLowerCase(),
+      });
+    }
+
+    if (filters?.category) {
+      qb.andWhere('LOWER(news.category) = :category', {
+        category: filters.category.toLowerCase(),
+      });
+    }
+
+    return qb.getMany();
   }
 
   async findOne(id: string): Promise<News | null> {
@@ -53,6 +74,7 @@ export class NewsService {
     updateArticleDto: UpdateArticleDto,
   ): Promise<News | null> {
     await this.newsRepository.update(id, updateArticleDto);
+    await this.cacheService.invalidateNewsCache();
     return this.findOne(id);
   }
 
@@ -142,6 +164,10 @@ export class NewsService {
         ? new Date(articleDto.publishedAt)
         : new Date(),
       sentimentScore: null, // Will be populated by sentiment service
+      tags: articleDto.keywords
+        ? articleDto.keywords.map((k) => k.toLowerCase())
+        : [],
+      category: articleDto.categories?.[0] ?? null,
     });
 
     return this.newsRepository.save(article);
@@ -179,6 +205,10 @@ export class NewsService {
       this.logger.log(
         `News fetch completed. Fetched ${articles.length} articles, ${newCount} new, ${skippedCount} duplicates skipped.`,
       );
+
+      if (newCount > 0) {
+        await this.cacheService.invalidateNewsCache();
+      }
     } catch (error) {
       this.logger.error(
         `Failed to fetch and save articles: ${error instanceof Error ? error.message : 'Unknown error'}`,
