@@ -1,13 +1,6 @@
 /* eslint-disable prettier/prettier */
-import { getNotifications } from '@/lib/notifications';
+import { notificationsApi, Notification } from '@/lib/notifications';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-
-export type Notification = {
-  id: number;
-  title: string;
-  message: string;
-  read: boolean;
-};
 
 type NotificationsContextType = {
   notifications: Notification[];
@@ -26,8 +19,10 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const data = await getNotifications('/notifications');
-      setNotifications(data);
+      const response = await notificationsApi.getNotifications();
+      if (response.success && response.data) {
+        setNotifications(response.data);
+      }
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
     }
@@ -38,13 +33,15 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   }, [fetchNotifications]);
 
   const markAsRead = useCallback(async (id: number) => {
+    // Optimistic update
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
     try {
-      // await markAsReadApi(id);
+      await notificationsApi.markAsRead(id);
     } catch (err) {
       console.error('Failed to mark as read:', err);
+      // Rollback on failure
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: false } : n))
       );
@@ -52,11 +49,14 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   }, []);
 
   const markAllAsRead = useCallback(async () => {
+    // Optimistic update
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     try {
-      // await Promise.all(notifications.filter(n => !n.read).map(n => markAsReadApi(n.id)));
+      await notificationsApi.markAllAsRead();
     } catch (err) {
       console.error('Failed to mark all as read:', err);
+      // Rollback on failure
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: false })));
     }
   }, []);
 
