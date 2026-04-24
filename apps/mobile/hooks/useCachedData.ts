@@ -31,52 +31,55 @@ export function useCachedData<T>({
   const [isStale, setIsStale] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
 
-  const fetchData = useCallback(async (forceRefresh = false) => {
-    if (!enabled) return;
+  const fetchData = useCallback(
+    async (forceRefresh = false) => {
+      if (!enabled) return;
 
-    setLoading(true);
-    setError(null);
+      setLoading(true);
+      setError(null);
 
-    try {
-      // Try to get cached data first (unless forcing refresh)
-      if (!forceRefresh) {
-        const cached = await cache.get<T>(key, cacheConfig);
-        if (cached) {
-          setData(cached.data);
-          setLastUpdated(cached.timestamp);
-          
-          // Check if data is stale
-          const now = Date.now();
-          const isDataStale = now > (cached.timestamp + cacheConfig.ttl);
-          setIsStale(isDataStale);
-          
-          // If not stale or offline, we're done
-          if (!isDataStale || !cache.isOnlineStatus()) {
-            setLoading(false);
-            return;
+      try {
+        // Try to get cached data first (unless forcing refresh)
+        if (!forceRefresh) {
+          const cached = await cache.get<T>(key, cacheConfig);
+          if (cached) {
+            setData(cached.data);
+            setLastUpdated(cached.timestamp);
+
+            // Check if data is stale
+            const now = Date.now();
+            const isDataStale = now > cached.timestamp + cacheConfig.ttl;
+            setIsStale(isDataStale);
+
+            // If not stale or offline, we're done
+            if (!isDataStale || !cache.isOnlineStatus()) {
+              setLoading(false);
+              return;
+            }
           }
         }
-      }
 
-      // Fetch fresh data
-      if (cache.isOnlineStatus()) {
-        const freshData = await fetcher();
-        await cache.set(key, freshData, cacheConfig);
-        setData(freshData);
-        setLastUpdated(Date.now());
-        setIsStale(false);
-      } else if (!data) {
-        // No cached data and offline
-        throw new Error('No internet connection and no cached data available');
+        // Fetch fresh data
+        if (cache.isOnlineStatus()) {
+          const freshData = await fetcher();
+          await cache.set(key, freshData, cacheConfig);
+          setData(freshData);
+          setLastUpdated(Date.now());
+          setIsStale(false);
+        } else if (!data) {
+          // No cached data and offline
+          throw new Error('No internet connection and no cached data available');
+        }
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Unknown error');
+        setError(error);
+        onError?.(error);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error('Unknown error');
-      setError(error);
-      onError?.(error);
-    } finally {
-      setLoading(false);
-    }
-  }, [key, fetcher, enabled, cacheConfig, onError, data]);
+    },
+    [key, fetcher, enabled, cacheConfig, onError, data],
+  );
 
   const refresh = useCallback(() => fetchData(true), [fetchData]);
 

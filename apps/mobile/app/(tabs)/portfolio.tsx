@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -6,19 +6,16 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { portfolioApi, AssetBalance, PortfolioSummary } from '../../lib/api';
 import { transactionApi } from '../../lib/transaction';
-import { Transaction, TransactionType, TransactionStatus } from '../../lib/types/transaction';
+import { Transaction, TransactionType } from '../../lib/types/transaction';
 import { useCachedData } from '../../hooks/useCachedData';
 import { CACHE_CONFIGS } from '../../lib/cache';
-import { CachedApi } from '../../lib/cached-api';
 
 /* ================= Helpers ================= */
 
@@ -78,14 +75,10 @@ function AssetRow({ asset, colors }: { asset: AssetBalance; colors: any }) {
 
       <View style={{ flex: 1 }}>
         <Text style={{ color: colors.text }}>{asset.assetCode}</Text>
-        <Text style={{ color: colors.textSecondary }}>
-          {formatAmount(asset.amount)}
-        </Text>
+        <Text style={{ color: colors.textSecondary }}>{formatAmount(asset.amount)}</Text>
       </View>
 
-      <Text style={{ color: colors.text }}>
-        {formatUsd(asset.valueUsd)}
-      </Text>
+      <Text style={{ color: colors.text }}>{formatUsd(asset.valueUsd)}</Text>
     </View>
   );
 }
@@ -115,9 +108,8 @@ function Header({ summary, colors }: { summary: PortfolioSummary; colors: any })
 /* ================= Screen ================= */
 
 export default function PortfolioScreen() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { colors } = useTheme();
-  const router = useRouter();
 
   // Use cached data for portfolio summary
   const {
@@ -126,7 +118,7 @@ export default function PortfolioScreen() {
     refresh: refreshSummary,
     isStale: summaryStale,
   } = useCachedData({
-    key: `portfolio_summary_${user?.id || 'default'}`,
+    key: `portfolio_summary_default`,
     fetcher: async () => {
       const response = await portfolioApi.getSummary();
       if (response.success && response.data) {
@@ -145,7 +137,7 @@ export default function PortfolioScreen() {
     refresh: refreshTransactions,
     isStale: transactionsStale,
   } = useCachedData({
-    key: `transactions_${user?.id || 'default'}_5`,
+    key: `transactions_default_5`,
     fetcher: async () => {
       const response = await transactionApi.getHistory(5);
       if (response.transactions) {
@@ -174,11 +166,11 @@ export default function PortfolioScreen() {
   const isStale = summaryStale || transactionsStale;
 
   //if (!isAuthenticated) {
-    //return (
-      //<View style={styles.center}>
-        //<Text>Login required</Text>
-      //</View>
-    //);
+  //return (
+  //<View style={styles.center}>
+  //<Text>Login required</Text>
+  //</View>
+  //);
   //}
 
   return (
@@ -192,20 +184,17 @@ export default function PortfolioScreen() {
           </Text>
         </View>
       )}
-      
+
       <FlatList
         data={summary?.assets || []}
         keyExtractor={(item) => item.assetCode}
-
         ListHeaderComponent={
           summary && (
             <>
               <Text style={[styles.title, { color: colors.text }]}>Portfolio</Text>
               <Header summary={summary} colors={colors} />
 
-              <Text style={[styles.section, { color: colors.text }]}>
-                Recent Transactions
-              </Text>
+              <Text style={[styles.section, { color: colors.text }]}>Recent Transactions</Text>
 
               {transactions.map((tx) => (
                 <RecentTransactionItem key={tx.id} tx={tx} colors={colors} />
@@ -213,18 +202,8 @@ export default function PortfolioScreen() {
             </>
           )
         }
-
-        renderItem={({ item }) => (
-          <AssetRow asset={item} colors={colors} />
-        )}
-
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-          />
-        }
-
+        renderItem={({ item }) => <AssetRow asset={item} colors={colors} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         ListEmptyComponent={
           !loading ? (
             <View style={styles.center}>
@@ -232,16 +211,11 @@ export default function PortfolioScreen() {
             </View>
           ) : null
         }
-
-        ListFooterComponent={
-          loading ? <ActivityIndicator style={{ margin: 20 }} /> : null
-        }
-
+        ListFooterComponent={loading ? <ActivityIndicator style={{ margin: 20 }} /> : null}
         onEndReached={() => {
-          if (!loading) console.log("pagination");
+          if (!loading) console.log('pagination');
         }}
         onEndReachedThreshold={0.5}
-
         initialNumToRender={10}
         windowSize={5}
         removeClippedSubviews

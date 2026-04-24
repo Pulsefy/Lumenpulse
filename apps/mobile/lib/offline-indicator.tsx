@@ -9,7 +9,7 @@ export function OfflineIndicator() {
   const { colors } = useTheme();
 
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener(state => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
       setIsOffline(!state.isConnected);
     });
 

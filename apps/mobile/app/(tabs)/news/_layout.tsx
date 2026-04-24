@@ -10,18 +10,9 @@ export default function NewsLayout() {
         headerTintColor: '#ffffff',
       }}
     >
-      <Stack.Screen
-        name="index"
-        options={{ title: 'News' }}
-      />
-      <Stack.Screen
-        name="[id]"
-        options={{ title: 'Article' }}
-      />
-      <Stack.Screen
-        name="saved"
-        options={{ title: 'Saved News' }}
-      />
+      <Stack.Screen name="index" options={{ title: 'News' }} />
+      <Stack.Screen name="[id]" options={{ title: 'Article' }} />
+      <Stack.Screen name="saved" options={{ title: 'Saved News' }} />
     </Stack>
   );
 }

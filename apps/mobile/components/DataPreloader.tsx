@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { CachedApi } from '../lib/cached-api';
 
@@ -7,16 +7,16 @@ import { CachedApi } from '../lib/cached-api';
  * Should be mounted at the app level to ensure data is available
  */
 export function DataPreloader() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isAuthenticated) {
       // Preload critical data in the background
-      CachedApi.preloadCriticalData(user.id).catch(error => {
+      CachedApi.preloadCriticalData().catch((error) => {
         console.warn('Failed to preload critical data:', error);
       });
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated]);
 
   // This component doesn't render anything
   return null;
@@ -26,12 +26,8 @@ export function DataPreloader() {
  * Hook to trigger data preloading manually
  */
 export function useDataPreloader() {
-  const { user } = useAuth();
-
   const preloadData = async () => {
-    if (user) {
-      await CachedApi.preloadCriticalData(user.id);
-    }
+    await CachedApi.preloadCriticalData();
   };
 
   const clearCache = async () => {

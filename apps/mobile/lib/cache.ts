@@ -31,10 +31,10 @@ export class CacheManager {
   }
 
   private initNetworkListener() {
-    NetInfo.addEventListener(state => {
+    NetInfo.addEventListener((state) => {
       const wasOffline = !this.isOnline;
       this.isOnline = state.isConnected ?? false;
-      
+
       // When connectivity returns, process refresh queue
       if (wasOffline && this.isOnline) {
         this.processRefreshQueue();
@@ -45,7 +45,7 @@ export class CacheManager {
   private async processRefreshQueue() {
     const keys = Array.from(this.refreshQueue);
     this.refreshQueue.clear();
-    
+
     // Process queued refreshes with delay to avoid overwhelming the API
     for (const key of keys) {
       setTimeout(() => {
@@ -74,7 +74,7 @@ export class CacheManager {
       }
 
       // Check if data is stale but still usable
-      const isStale = now > (entry.timestamp + config.ttl);
+      const isStale = now > entry.timestamp + config.ttl;
       if (isStale && config.staleWhileRevalidate && this.isOnline) {
         // Queue for background refresh
         this.refreshQueue.add(key);
@@ -92,7 +92,7 @@ export class CacheManager {
     try {
       const now = Date.now();
       const maxAge = config.maxAge || config.ttl * 3; // Default max age is 3x TTL
-      
+
       const entry: CacheEntry<T> = {
         data,
         timestamp: now,
@@ -116,7 +116,7 @@ export class CacheManager {
   async clear(): Promise<void> {
     try {
       const keys = await AsyncStorage.getAllKeys();
-      const cacheKeys = keys.filter(key => key.startsWith('cache_'));
+      const cacheKeys = keys.filter((key) => key.startsWith('cache_'));
       await AsyncStorage.multiRemove(cacheKeys);
     } catch (error) {
       console.warn('Cache clear error:', error);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Text,
   StyleSheet,
@@ -95,7 +95,7 @@ export default function NewsScreen() {
           ),
         }}
       />
-      
+
       {/* Stale data indicator */}
       {isStale && (
         <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}>
@@ -105,18 +105,13 @@ export default function NewsScreen() {
           </Text>
         </View>
       )}
-      
+
       <FlatList
         data={articles || []}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 16 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         ListEmptyComponent={
           !loading ? (
             <View style={styles.center}>
@@ -124,9 +119,7 @@ export default function NewsScreen() {
             </View>
           ) : null
         }
-        ListFooterComponent={
-          loading ? <ActivityIndicator style={{ margin: 20 }} /> : null
-        }
+        ListFooterComponent={loading ? <ActivityIndicator style={{ margin: 20 }} /> : null}
       />
     </SafeAreaView>
   );

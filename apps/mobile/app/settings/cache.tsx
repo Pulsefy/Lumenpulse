@@ -41,7 +41,7 @@ export default function CacheSettingsScreen() {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -57,12 +57,12 @@ export default function CacheSettingsScreen() {
     }
   };
 
-  const SettingItem = ({ 
-    icon, 
-    title, 
-    subtitle, 
-    onPress, 
-    destructive = false 
+  const SettingItem = ({
+    icon,
+    title,
+    subtitle,
+    onPress,
+    destructive = false,
   }: {
     icon: string;
     title: string;
@@ -76,19 +76,15 @@ export default function CacheSettingsScreen() {
       disabled={loading}
     >
       <View style={styles.settingIcon}>
-        <Ionicons 
-          name={icon as any} 
-          size={24} 
-          color={destructive ? colors.danger : colors.accent} 
+        <Ionicons
+          name={icon as any}
+          size={24}
+          color={destructive ? colors.danger : colors.accent}
         />
       </View>
       <View style={styles.settingContent}>
-        <Text style={[styles.settingTitle, { color: colors.text }]}>
-          {title}
-        </Text>
-        <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>
-          {subtitle}
-        </Text>
+        <Text style={[styles.settingTitle, { color: colors.text }]}>{title}</Text>
+        <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
     </TouchableOpacity>
@@ -100,17 +96,13 @@ export default function CacheSettingsScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Cache Settings
-        </Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Cache Settings</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.content}>
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Data Management
-          </Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Data Management</Text>
           <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>
             Manage cached data for offline access and improved performance
           </Text>
@@ -132,30 +124,25 @@ export default function CacheSettingsScreen() {
         />
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            How Caching Works
-          </Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>How Caching Works</Text>
           <View style={[styles.infoBox, { backgroundColor: colors.surface }]}>
             <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-              • Data is automatically cached when you use the app{'\n'}
-              • Cached data is shown instantly while fresh data loads{'\n'}
-              • Pull to refresh updates cached data{'\n'}
-              • Data expires automatically to stay current{'\n'}
-              • Works offline with previously cached data
+              • Data is automatically cached when you use the app{'\n'}• Cached data is shown
+              instantly while fresh data loads{'\n'}• Pull to refresh updates cached data{'\n'}•
+              Data expires automatically to stay current{'\n'}• Works offline with previously cached
+              data
             </Text>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Cache Status
-          </Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Cache Status</Text>
           <View style={[styles.statusBox, { backgroundColor: colors.surface }]}>
             <View style={styles.statusItem}>
-              <Ionicons 
-                name={cache.isOnlineStatus() ? "wifi" : "wifi-outline"} 
-                size={20} 
-                color={cache.isOnlineStatus() ? colors.success : colors.danger} 
+              <Ionicons
+                name={cache.isOnlineStatus() ? 'wifi' : 'wifi-outline'}
+                size={20}
+                color={cache.isOnlineStatus() ? colors.success : colors.danger}
               />
               <Text style={[styles.statusText, { color: colors.text }]}>
                 {cache.isOnlineStatus() ? 'Online' : 'Offline'}

@@ -1,12 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  SafeAreaView,
-  View,
-} from 'react-native';
+import { Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, View } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -55,7 +48,12 @@ export default function SavedNewsScreen() {
       <Stack.Screen options={{ title: 'Saved News' }} />
       {articles.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="bookmark-outline" size={64} color={colors.text} style={{ opacity: 0.2 }} />
+          <Ionicons
+            name="bookmark-outline"
+            size={64}
+            color={colors.text}
+            style={{ opacity: 0.2 }}
+          />
           <Text style={[styles.emptyText, { color: colors.text }]}>No saved articles yet.</Text>
         </View>
       ) : (

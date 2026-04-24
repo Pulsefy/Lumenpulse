@@ -9,12 +9,15 @@ import { Article } from './types/news';
  */
 export class CachedApi {
   // Portfolio data with caching
-  static async getPortfolioSummary(userId?: string) {
-    const cacheKey = `portfolio_summary_${userId || 'default'}`;
-    
+  static async getPortfolioSummary() {
+    const cacheKey = `portfolio_summary_default`;
+
     // Try cache first
     const cached = await cache.get(cacheKey, CACHE_CONFIGS.PORTFOLIO);
-    if (cached && (!cache.isOnlineStatus() || Date.now() - cached.timestamp < CACHE_CONFIGS.PORTFOLIO.ttl)) {
+    if (
+      cached &&
+      (!cache.isOnlineStatus() || Date.now() - cached.timestamp < CACHE_CONFIGS.PORTFOLIO.ttl)
+    ) {
       return { success: true, data: cached.data, fromCache: true };
     }
 
@@ -42,10 +45,13 @@ export class CachedApi {
   // News data with caching
   static async getNews(page = 1, limit = 20) {
     const cacheKey = `news_${page}_${limit}`;
-    
+
     // Try cache first
     const cached = await cache.get<Article[]>(cacheKey, CACHE_CONFIGS.NEWS);
-    if (cached && (!cache.isOnlineStatus() || Date.now() - cached.timestamp < CACHE_CONFIGS.NEWS.ttl)) {
+    if (
+      cached &&
+      (!cache.isOnlineStatus() || Date.now() - cached.timestamp < CACHE_CONFIGS.NEWS.ttl)
+    ) {
       return { success: true, data: cached.data, fromCache: true };
     }
 
@@ -73,10 +79,13 @@ export class CachedApi {
   // Assets data with caching
   static async getAssets() {
     const cacheKey = 'stellar_assets';
-    
+
     // Try cache first
     const cached = await cache.get(cacheKey, CACHE_CONFIGS.ASSETS);
-    if (cached && (!cache.isOnlineStatus() || Date.now() - cached.timestamp < CACHE_CONFIGS.ASSETS.ttl)) {
+    if (
+      cached &&
+      (!cache.isOnlineStatus() || Date.now() - cached.timestamp < CACHE_CONFIGS.ASSETS.ttl)
+    ) {
       return { success: true, data: cached.data, fromCache: true };
     }
 
@@ -102,12 +111,15 @@ export class CachedApi {
   }
 
   // Transaction history with caching
-  static async getTransactionHistory(limit = 10, userId?: string) {
-    const cacheKey = `transactions_${userId || 'default'}_${limit}`;
-    
+  static async getTransactionHistory(limit = 10) {
+    const cacheKey = `transactions_default_${limit}`;
+
     // Try cache first
     const cached = await cache.get(cacheKey, CACHE_CONFIGS.TRANSACTIONS);
-    if (cached && (!cache.isOnlineStatus() || Date.now() - cached.timestamp < CACHE_CONFIGS.TRANSACTIONS.ttl)) {
+    if (
+      cached &&
+      (!cache.isOnlineStatus() || Date.now() - cached.timestamp < CACHE_CONFIGS.TRANSACTIONS.ttl)
+    ) {
       return { success: true, data: cached.data, fromCache: true };
     }
 
@@ -139,12 +151,12 @@ export class CachedApi {
   }
 
   // Preload critical data for offline use
-  static async preloadCriticalData(userId?: string) {
+  static async preloadCriticalData() {
     const promises = [
-      this.getPortfolioSummary(userId),
+      this.getPortfolioSummary(),
       this.getNews(1, 10), // First page of news
       this.getAssets(),
-      this.getTransactionHistory(5, userId), // Recent transactions
+      this.getTransactionHistory(5), // Recent transactions
     ];
 
     try {
