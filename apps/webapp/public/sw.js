@@ -4,8 +4,8 @@ const urlsToCache = [
   '/news',
   '/dashboard',
   '/community',
-  '/assets/starkpulse-03.png',
-  '/assets/starkpulse-04.svg',
+  '/assets/lumenpulse-03.png',
+  '/assets/lumenpulse-04.svg',
   '/assets/globe-texture.jpg',
   '/manifest.json'
 ];
@@ -66,8 +66,8 @@ self.addEventListener('sync', (event) => {
 self.addEventListener('push', (event) => {
   const options = {
     body: event.data ? event.data.text() : 'New crypto news available!',
-    icon: '/assets/starkpulse-03.png',
-    badge: '/assets/starkpulse-03.png',
+    icon: '/assets/lumenpulse-03.png',
+    badge: '/assets/lumenpulse-03.png',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
@@ -77,12 +77,12 @@ self.addEventListener('push', (event) => {
       {
         action: 'explore',
         title: 'View News',
-        icon: '/assets/starkpulse-03.png'
+        icon: '/assets/lumenpulse-03.png'
       },
       {
         action: 'close',
         title: 'Close',
-        icon: '/assets/starkpulse-03.png'
+        icon: '/assets/lumenpulse-03.png'
       }
     ]
   };
