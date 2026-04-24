@@ -38,6 +38,7 @@ import { TestController } from './test/test.controller';
 import { UploadModule } from './upload/upload.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -92,6 +93,7 @@ import { UsersModule } from './users/users.module';
     UploadModule,
     AuthModule,
     UsersModule,
+    ReportsModule,
     QueueModule,
     StellarSyncModule,
     ExchangeRatesModule,
