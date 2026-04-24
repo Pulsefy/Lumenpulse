@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Star } from "lucide-react";
 import StellarBalancesPanel from "@/components/stellar-balances-panel";
 import AssetDetail from "@/components/asset-detail";
-import AuthGate from "@/components/auth/AuthGate";
+import WatchlistPanel from "@/components/watchlist-panel";
+import { WatchlistProvider } from "@/hooks/use-watchlist";
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -32,27 +35,50 @@ export default function DashboardPage() {
   }
 
   return (
-    <AuthGate>
-      <div className="min-h-screen bg-black text-white p-8">
-        {selectedAsset ? (
-          <AssetDetail
-            code={selectedAsset.code}
-            issuer={selectedAsset.issuer}
-            balance={selectedAsset.balance}
-            onBack={() => setSelectedAsset(null)}
-          />
-        ) : (
-          <>
-            <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
-            <p className="text-lg mb-4">Welcome to your personal dashboard.</p>
+    <WatchlistProvider>
+    <div className="min-h-screen bg-black text-white p-8">
+      {selectedAsset ? (
+        <AssetDetail
+          code={selectedAsset.code}
+          issuer={selectedAsset.issuer}
+          balance={selectedAsset.balance}
+          onBack={() => setSelectedAsset(null)}
+        />
+      ) : (
+        <>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <button
+              onClick={() => router.push("/dashboard/watchlist")}
+              className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded-lg transition-colors"
+            >
+              <Star size={16} className="fill-yellow-400" />
+              My Watchlist
+            </button>
+          </div>
+          <p className="text-lg mb-4">Welcome to your personal dashboard.</p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-              <div className="bg-gray-900/50 backdrop-blur-sm p-6 rounded-xl border border-white/10 shadow-xl">
-                <StellarBalancesPanel
-                  publicKey={publicKey}
-                  onAssetSelect={(asset) => setSelectedAsset(asset)}
-                />
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+            {/* Stellar Panel */}
+            <div className="bg-gray-900/50 backdrop-blur-sm p-6 rounded-xl border border-white/10 shadow-xl">
+              <StellarBalancesPanel
+                publicKey={publicKey}
+                onAssetSelect={(asset) => setSelectedAsset(asset)}
+              />
+            </div>
+
+            {/* Watchlist Panel */}
+            <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl border border-white/10 shadow-xl">
+              <WatchlistPanel
+                onSelectAsset={(asset) =>
+                  setSelectedAsset({
+                    code: asset.code,
+                    issuer: asset.issuer,
+                    balance: "0",
+                  })
+                }
+              />
+            </div>
 
               <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
                 <h2 className="text-xl font-semibold mb-4">
@@ -75,14 +101,14 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
-                <h2 className="text-xl font-semibold mb-4">Market Insights</h2>
-                <p className="text-gray-400">Insights will appear here.</p>
-              </div>
+            <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
+              <h2 className="text-xl font-semibold mb-4">Market Insights</h2>
+              <p className="text-gray-400">Insights will appear here.</p>
             </div>
-          </>
-        )}
-      </div>
-    </AuthGate>
+          </div>
+        </>
+      )}
+    </div>
+    </WatchlistProvider>
   );
 }

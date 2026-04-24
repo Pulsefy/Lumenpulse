@@ -3,7 +3,9 @@
 import { TrendingUp, TrendingDown, Star } from "lucide-react";
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { CryptoApiService, transformCryptoData } from "@/lib/api-services";
+import { CryptoApiService, transformCryptoData, CryptoApiData } from "@/lib/api-services";
+import { WatchlistItemType } from "@/lib/watchlist-service";
+import { WatchlistProvider, useWatchlist } from "@/hooks/use-watchlist";
 
 interface CryptoData {
   id: number;
@@ -21,13 +23,15 @@ interface CryptoData {
 
 interface CryptoTableProps {
   formatNumberAction: (num: number) => string;
+  showWatchlistToggle?: boolean;
 }
 
-export function CryptoTable({ formatNumberAction }: CryptoTableProps) {
+export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: CryptoTableProps) {
   const [cryptoData, setCryptoData] = useState<CryptoData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<number[]>([]);
+  const { toggleItem, isInWatchlist } = showWatchlistToggle ? useWatchlist() : { toggleItem: async () => ({ added: false }), isInWatchlist: () => false };
 
   // Fetch real crypto data
   useEffect(() => {
@@ -86,11 +90,25 @@ export function CryptoTable({ formatNumberAction }: CryptoTableProps) {
     return () => clearInterval(interval);
   }, []);
 
-  const toggleFavorite = (id: number) => {
-    if (favorites.includes(id)) {
-      setFavorites(favorites.filter((favId) => favId !== id));
+  const toggleFavorite = async (crypto: CryptoData) => {
+    if (favorites.includes(crypto.id)) {
+      setFavorites(favorites.filter((favId) => favId !== crypto.id));
     } else {
-      setFavorites([...favorites, id]);
+      setFavorites([...favorites, crypto.id]);
+    }
+
+    // Sync with backend watchlist
+    if (showWatchlistToggle) {
+      try {
+        await toggleItem({
+          symbol: crypto.symbol,
+          name: crypto.name,
+          type: WatchlistItemType.ASSET,
+          imageUrl: crypto.icon,
+        });
+      } catch {
+        // Silently fail - local state still works
+      }
     }
   };
 
@@ -192,13 +210,13 @@ export function CryptoTable({ formatNumberAction }: CryptoTableProps) {
                 >
                   <td className="py-4 pl-2">
                     <button
-                      onClick={() => toggleFavorite(crypto.id)}
+                      onClick={() => toggleFavorite(crypto)}
                       className="focus:outline-none transition-colors duration-200"
                     >
                       <Star
                         size={16}
                         className={
-                          favorites.includes(crypto.id)
+                          favorites.includes(crypto.id) || isInWatchlist(crypto.symbol, WatchlistItemType.ASSET)
                             ? "text-yellow-400 fill-yellow-400"
                             : "text-gray-500 group-hover:text-white hover:text-yellow-400 transition-colors duration-200"
                         }
