@@ -41,6 +41,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { GrantsModule } from './grants/grants.module';
 import { HealthModule } from './health/health.module';
+import { ReconciliationModule } from './reconciliation/reconciliation.module';
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { HealthModule } from './health/health.module';
     ExchangeRatesModule,
     GrantsModule,
     WatchlistModule,
+    ReconciliationModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
