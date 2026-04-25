@@ -8,7 +8,9 @@ members = [
   "contracts/notification_interface",
   "contracts/upgradable-contract",
   "contracts/vesting-wallet",
-  "contracts/lumenpulse-curation"
+  "contracts/lumenpulse-curation",
+  "contracts/access_control_interface",
+  "contracts/access_control"
 ]
 exclude = ["contracts/tests"]
 

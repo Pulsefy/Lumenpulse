@@ -1,0 +1,27 @@
+[package]
+name = "access_control"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "access_control"
+path = "src/lib.rs"
+
+[lib]
+crate-type = ["cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+access_control_interface = { path = "../access_control_interface" }
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
