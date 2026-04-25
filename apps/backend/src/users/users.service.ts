@@ -13,6 +13,8 @@ import { StellarService } from '../stellar/stellar.service';
 import { LinkStellarAccountDto } from './dto/link-stellar-account.dto';
 import { StellarAccountResponseDto } from './dto/stellar-account-response.dto';
 import { UpdateStellarAccountLabelDto } from './dto/update-stellar-account-label.dto';
+import { UploadService } from '../upload/upload.service';
+import crypto from 'crypto';
 
 @Injectable()
 export class UsersService {
@@ -24,6 +26,7 @@ export class UsersService {
     @InjectRepository(StellarAccount)
     private stellarAccountRepository: Repository<StellarAccount>,
     private stellarService: StellarService,
+    private uploadService: UploadService,
   ) {}
 
   // --- BASIC CRUD ---
@@ -55,6 +58,18 @@ export class UsersService {
       throw new NotFoundException(`User with id ${id} not found`);
     }
     return updatedUser;
+  }
+
+  async updateUserProfilePicture(file: Buffer, id: string) {
+    const fileName = `${crypto.randomUUID()}.webp`;
+    const url = await this.uploadService.uploadFile(file, fileName);
+    const updateResult = await this.usersRepository.update(id, {
+      avatarUrl: url,
+    });
+    if (updateResult.affected === 0) {
+      throw new NotFoundException('User not found');
+    }
+    return url;
   }
 
   // --- STELLAR ACCOUNT MANAGEMENT ---

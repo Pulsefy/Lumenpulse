@@ -16,6 +16,8 @@ export interface ThemeColors {
   accentSecondary: string;
   border: string;
   danger: string;
+  warning: string;
+  success: string;
   tabBar: string;
   tabBarBorder: string;
   tabBarActive: string;
@@ -34,6 +36,8 @@ export const darkColors: ThemeColors = {
   accentSecondary: '#7a85ff',
   border: 'rgba(255, 255, 255, 0.1)',
   danger: '#ff4757',
+  warning: '#ffa502',
+  success: '#2ed573',
   tabBar: '#0a0a0a',
   tabBarBorder: 'rgba(219, 116, 207, 0.2)',
   tabBarActive: '#db74cf',
@@ -52,6 +56,8 @@ export const lightColors: ThemeColors = {
   accentSecondary: '#5a65e0',
   border: 'rgba(26, 26, 46, 0.1)',
   danger: '#e63946',
+  warning: '#f77f00',
+  success: '#06d6a0',
   tabBar: '#ffffff',
   tabBarBorder: 'rgba(219, 116, 207, 0.15)',
   tabBarActive: '#c254b5',

@@ -66,7 +66,7 @@ const RegisterScreen = () => {
       console.error('Registration error:', error);
       Alert.alert(
         'Registration Failed',
-        error.message || 'An error occurred during registration. Please try again.'
+        error.message || 'An error occurred during registration. Please try again.',
       );
     } finally {
       setLoading(false);
@@ -136,10 +136,7 @@ const RegisterScreen = () => {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.linkButton}
-              onPress={() => router.push('/auth/login')}
-            >
+            <TouchableOpacity style={styles.linkButton} onPress={() => router.push('/auth/login')}>
               <Text style={styles.linkText}>
                 Already have an account? <Text style={styles.linkHighlight}>Sign In</Text>
               </Text>

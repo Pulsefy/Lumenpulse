@@ -18,6 +18,7 @@ export const mockTransactions: TransactionDto[] = [
     transactionHash: 'a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890',
     memo: 'Payment for services',
     fee: '100',
+    description: 'Sent 250.50 XLM to GABC...7890',
   },
   {
     id: '2',
@@ -32,6 +33,7 @@ export const mockTransactions: TransactionDto[] = [
     transactionHash: 'b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890b2c3',
     memo: 'Received from exchange',
     fee: '100',
+    description: 'Received 1000.00 XLM from GXYZ...7890',
   },
   {
     id: '3',
@@ -46,6 +48,7 @@ export const mockTransactions: TransactionDto[] = [
     transactionHash: 'c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890c3d4',
     memo: 'Swapped XLM for USDC',
     fee: '150',
+    description: 'Swapped 500.00 XLM for USDC',
   },
   {
     id: '4',
@@ -60,6 +63,7 @@ export const mockTransactions: TransactionDto[] = [
     transactionHash: 'd4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890d4e5',
     memo: 'Added USDC trustline',
     fee: '100',
+    description: 'Added trustline for USDC',
   },
   {
     id: '5',
@@ -74,6 +78,7 @@ export const mockTransactions: TransactionDto[] = [
     transactionHash: 'e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890e5f6',
     memo: 'USDC payment received',
     fee: '100',
+    description: 'Received 75.25 USDC from GABC...7890',
   },
   {
     id: '6',
@@ -88,6 +93,7 @@ export const mockTransactions: TransactionDto[] = [
     transactionHash: 'f67890a1b2c3d4e5f67890a1b2c3d4e5f67890f678',
     memo: 'Created new account for friend',
     fee: '100',
+    description: 'Created account GNEW...7890 with 2.00 XLM',
   },
   {
     id: '7',
@@ -102,6 +108,7 @@ export const mockTransactions: TransactionDto[] = [
     transactionHash: '07890a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c',
     memo: 'Failed withdrawal attempt',
     fee: '100',
+    description: 'Sent 1500.00 XLM to GEXC...7890',
   },
   {
     id: '8',
@@ -116,6 +123,7 @@ export const mockTransactions: TransactionDto[] = [
     transactionHash: '1890a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3',
     memo: 'Merged old account',
     fee: '100',
+    description: 'Merged account into GD7K...FDC',
   },
   {
     id: '9',
@@ -130,6 +138,7 @@ export const mockTransactions: TransactionDto[] = [
     transactionHash: '290a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d',
     memo: 'Swapped XLM for BTC',
     fee: '150',
+    description: 'Swapped 1000.00 XLM for BTC',
   },
   {
     id: '10',
@@ -144,6 +153,7 @@ export const mockTransactions: TransactionDto[] = [
     transactionHash: '3a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e',
     memo: 'Added BTC trustline',
     fee: '100',
+    description: 'Added trustline for BTC',
   },
 ];
 

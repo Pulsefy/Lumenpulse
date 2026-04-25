@@ -68,6 +68,25 @@ describe('CacheService', () => {
     });
   });
 
+  describe('checkHealth', () => {
+    it('returns true when Redis read/write succeeds', async () => {
+      mockCacheManager.set.mockResolvedValue(undefined);
+      mockCacheManager.get.mockResolvedValue('ok');
+      mockCacheManager.del.mockResolvedValue(undefined);
+
+      await expect(service.checkHealth()).resolves.toBe(true);
+      expect(mockCacheManager.set).toHaveBeenCalled();
+      expect(mockCacheManager.get).toHaveBeenCalled();
+      expect(mockCacheManager.del).toHaveBeenCalled();
+    });
+
+    it('returns false when Redis operations fail', async () => {
+      mockCacheManager.set.mockRejectedValue(new Error('Redis unavailable'));
+
+      await expect(service.checkHealth()).resolves.toBe(false);
+    });
+  });
+
   describe('invalidateNewsCache', () => {
     it('deletes the news cache key', async () => {
       mockCacheManager.del.mockResolvedValue(undefined);
@@ -76,7 +95,9 @@ describe('CacheService', () => {
     });
 
     it('does not throw when cache deletion fails', async () => {
-      mockCacheManager.del.mockRejectedValue(new Error('Redis connection lost'));
+      mockCacheManager.del.mockRejectedValue(
+        new Error('Redis connection lost'),
+      );
       await expect(service.invalidateNewsCache()).resolves.not.toThrow();
     });
   });

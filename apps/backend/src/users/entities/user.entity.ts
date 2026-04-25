@@ -22,6 +22,7 @@ export interface NotificationPreferences {
 
 export interface UserPreferences {
   notifications: NotificationPreferences;
+  preferredCurrency?: 'USD' | 'EUR' | 'GBP' | 'NGN' | 'XLM';
 }
 
 @Entity('users')
@@ -72,6 +73,7 @@ export class User {
         newsAlerts: true,
         securityAlerts: true,
       },
+      preferredCurrency: 'USD',
     },
   })
   preferences: UserPreferences;

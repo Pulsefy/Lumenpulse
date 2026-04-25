@@ -26,10 +26,6 @@ class SecurityConfig:
         self.rate_limit_default = os.getenv("RATE_LIMIT_DEFAULT", "100/minute")
         self.rate_limit_strict = os.getenv("RATE_LIMIT_STRICT", "10/minute")
         
-        # Validate API key is set
-        if not self.api_key:
-            raise ValueError("API_KEY environment variable must be set")
-        
         # Parse rate limit strings
         self._validate_rate_limit(self.rate_limit_default)
         self._validate_rate_limit(self.rate_limit_strict)
@@ -69,6 +65,12 @@ class SecurityConfig:
         Raises:
             HTTPException: If API key is missing or invalid
         """
+        if not self.api_key:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="API is not configured: API_KEY environment variable is missing.",
+            )
+
         api_key_header = request.headers.get("X-API-Key")
         
         if not api_key_header:
@@ -146,13 +148,28 @@ def setup_security_middleware(app) -> None:
     async def api_key_middleware(request: Request, call_next):
         """Middleware to check API key for all requests except health/metrics."""
         # Skip API key check for health checks and metrics
-        excluded_paths = ["/health", "/metrics", "/", "/docs", "/redoc", "/openapi.json"]
+        excluded_paths = [
+            "/health",
+            "/metrics",
+            "/",
+            "/docs",
+            "/redoc",
+            "/openapi.json",
+            "/sentiment/legend",
+        ]
         
         if request.url.path in excluded_paths:
             return await call_next(request)
         
         # Validate API key
-        security_config.validate_api_key(request)
+        try:
+            security_config.validate_api_key(request)
+        except HTTPException as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail},
+                headers=exc.headers,
+            )
         
         # Continue processing
         return await call_next(request)

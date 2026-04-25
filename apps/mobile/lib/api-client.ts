@@ -114,10 +114,7 @@ class ApiClient {
 
     // Setup timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      config.timeout || this.defaultTimeout,
-    );
+    const timeoutId = setTimeout(() => controller.abort(), config.timeout || this.defaultTimeout);
 
     try {
       const response = await fetch(url, {
@@ -185,11 +182,7 @@ class ApiClient {
   /**
    * POST request
    */
-  async post<T>(
-    endpoint: string,
-    body?: unknown,
-    config?: RequestConfig,
-  ): Promise<ApiResponse<T>> {
+  async post<T>(endpoint: string, body?: unknown, config?: RequestConfig): Promise<ApiResponse<T>> {
     return this.request<T>(
       endpoint,
       {
@@ -203,11 +196,7 @@ class ApiClient {
   /**
    * PUT request
    */
-  async put<T>(
-    endpoint: string,
-    body?: unknown,
-    config?: RequestConfig,
-  ): Promise<ApiResponse<T>> {
+  async put<T>(endpoint: string, body?: unknown, config?: RequestConfig): Promise<ApiResponse<T>> {
     return this.request<T>(
       endpoint,
       {

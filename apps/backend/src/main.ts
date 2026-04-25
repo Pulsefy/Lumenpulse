@@ -2,61 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import 'dotenv/config';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { GlobalExceptionFilter } from './filters/global-exception.filter';
-import { CustomValidationPipe } from './common/pipes/validation.pipe';
-import { SanitizationPipe } from './common/pipes/sanitization.pipe';
-import helmet from 'helmet';
-
-function getCorsOrigin(): string | string[] {
-  const isProduction = process.env.NODE_ENV === 'production';
-  const origins = process.env.CORS_ORIGIN?.trim();
-
-  if (origins) {
-    return origins.includes(',')
-      ? origins.split(',').map((o) => o.trim())
-      : origins;
-  }
-
-  if (isProduction) {
-    throw new Error(
-      'CORS_ORIGIN must be set in production. Restrict CORS to your frontend URL(s).',
-    );
-  }
-
-  return [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:8081',
-  ];
-}
+import { setupApp } from './bootstrap/app.setup';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
-  // Register the global exception filter
-  app.useGlobalFilters(new GlobalExceptionFilter());
-
-  // Register global validation pipe with security defaults
-  // Runs before sanitization to validate structure first
-  app.useGlobalPipes(
-    new CustomValidationPipe(),
-    // Sanitization pipe should run after validation
-    new SanitizationPipe(),
-  );
-
-  // Swagger Configuration
-
-  app.use(
-    helmet({
-      crossOriginEmbedderPolicy: false,
-    }),
-  );
-
-  app.enableCors({
-    origin: getCorsOrigin(),
-  });
-
-  app.useGlobalFilters(new GlobalExceptionFilter());
+  const app = await NestFactory.create(AppModule, { rawBody: true });
+  setupApp(app);
 
   const config = new DocumentBuilder()
     .setTitle('LumenPulse API')

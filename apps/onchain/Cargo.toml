@@ -4,9 +4,11 @@ members = [
   "contracts/contributor_registry",
   "contracts/crowdfund_vault",
   "contracts/lumen_token",
+  "contracts/matching_pool",
   "contracts/notification_interface",
   "contracts/upgradable-contract",
   "contracts/vesting-wallet",
+  "contracts/lumenpulse-curation"
 ]
 exclude = ["contracts/tests"]
 

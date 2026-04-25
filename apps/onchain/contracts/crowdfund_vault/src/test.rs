@@ -1,10 +1,11 @@
 use crate::errors::CrowdfundError;
+use crate::storage::DataKey;
 use crate::{CrowdfundVaultContract, CrowdfundVaultContractClient};
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Events, Ledger},
     token::{StellarAssetClient, TokenClient},
-    Address, Env,
+    vec, Address, Env,
 };
 fn create_token_contract<'a>(
     env: &Env,
@@ -43,6 +44,42 @@ fn setup_test<'a>(
     (client, admin, owner, user, token_client)
 }
 
+fn setup_test_with_admin<'a>(
+    env: &Env,
+) -> (
+    CrowdfundVaultContractClient<'a>,
+    Address,
+    Address,
+    Address,
+    TokenClient<'a>,
+    StellarAssetClient<'a>,
+    Address,
+) {
+    let admin = Address::generate(env);
+    let owner = Address::generate(env);
+    let user = Address::generate(env);
+
+    // Create token
+    let (token_client, token_admin_client) = create_token_contract(env, &admin);
+
+    // Mint tokens to user for deposits
+    token_admin_client.mint(&user, &10_000_000);
+
+    // Register contract
+    let contract_id = env.register(CrowdfundVaultContract, ());
+    let client = CrowdfundVaultContractClient::new(env, &contract_id);
+
+    (
+        client,
+        admin,
+        owner,
+        user,
+        token_client,
+        token_admin_client,
+        contract_id,
+    )
+}
+
 #[test]
 fn test_initialize() {
     let env = Env::default();
@@ -55,6 +92,7 @@ fn test_initialize() {
 
     // Verify admin is set
     assert_eq!(client.get_admin(), admin);
+    assert_eq!(client.get_storage_version(), 1);
 }
 
 #[test]
@@ -674,6 +712,121 @@ fn test_milestone_approval_status() {
     assert!(client.is_milestone_approved(&project_id, &0));
 }
 
+#[test]
+fn test_dispute_escrows_withdrawal_until_resolved() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Dispute"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &500_000);
+    client.approve_milestone(&admin, &project_id, &0);
+
+    client.dispute_milestone(&user, &project_id, &0, &symbol_short!("quality"));
+
+    assert!(client.is_milestone_disputed(&project_id, &0));
+
+    let blocked = client.try_withdraw(&project_id, &0, &100_000);
+    assert_eq!(blocked, Err(Ok(CrowdfundError::MilestoneEscrowed)));
+
+    client.resolve_milestone_dispute(&admin, &project_id, &0, &true);
+
+    assert!(!client.is_milestone_disputed(&project_id, &0));
+    client.withdraw(&project_id, &0, &100_000);
+    assert_eq!(client.get_balance(&project_id), 400_000);
+}
+
+#[test]
+fn test_dispute_resolution_can_revoke_approval() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Dispute"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &500_000);
+    client.approve_milestone(&admin, &project_id, &0);
+    client.dispute_milestone(&user, &project_id, &0, &symbol_short!("quality"));
+
+    client.resolve_milestone_dispute(&admin, &project_id, &0, &false);
+
+    assert!(!client.is_milestone_approved(&project_id, &0));
+
+    let blocked = client.try_withdraw(&project_id, &0, &100_000);
+    assert_eq!(blocked, Err(Ok(CrowdfundError::MilestoneNotApproved)));
+}
+
+#[test]
+fn test_only_contributors_can_dispute_milestones() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    let outsider = Address::generate(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Dispute"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &500_000);
+    client.approve_milestone(&admin, &project_id, &0);
+
+    let result =
+        client.try_dispute_milestone(&outsider, &project_id, &0, &symbol_short!("quality"));
+    assert_eq!(
+        result,
+        Err(Ok(CrowdfundError::InsufficientContributionToVote))
+    );
+}
+
+#[test]
+fn test_duplicate_dispute_is_rejected_and_metadata_is_readable() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Dispute"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &500_000);
+    client.approve_milestone(&admin, &project_id, &0);
+    client.dispute_milestone(&user, &project_id, &0, &symbol_short!("quality"));
+
+    let dispute = client.get_milestone_dispute(&project_id, &0);
+    assert_eq!(dispute.project_id, project_id);
+    assert_eq!(dispute.milestone_id, 0);
+    assert_eq!(dispute.challenger, user);
+    assert_eq!(dispute.reason, symbol_short!("quality"));
+
+    let result = client.try_dispute_milestone(&user, &project_id, &0, &symbol_short!("scope"));
+    assert_eq!(result, Err(Ok(CrowdfundError::MilestoneAlreadyDisputed)));
+}
+
 // ===== get_balance after operations =====
 #[test]
 fn test_balance_tracking() {
@@ -1171,6 +1324,222 @@ fn test_fund_matching_pool() {
 }
 
 #[test]
+fn test_fund_reward_pool() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, token_client, token_admin_client, contract_address) =
+        setup_test_with_admin(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Mint tokens to admin so they can fund the reward pool
+    let pool_amount: i128 = 5_000_000;
+    token_admin_client.mint(&admin, &pool_amount);
+
+    // Fund reward pool
+    client.fund_reward_pool(&admin, &token_client.address, &pool_amount);
+
+    // Verify reward pool balance
+    assert_eq!(
+        client.get_reward_pool_balance(&token_client.address),
+        pool_amount
+    );
+
+    // Verify tokens were actually transferred into the contract
+    assert_eq!(token_client.balance(&contract_address), pool_amount);
+}
+
+#[test]
+fn test_fund_reward_pool_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Non-admin tries to fund reward pool - should fail
+    let result = client.try_fund_reward_pool(&owner, &token_client.address, &10_000_000);
+    assert_eq!(result, Err(Ok(CrowdfundError::Unauthorized)));
+}
+
+#[test]
+fn test_batch_payout() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _user, token_client, token_admin_client, contract_address) =
+        setup_test_with_admin(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Mint tokens to admin and fund reward pool
+    let pool_amount: i128 = 100_000;
+    token_admin_client.mint(&admin, &pool_amount);
+    client.fund_reward_pool(&admin, &token_client.address, &pool_amount);
+
+    // Verify contract received the tokens
+    assert_eq!(token_client.balance(&contract_address), pool_amount);
+
+    // Create some recipients
+    let recipient1 = Address::generate(&env);
+    let recipient2 = Address::generate(&env);
+    let amount1: i128 = 30_000;
+    let amount2: i128 = 20_000;
+    let recipients = vec![
+        &env,
+        (recipient1.clone(), amount1),
+        (recipient2.clone(), amount2),
+    ];
+
+    // Execute batch payout
+    client.batch_payout(&admin, &token_client.address, &recipients);
+
+    // Verify reward pool decreased
+    assert_eq!(
+        client.get_reward_pool_balance(&token_client.address),
+        pool_amount - amount1 - amount2
+    );
+
+    // Verify recipients received tokens
+    assert_eq!(token_client.balance(&recipient1), amount1);
+    assert_eq!(token_client.balance(&recipient2), amount2);
+}
+
+#[test]
+fn test_batch_payout_empty_recipients() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, token_client, token_admin_client, _) = setup_test_with_admin(&env);
+
+    client.initialize(&admin);
+
+    // Fund reward pool
+    let pool_amount: i128 = 100_000;
+    token_admin_client.mint(&admin, &pool_amount);
+    client.fund_reward_pool(&admin, &token_client.address, &pool_amount);
+
+    // Empty recipients list should fail
+    let empty_recipients = vec![&env];
+    let result = client.try_batch_payout(&admin, &token_client.address, &empty_recipients);
+    assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
+}
+
+#[test]
+fn test_batch_payout_invalid_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, token_client, token_admin_client, _) = setup_test_with_admin(&env);
+
+    client.initialize(&admin);
+
+    // Fund reward pool
+    let pool_amount: i128 = 100_000;
+    token_admin_client.mint(&admin, &pool_amount);
+    client.fund_reward_pool(&admin, &token_client.address, &pool_amount);
+
+    // Recipient with zero amount should fail
+    let recipient = Address::generate(&env);
+    let recipients = vec![&env, (recipient, 0i128)];
+    let result = client.try_batch_payout(&admin, &token_client.address, &recipients);
+    assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
+}
+
+#[test]
+fn test_batch_payout_insufficient_balance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, token_client, token_admin_client, _) = setup_test_with_admin(&env);
+
+    client.initialize(&admin);
+
+    // Fund reward pool with a small amount
+    let pool_amount: i128 = 10_000;
+    token_admin_client.mint(&admin, &pool_amount);
+    client.fund_reward_pool(&admin, &token_client.address, &pool_amount);
+
+    // Request payout larger than pool balance
+    let recipient = Address::generate(&env);
+    let recipients = vec![&env, (recipient, 20_000i128)];
+    let result = client.try_batch_payout(&admin, &token_client.address, &recipients);
+    assert_eq!(result, Err(Ok(CrowdfundError::InsufficientBalance)));
+}
+
+#[test]
+fn test_batch_payout_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client, token_admin_client, _) =
+        setup_test_with_admin(&env);
+
+    client.initialize(&admin);
+
+    // Fund reward pool
+    let pool_amount: i128 = 100_000;
+    token_admin_client.mint(&admin, &pool_amount);
+    client.fund_reward_pool(&admin, &token_client.address, &pool_amount);
+
+    // Non-admin tries to execute batch payout
+    let recipient = Address::generate(&env);
+    let recipients = vec![&env, (recipient, 10_000i128)];
+    let result = client.try_batch_payout(&owner, &token_client.address, &recipients);
+    assert_eq!(result, Err(Ok(CrowdfundError::Unauthorized)));
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #11)")]
+fn test_batch_payout_contract_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, token_client, token_admin_client, _) = setup_test_with_admin(&env);
+
+    client.initialize(&admin);
+
+    // Fund reward pool
+    let pool_amount: i128 = 100_000;
+    token_admin_client.mint(&admin, &pool_amount);
+    client.fund_reward_pool(&admin, &token_client.address, &pool_amount);
+
+    // Pause contract
+    let _ = client.pause(&admin);
+
+    // Batch payout should fail when paused
+    let recipient = Address::generate(&env);
+    let recipients = vec![&env, (recipient, 10_000i128)];
+    client.batch_payout(&admin, &token_client.address, &recipients);
+}
+
+#[test]
+fn test_batch_payout_contract_address_recipient() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, token_client, token_admin_client, contract_address) =
+        setup_test_with_admin(&env);
+
+    client.initialize(&admin);
+
+    // Fund reward pool
+    let pool_amount: i128 = 100_000;
+    token_admin_client.mint(&admin, &pool_amount);
+    client.fund_reward_pool(&admin, &token_client.address, &pool_amount);
+
+    // Using contract address as recipient should fail
+    let recipients = vec![&env, (contract_address, 10_000i128)];
+    let result = client.try_batch_payout(&admin, &token_client.address, &recipients);
+    assert_eq!(result, Err(Ok(CrowdfundError::InvalidRecipient)));
+}
+
+#[test]
 #[should_panic(expected = "HostError: Error(Contract, #11)")]
 fn test_create_project_pause() {
     let env = Env::default();
@@ -1301,6 +1670,89 @@ fn test_deposit_pause_unpause() {
     assert_eq!(project.total_deposited, deposit_amount);
 }
 
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #11)")]
+fn test_distribute_match_pause() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Deposit funds
+    let contribution: i128 = 1_000_000;
+    client.deposit(&user, &project_id, &contribution);
+
+    // Fund matching pool
+    let pool_amount: i128 = 10_000_000;
+    let (_, token_admin_client) = create_token_contract(&env, &admin);
+    token_admin_client.mint(&admin, &pool_amount);
+    client.fund_matching_pool(&admin, &token_client.address, &pool_amount);
+
+    // Pause contract
+    let _ = client.pause(&admin);
+
+    // Try to distribute match - should fail
+    client.distribute_match(&project_id);
+}
+
+#[test]
+fn test_distribute_match_pause_unpause() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+
+    // Initialize contract
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Deposit funds
+    let contribution: i128 = 1_000_000;
+    client.deposit(&user, &project_id, &contribution);
+
+    // Fund matching pool
+    let pool_amount: i128 = 10_000_000;
+    let (_, token_admin_client) = create_token_contract(&env, &admin);
+    token_admin_client.mint(&admin, &pool_amount);
+    client.fund_matching_pool(&admin, &token_client.address, &pool_amount);
+
+    // Pause contract
+    let _ = client.pause(&admin);
+
+    let is_pause = client.require_not_paused();
+    assert!(is_pause);
+
+    // Unpause contract
+    let _ = client.unpause(&admin);
+
+    let is_pause = client.require_not_paused();
+    assert!(!is_pause);
+
+    // Now distribute match should work
+    let distributed = client.distribute_match(&project_id);
+
+    // Verify match was distributed
+    assert!(distributed > 0);
+}
+
 // ---------------------------------------------------------------------------
 // Upgradeability tests
 // ---------------------------------------------------------------------------
@@ -1352,6 +1804,38 @@ fn test_old_admin_cannot_upgrade_after_rotation() {
     let dummy = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
     let result = client.try_upgrade(&admin, &dummy);
     assert_eq!(result, Err(Ok(crate::errors::CrowdfundError::Unauthorized)));
+}
+
+#[test]
+fn test_migrate_restores_legacy_contract_access() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    env.as_contract(&client.address, || {
+        env.storage().instance().remove(&DataKey::StorageVersion);
+    });
+
+    let result = client.try_create_project(
+        &owner,
+        &symbol_short!("Legacy"),
+        &1_000_000,
+        &token_client.address,
+    );
+    assert_eq!(result, Err(Ok(CrowdfundError::MigrationRequired)));
+
+    assert_eq!(client.migrate(&admin), 1);
+    assert_eq!(client.get_storage_version(), 1);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Legacy"),
+        &1_000_000,
+        &token_client.address,
+    );
+    assert_eq!(project_id, 0);
 }
 
 #[test]
@@ -1524,6 +2008,71 @@ fn test_cancel_project_failed() {
     assert_eq!(client.get_balance(&project_id), deposit_amount);
 
     client.refund_contributors(&project_id, &user);
+}
+
+#[test]
+fn test_milestone_expiry_enables_contributor_clawback() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Expiry"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &400_000);
+    client.approve_milestone(&admin, &project_id, &0);
+
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + crate::DEFAULT_MILESTONE_EXPIRY_SECONDS + 1);
+
+    let withdraw_result = client.try_withdraw(&project_id, &0, &100_000);
+    assert_eq!(withdraw_result, Err(Ok(CrowdfundError::MilestoneExpired)));
+    assert_eq!(
+        client.get_project_status(&project_id),
+        symbol_short!("EXPIRED")
+    );
+
+    let refunded = client.clawback_contribution(&project_id, &user);
+    assert_eq!(refunded, 400_000);
+    assert_eq!(client.get_balance(&project_id), 0);
+    assert_eq!(token_client.balance(&user), 10_000_000);
+}
+
+#[test]
+fn test_clawback_window_closes_after_deadline() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Expiry"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &200_000);
+    client.approve_milestone(&admin, &project_id, &0);
+
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + crate::DEFAULT_MILESTONE_EXPIRY_SECONDS + 1);
+
+    let withdraw_result = client.try_withdraw(&project_id, &0, &50_000);
+    assert_eq!(withdraw_result, Err(Ok(CrowdfundError::MilestoneExpired)));
+
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + crate::DEFAULT_REFUND_WINDOW_SECONDS + 1);
+
+    let result = client.try_clawback_contribution(&project_id, &user);
+    assert_eq!(result, Err(Ok(CrowdfundError::RefundWindowClosed)));
 }
 
 #[test]

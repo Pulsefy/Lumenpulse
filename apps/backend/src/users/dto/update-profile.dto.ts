@@ -6,8 +6,17 @@ import {
   IsUrl,
   MaxLength,
   ValidateNested,
+  IsEnum,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+
+export enum CurrencyEnum {
+  USD = 'USD',
+  EUR = 'EUR',
+  GBP = 'GBP',
+  NGN = 'NGN',
+  XLM = 'XLM',
+}
 
 export class UpdateNotificationPreferencesDto {
   @ApiPropertyOptional({
@@ -44,6 +53,15 @@ export class UpdatePreferencesDto {
   @ValidateNested()
   @Type(() => UpdateNotificationPreferencesDto)
   notifications?: UpdateNotificationPreferencesDto;
+
+  @ApiPropertyOptional({
+    description: 'Preferred currency for portfolio valuation',
+    enum: CurrencyEnum,
+    example: 'USD',
+  })
+  @IsOptional()
+  @IsEnum(CurrencyEnum)
+  preferredCurrency?: CurrencyEnum;
 }
 
 export class UpdateProfileDto {

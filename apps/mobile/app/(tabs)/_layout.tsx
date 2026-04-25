@@ -43,6 +43,17 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="grants"
+        options={{
+          title: 'Grants',
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'trophy' : 'trophy-outline'} size={24} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
         name="discover"
         options={{
           title: 'Discover',
@@ -69,6 +80,17 @@ export default function TabLayout() {
           title: 'Transactions',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="receipt-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="news"
+        options={{
+          title: 'News',
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'newspaper' : 'newspaper-outline'} size={24} color={color} />
           ),
         }}
       />

@@ -23,6 +23,23 @@ export class CacheService {
     await this.cacheManager.del(key);
   }
 
+  async checkHealth(): Promise<boolean> {
+    const healthCheckKey = `health:redis:${Date.now()}`;
+
+    try {
+      await this.cacheManager.set(healthCheckKey, 'ok', 1000);
+      const cachedValue = await this.cacheManager.get<string>(healthCheckKey);
+      await this.cacheManager.del(healthCheckKey);
+
+      return cachedValue === 'ok';
+    } catch (error) {
+      this.logger.warn(
+        `Redis health check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      return false;
+    }
+  }
+
   /**
    * Invalidates all cached news responses.
    * Called whenever news articles are created or updated.

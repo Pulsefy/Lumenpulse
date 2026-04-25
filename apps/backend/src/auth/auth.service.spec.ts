@@ -324,6 +324,7 @@ describe('AuthService – Refresh Tokens', () => {
     };
 
     refreshTokenRepository = {
+      find: jest.fn(),
       findOne: jest.fn(),
       create: jest
         .fn()
@@ -546,6 +547,142 @@ describe('AuthService – Refresh Tokens', () => {
         { userId: 'user-uuid-1', revokedAt: IsNull() },
         { revokedAt: expect.any(Date) },
       );
+    });
+  });
+
+  describe('Security Center – Session Management', () => {
+    let findMock: jest.Mock;
+    let findOneMock: jest.Mock;
+
+    const activeToken1: Partial<RefreshToken> = {
+      id: 'session-1',
+      userId: 'user-uuid-1',
+      tokenHash: 'hash1',
+      deviceInfo: 'iPhone 15 Pro',
+      ipAddress: '192.168.1.1',
+      createdAt: new Date('2024-01-15T10:00:00Z'),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+      revokedAt: null,
+    };
+
+    const activeToken2: Partial<RefreshToken> = {
+      id: 'session-2',
+      userId: 'user-uuid-1',
+      tokenHash: 'hash2',
+      deviceInfo: 'Chrome on Windows',
+      ipAddress: '10.0.0.5',
+      createdAt: new Date('2024-01-10T10:00:00Z'),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      revokedAt: null,
+    };
+
+    const revokedToken: Partial<RefreshToken> = {
+      id: 'session-revoked',
+      userId: 'user-uuid-1',
+      tokenHash: 'hash-revoked',
+      deviceInfo: 'Logged out device',
+      ipAddress: '192.168.1.3',
+      createdAt: new Date('2024-01-05T10:00:00Z'),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      revokedAt: new Date(),
+    };
+
+    beforeEach(() => {
+      findMock = refreshTokenRepository.find;
+      findOneMock = refreshTokenRepository.findOne;
+    });
+
+    describe('getActiveSessions', () => {
+      it('should return only active, non-expired, non-revoked sessions ordered by createdAt DESC', async () => {
+        findMock.mockResolvedValue([activeToken1, activeToken2]);
+
+        const result = await service.getActiveSessions('user-uuid-1');
+
+        expect(result).toEqual({
+          sessions: [
+            {
+              id: 'session-1',
+              deviceInfo: 'iPhone 15 Pro',
+              ipAddress: '192.168.1.1',
+              createdAt: activeToken1.createdAt,
+              expiresAt: activeToken1.expiresAt,
+              isCurrent: false,
+            },
+            {
+              id: 'session-2',
+              deviceInfo: 'Chrome on Windows',
+              ipAddress: '10.0.0.5',
+              createdAt: activeToken2.createdAt,
+              expiresAt: activeToken2.expiresAt,
+              isCurrent: false,
+            },
+          ],
+          total: 2,
+        });
+
+        expect(findMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              userId: 'user-uuid-1',
+              revokedAt: expect.any(Object),
+              expiresAt: expect.any(Object),
+            }),
+            order: { createdAt: 'DESC' },
+          }),
+        );
+      });
+
+      it('should return empty list when no active sessions', async () => {
+        findMock.mockResolvedValue([]);
+
+        const result = await service.getActiveSessions('user-uuid-1');
+
+        expect(result.sessions).toEqual([]);
+        expect(result.total).toBe(0);
+      });
+    });
+
+    describe('revokeSession', () => {
+      it('should revoke an active session successfully', async () => {
+        const token: Partial<RefreshToken> = {
+          ...activeToken1,
+          revokedAt: null,
+        };
+        findOneMock.mockResolvedValue(token);
+
+        const result = await service.revokeSession('session-1', 'user-uuid-1');
+
+        expect(result).toEqual({
+          message: 'Session revoked successfully',
+          sessionId: 'session-1',
+        });
+        expect(token.revokedAt).toBeInstanceOf(Date);
+        expect(refreshTokenRepository.save).toHaveBeenCalledWith(token);
+      });
+
+      it('should return success if session is already revoked (idempotent)', async () => {
+        const alreadyRevoked: Partial<RefreshToken> = {
+          ...revokedToken,
+          revokedAt: new Date(),
+        };
+        findOneMock.mockResolvedValue(alreadyRevoked);
+
+        const result = await service.revokeSession(
+          'session-revoked',
+          'user-uuid-1',
+        );
+
+        expect(result.message).toBe('Session revoked successfully');
+        expect(refreshTokenRepository.save).not.toHaveBeenCalled();
+      });
+
+      it('should throw NotFoundException if session does not exist', async () => {
+        findOneMock.mockResolvedValue(null);
+
+        await expect(
+          service.revokeSession('non-existent-id', 'user-uuid-1'),
+        ).rejects.toThrow(NotFoundException);
+      });
     });
   });
 });

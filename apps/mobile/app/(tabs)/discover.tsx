@@ -1,5 +1,5 @@
 /* eslint-disable prettier/prettier */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,26 +9,83 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { stellarApi, StellarAsset } from '../../lib/api';
+import { useCachedData } from '../../hooks/useCachedData';
+import { CACHE_CONFIGS } from '../../lib/cache';
 
 // ─── Mock fallback data (used when API is unavailable) ───────────────────────
 // These are popular Stellar network assets. Replace with live data once
 // GET /stellar/assets is deployed on the backend.
 
 const MOCK_ASSETS: StellarAsset[] = [
-  { code: 'XLM',  name: 'Stellar Lumens',    issuer: null,                                                               priceUsd: 0.1051, change24h: 1.23  },
-  { code: 'USDC', name: 'USD Coin',           issuer: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN', priceUsd: 1.0000, change24h: 0.01  },
-  { code: 'BTC',  name: 'Bitcoin (Wrapped)',  issuer: 'GDXTJEK4JZNSTNQAWA53RZNS2GIKTDRPEUWDXELFMKU52XNECNVDVXDI', priceUsd: 67241, change24h: -0.88 },
-  { code: 'ETH',  name: 'Ethereum (Wrapped)', issuer: 'GBDEVU63Y6NTHJQQZIKVTC23NWLQKCKZZZ6AANA8APE6SLTD4XL7VCB', priceUsd: 3502,  change24h: 2.14  },
-  { code: 'AQUA', name: 'Aquarius',           issuer: 'GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA', priceUsd: 0.0007, change24h: -3.40 },
-  { code: 'yXLM', name: 'Yield XLM',          issuer: 'GARDNV3Q7YGT4AKSDF25LT32YSCCW4EV22Y2TV3I2PU2MMXJTEDL5T55', priceUsd: 0.1062, change24h: 1.15  },
-  { code: 'SHX',  name: 'Stronghold',         issuer: 'GDSTRSHXHGJ7ZIVRBXEYE5Q74XUVCUSEKEBR7UCHEUUEK72N7I7KJ6JH', priceUsd: 0.0081, change24h: 5.60  },
-  { code: 'LOBSTR',name:'Lobstr Token',        issuer: 'GCKU3YNEBAA7CR5W5BPNNQKBRMKZD5ZFKX3QHAKJ273HJHZM4HPEZ8NB', priceUsd: 0.0320, change24h: -1.70 },
-  { code: 'SSLX', name: 'StellarX',           issuer: 'GBSTRUSD7IRX73RQZBL3RQUH6KS3O4NYFY3QCALDLZD77XMZOPWAVTUK', priceUsd: 0.0028, change24h: 0.45  },
-  { code: 'REPO', name: 'Repo Token',          issuer: 'GCZNF24HPMYTV6NOEHI7Q5RJFFUI23JKUKY3H3XTQAFBQIBOHD5OXG3',  priceUsd: 0.0055, change24h: -0.20 },
+  { code: 'XLM', name: 'Stellar Lumens', issuer: null, priceUsd: 0.1051, change24h: 1.23 },
+  {
+    code: 'USDC',
+    name: 'USD Coin',
+    issuer: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+    priceUsd: 1.0,
+    change24h: 0.01,
+  },
+  {
+    code: 'BTC',
+    name: 'Bitcoin (Wrapped)',
+    issuer: 'GDXTJEK4JZNSTNQAWA53RZNS2GIKTDRPEUWDXELFMKU52XNECNVDVXDI',
+    priceUsd: 67241,
+    change24h: -0.88,
+  },
+  {
+    code: 'ETH',
+    name: 'Ethereum (Wrapped)',
+    issuer: 'GBDEVU63Y6NTHJQQZIKVTC23NWLQKCKZZZ6AANA8APE6SLTD4XL7VCB',
+    priceUsd: 3502,
+    change24h: 2.14,
+  },
+  {
+    code: 'AQUA',
+    name: 'Aquarius',
+    issuer: 'GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA',
+    priceUsd: 0.0007,
+    change24h: -3.4,
+  },
+  {
+    code: 'yXLM',
+    name: 'Yield XLM',
+    issuer: 'GARDNV3Q7YGT4AKSDF25LT32YSCCW4EV22Y2TV3I2PU2MMXJTEDL5T55',
+    priceUsd: 0.1062,
+    change24h: 1.15,
+  },
+  {
+    code: 'SHX',
+    name: 'Stronghold',
+    issuer: 'GDSTRSHXHGJ7ZIVRBXEYE5Q74XUVCUSEKEBR7UCHEUUEK72N7I7KJ6JH',
+    priceUsd: 0.0081,
+    change24h: 5.6,
+  },
+  {
+    code: 'LOBSTR',
+    name: 'Lobstr Token',
+    issuer: 'GCKU3YNEBAA7CR5W5BPNNQKBRMKZD5ZFKX3QHAKJ273HJHZM4HPEZ8NB',
+    priceUsd: 0.032,
+    change24h: -1.7,
+  },
+  {
+    code: 'SSLX',
+    name: 'StellarX',
+    issuer: 'GBSTRUSD7IRX73RQZBL3RQUH6KS3O4NYFY3QCALDLZD77XMZOPWAVTUK',
+    priceUsd: 0.0028,
+    change24h: 0.45,
+  },
+  {
+    code: 'REPO',
+    name: 'Repo Token',
+    issuer: 'GCZNF24HPMYTV6NOEHI7Q5RJFFUI23JKUKY3H3XTQAFBQIBOHD5OXG3',
+    priceUsd: 0.0055,
+    change24h: -0.2,
+  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -84,7 +141,9 @@ function AssetItem({ asset, colors }: { asset: StellarAsset; colors: ThemeColors
 
       {/* Price & 24h change */}
       <View style={styles.assetPricing}>
-        <Text style={[styles.assetPrice, { color: colors.text }]}>{formatPrice(asset.priceUsd)}</Text>
+        <Text style={[styles.assetPrice, { color: colors.text }]}>
+          {formatPrice(asset.priceUsd)}
+        </Text>
         <View style={[styles.changeBadge, { backgroundColor: `${changeColor}22` }]}>
           <Ionicons
             name={isPositive ? 'trending-up' : 'trending-down'}
@@ -93,7 +152,8 @@ function AssetItem({ asset, colors }: { asset: StellarAsset; colors: ThemeColors
             style={{ marginRight: 3 }}
           />
           <Text style={[styles.changeText, { color: changeColor }]}>
-            {isPositive ? '+' : ''}{asset.change24h.toFixed(2)}%
+            {isPositive ? '+' : ''}
+            {asset.change24h.toFixed(2)}%
           </Text>
         </View>
       </View>
@@ -105,38 +165,46 @@ function AssetItem({ asset, colors }: { asset: StellarAsset; colors: ThemeColors
 
 export default function AssetDiscoveryScreen() {
   const { colors } = useTheme();
-
-  const [assets, setAssets] = useState<StellarAsset[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchAssets = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    const response = await stellarApi.getAssets();
-    if (response.success && response.data?.assets?.length) {
-      setAssets(response.data.assets);
-    } else {
+  // Use cached data for assets
+  const {
+    data: assetsData,
+    loading: isLoading,
+    error: apiError,
+    refresh,
+    isStale,
+  } = useCachedData({
+    key: 'stellar_assets',
+    fetcher: async () => {
+      const response = await stellarApi.getAssets();
+      if (response.success && response.data?.assets?.length) {
+        return response.data.assets;
+      }
       // Gracefully fall back to mock data so the UI is always useful
-      setAssets(MOCK_ASSETS);
+      return MOCK_ASSETS;
+    },
+    ...CACHE_CONFIGS.ASSETS,
+  });
+
+  const assets = assetsData || [];
+  const error = apiError?.message || null;
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
     }
-
-    setIsLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void fetchAssets();
-  }, [fetchAssets]);
+  };
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return assets;
     return assets.filter(
-      (a) =>
-        a.code.toLowerCase().includes(q) ||
-        a.name.toLowerCase().includes(q),
+      (a) => a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q),
     );
   }, [assets, query]);
 
@@ -158,12 +226,17 @@ export default function AssetDiscoveryScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <Text style={[styles.screenTitle, { color: colors.text }]}>Discover</Text>
         <View style={[styles.center, { flex: 1, padding: 32 }]}>
-          <Ionicons name="cloud-offline-outline" size={56} color={colors.danger} style={{ marginBottom: 16 }} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn't load assets</Text>
+          <Ionicons
+            name="cloud-offline-outline"
+            size={56}
+            color={colors.danger}
+            style={{ marginBottom: 16 }}
+          />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn&apos;t load assets</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{error}</Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: colors.accent }]}
-            onPress={() => void fetchAssets()}
+            onPress={handleRefresh}
             activeOpacity={0.8}
           >
             <Text style={styles.retryText}>Retry</Text>
@@ -181,9 +254,20 @@ export default function AssetDiscoveryScreen() {
         keyExtractor={(item) => `${item.code}-${item.issuer ?? 'native'}`}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         ListHeaderComponent={
           <>
             <Text style={[styles.screenTitle, { color: colors.text }]}>Discover</Text>
+
+            {/* Stale data indicator */}
+            {isStale && (
+              <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}>
+                <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
+                <Text style={[styles.staleText, { color: colors.warning }]}>
+                  Showing cached data - Pull to refresh
+                </Text>
+              </View>
+            )}
 
             {/* Search Bar */}
             <View
@@ -192,7 +276,12 @@ export default function AssetDiscoveryScreen() {
                 { backgroundColor: colors.surface, borderColor: colors.cardBorder },
               ]}
             >
-              <Ionicons name="search-outline" size={18} color={colors.textSecondary} style={styles.searchIcon} />
+              <Ionicons
+                name="search-outline"
+                size={18}
+                color={colors.textSecondary}
+                style={styles.searchIcon}
+              />
               <TextInput
                 testID="asset-search-input"
                 style={[styles.searchInput, { color: colors.text }]}
@@ -205,7 +294,10 @@ export default function AssetDiscoveryScreen() {
                 clearButtonMode="while-editing"
               />
               {query.length > 0 && (
-                <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <TouchableOpacity
+                  onPress={() => setQuery('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
                   <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               )}
@@ -220,10 +312,15 @@ export default function AssetDiscoveryScreen() {
         }
         ListEmptyComponent={
           <View style={[styles.center, { paddingVertical: 60 }]}>
-            <Ionicons name="search-outline" size={48} color={colors.textSecondary} style={{ marginBottom: 12 }} />
+            <Ionicons
+              name="search-outline"
+              size={48}
+              color={colors.textSecondary}
+              style={{ marginBottom: 12 }}
+            />
             <Text style={[styles.emptyTitle, { color: colors.text }]}>No results</Text>
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-              Try searching for "USDC" or "XLM"
+              Try searching for &quot;USDC&quot; or &quot;XLM&quot;
             </Text>
           </View>
         }
@@ -334,4 +431,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   retryText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+
+  staleIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 8,
+  },
+  staleText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 6,
+  },
 });
