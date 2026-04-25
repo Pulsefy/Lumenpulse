@@ -75,6 +75,29 @@ export class StellarController {
     return this.stellarService.getAccountBalances(publicKey);
   }
 
+  @Get('accounts/:publicKey/transactions')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get account transactions',
+    description:
+      'Fetches recent transaction history for a given Stellar public key',
+  })
+  @ApiParam({
+    name: 'publicKey',
+    description: 'Stellar account public key',
+    example: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Account transactions retrieved successfully',
+  })
+  async getAccountTransactions(
+    @Param('publicKey') publicKey: string,
+    @Query('limit') limit?: number,
+  ): Promise<any> {
+    return this.stellarService.getAccountTransactions(publicKey, limit);
+  }
+
   @Get('health')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
