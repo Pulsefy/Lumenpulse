@@ -117,3 +117,39 @@ export const transformNewsData = (apiData: NewsApiData, index: number) => ({
   }),
   imageUrl: apiData.urlToImage || 'https://picsum.photos/seed/crypto/800/450',
 });
+
+// Stellar API service
+export class StellarApiService {
+  private static readonly BASE_URL =
+    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+  static async getAccountBalances(publicKey: string) {
+    try {
+      const response = await fetch(
+        `${this.BASE_URL}/stellar/accounts/${publicKey}/balances`,
+      );
+      if (!response.ok) {
+        throw new Error('Failed to fetch Stellar balances');
+      }
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching Stellar balances:', error);
+      throw error;
+    }
+  }
+
+  static async getAccountTransactions(publicKey: string, limit: number = 10) {
+    try {
+      const response = await fetch(
+        `${this.BASE_URL}/stellar/accounts/${publicKey}/transactions?limit=${limit}`,
+      );
+      if (!response.ok) {
+        throw new Error('Failed to fetch Stellar transactions');
+      }
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching Stellar transactions:', error);
+      throw error;
+    }
+  }
+}
