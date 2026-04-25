@@ -42,9 +42,7 @@ export class WatchlistService {
     });
 
     if (existing) {
-      throw new ConflictException(
-        `${dto.symbol} is already in your watchlist`,
-      );
+      throw new ConflictException(`${dto.symbol} is already in your watchlist`);
     }
 
     const item = this.watchlistRepository.create({
@@ -58,7 +56,7 @@ export class WatchlistService {
       sortOrder: dto.sortOrder ?? 0,
     } as Partial<WatchlistItem>);
 
-    const saved = await this.watchlistRepository.save(item as WatchlistItem);
+    const saved = await this.watchlistRepository.save(item);
     return this.toResponseDto(saved);
   }
 
@@ -75,9 +73,7 @@ export class WatchlistService {
     });
 
     if (!item) {
-      throw new NotFoundException(
-        `Watchlist item ${itemId} not found`,
-      );
+      throw new NotFoundException(`Watchlist item ${itemId} not found`);
     }
 
     await this.watchlistRepository.remove(item);
@@ -116,18 +112,14 @@ export class WatchlistService {
     itemId: string,
     dto: UpdateWatchlistDto,
   ): Promise<WatchlistItemResponseDto> {
-    this.logger.log(
-      `Updating watchlist item ${itemId} for user ${userId}`,
-    );
+    this.logger.log(`Updating watchlist item ${itemId} for user ${userId}`);
 
     const item = await this.watchlistRepository.findOne({
       where: { id: itemId, userId },
     });
 
     if (!item) {
-      throw new NotFoundException(
-        `Watchlist item ${itemId} not found`,
-      );
+      throw new NotFoundException(`Watchlist item ${itemId} not found`);
     }
 
     if (dto.name !== undefined) item.name = dto.name;

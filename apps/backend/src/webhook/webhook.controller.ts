@@ -7,10 +7,15 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { WebhookService } from './webhook.service';
 import { DataProcessingWebhookDto } from './dto/webhook-payload.dto';
+import {
+  WebhookVerificationGuard,
+  WebhookProvider,
+} from './webhook-verification.guard';
 
 interface RawRequest {
   rawBody?: Buffer;
@@ -23,6 +28,8 @@ export class WebhookController {
 
   @Post('data-processing')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(WebhookVerificationGuard)
+  @WebhookProvider('data-processing')
   @ApiOperation({
     summary: 'Receive data-processing intelligence events',
     description:
@@ -57,8 +64,7 @@ export class WebhookController {
       throw new BadRequestException('Empty request body');
     }
 
-    this.webhookService.verifySignature(req.rawBody, signature);
-
+    // Signature is already verified by the guard
     const notification =
       await this.webhookService.handleDataProcessingEvent(payload);
 

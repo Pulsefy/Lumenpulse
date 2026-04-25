@@ -7,7 +7,7 @@ describe('GrantsService', () => {
   let service: GrantsService;
 
   const now = Math.floor(Date.now() / 1000);
-  const past = now - 7200;   // 2 hours ago
+  const past = now - 7200; // 2 hours ago
   const future = now + 7200; // 2 hours from now
 
   beforeEach(async () => {
@@ -47,8 +47,18 @@ describe('GrantsService', () => {
   });
 
   it('lists all rounds', () => {
-    service.createRound({ name: 'R1', tokenAddress: 'GT', startTime: past, endTime: future });
-    service.createRound({ name: 'R2', tokenAddress: 'GT', startTime: past, endTime: future });
+    service.createRound({
+      name: 'R1',
+      tokenAddress: 'GT',
+      startTime: past,
+      endTime: future,
+    });
+    service.createRound({
+      name: 'R2',
+      tokenAddress: 'GT',
+      startTime: past,
+      endTime: future,
+    });
     expect(service.listRounds()).toHaveLength(2);
   });
 
@@ -59,27 +69,52 @@ describe('GrantsService', () => {
   // ── Pool funding ─────────────────────────────────────────────────────────
 
   it('funds the pool', () => {
-    const round = service.createRound({ name: 'R', tokenAddress: 'GT', startTime: past, endTime: future });
-    const result = service.fundPool({ roundId: round.id, funderPublicKey: 'GFUNDER', amount: '1000000' });
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past,
+      endTime: future,
+    });
+    const result = service.fundPool({
+      roundId: round.id,
+      funderPublicKey: 'GFUNDER',
+      amount: '1000000',
+    });
     expect(result.newBalance).toBe('1000000');
     expect(service.getRound(round.id).totalPool).toBe('1000000');
   });
 
   it('rejects funding a finalized round', () => {
     // Create a round that ended in the past
-    const round = service.createRound({ name: 'R', tokenAddress: 'GT', startTime: past - 3600, endTime: past });
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past - 3600,
+      endTime: past,
+    });
     service.finalizeRound(round.id);
     expect(() =>
-      service.fundPool({ roundId: round.id, funderPublicKey: 'G', amount: '100' }),
+      service.fundPool({
+        roundId: round.id,
+        funderPublicKey: 'G',
+        amount: '100',
+      }),
     ).toThrow(BadRequestException);
   });
 
   // ── Eligibility ──────────────────────────────────────────────────────────
 
   it('approves and removes a project', () => {
-    const round = service.createRound({ name: 'R', tokenAddress: 'GT', startTime: past, endTime: future });
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past,
+      endTime: future,
+    });
     service.approveProject({ roundId: round.id, projectId: 1 });
-    expect(() => service.approveProject({ roundId: round.id, projectId: 1 })).toThrow(BadRequestException);
+    expect(() =>
+      service.approveProject({ roundId: round.id, projectId: 1 }),
+    ).toThrow(BadRequestException);
     service.removeProject(round.id, 1);
     expect(() => service.removeProject(round.id, 1)).toThrow(NotFoundException);
   });
@@ -87,10 +122,25 @@ describe('GrantsService', () => {
   // ── Contribution recording ───────────────────────────────────────────────
 
   it('records contributions and tracks them', () => {
-    const round = service.createRound({ name: 'R', tokenAddress: 'GT', startTime: past, endTime: future });
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past,
+      endTime: future,
+    });
     service.approveProject({ roundId: round.id, projectId: 1 });
-    service.recordContribution({ roundId: round.id, projectId: 1, contributorPublicKey: 'GA', amount: '100' });
-    service.recordContribution({ roundId: round.id, projectId: 1, contributorPublicKey: 'GB', amount: '100' });
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 1,
+      contributorPublicKey: 'GA',
+      amount: '100',
+    });
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 1,
+      contributorPublicKey: 'GB',
+      amount: '100',
+    });
     const summary = service.getRoundSummary(round.id);
     const proj = summary.projects.find((p) => p.projectId === 1)!;
     expect(proj.contributorCount).toBe(2);
@@ -98,25 +148,50 @@ describe('GrantsService', () => {
   });
 
   it('rejects contribution to ineligible project', () => {
-    const round = service.createRound({ name: 'R', tokenAddress: 'GT', startTime: past, endTime: future });
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past,
+      endTime: future,
+    });
     expect(() =>
-      service.recordContribution({ roundId: round.id, projectId: 99, contributorPublicKey: 'GA', amount: '100' }),
+      service.recordContribution({
+        roundId: round.id,
+        projectId: 99,
+        contributorPublicKey: 'GA',
+        amount: '100',
+      }),
     ).toThrow(BadRequestException);
   });
 
   // ── QF score — breadth beats depth ──────────────────────────────────────
 
   it('QF: 4 contributors of 25 outscores 1 contributor of 100', () => {
-    const round = service.createRound({ name: 'R', tokenAddress: 'GT', startTime: past, endTime: future });
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past,
+      endTime: future,
+    });
     service.approveProject({ roundId: round.id, projectId: 1 }); // many small
     service.approveProject({ roundId: round.id, projectId: 2 }); // one large
 
     // Project 1: 4 × 25
     ['GA', 'GB', 'GC', 'GD'].forEach((pk) =>
-      service.recordContribution({ roundId: round.id, projectId: 1, contributorPublicKey: pk, amount: '25' }),
+      service.recordContribution({
+        roundId: round.id,
+        projectId: 1,
+        contributorPublicKey: pk,
+        amount: '25',
+      }),
     );
     // Project 2: 1 × 100
-    service.recordContribution({ roundId: round.id, projectId: 2, contributorPublicKey: 'GE', amount: '100' });
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 2,
+      contributorPublicKey: 'GE',
+      amount: '100',
+    });
 
     const summary = service.getRoundSummary(round.id);
     const p1 = summary.projects.find((p) => p.projectId === 1)!;
@@ -128,39 +203,86 @@ describe('GrantsService', () => {
   // ── Finalization ─────────────────────────────────────────────────────────
 
   it('finalizes a round that has ended', () => {
-    const round = service.createRound({ name: 'R', tokenAddress: 'GT', startTime: past - 3600, endTime: past });
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past - 3600,
+      endTime: past,
+    });
     const finalized = service.finalizeRound(round.id);
     expect(finalized.isFinalized).toBe(true);
     expect(finalized.status).toBe('FINALIZED');
   });
 
   it('rejects finalizing a round still open', () => {
-    const round = service.createRound({ name: 'R', tokenAddress: 'GT', startTime: past, endTime: future });
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past,
+      endTime: future,
+    });
     expect(() => service.finalizeRound(round.id)).toThrow(BadRequestException);
   });
 
   // ── Distribution ─────────────────────────────────────────────────────────
 
   it('distributes pool proportionally via QF', () => {
-    const round = service.createRound({ name: 'R', tokenAddress: 'GT', startTime: past - 3600, endTime: past });
-    service.fundPool({ roundId: round.id, funderPublicKey: 'GF', amount: '1000000' });
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past - 3600,
+      endTime: past,
+    });
+    service.fundPool({
+      roundId: round.id,
+      funderPublicKey: 'GF',
+      amount: '1000000',
+    });
     service.approveProject({ roundId: round.id, projectId: 1 });
     service.approveProject({ roundId: round.id, projectId: 2 });
 
     // Simulate contributions before end (bypass window check by using past round)
     // We directly call recordContribution — it checks now vs endTime, so use a round still open
-    const activeRound = service.createRound({ name: 'Active', tokenAddress: 'GT', startTime: past, endTime: future });
-    service.fundPool({ roundId: activeRound.id, funderPublicKey: 'GF', amount: '1000000' });
+    const activeRound = service.createRound({
+      name: 'Active',
+      tokenAddress: 'GT',
+      startTime: past,
+      endTime: future,
+    });
+    service.fundPool({
+      roundId: activeRound.id,
+      funderPublicKey: 'GF',
+      amount: '1000000',
+    });
     service.approveProject({ roundId: activeRound.id, projectId: 1 });
     service.approveProject({ roundId: activeRound.id, projectId: 2 });
     ['GA', 'GB', 'GC', 'GD'].forEach((pk) =>
-      service.recordContribution({ roundId: activeRound.id, projectId: 1, contributorPublicKey: pk, amount: '25' }),
+      service.recordContribution({
+        roundId: activeRound.id,
+        projectId: 1,
+        contributorPublicKey: pk,
+        amount: '25',
+      }),
     );
-    service.recordContribution({ roundId: activeRound.id, projectId: 2, contributorPublicKey: 'GE', amount: '100' });
+    service.recordContribution({
+      roundId: activeRound.id,
+      projectId: 2,
+      contributorPublicKey: 'GE',
+      amount: '100',
+    });
 
     // Finalize by creating a past-ended round with same data
-    const endedRound = service.createRound({ name: 'Ended', tokenAddress: 'GT', startTime: past - 7200, endTime: past - 3600 });
-    service.fundPool({ roundId: endedRound.id, funderPublicKey: 'GF', amount: '1000000' });
+    const endedRound = service.createRound({
+      name: 'Ended',
+      tokenAddress: 'GT',
+      startTime: past - 7200,
+      endTime: past - 3600,
+    });
+    service.fundPool({
+      roundId: endedRound.id,
+      funderPublicKey: 'GF',
+      amount: '1000000',
+    });
     service.approveProject({ roundId: endedRound.id, projectId: 1 });
     service.approveProject({ roundId: endedRound.id, projectId: 2 });
     // Manually inject contributions via the active round summary scores
@@ -169,13 +291,25 @@ describe('GrantsService', () => {
 
     // With no contributions, total_qf = 0 → distribute returns error
     expect(() =>
-      service.distribute({ roundId: endedRound.id, projectOwners: ['GOWNER1', 'GOWNER2'] }),
+      service.distribute({
+        roundId: endedRound.id,
+        projectOwners: ['GOWNER1', 'GOWNER2'],
+      }),
     ).toThrow(BadRequestException);
   });
 
   it('rejects distributing before finalization', () => {
-    const round = service.createRound({ name: 'R', tokenAddress: 'GT', startTime: past, endTime: future });
-    service.fundPool({ roundId: round.id, funderPublicKey: 'GF', amount: '100' });
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past,
+      endTime: future,
+    });
+    service.fundPool({
+      roundId: round.id,
+      funderPublicKey: 'GF',
+      amount: '100',
+    });
     service.approveProject({ roundId: round.id, projectId: 1 });
     expect(() =>
       service.distribute({ roundId: round.id, projectOwners: ['GOWNER'] }),
@@ -184,8 +318,17 @@ describe('GrantsService', () => {
 
   it('rejects double distribution', () => {
     // Build a round with contributions, finalize, distribute, then try again
-    const round = service.createRound({ name: 'R', tokenAddress: 'GT', startTime: past - 7200, endTime: past - 3600 });
-    service.fundPool({ roundId: round.id, funderPublicKey: 'GF', amount: '1000000' });
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past - 7200,
+      endTime: past - 3600,
+    });
+    service.fundPool({
+      roundId: round.id,
+      funderPublicKey: 'GF',
+      amount: '1000000',
+    });
     service.approveProject({ roundId: round.id, projectId: 1 });
     service.finalizeRound(round.id);
 
@@ -198,15 +341,34 @@ describe('GrantsService', () => {
   // ── Round summary ────────────────────────────────────────────────────────
 
   it('returns round summary sorted by estimated match descending', () => {
-    const round = service.createRound({ name: 'R', tokenAddress: 'GT', startTime: past, endTime: future });
-    service.fundPool({ roundId: round.id, funderPublicKey: 'GF', amount: '1000000' });
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past,
+      endTime: future,
+    });
+    service.fundPool({
+      roundId: round.id,
+      funderPublicKey: 'GF',
+      amount: '1000000',
+    });
     service.approveProject({ roundId: round.id, projectId: 1 });
     service.approveProject({ roundId: round.id, projectId: 2 });
 
     ['GA', 'GB', 'GC', 'GD'].forEach((pk) =>
-      service.recordContribution({ roundId: round.id, projectId: 1, contributorPublicKey: pk, amount: '25' }),
+      service.recordContribution({
+        roundId: round.id,
+        projectId: 1,
+        contributorPublicKey: pk,
+        amount: '25',
+      }),
     );
-    service.recordContribution({ roundId: round.id, projectId: 2, contributorPublicKey: 'GE', amount: '100' });
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 2,
+      contributorPublicKey: 'GE',
+      amount: '100',
+    });
 
     const summary = service.getRoundSummary(round.id);
     expect(summary.projects[0].projectId).toBe(1); // higher QF score first
@@ -214,7 +376,10 @@ describe('GrantsService', () => {
       BigInt(summary.projects[1].estimatedMatch),
     );
     // Allocations sum to pool
-    const total = summary.projects.reduce((acc, p) => acc + BigInt(p.estimatedMatch), 0n);
+    const total = summary.projects.reduce(
+      (acc, p) => acc + BigInt(p.estimatedMatch),
+      0n,
+    );
     expect(total).toBe(BigInt(summary.poolBalance));
   });
 });

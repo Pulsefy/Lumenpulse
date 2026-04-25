@@ -29,7 +29,10 @@ import {
   WatchlistResponseDto,
 } from './dto/watchlist.dto';
 import { WatchlistItemType } from './watchlist-item.entity';
-import { getWatchlistReadThrottleOverride, getWatchlistWriteThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import {
+  getWatchlistReadThrottleOverride,
+  getWatchlistWriteThrottleOverride,
+} from '../common/rate-limit/rate-limit.config';
 
 @ApiTags('watchlist')
 @ApiBearerAuth('JWT-auth')
@@ -43,7 +46,7 @@ export class WatchlistController {
   @ApiOperation({
     summary: 'Get user watchlist',
     description:
-      'Returns all items in the authenticated user\'s watchlist, optionally filtered by type',
+      "Returns all items in the authenticated user's watchlist, optionally filtered by type",
   })
   @ApiQuery({
     name: 'type',
@@ -72,7 +75,7 @@ export class WatchlistController {
   @ApiOperation({
     summary: 'Add item to watchlist',
     description:
-      'Add an asset or project to the authenticated user\'s watchlist',
+      "Add an asset or project to the authenticated user's watchlist",
   })
   @ApiResponse({
     status: 201,
@@ -122,8 +125,7 @@ export class WatchlistController {
   @Throttle(getWatchlistWriteThrottleOverride())
   @ApiOperation({
     summary: 'Update watchlist item',
-    description:
-      'Update a watchlist item\'s notes, image, name, or sort order',
+    description: "Update a watchlist item's notes, image, name, or sort order",
   })
   @ApiResponse({
     status: 200,
@@ -148,7 +150,7 @@ export class WatchlistController {
   @ApiOperation({
     summary: 'Remove item from watchlist',
     description:
-      'Remove an asset or project from the authenticated user\'s watchlist',
+      "Remove an asset or project from the authenticated user's watchlist",
   })
   @ApiResponse({ status: 204, description: 'Item removed successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -189,7 +191,7 @@ export class WatchlistController {
   @ApiOperation({
     summary: 'Check if symbol is in watchlist',
     description:
-      'Check whether a specific symbol is in the authenticated user\'s watchlist',
+      "Check whether a specific symbol is in the authenticated user's watchlist",
   })
   @ApiQuery({ name: 'symbol', required: true, type: String })
   @ApiQuery({
