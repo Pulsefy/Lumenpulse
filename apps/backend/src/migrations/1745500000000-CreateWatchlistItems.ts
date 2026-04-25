@@ -50,9 +50,7 @@ export class CreateWatchlistItems1745500000000 implements MigrationInterface {
     );
 
     // Drop indexes
-    await queryRunner.query(
-      `DROP INDEX "public"."IDX_watchlist_items_userId"`,
-    );
+    await queryRunner.query(`DROP INDEX "public"."IDX_watchlist_items_userId"`);
     await queryRunner.query(
       `DROP INDEX "public"."IDX_watchlist_items_user_symbol_type"`,
     );
@@ -61,8 +59,6 @@ export class CreateWatchlistItems1745500000000 implements MigrationInterface {
     await queryRunner.query(`DROP TABLE "watchlist_items"`);
 
     // Drop enum type
-    await queryRunner.query(
-      `DROP TYPE "public"."watchlist_items_type_enum"`,
-    );
+    await queryRunner.query(`DROP TYPE "public"."watchlist_items_type_enum"`);
   }
 }
