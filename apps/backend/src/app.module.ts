@@ -42,6 +42,7 @@ import { UsersModule } from './users/users.module';
 import { GrantsModule } from './grants/grants.module';
 import { HealthModule } from './health/health.module';
 import { OutboxModule } from './outbox/outbox.module';
+import { CorrelationModule } from './common/correlation/correlation.module';
 
 @Module({
   imports: [
@@ -103,6 +104,7 @@ import { OutboxModule } from './outbox/outbox.module';
     GrantsModule,
     WatchlistModule,
     OutboxModule,
+    CorrelationModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

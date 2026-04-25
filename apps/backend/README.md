@@ -65,3 +65,45 @@ Example error response:
   "requestId": "f2c3cb1c-8c86-4505-b4ce-fca50da2d46d"
 }
 ```
+
+## Observability & Logging
+
+The backend uses a structured JSON logging system with request-scoped correlation IDs to improve traceability across the API, background workers, and external integrations.
+
+### Key Features
+
+- **Correlation IDs**: Automatically generated for every incoming request and propagated through asynchronous operations using `AsyncLocalStorage`.
+- **Structured Logs**: All logs are output as JSON objects, making them easy to index and search in log management tools (e.g., ELK, CloudWatch).
+- **Trace Propagation**: Correlation IDs are automatically passed to:
+  - **BullMQ Workers**: Portfolio snapshots and Stellar synchronization jobs.
+  - **External APIs**: Outgoing requests to CoinDesk, Sentiment Analysis, and Exchange Rate providers.
+- **Rich Context**: API logs include method, URL, status code, response time, and client metadata.
+
+### Example Structured Log
+
+```json
+{
+  "level": "log",
+  "timestamp": "2026-04-25T13:15:00.000Z",
+  "context": "LoggerMiddleware",
+  "message": "GET /api/portfolio/summary 200 45ms",
+  "correlationId": "f2c3cb1c-8c86-4505-b4ce-fca50da2d46d",
+  "method": "GET",
+  "url": "/api/portfolio/summary",
+  "status": 200,
+  "duration": "45ms",
+  "ip": "127.0.0.1"
+}
+```
+
+### Manual Usage
+
+To log with correlation context in your services:
+
+```typescript
+import { Logger } from '@nestjs/common';
+
+private readonly logger = new Logger(MyService.name);
+
+this.logger.log({ message: 'Processing data', detail: 'Additional metadata' });
+```
