@@ -1790,3 +1790,30 @@ fn test_withdraw_with_fee() {
     // Check remaining project balance reflects gross deduction
     assert_eq!(client.get_balance(&project_id), 400_000);
 }
+
+#[test]
+fn test_stream_claim() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Test"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &500_000);
+
+    client.approve_milestone(&admin, &project_id, &0);
+
+    env.ledger().set_timestamp(1000);
+
+    let claimed = client.claim_stream(&project_id, &owner);
+
+    assert!(claimed > 0);
+}

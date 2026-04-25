@@ -26,6 +26,18 @@ pub enum DataKey {
     FeeBps,                      // -> u32
     Treasury,                    // -> Address
     Subscribers,
+    Stream(u64),
+    
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StreamData {
+    pub total: i128,
+    pub claimed: i128,
+    pub start_time: u64,
+    pub duration: u64,
+    pub recipient: Address,
 }
 
 #[contracttype]

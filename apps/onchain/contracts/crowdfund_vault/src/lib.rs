@@ -13,7 +13,7 @@ use notification_interface::{Notification, NotificationReceiverClient};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
-use storage::{DataKey, ProjectData, ProtocolStats};
+use storage::{DataKey, ProjectData, ProtocolStats, StreamData};
 
 #[contract]
 pub struct CrowdfundVaultContract;
@@ -36,6 +36,104 @@ impl CrowdfundVaultContract {
         caller.require_auth();
         Ok(())
     }
+
+
+    pub fn create_stream(
+    env: Env,
+    project_id: u64,
+    recipient: Address,
+    amount: i128,
+    duration: u64,
+) -> Result<(), CrowdfundError> {
+    if amount <= 0 {
+        return Err(CrowdfundError::InvalidAmount);
+    }
+
+    if duration == 0 {
+        return Err(CrowdfundError::InvalidAmount);
+    }
+
+    let stream = StreamData {
+        total: amount,
+        claimed: 0,
+        start_time: env.ledger().timestamp(),
+        duration,
+        recipient,
+    };
+
+    env.storage()
+        .persistent()
+        .set(&DataKey::Stream(project_id), &stream);
+
+    Ok(())
+}
+
+fn get_unlocked(env: &Env, stream: &StreamData) -> i128 {
+    let now = env.ledger().timestamp();
+
+    if now <= stream.start_time {
+        return 0;
+    }
+
+    let elapsed = now - stream.start_time;
+
+    if elapsed >= stream.duration {
+        return stream.total;
+    }
+
+    (stream.total * elapsed as i128) / stream.duration as i128
+}
+
+
+pub fn claim_stream(
+    env: Env,
+    project_id: u64,
+    caller: Address,
+) -> Result<i128, CrowdfundError> {
+    caller.require_auth();
+
+    let mut stream: StreamData = env
+        .storage()
+        .persistent()
+        .get(&DataKey::Stream(project_id))
+        .ok_or(CrowdfundError::ProjectNotFound)?;
+
+    if caller != stream.recipient {
+        return Err(CrowdfundError::Unauthorized);
+    }
+
+    let unlocked = Self::get_unlocked(&env, &stream);
+    let claimable = unlocked - stream.claimed;
+
+    if claimable <= 0 {
+        return Err(CrowdfundError::InvalidAmount);
+    }
+
+    stream.claimed += claimable;
+
+    env.storage()
+        .persistent()
+        .set(&DataKey::Stream(project_id), &stream);
+
+    let project: ProjectData = env
+        .storage()
+        .persistent()
+        .get(&DataKey::Project(project_id))
+        .ok_or(CrowdfundError::ProjectNotFound)?;
+
+    let contract_address = env.current_contract_address();
+
+    token::transfer(
+        &env,
+        &project.token_address,
+        &contract_address,
+        &caller,
+        &claimable,
+    );
+
+    Ok(claimable)
+}
+
 
     /// Initialize the contract with an admin address
     pub fn initialize(env: Env, admin: Address) -> Result<(), CrowdfundError> {
@@ -498,6 +596,28 @@ impl CrowdfundVaultContract {
 
         // Emit milestone approval event
         events::MilestoneApprovedEvent { admin, project_id }.publish(&env);
+
+        // ===== STREAM CREATION (ADD HERE) =====
+let project: ProjectData = env
+    .storage()
+    .persistent()
+    .get(&DataKey::Project(project_id))
+    .unwrap();
+
+let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+let total_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+
+let stream_amount = total_balance / 2;
+
+if stream_amount > 0 {
+    let _ = Self::create_stream(
+        env.clone(),
+        project_id,
+        project.owner.clone(),
+        stream_amount,
+        7 * 24 * 60 * 60,
+    );
+}
 
         Ok(())
     }
