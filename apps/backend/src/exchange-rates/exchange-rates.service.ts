@@ -1,36 +1,29 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { CacheService } from '../cache/cache.service';
-
-export type SupportedCurrency = 'USD' | 'EUR' | 'GBP' | 'NGN' | 'XLM';
+import { ConfigService } from '@nestjs/config';
+import { REQUEST_ID_HEADER } from '../common/constants/request.constants';
+import { CorrelationService } from '../common/correlation/correlation.service';
 
 interface ExchangeRateResponse {
-  rates: {
-    [key: string]: number;
-  };
+  rates: { [key: string]: number };
+}
+
+interface CoingeckoResponse {
+  [key: string]: { [key: string]: number };
 }
 
 @Injectable()
 export class ExchangeRatesService {
   private readonly logger = new Logger(ExchangeRatesService.name);
-  private readonly EXCHANGE_RATE_CACHE_PREFIX = 'exchange-rates';
-  private readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-  private readonly supportedCurrencies: SupportedCurrency[] = [
-    'USD',
-    'EUR',
-    'GBP',
-    'NGN',
-    'XLM',
-  ];
 
   constructor(
     private readonly httpService: HttpService,
-    private readonly cacheService: CacheService,
+    private readonly configService: ConfigService,
+    private readonly correlationService: CorrelationService,
   ) {}
 
   /**
-   * Get exchange rate from one currency to another
+   * Fetch exchange rate between two currencies
    */
   async getExchangeRate(
     fromCurrency: string,
@@ -40,74 +33,41 @@ export class ExchangeRatesService {
       return 1;
     }
 
-    const cacheKey = `${this.EXCHANGE_RATE_CACHE_PREFIX}:${fromCurrency}_${toCurrency}`;
-
-    // Check cache first
-    const cached = await this.cacheService.get<number>(cacheKey);
-    if (cached !== undefined) {
-      return cached;
-    }
-
     try {
-      // Use CoinGecko free API for cryptocurrency and fiat exchange rates
-      const rate = await this.fetchFromCoinGecko(fromCurrency, toCurrency);
-
-      // Cache the result
-      await this.cacheService.set(cacheKey, rate, this.CACHE_TTL_MS);
-
-      return rate;
-    } catch (error) {
-      this.logger.error(
-        `Failed to fetch exchange rate ${fromCurrency}/${toCurrency}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      // Primary source: CoinGecko
+      return await this.fetchFromCoingecko(fromCurrency, toCurrency);
+    } catch (error: unknown) {
+      this.logger.warn(
+        `CoinGecko API failed, falling back to alternative: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
       );
-      throw new Error(
-        `Unable to fetch exchange rate for ${fromCurrency}/${toCurrency}`,
-      );
+
+      // Fallback source: ExchangeRate-API
+      return await this.fetchFromExchangeRateApi(fromCurrency, toCurrency);
     }
   }
 
   /**
-   * Convert amount from one currency to another
+   * Primary: Fetch exchange rates from CoinGecko
    */
-  async convertCurrency(
-    amount: number,
-    fromCurrency: string,
-    toCurrency: string,
-  ): Promise<number> {
-    const rate = await this.getExchangeRate(fromCurrency, toCurrency);
-    return Math.round(amount * rate * 100) / 100; // Round to 2 decimal places
-  }
-
-  /**
-   * Get all supported currencies
-   */
-  getSupportedCurrencies(): SupportedCurrency[] {
-    return this.supportedCurrencies;
-  }
-
-  /**
-   * Validate if currency is supported
-   */
-  isSupportedCurrency(currency: string): currency is SupportedCurrency {
-    return this.supportedCurrencies.includes(currency as SupportedCurrency);
-  }
-
-  /**
-   * Fetch exchange rates from CoinGecko API
-   */
-  private async fetchFromCoinGecko(
+  private async fetchFromCoingecko(
     fromCurrency: string,
     toCurrency: string,
   ): Promise<number> {
     try {
-      // CoinGecko free API endpoint for cryptocurrency prices
       const response = await this.httpService
-        .get<ExchangeRateResponse>(
+        .get<CoingeckoResponse>(
           `https://api.coingecko.com/api/v3/simple/price`,
           {
             params: {
               ids: this.mapCurrencyToCoingeckoId(fromCurrency),
               vs_currencies: this.mapCurrencyToCoingeckoId(toCurrency),
+            },
+            headers: {
+              ...(this.correlationService.getCorrelationId() && {
+                [REQUEST_ID_HEADER]: this.correlationService.getCorrelationId(),
+              }),
             },
           },
         )
@@ -151,6 +111,13 @@ export class ExchangeRatesService {
     const response = await this.httpService
       .get<ExchangeRateResponse>(
         `https://api.exchangerate-api.com/v4/latest/${fromCurrency}`,
+        {
+          headers: {
+            ...(this.correlationService.getCorrelationId() && {
+              [REQUEST_ID_HEADER]: this.correlationService.getCorrelationId(),
+            }),
+          },
+        },
       )
       .toPromise();
 

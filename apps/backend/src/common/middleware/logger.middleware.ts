@@ -1,45 +1,37 @@
-import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
+import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
+import { CorrelationService } from '../correlation/correlation.service';
 
 @Injectable()
 export class LoggerMiddleware implements NestMiddleware {
-  use(req: Request, res: Response, next: NextFunction): void {
-    const startTime = Date.now();
+  constructor(private readonly correlationService: CorrelationService) {}
 
-    // Store original end method with proper typing
-    const originalEnd: (
-      chunk?: unknown,
-      encoding?: unknown,
-      callback?: unknown,
-    ) => void = res.end.bind(res) as (
-      chunk?: unknown,
-      encoding?: unknown,
-      callback?: unknown,
-    ) => void;
+  use(req: Request, res: Response, next: NextFunction) {
+    const { method, originalUrl, ip } = req;
+    const userAgent = req.get('user-agent') || '';
+    const start = Date.now();
 
-    // Use arrow function to avoid 'this' binding issues
-    res.end = ((
-      chunk?: unknown,
-      encoding?: unknown,
-      callback?: unknown,
-    ): void => {
-      const duration = Date.now() - startTime;
-      const requestId =
-        typeof req.requestId === 'string' ? req.requestId : 'unknown';
-      const message = `[Request:${requestId}] ${req.method} ${req.url} - ${res.statusCode} - ${duration}ms`;
+    res.on('finish', () => {
+      const { statusCode } = res;
+      const duration = Date.now() - start;
+      const correlationId = this.correlationService.getCorrelationId();
 
-      // Log based on status code
-      if (res.statusCode >= 500) {
-        Logger.error(message, undefined, 'HTTP');
-      } else if (res.statusCode >= 400) {
-        Logger.warn(message, 'HTTP');
+      const logData = {
+        method,
+        url: originalUrl,
+        status: statusCode,
+        duration: `${duration}ms`,
+        ip,
+        userAgent,
+        correlationId,
+      };
+
+      if (statusCode >= 400) {
+        console.warn(JSON.stringify({ level: 'warn', ...logData }));
       } else {
-        Logger.log(message, 'HTTP');
+        console.log(JSON.stringify({ level: 'log', ...logData }));
       }
-
-      // Call the original end method with proper context
-      originalEnd(chunk, encoding, callback);
-    }) as typeof res.end;
+    });
 
     next();
   }

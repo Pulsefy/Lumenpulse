@@ -29,13 +29,24 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (status >= 500) {
       const stack = exception instanceof Error ? exception.stack : undefined;
       this.logger.error(
-        `[${requestId}] ${request.method} ${request.url} -> ${status}`,
+        {
+          requestId,
+          method: request.method,
+          url: request.url,
+          statusCode: status,
+          error: errorResponse.message,
+        },
         stack,
       );
     } else {
-      this.logger.warn(
-        `[${requestId}] ${request.method} ${request.url} -> ${status} ${errorResponse.code}`,
-      );
+      this.logger.warn({
+        requestId,
+        method: request.method,
+        url: request.url,
+        statusCode: status,
+        errorCode: errorResponse.code,
+        error: errorResponse.message,
+      });
     }
 
     response.status(status).json(errorResponse);
@@ -140,7 +151,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
   private getErrorCode(
     status: number,
-    exceptionResponse?: Record<string, unknown>,
+    exceptionResponse?: Record<string, unknown>|undefined,
   ): string {
     if (
       exceptionResponse &&
