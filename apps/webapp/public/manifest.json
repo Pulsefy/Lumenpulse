@@ -12,7 +12,7 @@
   "categories": ["finance", "news", "productivity"],
   "icons": [
     {
-      "src": "/assets/starkpulse-03.png",
+      "src": "/assets/lumenpulse-03.png",
       "sizes": "71x71",
       "type": "image/png",
       "purpose": "any maskable"
@@ -74,7 +74,7 @@
       "url": "/news",
       "icons": [
         {
-          "src": "/assets/starkpulse-03.png",
+          "src": "/assets/lumenpulse-03.png",
           "sizes": "71x71"
         }
       ]
@@ -86,7 +86,7 @@
       "url": "/dashboard",
       "icons": [
         {
-          "src": "/assets/starkpulse-03.png",
+          "src": "/assets/lumenpulse-03.png",
           "sizes": "71x71"
         }
       ]

@@ -22,6 +22,7 @@ import { NotificationModule } from './notification/notification.module';
 import { QueueModule } from './queue/queue.module';
 import { StellarSyncModule } from './stellar-sync/stellar-sync.module';
 import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module';
+import { WatchlistModule } from './watchlist/watchlist.module';
 
 import databaseConfig from './database/database.config';
 import stellarConfig from './stellar/config/stellar.config';
@@ -39,6 +40,8 @@ import { UploadModule } from './upload/upload.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ReportsModule } from './reports/reports.module';
+import { GrantsModule } from './grants/grants.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -94,9 +97,12 @@ import { ReportsModule } from './reports/reports.module';
     AuthModule,
     UsersModule,
     ReportsModule,
+    HealthModule,
     QueueModule,
     StellarSyncModule,
     ExchangeRatesModule,
+    GrantsModule,
+    WatchlistModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

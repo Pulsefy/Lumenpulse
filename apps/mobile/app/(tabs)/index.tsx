@@ -53,9 +53,7 @@ export default function HomeScreen() {
               <Ionicons name="notifications-outline" size={28} color={colors.accent} />
               {unreadCount > 0 && (
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </Text>
+                  <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
                 </View>
               )}
             </TouchableOpacity>

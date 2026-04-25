@@ -28,7 +28,7 @@ html {
 
 @layer base {
   :root {
-    /* Fixed dark theme colors */
+    /* Default theme colors (dark) */
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
     --card: 240 10% 3.9%;
@@ -56,6 +56,93 @@ html {
     --chart-5: 170 100% 50%;
 
     /* Button gradient variables */
+    --text-button-gradient: #ffffff;
+    --surface-button-gradient-default-a: #db74cf;
+    --surface-button-gradient-default-b: #9f56ff;
+    --surface-button-gradient-default-c: #7a85ff;
+  }
+
+  /* Theme transition configuration - Requirements 5.1, 5.2, 5.4 */
+  * {
+    transition: background-color 250ms ease-in-out, 
+                color 250ms ease-in-out, 
+                border-color 250ms ease-in-out;
+  }
+
+  /* Prevent multiple simultaneous transitions - Requirement 5.3 */
+  .theme-transitioning * {
+    transition: none !important;
+  }
+
+  /* Accessibility: Respect prefers-reduced-motion - Requirements 7.3, 7.4 */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition: none !important;
+    }
+  }
+
+  /* Light theme colors - WCAG AA compliant */
+  :root[data-theme="light"] {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 217.2 91.2% 59.8%;
+    --chart-1: 217.2 91.2% 59.8%;
+    --chart-2: 47.9 95.8% 53.1%;
+    --chart-3: 0 84.2% 60.2%;
+    --chart-4: 262.1 83.3% 57.8%;
+    --chart-5: 170 100% 50%;
+
+    /* Button gradient variables for light theme */
+    --text-button-gradient: #ffffff;
+    --surface-button-gradient-default-a: #db74cf;
+    --surface-button-gradient-default-b: #9f56ff;
+    --surface-button-gradient-default-c: #7a85ff;
+  }
+
+  /* Dark theme colors - WCAG AA compliant */
+  :root[data-theme="dark"] {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+    --chart-1: 217.2 91.2% 59.8%;
+    --chart-2: 47.9 95.8% 53.1%;
+    --chart-3: 0 84.2% 60.2%;
+    --chart-4: 262.1 83.3% 57.8%;
+    --chart-5: 170 100% 50%;
+
+    /* Button gradient variables for dark theme */
     --text-button-gradient: #ffffff;
     --surface-button-gradient-default-a: #db74cf;
     --surface-button-gradient-default-b: #9f56ff;

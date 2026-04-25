@@ -107,17 +107,17 @@ const response = await apiClient.get('/some-endpoint');
 
 if (!response.success) {
   const error = response.error;
-  
+
   // Display user-friendly message
   Alert.alert('Error', error?.message || 'Something went wrong');
-  
+
   // Log for debugging
   console.error('API Error:', {
     message: error?.message,
     statusCode: error?.statusCode,
     details: error?.details,
   });
-  
+
   return;
 }
 
@@ -140,6 +140,7 @@ apiClient.setAuthToken(null);
 ```
 
 The token is automatically included in all subsequent requests as:
+
 ```
 Authorization: Bearer <token>
 ```
@@ -209,9 +210,9 @@ import config from '@/lib/config';
 
 const testConnection = async () => {
   console.log('Testing API at:', config.api.baseUrl);
-  
+
   const response = await healthApi.check();
-  
+
   if (response.success) {
     console.log('✅ Connected:', response.data);
   } else {
@@ -240,7 +241,7 @@ const fetchData = async () => {
   setIsLoading(true);
   const response = await apiClient.get('/data');
   setIsLoading(false);
-  
+
   if (response.success) {
     setData(response.data);
   }
@@ -255,12 +256,12 @@ const [error, setError] = useState<string | null>(null);
 const fetchData = async () => {
   setError(null);
   const response = await apiClient.get('/data');
-  
+
   if (!response.success) {
     setError(response.error?.message || 'Failed to load data');
     return;
   }
-  
+
   setData(response.data);
 };
 ```
@@ -271,16 +272,16 @@ const fetchData = async () => {
 const fetchWithRetry = async (maxRetries = 3) => {
   for (let i = 0; i < maxRetries; i++) {
     const response = await apiClient.get('/data');
-    
+
     if (response.success) {
       return response.data;
     }
-    
+
     if (i < maxRetries - 1) {
-      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)));
     }
   }
-  
+
   throw new Error('Max retries exceeded');
 };
 ```
