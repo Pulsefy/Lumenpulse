@@ -17,6 +17,10 @@ export default function DashboardPage() {
     balance: string;
   } | null>(null);
 
+  // For demo purposes, we use a default key if none is set
+  // In a real app, this would come from the connected wallet (Freighter/Albedo)
+  const defaultPublicKey = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
+
   useEffect(() => {
     // TODO: replace this with real user wallet later
     // For now, we simulate "no wallet connected"
@@ -26,7 +30,9 @@ export default function DashboardPage() {
     setIsLoading(false);
   }, []);
 
-  if (isLoading) {
+  const { balances, transactions, isLoading: isLoadingStellar, error } = useStellarAccount(publicKey);
+
+  if (isLoadingAuth) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>

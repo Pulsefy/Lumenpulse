@@ -84,7 +84,13 @@ function getEnvironmentName(nodeEnv: string | undefined): EnvironmentName {
 
 function resolveProfile(
   env: NodeJS.ProcessEnv,
-  key: 'global' | 'auth' | 'portfolioRead' | 'portfolioWrite' | 'watchlistRead' | 'watchlistWrite',
+  key:
+    | 'global'
+    | 'auth'
+    | 'portfolioRead'
+    | 'portfolioWrite'
+    | 'watchlistRead'
+    | 'watchlistWrite',
 ): RateLimitProfile {
   const profileDefaults = DEFAULTS[getEnvironmentName(env.NODE_ENV)][key];
   const envKeyPrefix = key

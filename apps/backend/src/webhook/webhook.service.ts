@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { DataProcessingWebhookDto } from './dto/webhook-payload.dto';
 import { NotificationService } from '../notification/notification.service';
+import { NotificationDeliveryService } from '../notification/notification-delivery.service';
 import {
   NotificationType,
   NotificationSeverity,
@@ -22,10 +23,15 @@ export class WebhookService {
   constructor(
     private readonly configService: ConfigService,
     private readonly notificationService: NotificationService,
+    private readonly deliveryService: NotificationDeliveryService,
   ) {
     this.webhookSecret = this.configService.get<string>('WEBHOOK_SECRET', '');
   }
 
+  /**
+   * Legacy signature verification (kept for backward compatibility)
+   * New implementations should use WebhookVerificationGuard
+   */
   verifySignature(rawBody: Buffer, signatureHeader: string): void {
     if (!this.webhookSecret) {
       this.logger.warn(
@@ -88,7 +94,8 @@ export class WebhookService {
       severity_score,
     );
 
-    return this.notificationService.create({
+    // Create the notification
+    const notification = await this.notificationService.create({
       type:
         type === 'sentiment_spike'
           ? NotificationType.SENTIMENT_SPIKE
@@ -107,6 +114,20 @@ export class WebhookService {
       },
       userId: null, // broadcast — visible to all users
     });
+
+    // TODO: In a production system, you'd want to deliver to specific users
+    // based on their watchlists, portfolios, or preferences.
+    // Example:
+    // const usersToNotify = await this.getUsersForEvent(payload);
+    // for (const user of usersToNotify) {
+    //   await this.deliveryService.deliverToUser(
+    //     notification,
+    //     user.id,
+    //     type,
+    //   );
+    // }
+
+    return notification;
   }
 
   private resolveSeverity(score: number): NotificationSeverity {

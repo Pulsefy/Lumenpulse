@@ -149,6 +149,37 @@ export class StellarService {
   }
 
   /**
+   * Fetches recent transactions for a given Stellar public key
+   * @param publicKey - Stellar account public key
+   * @param limit - Number of transactions to fetch (default: 10)
+   * @returns Promise<any> - List of recent transactions
+   */
+  async getAccountTransactions(
+    publicKey: string,
+    limit: number = 10,
+  ): Promise<any> {
+    validateStellarPublicKey(publicKey);
+    this.logger.debug(`Fetching transactions for account: ${publicKey}`);
+
+    try {
+      const payments = await this.server
+        .payments()
+        .forAccount(publicKey)
+        .order('desc')
+        .limit(limit)
+        .call();
+
+      return payments.records;
+    } catch (error: unknown) {
+      this.logger.error(`Error fetching transactions for ${publicKey}:`, error);
+      throw new HorizonUnavailableException(
+        this.config.horizonUrl,
+        'Failed to fetch transactions',
+      );
+    }
+  }
+
+  /**
    * Gets account information with balances (alias for getAccountBalances for backward compatibility)
    * @param publicKey The Stellar public key
    * @returns Account information or null if not found

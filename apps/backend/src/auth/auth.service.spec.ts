@@ -588,8 +588,8 @@ describe('AuthService – Refresh Tokens', () => {
     };
 
     beforeEach(() => {
-      findMock = refreshTokenRepository.find as jest.Mock;
-      findOneMock = refreshTokenRepository.findOne as jest.Mock;
+      findMock = refreshTokenRepository.find;
+      findOneMock = refreshTokenRepository.findOne;
     });
 
     describe('getActiveSessions', () => {
@@ -640,7 +640,6 @@ describe('AuthService – Refresh Tokens', () => {
         expect(result.sessions).toEqual([]);
         expect(result.total).toBe(0);
       });
-
     });
 
     describe('revokeSession', () => {
@@ -668,7 +667,10 @@ describe('AuthService – Refresh Tokens', () => {
         };
         findOneMock.mockResolvedValue(alreadyRevoked);
 
-        const result = await service.revokeSession('session-revoked', 'user-uuid-1');
+        const result = await service.revokeSession(
+          'session-revoked',
+          'user-uuid-1',
+        );
 
         expect(result.message).toBe('Session revoked successfully');
         expect(refreshTokenRepository.save).not.toHaveBeenCalled();
@@ -681,7 +683,6 @@ describe('AuthService – Refresh Tokens', () => {
           service.revokeSession('non-existent-id', 'user-uuid-1'),
         ).rejects.toThrow(NotFoundException);
       });
-
     });
   });
 });
