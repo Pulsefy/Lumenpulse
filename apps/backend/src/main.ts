@@ -1,47 +1,36 @@
 import { NestFactory } from '@nestjs/core';
-import 'dotenv/config';
+import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { setupApp } from './bootstrap/app.setup';
+import { StructuredLogger } from './common/logging/structured-logger.service';
+import { CorrelationService } from './common/correlation/correlation.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
-  setupApp(app);
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  });
 
-  const config = new DocumentBuilder()
-    .setTitle('LumenPulse API')
-    .setDescription(
-      'Comprehensive API documentation for LumenPulse - A decentralized crypto news aggregator and portfolio management platform built on Stellar blockchain',
-    )
-    .setVersion('1.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description: 'Enter JWT token',
-      },
-      'JWT-auth',
-    )
-    .addTag('auth', 'Authentication and authorization endpoints')
-    .addTag('users', 'User profile and account management')
-    .addTag('news', 'Crypto news aggregation and sentiment analysis')
-    .addTag('portfolio', 'Portfolio tracking and performance metrics')
-    .addTag('stellar', 'Stellar blockchain integration')
-    .addServer('http://localhost:3000', 'Development')
-    .addServer('https://api.lumenpulse.io', 'Production')
-    .build();
+  // Retrieve correlation service to inject into our structured logger
+  const correlationService = app.get(CorrelationService);
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  // Use our custom structured JSON logger
+  app.useLogger(new StructuredLogger('Lumenpulse', correlationService));
 
-  const port = process.env.PORT ?? 3000;
+  const configService = app.get(ConfigService);
 
-  // await app.listen(port);
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+
+  app.enableCors();
+  app.setGlobalPrefix('api');
+
+  const port = configService.get<number>('PORT', 3000);
   await app.listen(port);
-
-  console.log(`Application is running on: http://localhost:${port}`);
-  console.log(`Swagger docs available at: http://localhost:${port}/api/docs`);
+  console.log(`Application is running on: http://localhost:${port}/api`);
 }
-
-void bootstrap();
+bootstrap();

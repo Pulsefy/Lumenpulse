@@ -1,13 +1,14 @@
-export type SnapshotTriggerSource = 'cron' | 'manual';
+export type SnapshotTriggerSource = 'manual' | 'scheduled' | 'system';
 
 export interface PortfolioSnapshotBatchJobData {
   triggeredBy: SnapshotTriggerSource;
-  requestedAt: string;
+  correlationId?: string;
 }
 
 export interface PortfolioSnapshotUserJobData {
   userId: string;
   batchId: string;
+  correlationId?: string;
 }
 
 export interface PortfolioSnapshotBatchStatus {

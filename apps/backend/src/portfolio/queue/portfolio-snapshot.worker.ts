@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Job, Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
+import { randomUUID } from 'node:crypto';
 import { Repository } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { MetricsService } from '../../metrics/metrics.service';
@@ -25,6 +26,7 @@ import {
   PortfolioSnapshotUserJobData,
 } from './portfolio-snapshot.types';
 import { PortfolioSnapshotProgressStore } from './portfolio-snapshot.progress-store';
+import { CorrelationService } from '../../common/correlation/correlation.service';
 
 @Injectable()
 export class PortfolioSnapshotWorker implements OnModuleInit, OnModuleDestroy {
@@ -51,6 +53,7 @@ export class PortfolioSnapshotWorker implements OnModuleInit, OnModuleDestroy {
     private readonly progressStore: PortfolioSnapshotProgressStore,
     private readonly configService: ConfigService,
     private readonly metricsService: MetricsService,
+    private readonly correlationService: CorrelationService,
   ) {
     this.concurrency = this.configService.get<number>(
       'PORTFOLIO_SNAPSHOT_CONCURRENCY',
@@ -155,16 +158,21 @@ export class PortfolioSnapshotWorker implements OnModuleInit, OnModuleDestroy {
   private async process(
     job: Job<PortfolioSnapshotBatchJobData | PortfolioSnapshotUserJobData>,
   ): Promise<unknown> {
-    if (job.name === PORTFOLIO_SNAPSHOT_BATCH_JOB) {
-      return this.processBatch(job as Job<PortfolioSnapshotBatchJobData>);
-    }
+    const correlationId =
+      job.data.correlationId || String(job.id) || randomUUID();
 
-    if (job.name === PORTFOLIO_SNAPSHOT_USER_JOB) {
-      return this.processUser(job as Job<PortfolioSnapshotUserJobData>);
-    }
+    return this.correlationService.runWithId(correlationId, async () => {
+      if (job.name === PORTFOLIO_SNAPSHOT_BATCH_JOB) {
+        return this.processBatch(job as Job<PortfolioSnapshotBatchJobData>);
+      }
 
-    this.logger.warn(`Unknown job type ${job.name} ignored.`);
-    return null;
+      if (job.name === PORTFOLIO_SNAPSHOT_USER_JOB) {
+        return this.processUser(job as Job<PortfolioSnapshotUserJobData>);
+      }
+
+      this.logger.warn(`Unknown job type ${job.name} ignored.`);
+      return null;
+    });
   }
 
   private async processBatch(
@@ -172,6 +180,7 @@ export class PortfolioSnapshotWorker implements OnModuleInit, OnModuleDestroy {
   ): Promise<{ total: number }> {
     const batchId = String(job.id);
     const startedAt = new Date().toISOString();
+    const correlationId = this.correlationService.getCorrelationId();
 
     try {
       const total = await this.userRepository.count();
@@ -206,6 +215,7 @@ export class PortfolioSnapshotWorker implements OnModuleInit, OnModuleDestroy {
             data: {
               userId: user.id,
               batchId,
+              correlationId,
             },
             opts: {
               attempts: this.attempts,
