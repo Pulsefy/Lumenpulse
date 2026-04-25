@@ -41,7 +41,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { GrantsModule } from './grants/grants.module';
 import { HealthModule } from './health/health.module';
-import { ReconciliationModule } from './reconciliation/reconciliation.module';
+import { OutboxModule } from './outbox/outbox.module';
 
 @Module({
   imports: [
@@ -102,7 +102,7 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
     ExchangeRatesModule,
     GrantsModule,
     WatchlistModule,
-    ReconciliationModule,
+    OutboxModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
