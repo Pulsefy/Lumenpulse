@@ -153,7 +153,10 @@ export class WatchlistItemResponseDto {
 }
 
 export class WatchlistResponseDto {
-  @ApiProperty({ description: 'List of watchlist items', type: [WatchlistItemResponseDto] })
+  @ApiProperty({
+    description: 'List of watchlist items',
+    type: [WatchlistItemResponseDto],
+  })
   items: WatchlistItemResponseDto[];
 
   @ApiProperty({ description: 'Total number of items' })
