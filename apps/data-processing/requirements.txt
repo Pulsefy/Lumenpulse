@@ -51,3 +51,4 @@ pytest
 
 joblib>=1.1.0
 matplotlib>=3.5.0
+hypothesis>=6.0.0
