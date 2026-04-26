@@ -212,3 +212,22 @@ pub struct StorageMigratedEvent {
     pub admin: Address,
     pub storage_version: u32,
 }
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GaslessDepositEvent {
+    #[topic]
+    pub user: Address,
+    #[topic]
+    pub project_id: u64,
+    pub amount: i128,
+    pub consumed_nonce: u64,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GaslessContributorRegistrationEvent {
+    #[topic]
+    pub contributor: Address,
+    pub consumed_nonce: u64,
+}

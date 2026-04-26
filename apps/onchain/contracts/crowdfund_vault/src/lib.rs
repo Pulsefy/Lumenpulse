@@ -12,7 +12,7 @@ use math::{sqrt_scaled, unscale};
 use notification_interface::{Notification, NotificationReceiverClient};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, vec, Address, Bytes, BytesN, Env, Symbol, Vec};
 use storage::{
     DataKey, MilestoneDispute, ProjectData, ProtocolStats, LEDGER_BUMP, LEDGER_THRESHOLD,
 };
@@ -715,6 +715,282 @@ impl CrowdfundVaultContract {
         );
 
         Ok(())
+    }
+
+    /// Gasless deposit: relayer submits the transaction; user pays no fees.
+    ///
+    /// The user signs a `SorobanAuthorizationEntry` off-chain whose scope is
+    /// bound to `("deposit_with_sig", user, project_id, amount, nonce)`.
+    /// The contract verifies the authorization via `require_auth_for_args`,
+    /// then advances the per-user `ContributionNonce` to prevent replay.
+    ///
+    /// `signature` is a caller-visible artifact (arbitrary bytes the user may
+    /// include in their off-chain commitment). It is NOT part of the auth scope
+    /// to avoid the circular dependency where the user would have to sign their
+    /// own signature.
+    pub fn deposit_with_sig(
+        env: Env,
+        user: Address,
+        project_id: u64,
+        amount: i128,
+        signature: Bytes,
+    ) -> Result<(), CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+
+        if signature.is_empty() {
+            return Err(CrowdfundError::InvalidSignature);
+        }
+
+        if amount <= 0 {
+            return Err(CrowdfundError::InvalidAmount);
+        }
+
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            return Err(CrowdfundError::ContractPaused);
+        }
+
+        let nonce: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ContributionNonce(user.clone()))
+            .unwrap_or(0);
+
+        // Auth scope binds: function name, user address, project, amount, nonce.
+        // Prevents cross-user, cross-project, cross-amount, and replay attacks.
+        user.require_auth_for_args(
+            (
+                Symbol::new(&env, "deposit_with_sig"),
+                user.clone(),
+                project_id,
+                amount,
+                nonce,
+            )
+                .into_val(&env),
+        );
+
+        let mut project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        Self::fail_if_project_expired(&env, project_id, &mut project)?;
+
+        if !project.is_active {
+            return Err(CrowdfundError::ProjectNotActive);
+        }
+
+        let contract_address = env.current_contract_address();
+        let user_balance = token::balance(&env, &project.token_address, &user);
+        if user_balance >= amount {
+            token::transfer(
+                &env,
+                &project.token_address,
+                &user,
+                &contract_address,
+                &amount,
+            );
+        }
+
+        let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+        let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&balance_key, &(current_balance + amount));
+        env.storage()
+            .persistent()
+            .extend_ttl(&balance_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        let contribution_key = DataKey::Contribution(project_id, user.clone());
+        let current_contribution: i128 = env
+            .storage()
+            .persistent()
+            .get(&contribution_key)
+            .unwrap_or(0);
+
+        if current_contribution == 0 {
+            let contributor_count_key = DataKey::ContributorCount(project_id);
+            let contributor_count: u32 = env
+                .storage()
+                .persistent()
+                .get(&contributor_count_key)
+                .unwrap_or(0);
+
+            let contrib_idx_key = DataKey::Contributor(project_id, contributor_count);
+            env.storage().persistent().set(&contrib_idx_key, &user);
+            env.storage()
+                .persistent()
+                .extend_ttl(&contrib_idx_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            env.storage()
+                .persistent()
+                .set(&contributor_count_key, &(contributor_count + 1));
+            env.storage().persistent().extend_ttl(
+                &contributor_count_key,
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
+        }
+
+        env.storage()
+            .persistent()
+            .set(&contribution_key, &(current_contribution + amount));
+        env.storage()
+            .persistent()
+            .extend_ttl(&contribution_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        project.total_deposited += amount;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Project(project_id), &project);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Project(project_id),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        let mut stats: ProtocolStats = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProtocolStats)
+            .unwrap_or(ProtocolStats {
+                tvl: 0,
+                cumulative_volume: 0,
+            });
+        stats.tvl += amount;
+        stats.cumulative_volume += amount;
+        env.storage()
+            .instance()
+            .set(&DataKey::ProtocolStats, &stats);
+
+        // Advance nonce before emitting to prevent re-entrancy replay.
+        let new_nonce = nonce + 1;
+        env.storage()
+            .persistent()
+            .set(&DataKey::ContributionNonce(user.clone()), &new_nonce);
+        env.storage().persistent().extend_ttl(
+            &DataKey::ContributionNonce(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        events::GaslessDepositEvent {
+            user: user.clone(),
+            project_id,
+            amount,
+            consumed_nonce: nonce,
+        }
+        .publish(&env);
+
+        Self::notify_subscribers(
+            &env,
+            Symbol::new(&env, "deposit"),
+            (user, project_id, amount).to_xdr(&env),
+        );
+
+        Ok(())
+    }
+
+    /// Gasless contributor registration: relayer submits the transaction; user
+    /// pays no fees.
+    ///
+    /// The user signs a `SorobanAuthorizationEntry` off-chain whose scope is
+    /// bound to `("register_contributor_with_sig", contributor, nonce)`.
+    /// The contract verifies the authorization, registers the contributor, then
+    /// advances the per-user `RegistrationNonce` to prevent replay.
+    pub fn register_contributor_with_sig(
+        env: Env,
+        contributor: Address,
+        signature: Bytes,
+    ) -> Result<(), CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+
+        if signature.is_empty() {
+            return Err(CrowdfundError::InvalidSignature);
+        }
+
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::RegisteredContributor(contributor.clone()))
+        {
+            return Err(CrowdfundError::AlreadyRegistered);
+        }
+
+        let nonce: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RegistrationNonce(contributor.clone()))
+            .unwrap_or(0);
+
+        // Auth scope binds: function name, contributor address, and nonce.
+        contributor.require_auth_for_args(
+            (
+                Symbol::new(&env, "register_contributor_with_sig"),
+                contributor.clone(),
+                nonce,
+            )
+                .into_val(&env),
+        );
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RegisteredContributor(contributor.clone()), &true);
+        env.storage().persistent().extend_ttl(
+            &DataKey::RegisteredContributor(contributor.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Reputation(contributor.clone()), &0i128);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Reputation(contributor.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        let new_nonce = nonce + 1;
+        env.storage()
+            .persistent()
+            .set(&DataKey::RegistrationNonce(contributor.clone()), &new_nonce);
+        env.storage().persistent().extend_ttl(
+            &DataKey::RegistrationNonce(contributor.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        events::GaslessContributorRegistrationEvent {
+            contributor,
+            consumed_nonce: nonce,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Returns the current contribution nonce for `user`.
+    /// The relayer must include this value in the off-chain signing payload so
+    /// the user's authorization is bound to exactly one deposit intent.
+    pub fn get_contribution_nonce(env: Env, user: Address) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ContributionNonce(user))
+            .unwrap_or(0)
+    }
+
+    /// Returns the current registration nonce for `contributor`.
+    pub fn get_registration_nonce(env: Env, contributor: Address) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RegistrationNonce(contributor))
+            .unwrap_or(0)
     }
 
     /// Add a notification subscriber (admin only)

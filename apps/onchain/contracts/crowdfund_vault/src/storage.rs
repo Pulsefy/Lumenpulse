@@ -38,6 +38,8 @@ pub enum DataKey {
     FeeBps,                      // -> u32
     Treasury,                    // -> Address
     Subscribers,
+    ContributionNonce(Address),  // Address -> u64 (per-user nonce for gasless deposit)
+    RegistrationNonce(Address),  // Address -> u64 (per-user nonce for gasless registration)
 }
 
 #[contracttype]
