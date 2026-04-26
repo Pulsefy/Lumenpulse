@@ -20,6 +20,8 @@ import {
 @Index('UQ_daily_snapshots_date_asset', ['snapshotDate', 'assetSymbol'], {
   unique: true,
 })
+@Index(['assetSymbol'])
+@Index(['createdAt'])
 export class DailySnapshot {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

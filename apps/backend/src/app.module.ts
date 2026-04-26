@@ -42,6 +42,7 @@ import { UsersModule } from './users/users.module';
 import { GrantsModule } from './grants/grants.module';
 import { HealthModule } from './health/health.module';
 import { OutboxModule } from './outbox/outbox.module';
+import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 
 @Module({
@@ -104,6 +105,7 @@ import { IdempotencyInterceptor } from './common/interceptors/idempotency.interc
     GrantsModule,
     WatchlistModule,
     OutboxModule,
+    TelegramBotModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

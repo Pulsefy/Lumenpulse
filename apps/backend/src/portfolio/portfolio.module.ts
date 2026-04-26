@@ -22,6 +22,7 @@ import { PortfolioSnapshotWorker } from './queue/portfolio-snapshot.worker';
 import { ExchangeRatesModule } from '../exchange-rates/exchange-rates.module';
 import { StellarModule } from '../stellar/stellar.module';
 import { PriceModule } from '../price/price.module';
+import { ProfilingModule } from '../common/profiling/profiling.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { PriceModule } from '../price/price.module';
     ExchangeRatesModule,
     StellarModule,
     PriceModule,
+    ProfilingModule,
   ],
   controllers: [PortfolioController],
   providers: [

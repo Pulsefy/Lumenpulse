@@ -12,6 +12,9 @@ import { User } from './user.entity';
 
 @Entity('stellar_accounts')
 @Index(['userId', 'publicKey'], { unique: true })
+@Index(['userId'])
+@Index(['isActive'])
+@Index(['isPrimary'])
 export class StellarAccount {
   @PrimaryGeneratedColumn('uuid')
   id: string;
