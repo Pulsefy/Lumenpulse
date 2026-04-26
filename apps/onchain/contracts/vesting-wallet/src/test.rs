@@ -1,6 +1,9 @@
 use crate::errors::VestingError;
+use crate::storage::{MilestoneLink, MilestoneRequirement};
 use crate::{VestingWalletContract, VestingWalletContractClient};
+use crowdfund_vault::{CrowdfundVaultContract, CrowdfundVaultContractClient};
 use soroban_sdk::{
+    symbol_short,
     testutils::{Address as _, Ledger},
     token::{StellarAssetClient, TokenClient},
     Address, Env,
@@ -40,6 +43,27 @@ fn setup_test<'a>(
     let client = VestingWalletContractClient::new(env, &contract_id);
 
     (client, admin, beneficiary, token_client, contract_id)
+}
+
+fn setup_vault_project<'a>(
+    env: &Env,
+    admin: &Address,
+    token_address: &Address,
+) -> (CrowdfundVaultContractClient<'a>, Address, u64) {
+    let owner = Address::generate(env);
+    let vault_id = env.register(CrowdfundVaultContract, ());
+    let vault_client = CrowdfundVaultContractClient::new(env, &vault_id);
+
+    vault_client.initialize(admin);
+
+    let project_id = vault_client.create_project(
+        &owner,
+        &symbol_short!("VestProj"),
+        &1_000_000,
+        token_address,
+    );
+
+    (vault_client, vault_id, project_id)
 }
 
 #[test]
@@ -101,6 +125,43 @@ fn test_create_vesting() {
 
     // Verify tokens were transferred to contract
     assert_eq!(token_client.balance(&contract_id), amount);
+}
+
+#[test]
+fn test_create_vesting_with_milestone_stores_link() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (_, vault_id, project_id) = setup_vault_project(&env, &admin, &token_client.address);
+
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 1000;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+    let milestone_id = 0u32;
+    let milestone_link = MilestoneLink {
+        vault_contract: vault_id.clone(),
+        project_id,
+        milestone_id,
+    };
+
+    client.create_vesting_with_milestone(
+        &admin,
+        &beneficiary,
+        &amount,
+        &start_time,
+        &duration,
+        &milestone_link,
+    );
+
+    let vesting = client.get_vesting(&beneficiary);
+    assert_eq!(
+        vesting.milestone_requirement,
+        MilestoneRequirement::External(milestone_link)
+    );
 }
 
 #[test]
@@ -225,6 +286,60 @@ fn test_claim_before_start_time() {
 }
 
 #[test]
+fn test_claim_requires_completed_vault_milestone() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (vault_client, vault_id, project_id) =
+        setup_vault_project(&env, &admin, &token_client.address);
+
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+    let milestone_id = 0u32;
+    let milestone_link = MilestoneLink {
+        vault_contract: vault_id,
+        project_id,
+        milestone_id,
+    };
+
+    client.create_vesting_with_milestone(
+        &admin,
+        &beneficiary,
+        &amount,
+        &start_time,
+        &duration,
+        &milestone_link,
+    );
+
+    env.ledger().set_timestamp(start_time + duration / 2);
+
+    assert_eq!(client.get_claimable(&beneficiary), 0);
+    assert_eq!(client.get_available_amount(&beneficiary), 0);
+    assert_eq!(
+        client.try_claim(&beneficiary),
+        Err(Ok(VestingError::NothingToClaim))
+    );
+
+    vault_client.approve_milestone(&admin, &project_id, &milestone_id);
+
+    assert_eq!(client.get_claimable(&beneficiary), amount / 2);
+
+    let first_claim = client.claim(&beneficiary);
+    assert_eq!(first_claim, amount / 2);
+
+    env.ledger().set_timestamp(start_time + duration + 1);
+
+    let second_claim = client.claim(&beneficiary);
+    assert_eq!(second_claim, amount / 2);
+    assert_eq!(token_client.balance(&beneficiary), amount);
+}
+
+#[test]
 fn test_claim_partial_vesting() {
     let env = Env::default();
     env.mock_all_auths();
@@ -289,12 +404,14 @@ fn test_claim_full_vesting() {
     // Verify beneficiary received all tokens
     assert_eq!(token_client.balance(&beneficiary), amount);
 
-    // Verify vesting data updated
-    let vesting = client.get_vesting(&beneficiary);
-    assert_eq!(vesting.claimed_amount, amount);
+    // After a full claim the vesting entry is removed (state compaction).
+    // get_vesting must now return VestingNotFound.
+    let result = client.try_get_vesting(&beneficiary);
+    assert_eq!(result, Err(Ok(VestingError::VestingNotFound)));
 
-    // Verify nothing left to claim
-    assert_eq!(client.get_available_amount(&beneficiary), 0);
+    // get_available_amount also returns VestingNotFound (entry is gone).
+    let result2 = client.try_get_available_amount(&beneficiary);
+    assert_eq!(result2, Err(Ok(VestingError::VestingNotFound)));
 }
 
 #[test]
@@ -624,4 +741,95 @@ fn test_old_admin_cannot_upgrade_after_rotation() {
     let dummy = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
     let result = client.try_upgrade(&admin, &dummy);
     assert_eq!(result, Err(Ok(crate::errors::VestingError::Unauthorized)));
+}
+
+// ---------------------------------------------------------------------------
+// TTL / storage-rent tests
+// ---------------------------------------------------------------------------
+
+/// Verify that a vesting entry remains accessible after a simulated ledger
+/// advance — the TTL bump on write keeps the entry alive.
+#[test]
+fn test_vesting_entry_accessible_after_ledger_advance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+
+    // Advance the ledger sequence significantly.
+    env.ledger().set_sequence_number(200_000);
+
+    // Entry must still be readable — TTL bump on write keeps it alive.
+    let vesting = client.get_vesting(&beneficiary);
+    assert_eq!(vesting.total_amount, amount);
+}
+
+/// Verify that TTL is extended after a read (get_vesting) by confirming the
+/// entry survives a second large ledger jump.
+#[test]
+fn test_ttl_extended_after_read_write() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+
+    // First ledger advance.
+    env.ledger().set_sequence_number(100_001);
+
+    // Read triggers another TTL bump.
+    let vesting = client.get_vesting(&beneficiary);
+    assert_eq!(vesting.total_amount, amount);
+
+    // Second ledger advance — read-triggered bump should keep it alive.
+    env.ledger().set_sequence_number(200_002);
+    let vesting2 = client.get_vesting(&beneficiary);
+    assert_eq!(vesting2.total_amount, amount);
+}
+
+/// Verify that after a beneficiary fully claims their vesting, the storage
+/// entry is removed (state compaction).
+#[test]
+fn test_vesting_entry_removed_after_full_claim() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+
+    // Fast-forward past the full vesting period.
+    env.ledger().set_timestamp(start_time + duration + 1);
+
+    // Claim all tokens.
+    let claimed = client.claim(&beneficiary);
+    assert_eq!(claimed, amount);
+
+    // The vesting entry must have been removed — get_vesting should now fail.
+    let result = client.try_get_vesting(&beneficiary);
+    assert_eq!(
+        result,
+        Err(Ok(crate::errors::VestingError::VestingNotFound))
+    );
 }

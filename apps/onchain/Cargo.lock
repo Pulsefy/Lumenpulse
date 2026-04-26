@@ -1189,6 +1189,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pricing_adapter"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk 23.5.2",
+]
+
+[[package]]
 name = "primeorder"
 version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2172,6 +2179,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 name = "vesting-wallet"
 version = "0.0.0"
 dependencies = [
+ "crowdfund_vault",
  "soroban-sdk 23.5.2",
 ]
 

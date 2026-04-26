@@ -5,6 +5,7 @@ mod allowance;
 mod balance;
 mod events;
 mod metadata;
+mod storage;
 mod test;
 
 use events::{AdminChangedEvent, BurnEvent, UpgradedEvent};

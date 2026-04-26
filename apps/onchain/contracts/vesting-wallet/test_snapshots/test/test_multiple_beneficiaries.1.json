@@ -513,6 +513,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "milestone_requirement"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "start_time"
                       },
                       "val": {
@@ -533,7 +545,7 @@
             },
             "ext": "v0"
           },
-          4095
+          518400
         ]
       ],
       [
@@ -599,6 +611,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "milestone_requirement"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "start_time"
                       },
                       "val": {
@@ -619,7 +643,7 @@
             },
             "ext": "v0"
           },
-          4095
+          518400
         ]
       ],
       [
@@ -676,7 +700,7 @@
             },
             "ext": "v0"
           },
-          4095
+          518400
         ]
       ],
       [
@@ -1122,7 +1146,7 @@
             },
             "ext": "v0"
           },
-          4095
+          518400
         ]
       ]
     ]

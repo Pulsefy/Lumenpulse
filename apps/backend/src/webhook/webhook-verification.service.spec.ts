@@ -39,7 +39,7 @@ describe('WebhookVerificationService', () => {
     service = module.get<WebhookVerificationService>(
       WebhookVerificationService,
     );
-    
+
     // Manually call onModuleInit to load provider configs
     service.onModuleInit();
   });

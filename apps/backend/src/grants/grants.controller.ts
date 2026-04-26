@@ -17,6 +17,9 @@ import {
   RecordContributionDto,
 } from './dto/grants.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/decorators/auth.decorators';
+import { UserRole } from '../users/entities/user.entity';
 
 @Controller('grants')
 export class GrantsController {
@@ -40,13 +43,15 @@ export class GrantsController {
   }
 
   @Post('rounds')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   createRound(@Body() dto: CreateRoundDto) {
     return this.grantsService.createRound(dto);
   }
 
   @Post('rounds/:id/finalize')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   finalizeRound(@Param('id', ParseIntPipe) id: number) {
     return this.grantsService.finalizeRound(id);
   }
@@ -54,7 +59,8 @@ export class GrantsController {
   // ── Pool funding ───────────────────────────────────────────────────────────
 
   @Post('rounds/fund')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   fundPool(@Body() dto: FundPoolDto) {
     return this.grantsService.fundPool(dto);
   }
@@ -62,14 +68,16 @@ export class GrantsController {
   // ── Eligibility ────────────────────────────────────────────────────────────
 
   @Post('rounds/projects/approve')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.REVIEWER)
   approveProject(@Body() dto: ApproveProjectDto) {
     this.grantsService.approveProject(dto);
     return { success: true };
   }
 
   @Delete('rounds/:roundId/projects/:projectId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   removeProject(
     @Param('roundId', ParseIntPipe) roundId: number,
     @Param('projectId', ParseIntPipe) projectId: number,
@@ -89,7 +97,8 @@ export class GrantsController {
   // ── Distribution ───────────────────────────────────────────────────────────
 
   @Post('rounds/distribute')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   distribute(@Body() dto: DistributeDto) {
     return this.grantsService.distribute(dto);
   }
