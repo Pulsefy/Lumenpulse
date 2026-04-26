@@ -66,6 +66,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include versioned routers
+app.include_router(v1_router)
+
 @app.middleware("http")
 async def metrics_and_logging_middleware(request: Request, call_next):
     corr_id = request.headers.get("X-Correlation-ID", generate_correlation_id())
@@ -115,6 +118,7 @@ class AnalyzeResponse(BaseModel):
     asset_codes: List[str] = []  # Asset codes found in text
     sentiment_label: str = ""  # positive/negative/neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
+    linked_entities: List[Dict[str, Any]] = []  # Entities linked to ecosystem registry
 
 
 class AssetAnalysisResponse(BaseModel):
@@ -146,9 +150,18 @@ class NewsArticleResponse(BaseModel):
     categories: List[str] = []
     keywords: List[str] = []
     detected_entities: List[str] = []
+    linked_entities: List[Dict[str, Any]] = []  # Entities linked to ecosystem registry
     sentiment_score: Optional[float] = None  # Raw compound score stored in DB
     sentiment_label: Optional[str] = None  # positive / negative / neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
+
+# ---------------------------------------------------------------------------
+# Versioned Routers (Issue #2)
+# ---------------------------------------------------------------------------
+
+from fastapi import APIRouter
+
+v1_router = APIRouter(prefix="/v1")
 
 @app.get("/metrics")
 async def metrics():
@@ -187,7 +200,7 @@ async def health_check(request: Request) -> HealthResponse:
     )
 
 
-@app.get("/news", response_model=List[NewsArticleResponse])
+@v1_router.get("/news", response_model=List[NewsArticleResponse])
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def get_news(
     request: Request,
@@ -244,6 +257,7 @@ async def get_news(
                 categories=article.categories or [],
                 keywords=article.keywords or [],
                 detected_entities=article.detected_entities or [],
+                linked_entities=article.linked_entities or [],
                 sentiment_score=article.sentiment_score,
                 sentiment_label=article.sentiment_label,
                 indicator=_build_indicator(article.sentiment_score),
@@ -255,7 +269,7 @@ async def get_news(
         raise HTTPException(status_code=500, detail="Failed to fetch news articles")
 
 
-@app.post("/analyze", response_model=AnalyzeResponse)
+@v1_router.post("/analyze", response_model=AnalyzeResponse)
 @limiter.limit("50/minute") if limiter else lambda x: x
 async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeResponse:
     """
@@ -294,6 +308,7 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
             asset_codes=result.asset_codes,
             sentiment_label=result.sentiment_label,
             indicator=SentimentIndicatorResponse(**ind.to_dict()),
+            linked_entities=result.linked_entities,
         )
 
     except HTTPException:
@@ -303,7 +318,7 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-@app.get("/analyze", response_model=AssetAnalysisResponse)
+@v1_router.get("/analyze", response_model=AssetAnalysisResponse)
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def get_asset_analysis(
     request: Request,
@@ -354,7 +369,7 @@ async def get_asset_analysis(
 
 
 # Optional: Batch analysis endpoint if needed
-@app.post("/analyze-batch")
+@v1_router.post("/analyze-batch")
 @limiter.limit("10/minute") if limiter else lambda x: x
 async def analyze_batch(request: Request, texts: list[str], asset: Optional[str] = None) -> Dict[str, Any]:
     """Batch analyze multiple texts with optional asset filter"""
@@ -375,7 +390,7 @@ async def analyze_batch(request: Request, texts: list[str], asset: Optional[str]
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/sentiment/legend")
+@v1_router.get("/sentiment/legend")
 async def get_sentiment_legend() -> Dict[str, Any]:
     """
     Return the colour legend that frontend clients use to render
@@ -435,7 +450,7 @@ class ModelStatusResponse(BaseModel):
     registry: Dict[str, Any]
 
 
-@app.post("/retrain", response_model=RetrainResponse)
+@v1_router.post("/retrain", response_model=RetrainResponse)
 @limiter.limit("5/minute") if limiter else lambda x: x
 async def trigger_retraining(
     body: RetrainRequest,
@@ -465,7 +480,7 @@ async def trigger_retraining(
     return RetrainResponse(**{k: result.get(k) for k in RetrainResponse.model_fields if k in result})
 
 
-@app.get("/model/status", response_model=ModelStatusResponse)
+@v1_router.get("/model/status", response_model=ModelStatusResponse)
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def model_status(request: Request) -> ModelStatusResponse:
     """
@@ -499,7 +514,7 @@ class ForecastResponse(BaseModel):
     generated_at: str
 
 
-@app.get("/analytics/forecast", response_model=ForecastResponse)
+@v1_router.get("/analytics/forecast", response_model=ForecastResponse)
 @limiter.limit("20/minute") if limiter else lambda x: x
 async def get_forecast(request: Request) -> ForecastResponse:
     """
@@ -574,7 +589,7 @@ class LagAnalysisResponse(BaseModel):
     recommendation: str
 
 
-@app.post("/correlation/analyze", response_model=CorrelationResponse)
+@v1_router.post("/correlation/analyze", response_model=CorrelationResponse)
 @limiter.limit("20/minute") if limiter else lambda x: x
 async def analyze_correlation(
     body: CorrelationRequest,
@@ -618,7 +633,7 @@ async def analyze_correlation(
     )
 
 
-@app.post("/correlation/lag-analysis", response_model=LagAnalysisResponse)
+@v1_router.post("/correlation/lag-analysis", response_model=LagAnalysisResponse)
 @limiter.limit("10/minute") if limiter else lambda x: x
 async def analyze_lag_correlation(
     body: LagAnalysisRequest,

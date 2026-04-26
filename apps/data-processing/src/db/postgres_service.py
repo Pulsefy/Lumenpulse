@@ -67,6 +67,15 @@ class PostgresService:
             summary=normalized.get("summary"),
             content=normalized.get("content"),
         )
+        
+        # Link entities to the registry
+        full_text = "\n".join([
+            normalized.get("title") or "",
+            normalized.get("summary") or "",
+            normalized.get("content") or ""
+        ])
+        normalized["linked_entities"] = self.ner_service.extract_linked_entities(full_text)
+        
         return normalized
 
     @contextmanager
@@ -185,6 +194,7 @@ class PostgresService:
                     existing.categories = article_data.get("categories", existing.categories)
                     existing.keywords = article_data.get("keywords", existing.keywords)
                     existing.detected_entities = article_data.get("detected_entities", existing.detected_entities)
+                    existing.linked_entities = article_data.get("linked_entities", existing.linked_entities)
                     existing.language = article_data.get("language", existing.language)
                     existing.published_at = article_data.get("published_at", existing.published_at)
                     existing.fetched_at = article_data.get("fetched_at", existing.fetched_at)
@@ -214,6 +224,7 @@ class PostgresService:
                         categories=article_data.get("categories"),
                         keywords=article_data.get("keywords"),
                         detected_entities=article_data.get("detected_entities"),
+                        linked_entities=article_data.get("linked_entities"),
                         language=article_data.get("language"),
                         published_at=article_data.get("published_at"),
                         fetched_at=article_data.get("fetched_at"),
@@ -277,6 +288,7 @@ class PostgresService:
                         existing.categories = article_data.get("categories", existing.categories)
                         existing.keywords = article_data.get("keywords", existing.keywords)
                         existing.detected_entities = article_data.get("detected_entities", existing.detected_entities)
+                        existing.linked_entities = article_data.get("linked_entities", existing.linked_entities)
                         existing.language = article_data.get("language", existing.language)
                         existing.published_at = article_data.get("published_at", existing.published_at)
                         existing.fetched_at = article_data.get("fetched_at", existing.fetched_at)
@@ -302,6 +314,7 @@ class PostgresService:
                             categories=article_data.get("categories"),
                             keywords=article_data.get("keywords"),
                             detected_entities=article_data.get("detected_entities"),
+                            linked_entities=article_data.get("linked_entities"),
                             language=article_data.get("language"),
                             published_at=article_data.get("published_at"),
                             fetched_at=article_data.get("fetched_at"),

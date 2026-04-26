@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 # Import keyword extractor for asset filtering
 from src.analytics.keywords import KeywordExtractor
+from src.analytics.ner_service import NERService
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +77,13 @@ class SentimentResult:
     neutral: float  # 0 to 1
     sentiment_label: str  # 'positive', 'negative', 'neutral'
     asset_codes: List[str] = None  # List of asset codes mentioned in text
+    linked_entities: List[Dict[str, Any]] = None  # Linked ecosystem entities
 
     def __post_init__(self):
         if self.asset_codes is None:
             self.asset_codes = []
+        if self.linked_entities is None:
+            self.linked_entities = []
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -90,6 +94,7 @@ class SentimentResult:
             "neutral": self.neutral,
             "sentiment_label": self.sentiment_label,
             "asset_codes": self.asset_codes,
+            "linked_entities": self.linked_entities,
         }
 
 
@@ -99,6 +104,7 @@ class SentimentAnalyzer:
     def __init__(self):
         self.analyzer = SentimentIntensityAnalyzer()
         self.keyword_extractor = KeywordExtractor()
+        self.ner_service = NERService()
         self.cache: object | None = None
         try:
             from cache_manager import CacheManager
@@ -164,6 +170,7 @@ class SentimentAnalyzer:
             neutral=scores["neu"],
             sentiment_label=label,
             asset_codes=asset_codes,
+            linked_entities=self.ner_service.extract_linked_entities(text),
         )
 
         if self.cache:

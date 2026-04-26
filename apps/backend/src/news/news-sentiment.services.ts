@@ -26,7 +26,7 @@ export class NewsSentimentService {
       const response = await firstValueFrom<
         AxiosResponse<SentimentApiResponse>
       >(
-        this.httpService.post<SentimentApiResponse>(`${baseUrl}/analyze`, {
+        this.httpService.post<SentimentApiResponse>(`${baseUrl}/v1/analyze`, {
           text,
         }),
       );

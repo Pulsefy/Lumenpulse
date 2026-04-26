@@ -49,7 +49,7 @@ export class ModelRetrainingService {
       this.logger.log(`Triggering model retraining (force=${force})`);
       const response = await firstValueFrom(
         this.httpService.post<RetrainResult>(
-          `${this.pythonApiUrl}/retrain`,
+          `${this.pythonApiUrl}/v1/retrain`,
           { force },
           { headers: this.headers, timeout: 300_000 }, // 5 min timeout
         ),
@@ -73,7 +73,7 @@ export class ModelRetrainingService {
     try {
       const response = await firstValueFrom(
         this.httpService.get<ModelStatusResult>(
-          `${this.pythonApiUrl}/model/status`,
+          `${this.pythonApiUrl}/v1/model/status`,
           { headers: this.headers, timeout: 10_000 },
         ),
       );

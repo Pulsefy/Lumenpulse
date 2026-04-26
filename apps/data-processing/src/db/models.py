@@ -41,6 +41,7 @@ class Article(Base):
     # Keywords and metadata
     keywords = Column(JSON, nullable=True)  # Array of keywords
     detected_entities = Column(JSON, nullable=True)  # NER entities detected in article text
+    linked_entities = Column(JSON, nullable=True)  # Linked ecosystem entities with metadata
     language = Column(String(10), nullable=True)
     
     # Timestamps
@@ -91,6 +92,7 @@ class SocialPost(Base):
     asset_codes = Column(JSON, nullable=True)  # Array of asset codes mentioned
     primary_asset = Column(String(20), nullable=True, index=True)
     hashtags = Column(JSON, nullable=True)  # Array of hashtags
+    linked_entities = Column(JSON, nullable=True)  # Linked ecosystem entities with metadata
     subreddit = Column(String(100), nullable=True)  # For Reddit posts
     
     # Sentiment scores
@@ -255,3 +257,41 @@ class AssetTrend(Base):
 
     def __repr__(self):
         return f"<AssetTrend(asset={self.asset}, metric={self.metric_name}, trend={self.trend_direction})>"
+
+
+class EcosystemRegistry(Base):
+    """
+    Stores known projects, assets, and ecosystem entries for entity linking
+    """
+
+    __tablename__ = "ecosystem_registry"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    entity_id = Column(String(100), unique=True, nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    type = Column(String(50), nullable=False, index=True)  # project, asset, ecosystem_entry
+    category = Column(String(100), nullable=True)
+    description = Column(Text, nullable=True)
+    website = Column(String(255), nullable=True)
+    twitter = Column(String(255), nullable=True)
+    github = Column(String(255), nullable=True)
+    asset_code = Column(String(20), nullable=True, index=True)
+    aliases = Column(JSON, nullable=True)  # List of names/tickers that refer to this entity
+    tags = Column(JSON, nullable=True)
+    is_active = Column(Integer, default=1)
+    
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("idx_registry_type", "type"),
+        Index("idx_registry_asset", "asset_code"),
+        Index("idx_registry_name", "name"),
+    )
+
+    def __repr__(self):
+        return f"<EcosystemRegistry(id={self.entity_id}, name={self.name}, type={self.type})>"

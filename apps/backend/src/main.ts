@@ -13,7 +13,7 @@ async function bootstrap() {
     .setDescription(
       'Comprehensive API documentation for LumenPulse - A decentralized crypto news aggregator and portfolio management platform built on Stellar blockchain',
     )
-    .setVersion('1.0')
+    .setVersion('1.0 (v1)')
     .addBearerAuth(
       {
         type: 'http',
