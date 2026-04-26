@@ -13,14 +13,21 @@ import {
 } from "lucide-react";
 import { CryptoApiService, transformCryptoData } from "@/lib/api-services";
 import { Asset } from "./stellar-balances-panel";
+import TransactionDetail from "./transaction-detail";
 
 interface Transaction {
   id: string;
-  type: string;
+  hash: string;
+  type: "Received" | "Sent" | "Trade";
   amount: string;
   asset: string;
   date: string;
-  status: string;
+  status: "Completed" | "Pending" | "Failed";
+  from: string;
+  to: string;
+  fee: string;
+  ledger: number;
+  memo?: string;
 }
 
 interface AssetDetailProps extends Asset {
@@ -36,6 +43,7 @@ export default function AssetDetail({
   const [loading, setLoading] = useState(true);
   const [priceData, setPriceData] = useState<any>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [sentiment, setSentiment] = useState({ score: 0.75, label: "Bullish" });
 
   useEffect(() => {
@@ -68,35 +76,57 @@ export default function AssetDetail({
         setTransactions([
           {
             id: "1",
+            hash: "4f7a9b8c2e1d0f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a",
             type: "Received",
-            amount: "500",
+            amount: "500.00",
             asset: code,
             date: "2024-03-20 14:30",
             status: "Completed",
+            from: "GBA...5RE",
+            to: "GDA...KZN",
+            fee: "0.00001 XLM",
+            ledger: 51234567,
+            memo: "Grant reward",
           },
           {
             id: "2",
+            hash: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
             type: "Sent",
-            amount: "120",
+            amount: "120.00",
             asset: code,
             date: "2024-03-18 09:15",
             status: "Completed",
+            from: "GDA...KZN",
+            to: "GCB...YTR",
+            fee: "0.00001 XLM",
+            ledger: 51230000,
           },
           {
             id: "3",
+            hash: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
             type: "Trade",
-            amount: "250",
+            amount: "250.00",
             asset: code,
             date: "2024-03-15 16:45",
             status: "Completed",
+            from: "DEX_POOL",
+            to: "GDA...KZN",
+            fee: "0.00012 XLM",
+            ledger: 51225000,
+            memo: "Swap XLM/USDC",
           },
           {
             id: "4",
+            hash: "f9e8d7c6b5a43210f9e8d7c6b5a43210f9e8d7c6b5a43210f9e8d7c6b5a43210",
             type: "Received",
-            amount: "1000",
+            amount: "1000.00",
             asset: code,
             date: "2024-03-10 11:20",
             status: "Completed",
+            from: "GBA...5RE",
+            to: "GDA...KZN",
+            fee: "0.00001 XLM",
+            ledger: 51210000,
           },
         ]);
 
@@ -246,11 +276,12 @@ export default function AssetDetail({
               {transactions.map((tx) => (
                 <div
                   key={tx.id}
-                  className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors"
+                  onClick={() => setSelectedTransaction(tx)}
+                  className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer group/item"
                 >
                   <div className="flex items-center gap-4">
                     <div
-                      className={`p-2 rounded-full ${
+                      className={`p-2 rounded-full transition-transform group-hover/item:scale-110 ${
                         tx.type === "Received"
                           ? "bg-green-500/10 text-green-400"
                           : tx.type === "Sent"
@@ -267,7 +298,7 @@ export default function AssetDetail({
                       )}
                     </div>
                     <div>
-                      <p className="font-medium">{tx.type}</p>
+                      <p className="font-medium group-hover/item:text-blue-400 transition-colors">{tx.type}</p>
                       <p className="text-xs text-gray-500">{tx.date}</p>
                     </div>
                   </div>
@@ -398,6 +429,14 @@ export default function AssetDetail({
           </div>
         </div>
       </div>
+
+      {/* Transaction Detail Modal */}
+      {selectedTransaction && (
+        <TransactionDetail
+          transaction={selectedTransaction}
+          onClose={() => setSelectedTransaction(null)}
+        />
+      )}
     </div>
   );
 }

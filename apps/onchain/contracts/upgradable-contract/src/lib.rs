@@ -1,9 +1,11 @@
 #![no_std]
 
 mod events;
+mod storage;
 
 use events::{AdminChangedEvent, UpgradedEvent};
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
+use storage::{LEDGER_BUMP, LEDGER_THRESHOLD};
 
 /// Storage key enumeration for instance-level state.
 #[contracttype]
@@ -28,6 +30,9 @@ impl UpgradableContract {
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
     }
 
     /// Upgrade the contract WASM to a new hash.
@@ -41,6 +46,9 @@ impl UpgradableContract {
             .instance()
             .get(&DataKey::Admin)
             .expect("not initialized");
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         if caller != admin {
             panic!("unauthorized");
@@ -68,6 +76,9 @@ impl UpgradableContract {
             .instance()
             .get(&DataKey::Admin)
             .expect("not initialized");
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         if current_admin != stored_admin {
             panic!("unauthorized");
@@ -75,6 +86,9 @@ impl UpgradableContract {
         current_admin.require_auth();
 
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         AdminChangedEvent {
             old_admin: current_admin,
@@ -85,23 +99,38 @@ impl UpgradableContract {
 
     /// Return the current admin address.
     pub fn get_admin(env: Env) -> Address {
-        env.storage()
+        let admin = env
+            .storage()
             .instance()
             .get(&DataKey::Admin)
-            .expect("not initialized")
+            .expect("not initialized");
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        admin
     }
 
     /// Increment the on-chain counter and return its new value.
     pub fn increment(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         let mut count: u32 = env.storage().instance().get(&DataKey::Counter).unwrap_or(0);
         count += 1;
         env.storage().instance().set(&DataKey::Counter, &count);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         count
     }
 
     /// Return the current counter value without mutating state.
     pub fn get_count(env: Env) -> u32 {
-        env.storage().instance().get(&DataKey::Counter).unwrap_or(0)
+        let count = env.storage().instance().get(&DataKey::Counter).unwrap_or(0);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        count
     }
 
     /// Return this contract's version identifier.

@@ -3,7 +3,7 @@ extern crate std;
 
 use crate::{UpgradableContract, UpgradableContractClient};
 use soroban_sdk::{
-    testutils::{Address as _, Events},
+    testutils::{Address as _, Events, Ledger},
     Address, Bytes, BytesN, Env,
 };
 
@@ -188,4 +188,59 @@ fn test_old_admin_cannot_upgrade_after_rotation() {
 
     let dummy = BytesN::from_array(&env, &[0u8; 32]);
     client.upgrade(&admin, &dummy); // must panic – old admin rejected
+}
+
+// ---------------------------------------------------------------------------
+// 8. TTL / storage-rent tests
+// ---------------------------------------------------------------------------
+
+/// Verify that instance storage (admin + counter) remains accessible after a
+/// simulated ledger advance — the TTL bump on write keeps the entry alive.
+#[test]
+fn test_instance_storage_accessible_after_ledger_advance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+
+    client.init(&admin);
+    client.increment();
+    client.increment();
+
+    // Advance the ledger sequence significantly.
+    env.ledger().set_sequence_number(200_000);
+
+    // Both admin and counter must still be readable.
+    assert_eq!(client.get_admin(), admin);
+    assert_eq!(client.get_count(), 2);
+}
+
+/// Verify that TTL is extended after a read (get_count) by confirming the
+/// entry survives a second large ledger jump.
+#[test]
+fn test_ttl_extended_after_read_write() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+
+    client.init(&admin);
+    assert_eq!(client.increment(), 1);
+
+    // First ledger advance.
+    env.ledger().set_sequence_number(100_001);
+
+    // Read triggers another TTL bump.
+    assert_eq!(client.get_count(), 1);
+
+    // Second ledger advance — read-triggered bump should keep it alive.
+    env.ledger().set_sequence_number(200_002);
+    assert_eq!(client.get_count(), 1);
+
+    // Write also bumps TTL.
+    assert_eq!(client.increment(), 2);
+    env.ledger().set_sequence_number(300_003);
+    assert_eq!(client.get_count(), 2);
 }

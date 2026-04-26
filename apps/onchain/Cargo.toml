@@ -9,7 +9,8 @@ members = [
   "contracts/reentrancy-guard",
   "contracts/upgradable-contract",
   "contracts/vesting-wallet",
-  "contracts/lumenpulse-curation"
+  "contracts/lumenpulse-curation",
+  "contracts/pricing_adapter"
 ]
 exclude = ["contracts/tests"]
 

@@ -1,6 +1,7 @@
 use soroban_sdk::{contractevent, Address, BytesN, String};
 
 use crate::multisig::{ProposalAction, ProposalStatus};
+use crate::storage::Badge;
 
 #[contractevent]
 pub struct UpgradedEvent {
@@ -70,4 +71,20 @@ pub struct GaslessRegistrationEvent {
     /// The nonce that was consumed by this registration.  The next valid nonce
     /// for this address is `consumed_nonce + 1`.
     pub consumed_nonce: u64,
+}
+
+#[contractevent]
+pub struct BadgeGrantedEvent {
+    #[topic]
+    pub contributor: Address,
+    pub badge: Badge,
+    pub executor: Address,
+}
+
+#[contractevent]
+pub struct BadgeRevokedEvent {
+    #[topic]
+    pub contributor: Address,
+    pub badge: Badge,
+    pub executor: Address,
 }
