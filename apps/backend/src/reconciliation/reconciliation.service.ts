@@ -9,6 +9,7 @@ import {
   ReconciliationJob,
   ReconciliationStatus,
 } from './entities/reconciliation-job.entity';
+import { QueryProfilerService } from '../common/profiling/query-profiler.service';
 
 /** Tolerance for floating-point drift (0.0000001 XLM) */
 const DRIFT_THRESHOLD = 1e-7;
@@ -25,6 +26,7 @@ export class ReconciliationService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly stellarBalanceService: StellarBalanceService,
+    private readonly profiler: QueryProfilerService,
   ) {}
 
   /**
@@ -33,6 +35,15 @@ export class ReconciliationService {
    * and repairs inconsistencies by updating the stored records.
    */
   async runReconciliation(
+    triggeredBy = 'scheduled',
+  ): Promise<ReconciliationJob> {
+    return this.profiler.profile(
+      async () => this.doRunReconciliation(triggeredBy),
+      { label: 'ReconciliationService.runReconciliation', thresholdMs: 5000 },
+    );
+  }
+
+  private async doRunReconciliation(
     triggeredBy = 'scheduled',
   ): Promise<ReconciliationJob> {
     const job = await this.jobRepo.save(

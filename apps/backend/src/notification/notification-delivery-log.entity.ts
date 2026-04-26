@@ -28,6 +28,8 @@ export enum DeliveryStatus {
 @Index(['userId'])
 @Index(['channel', 'status'])
 @Index(['createdAt'])
+@Index(['userId', 'createdAt'])
+@Index(['status', 'retryCount'])
 export class NotificationDeliveryLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
