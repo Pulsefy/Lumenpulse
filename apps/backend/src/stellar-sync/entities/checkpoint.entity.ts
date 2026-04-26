@@ -6,6 +6,7 @@ import {
 } from 'typeorm';
 
 @Entity('stellar_sync_checkpoints')
+@Index(['updatedAt'])
 export class StellarSyncCheckpoint {
   @PrimaryGeneratedColumn('uuid')
   id: string;

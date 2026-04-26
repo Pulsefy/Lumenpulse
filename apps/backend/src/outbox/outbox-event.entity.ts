@@ -14,6 +14,7 @@ export enum OutboxEventStatus {
 
 @Entity('outbox_events')
 @Index('IDX_outbox_events_status_created', ['status', 'createdAt'])
+@Index(['eventType'])
 export class OutboxEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;

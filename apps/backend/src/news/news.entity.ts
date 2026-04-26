@@ -13,6 +13,7 @@ import {
 @Index(['source'])
 @Index(['sentimentScore'])
 @Index(['source', 'publishedAt'])
+@Index(['category'])
 export class News {
   @PrimaryGeneratedColumn('uuid')
   id: string;
