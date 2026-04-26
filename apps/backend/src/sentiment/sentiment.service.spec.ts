@@ -131,7 +131,7 @@ describe('SentimentService', () => {
 
       expect(result).toEqual({ sentiment: 0.85 });
       expect(mockHttpService.post).toHaveBeenCalledWith(
-        'http://localhost:8000/analyze',
+        'http://localhost:8000/v1/analyze',
         { text },
         {
           timeout: 10000,
