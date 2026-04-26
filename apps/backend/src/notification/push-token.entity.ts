@@ -19,6 +19,8 @@ export enum PushTokenPlatform {
 @Entity('push_tokens')
 @Index(['userId'])
 @Index(['token'], { unique: true })
+@Index(['isActive'])
+@Index(['userId', 'isActive'])
 export class PushToken {
   @PrimaryGeneratedColumn('uuid')
   id: string;
