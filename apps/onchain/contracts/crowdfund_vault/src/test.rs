@@ -2435,3 +2435,320 @@ fn test_campaign_entries_removed_after_refund() {
     let project = client.get_project(&project_id);
     assert!(!project.is_active);
 }
+
+// ============================================================================
+// On-Chain Analytics Tests: TVL and Volume Tracking
+// ============================================================================
+
+#[test]
+fn test_protocol_stats_initialized_to_zero() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, _) = setup_test(&env);
+    client.initialize(&admin);
+
+    // Check initial protocol stats
+    let stats = client.get_protocol_stats();
+    assert_eq!(stats.tvl, 0);
+    assert_eq!(stats.cumulative_volume, 0);
+
+    // Check individual getters
+    assert_eq!(client.get_tvl(), 0);
+    assert_eq!(client.get_cumulative_volume(), 0);
+}
+
+#[test]
+fn test_tvl_increases_on_deposit() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Initial stats should be zero
+    assert_eq!(client.get_tvl(), 0);
+    assert_eq!(client.get_cumulative_volume(), 0);
+
+    // Deposit funds
+    let deposit_amount = 100_000i128;
+    client.deposit(&user, &project_id, &deposit_amount);
+
+    // TVL and cumulative volume should both increase
+    assert_eq!(client.get_tvl(), deposit_amount);
+    assert_eq!(client.get_cumulative_volume(), deposit_amount);
+
+    // Make another deposit
+    let second_deposit = 50_000i128;
+    client.deposit(&user, &project_id, &second_deposit);
+
+    // TVL and cumulative volume should both increase
+    assert_eq!(client.get_tvl(), deposit_amount + second_deposit);
+    assert_eq!(client.get_cumulative_volume(), deposit_amount + second_deposit);
+}
+
+#[test]
+fn test_tvl_decreases_on_withdrawal() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Deposit funds
+    let deposit_amount = 100_000i128;
+    client.deposit(&user, &project_id, &deposit_amount);
+
+    assert_eq!(client.get_tvl(), deposit_amount);
+    assert_eq!(client.get_cumulative_volume(), deposit_amount);
+
+    // Approve milestone for withdrawal
+    client.approve_milestone(&admin, &project_id, &0);
+
+    // Withdraw funds
+    let withdraw_amount = 30_000i128;
+    client.withdraw(&project_id, &0, &withdraw_amount);
+
+    // TVL should decrease, but cumulative volume stays the same
+    assert_eq!(client.get_tvl(), deposit_amount - withdraw_amount);
+    assert_eq!(client.get_cumulative_volume(), deposit_amount); // Volume doesn't decrease
+}
+
+#[test]
+fn test_tvl_with_multiple_projects() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    // Create first project
+    let project_id_1 = client.create_project(
+        &owner,
+        &symbol_short!("Proj1"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Create second project
+    let project_id_2 = client.create_project(
+        &owner,
+        &symbol_short!("Proj2"),
+        &2_000_000,
+        &token_client.address,
+    );
+
+    // Deposit to first project
+    let deposit_1 = 100_000i128;
+    client.deposit(&user, &project_id_1, &deposit_1);
+
+    assert_eq!(client.get_tvl(), deposit_1);
+    assert_eq!(client.get_cumulative_volume(), deposit_1);
+
+    // Deposit to second project
+    let deposit_2 = 200_000i128;
+    client.deposit(&user, &project_id_2, &deposit_2);
+
+    // TVL should be sum of both deposits
+    assert_eq!(client.get_tvl(), deposit_1 + deposit_2);
+    assert_eq!(client.get_cumulative_volume(), deposit_1 + deposit_2);
+}
+
+#[test]
+fn test_tvl_decreases_on_refund() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Deposit funds
+    let deposit_amount = 100_000i128;
+    client.deposit(&user, &project_id, &deposit_amount);
+
+    assert_eq!(client.get_tvl(), deposit_amount);
+    assert_eq!(client.get_cumulative_volume(), deposit_amount);
+
+    // Cancel project
+    client.cancel_project(&admin, &project_id);
+
+    // Refund contributors
+    client.refund_contributors(&project_id, &admin);
+
+    // TVL should be back to zero after refund
+    assert_eq!(client.get_tvl(), 0);
+    // Cumulative volume remains unchanged
+    assert_eq!(client.get_cumulative_volume(), deposit_amount);
+}
+
+#[test]
+fn test_cumulative_volume_is_monotonic() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Deposit
+    let deposit_1 = 100_000i128;
+    client.deposit(&user, &project_id, &deposit_1);
+    let volume_after_deposit = client.get_cumulative_volume();
+    assert_eq!(volume_after_deposit, deposit_1);
+
+    // Approve and withdraw
+    client.approve_milestone(&admin, &project_id, &0);
+    client.withdraw(&project_id, &0, &50_000);
+
+    // Volume should not decrease after withdrawal
+    assert_eq!(client.get_cumulative_volume(), volume_after_deposit);
+
+    // Another deposit
+    let deposit_2 = 75_000i128;
+    client.deposit(&user, &project_id, &deposit_2);
+
+    // Volume should increase
+    assert_eq!(client.get_cumulative_volume(), deposit_1 + deposit_2);
+}
+
+#[test]
+fn test_protocol_stats_struct_returns_both_metrics() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    // Create project and deposit
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let deposit_amount = 100_000i128;
+    client.deposit(&user, &project_id, &deposit_amount);
+
+    // Get stats struct
+    let stats = client.get_protocol_stats();
+    assert_eq!(stats.tvl, deposit_amount);
+    assert_eq!(stats.cumulative_volume, deposit_amount);
+
+    // Verify individual getters match
+    assert_eq!(client.get_tvl(), stats.tvl);
+    assert_eq!(client.get_cumulative_volume(), stats.cumulative_volume);
+}
+
+#[test]
+fn test_tvl_with_clawback() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Deposit funds
+    let deposit_amount = 100_000i128;
+    client.deposit(&user, &project_id, &deposit_amount);
+
+    assert_eq!(client.get_tvl(), deposit_amount);
+
+    // Cancel project to enable clawback
+    client.cancel_project(&admin, &project_id);
+
+    // Clawback contribution
+    client.clawback_contribution(&project_id, &user);
+
+    // TVL should decrease after clawback
+    assert_eq!(client.get_tvl(), 0);
+    // Cumulative volume remains unchanged
+    assert_eq!(client.get_cumulative_volume(), deposit_amount);
+}
+
+#[test]
+fn test_analytics_across_project_lifecycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let user2 = Address::generate(&env);
+    let (_, token_admin_client) = create_token_contract(&env, &admin);
+    token_admin_client.mint(&user2, &10_000_000);
+
+    // Create project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Phase 1: Multiple deposits
+    client.deposit(&user, &project_id, &100_000);
+    client.deposit(&user2, &project_id, &150_000);
+    
+    assert_eq!(client.get_tvl(), 250_000);
+    assert_eq!(client.get_cumulative_volume(), 250_000);
+
+    // Phase 2: Milestone approval and withdrawal
+    client.approve_milestone(&admin, &project_id, &0);
+    client.withdraw(&project_id, &0, &80_000);
+
+    assert_eq!(client.get_tvl(), 170_000); // 250_000 - 80_000
+    assert_eq!(client.get_cumulative_volume(), 250_000); // Unchanged
+
+    // Phase 3: More deposits
+    client.deposit(&user, &project_id, &50_000);
+
+    assert_eq!(client.get_tvl(), 220_000); // 170_000 + 50_000
+    assert_eq!(client.get_cumulative_volume(), 300_000); // 250_000 + 50_000
+
+    // Phase 4: Another withdrawal
+    client.approve_milestone(&admin, &project_id, &1);
+    client.withdraw(&project_id, &1, &100_000);
+
+    assert_eq!(client.get_tvl(), 120_000); // 220_000 - 100_000
+    assert_eq!(client.get_cumulative_volume(), 300_000); // Still unchanged
+}

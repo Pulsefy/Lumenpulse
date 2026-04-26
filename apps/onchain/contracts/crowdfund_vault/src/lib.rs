@@ -2156,6 +2156,68 @@ impl CrowdfundVaultContract {
 
         Ok(())
     }
+
+    /// Get protocol-wide analytics: Total Value Locked (TVL) and Cumulative Funding Volume
+    /// 
+    /// Returns trustless on-chain statistics for the entire protocol:
+    /// - TVL: Current total value locked across all active projects
+    /// - Cumulative Volume: Total amount of funds that have flowed through the protocol
+    /// 
+    /// These metrics are maintained on-chain and updated atomically with each deposit/withdrawal.
+    pub fn get_protocol_stats(env: Env) -> Result<ProtocolStats, CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+
+        let stats: ProtocolStats = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProtocolStats)
+            .unwrap_or(ProtocolStats {
+                tvl: 0,
+                cumulative_volume: 0,
+            });
+
+        Ok(stats)
+    }
+
+    /// Get current Total Value Locked (TVL) across all projects
+    /// 
+    /// TVL represents the total amount of funds currently locked in the protocol
+    /// across all active projects. This value increases with deposits and decreases
+    /// with withdrawals and refunds.
+    pub fn get_tvl(env: Env) -> Result<i128, CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+
+        let stats: ProtocolStats = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProtocolStats)
+            .unwrap_or(ProtocolStats {
+                tvl: 0,
+                cumulative_volume: 0,
+            });
+
+        Ok(stats.tvl)
+    }
+
+    /// Get cumulative funding volume
+    /// 
+    /// Returns the total amount of funds that have been deposited into the protocol
+    /// since inception. This is a monotonically increasing counter that tracks
+    /// all-time funding activity.
+    pub fn get_cumulative_volume(env: Env) -> Result<i128, CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+
+        let stats: ProtocolStats = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProtocolStats)
+            .unwrap_or(ProtocolStats {
+                tvl: 0,
+                cumulative_volume: 0,
+            });
+
+        Ok(stats.cumulative_volume)
+    }
 }
 
 #[cfg(test)]
