@@ -240,7 +240,11 @@ describe('NewsService - sentiment methods', () => {
   };
 
   const mockQueryProfilerService = {
-    profile: jest.fn().mockImplementation(async (fn: () => any) => await fn()),
+    // eslint-disable-next-line @typescript-eslint/require-await
+    profile: jest.fn().mockImplementation(async (fn: () => any) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return fn();
+    }),
   };
 
   beforeEach(async () => {
