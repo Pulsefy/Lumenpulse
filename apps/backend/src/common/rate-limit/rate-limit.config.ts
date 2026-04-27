@@ -1,6 +1,7 @@
 import { ExecutionContext } from '@nestjs/common';
 import { ThrottlerModuleOptions, ThrottlerOptions } from '@nestjs/throttler';
 import { ThrottlerStorage } from '@nestjs/throttler';
+import { config } from '../../lib/config';
 
 interface RateLimitProfile {
   limit: number;
@@ -114,8 +115,22 @@ function resolveProfile(
 }
 
 export function getRateLimitSettings(
-  env: NodeJS.ProcessEnv = process.env,
+  env?: NodeJS.ProcessEnv,
 ): RateLimitSettings {
+  if (!env) {
+    return {
+      global: config.rateLimit.global,
+      auth: config.rateLimit.auth,
+      portfolioRead: config.rateLimit.portfolioRead,
+      portfolioWrite: config.rateLimit.portfolioWrite,
+      watchlistRead: config.rateLimit.watchlistRead,
+      watchlistWrite: config.rateLimit.watchlistWrite,
+      tracker: config.rateLimit.tracker,
+      redisUrl: config.rateLimit.redisUrl,
+      redisNamespace: config.rateLimit.redisNamespace,
+    };
+  }
+
   return {
     global: resolveProfile(env, 'global'),
     auth: resolveProfile(env, 'auth'),
