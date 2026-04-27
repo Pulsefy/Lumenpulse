@@ -833,3 +833,90 @@ fn test_vesting_entry_removed_after_full_claim() {
         Err(Ok(crate::errors::VestingError::VestingNotFound))
     );
 }
+
+#[test]
+fn test_reentrancy_guard_claim_rejects_when_locked() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, contract_id) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+    env.ledger().set_timestamp(start_time + duration / 2);
+
+    env.as_contract(&contract_id, || {
+        env.storage()
+            .instance()
+            .set(&symbol_short!("REENTRANT"), &true);
+    });
+
+    let result = client.try_claim(&beneficiary);
+    assert_eq!(result, Err(Ok(VestingError::Reentrancy)));
+
+    let lock_state: bool = env.as_contract(&contract_id, || {
+        env.storage()
+            .instance()
+            .get(&symbol_short!("REENTRANT"))
+            .unwrap_or(false)
+    });
+    assert!(lock_state);
+}
+
+#[test]
+fn test_reentrancy_guard_resets_for_sequential_claims() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, contract_id) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+
+    env.ledger().set_timestamp(start_time + duration / 2);
+    let first = client.claim(&beneficiary);
+    assert_eq!(first, amount / 2);
+
+    env.ledger().set_timestamp(start_time + duration + 1);
+    let second = client.claim(&beneficiary);
+    assert_eq!(second, amount / 2);
+
+    let lock_state: bool = env.as_contract(&contract_id, || {
+        env.storage()
+            .instance()
+            .get(&symbol_short!("REENTRANT"))
+            .unwrap_or(false)
+    });
+    assert!(!lock_state);
+}
+
+#[test]
+fn test_claim_cei_state_updated_before_balance_assertion() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+
+    env.ledger().set_timestamp(start_time + duration / 2);
+    let claimed = client.claim(&beneficiary);
+    assert_eq!(claimed, amount / 2);
+
+    let vesting = client.get_vesting(&beneficiary);
+    assert_eq!(vesting.claimed_amount, amount / 2);
+    assert_eq!(token_client.balance(&beneficiary), amount / 2);
+}
