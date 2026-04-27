@@ -8,6 +8,7 @@ import { NotificationService } from './notification.service';
 import { NotificationPreferenceService } from './notification-preference.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { NotificationPreferenceController } from './notification-preference.controller';
+import { ProfilingModule } from '../common/profiling/profiling.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { NotificationPreferenceController } from './notification-preference.cont
       NotificationPreference,
       NotificationDeliveryLog,
     ]),
+    ProfilingModule,
   ],
   providers: [
     NotificationService,

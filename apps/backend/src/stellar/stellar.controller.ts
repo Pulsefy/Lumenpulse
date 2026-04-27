@@ -45,6 +45,8 @@ export class StellarController {
 
   @Get('accounts/:publicKey/balances')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(30_000)
   @ApiOperation({
     summary: 'Get account balances',
     description:

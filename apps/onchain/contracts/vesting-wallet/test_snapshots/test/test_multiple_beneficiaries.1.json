@@ -513,6 +513,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "milestone_requirement"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "start_time"
                       },
                       "val": {
@@ -595,6 +607,18 @@
                       },
                       "val": {
                         "u64": "10000"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "milestone_requirement"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
+                          }
+                        ]
                       }
                     },
                     {

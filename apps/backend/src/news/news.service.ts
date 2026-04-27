@@ -8,6 +8,7 @@ import { UpdateArticleDto } from './dto/update-article.dto';
 import { NewsProviderService } from './news-provider.service';
 import { NewsArticleDto } from './dto/news-article.dto';
 import { CacheService } from '../cache/cache.service';
+import { QueryProfilerService } from '../common/profiling/query-profiler.service';
 
 interface RawOverallResult {
   average: string | null;
@@ -29,6 +30,7 @@ export class NewsService {
     private newsRepository: Repository<News>,
     private readonly newsProviderService: NewsProviderService,
     private readonly cacheService: CacheService,
+    private readonly profiler: QueryProfilerService,
   ) {}
 
   async create(createArticleDto: CreateArticleDto): Promise<News> {
@@ -42,23 +44,28 @@ export class NewsService {
     tag?: string;
     category?: string;
   }): Promise<News[]> {
-    const qb = this.newsRepository
-      .createQueryBuilder('news')
-      .orderBy('news.publishedAt', 'DESC');
+    return this.profiler.profile(
+      async () => {
+        const qb = this.newsRepository
+          .createQueryBuilder('news')
+          .orderBy('news.publishedAt', 'DESC');
 
-    if (filters?.tag) {
-      qb.andWhere(':tag = ANY(news.tags)', {
-        tag: filters.tag.toLowerCase(),
-      });
-    }
+        if (filters?.tag) {
+          qb.andWhere(':tag = ANY(news.tags)', {
+            tag: filters.tag.toLowerCase(),
+          });
+        }
 
-    if (filters?.category) {
-      qb.andWhere('LOWER(news.category) = :category', {
-        category: filters.category.toLowerCase(),
-      });
-    }
+        if (filters?.category) {
+          qb.andWhere('LOWER(news.category) = :category', {
+            category: filters.category.toLowerCase(),
+          });
+        }
 
-    return qb.getMany();
+        return qb.getMany();
+      },
+      { label: 'NewsService.findAll', thresholdMs: 150 },
+    );
   }
 
   async findOne(id: string): Promise<News | null> {
@@ -114,34 +121,39 @@ export class NewsService {
     overall: { averageSentiment: number; totalArticles: number };
     bySource: { source: string; averageScore: number; articleCount: number }[];
   }> {
-    const overall = await this.newsRepository
-      .createQueryBuilder('news')
-      .select('AVG(news.sentimentScore)', 'average')
-      .addSelect('COUNT(news.id)', 'totalArticles')
-      .where('news.sentimentScore IS NOT NULL')
-      .getRawOne<RawOverallResult>();
+    return this.profiler.profile(
+      async () => {
+        const overall = await this.newsRepository
+          .createQueryBuilder('news')
+          .select('AVG(news.sentimentScore)', 'average')
+          .addSelect('COUNT(news.id)', 'totalArticles')
+          .where('news.sentimentScore IS NOT NULL')
+          .getRawOne<RawOverallResult>();
 
-    const bySource = await this.newsRepository
-      .createQueryBuilder('news')
-      .select('news.source', 'source')
-      .addSelect('AVG(news.sentimentScore)', 'averageScore')
-      .addSelect('COUNT(news.id)', 'articleCount')
-      .where('news.sentimentScore IS NOT NULL')
-      .groupBy('news.source')
-      .orderBy('averageScore', 'DESC')
-      .getRawMany<RawSourceResult>();
+        const bySource = await this.newsRepository
+          .createQueryBuilder('news')
+          .select('news.source', 'source')
+          .addSelect('AVG(news.sentimentScore)', 'averageScore')
+          .addSelect('COUNT(news.id)', 'articleCount')
+          .where('news.sentimentScore IS NOT NULL')
+          .groupBy('news.source')
+          .orderBy('averageScore', 'DESC')
+          .getRawMany<RawSourceResult>();
 
-    return {
-      overall: {
-        averageSentiment: parseFloat(overall?.average ?? '0') || 0,
-        totalArticles: parseInt(overall?.totalArticles ?? '0', 10),
+        return {
+          overall: {
+            averageSentiment: parseFloat(overall?.average ?? '0') || 0,
+            totalArticles: parseInt(overall?.totalArticles ?? '0', 10),
+          },
+          bySource: bySource.map((r) => ({
+            source: r.source,
+            averageScore: parseFloat(r.averageScore),
+            articleCount: parseInt(r.articleCount, 10),
+          })),
+        };
       },
-      bySource: bySource.map((r) => ({
-        source: r.source,
-        averageScore: parseFloat(r.averageScore),
-        articleCount: parseInt(r.articleCount, 10),
-      })),
-    };
+      { label: 'NewsService.getSentimentSummary', thresholdMs: 200 },
+    );
   }
 
   /**

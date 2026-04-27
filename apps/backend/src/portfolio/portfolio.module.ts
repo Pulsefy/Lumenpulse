@@ -6,6 +6,7 @@ import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { PortfolioAsset } from './portfolio-asset.entity';
 import { PortfolioSnapshot } from './entities/portfolio-snapshot.entity';
+import { PortfolioMaterializedSnapshot } from './entities/portfolio-materialized-snapshot.entity';
 import { User } from '../users/entities/user.entity';
 import { PortfolioService } from './portfolio.service';
 import { PortfolioController } from './portfolio.controller';
@@ -22,18 +23,27 @@ import { PortfolioSnapshotWorker } from './queue/portfolio-snapshot.worker';
 import { ExchangeRatesModule } from '../exchange-rates/exchange-rates.module';
 import { StellarModule } from '../stellar/stellar.module';
 import { PriceModule } from '../price/price.module';
+import { MaterializedSnapshotService } from './materialized-snapshot.service';
+import { ProfilingModule } from '../common/profiling/profiling.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PortfolioAsset, PortfolioSnapshot, User]),
+    TypeOrmModule.forFeature([
+      PortfolioAsset,
+      PortfolioSnapshot,
+      PortfolioMaterializedSnapshot,
+      User,
+    ]),
     MetricsModule,
     ExchangeRatesModule,
     StellarModule,
     PriceModule,
+    ProfilingModule,
   ],
   controllers: [PortfolioController],
   providers: [
     PortfolioService,
+    MaterializedSnapshotService,
     StellarBalanceService,
     PortfolioSnapshotProgressStore,
     PortfolioSnapshotQueueService,
@@ -64,6 +74,11 @@ import { PriceModule } from '../price/price.module';
       inject: [PORTFOLIO_SNAPSHOT_CONNECTION],
     },
   ],
-  exports: [PortfolioService, PortfolioSnapshotQueueService, TypeOrmModule],
+  exports: [
+    PortfolioService,
+    MaterializedSnapshotService,
+    PortfolioSnapshotQueueService,
+    TypeOrmModule,
+  ],
 })
 export class PortfolioModule {}

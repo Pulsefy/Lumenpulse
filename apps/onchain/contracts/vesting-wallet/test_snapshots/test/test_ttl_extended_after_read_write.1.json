@@ -357,6 +357,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "milestone_requirement"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "start_time"
                       },
                       "val": {

@@ -61,9 +61,9 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const bodyHash = this.calculateHash(request.body);
     const cacheKey = `idempotency:${request.path}:${idempotencyKey}`;
 
-    const cachedResult = await this.cacheService.get<IdempotencyResult | string>(
-      cacheKey,
-    );
+    const cachedResult = await this.cacheService.get<
+      IdempotencyResult | string
+    >(cacheKey);
 
     if (cachedResult) {
       if (cachedResult === 'IN_PROGRESS') {
@@ -105,7 +105,9 @@ export class IdempotencyInterceptor implements NestInterceptor {
           this.cacheService
             .set(cacheKey, result, ttl)
             .catch((err: Error) =>
-              this.logger.error(`Failed to cache idempotency result: ${err.message}`),
+              this.logger.error(
+                `Failed to cache idempotency result: ${err.message}`,
+              ),
             );
         },
         error: () => {
@@ -113,7 +115,9 @@ export class IdempotencyInterceptor implements NestInterceptor {
           this.cacheService
             .del(cacheKey)
             .catch((err: Error) =>
-              this.logger.error(`Failed to release idempotency lock: ${err.message}`),
+              this.logger.error(
+                `Failed to release idempotency lock: ${err.message}`,
+              ),
             );
         },
       }),

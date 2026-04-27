@@ -37,6 +37,9 @@ import { UpdateStellarAccountLabelDto } from './dto/update-stellar-account-label
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileResponseDto } from './dto/profile-response.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/decorators/auth.decorators';
+import { UserRole } from './entities/user.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SharpPipe } from '../common/pipes/sharp.pipe';
 
@@ -104,6 +107,8 @@ export class UsersController {
   // --- ADMIN/GENERAL ENDPOINTS ---
 
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({ status: 200, description: 'List of all users', type: [User] })
   async findAll(): Promise<User[]> {
@@ -111,6 +116,8 @@ export class UsersController {
   }
 
   @Get(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get user by ID' })
   @ApiResponse({ status: 200, description: 'User found', type: User })
   @ApiResponse({ status: 404, description: 'User not found' })

@@ -10,6 +10,7 @@ import {
   DeliveryStatus,
 } from './notification-delivery-log.entity';
 import { PushToken } from './push-token.entity';
+import { QueryProfilerService } from '../common/profiling/query-profiler.service';
 
 /**
  * Notification Delivery Orchestration Service
@@ -26,6 +27,7 @@ export class NotificationDeliveryService implements OnModuleInit {
     private readonly deliveryLogRepository: Repository<NotificationDeliveryLog>,
     @InjectRepository(PushToken)
     private readonly pushTokenRepository: Repository<PushToken>,
+    private readonly profiler: QueryProfilerService,
   ) {}
 
   onModuleInit() {
@@ -36,6 +38,17 @@ export class NotificationDeliveryService implements OnModuleInit {
    * Deliver a notification to all enabled channels for a user
    */
   async deliverToUser(
+    notification: Notification,
+    userId: string,
+    eventCategory?: string,
+  ): Promise<NotificationDeliveryLog[]> {
+    return this.profiler.profile(
+      async () => this.doDeliverToUser(notification, userId, eventCategory),
+      { label: 'NotificationDeliveryService.deliverToUser', thresholdMs: 300 },
+    );
+  }
+
+  private async doDeliverToUser(
     notification: Notification,
     userId: string,
     eventCategory?: string,
@@ -285,11 +298,18 @@ export class NotificationDeliveryService implements OnModuleInit {
     userId: string,
     limit: number = 50,
   ): Promise<NotificationDeliveryLog[]> {
-    return this.deliveryLogRepository.find({
-      where: { userId },
-      order: { createdAt: 'DESC' },
-      take: limit,
-    });
+    return this.profiler.profile(
+      () =>
+        this.deliveryLogRepository.find({
+          where: { userId },
+          order: { createdAt: 'DESC' },
+          take: limit,
+        }),
+      {
+        label: 'NotificationDeliveryService.getDeliveryLogsForUser',
+        thresholdMs: 150,
+      },
+    );
   }
 
   /**
