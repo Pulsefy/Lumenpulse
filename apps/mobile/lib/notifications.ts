@@ -11,7 +11,7 @@ export async function getNotifications(p0: string) {
   }
 }
 
-export async function markAsRead(id: number) {
+export async function markAsRead(id: string) {
   try {
     await axios.post(`${config.api.baseUrl}/notifications/${id}/read`);
     return true;

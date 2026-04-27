@@ -5,7 +5,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useRouter } from 'expo-router';
 
 export type Notification = {
-  id: number;
+  id: string;
   title: string;
   message: string;
   read: boolean;
@@ -20,7 +20,7 @@ type NotificationsContextType = {
   notifications: Notification[];
   unreadCount: number;
   fetchNotifications: () => Promise<void>;
-  markAsRead: (id: number) => Promise<void>;
+  markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   registerForPushNotificationsAsync: () => Promise<string | null>;
   handleNotification: (notification: Notifications.Notification) => void;
@@ -44,6 +44,30 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       setNotifications(data);
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
+      // Mock data for testing
+      setNotifications([
+        {
+          id: '1',
+          title: 'Price Alert: BTC surged 5%',
+          message: 'Bitcoin has increased by 5% in the last hour, reaching $45,000.',
+          read: false,
+          data: { type: 'alert', id: 'btc-alert' },
+        },
+        {
+          id: '2',
+          title: 'Account Activity',
+          message: 'Your portfolio value has changed by +2.3% today.',
+          read: true,
+          data: { type: 'activity' },
+        },
+        {
+          id: '3',
+          title: 'Major News Event',
+          message: 'Breaking: New regulatory framework announced for crypto markets.',
+          read: false,
+          data: { type: 'news', id: 'regulatory-news' },
+        },
+      ]);
     }
   }, []);
 
@@ -109,7 +133,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     // but typically we handle navigation when user taps the notification
   }, []);
 
-  const markAsRead = useCallback(async (id: number) => {
+  const markAsRead = useCallback(async (id: string) => {
     // Update local state first
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
 
