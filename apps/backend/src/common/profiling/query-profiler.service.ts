@@ -25,9 +25,7 @@ export class QueryProfilerService {
           `[SLOW QUERY] ${label} took ${duration.toFixed(2)}ms (threshold: ${thresholdMs}ms)`,
         );
       } else {
-        this.logger.debug(
-          `[QUERY] ${label} took ${duration.toFixed(2)}ms`,
-        );
+        this.logger.debug(`[QUERY] ${label} took ${duration.toFixed(2)}ms`);
       }
 
       return result;

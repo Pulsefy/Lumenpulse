@@ -7,9 +7,6 @@ export interface ProfileQueryMetadata {
   label: string;
 }
 
-export const ProfileQuery = (
-  label: string,
-  thresholdMs = 100,
-) => {
+export const ProfileQuery = (label: string, thresholdMs = 100) => {
   return SetMetadata(PROFILE_QUERY_KEY, { label, thresholdMs });
 };

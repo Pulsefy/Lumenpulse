@@ -11,6 +11,7 @@ import { StellarAccount } from './stellar-account.entity';
 
 export enum UserRole {
   USER = 'user',
+  REVIEWER = 'reviewer',
   ADMIN = 'admin',
 }
 

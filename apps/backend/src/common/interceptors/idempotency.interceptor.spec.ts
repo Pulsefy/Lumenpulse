@@ -32,12 +32,20 @@ describe('IdempotencyInterceptor', () => {
 
   it('should return cached result if key and body hash match', async () => {
     const body = { amount: 100 };
-    const context = createMockContext('POST', { 'idempotency-key': 'test-key' }, body);
+    const context = createMockContext(
+      'POST',
+      { 'idempotency-key': 'test-key' },
+      body,
+    );
     const next: CallHandler = { handle: jest.fn() };
-    
+
     // @ts-expect-error - accessing private method for test
     const bodyHash = interceptor.calculateHash(body);
-    const cachedResponse = { statusCode: 201, body: { success: true }, bodyHash };
+    const cachedResponse = {
+      statusCode: 201,
+      body: { success: true },
+      bodyHash,
+    };
 
     mockCacheService.get.mockResolvedValue(cachedResponse);
 
@@ -48,10 +56,18 @@ describe('IdempotencyInterceptor', () => {
 
   it('should throw UnprocessableEntity if body hash mismatch', async () => {
     const body = { amount: 100 };
-    const context = createMockContext('POST', { 'idempotency-key': 'test-key' }, body);
+    const context = createMockContext(
+      'POST',
+      { 'idempotency-key': 'test-key' },
+      body,
+    );
     const next: CallHandler = { handle: jest.fn() };
-    
-    const cachedResponse = { statusCode: 201, body: { success: true }, bodyHash: 'different-hash' };
+
+    const cachedResponse = {
+      statusCode: 201,
+      body: { success: true },
+      bodyHash: 'different-hash',
+    };
 
     mockCacheService.get.mockResolvedValue(cachedResponse);
 
@@ -61,8 +77,14 @@ describe('IdempotencyInterceptor', () => {
   });
 
   it('should clear lock on error', async () => {
-    const context = createMockContext('POST', { 'idempotency-key': 'test-key' }, {});
-    const next: CallHandler = { handle: () => throwError(() => new Error('Failed')) };
+    const context = createMockContext(
+      'POST',
+      { 'idempotency-key': 'test-key' },
+      {},
+    );
+    const next: CallHandler = {
+      handle: () => throwError(() => new Error('Failed')),
+    };
 
     mockCacheService.get.mockResolvedValue(null);
 
@@ -76,7 +98,11 @@ describe('IdempotencyInterceptor', () => {
     expect(mockCacheService.del).toHaveBeenCalled();
   });
 
-  function createMockContext(method: string, headers: Record<string, string>, body: unknown): ExecutionContext {
+  function createMockContext(
+    method: string,
+    headers: Record<string, string>,
+    body: unknown,
+  ): ExecutionContext {
     return {
       switchToHttp: () => ({
         getRequest: () => ({

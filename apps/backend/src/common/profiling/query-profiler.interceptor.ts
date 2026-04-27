@@ -8,7 +8,10 @@ import {
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { Reflector } from '@nestjs/core';
-import { PROFILE_QUERY_KEY, ProfileQueryMetadata } from './profile-query.decorator';
+import {
+  PROFILE_QUERY_KEY,
+  ProfileQueryMetadata,
+} from './profile-query.decorator';
 
 @Injectable()
 export class QueryProfilerInterceptor implements NestInterceptor {

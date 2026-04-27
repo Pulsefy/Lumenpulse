@@ -1,6 +1,9 @@
 use crate::errors::VestingError;
+use crate::storage::{MilestoneLink, MilestoneRequirement};
 use crate::{VestingWalletContract, VestingWalletContractClient};
+use crowdfund_vault::{CrowdfundVaultContract, CrowdfundVaultContractClient};
 use soroban_sdk::{
+    symbol_short,
     testutils::{Address as _, Ledger},
     token::{StellarAssetClient, TokenClient},
     Address, Env,
@@ -40,6 +43,27 @@ fn setup_test<'a>(
     let client = VestingWalletContractClient::new(env, &contract_id);
 
     (client, admin, beneficiary, token_client, contract_id)
+}
+
+fn setup_vault_project<'a>(
+    env: &Env,
+    admin: &Address,
+    token_address: &Address,
+) -> (CrowdfundVaultContractClient<'a>, Address, u64) {
+    let owner = Address::generate(env);
+    let vault_id = env.register(CrowdfundVaultContract, ());
+    let vault_client = CrowdfundVaultContractClient::new(env, &vault_id);
+
+    vault_client.initialize(admin);
+
+    let project_id = vault_client.create_project(
+        &owner,
+        &symbol_short!("VestProj"),
+        &1_000_000,
+        token_address,
+    );
+
+    (vault_client, vault_id, project_id)
 }
 
 #[test]
@@ -101,6 +125,43 @@ fn test_create_vesting() {
 
     // Verify tokens were transferred to contract
     assert_eq!(token_client.balance(&contract_id), amount);
+}
+
+#[test]
+fn test_create_vesting_with_milestone_stores_link() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (_, vault_id, project_id) = setup_vault_project(&env, &admin, &token_client.address);
+
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 1000;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+    let milestone_id = 0u32;
+    let milestone_link = MilestoneLink {
+        vault_contract: vault_id.clone(),
+        project_id,
+        milestone_id,
+    };
+
+    client.create_vesting_with_milestone(
+        &admin,
+        &beneficiary,
+        &amount,
+        &start_time,
+        &duration,
+        &milestone_link,
+    );
+
+    let vesting = client.get_vesting(&beneficiary);
+    assert_eq!(
+        vesting.milestone_requirement,
+        MilestoneRequirement::External(milestone_link)
+    );
 }
 
 #[test]
@@ -222,6 +283,60 @@ fn test_claim_before_start_time() {
 
     // Verify available amount is 0
     assert_eq!(client.get_available_amount(&beneficiary), 0);
+}
+
+#[test]
+fn test_claim_requires_completed_vault_milestone() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    let (vault_client, vault_id, project_id) =
+        setup_vault_project(&env, &admin, &token_client.address);
+
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000;
+    let amount: i128 = 1_000_000;
+    let milestone_id = 0u32;
+    let milestone_link = MilestoneLink {
+        vault_contract: vault_id,
+        project_id,
+        milestone_id,
+    };
+
+    client.create_vesting_with_milestone(
+        &admin,
+        &beneficiary,
+        &amount,
+        &start_time,
+        &duration,
+        &milestone_link,
+    );
+
+    env.ledger().set_timestamp(start_time + duration / 2);
+
+    assert_eq!(client.get_claimable(&beneficiary), 0);
+    assert_eq!(client.get_available_amount(&beneficiary), 0);
+    assert_eq!(
+        client.try_claim(&beneficiary),
+        Err(Ok(VestingError::NothingToClaim))
+    );
+
+    vault_client.approve_milestone(&admin, &project_id, &milestone_id);
+
+    assert_eq!(client.get_claimable(&beneficiary), amount / 2);
+
+    let first_claim = client.claim(&beneficiary);
+    assert_eq!(first_claim, amount / 2);
+
+    env.ledger().set_timestamp(start_time + duration + 1);
+
+    let second_claim = client.claim(&beneficiary);
+    assert_eq!(second_claim, amount / 2);
+    assert_eq!(token_client.balance(&beneficiary), amount);
 }
 
 #[test]

@@ -4,7 +4,9 @@ export class CreateTelegramBotTables1770000000000 implements MigrationInterface 
   name = 'CreateTelegramBotTables1770000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    const subscriptionsTableExists = await queryRunner.hasTable('telegram_subscriptions');
+    const subscriptionsTableExists = await queryRunner.hasTable(
+      'telegram_subscriptions',
+    );
     if (!subscriptionsTableExists) {
       await queryRunner.query(`
         CREATE TABLE "telegram_subscriptions" (
@@ -51,15 +53,25 @@ export class CreateTelegramBotTables1770000000000 implements MigrationInterface 
   public async down(queryRunner: QueryRunner): Promise<void> {
     const silenceTableExists = await queryRunner.hasTable('telegram_silence');
     if (silenceTableExists) {
-      await queryRunner.query(`DROP INDEX "public"."IDX_telegram_silence_silencedUntil"`);
-      await queryRunner.query(`DROP INDEX "public"."IDX_telegram_silence_chatId"`);
+      await queryRunner.query(
+        `DROP INDEX "public"."IDX_telegram_silence_silencedUntil"`,
+      );
+      await queryRunner.query(
+        `DROP INDEX "public"."IDX_telegram_silence_chatId"`,
+      );
       await queryRunner.query(`DROP TABLE "telegram_silence"`);
     }
 
-    const subscriptionsTableExists = await queryRunner.hasTable('telegram_subscriptions');
+    const subscriptionsTableExists = await queryRunner.hasTable(
+      'telegram_subscriptions',
+    );
     if (subscriptionsTableExists) {
-      await queryRunner.query(`DROP INDEX "public"."IDX_telegram_subscriptions_isActive"`);
-      await queryRunner.query(`DROP INDEX "public"."IDX_telegram_subscriptions_chatId"`);
+      await queryRunner.query(
+        `DROP INDEX "public"."IDX_telegram_subscriptions_isActive"`,
+      );
+      await queryRunner.query(
+        `DROP INDEX "public"."IDX_telegram_subscriptions_chatId"`,
+      );
       await queryRunner.query(`DROP TABLE "telegram_subscriptions"`);
     }
   }

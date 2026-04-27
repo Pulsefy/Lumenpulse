@@ -4,22 +4,36 @@ mod errors;
 mod events;
 mod storage;
 mod token;
+mod vault_interface;
 
 use errors::VestingError;
 use events::{AdminChangedEvent, UpgradedEvent};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
-use storage::{DataKey, VestingData, LEDGER_BUMP, LEDGER_THRESHOLD};
+use storage::{
+    DataKey, MilestoneLink, MilestoneRequirement, VestingData, LEDGER_BUMP, LEDGER_THRESHOLD,
+};
 use token::transfer;
+use vault_interface::CrowdfundVaultClient;
 
 #[contract]
 pub struct VestingWalletContract;
 
 #[contractimpl]
 impl VestingWalletContract {
+    fn milestone_completed(env: &Env, vesting: &VestingData) -> bool {
+        match &vesting.milestone_requirement {
+            MilestoneRequirement::External(link) => {
+                let vault_client = CrowdfundVaultClient::new(env, &link.vault_contract);
+                vault_client.is_milestone_approved(&link.project_id, &link.milestone_id)
+            }
+            MilestoneRequirement::None => true,
+        }
+    }
+
     /// Helper function to calculate claimable amount for a vesting schedule
     /// This is used by both get_claimable and claim to ensure consistency
-    fn calculate_claimable_amount(current_time: u64, vesting: &VestingData) -> i128 {
-        if current_time < vesting.start_time {
+    fn calculate_claimable_amount(env: &Env, current_time: u64, vesting: &VestingData) -> i128 {
+        if !Self::milestone_completed(env, vesting) || current_time < vesting.start_time {
             // Vesting hasn't started yet
             0
         } else if current_time >= vesting.start_time + vesting.duration {
@@ -64,6 +78,47 @@ impl VestingWalletContract {
         amount: i128,
         start_time: u64,
         duration: u64,
+    ) -> Result<(), VestingError> {
+        Self::create_vesting_internal(
+            env,
+            admin,
+            beneficiary,
+            amount,
+            start_time,
+            duration,
+            MilestoneRequirement::None,
+        )
+    }
+
+    /// Create a vesting schedule that is gated by an external crowdfund vault milestone.
+    pub fn create_vesting_with_milestone(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+        amount: i128,
+        start_time: u64,
+        duration: u64,
+        milestone_link: MilestoneLink,
+    ) -> Result<(), VestingError> {
+        Self::create_vesting_internal(
+            env,
+            admin,
+            beneficiary,
+            amount,
+            start_time,
+            duration,
+            MilestoneRequirement::External(milestone_link),
+        )
+    }
+
+    fn create_vesting_internal(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+        amount: i128,
+        start_time: u64,
+        duration: u64,
+        milestone_requirement: MilestoneRequirement,
     ) -> Result<(), VestingError> {
         // Check if contract is initialized
         let stored_admin: Address = env
@@ -111,6 +166,11 @@ impl VestingWalletContract {
 
         let contract_address = env.current_contract_address();
 
+        if let MilestoneRequirement::External(link) = &milestone_requirement {
+            let vault_client = CrowdfundVaultClient::new(&env, &link.vault_contract);
+            let _ = vault_client.is_milestone_approved(&link.project_id, &link.milestone_id);
+        }
+
         // If vesting already exists, return remaining tokens to admin
         // (total_amount - claimed_amount)
         if let Some(existing_vesting) = env
@@ -139,6 +199,7 @@ impl VestingWalletContract {
             start_time,
             duration,
             claimed_amount: 0,
+            milestone_requirement,
         };
 
         // Store vesting data
@@ -191,7 +252,7 @@ impl VestingWalletContract {
         let current_time = env.ledger().timestamp();
 
         // Calculate available amount using the helper function
-        let available_amount = Self::calculate_claimable_amount(current_time, &vesting);
+        let available_amount = Self::calculate_claimable_amount(&env, current_time, &vesting);
 
         // Check if there's anything to claim
         if available_amount <= 0 {
@@ -262,7 +323,7 @@ impl VestingWalletContract {
         let current_time = env.ledger().timestamp();
 
         // Calculate claimable amount using the helper function
-        let claimable_amount = Self::calculate_claimable_amount(current_time, &vesting);
+        let claimable_amount = Self::calculate_claimable_amount(&env, current_time, &vesting);
 
         Ok(claimable_amount)
     }
@@ -298,7 +359,7 @@ impl VestingWalletContract {
         let current_time = env.ledger().timestamp();
 
         // Calculate available amount using the helper function
-        let available_amount = Self::calculate_claimable_amount(current_time, &vesting);
+        let available_amount = Self::calculate_claimable_amount(&env, current_time, &vesting);
 
         Ok(available_amount)
     }

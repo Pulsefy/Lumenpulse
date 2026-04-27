@@ -305,7 +305,10 @@ export class NotificationDeliveryService implements OnModuleInit {
           order: { createdAt: 'DESC' },
           take: limit,
         }),
-      { label: 'NotificationDeliveryService.getDeliveryLogsForUser', thresholdMs: 150 },
+      {
+        label: 'NotificationDeliveryService.getDeliveryLogsForUser',
+        thresholdMs: 150,
+      },
     );
   }
 
