@@ -24,6 +24,7 @@ import {
   NewsCategoriesResponseDto,
   SingleArticleResponseDto,
 } from './dto/news-article.dto';
+import { TranslationStatsDto } from './dto/translation-stats.dto';
 
 @ApiTags('news')
 @Controller('news')
@@ -190,5 +191,53 @@ export class NewsController {
       symbol,
       limit ? parseInt(limit, 10) : undefined,
     );
+  }
+
+  @Get('translation/stats')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get translation statistics for all articles',
+  })
+  @ApiResponse({
+    status: 200,
+    type: TranslationStatsDto,
+    description: 'Translation statistics including language breakdown',
+  })
+  async getTranslationStats(): Promise<TranslationStatsDto> {
+    return this.newsService.getTranslationStats();
+  }
+
+  @Get('translation/language/:lang')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get articles by original language',
+  })
+  @ApiParam({
+    name: 'lang',
+    type: String,
+    example: 'es',
+    description: 'ISO 639-1 language code',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Articles in the specified original language',
+  })
+  async getArticlesByLanguage(@Param('lang') language: string) {
+    const articles = await this.newsService.findByOriginalLanguage(language);
+    return {
+      articles: articles.map((a) => ({
+        id: a.id,
+        title: a.title,
+        originalTitle: a.originalTitle,
+        url: a.url,
+        source: a.source,
+        publishedAt: a.publishedAt.toISOString(),
+        originalLanguage: a.originalLanguage,
+        isTranslated: a.isTranslated,
+        translationConfidence: a.translationConfidence,
+      })),
+      totalCount: articles.length,
+      language,
+    };
   }
 }

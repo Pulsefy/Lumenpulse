@@ -9,6 +9,7 @@ import { News } from './news.entity';
 import { NewsSentimentService } from './news-sentiment.services';
 import { AppCacheModule } from '../cache/cache.module';
 import { ProfilingModule } from '../common/profiling/profiling.module';
+import { TranslationModule } from '../translation/translation.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ProfilingModule } from '../common/profiling/profiling.module';
     TypeOrmModule.forFeature([News]),
     AppCacheModule,
     ProfilingModule,
+    TranslationModule,
   ],
   controllers: [NewsController],
   providers: [NewsProviderService, NewsService, NewsSentimentService],

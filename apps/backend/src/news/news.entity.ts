@@ -14,6 +14,8 @@ import {
 @Index(['sentimentScore'])
 @Index(['source', 'publishedAt'])
 @Index(['category'])
+@Index(['originalLanguage'])
+@Index(['isTranslated'])
 export class News {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -38,6 +40,21 @@ export class News {
 
   @Column({ nullable: true })
   category: string | null;
+
+  @Column({ name: 'original_language', length: 10, nullable: true })
+  originalLanguage: string | null;
+
+  @Column({ name: 'original_title', type: 'text', nullable: true })
+  originalTitle: string | null;
+
+  @Column({ name: 'translation_confidence', type: 'float', nullable: true })
+  translationConfidence: number | null;
+
+  @Column({ name: 'is_translated', default: false })
+  isTranslated: boolean;
+
+  @Column({ name: 'normalized_at', type: 'timestamp', nullable: true })
+  normalizedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
 import { News } from './news.entity';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
@@ -9,6 +10,7 @@ import { NewsProviderService } from './news-provider.service';
 import { NewsArticleDto } from './dto/news-article.dto';
 import { CacheService } from '../cache/cache.service';
 import { QueryProfilerService } from '../common/profiling/query-profiler.service';
+import { TranslationService } from '../translation/translation.service';
 
 interface RawOverallResult {
   average: string | null;
@@ -31,6 +33,8 @@ export class NewsService {
     private readonly newsProviderService: NewsProviderService,
     private readonly cacheService: CacheService,
     private readonly profiler: QueryProfilerService,
+    private readonly translationService: TranslationService,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(createArticleDto: CreateArticleDto): Promise<News> {
@@ -159,6 +163,7 @@ export class NewsService {
   /**
    * Creates a new article if it doesn't already exist (based on URL).
    * Returns the existing article if found, or the newly created article.
+   * Applies translation and normalization pipeline before saving.
    */
   async createOrIgnore(articleDto: NewsArticleDto): Promise<News | null> {
     // Check if article already exists by URL
@@ -167,9 +172,51 @@ export class NewsService {
       return null; // Return null to indicate it was skipped
     }
 
-    // Create new article
+    // Apply translation and normalization pipeline
+    const translationEnabled = this.configService.get<boolean>(
+      'TRANSLATION_ENABLED',
+      true,
+    );
+
+    let processedTitle = articleDto.title;
+    let originalTitle: string | null = null;
+    let originalLanguage: string | null = null;
+    let translationConfidence: number | null = null;
+    let isTranslated = false;
+
+    if (translationEnabled) {
+      try {
+        const result = await this.translationService.translateAndNormalize(
+          articleDto.title,
+          articleDto.body || '',
+        );
+
+        processedTitle = result.title;
+        originalLanguage = result.originalLanguage;
+        translationConfidence = result.translationConfidence;
+
+        // Store original title if it was translated
+        if (originalLanguage && originalLanguage !== 'en') {
+          originalTitle = articleDto.title;
+          isTranslated = true;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Translation failed for article ${articleDto.url}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+        // Continue with original content if translation fails
+        processedTitle = this.translationService.normalizeText(
+          articleDto.title,
+        );
+      }
+    } else {
+      // Just normalize if translation is disabled
+      processedTitle = this.translationService.normalizeText(articleDto.title);
+    }
+
+    // Create new article with translation metadata
     const article = this.newsRepository.create({
-      title: articleDto.title,
+      title: processedTitle,
       url: articleDto.url,
       source: articleDto.source,
       publishedAt: articleDto.publishedAt
@@ -180,6 +227,11 @@ export class NewsService {
         ? articleDto.keywords.map((k) => k.toLowerCase())
         : [],
       category: articleDto.categories?.[0] ?? null,
+      originalTitle,
+      originalLanguage,
+      translationConfidence,
+      isTranslated,
+      normalizedAt: new Date(),
     });
 
     return this.newsRepository.save(article);
@@ -226,5 +278,141 @@ export class NewsService {
         `Failed to fetch and save articles: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
+  }
+
+  /**
+   * Get translation statistics for all articles
+   */
+  async getTranslationStats(): Promise<{
+    totalArticles: number;
+    translatedArticles: number;
+    englishArticles: number;
+    languageBreakdown: Record<string, number>;
+    averageConfidence: number;
+  }> {
+    const total = await this.newsRepository.count();
+    const translated = await this.newsRepository.count({
+      where: { isTranslated: true },
+    });
+
+    // Get language breakdown
+    const languageStats = await this.newsRepository
+      .createQueryBuilder('news')
+      .select('news.originalLanguage', 'language')
+      .addSelect('COUNT(*)', 'count')
+      .where('news.originalLanguage IS NOT NULL')
+      .groupBy('news.originalLanguage')
+      .getRawMany();
+
+    const languageBreakdown: Record<string, number> = {};
+    for (const stat of languageStats) {
+      languageBreakdown[stat.language] = parseInt(stat.count, 10);
+    }
+
+    // Calculate average confidence
+    const avgResult = await this.newsRepository
+      .createQueryBuilder('news')
+      .select('AVG(news.translationConfidence)', 'avg')
+      .where('news.translationConfidence IS NOT NULL')
+      .getRawOne();
+
+    const averageConfidence = parseFloat(avgResult?.avg || '0') || 0;
+
+    return {
+      totalArticles: total,
+      translatedArticles: translated,
+      englishArticles: total - translated,
+      languageBreakdown,
+      averageConfidence,
+    };
+  }
+
+  /**
+   * Find articles that need translation (no original_language set)
+   */
+  async findUntranslatedArticles(limit = 100): Promise<News[]> {
+    return this.newsRepository.find({
+      where: { originalLanguage: IsNull() },
+      order: { publishedAt: 'DESC' },
+      take: limit,
+    });
+  }
+
+  /**
+   * Retroactively translate existing articles
+   * Scheduled to run daily at 2 AM
+   */
+  @Cron('0 0 2 * * *')
+  async retroactivelyTranslateArticles(): Promise<void> {
+    const translationEnabled = this.configService.get<boolean>(
+      'TRANSLATION_ENABLED',
+      true,
+    );
+
+    if (!translationEnabled) {
+      this.logger.log('Translation is disabled, skipping retroactive job');
+      return;
+    }
+
+    this.logger.log('Running retroactive translation job...');
+
+    try {
+      const untranslatedArticles = await this.findUntranslatedArticles(50);
+
+      let processedCount = 0;
+      let errorCount = 0;
+
+      for (const article of untranslatedArticles) {
+        try {
+          const result = await this.translationService.translateAndNormalize(
+            article.title,
+            '',
+          );
+
+          const updateData: Partial<News> = {
+            title: result.title,
+            originalLanguage: result.originalLanguage,
+            translationConfidence: result.translationConfidence,
+            normalizedAt: new Date(),
+          };
+
+          // Store original title if it was translated
+          if (result.originalLanguage && result.originalLanguage !== 'en') {
+            updateData.originalTitle = article.title;
+            updateData.isTranslated = true;
+          }
+
+          await this.newsRepository.update(article.id, updateData);
+          processedCount++;
+        } catch (error) {
+          this.logger.error(
+            `Failed to translate article ${article.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+          errorCount++;
+        }
+      }
+
+      this.logger.log(
+        `Retroactive translation completed. Processed: ${processedCount}, Errors: ${errorCount}`,
+      );
+
+      if (processedCount > 0) {
+        await this.cacheService.invalidateNewsCache();
+      }
+    } catch (error) {
+      this.logger.error(
+        `Retroactive translation job failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  }
+
+  /**
+   * Find articles by original language
+   */
+  async findByOriginalLanguage(language: string): Promise<News[]> {
+    return this.newsRepository.find({
+      where: { originalLanguage: language },
+      order: { publishedAt: 'DESC' },
+    });
   }
 }
