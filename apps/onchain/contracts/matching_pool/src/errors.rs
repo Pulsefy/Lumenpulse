@@ -20,4 +20,5 @@ pub enum MatchingPoolError {
     MatchAlreadyDistributed = 14,
     InvalidRoundDates = 15,
     ContractPaused = 16,
+    Reentrancy = 17,
 }

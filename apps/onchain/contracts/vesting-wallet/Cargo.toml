@@ -10,6 +10,7 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
+reentrancy-guard = { path = "../reentrancy-guard" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

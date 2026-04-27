@@ -409,6 +409,14 @@
                     "storage": [
                       {
                         "key": {
+                          "symbol": "REENTRANT"
+                        },
+                        "val": {
+                          "bool": false
+                        }
+                      },
+                      {
+                        "key": {
                           "vec": [
                             {
                               "symbol": "Admin"
