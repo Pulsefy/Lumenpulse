@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -188,7 +187,6 @@ export default function AssetDiscoveryScreen() {
     ...CACHE_CONFIGS.ASSETS,
   });
 
-  const assets = assetsData || [];
   const error = apiError?.message || null;
 
   const handleRefresh = async () => {
@@ -202,11 +200,12 @@ export default function AssetDiscoveryScreen() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return assets;
-    return assets.filter(
+    const assetsList = assetsData || [];
+    if (!q) return assetsList;
+    return assetsList.filter(
       (a) => a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q),
     );
-  }, [assets, query]);
+  }, [assetsData, query]);
 
   // ── Loading ───────────────────────────────────────────────────────────────
   if (isLoading) {

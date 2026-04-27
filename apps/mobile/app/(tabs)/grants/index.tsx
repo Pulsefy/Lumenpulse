@@ -15,7 +15,13 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { grantsApi, GrantRound, roundStatusLabel } from '../../../lib/grants';
 import { formatTokenAmount } from '../../../lib/stellar';
 
-function StatusBadge({ status, colors }: { status: GrantRound['status']; colors: ReturnType<typeof useTheme>['colors'] }) {
+function StatusBadge({
+  status,
+  colors,
+}: {
+  status: GrantRound['status'];
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
   const colorMap: Record<string, string> = {
     ACTIVE: colors.accent,
     PENDING: '#f59e0b',
@@ -65,9 +71,7 @@ function RoundCard({
 
       <View style={styles.cardFooter}>
         <Ionicons name="calendar-outline" size={13} color={colors.textSecondary} />
-        <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-          Ends {endDate}
-        </Text>
+        <Text style={[styles.footerText, { color: colors.textSecondary }]}>Ends {endDate}</Text>
         <Ionicons
           name="chevron-forward"
           size={14}
@@ -88,7 +92,11 @@ export default function GrantsScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchRounds = useCallback(async (refresh = false) => {
-    refresh ? setIsRefreshing(true) : setIsLoading(true);
+    if (refresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const res = await grantsApi.listRounds();
@@ -105,7 +113,9 @@ export default function GrantsScreen() {
     }
   }, []);
 
-  useEffect(() => { void fetchRounds(); }, [fetchRounds]);
+  useEffect(() => {
+    void fetchRounds();
+  }, [fetchRounds]);
 
   if (isLoading && rounds.length === 0) {
     return (
@@ -118,7 +128,12 @@ export default function GrantsScreen() {
   if (error && rounds.length === 0) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background, padding: 32 }]}>
-        <Ionicons name="cloud-offline-outline" size={52} color={colors.danger} style={{ marginBottom: 16 }} />
+        <Ionicons
+          name="cloud-offline-outline"
+          size={52}
+          color={colors.danger}
+          style={{ marginBottom: 16 }}
+        />
         <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn&apos;t load rounds</Text>
         <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{error}</Text>
         <TouchableOpacity
@@ -162,7 +177,12 @@ export default function GrantsScreen() {
         )}
         ListEmptyComponent={
           <View style={[styles.center, { paddingVertical: 60 }]}>
-            <Ionicons name="trophy-outline" size={48} color={colors.textSecondary} style={{ marginBottom: 12 }} />
+            <Ionicons
+              name="trophy-outline"
+              size={48}
+              color={colors.textSecondary}
+              style={{ marginBottom: 12 }}
+            />
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
               No active grant rounds yet.
             </Text>
@@ -191,7 +211,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
   cardTitle: { fontSize: 17, fontWeight: '700', flex: 1, marginRight: 8 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   badgeText: { fontSize: 11, fontWeight: '600' },

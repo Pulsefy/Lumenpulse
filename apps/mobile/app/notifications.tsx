@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import React, { useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';

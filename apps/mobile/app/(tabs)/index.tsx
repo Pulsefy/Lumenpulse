@@ -1,10 +1,9 @@
-/* eslint-disable prettier/prettier */
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { healthApi } from '../../lib/api';
-import config from '../../lib/config';
+import { config } from '../../lib/config';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -10,12 +11,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { crowdfundApi, CrowdfundProject } from '../../../lib/crowdfund';
+import { crowdfundApi, CrowdfundProject, Contributor, RoadmapItem } from '../../../lib/crowdfund';
 import { computeFundingProgress, formatTokenAmount } from '../../../lib/stellar';
 import ContributionModal from '../../../components/ContributionModal';
 import { usersApi } from '../../../lib/api';
+import { moderationApi, ReportType, ReportReason } from '../../../lib/moderation';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -49,6 +52,72 @@ function StatItem({
   );
 }
 
+function ContributorCard({
+  contributor,
+  colors,
+}: {
+  contributor: Contributor;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  return (
+    <View
+      style={[
+        styles.contributorCard,
+        { backgroundColor: colors.card, borderColor: colors.cardBorder },
+      ]}
+    >
+      <View style={styles.contributorInfo}>
+        <Ionicons name="wallet-outline" size={18} color={colors.accent} />
+        <Text
+          style={[styles.contributorAddress, { color: colors.text }]}
+          numberOfLines={1}
+          ellipsizeMode="middle"
+        >
+          {contributor.publicKey}
+        </Text>
+      </View>
+      <View style={styles.contributorStats}>
+        <Text style={[styles.contributorAmount, { color: colors.accent }]}>
+          {formatTokenAmount(contributor.totalContributed)} XLM
+        </Text>
+        <Text style={[styles.contributorCount, { color: colors.textSecondary }]}>
+          {contributor.contributionCount} contribution
+          {contributor.contributionCount !== 1 ? 's' : ''}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function RoadmapCard({
+  item,
+  colors,
+}: {
+  item: RoadmapItem;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  return (
+    <View
+      style={[styles.roadmapCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+    >
+      <View style={styles.roadmapHeader}>
+        <Ionicons
+          name={item.isCompleted ? 'checkmark-circle' : 'time-outline'}
+          size={20}
+          color={item.isCompleted ? colors.success : colors.textSecondary}
+        />
+        <Text style={[styles.roadmapTitle, { color: colors.text }]}>{item.title}</Text>
+      </View>
+      <Text style={[styles.roadmapDescription, { color: colors.textSecondary }]}>
+        {item.description}
+      </Text>
+      <Text style={[styles.roadmapDate, { color: colors.textSecondary }]}>
+        Target: {new Date(item.targetDate).toLocaleDateString()}
+      </Text>
+    </View>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ProjectDetailScreen() {
@@ -57,10 +126,12 @@ export default function ProjectDetailScreen() {
   const { isAuthenticated } = useAuth();
 
   const [project, setProject] = useState<CrowdfundProject | null>(null);
+  const [contributors, setContributors] = useState<Contributor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showContributeModal, setShowContributeModal] = useState(false);
   const [stellarPublicKey, setStellarPublicKey] = useState<string | null>(null);
+  const [isReporting, setIsReporting] = useState(false);
 
   const projectId = parseInt(id ?? '0', 10);
 
@@ -82,6 +153,17 @@ export default function ProjectDetailScreen() {
     }
   }, [projectId]);
 
+  const fetchContributors = useCallback(async () => {
+    try {
+      const response = await crowdfundApi.getContributors(projectId);
+      if (response.success && response.data) {
+        setContributors(response.data);
+      }
+    } catch {
+      // Non-critical — contributors list is optional
+    }
+  }, [projectId]);
+
   const fetchUserPublicKey = useCallback(async () => {
     try {
       const response = await usersApi.getProfile();
@@ -95,10 +177,11 @@ export default function ProjectDetailScreen() {
 
   useEffect(() => {
     void fetchProject();
+    void fetchContributors();
     if (isAuthenticated) {
       void fetchUserPublicKey();
     }
-  }, [fetchProject, fetchUserPublicKey, isAuthenticated]);
+  }, [fetchProject, fetchContributors, fetchUserPublicKey, isAuthenticated]);
 
   const handleContribute = async (
     amount: string,
@@ -128,6 +211,34 @@ export default function ProjectDetailScreen() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Network error. Please try again.';
       return { errorMessage: message };
+    }
+  };
+
+  const handleReport = async (reason: ReportReason) => {
+    if (isReporting || !project) return;
+
+    setIsReporting(true);
+    try {
+      const response = await moderationApi.createReport({
+        targetType: ReportType.PROJECT,
+        targetId: String(projectId),
+        reason,
+        description: `Project reported: ${project.name}`,
+      });
+
+      if (response.success) {
+        Alert.alert(
+          'Report Submitted',
+          'Thank you. Your report has been submitted for review by our moderation team.',
+        );
+      } else {
+        Alert.alert('Error', response.error?.message || 'Failed to submit report.');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to submit report.';
+      Alert.alert('Error', message);
+    } finally {
+      setIsReporting(false);
     }
   };
 
@@ -173,6 +284,16 @@ export default function ProjectDetailScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Project banner image */}
+        {project.bannerUrl && (
+          <Image
+            source={{ uri: project.bannerUrl }}
+            style={styles.bannerImage}
+            contentFit="cover"
+            transition={200}
+          />
+        )}
+
         {/* Project header */}
         <Text style={[styles.title, { color: colors.text }]}>{project.name}</Text>
 
@@ -185,23 +306,36 @@ export default function ProjectDetailScreen() {
           </View>
         )}
 
-        {/* Funding progress */}
-        <View
-          style={[
-            styles.fundingCard,
-            { backgroundColor: colors.surface, borderColor: colors.cardBorder },
-          ]}
-        >
-          <View style={styles.fundingHeader}>
-            <Text style={[styles.fundingAmount, { color: colors.text }]}>
-              {formatTokenAmount(project.totalDeposited)} XLM
+        {/* Description */}
+        {project.description && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>About</Text>
+            <Text style={[styles.description, { color: colors.textSecondary }]}>
+              {project.description}
             </Text>
-            <Text style={[styles.fundingPercentage, { color: colors.accent }]}>{progress}%</Text>
           </View>
-          <ProgressBar progress={progress} color={colors.accent} />
-          <Text style={[styles.fundingTarget, { color: colors.textSecondary }]}>
-            Goal: {formatTokenAmount(project.targetAmount)} XLM
-          </Text>
+        )}
+
+        {/* Funding progress */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Funding Progress</Text>
+          <View
+            style={[
+              styles.fundingCard,
+              { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+            ]}
+          >
+            <View style={styles.fundingHeader}>
+              <Text style={[styles.fundingAmount, { color: colors.text }]}>
+                {formatTokenAmount(project.totalDeposited)} XLM
+              </Text>
+              <Text style={[styles.fundingPercentage, { color: colors.accent }]}>{progress}%</Text>
+            </View>
+            <ProgressBar progress={progress} color={colors.accent} />
+            <Text style={[styles.fundingTarget, { color: colors.textSecondary }]}>
+              Goal: {formatTokenAmount(project.targetAmount)} XLM
+            </Text>
+          </View>
         </View>
 
         {/* Stats grid */}
@@ -220,6 +354,30 @@ export default function ProjectDetailScreen() {
           />
         </View>
 
+        {/* Roadmap */}
+        {project.roadmap && project.roadmap.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Roadmap</Text>
+            {project.roadmap.map((item) => (
+              <RoadmapCard key={item.id} item={item} colors={colors} />
+            ))}
+          </View>
+        )}
+
+        {/* Recent contributors */}
+        {contributors.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Contributors</Text>
+            {contributors.slice(0, 5).map((contributor, index) => (
+              <ContributorCard
+                key={`${contributor.publicKey}-${index}`}
+                contributor={contributor}
+                colors={colors}
+              />
+            ))}
+          </View>
+        )}
+
         {/* Owner info */}
         <View style={[styles.infoRow, { borderColor: colors.border }]}>
           <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
@@ -232,6 +390,33 @@ export default function ProjectDetailScreen() {
             {project.owner}
           </Text>
         </View>
+
+        {/* Report button */}
+        <TouchableOpacity
+          style={[styles.reportButton, { borderColor: colors.border }]}
+          onPress={() => {
+            Alert.alert('Report Project', 'Why are you reporting this project?', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Spam',
+                onPress: () => void handleReport(ReportReason.SPAM),
+              },
+              {
+                text: 'Fraud',
+                onPress: () => void handleReport(ReportReason.FRAUD),
+              },
+              {
+                text: 'Misleading',
+                onPress: () => void handleReport(ReportReason.MISLEADING_INFO),
+              },
+            ]);
+          }}
+        >
+          <Ionicons name="flag-outline" size={16} color={colors.danger} />
+          <Text style={[styles.reportButtonText, { color: colors.danger }]}>
+            Report this project
+          </Text>
+        </TouchableOpacity>
 
         {/* On-chain notice */}
         <View
@@ -294,6 +479,14 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
 
+  // Banner image
+  bannerImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 16,
+    marginBottom: 20,
+  },
+
   // Header
   title: {
     fontSize: 26,
@@ -315,12 +508,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  // Section
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  description: {
+    fontSize: 14,
+    lineHeight: 22,
+  },
+
   // Funding card
   fundingCard: {
     borderRadius: 18,
     borderWidth: 1,
     padding: 20,
-    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -381,6 +587,66 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
+  // Contributor card
+  contributorCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 10,
+  },
+  contributorInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  contributorAddress: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  contributorStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingLeft: 26,
+  },
+  contributorAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  contributorCount: {
+    fontSize: 12,
+  },
+
+  // Roadmap card
+  roadmapCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 10,
+  },
+  roadmapHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  roadmapTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+  },
+  roadmapDescription: {
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 8,
+    paddingLeft: 28,
+  },
+  roadmapDate: {
+    fontSize: 12,
+    paddingLeft: 28,
+  },
+
   // Info row
   infoRow: {
     flexDirection: 'row',
@@ -398,6 +664,22 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     textAlign: 'right',
+  },
+
+  // Report button
+  reportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderRadius: 10,
+    gap: 8,
+    marginBottom: 16,
+  },
+  reportButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 
   // Notice card

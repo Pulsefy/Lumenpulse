@@ -1,20 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  Modal,
-  ScrollView,
-} from 'react-native';
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { transactionApi } from '../../lib/transaction';
-import { Transaction, TransactionType, TransactionStatus } from '../../lib/types/transaction';
+import { Transaction, TransactionType } from '../../lib/types/transaction';
 import StandardList from '@/components/StandardList';
 
 /* ================= Helpers ================= */
@@ -102,7 +92,6 @@ function TransactionDetailModal({ transaction, visible, onClose, colors }: any) 
 export default function TransactionHistoryScreen() {
   const { isAuthenticated } = useAuth();
   const { colors } = useTheme();
-  const router = useRouter();
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -115,7 +104,11 @@ export default function TransactionHistoryScreen() {
 
   const fetchTransactions = useCallback(
     async (refresh = false) => {
-      refresh ? setIsRefreshing(true) : setIsLoading(true);
+      if (refresh) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
       setError(null);
 
       try {
@@ -140,7 +133,7 @@ export default function TransactionHistoryScreen() {
 
   useEffect(() => {
     if (isAuthenticated) fetchTransactions(true);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, fetchTransactions]);
 
   const handleLoadMore = () => {
     if (nextPage && !isLoading) fetchTransactions(false);

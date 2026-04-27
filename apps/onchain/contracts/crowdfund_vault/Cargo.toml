@@ -11,6 +11,7 @@ doctest = false
 [dependencies]
 soroban-sdk = { workspace = true }
 notification_interface = { path = "../notification_interface" }
+reentrancy-guard = { path = "../reentrancy-guard" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

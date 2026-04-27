@@ -17,13 +17,20 @@ import {
   ProjectQf,
   matchShare,
   roundStatusLabel,
-  formatPoolAmount,
 } from '../../../lib/grants';
 import { formatTokenAmount } from '../../../lib/stellar';
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function InfoRow({ label, value, colors }: { label: string; value: string; colors: ReturnType<typeof useTheme>['colors'] }) {
+function InfoRow({
+  label,
+  value,
+  colors,
+}: {
+  label: string;
+  value: string;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
   return (
     <View style={[styles.infoRow, { borderColor: colors.border }]}>
       <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{label}</Text>
@@ -32,7 +39,13 @@ function InfoRow({ label, value, colors }: { label: string; value: string; color
   );
 }
 
-function QfBar({ share, colors }: { share: number; colors: ReturnType<typeof useTheme>['colors'] }) {
+function QfBar({
+  share,
+  colors,
+}: {
+  share: number;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
   return (
     <View style={styles.qfTrack}>
       <View style={[styles.qfFill, { width: `${share}%`, backgroundColor: colors.accent }]} />
@@ -56,7 +69,9 @@ function ProjectRow({
   const rankColor = rankColors[rank] ?? colors.textSecondary;
 
   return (
-    <View style={[styles.projectCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+    <View
+      style={[styles.projectCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+    >
       <View style={styles.projectHeader}>
         <View style={[styles.rankBadge, { backgroundColor: rankColor + '22' }]}>
           <Text style={[styles.rankText, { color: rankColor }]}>#{rank + 1}</Text>
@@ -117,7 +132,9 @@ export default function GrantRoundDetailScreen() {
     }
   }, [roundId]);
 
-  useEffect(() => { void fetchSummary(); }, [fetchSummary]);
+  useEffect(() => {
+    void fetchSummary();
+  }, [fetchSummary]);
 
   if (isLoading) {
     return (
@@ -130,8 +147,15 @@ export default function GrantRoundDetailScreen() {
   if (error || !summary) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background, padding: 32 }]}>
-        <Ionicons name="alert-circle-outline" size={52} color={colors.danger} style={{ marginBottom: 16 }} />
-        <Text style={[styles.errorText, { color: colors.text }]}>{error ?? 'Round not found.'}</Text>
+        <Ionicons
+          name="alert-circle-outline"
+          size={52}
+          color={colors.danger}
+          style={{ marginBottom: 16 }}
+        />
+        <Text style={[styles.errorText, { color: colors.text }]}>
+          {error ?? 'Round not found.'}
+        </Text>
         <TouchableOpacity
           style={[styles.retryBtn, { backgroundColor: colors.accent }]}
           onPress={() => void fetchSummary()}
@@ -158,7 +182,12 @@ export default function GrantRoundDetailScreen() {
         </View>
 
         {/* Pool card */}
-        <View style={[styles.poolCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+        <View
+          style={[
+            styles.poolCard,
+            { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+          ]}
+        >
           <Text style={[styles.poolLabel, { color: colors.textSecondary }]}>Matching Pool</Text>
           <Text style={[styles.poolValue, { color: colors.text }]}>
             {formatTokenAmount(poolBalance)} XLM
@@ -174,7 +203,9 @@ export default function GrantRoundDetailScreen() {
         <InfoRow label="Eligible projects" value={String(projects.length)} colors={colors} />
 
         {/* QF explanation */}
-        <View style={[styles.infoBox, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+        <View
+          style={[styles.infoBox, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+        >
           <Ionicons name="information-circle-outline" size={18} color={colors.accent} />
           <Text style={[styles.infoBoxText, { color: colors.textSecondary }]}>
             Quadratic funding rewards projects with broad community support. A project with 100
@@ -183,9 +214,7 @@ export default function GrantRoundDetailScreen() {
         </View>
 
         {/* Project allocations */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Estimated Allocations
-        </Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Estimated Allocations</Text>
 
         {projects.length === 0 ? (
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
@@ -213,7 +242,13 @@ const styles = StyleSheet.create({
   scroll: { padding: 20, paddingBottom: 60 },
 
   title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5, marginBottom: 10 },
-  statusChip: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginBottom: 20 },
+  statusChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
   statusText: { fontSize: 12, fontWeight: '700' },
 
   poolCard: {
@@ -263,7 +298,13 @@ const styles = StyleSheet.create({
   projectId: { flex: 1, fontSize: 15, fontWeight: '600' },
   matchAmount: { fontSize: 15, fontWeight: '700' },
 
-  qfTrack: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 12 },
+  qfTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
   qfFill: { height: '100%', borderRadius: 4 },
 
   projectStats: { flexDirection: 'row', justifyContent: 'space-between' },

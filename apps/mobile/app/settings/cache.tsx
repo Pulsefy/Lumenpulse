@@ -34,7 +34,7 @@ export default function CacheSettingsScreen() {
             try {
               await clearCache();
               Alert.alert('Success', 'Cache cleared successfully');
-            } catch (error) {
+            } catch {
               Alert.alert('Error', 'Failed to clear cache');
             } finally {
               setLoading(false);
@@ -50,7 +50,7 @@ export default function CacheSettingsScreen() {
     try {
       await preloadData();
       Alert.alert('Success', 'Critical data preloaded for offline use');
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to preload data');
     } finally {
       setLoading(false);
