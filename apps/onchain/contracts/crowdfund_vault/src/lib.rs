@@ -644,9 +644,11 @@ impl CrowdfundVaultContract {
 
                 let contrib_idx_key = DataKey::Contributor(project_id, contributor_count);
                 env.storage().persistent().set(&contrib_idx_key, &user);
-                env.storage()
-                    .persistent()
-                    .extend_ttl(&contrib_idx_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                env.storage().persistent().extend_ttl(
+                    &contrib_idx_key,
+                    LEDGER_THRESHOLD,
+                    LEDGER_BUMP,
+                );
 
                 env.storage()
                     .persistent()
@@ -685,7 +687,9 @@ impl CrowdfundVaultContract {
                 });
             stats.tvl += amount;
             stats.cumulative_volume += amount;
-            env.storage().instance().set(&DataKey::ProtocolStats, &stats);
+            env.storage()
+                .instance()
+                .set(&DataKey::ProtocolStats, &stats);
 
             if user_balance >= amount {
                 token::transfer(
@@ -1117,7 +1121,9 @@ impl CrowdfundVaultContract {
                     cumulative_volume: 0,
                 });
             stats.tvl -= amount;
-            env.storage().instance().set(&DataKey::ProtocolStats, &stats);
+            env.storage()
+                .instance()
+                .set(&DataKey::ProtocolStats, &stats);
 
             if local_balance < amount {
                 let amount_to_divest = amount - local_balance;

@@ -186,10 +186,10 @@ impl VestingWalletContract {
             let _ = vault_client.is_milestone_approved(&link.project_id, &link.milestone_id);
         }
 
-        let remaining_from_previous = if let Some(existing_vesting) = env
-            .storage()
-            .persistent()
-            .get::<_, VestingData>(&DataKey::Vesting(beneficiary.clone()))
+        let remaining_from_previous = if let Some(existing_vesting) =
+            env.storage()
+                .persistent()
+                .get::<_, VestingData>(&DataKey::Vesting(beneficiary.clone()))
         {
             env.storage().persistent().extend_ttl(
                 &DataKey::Vesting(beneficiary.clone()),
