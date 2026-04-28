@@ -12,13 +12,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useLocalization } from '../../src/context';
 import { stellarApi, StellarAsset } from '../../lib/api';
 import { useCachedData } from '../../hooks/useCachedData';
 import { CACHE_CONFIGS } from '../../lib/cache';
-
-// ─── Mock fallback data (used when API is unavailable) ───────────────────────
-// These are popular Stellar network assets. Replace with live data once
-// GET /stellar/assets is deployed on the backend.
 
 const MOCK_ASSETS: StellarAsset[] = [
   { code: 'XLM', name: 'Stellar Lumens', issuer: null, priceUsd: 0.1051, change24h: 1.23 },
@@ -87,8 +84,6 @@ const MOCK_ASSETS: StellarAsset[] = [
   },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function formatPrice(usd: number): string {
   if (usd >= 1) {
     return new Intl.NumberFormat('en-US', {
@@ -98,7 +93,6 @@ function formatPrice(usd: number): string {
       maximumFractionDigits: 2,
     }).format(usd);
   }
-  // Small prices: show up to 6 significant digits
   return `$${usd.toPrecision(4)}`;
 }
 
@@ -109,11 +103,9 @@ function assetColor(code: string): string {
   return palette[Math.abs(hash) % palette.length];
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
-function AssetItem({ asset, colors }: { asset: StellarAsset; colors: ThemeColors }) {
+function AssetItem({ asset, colors, t }: { asset: StellarAsset; colors: ThemeColors; t: (key: string) => string }) {
   const color = assetColor(asset.code);
   const isPositive = asset.change24h >= 0;
   const changeColor = isPositive ? '#27ae60' : '#e74c3c';
@@ -122,35 +114,40 @@ function AssetItem({ asset, colors }: { asset: StellarAsset; colors: ThemeColors
     <View
       testID={`asset-item-${asset.code}`}
       style={[styles.assetItem, { borderBottomColor: colors.border }]}
+      accessible
+      accessibilityLabel={`${asset.code} ${asset.name}, ${t('discover.price')} ${formatPrice(asset.priceUsd)}, ${t('discover.change_24h')} ${isPositive ? '+' : ''}${asset.change24h.toFixed(2)}%`}
+      accessibilityRole="button"
+      accessibilityHint={t('discover.asset_hint')}
     >
-      {/* Icon */}
-      <View style={[styles.assetIcon, { backgroundColor: `${color}22` }]}>
+      <View style={[styles.assetIcon, { backgroundColor: `${color}22` }]} accessible>
         <Text style={[styles.assetIconText, { color }]}>{asset.code.charAt(0)}</Text>
       </View>
 
-      {/* Name & code */}
       <View style={styles.assetMeta}>
-        <Text style={[styles.assetCode, { color: colors.text }]} numberOfLines={1}>
+        <Text style={[styles.assetCode, { color: colors.text }]} numberOfLines={1} accessible>
           {asset.code}
         </Text>
-        <Text style={[styles.assetName, { color: colors.textSecondary }]} numberOfLines={1}>
+        <Text style={[styles.assetName, { color: colors.textSecondary }]} numberOfLines={1} accessible>
           {asset.name}
         </Text>
       </View>
 
-      {/* Price & 24h change */}
       <View style={styles.assetPricing}>
-        <Text style={[styles.assetPrice, { color: colors.text }]}>
+        <Text style={[styles.assetPrice, { color: colors.text }]} accessible>
           {formatPrice(asset.priceUsd)}
         </Text>
-        <View style={[styles.changeBadge, { backgroundColor: `${changeColor}22` }]}>
+        <View
+          style={[styles.changeBadge, { backgroundColor: `${changeColor}22` }]}
+          accessible
+          accessibilityLabel={`${t('discover.change_24h')}: ${isPositive ? '+' : ''}${asset.change24h.toFixed(2)}%`}
+        >
           <Ionicons
             name={isPositive ? 'trending-up' : 'trending-down'}
             size={11}
             color={changeColor}
             style={{ marginRight: 3 }}
           />
-          <Text style={[styles.changeText, { color: changeColor }]}>
+          <Text style={[styles.changeText, { color: changeColor }]} accessible>
             {isPositive ? '+' : ''}
             {asset.change24h.toFixed(2)}%
           </Text>
@@ -160,14 +157,12 @@ function AssetItem({ asset, colors }: { asset: StellarAsset; colors: ThemeColors
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-
 export default function AssetDiscoveryScreen() {
   const { colors } = useTheme();
+  const { t } = useLocalization();
   const [query, setQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  // Use cached data for assets
   const {
     data: assetsData,
     loading: isLoading,
@@ -181,7 +176,6 @@ export default function AssetDiscoveryScreen() {
       if (response.success && response.data?.assets?.length) {
         return response.data.assets;
       }
-      // Gracefully fall back to mock data so the UI is always useful
       return MOCK_ASSETS;
     },
     ...CACHE_CONFIGS.ASSETS,
@@ -207,45 +201,59 @@ export default function AssetDiscoveryScreen() {
     );
   }, [assetsData, query]);
 
-  // ── Loading ───────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={[styles.screenTitle, { color: colors.text }]}>Discover</Text>
+        <Text style={[styles.screenTitle, { color: colors.text }]} accessible accessibilityRole="header">
+          {t('discover.title')}
+        </Text>
         <View style={[styles.center, { flex: 1 }]}>
-          <ActivityIndicator color={colors.accent} size="large" />
+          <ActivityIndicator
+            color={colors.accent}
+            size="large"
+            accessible
+            accessibilityLabel={t('common.loading')}
+          />
         </View>
       </SafeAreaView>
     );
   }
 
-  // ── Error ─────────────────────────────────────────────────────────────────
   if (error) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={[styles.screenTitle, { color: colors.text }]}>Discover</Text>
+        <Text style={[styles.screenTitle, { color: colors.text }]} accessible accessibilityRole="header">
+          {t('discover.title')}
+        </Text>
         <View style={[styles.center, { flex: 1, padding: 32 }]}>
           <Ionicons
             name="cloud-offline-outline"
             size={56}
             color={colors.danger}
             style={{ marginBottom: 16 }}
+            accessible
+            accessibilityLabel={t('errors.couldnt_load', { item: 'assets' })}
           />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn&apos;t load assets</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{error}</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+            {t('errors.couldnt_load', { item: 'assets' })}
+          </Text>
+          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} accessible>
+            {error}
+          </Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: colors.accent }]}
             onPress={handleRefresh}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.retry')}
           >
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={styles.retryText} accessible>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ── Main ──────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
@@ -253,27 +261,39 @@ export default function AssetDiscoveryScreen() {
         keyExtractor={(item) => `${item.code}-${item.issuer ?? 'native'}`}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            accessibilityLabel="Pull to refresh assets"
+          />
+        }
         ListHeaderComponent={
           <>
-            <Text style={[styles.screenTitle, { color: colors.text }]}>Discover</Text>
+            <Text style={[styles.screenTitle, { color: colors.text }]} accessible accessibilityRole="header">
+              {t('discover.title')}
+            </Text>
 
-            {/* Stale data indicator */}
             {isStale && (
-              <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}>
+              <View
+                style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}
+                accessible
+                accessibilityLabel={t('discover.showing_cached')}
+              >
                 <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
-                <Text style={[styles.staleText, { color: colors.warning }]}>
-                  Showing cached data - Pull to refresh
+                <Text style={[styles.staleText, { color: colors.warning }]} accessible>
+                  {t('discover.showing_cached')}
                 </Text>
               </View>
             )}
 
-            {/* Search Bar */}
             <View
               style={[
                 styles.searchContainer,
                 { backgroundColor: colors.surface, borderColor: colors.cardBorder },
               ]}
+              accessible
+              accessibilityLabel={t('discover.search_label')}
             >
               <Ionicons
                 name="search-outline"
@@ -284,58 +304,68 @@ export default function AssetDiscoveryScreen() {
               <TextInput
                 testID="asset-search-input"
                 style={[styles.searchInput, { color: colors.text }]}
-                placeholder="Search by name or code…"
+                placeholder={t('discover.search_placeholder')}
                 placeholderTextColor={colors.textSecondary}
                 value={query}
                 onChangeText={setQuery}
                 autoCapitalize="none"
                 autoCorrect={false}
                 clearButtonMode="while-editing"
+                accessibilityLabel={t('discover.search_label')}
+                accessibilityRole="search"
               />
               {query.length > 0 && (
                 <TouchableOpacity
                   onPress={() => setQuery('')}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.clear')}
                 >
                   <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               )}
             </View>
 
-            {/* Column labels */}
-            <View style={[styles.columnHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.columnLabel, { color: colors.textSecondary }]}>Asset</Text>
-              <Text style={[styles.columnLabel, { color: colors.textSecondary }]}>Price / 24h</Text>
+            <View style={[styles.columnHeader, { borderBottomColor: colors.border }]} accessible>
+              <Text style={[styles.columnLabel, { color: colors.textSecondary }]} accessible>
+                {t('discover.asset')}
+              </Text>
+              <Text style={[styles.columnLabel, { color: colors.textSecondary }]} accessible>
+                {t('discover.price')} / 24h
+              </Text>
             </View>
           </>
         }
         ListEmptyComponent={
-          <View style={[styles.center, { paddingVertical: 60 }]}>
+          <View style={[styles.center, { paddingVertical: 60 }]} accessible accessibilityLabel="No results">
             <Ionicons
               name="search-outline"
               size={48}
               color={colors.textSecondary}
               style={{ marginBottom: 12 }}
+              accessible
+              accessibilityLabel={t('discover.title')}
             />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No results</Text>
-            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-              Try searching for &quot;USDC&quot; or &quot;XLM&quot;
+            <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+              {t('discover.no_results')}
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} accessible>
+              {t('discover.try_search')}
             </Text>
           </View>
         }
-        renderItem={({ item }) => <AssetItem asset={item} colors={colors} />}
+        renderItem={({ item }) => <AssetItem asset={item} colors={colors} t={t} />}
+        accessibilityLabel={t('discover.title')}
+        accessibilityRole="list"
       />
     </SafeAreaView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center' },
   listContent: { paddingBottom: 40 },
-
   screenTitle: {
     fontSize: 28,
     fontWeight: '800',
@@ -344,8 +374,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 16,
   },
-
-  /* Search */
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -362,8 +390,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     paddingVertical: 0,
   },
-
-  /* Column header */
   columnHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -377,8 +403,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
-
-  /* Asset row */
   assetItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -398,7 +422,6 @@ const styles = StyleSheet.create({
   assetMeta: { flex: 1, marginRight: 8 },
   assetCode: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
   assetName: { fontSize: 13 },
-
   assetPricing: { alignItems: 'flex-end' },
   assetPrice: { fontSize: 15, fontWeight: '600', marginBottom: 4 },
   changeBadge: {
@@ -409,8 +432,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   changeText: { fontSize: 11, fontWeight: '700' },
-
-  /* Empty / error */
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
@@ -430,7 +451,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   retryText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
-
   staleIndicator: {
     flexDirection: 'row',
     alignItems: 'center',

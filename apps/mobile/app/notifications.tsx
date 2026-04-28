@@ -5,11 +5,13 @@ import { useNotifications, Notification } from '../contexts/NotificationsContext
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalization } from '../src/context';
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const router = useRouter();
+  const { t } = useLocalization();
 
   const renderItem = useCallback(
     ({ item }: { item: Notification }) => (
@@ -22,17 +24,23 @@ export default function NotificationsScreen() {
           },
         ]}
         onPress={() => markAsRead(item.id)}
-        accessibilityLabel={`${item.title}. ${item.read ? 'Read' : 'Unread'}. Tap to mark as read.`}
+        accessibilityLabel={`${item.title}. ${item.read ? t('notifications.read') : t('notifications.unread')}. ${t('notifications.mark_as_read')}`}
+        accessibilityRole="button"
+        accessibilityState={{ checked: item.read }}
       >
-        {!item.read && <View style={styles.unreadDot} />}
-        <Text style={[styles.itemTitle, { color: colors.text }]}>{item.title}</Text>
-        <Text style={[styles.itemMessage, { color: colors.text }]}>{item.message}</Text>
-        <Text style={[styles.itemStatus, { color: colors.text }]}>
+        {!item.read && <View style={styles.unreadDot} accessible accessibilityLabel={t('notifications.unread')} />}
+        <Text style={[styles.itemTitle, { color: colors.text }]} accessible accessibilityRole="header">
+          {item.title}
+        </Text>
+        <Text style={[styles.itemMessage, { color: colors.text }]} accessible>
+          {item.message}
+        </Text>
+        <Text style={[styles.itemStatus, { color: colors.text }]} accessible>
           {item.read ? '✓ Read' : '● Unread'}
         </Text>
       </TouchableOpacity>
     ),
-    [colors, markAsRead],
+    [colors, markAsRead, t],
   );
 
   return (
@@ -43,25 +51,36 @@ export default function NotificationsScreen() {
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backButton}
-            accessibilityLabel="Go back"
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            accessibilityHint="Go back to previous screen"
           >
             <Ionicons name="chevron-back" size={24} color={colors.accent} />
           </TouchableOpacity>
 
           {/* Title + badge */}
           <View style={styles.titleRow}>
-            <Text style={[styles.screenTitle, { color: colors.text }]}>Notifications</Text>
+            <Text style={[styles.screenTitle, { color: colors.text }]} accessible accessibilityRole="header">
+              {t('notifications.title')}
+            </Text>
             {unreadCount > 0 && (
-              <View style={styles.badge}>
+              <View style={styles.badge} accessible accessibilityLabel={`${unreadCount} ${t('notifications.unread')}`}>
                 <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
               </View>
             )}
           </View>
 
-          {/* Mark all read — keeps the header balanced */}
+          {/* Mark all read */}
           {unreadCount > 0 ? (
-            <TouchableOpacity onPress={markAllAsRead} style={styles.markAllButton}>
-              <Text style={[styles.markAllText, { color: colors.accent }]}>Mark all</Text>
+            <TouchableOpacity
+              onPress={markAllAsRead}
+              style={styles.markAllButton}
+              accessibilityRole="button"
+              accessibilityLabel={t('notifications.mark_all_read')}
+            >
+              <Text style={[styles.markAllText, { color: colors.accent }]} accessible>
+                {t('common.confirm')}
+              </Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.markAllButton} />
@@ -69,11 +88,13 @@ export default function NotificationsScreen() {
         </View>
 
         {notifications.length === 0 ? (
-          <View style={styles.emptyState}>
+          <View style={styles.emptyState} accessible accessibilityLabel={t('notifications.no_notifications')}>
             <Text style={styles.emptyIcon}>🔔</Text>
-            <Text style={[styles.emptyText, { color: colors.text }]}>No notifications yet</Text>
-            <Text style={[styles.emptySubText, { color: colors.text }]}>
-              Price alerts and account activity will show up here.
+            <Text style={[styles.emptyText, { color: colors.text }]} accessible accessibilityRole="header">
+              {t('notifications.no_notifications')}
+            </Text>
+            <Text style={[styles.emptySubText, { color: colors.text }]} accessible>
+              {t('notifications.notification_text')}
             </Text>
           </View>
         ) : (
@@ -82,6 +103,8 @@ export default function NotificationsScreen() {
             keyExtractor={(item) => item.id.toString()}
             renderItem={renderItem}
             contentContainerStyle={styles.list}
+            accessibilityLabel={t('notifications.title')}
+            accessibilityRole="list"
           />
         )}
       </View>
@@ -100,7 +123,6 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 4,
-    marginRight: 4,
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   screenTitle: { fontSize: 22, fontWeight: '700' },
