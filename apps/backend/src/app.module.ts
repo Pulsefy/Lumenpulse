@@ -116,13 +116,15 @@ import { ExportModule } from './export/export.module';
     ExportModule,
     TelegramBotModule,
     ModerationModule,
-    StructuredLoggerModule.forRoot({
-      context: 'LumenPulse',
-      options: {
-        includeRequestDetails: true,
-        excludePaths: ['/health', '/metrics'],
-      },
-    }),
+  /*
+StructuredLoggerModule.forRoot({
+  context: 'LumenPulse',
+  options: {
+    includeRequestDetails: true,
+    excludePaths: ['/health', '/metrics'],
+  },
+}),
+*/
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

@@ -1,6 +1,7 @@
-import { Injectable, LoggerService, Optional } from '@nestjs/common';
-import { Request, Response } from 'express';
-import { randomUUID } from 'node:crypto';
+import { Injectable, LoggerService } from '@nestjs/common';
+// import { Request, Response } from 'express';
+// import type { StructuredLoggerModuleOptions } from './structured-logger.module';
+// import { STRUCTURED_LOGGER_OPTIONS } from './structured-logger.module';
 
 export interface LogContext {
   requestId?: string;
@@ -11,7 +12,7 @@ export interface LogContext {
 
 export interface StructuredLogEntry {
   timestamp: string;
-  level: 'info' | 'warn' | 'error' | debug';
+  level: 'info' | 'warn' | 'error' | 'debug';
   message: string;
   context: string;
   requestId?: string;
@@ -28,7 +29,7 @@ export interface LoggingOptions {
   includeRequestDetails?: boolean;
   includeHeaders?: boolean;
   excludePaths?: string[];
-  customFields?: (req: Request, res: Response) => Record<string, unknown>;
+  customFields?: (req: any, res: any) => Record<string, unknown>;
 }
 
 @Injectable()
@@ -54,10 +55,12 @@ export class StructuredLogger implements LoggerService {
     this.options = { ...this.options, ...options };
   }
 
-  private shouldLog(req?: Request): boolean {
+  private shouldLog(req?: any): boolean {
     if (!req || !this.options.excludePaths) return true;
     const path = req.url || '';
-    return !this.options.excludePaths.some((excluded) => path.startsWith(excluded));
+    return !this.options.excludePaths.some((excluded) =>
+      path.startsWith(excluded),
+    );
   }
 
   private buildLogEntry(
@@ -65,8 +68,8 @@ export class StructuredLogger implements LoggerService {
     message: string,
     context?: LogContext,
     metadata?: Record<string, unknown>,
-    req?: Request,
-    res?: Response,
+    req?: any,
+    res?: any,
   ): StructuredLogEntry {
     const entry: StructuredLogEntry = {
       timestamp: new Date().toISOString(),
@@ -90,13 +93,12 @@ export class StructuredLogger implements LoggerService {
   }
 
   private formatLogEntry(entry: StructuredLogEntry): string {
-    // JSON format for machine parsing
     return JSON.stringify(entry);
   }
 
-  private log(entry: StructuredLogEntry): void {
+  private write(entry: StructuredLogEntry): void {
     const formatted = this.formatLogEntry(entry);
-    
+
     switch (entry.level) {
       case 'error':
         console.error(formatted);
@@ -112,76 +114,71 @@ export class StructuredLogger implements LoggerService {
     }
   }
 
-  logInfo(message: string, context?: LogContext, metadata?: Record<string, unknown>, req?: Request, res?: Response): void {
-    if (!this.shouldLog(req)) return;
-    const entry = this.buildLogEntry('info', message, context, metadata, req, res);
-    this.log(entry);
-  }
-
-  logWarn(message: string, context?: LogContext, metadata?: Record<string, unknown>, req?: Request, res?: Response): void {
-    if (!this.shouldLog(req)) return;
-    const entry = this.buildLogEntry('warn', message, context, metadata, req, res);
-    this.log(entry);
-  }
-
-  logError(message: string, context?: LogContext, metadata?: Record<string, unknown>, req?: Request, res?: Response): void {
-    if (!this.shouldLog(req)) return;
-    const entry = this.buildLogEntry('error', message, context, metadata, req, res);
-    this.log(entry);
-  }
-
-  logDebug(message: string, context?: LogContext, metadata?: Record<string, unknown>, req?: Request, res?: Response): void {
-    if (!this.shouldLog(req)) return;
-    const entry = this.buildLogEntry('debug', message, context, metadata, req, res);
-    this.log(entry);
-  }
-
-  // NestJS LoggerService implementation
-  log(message: string, context?: string): void {
-    const ctx = context || this.context;
-    const entry: StructuredLogEntry = {
+  log(message: any, context?: string): any {
+    this.write({
       timestamp: new Date().toISOString(),
       level: 'info',
       message,
-      context: ctx,
-    };
-    this.log(entry);
+      context: context || this.context,
+    });
   }
 
-  error(message: string, trace?: string, context?: string): void {
-    const ctx = context || this.context;
-    const entry: StructuredLogEntry = {
+  error(message: any, trace?: string, context?: string): any {
+    this.write({
       timestamp: new Date().toISOString(),
       level: 'error',
       message: trace ? `${message}\n${trace}` : message,
-      context: ctx,
-    };
-    this.log(entry);
+      context: context || this.context,
+    });
   }
 
-  warn(message: string, context?: string): void {
-    const ctx = context || this.context;
-    const entry: StructuredLogEntry = {
+  warn(message: any, context?: string): any {
+    this.write({
       timestamp: new Date().toISOString(),
       level: 'warn',
       message,
-      context: ctx,
-    };
-    this.log(entry);
+      context: context || this.context,
+    });
   }
 
-  debug(message: string, context?: string): void {
-    const ctx = context || this.context;
-    const entry: StructuredLogEntry = {
+  debug(message: any, context?: string): any {
+    this.write({
       timestamp: new Date().toISOString(),
       level: 'debug',
       message,
-      context: ctx,
-    };
-    this.log(entry);
+      context: context || this.context,
+    });
   }
 
-  verbose(message: string, context?: string): void {
+  verbose(message: any, context?: string): any {
     this.debug(message, context);
+  }
+
+  logInfo(message: string, context?: LogContext, metadata?: Record<string, unknown>, req?: any, res?: any): void {
+    if (!this.shouldLog(req)) return;
+
+    const entry = this.buildLogEntry('info', message, context, metadata, req, res);
+    this.write(entry);
+  }
+
+  logWarn(message: string, context?: LogContext, metadata?: Record<string, unknown>, req?: any, res?: any): void {
+    if (!this.shouldLog(req)) return;
+
+    const entry = this.buildLogEntry('warn', message, context, metadata, req, res);
+    this.write(entry);
+  }
+
+  logError(message: string, context?: LogContext, metadata?: Record<string, unknown>, req?: any, res?: any): void {
+    if (!this.shouldLog(req)) return;
+
+    const entry = this.buildLogEntry('error', message, context, metadata, req, res);
+    this.write(entry);
+  }
+
+  logDebug(message: string, context?: LogContext, metadata?: Record<string, unknown>, req?: any, res?: any): void {
+    if (!this.shouldLog(req)) return;
+
+    const entry = this.buildLogEntry('debug', message, context, metadata, req, res);
+    this.write(entry);
   }
 }
