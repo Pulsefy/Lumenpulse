@@ -2124,9 +2124,231 @@ impl CrowdfundVaultContract {
 
         let contract_address = env.current_contract_address();
         let yield_client = yield_provider::YieldProviderClient::new(env, &yield_provider_addr);
-        yield_client.withdraw(&contract_address, &amount);
+        let returned_amount = yield_client.withdraw(&contract_address, &amount);
+
+        if returned_amount > amount {
+            let interest = returned_amount - amount;
+            let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+            let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+            env.storage()
+                .persistent()
+                .set(&balance_key, &(current_balance + interest));
+        }
 
         Ok(())
+    }
+
+    /// Add a yield provider to the list for a token (admin only)
+    pub fn add_yield_provider(
+        env: Env,
+        admin: Address,
+        token_address: Address,
+        yield_provider: Address,
+    ) -> Result<(), CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+
+        let key = DataKey::YieldProviders(token_address.clone());
+        let mut providers: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+
+        // Check if provider already exists
+        for provider in providers.iter() {
+            if provider == yield_provider {
+                return Err(CrowdfundError::AlreadyExists);
+            }
+        }
+
+        providers.push_back(yield_provider);
+        env.storage().persistent().set(&key, &providers);
+
+        Ok(())
+    }
+
+    /// Remove a yield provider from the list for a token (admin only)
+    pub fn remove_yield_provider(
+        env: Env,
+        admin: Address,
+        token_address: Address,
+        yield_provider: Address,
+    ) -> Result<(), CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+
+        let key = DataKey::YieldProviders(token_address.clone());
+        let providers: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+
+        let mut new_providers = Vec::new(&env);
+        let mut found = false;
+
+        for provider in providers.iter() {
+            if provider != yield_provider {
+                new_providers.push_back(provider);
+            } else {
+                found = true;
+            }
+        }
+
+        if !found {
+            return Err(CrowdfundError::NotFound);
+        }
+
+        env.storage().persistent().set(&key, &new_providers);
+
+        Ok(())
+    }
+
+    /// Get all yield providers for a token
+    pub fn get_yield_providers(env: Env, token_address: Address) -> Vec<Address> {
+        let key = DataKey::YieldProviders(token_address);
+        env.storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env))
+    }
+
+    /// Invest idle funds across multiple yield providers (distributes evenly)
+    pub fn invest_idle_funds_distributed(
+        env: Env,
+        caller: Address,
+        project_id: u64,
+        amount: i128,
+    ) -> Result<(), CrowdfundError> {
+        Self::with_reentrancy_guard(&env, || {
+            Self::require_current_storage_version(&env)?;
+            caller.require_auth();
+
+            let project: ProjectData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Project(project_id))
+                .ok_or(CrowdfundError::ProjectNotFound)?;
+
+            if !project.is_active {
+                return Err(CrowdfundError::ProjectNotActive);
+            }
+
+            let stored_admin = Self::get_admin_address(&env)?;
+
+            if caller != stored_admin && caller != project.owner {
+                return Err(CrowdfundError::Unauthorized);
+            }
+
+            Self::invest_funds_distributed_internal(&env, project_id, amount)
+        })
+    }
+
+    /// Internal function to invest funds across multiple providers
+    fn invest_funds_distributed_internal(
+        env: &Env,
+        project_id: u64,
+        amount: i128,
+    ) -> Result<(), CrowdfundError> {
+        let project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        let providers_key = DataKey::YieldProviders(project.token_address.clone());
+        let providers: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&providers_key)
+            .unwrap_or(Vec::new(env));
+
+        if providers.is_empty() {
+            return Err(CrowdfundError::YieldProviderNotFound);
+        }
+
+        let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+        let total_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+
+        let invested_key = DataKey::ProjectInvestedBalance(project_id);
+        let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
+
+        let local_balance = total_balance - current_invested;
+        if local_balance < amount {
+            return Err(CrowdfundError::InsufficientBalance);
+        }
+
+        // Distribute amount evenly across providers
+        let num_providers = providers.len() as i128;
+        let amount_per_provider = amount / num_providers;
+        let remainder = amount % num_providers;
+
+        let contract_address = env.current_contract_address();
+        let token_client = TokenClient::new(env, &project.token_address);
+
+        for (i, provider) in providers.iter().enumerate() {
+            let mut invest_amount = amount_per_provider;
+            if i < remainder as usize {
+                invest_amount += 1; // Distribute remainder
+            }
+
+            if invest_amount > 0 {
+                token_client.transfer(&contract_address, &provider, &invest_amount);
+                let yield_client = yield_provider::YieldProviderClient::new(env, &provider);
+                yield_client.deposit(&contract_address, &invest_amount);
+            }
+        }
+
+        env.storage()
+            .persistent()
+            .set(&invested_key, &(current_invested + amount));
+
+        Ok(())
+    }
+
+    /// Auto-invest idle funds when they exceed a threshold (can be called by anyone)
+    pub fn auto_invest_idle_funds(
+        env: Env,
+        project_id: u64,
+        min_threshold: i128,
+    ) -> Result<(), CrowdfundError> {
+        Self::with_reentrancy_guard(&env, || {
+            Self::require_current_storage_version(&env)?;
+
+            let project: ProjectData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Project(project_id))
+                .ok_or(CrowdfundError::ProjectNotFound)?;
+
+            if !project.is_active {
+                return Err(CrowdfundError::ProjectNotActive);
+            }
+
+            let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+            let total_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+
+            let invested_key = DataKey::ProjectInvestedBalance(project_id);
+            let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
+
+            let idle_balance = total_balance - current_invested;
+
+            if idle_balance >= min_threshold {
+                // Try distributed investment first, fall back to single provider
+                if let Ok(()) =
+                    Self::invest_funds_distributed_internal(&env, project_id, idle_balance)
+                {
+                    return Ok(());
+                } else if let Some(_single_provider) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, Address>(&DataKey::YieldProvider(project.token_address.clone()))
+                {
+                    return Self::invest_funds_internal(&env, project_id, idle_balance);
+                }
+            }
+
+            Ok(())
+        })
     }
 }
 
