@@ -1,5 +1,9 @@
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  CursorPaginationQueryDto,
+  SortOrder,
+} from '../../common/dto/cursor-pagination.dto';
 
 export enum ChartInterval {
   ONE_HOUR = '1h',
@@ -11,7 +15,7 @@ export enum ChartRange {
   THIRTY_DAYS = '30d',
 }
 
-export class ChartDataQueryDto {
+export class ChartDataQueryDto extends CursorPaginationQueryDto {
   @ApiPropertyOptional({
     enum: ChartInterval,
     default: ChartInterval.ONE_HOUR,
@@ -42,4 +46,12 @@ export class ChartDataPointDto {
   timestamp: string;
   sentiment: number;
   count: number;
+}
+
+export interface ChartDataResponseDto {
+  items: ChartDataPointDto[];
+  total: number;
+  limit: number;
+  sortOrder: SortOrder;
+  nextCursor?: string;
 }

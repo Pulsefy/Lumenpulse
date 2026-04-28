@@ -17,6 +17,12 @@ import {
   VoteResultDto,
   WeightMode,
 } from './dto/verification.dto';
+import {
+  ProjectListQueryDto,
+  ProjectListResponseDto,
+  ProjectSortBy,
+} from './dto/project-list-query.dto';
+import { SortOrder } from '../common/dto/cursor-pagination.dto';
 
 interface ProjectRecord {
   projectId: number;
@@ -124,10 +130,49 @@ export class VerificationService {
     return this.toDto(this.getRecord(projectId));
   }
 
-  listProjects(status?: VerificationStatus): ProjectVerificationDto[] {
-    return [...this.projects.values()]
+  listProjects(
+    query: ProjectListQueryDto = {},
+  ): ProjectListResponseDto<ProjectVerificationDto> {
+    const status = query.status;
+    const sortBy = query.sortBy ?? ProjectSortBy.REGISTERED_AT;
+    const sortOrder = query.sortOrder ?? SortOrder.DESC;
+    const limit = query.limit ?? 20;
+    const cursor = query.cursor ? Number(query.cursor) : undefined;
+
+    const sorted = [...this.projects.values()]
       .filter((p) => !status || p.status === status)
-      .map((p) => this.toDto(p));
+      .sort((a, b) => {
+        const aValue =
+          sortBy === ProjectSortBy.VOTES_FOR ? a.votesFor : a.registeredAt;
+        const bValue =
+          sortBy === ProjectSortBy.VOTES_FOR ? b.votesFor : b.registeredAt;
+        return sortOrder === SortOrder.ASC ? aValue - bValue : bValue - aValue;
+      });
+
+    const filteredByCursor = sorted.filter((project) => {
+      if (cursor === undefined) return true;
+      const value =
+        sortBy === ProjectSortBy.VOTES_FOR
+          ? project.votesFor
+          : project.registeredAt;
+      return sortOrder === SortOrder.ASC ? value > cursor : value < cursor;
+    });
+
+    const items = filteredByCursor.slice(0, limit).map((p) => this.toDto(p));
+    const last = filteredByCursor[limit - 1];
+
+    return {
+      items,
+      nextCursor: last
+        ? String(
+            sortBy === ProjectSortBy.VOTES_FOR ? last.votesFor : last.registeredAt,
+          )
+        : undefined,
+      total: sorted.length,
+      limit,
+      sortOrder,
+      sortBy,
+    };
   }
 
   isVerified(projectId: number): boolean {

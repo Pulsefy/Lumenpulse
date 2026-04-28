@@ -1,7 +1,7 @@
 import { Controller, Get, Query, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
-import { ChartDataQueryDto, ChartDataPointDto } from './dto/chart-data.dto';
+import { ChartDataQueryDto, ChartDataResponseDto } from './dto/chart-data.dto';
 
 @ApiTags('analytics')
 @Controller('analytics')
@@ -19,12 +19,8 @@ export class AnalyticsController {
   @ApiResponse({
     status: 200,
     description: 'Bucketed sentiment data',
-    type: ChartDataPointDto,
-    isArray: true,
   })
-  async getChartData(
-    @Query() query: ChartDataQueryDto,
-  ): Promise<ChartDataPointDto[]> {
+  async getChartData(@Query() query: ChartDataQueryDto): Promise<ChartDataResponseDto> {
     return this.analyticsService.getChartData(query);
   }
 }
