@@ -79,6 +79,12 @@ export class User {
   })
   preferences: UserPreferences;
 
+  @Column({ type: 'boolean', default: false })
+  twoFactorEnabled: boolean;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  twoFactorSecret: string | null;
+
   @OneToMany(() => StellarAccount, (stellarAccount) => stellarAccount.user)
   stellarAccounts: StellarAccount[];
 

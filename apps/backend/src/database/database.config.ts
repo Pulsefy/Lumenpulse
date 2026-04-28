@@ -1,12 +1,14 @@
 import { registerAs } from '@nestjs/config';
+import { config } from '../lib/config';
 
 export default registerAs('database', () => ({
   type: 'postgres' as const,
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  username: process.env.DB_USERNAME || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  database: process.env.DB_DATABASE || process.env.DB_NAME || 'lumenpulse',
+  host: config.database.host,
+  port: config.database.port,
+  username: config.database.username,
+  // Database drivers require the raw password string.
+  password: config.database.password.reveal(),
+  database: config.database.database,
   synchronize: false,
-  logging: process.env.NODE_ENV === 'development',
+  logging: config.database.logging,
 }));

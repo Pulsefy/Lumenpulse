@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../contexts/ThemeContext';
+import { useLocalization } from '../src/context';
 import { authenticateBiometricPrompt, getBiometricLockEnabled } from '../lib/biometric-lock';
 
 interface BiometricLockGuardProps {
@@ -9,7 +9,7 @@ interface BiometricLockGuardProps {
 }
 
 export default function BiometricLockGuard({ children }: BiometricLockGuardProps) {
-  const { colors } = useTheme();
+  const { colors } = useLocalization();
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -47,21 +47,23 @@ export default function BiometricLockGuard({ children }: BiometricLockGuardProps
       }
     };
 
-    void initialize();
+    initialize();
   }, []);
 
   if (isBootstrapping) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={[styles.bootText, { color: colors.textSecondary }]}>Securing session...</Text>
+      <View style={[styles.centered, { backgroundColor: colors.background }]} accessible accessibilityLabel="Securing session">
+        <ActivityIndicator size="large" color={colors.accent} accessibilityLabel="Loading" />
+        <Text style={[styles.bootText, { color: colors.textSecondary }]} accessible>
+          Securing session...
+        </Text>
       </View>
     );
   }
 
   if (isLocked) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
+      <View style={[styles.centered, { backgroundColor: colors.background }]} accessible accessibilityLabel="App locked">
         <View
           style={[
             styles.lockCard,
@@ -70,10 +72,14 @@ export default function BiometricLockGuard({ children }: BiometricLockGuardProps
               borderColor: colors.border,
             },
           ]}
+          accessible
+          accessibilityLabel="Authentication required"
         >
-          <Ionicons name="lock-closed-outline" size={36} color={colors.accent} />
-          <Text style={[styles.lockTitle, { color: colors.text }]}>App Locked</Text>
-          <Text style={[styles.lockSubtitle, { color: colors.textSecondary }]}>
+          <Ionicons name="lock-closed-outline" size={36} color={colors.accent} accessible accessibilityLabel="Locked" />
+          <Text style={[styles.lockTitle, { color: colors.text }]} accessible accessibilityRole="header">
+            App Locked
+          </Text>
+          <Text style={[styles.lockSubtitle, { color: colors.textSecondary }]} accessible>
             Authenticate with Face ID, fingerprint, or passcode to continue.
           </Text>
           <TouchableOpacity
@@ -81,11 +87,16 @@ export default function BiometricLockGuard({ children }: BiometricLockGuardProps
             onPress={() => void unlock()}
             disabled={isRetrying}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Unlock app"
+            accessibilityHint="Authenticate to access the app"
           >
             {isRetrying ? (
-              <ActivityIndicator color="#ffffff" />
+              <ActivityIndicator color="#ffffff" accessibilityLabel="Authenticating" />
             ) : (
-              <Text style={styles.unlockButtonText}>Try Again</Text>
+              <Text style={styles.unlockButtonText} accessible>
+                Try Again
+              </Text>
             )}
           </TouchableOpacity>
         </View>

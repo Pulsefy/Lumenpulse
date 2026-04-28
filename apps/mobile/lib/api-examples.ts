@@ -7,7 +7,7 @@
 
 import { apiClient, ApiResponse } from './api-client';
 import { authApi, healthApi } from './api';
-import config from './config';
+import { config } from './config';
 
 // ============================================================================
 // Example 1: Basic GET Request
@@ -161,7 +161,7 @@ async function exampleCancellation() {
   try {
     const response = await requestPromise;
     return response;
-  } catch (error) {
+  } catch {
     console.log('Request was cancelled or failed');
     return null;
   }
@@ -253,20 +253,6 @@ async function exampleRetryLogic<T>(
   }
 
   throw new Error('Max retries exceeded');
-}
-
-// Usage:
-async function exampleUsingRetry() {
-  try {
-    const data = await exampleRetryLogic(
-      () => apiClient.get<{ status: string }>('/health'),
-      3,
-      1000,
-    );
-    console.log('Success after retries:', data);
-  } catch (error) {
-    console.error('Failed after all retries:', error);
-  }
 }
 
 // ============================================================================

@@ -11,11 +11,8 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
 import { useAuth } from '../../contexts/AuthContext';
-import { useTheme } from '../../contexts/ThemeContext';
-import { useRouter } from 'expo-router';
-import { ThemeMode } from '../../theme/colors';
+import { useLocalization } from '../../src/context';
 import {
   authenticateBiometricPrompt,
   getBiometricLockEnabled,
@@ -24,7 +21,7 @@ import {
   setBiometricLockEnabled,
 } from '../../lib/biometric-lock';
 
-const THEME_OPTIONS: { label: string; value: ThemeMode; icon: string }[] = [
+const THEME_OPTIONS: { label: string; value: 'system' | 'light' | 'dark'; icon: string }[] = [
   { label: 'System', value: 'system', icon: 'phone-portrait-outline' },
   { label: 'Light', value: 'light', icon: 'sunny-outline' },
   { label: 'Dark', value: 'dark', icon: 'moon-outline' },
@@ -32,14 +29,15 @@ const THEME_OPTIONS: { label: string; value: ThemeMode; icon: string }[] = [
 
 export default function SettingsScreen() {
   const { logout, isAuthenticated } = useAuth();
-  const { colors, mode, setMode } = useTheme();
+  const { colors, setThemeMode, resolvedMode } = useLocalization();
+  const { t } = useLocalization();
   const router = useRouter();
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(true);
   const [biometricSaving, setBiometricSaving] = useState(false);
 
-  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
-  const appEnv = Constants.expoConfig?.extra?.environment ?? 'development';
+  const appVersion = '1.0.0';
+  const appEnv = 'development';
 
   useEffect(() => {
     const loadBiometricPreference = async () => {
@@ -48,7 +46,7 @@ export default function SettingsScreen() {
       setBiometricLoading(false);
     };
 
-    void loadBiometricPreference();
+    loadBiometricPreference();
   }, []);
 
   const handleLogout = async () => {
@@ -61,9 +59,7 @@ export default function SettingsScreen() {
   };
 
   const handleBiometricToggle = async (nextValue: boolean) => {
-    if (biometricSaving) {
-      return;
-    }
+    if (biometricSaving) return;
 
     setBiometricSaving(true);
 
@@ -72,8 +68,8 @@ export default function SettingsScreen() {
         const supported = await isBiometricLockSupported();
         if (!supported) {
           Alert.alert(
-            'Biometric Not Supported',
-            'This device does not support biometric authentication.',
+            t('settings.biometric_lock.not_supported'),
+            t('settings.biometric_lock.not_supported_message'),
           );
           return;
         }
@@ -81,54 +77,70 @@ export default function SettingsScreen() {
         const enrolled = await isBiometricEnrolled();
         if (!enrolled) {
           Alert.alert(
-            'No Biometrics Enrolled',
-            'Set up Face ID or fingerprint in your device settings before enabling this lock.',
+            t('settings.biometric_lock.no_biometrics'),
+            t('settings.biometric_lock.no_biometrics_message'),
           );
           return;
         }
 
-        const result = await authenticateBiometricPrompt('Confirm biometric lock');
-        if (!result.success) {
-          return;
-        }
+        const result = await authenticateBiometricPrompt(t('settings.biometric_lock.confirm_biometric'));
+        if (!result.success) return;
       }
 
       await setBiometricLockEnabled(nextValue);
       setBiometricEnabled(nextValue);
     } catch (error) {
       console.error('Error updating biometric lock setting:', error);
-      Alert.alert('Update Failed', 'Could not update biometric lock preference. Please try again.');
+      Alert.alert(
+        t('settings.biometric_lock.update_failed'),
+        t('settings.biometric_lock.update_failed_message'),
+      );
     } finally {
       setBiometricSaving(false);
     }
   };
 
+  const handleThemeChange = (value: 'system' | 'light' | 'dark') => {
+    setThemeMode(value);
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
+        <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+          {t('settings.title')}
+        </Text>
 
         <View
           style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessible
+          accessibilityLabel={t('settings.account_preferences')}
         >
           <View style={styles.sectionHeader}>
             <Ionicons name="options-outline" size={20} color={colors.accent} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Account & Preferences</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]} accessible>
+              {t('settings.account_preferences')}
+            </Text>
           </View>
 
           <TouchableOpacity
             style={styles.navRow}
             activeOpacity={0.75}
             onPress={() => router.push('/settings/manage-accounts')}
+            accessibilityRole="link"
+            accessibilityLabel={t('settings.manage_accounts.title')}
+            accessibilityHint={t('settings.manage_accounts.description')}
           >
             <View style={styles.navRowCopy}>
               <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
                 <Ionicons name="wallet-outline" size={18} color={colors.accent} />
               </View>
               <View style={styles.navTextWrap}>
-                <Text style={[styles.navTitle, { color: colors.text }]}>Manage Accounts</Text>
-                <Text style={[styles.navDescription, { color: colors.textSecondary }]}>
-                  Add linked Stellar public keys with QR and remove them when needed.
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.manage_accounts.title')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t('settings.manage_accounts.description')}
                 </Text>
               </View>
             </View>
@@ -141,15 +153,20 @@ export default function SettingsScreen() {
             style={styles.navRow}
             activeOpacity={0.75}
             onPress={() => router.push('/settings/notification-settings')}
+            accessibilityRole="link"
+            accessibilityLabel={t('settings.notification_settings.title')}
+            accessibilityHint={t('settings.notification_settings.description')}
           >
             <View style={styles.navRowCopy}>
               <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
                 <Ionicons name="notifications-outline" size={18} color={colors.accent} />
               </View>
               <View style={styles.navTextWrap}>
-                <Text style={[styles.navTitle, { color: colors.text }]}>Notification Settings</Text>
-                <Text style={[styles.navDescription, { color: colors.textSecondary }]}>
-                  Control price, news, and security alerts individually.
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.notification_settings.title')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t('settings.notification_settings.description')}
                 </Text>
               </View>
             </View>
@@ -164,21 +181,25 @@ export default function SettingsScreen() {
                 <Ionicons name="lock-closed-outline" size={18} color={colors.accent} />
               </View>
               <View style={styles.navTextWrap}>
-                <Text style={[styles.navTitle, { color: colors.text }]}>Enable Biometric Lock</Text>
-                <Text style={[styles.navDescription, { color: colors.textSecondary }]}>
-                  Require Face ID, fingerprint, or passcode on every cold app start.
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.biometric_lock.enable')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t('settings.biometric_lock.description')}
                 </Text>
               </View>
             </View>
 
             {biometricLoading || biometricSaving ? (
-              <ActivityIndicator color={colors.accent} />
+              <ActivityIndicator color={colors.accent} accessibilityLabel={t('common.loading')} />
             ) : (
               <Switch
                 value={biometricEnabled}
-                onValueChange={(value) => void handleBiometricToggle(value)}
+                onValueChange={handleBiometricToggle}
                 trackColor={{ false: colors.cardBorder, true: colors.accent }}
                 thumbColor="#ffffff"
+                accessibilityLabel={t('settings.biometric_lock.enable')}
+                accessibilityRole="switch"
               />
             )}
           </View>
@@ -186,15 +207,19 @@ export default function SettingsScreen() {
 
         <View
           style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessible
+          accessibilityLabel={t('settings.appearance')}
         >
           <View style={styles.sectionHeader}>
             <Ionicons name="color-palette-outline" size={20} color={colors.accent} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Appearance</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]} accessible>
+              {t('settings.appearance')}
+            </Text>
           </View>
 
           <View style={styles.themeRow}>
             {THEME_OPTIONS.map((opt) => {
-              const isActive = mode === opt.value;
+              const isActive = resolvedMode === opt.value;
               return (
                 <TouchableOpacity
                   key={opt.value}
@@ -205,15 +230,18 @@ export default function SettingsScreen() {
                       borderColor: isActive ? colors.accent : colors.cardBorder,
                     },
                   ]}
-                  onPress={() => setMode(opt.value)}
+                  onPress={() => handleThemeChange(opt.value)}
                   activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={`${opt.label} theme`}
                 >
                   <Ionicons
                     name={opt.icon as any}
                     size={20}
                     color={isActive ? '#ffffff' : colors.textSecondary}
                   />
-                  <Text style={[styles.themeLabel, { color: isActive ? '#ffffff' : colors.text }]}>
+                  <Text style={[styles.themeLabel, { color: isActive ? '#ffffff' : colors.text }]} accessible>
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
@@ -224,29 +252,37 @@ export default function SettingsScreen() {
 
         <View
           style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessible
+          accessibilityLabel={t('settings.app_info')}
         >
           <View style={styles.sectionHeader}>
             <Ionicons name="information-circle-outline" size={20} color={colors.accent} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>App Info</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]} accessible>
+              {t('settings.app_info')}
+            </Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Version</Text>
-            <Text style={[styles.infoValue, { color: colors.text }]}>{appVersion}</Text>
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]} accessible>
+              {t('settings.version')}
+            </Text>
+            <Text style={[styles.infoValue, { color: colors.text }]} accessible>
+              {appVersion}
+            </Text>
           </View>
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
           <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Environment</Text>
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]} accessible>
+              {t('settings.environment')}
+            </Text>
             <View
-              style={[
-                styles.envBadge,
-                { backgroundColor: colors.card, borderColor: colors.cardBorder },
-              ]}
+              style={[styles.envBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+              accessible
             >
               <Text style={[styles.envBadgeText, { color: colors.accent }]}>
-                {appEnv === 'production' ? 'Production' : 'Contributor Build'}
+                {appEnv === 'production' ? t('settings.environment_production') : t('settings.environment_contributor')}
               </Text>
             </View>
           </View>
@@ -254,8 +290,12 @@ export default function SettingsScreen() {
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
           <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Platform</Text>
-            <Text style={[styles.infoValue, { color: colors.text }]}>Lumenpulse Mobile</Text>
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]} accessible>
+              {t('settings.platform')}
+            </Text>
+            <Text style={[styles.infoValue, { color: colors.text }]} accessible>
+              Lumenpulse Mobile
+            </Text>
           </View>
         </View>
 
@@ -264,9 +304,12 @@ export default function SettingsScreen() {
             style={[styles.logoutButton, { backgroundColor: colors.danger }]}
             onPress={handleLogout}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t('settings.logout')}
+            accessibilityHint="Sign out of your account"
           >
             <Ionicons name="log-out-outline" size={20} color="#ffffff" style={{ marginRight: 8 }} />
-            <Text style={styles.logoutButtonText}>Log Out</Text>
+            <Text style={styles.logoutButtonText} accessible>{t('settings.logout')}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>

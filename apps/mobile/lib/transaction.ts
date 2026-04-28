@@ -1,5 +1,5 @@
 import { apiClient } from './api-client';
-import { Transaction, TransactionHistoryResponse } from '../lib/types/transaction';
+import { TransactionHistoryResponse } from '../lib/types/transaction';
 
 export const transactionApi = {
   getHistory: async (limit?: number, cursor?: string): Promise<TransactionHistoryResponse> => {
