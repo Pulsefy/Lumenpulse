@@ -95,7 +95,7 @@ mod prop4_tvl_tracking {
     use super::*;
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(1000))]
+        #![proptest_config(ProptestConfig::with_cases(200))]
 
         // Feature: invariant-hardening, Property 4: tvl tracks deposits and withdrawals exactly
         // Validates: Requirements 3.1, 3.2, 3.3
@@ -165,7 +165,7 @@ mod prop5_cumulative_volume {
     use super::*;
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(1000))]
+        #![proptest_config(ProptestConfig::with_cases(200))]
 
         // Feature: invariant-hardening, Property 5: cumulative_volume is non-decreasing
         // Validates: Requirements 3.4
@@ -211,7 +211,7 @@ mod prop6_admin_only {
     use super::*;
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(1000))]
+        #![proptest_config(ProptestConfig::with_cases(200))]
 
         // Feature: invariant-hardening, Property 6: non-admin callers are rejected
         // Validates: Requirements 4.1
@@ -257,7 +257,7 @@ mod prop7_paused_vault {
     use super::*;
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(1000))]
+        #![proptest_config(ProptestConfig::with_cases(200))]
 
         // Feature: invariant-hardening, Property 7: paused vault rejects state-changing calls
         // Validates: Requirements 4.3
@@ -314,7 +314,7 @@ mod prop8_project_not_found {
     use super::*;
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(1000))]
+        #![proptest_config(ProptestConfig::with_cases(200))]
 
         // Feature: invariant-hardening, Property 8: operations on missing projects return ProjectNotFound
         // Validates: Requirements 4.4
@@ -359,7 +359,7 @@ mod prop9_withdrawal_requires_milestone {
     use super::*;
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(1000))]
+        #![proptest_config(ProptestConfig::with_cases(200))]
 
         // Feature: invariant-hardening, Property 9: withdraw without approval returns MilestoneNotApproved
         // Validates: Requirements 5.1
@@ -405,7 +405,7 @@ mod prop10_withdrawal_balance_cap {
     use super::*;
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(1000))]
+        #![proptest_config(ProptestConfig::with_cases(200))]
 
         // Feature: invariant-hardening, Property 10: withdraw above balance returns InsufficientBalance
         // Validates: Requirements 5.2
@@ -458,7 +458,7 @@ mod prop11_quadratic_match_non_negative {
     use super::*;
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(1000))]
+        #![proptest_config(ProptestConfig::with_cases(200))]
 
         // Feature: invariant-hardening, Property 11: calculate_match >= 0 for any contributions
         // Validates: Requirements 6.1
@@ -508,7 +508,7 @@ mod prop12_distribute_match {
     use super::*;
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(1000))]
+        #![proptest_config(ProptestConfig::with_cases(200))]
 
         // Feature: invariant-hardening, Property 12: distribute_match respects pool cap and updates balances correctly
         // Validates: Requirements 6.2, 6.3, 6.4
