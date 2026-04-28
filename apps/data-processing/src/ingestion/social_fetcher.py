@@ -9,6 +9,7 @@ import math
 import os
 import re
 import time
+import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -17,7 +18,113 @@ from typing import Dict, List, Optional
 import requests
 from requests.exceptions import RequestException
 
+try:
+    from langdetect import DetectorFactory, LangDetectException, detect
+
+    DetectorFactory.seed = 0
+    LANGDETECT_AVAILABLE = True
+except ImportError:
+    LANGDETECT_AVAILABLE = False
+
+    class LangDetectException(Exception):
+        """Fallback exception when langdetect is unavailable."""
+
+DEFAULT_TRANSLATION_API_URL = "https://libretranslate.de/translate"
+
 logger = logging.getLogger(__name__)
+
+def _normalize_text(text: Optional[str]) -> str:
+    """Normalize text for analytics ingestion."""
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKC", text)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+def _normalize_language_code(language: str) -> str:
+    """Normalize language codes like en_US to en."""
+    if not language or not isinstance(language, str):
+        return "unknown"
+    normalized = language.strip().lower().replace("_", "-")
+    return normalized.split("-")[0]
+
+def _detect_script_language(text: str) -> Optional[str]:
+    if re.search(r"[\u4e00-\u9fff]", text):
+        return "zh"
+    if re.search(r"[\u3040-\u30ff]", text):
+        return "ja"
+    if re.search(r"[\uac00-\ud7af]", text):
+        return "ko"
+    if re.search(r"[\u0400-\u04ff]", text):
+        return "ru"
+    if re.search(r"[\u0600-\u06ff]", text):
+        return "ar"
+    return None
+
+def _detect_language(text: str, hint: Optional[str] = None) -> str:
+    """Detect the source language for a post."""
+    if hint:
+        return _normalize_language_code(hint)
+
+    if text and LANGDETECT_AVAILABLE:
+        try:
+            detected = detect(text)
+            return _normalize_language_code(detected)
+        except LangDetectException:
+            pass
+
+    script_language = _detect_script_language(text or "")
+    if script_language:
+        return script_language
+
+    return "en"
+
+def _translate_text(text: str, source_lang: str, session: requests.Session) -> str:
+    """Translate non-English text to English using a configurable endpoint."""
+    if not text or source_lang == "en":
+        return text
+
+    translation_url = (
+        os.getenv("TRANSLATION_API_URL", "").strip() or DEFAULT_TRANSLATION_API_URL
+    )
+    translation_key = os.getenv("TRANSLATION_API_KEY", "").strip()
+
+    if not translation_url:
+        return text
+
+    payload = {
+        "q": text,
+        "source": source_lang,
+        "target": "en",
+        "format": "text",
+    }
+    headers = {"Content-Type": "application/json"}
+    if translation_key:
+        headers["Authorization"] = f"Bearer {translation_key}"
+
+    try:
+        response = session.post(
+            translation_url,
+            json=payload,
+            headers=headers,
+            timeout=10,
+        )
+        if response.status_code != 200:
+            logger.warning(
+                "Translation API returned %s for source_lang=%s",
+                response.status_code,
+                source_lang,
+            )
+            return text
+
+        data = response.json()
+        return data.get("translatedText") or data.get("translation") or text
+    except RequestException as exc:
+        logger.warning("Translation request failed: %s", exc)
+        return text
+    except ValueError:
+        logger.warning("Translation API returned invalid JSON")
+        return text
 
 
 class SocialPlatform(Enum):
@@ -47,6 +154,9 @@ class SocialPost:
     # Platform-specific metadata
     hashtags: Optional[List[str]] = None
     subreddit: Optional[str] = None
+    # Translation
+    language: str = "en"
+    translated: bool = False
     # Tracking
     fetched_at: datetime = None
 
@@ -62,6 +172,8 @@ class SocialPost:
         data["posted_at"] = self.posted_at.isoformat()
         data["fetched_at"] = self.fetched_at.isoformat() if self.fetched_at else None
         data["platform"] = self.platform
+        data["language"] = self.language
+        data["translated"] = self.translated
         return data
 
     def to_news_article_format(self) -> Dict:
@@ -81,6 +193,8 @@ class SocialPost:
             "tags": self.hashtags or [],
             "platform": self.platform,
             "author": self.author,
+            "language": self.language,
+            "translated": self.translated,
             "engagement": {
                 "likes": self.likes,
                 "comments": self.comments,
@@ -235,14 +349,18 @@ class TwitterFetcher:
 
         posts = []
 
-        # Normalize hashtag
+        # Normalize hashtag and allow non-English posts
         query = hashtag if hashtag.startswith("#") else f"#{hashtag}"
-        query = f"{query} -is:retweet lang:en"  # Exclude retweets, English only
+        twitter_lang = os.getenv("TWITTER_SEARCH_LANG", "").strip()
+        if twitter_lang:
+            query = f"{query} -is:retweet lang:{twitter_lang}"
+        else:
+            query = f"{query} -is:retweet"
 
         params = {
             "query": query,
             "max_results": min(limit, 100),  # Twitter max is 100 per request
-            "tweet.fields": "created_at,public_metrics,entities,author_id",
+            "tweet.fields": "created_at,public_metrics,entities,author_id,lang",
             "expansions": "author_id",
             "user.fields": "username,name",
         }
@@ -284,10 +402,22 @@ class TwitterFetcher:
                 entities = tweet.get("entities", {})
                 hashtags = [f"#{tag['tag']}" for tag in entities.get("hashtags", [])]
 
+                raw_content = tweet.get("text", "")
+                lang_hint = tweet.get("lang")
+                source_language = _detect_language(raw_content, hint=lang_hint)
+                translated = False
+                
+                content_to_use = raw_content
+                if source_language != "en":
+                    content_to_use = _translate_text(raw_content, source_language, self.session)
+                    translated = True
+                    
+                content_to_use = _normalize_text(content_to_use)
+
                 post = SocialPost(
                     id=tweet["id"],
                     platform=SocialPlatform.TWITTER.value,
-                    content=tweet.get("text", ""),
+                    content=content_to_use,
                     author=user.get("username", "unknown"),
                     posted_at=datetime.fromisoformat(tweet["created_at"].replace("Z", "+00:00")),
                     url=f"https://twitter.com/user/status/{tweet['id']}",
@@ -295,6 +425,8 @@ class TwitterFetcher:
                     comments=metrics.get("reply_count", 0),
                     shares=metrics.get("retweet_count", 0),
                     hashtags=hashtags,
+                    language=source_language,
+                    translated=translated,
                 )
                 posts.append(post)
 
@@ -402,11 +534,22 @@ class RedditFetcher:
             # Parse posts
             for child in data.get("data", {}).get("children", [])[:limit]:
                 post_data = child.get("data", {})
+                
+                raw_content = post_data.get("selftext", "") or post_data.get("title", "")
+                source_language = _detect_language(raw_content)
+                translated = False
+                
+                content_to_use = raw_content
+                if source_language != "en":
+                    content_to_use = _translate_text(raw_content, source_language, self.session)
+                    translated = True
+                    
+                content_to_use = _normalize_text(content_to_use)
 
                 post = SocialPost(
                     id=post_data.get("id", ""),
                     platform=SocialPlatform.REDDIT.value,
-                    content=post_data.get("selftext", "") or post_data.get("title", ""),
+                    content=content_to_use,
                     author=post_data.get("author", "[deleted]"),
                     posted_at=datetime.fromtimestamp(post_data.get("created_utc", time.time()), tz=timezone.utc),
                     url=f"https://reddit.com{post_data.get('permalink', '')}",
@@ -415,6 +558,8 @@ class RedditFetcher:
                     shares=post_data.get("num_crossposts", 0),
                     subreddit=post_data.get("subreddit", subreddit),
                     hashtags=self._extract_hashtags(post_data),
+                    language=source_language,
+                    translated=translated,
                 )
                 posts.append(post)
 
@@ -472,10 +617,21 @@ class RedditFetcher:
             for child in data.get("data", {}).get("children", [])[:limit]:
                 post_data = child.get("data", {})
 
+                raw_content = post_data.get("selftext", "") or post_data.get("title", "")
+                source_language = _detect_language(raw_content)
+                translated = False
+                
+                content_to_use = raw_content
+                if source_language != "en":
+                    content_to_use = _translate_text(raw_content, source_language, self.session)
+                    translated = True
+                    
+                content_to_use = _normalize_text(content_to_use)
+
                 post = SocialPost(
                     id=post_data.get("id", ""),
                     platform=SocialPlatform.REDDIT.value,
-                    content=post_data.get("selftext", "") or post_data.get("title", ""),
+                    content=content_to_use,
                     author=post_data.get("author", "[deleted]"),
                     posted_at=datetime.fromtimestamp(post_data.get("created_utc", time.time()), tz=timezone.utc),
                     url=f"https://reddit.com{post_data.get('permalink', '')}",
@@ -483,6 +639,8 @@ class RedditFetcher:
                     comments=post_data.get("num_comments", 0),
                     shares=post_data.get("num_crossposts", 0),
                     subreddit=post_data.get("subreddit", ""),
+                    language=source_language,
+                    translated=translated,
                 )
                 posts.append(post)
 
@@ -657,6 +815,8 @@ class SocialFetcher:
                 shares=p.get("shares", 0),
                 hashtags=p.get("hashtags", []),
                 subreddit=p.get("subreddit"),
+                language=p.get("language", "en"),
+                translated=p.get("translated", False),
             ).to_news_article_format()
             for p in posts
         ]

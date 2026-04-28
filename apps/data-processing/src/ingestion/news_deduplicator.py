@@ -3,10 +3,12 @@ News deduplication module - removes duplicate articles to prevent re-processing
 """
 import hashlib
 import json
-from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Optional, Set
-from pathlib import Path
 import logging
+import re
+import unicodedata
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,12 @@ class NewsDeduplicator:
         
         logger.info(f"Initialized NewsDeduplicator with window of {deduplication_window_days} days")
 
+    def _clean_text(self, text: str) -> str:
+        normalized = unicodedata.normalize("NFKD", text or "")
+        normalized = normalized.encode("ascii", "ignore").decode("ascii")
+        normalized = re.sub(r"\s+", " ", normalized).strip().lower()
+        return normalized
+
     def _normalize_article(self, article: Dict) -> str:
         """
         Normalize article content for consistent hashing
@@ -52,16 +60,16 @@ class NewsDeduplicator:
             Normalized string representation of the article
         """
         # Extract and normalize key fields
-        title = (article.get('title') or '').strip().lower()
-        content = (article.get('content') or '').strip().lower()
-        url = (article.get('url') or '').strip().lower()
+        title = self._clean_text(article.get("title") or "")
+        content = self._clean_text(article.get("content") or "")
+        url = self._clean_text(article.get("url") or "")
         
         # Create a canonical representation
         canonical_data = {
-            'title': title,
-            'content': content,
-            'url': url,
-            'source': (article.get('source') or '').strip().lower(),
+            "title": title,
+            "content": content,
+            "url": url,
+            "source": self._clean_text(article.get("source") or ""),
         }
         
         # Convert to JSON string for consistent hashing

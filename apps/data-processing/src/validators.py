@@ -17,10 +17,12 @@ logger = logging.getLogger("data_validation")
 class NewsArticle(BaseModel):
     id: str
     title: str
-    content: str
+    content: Optional[str] = None
+    summary: Optional[str] = None
     published_at: str  # ISO8601 string
     source: Optional[str]
     url: Optional[str]
+    language: Optional[str] = None
 
     @validator("published_at")
     def validate_published_at(cls, v):

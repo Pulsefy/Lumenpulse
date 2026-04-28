@@ -3,15 +3,30 @@ News Fetcher Service for cryptocurrency news.
 Fetches data from external APIs and standardizes the format.
 """
 
-import os
 import json
+import os
+import re
 import time
-from typing import List, Dict, Optional
+import unicodedata
 from dataclasses import dataclass, asdict
-from .news_deduplicator import NewsDeduplicator
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+from .news_deduplicator import NewsDeduplicator
 import requests
 from requests.exceptions import RequestException, Timeout
+
+try:
+    from langdetect import DetectorFactory, LangDetectException, detect
+
+    DetectorFactory.seed = 0
+    LANGDETECT_AVAILABLE = True
+except ImportError:
+    LANGDETECT_AVAILABLE = False
+
+    class LangDetectException(Exception):
+        """Fallback exception when langdetect is unavailable."""
+
+DEFAULT_TRANSLATION_API_URL = "https://libretranslate.de/translate"
 
 
 @dataclass
@@ -28,6 +43,8 @@ class NewsArticle:
     categories: List[str]
     sentiment_score: Optional[float] = None  # To be filled by sentiment engine
     tags: Optional[List[str]] = None
+    language: str = "en"
+    translated: bool = False
 
     def to_dict(self) -> Dict:
         """Convert to dictionary with serialized datetime"""
@@ -110,6 +127,126 @@ class NewsFetcher:
         else:
             response.raise_for_status()
 
+    def _normalize_text(self, text: Optional[str]) -> str:
+        """Normalize text for analytics ingestion."""
+        if not text:
+            return ""
+        normalized = unicodedata.normalize("NFKC", text)
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        return normalized
+
+    def _normalize_language_code(self, language: str) -> str:
+        """Normalize language codes like en_US to en."""
+        if not language or not isinstance(language, str):
+            return "unknown"
+        normalized = language.strip().lower().replace("_", "-")
+        return normalized.split("-")[0]
+
+    def _detect_script_language(self, text: str) -> Optional[str]:
+        if re.search(r"[\u4e00-\u9fff]", text):
+            return "zh"
+        if re.search(r"[\u3040-\u30ff]", text):
+            return "ja"
+        if re.search(r"[\uac00-\ud7af]", text):
+            return "ko"
+        if re.search(r"[\u0400-\u04ff]", text):
+            return "ru"
+        if re.search(r"[\u0600-\u06ff]", text):
+            return "ar"
+        return None
+
+    def _detect_language(self, text: str, hint: Optional[str] = None) -> str:
+        """Detect the source language for an article."""
+        if hint:
+            return self._normalize_language_code(hint)
+
+        if text and LANGDETECT_AVAILABLE:
+            try:
+                detected = detect(text)
+                return self._normalize_language_code(detected)
+            except LangDetectException:
+                pass
+
+        script_language = self._detect_script_language(text or "")
+        if script_language:
+            return script_language
+
+        return "en"
+
+    def _translate_text(self, text: str, source_lang: str) -> str:
+        """Translate non-English text to English using a configurable endpoint."""
+        if not text or source_lang == "en":
+            return text
+
+        translation_url = (
+            os.getenv("TRANSLATION_API_URL", "").strip() or DEFAULT_TRANSLATION_API_URL
+        )
+        translation_key = os.getenv("TRANSLATION_API_KEY", "").strip()
+
+        if not translation_url:
+            return text
+
+        payload = {
+            "q": text,
+            "source": source_lang,
+            "target": "en",
+            "format": "text",
+        }
+        headers = {"Content-Type": "application/json"}
+        if translation_key:
+            headers["Authorization"] = f"Bearer {translation_key}"
+
+        try:
+            response = self.session.post(
+                translation_url,
+                json=payload,
+                headers=headers,
+                timeout=APIConfig.TIMEOUT,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    "Translation API returned %s for source_lang=%s",
+                    response.status_code,
+                    source_lang,
+                )
+                return text
+
+            data = response.json()
+            return data.get("translatedText") or data.get("translation") or text
+        except RequestException as exc:
+            logger.warning("Translation request failed: %s", exc)
+            return text
+        except ValueError:
+            logger.warning("Translation API returned invalid JSON")
+            return text
+
+    def _prepare_article_fields(
+        self,
+        title: str,
+        content: Optional[str],
+        summary: Optional[str],
+        lang_hint: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        title = title or ""
+        content = content or ""
+        summary = summary or ""
+
+        source_language = self._detect_language(f"{title} {content}", hint=lang_hint)
+        translated = False
+        if source_language != "en":
+            title = self._translate_text(title, source_language)
+            content = self._translate_text(content, source_language)
+            summary = self._translate_text(summary, source_language)
+            translated = True
+
+        return {
+            "title": self._normalize_text(title),
+            "content": self._normalize_text(content),
+            "summary": self._normalize_text(summary),
+            "language": source_language,
+            "translated": translated,
+        }
+
     def _fetch_cryptocompare(self, limit: int) -> List[NewsArticle]:
         """Fetch news from CryptoCompare API"""
         articles = []
@@ -118,7 +255,6 @@ class NewsFetcher:
             self._respect_rate_limit()
 
             params = {
-                "lang": "EN",
                 "categories": "BTC,ETH,BLOCKCHAIN",
                 "excludeCategories": "Sponsored",
             }
@@ -145,11 +281,17 @@ class NewsFetcher:
             # Parse articles
             for item in data.get("Data", [])[:limit]:
                 try:
-                    article = NewsArticle(
-                        id=f"cc_{item['id']}",
+                    parsed_fields = self._prepare_article_fields(
                         title=item.get("title", ""),
                         content=item.get("body", ""),
                         summary=item.get("short_description", ""),
+                        lang_hint=item.get("lang") or item.get("language"),
+                    )
+                    article = NewsArticle(
+                        id=f"cc_{item['id']}",
+                        title=parsed_fields["title"],
+                        content=parsed_fields["content"],
+                        summary=parsed_fields["summary"],
                         source=item.get("source", "Unknown"),
                         url=item.get("url", ""),
                         published_at=datetime.fromtimestamp(
@@ -163,6 +305,8 @@ class NewsFetcher:
                         tags=(
                             item.get("tags", "").split("|") if item.get("tags") else []
                         ),
+                        language=parsed_fields["language"],
+                        translated=parsed_fields["translated"],
                     )
 
                     # Avoid duplicates
@@ -194,7 +338,6 @@ class NewsFetcher:
 
             params = {
                 "q": "cryptocurrency OR blockchain OR bitcoin OR ethereum",
-                "language": "en",
                 "sortBy": "publishedAt",
                 "pageSize": min(limit, 100),  # NewsAPI max is 100
                 "from": from_date.strftime("%Y-%m-%d"),
@@ -218,11 +361,17 @@ class NewsFetcher:
                         item["publishedAt"].replace("Z", "+00:00")
                     )
 
-                    article = NewsArticle(
-                        id=f"na_{hash(item['url']) & 0xFFFFFFFF}",
+                    parsed_fields = self._prepare_article_fields(
                         title=item.get("title", ""),
                         content=item.get("content", ""),
                         summary=item.get("description", ""),
+                        lang_hint=item.get("language") or item.get("lang"),
+                    )
+                    article = NewsArticle(
+                        id=f"na_{hash(item['url']) & 0xFFFFFFFF}",
+                        title=parsed_fields["title"],
+                        content=parsed_fields["content"],
+                        summary=parsed_fields["summary"],
                         source=item.get("source", {}).get("name", "Unknown"),
                         url=item.get("url", ""),
                         published_at=published_at,
@@ -230,6 +379,8 @@ class NewsFetcher:
                             "crypto",
                             "blockchain",
                         ],  # NewsAPI doesn't provide categories
+                        language=parsed_fields["language"],
+                        translated=parsed_fields["translated"],
                     )
 
                     # Avoid duplicates
