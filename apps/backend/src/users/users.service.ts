@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { User } from './entities/user.entity';
 import { StellarAccount } from './entities/stellar-account.entity';
 import { StellarService } from '../stellar/stellar.service';
@@ -15,10 +16,30 @@ import { StellarAccountResponseDto } from './dto/stellar-account-response.dto';
 import { UpdateStellarAccountLabelDto } from './dto/update-stellar-account-label.dto';
 import { UploadService } from '../upload/upload.service';
 import crypto from 'crypto';
+import {
+  Keypair,
+  Networks,
+  TransactionBuilder,
+  Operation,
+  BASE_FEE,
+  Account,
+  Transaction,
+} from '@stellar/stellar-sdk';
+
+interface WalletChallengeData {
+  nonce: string;
+  timestamp: number;
+  challengeXDR: string;
+  expiresAt: number;
+}
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
+  private readonly challengeStore = new Map<string, WalletChallengeData>();
+  private readonly CHALLENGE_TIMEOUT = 5 * 60 * 1000;
+  private readonly serverKeypair: Keypair;
+  private readonly stellarNetwork: string;
 
   constructor(
     @InjectRepository(User)
@@ -27,7 +48,21 @@ export class UsersService {
     private stellarAccountRepository: Repository<StellarAccount>,
     private stellarService: StellarService,
     private uploadService: UploadService,
-  ) {}
+    private configService: ConfigService,
+  ) {
+    const serverSecret = this.configService.get<string>('STELLAR_SERVER_SECRET');
+    if (!serverSecret) {
+      throw new Error('STELLAR_SERVER_SECRET is not configured');
+    }
+    this.serverKeypair = Keypair.fromSecret(serverSecret);
+
+    this.stellarNetwork = this.configService.get<string>(
+      'STELLAR_NETWORK',
+      'testnet',
+    );
+
+    setInterval(() => this.cleanupExpiredChallenges(), 60000);
+  }
 
   // --- BASIC CRUD ---
 
@@ -217,6 +252,158 @@ export class UsersService {
     await this.usersRepository.save(user);
   }
 
+  async generateWalletChallenge(publicKey: string): Promise<{
+    challenge: string;
+    nonce: string;
+    expiresIn: number;
+    publicKey: string;
+  }> {
+    this.stellarService.validatePublicKeyOrThrow(publicKey);
+
+    const nonce = crypto.randomBytes(32).toString('hex');
+    const timestamp = Date.now();
+
+    const sourceAccount = new Account(this.serverKeypair.publicKey(), '-1');
+
+    const networkPassphrase =
+      this.stellarNetwork === 'testnet' ? Networks.TESTNET : Networks.PUBLIC;
+
+    const transaction = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase,
+      timebounds: {
+        minTime: 0,
+        maxTime: Math.floor(timestamp / 1000) + 300,
+      },
+    })
+      .addOperation(
+        Operation.manageData({
+          name: 'LumenPulse verify',
+          value: Buffer.from(nonce),
+          source: publicKey,
+        }),
+      )
+      .addOperation(
+        Operation.manageData({
+          name: 'web_auth_domain',
+          value: Buffer.from(
+            this.configService.get<string>('DOMAIN', 'lumenpulse.io'),
+          ),
+          source: this.serverKeypair.publicKey(),
+        }),
+      )
+      .build();
+
+    transaction.sign(this.serverKeypair);
+
+    const challengeXDR = transaction.toXDR();
+
+    this.challengeStore.set(publicKey, {
+      nonce,
+      timestamp,
+      challengeXDR,
+      expiresAt: timestamp + this.CHALLENGE_TIMEOUT,
+    });
+
+    this.logger.debug(`Wallet challenge generated for ${publicKey}`);
+
+    return {
+      challenge: challengeXDR,
+      nonce,
+      expiresIn: 300,
+      publicKey,
+    };
+  }
+
+  async verifyWalletChallenge(
+    publicKey: string,
+    signedChallenge: string,
+  ): Promise<{ verified: boolean; publicKey: string; message: string }> {
+    this.stellarService.validatePublicKeyOrThrow(publicKey);
+
+    const storedChallenge = this.challengeStore.get(publicKey);
+
+    if (!storedChallenge) {
+      throw new BadRequestException(
+        'No challenge found for this public key. Please request a new challenge.',
+      );
+    }
+
+    if (Date.now() > storedChallenge.expiresAt) {
+      this.challengeStore.delete(publicKey);
+      throw new BadRequestException(
+        'Challenge has expired. Please request a new challenge.',
+      );
+    }
+
+    const networkPassphrase =
+      this.stellarNetwork === 'testnet' ? Networks.TESTNET : Networks.PUBLIC;
+
+    let transaction: Transaction;
+
+    try {
+      transaction = new Transaction(signedChallenge, networkPassphrase);
+    } catch {
+      this.challengeStore.delete(publicKey);
+      throw new BadRequestException('Invalid transaction format');
+    }
+
+    const userSignature = transaction.signatures.find((sig) => {
+      try {
+        const keypair = Keypair.fromPublicKey(publicKey);
+        return keypair.verify(transaction.hash(), sig.signature());
+      } catch {
+        return false;
+      }
+    });
+
+    if (!userSignature) {
+      this.challengeStore.delete(publicKey);
+      throw new BadRequestException(
+        'Invalid signature. Transaction was not signed by the provided public key.',
+      );
+    }
+
+    this.challengeStore.delete(publicKey);
+
+    this.logger.debug(`Wallet challenge verified for ${publicKey}`);
+
+    return {
+      verified: true,
+      publicKey,
+      message: 'Wallet ownership verified successfully',
+    };
+  }
+
+  async markAccountVerified(publicKey: string): Promise<void> {
+    const account = await this.stellarAccountRepository.findOne({
+      where: { publicKey },
+    });
+
+    if (!account) {
+      throw new NotFoundException('Stellar account not found');
+    }
+
+    account.isVerified = true;
+    await this.stellarAccountRepository.save(account);
+  }
+
+  private cleanupExpiredChallenges(): void {
+    const now = Date.now();
+    let cleanedCount = 0;
+
+    for (const [key, value] of this.challengeStore.entries()) {
+      if (now > value.expiresAt) {
+        this.challengeStore.delete(key);
+        cleanedCount++;
+      }
+    }
+
+    if (cleanedCount > 0) {
+      this.logger.debug(`Cleaned up ${cleanedCount} expired wallet challenges`);
+    }
+  }
+
   private mapToResponseDto(account: StellarAccount): StellarAccountResponseDto {
     return {
       id: account.id,
@@ -224,6 +411,7 @@ export class UsersService {
       label: account.label,
       isPrimary: account.isPrimary,
       isActive: account.isActive,
+      isVerified: account.isVerified,
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,
     };

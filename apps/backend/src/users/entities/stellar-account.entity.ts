@@ -41,6 +41,9 @@ export class StellarAccount {
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  isVerified: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
