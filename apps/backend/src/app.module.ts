@@ -46,6 +46,7 @@ import { OutboxModule } from './outbox/outbox.module';
 import { VerificationModule } from './verification/verification.module';
 import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -111,6 +112,7 @@ import { IdempotencyInterceptor } from './common/interceptors/idempotency.interc
     OutboxModule,
     TelegramBotModule,
     ModerationModule,
+    SearchModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
