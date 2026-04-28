@@ -29,6 +29,9 @@ import databaseConfig from './database/database.config';
 import stellarConfig from './stellar/config/stellar.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { StructuredLoggerMiddleware } from './common/middleware/structured-logger.middleware';
+import { StructuredLoggingInterceptor } from './common/interceptors/structured-logging.interceptor';
+import { StructuredLoggerModule } from './common/services/structured-logger.module';
 import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
 import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { RateLimitStorageService } from './common/rate-limit/rate-limit.storage';
@@ -113,10 +116,23 @@ import { ExportModule } from './export/export.module';
     ExportModule,
     TelegramBotModule,
     ModerationModule,
+  /*
+StructuredLoggerModule.forRoot({
+  context: 'LumenPulse',
+  options: {
+    includeRequestDetails: true,
+    excludePaths: ['/health', '/metrics'],
+  },
+}),
+*/
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
     AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: StructuredLoggingInterceptor,
+    },
     {
       provide: APP_GUARD,
       useClass: RateLimitGuard,
@@ -129,6 +145,8 @@ import { ExportModule } from './export/export.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RequestIdMiddleware, LoggerMiddleware).forRoutes('*');
+    consumer
+      .apply(RequestIdMiddleware, StructuredLoggerMiddleware, LoggerMiddleware)
+      .forRoutes('*');
   }
 }
