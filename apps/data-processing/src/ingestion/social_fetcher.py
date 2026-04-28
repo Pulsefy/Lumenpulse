@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
+from .news_deduplicator import NewsDeduplicator
 
 import requests
 from requests.exceptions import RequestException
@@ -567,8 +568,11 @@ class SocialFetcher:
         self.twitter = TwitterFetcher(bearer_token=twitter_token) if use_twitter else None
         self.reddit = RedditFetcher() if use_reddit else None
 
-        # Deduplication tracking
-        self.seen_post_ids: set = set()
+        # Robust deduplication tracking
+        self.deduplicator = NewsDeduplicator(
+            deduplication_window_days=7,
+            storage_path="./data/social_deduplication.json"
+        )
 
     def fetch_all(
         self,
@@ -605,20 +609,16 @@ class SocialFetcher:
             )
             all_posts.extend(reddit_posts)
 
-        # Deduplicate and sort by date
-        unique_posts = []
-        for post in all_posts:
-            post_id = f"{post.platform}_{post.id}"
-            if post_id not in self.seen_post_ids:
-                self.seen_post_ids.add(post_id)
-                unique_posts.append(post)
+        # Deduplicate using robust deduplicator
+        post_dicts = [post.to_dict() for post in all_posts]
+        unique_post_dicts = self.deduplicator.filter_duplicates(post_dicts)
 
         # Sort by posted_at (newest first)
-        unique_posts.sort(key=lambda p: p.posted_at, reverse=True)
+        unique_post_dicts.sort(key=lambda p: p["posted_at"], reverse=True)
 
-        logger.info(f"Total unique social posts: {len(unique_posts)}")
+        logger.info(f"Total unique social posts: {len(unique_post_dicts)}")
 
-        return [post.to_dict() for post in unique_posts]
+        return unique_post_dicts
 
     def fetch_as_articles(
         self,
@@ -689,7 +689,8 @@ class SocialFetcher:
 
     def clear_cache(self):
         """Clear the seen post cache"""
-        self.seen_post_ids.clear()
+        self.deduplicator.seen_data.clear()
+        self.deduplicator.lsh_index = [{} for _ in range(self.deduplicator.num_bands)]
 
     def close(self):
         """Close all fetcher sessions"""
