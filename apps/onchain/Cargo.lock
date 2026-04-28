@@ -2155,6 +2155,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "treasury"
+version = "0.1.0"
+dependencies = [
+ "reentrancy-guard",
+ "soroban-sdk 23.5.2",
+]
+
+[[package]]
 name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

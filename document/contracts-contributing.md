@@ -1,6 +1,6 @@
 # Contracts Contribution Guide
 
-This guide covers app-specific standards for `apps/onchain`.
+This guide covers app-specific standards for `apps/onchain`. All contracts are built with Soroban/Rust. For migration context from prior chain assumptions, see [Stellar Migration Notes](STELLAR_MIGRATION_NOTES.md).
 
 ## Setup
 
