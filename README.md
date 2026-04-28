@@ -17,6 +17,10 @@ Designed for crypto enthusiasts, traders, and developers worldwide, LumenPulse s
 - **RESTful API**: Scalable backend for data queries and integrations.
 - **Intelligent Data Processing**: Automated analytics for market trends and portfolio optimization.
 
+## Migration Notes
+
+LumenPulse has migrated to Stellar/Soroban architecture. For details on changes from prior chain assumptions, completed migrations, and legacy cleanup, see [Stellar Migration Notes](document/STELLAR_MIGRATION_NOTES.md).
+
 ## Tech Stack
 ### Frontend
 - Next.js 15: App router, server components, and streaming.
