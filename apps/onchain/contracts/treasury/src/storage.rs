@@ -1,7 +1,7 @@
 use soroban_sdk::{contracttype, Address};
 
 pub const LEDGER_THRESHOLD: u32 = 120_960; // ~1 week
-pub const LEDGER_BUMP: u32 = 241_920;      // ~2 weeks
+pub const LEDGER_BUMP: u32 = 241_920; // ~2 weeks
 
 #[contracttype]
 #[derive(Clone)]

@@ -17,7 +17,13 @@ pub struct TokensClaimedEvent {
     pub remaining: i128,
 }
 
-pub fn publish_stream_created(env: &Env, beneficiary: Address, amount: i128, start_time: u64, duration: u64) {
+pub fn publish_stream_created(
+    env: &Env,
+    beneficiary: Address,
+    amount: i128,
+    start_time: u64,
+    duration: u64,
+) {
     env.events().publish(
         ("Treasury", "stream_created", beneficiary.clone()),
         StreamCreatedEvent {
@@ -29,7 +35,12 @@ pub fn publish_stream_created(env: &Env, beneficiary: Address, amount: i128, sta
     );
 }
 
-pub fn publish_tokens_claimed(env: &Env, beneficiary: Address, amount_claimed: i128, remaining: i128) {
+pub fn publish_tokens_claimed(
+    env: &Env,
+    beneficiary: Address,
+    amount_claimed: i128,
+    remaining: i128,
+) {
     env.events().publish(
         ("Treasury", "tokens_claimed", beneficiary.clone()),
         TokensClaimedEvent {

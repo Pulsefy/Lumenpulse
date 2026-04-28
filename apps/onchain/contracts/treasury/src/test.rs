@@ -33,7 +33,7 @@ fn test_treasury_streaming() {
     let start_time = 1000u64;
     let duration = 1000u64;
     env.ledger().set_timestamp(start_time);
-    
+
     treasury_client.allocate_budget(&admin, &beneficiary, &amount, &start_time, &duration);
 
     // Check unlocked at start_time (should be 0)

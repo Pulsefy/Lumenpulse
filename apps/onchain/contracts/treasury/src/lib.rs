@@ -66,7 +66,7 @@ impl TreasuryContract {
                 .instance()
                 .get(&DataKey::Admin)
                 .ok_or(TreasuryError::NotInitialized)?;
-            
+
             if admin != stored_admin {
                 return Err(TreasuryError::Unauthorized);
             }
@@ -96,9 +96,11 @@ impl TreasuryContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::Stream(beneficiary.clone()), &stream);
-            env.storage()
-                .persistent()
-                .extend_ttl(&DataKey::Stream(beneficiary.clone()), LEDGER_THRESHOLD, LEDGER_BUMP);
+            env.storage().persistent().extend_ttl(
+                &DataKey::Stream(beneficiary.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
 
             // Transfer tokens from admin to treasury
             let token_client = token::TokenClient::new(&env, &token_addr);
@@ -142,7 +144,9 @@ impl TreasuryContract {
                 env.storage().persistent().remove(&key);
             } else {
                 env.storage().persistent().set(&key, &stream);
-                env.storage().persistent().extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
             }
 
             let token_client = token::TokenClient::new(&env, &token_addr);

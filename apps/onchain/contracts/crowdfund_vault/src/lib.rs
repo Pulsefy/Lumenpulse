@@ -5,8 +5,8 @@ mod events;
 mod math;
 mod storage;
 mod token;
-mod yield_provider;
 mod treasury_interface;
+mod yield_provider;
 
 use errors::CrowdfundError;
 use math::{sqrt_scaled, unscale};
@@ -1207,7 +1207,7 @@ impl CrowdfundVaultContract {
             env.storage()
                 .persistent()
                 .set(&balance_key, &(total_balance - amount));
-            
+
             project.total_withdrawn += amount;
             env.storage()
                 .persistent()
@@ -1226,10 +1226,16 @@ impl CrowdfundVaultContract {
             // Call treasury contract to start stream
             let treasury_client = treasury_interface::TreasuryClient::new(&env, &treasury_contract);
             let start_time = env.ledger().timestamp();
-            
+
             // The treasury contract expects the admin to authorize the allocation.
             // We pass the admin address here.
-            treasury_client.allocate_budget(&admin, &project.owner, &amount, &start_time, &duration);
+            treasury_client.allocate_budget(
+                &admin,
+                &project.owner,
+                &amount,
+                &start_time,
+                &duration,
+            );
 
             Ok(())
         })
