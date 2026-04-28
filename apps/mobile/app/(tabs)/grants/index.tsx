@@ -12,15 +12,18 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useLocalization } from '../../../src/context';
 import { grantsApi, GrantRound, roundStatusLabel } from '../../../lib/grants';
 import { formatTokenAmount } from '../../../lib/stellar';
 
 function StatusBadge({
   status,
   colors,
+  t,
 }: {
   status: GrantRound['status'];
   colors: ReturnType<typeof useTheme>['colors'];
+  t: (key: string) => string;
 }) {
   const colorMap: Record<string, string> = {
     ACTIVE: colors.accent,
@@ -31,8 +34,10 @@ function StatusBadge({
   };
   const bg = colorMap[status] ?? colors.textSecondary;
   return (
-    <View style={[styles.badge, { backgroundColor: bg + '22' }]}>
-      <Text style={[styles.badgeText, { color: bg }]}>{roundStatusLabel(status)}</Text>
+    <View style={[styles.badge, { backgroundColor: bg + '22' }]} accessible>
+      <Text style={[styles.badgeText, { color: bg }]} accessible>
+        {roundStatusLabel(status, t)}
+      </Text>
     </View>
   );
 }
@@ -41,10 +46,12 @@ function RoundCard({
   round,
   colors,
   onPress,
+  t,
 }: {
   round: GrantRound;
   colors: ReturnType<typeof useTheme>['colors'];
   onPress: () => void;
+  t: (key: string) => string;
 }) {
   const endDate = new Date(round.endTime * 1000).toLocaleDateString();
 
@@ -53,25 +60,32 @@ function RoundCard({
       style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}
       onPress={onPress}
       activeOpacity={0.75}
+      accessibilityRole="link"
+      accessibilityLabel={`${round.name}, ${t('grants.matching_pool')}: ${formatTokenAmount(round.totalPool)} XLM`}
+      accessibilityHint={t('grants.round_hint')}
     >
       <View style={styles.cardHeader}>
-        <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+        <Text style={[styles.cardTitle, { color: colors.text }]} accessible accessibilityRole="header">
           {round.name}
         </Text>
-        <StatusBadge status={round.status} colors={colors} />
+        <StatusBadge status={round.status} colors={colors} t={t} />
       </View>
 
       <View style={styles.poolRow}>
         <Ionicons name="wallet-outline" size={16} color={colors.accent} />
-        <Text style={[styles.poolLabel, { color: colors.textSecondary }]}>Matching Pool</Text>
-        <Text style={[styles.poolAmount, { color: colors.text }]}>
+        <Text style={[styles.poolLabel, { color: colors.textSecondary }]} accessible>
+          {t('grants.matching_pool')}
+        </Text>
+        <Text style={[styles.poolAmount, { color: colors.text }]} accessible>
           {formatTokenAmount(round.totalPool)} XLM
         </Text>
       </View>
 
       <View style={styles.cardFooter}>
         <Ionicons name="calendar-outline" size={13} color={colors.textSecondary} />
-        <Text style={[styles.footerText, { color: colors.textSecondary }]}>Ends {endDate}</Text>
+        <Text style={[styles.footerText, { color: colors.textSecondary }]} accessible>
+          {t('grants.ends')} {endDate}
+        </Text>
         <Ionicons
           name="chevron-forward"
           size={14}
@@ -85,6 +99,7 @@ function RoundCard({
 
 export default function GrantsScreen() {
   const { colors } = useTheme();
+  const { t } = useLocalization();
   const router = useRouter();
   const [rounds, setRounds] = useState<GrantRound[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -103,15 +118,15 @@ export default function GrantsScreen() {
       if (res.success && res.data) {
         setRounds(res.data);
       } else {
-        setError(res.error?.message ?? 'Failed to load rounds.');
+        setError(res.error?.message ?? t('errors.couldnt_load', { item: 'rounds' }));
       }
     } catch {
-      setError('Something went wrong. Please try again.');
+      setError(t('errors.something_went_wrong'));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void fetchRounds();
@@ -120,7 +135,12 @@ export default function GrantsScreen() {
   if (isLoading && rounds.length === 0) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <ActivityIndicator
+          size="large"
+          color={colors.accent}
+          accessible
+          accessibilityLabel={t('common.loading')}
+        />
       </SafeAreaView>
     );
   }
@@ -133,14 +153,24 @@ export default function GrantsScreen() {
           size={52}
           color={colors.danger}
           style={{ marginBottom: 16 }}
+          accessible
+          accessibilityLabel={t('errors.couldnt_load', { item: 'rounds' })}
         />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn&apos;t load rounds</Text>
-        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{error}</Text>
+        <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+          {t('errors.couldnt_load', { item: 'rounds' })}
+        </Text>
+        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} accessible>
+          {error}
+        </Text>
         <TouchableOpacity
           style={[styles.retryBtn, { backgroundColor: colors.accent }]}
           onPress={() => void fetchRounds()}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.retry')}
+          accessibilityHint="Retry loading grant rounds"
         >
-          <Text style={styles.retryBtnText}>Retry</Text>
+          <Text style={styles.retryBtnText} accessible>{t('common.retry')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -158,36 +188,39 @@ export default function GrantsScreen() {
             onRefresh={() => void fetchRounds(true)}
             tintColor={colors.accent}
             colors={[colors.accent]}
+            accessibilityLabel="Pull to refresh grant rounds"
           />
         }
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={[styles.heading, { color: colors.text }]}>Grants Rounds</Text>
-            <Text style={[styles.subheading, { color: colors.textSecondary }]}>
-              Quadratic funding — breadth of support determines matching
+            <Text style={[styles.heading, { color: colors.text }]} accessible accessibilityRole="header">
+              {t('grants.title')}
+            </Text>
+            <Text style={[styles.subheading, { color: colors.textSecondary }]} accessible>
+              {t('grants.description')}
             </Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <RoundCard
-            round={item}
-            colors={colors}
-            onPress={() => router.push(`/grants/${item.id}`)}
-          />
-        )}
         ListEmptyComponent={
-          <View style={[styles.center, { paddingVertical: 60 }]}>
+          <View style={[styles.center, { paddingVertical: 60 }]} accessible accessibilityLabel="No grant rounds">
             <Ionicons
               name="trophy-outline"
               size={48}
               color={colors.textSecondary}
               style={{ marginBottom: 12 }}
+              accessible
+              accessibilityLabel={t('grants.title')}
             />
-            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-              No active grant rounds yet.
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} accessible>
+              {t('grants.no_rounds')}
             </Text>
           </View>
         }
+        renderItem={({ item }) => (
+          <RoundCard round={item} colors={colors} onPress={() => router.push(`/grants/${item.id}`)} t={t} />
+        )}
+        accessibilityLabel={t('grants.title')}
+        accessibilityRole="list"
       />
     </SafeAreaView>
   );

@@ -16,13 +16,14 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Article } from '@/lib/types/news';
 import { useCachedData } from '@/hooks/useCachedData';
 import { CACHE_CONFIGS } from '@/lib/cache';
+import { useLocalization } from '@/src/context';
 
 export default function NewsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useLocalization();
   const [refreshing, setRefreshing] = useState(false);
 
-  // Use cached data for news
   const {
     data: articles,
     loading,
@@ -54,9 +55,14 @@ export default function NewsScreen() {
     <TouchableOpacity
       style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
       onPress={() => router.push(`/news/${item.id}`)}
+      accessibilityRole="link"
+      accessibilityLabel={`${item.title}. ${item.source}. ${new Date(item.publishedAt).toLocaleString()}`}
+      accessibilityHint="Double tap to read article"
     >
-      <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
-      <Text style={[styles.meta, { color: colors.text }]}>
+      <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+        {item.title}
+      </Text>
+      <Text style={[styles.meta, { color: colors.text }]} accessible>
         {item.source} • {new Date(item.publishedAt).toLocaleString()}
       </Text>
     </TouchableOpacity>
@@ -65,7 +71,12 @@ export default function NewsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color="#db74cf" />
+        <ActivityIndicator
+          size="large"
+          color="#db74cf"
+          accessible
+          accessibilityLabel={t('common.loading')}
+        />
       </SafeAreaView>
     );
   }
@@ -73,9 +84,16 @@ export default function NewsScreen() {
   if (error) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={styles.error}>{error.message}</Text>
-        <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
-          <Text style={styles.retryText}>Retry</Text>
+        <Text style={styles.error} accessible accessibilityRole="alert">
+          {error.message}
+        </Text>
+        <TouchableOpacity
+          onPress={handleRefresh}
+          style={styles.retryButton}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.retry')}
+        >
+          <Text style={styles.retryText} accessible>{t('common.retry')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -89,6 +107,9 @@ export default function NewsScreen() {
             <TouchableOpacity
               onPress={() => router.push('/news/saved')}
               style={{ marginRight: 16 }}
+              accessibilityRole="link"
+              accessibilityLabel={t('news.saved')}
+              accessibilityHint="View saved articles"
             >
               <Ionicons name="bookmark-outline" size={24} color={colors.text} />
             </TouchableOpacity>
@@ -96,12 +117,15 @@ export default function NewsScreen() {
         }}
       />
 
-      {/* Stale data indicator */}
       {isStale && (
-        <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}>
+        <View
+          style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}
+          accessible
+          accessibilityLabel={t('news.showing_cached')}
+        >
           <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
-          <Text style={[styles.staleText, { color: colors.warning }]}>
-            Showing cached news - Pull to refresh
+          <Text style={[styles.staleText, { color: colors.warning }]} accessible>
+            {t('news.showing_cached')}
           </Text>
         </View>
       )}
@@ -111,15 +135,23 @@ export default function NewsScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            accessibilityLabel="Pull to refresh news"
+          />
+        }
         ListEmptyComponent={
           !loading ? (
-            <View style={styles.center}>
-              <Text style={{ color: colors.text }}>No news available</Text>
+            <View style={styles.center} accessible accessibilityLabel="No news available">
+              <Text style={{ color: colors.text }}>{t('news.no_news')}</Text>
             </View>
           ) : null
         }
         ListFooterComponent={loading ? <ActivityIndicator style={{ margin: 20 }} /> : null}
+        accessibilityLabel={t('news.title')}
+        accessibilityRole="list"
       />
     </SafeAreaView>
   );

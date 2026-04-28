@@ -3,6 +3,7 @@ import { Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, View } from
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useLocalization } from '@/src/context';
 import { Article } from '@/lib/types/news';
 import { savedNewsService } from '@/lib/saved-news';
 
@@ -10,6 +11,7 @@ export default function SavedNewsScreen() {
   const [articles, setArticles] = useState<Article[]>([]);
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useLocalization();
 
   useEffect(() => {
     loadSavedArticles();
@@ -24,20 +26,27 @@ export default function SavedNewsScreen() {
     <TouchableOpacity
       style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
       onPress={() => router.push(`/news/${item.id}`)}
+      accessibilityRole="link"
+      accessibilityLabel={`${item.title}. ${item.source}. ${new Date(item.publishedAt).toLocaleString()}`}
+      accessibilityHint="Double tap to read article"
     >
       <View style={styles.cardHeader}>
-        <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
+        <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+          {item.title}
+        </Text>
         <TouchableOpacity
           onPress={async (e) => {
             e.stopPropagation();
             await savedNewsService.unsaveArticle(item.id);
             loadSavedArticles();
           }}
+          accessibilityRole="button"
+          accessibilityLabel={t('news.saved')}
         >
           <Ionicons name="bookmark" size={20} color="#db74cf" />
         </TouchableOpacity>
       </View>
-      <Text style={[styles.meta, { color: colors.text }]}>
+      <Text style={[styles.meta, { color: colors.text }]} accessible>
         {item.source} • {new Date(item.publishedAt).toLocaleString()}
       </Text>
     </TouchableOpacity>
@@ -45,16 +54,13 @@ export default function SavedNewsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Stack.Screen options={{ title: 'Saved News' }} />
+      <Stack.Screen options={{ title: t('news.saved') }} />
       {articles.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons
-            name="bookmark-outline"
-            size={64}
-            color={colors.text}
-            style={{ opacity: 0.2 }}
-          />
-          <Text style={[styles.emptyText, { color: colors.text }]}>No saved articles yet.</Text>
+        <View style={styles.emptyContainer} accessible accessibilityLabel="No saved news">
+          <Ionicons name="bookmark-outline" size={64} color={colors.text} style={{ opacity: 0.2 }} accessible />
+          <Text style={[styles.emptyText, { color: colors.text }]} accessible>
+            {t('news.no_news')}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -62,6 +68,8 @@ export default function SavedNewsScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16 }}
+          accessibilityLabel={t('news.saved')}
+          accessibilityRole="list"
         />
       )}
     </SafeAreaView>

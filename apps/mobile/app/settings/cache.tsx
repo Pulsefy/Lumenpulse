@@ -11,31 +11,33 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useLocalization } from '../../src/context';
 import { useDataPreloader } from '../../components/DataPreloader';
 import { cache } from '../../lib/cache';
 
 export default function CacheSettingsScreen() {
   const { colors } = useTheme();
+  const { t } = useLocalization();
   const router = useRouter();
   const { preloadData, clearCache } = useDataPreloader();
   const [loading, setLoading] = useState(false);
 
   const handleClearCache = () => {
     Alert.alert(
-      'Clear Cache',
-      'This will remove all cached data. You may experience slower loading times until data is re-cached.',
+      t('settings.cache.clear_cache'),
+      t('settings.cache.clear_cache_message'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Clear',
+          text: t('common.confirm'),
           style: 'destructive',
           onPress: async () => {
             setLoading(true);
             try {
               await clearCache();
-              Alert.alert('Success', 'Cache cleared successfully');
+              Alert.alert(t('success'), t('settings.cache.cleared_successfully'));
             } catch {
-              Alert.alert('Error', 'Failed to clear cache');
+              Alert.alert(t('errors.error'), t('settings.cache.clear_failed'));
             } finally {
               setLoading(false);
             }
@@ -49,9 +51,9 @@ export default function CacheSettingsScreen() {
     setLoading(true);
     try {
       await preloadData();
-      Alert.alert('Success', 'Critical data preloaded for offline use');
+      Alert.alert(t('success'), t('settings.cache.preloaded_successfully'));
     } catch {
-      Alert.alert('Error', 'Failed to preload data');
+      Alert.alert(t('errors.error'), t('settings.cache.preload_failed'));
     } finally {
       setLoading(false);
     }
@@ -74,6 +76,9 @@ export default function CacheSettingsScreen() {
       style={[styles.settingItem, { backgroundColor: colors.surface }]}
       onPress={onPress}
       disabled={loading}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityHint={subtitle}
     >
       <View style={styles.settingIcon}>
         <Ionicons
@@ -83,8 +88,12 @@ export default function CacheSettingsScreen() {
         />
       </View>
       <View style={styles.settingContent}>
-        <Text style={[styles.settingTitle, { color: colors.text }]}>{title}</Text>
-        <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
+        <Text style={[styles.settingTitle, { color: colors.text }]} accessible>
+          {title}
+        </Text>
+        <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]} accessible>
+          {subtitle}
+        </Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
     </TouchableOpacity>
@@ -93,59 +102,68 @@ export default function CacheSettingsScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Cache Settings</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]} accessible accessibilityRole="header">
+          {t('settings.cache.title')}
+        </Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.content}>
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Data Management</Text>
-          <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>
-            Manage cached data for offline access and improved performance
+          <Text style={[styles.sectionTitle, { color: colors.text }]} accessible accessibilityRole="header">
+            {t('settings.cache.data_management')}
+          </Text>
+          <Text style={[styles.sectionDescription, { color: colors.textSecondary }]} accessible>
+            {t('settings.cache.data_management_desc')}
           </Text>
         </View>
 
         <SettingItem
           icon="download-outline"
-          title="Preload Critical Data"
-          subtitle="Download portfolio, news, and assets for offline use"
+          title={t('settings.cache.preload_data')}
+          subtitle={t('settings.cache.preload_data_desc')}
           onPress={handlePreloadData}
         />
 
         <SettingItem
           icon="trash-outline"
-          title="Clear All Cache"
-          subtitle="Remove all cached data to free up storage space"
+          title={t('settings.cache.clear_cache')}
+          subtitle={t('settings.cache.clear_cache_desc')}
           onPress={handleClearCache}
           destructive
         />
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>How Caching Works</Text>
-          <View style={[styles.infoBox, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]} accessible accessibilityRole="header">
+            {t('settings.cache.how_caching_works')}
+          </Text>
+          <View style={[styles.infoBox, { backgroundColor: colors.surface }]} accessible>
             <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-              • Data is automatically cached when you use the app{'\n'}• Cached data is shown
-              instantly while fresh data loads{'\n'}• Pull to refresh updates cached data{'\n'}•
-              Data expires automatically to stay current{'\n'}• Works offline with previously cached
-              data
+              {t('settings.cache.caching_info')}
             </Text>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Cache Status</Text>
-          <View style={[styles.statusBox, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]} accessible accessibilityRole="header">
+            {t('settings.cache.cache_status')}
+          </Text>
+          <View style={[styles.statusBox, { backgroundColor: colors.surface }]} accessible>
             <View style={styles.statusItem}>
               <Ionicons
                 name={cache.isOnlineStatus() ? 'wifi' : 'wifi-outline'}
                 size={20}
                 color={cache.isOnlineStatus() ? colors.success : colors.danger}
               />
-              <Text style={[styles.statusText, { color: colors.text }]}>
-                {cache.isOnlineStatus() ? 'Online' : 'Offline'}
+              <Text style={[styles.statusText, { color: colors.text }]} accessible>
+                {cache.isOnlineStatus() ? t('settings.cache.online') : t('settings.cache.offline')}
               </Text>
             </View>
           </View>

@@ -1,0 +1,293 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "retry": "Retry",
+    "back": "Back",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "done": "Done",
+    "error": "Error",
+    "success": "Success",
+    "warning": "Warning",
+    "info": "Info"
+  },
+  "auth": {
+    "login": {
+      "title": "Welcome Back",
+      "subtitle": "Sign in to your account",
+      "email_label": "Email",
+      "email_placeholder": "Enter your email",
+      "password_label": "Password",
+      "password_placeholder": "Enter your password",
+      "sign_in_button": "Sign In",
+      "sign_up_link": "Don't have an account? Sign Up",
+      "bypass_login": "(Debug) Bypass Login to Dashboard",
+      "errors": {
+        "email_required": "Please enter your email address",
+        "email_invalid": "Please enter a valid email address",
+        "password_required": "Please enter your password",
+        "password_min_length": "Password must be at least 6 characters long",
+        "login_failed": "Login Failed",
+        "login_failed_message": "An error occurred during login. Please try again."
+      }
+    },
+    "register": {
+      "title": "Create Account",
+      "subtitle": "Join Lumenpulse today",
+      "email_label": "Email",
+      "email_placeholder": "Enter your email",
+      "password_label": "Password",
+      "password_placeholder": "Enter your password",
+      "confirm_password_label": "Confirm Password",
+      "confirm_password_placeholder": "Confirm your password",
+      "create_account_button": "Create Account",
+      "login_link": "Already have an account? Sign In",
+      "errors": {
+        "email_required": "Please enter your email address",
+        "email_invalid": "Please enter a valid email address",
+        "password_required": "Please enter a password",
+        "password_min_length": "Password must be at least 6 characters long",
+        "passwords_mismatch": "Passwords do not match",
+        "registration_failed": "Registration Failed",
+        "registration_failed_message": "An error occurred during registration. Please try again."
+      }
+    }
+  },
+  "navigation": {
+    "home": "Home",
+    "projects": "Projects",
+    "grants": "Grants",
+    "discover": "Discover",
+    "portfolio": "Portfolio",
+    "transactions": "Transactions",
+    "news": "News",
+    "settings": "Settings",
+    "notifications": "Notifications",
+    "manage_accounts": "Manage Accounts",
+    "notification_settings": "Notification Settings",
+    "cache": "Cache"
+  },
+  "home": {
+    "title": "Lumenpulse Mobile",
+    "subtitle": "Decentralized Crypto Insights",
+    "api_status": "API Status:",
+    "connected_to": "Connected to",
+    "failed": "Failed",
+    "test_connection": "Test Connection",
+    "get_started": "Get Started",
+    "coming_soon": "Portfolio & News aggregation coming soon."
+  },
+  "projects": {
+    "title": "Projects",
+    "no_projects": "No crowdfund projects available yet.",
+    "loading": "Loading projects...",
+    "error": "Couldn't load projects",
+    "retry": "Retry",
+    "status": {
+      "closed": "Closed"
+    },
+    "contributors": "contributor{{count}}",
+    "contributors_plural": "contributors",
+    "funded": "funded"
+  },
+  "project_detail": {
+    "about": "About",
+    "funding_progress": "Funding Progress",
+    "remaining": "Remaining",
+    "contributors": "Contributors",
+    "roadmap": "Roadmap",
+    "recent_contributors": "Recent Contributors",
+    "owner": "Owner",
+    "report": "Report this project",
+    "report_reason": {
+      "spam": "Spam",
+      "fraud": "Fraud",
+      "misleading": "Misleading Info"
+    },
+    "report_confirmation": "Thank you. Your report has been submitted for review by our moderation team.",
+    "contribute": "Contribute",
+    "closed_banner": "This project is no longer accepting contributions.",
+    "on_chain_notice": "Contributions are secured by a Soroban smart contract on the Stellar network. Funds are held in an on-chain vault until milestones are approved."
+  },
+  "contribution_modal": {
+    "title": "Contribute to Project",
+    "amount_label": "Contribution amount in XLM",
+    "estimated_fee": "Estimated network fee: ~{{amount}} XLM",
+    "disclaimer": "This is an on-chain transaction on the Stellar network. Contributions are non-refundable unless the project is cancelled.",
+    "submit": "Confirm Contribution",
+    "submitting": "Submitting...",
+    "done": "Done",
+    "success": "Contribution Successful!",
+    "success_message": "You contributed {{amount}} XLM to {{project}}.",
+    "failed": "Contribution Failed",
+    "transaction_hash": "Transaction Hash"
+  },
+  "grants": {
+    "title": "Grants Rounds",
+    "description": "Quadratic funding — breadth of support determines matching",
+    "no_rounds": "No active grant rounds yet.",
+    "loading": "Loading rounds...",
+    "error": "Couldn't load rounds",
+    "matching_pool": "Matching Pool",
+    "ends": "Ends",
+    "start": "Start",
+    "eligible_projects": "Eligible projects",
+    "project": "Project",
+    "contributors": "contributors",
+    "contributed": "contributed",
+    "qf_explanation": "Quadratic funding rewards projects with broad community support. A project with 100 contributors of $1 each receives more matching than one with a single $100 donor.",
+    "status": {
+      "active": "Active",
+      "pending": "Pending",
+      "ended": "Ended",
+      "finalized": "Finalized",
+      "distributed": "Distributed"
+    },
+    "round_hint": "Double tap to view round details"
+  },
+  "grant_detail": {
+    "eligible_projects": "Eligible projects",
+    "start": "Start",
+    "end": "End",
+    "of_pool": "of pool",
+    "contributors": "contributors",
+    "contributed": "contributed",
+    "estimated_allocations": "Estimated Allocations"
+  },
+  "news": {
+    "title": "News",
+    "saved": "Saved",
+    "no_news": "No news available",
+    "showing_cached": "Showing cached news - Pull to refresh",
+    "read": "Read",
+    "unread": "Unread",
+    "mark_as_read": "Tap to mark as read",
+    "mark_all": "Mark all",
+    "go_back": "Go back"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "no_notifications": "No notifications yet",
+    "notification_text": "Price alerts and account activity will show up here.",
+    "mark_all_read": "Mark all as read",
+    "unread": "Unread",
+    "read": "Read",
+    "mark_as_read": "Tap to mark as read"
+  },
+  "discover": {
+    "title": "Discover",
+    "search_placeholder": "Search by name or code…",
+    "no_results": "No results",
+    "try_search": "Try searching for \"USDC\" or \"XLM\"",
+    "showing_cached": "Showing cached data - Pull to refresh",
+    "couldnt_load": "Couldn't load assets",
+    "retry": "Retry",
+    "price": "Price / 24h",
+    "asset": "Asset",
+    "search_label": "Search assets",
+    "asset_hint": "Double tap to view asset details"
+  },
+  "portfolio": {
+    "title": "Portfolio",
+    "total_balance": "Total Balance",
+    "recent_transactions": "Recent Transactions",
+    "login_required": "Login required",
+    "showing_cached": "Showing cached data - Pull to refresh",
+    "no_assets": "No assets"
+  },
+  "transactions": {
+    "title": "Transactions",
+    "login_required": "Please login",
+    "failed": "Failed to load transactions",
+    "payment": "Payment",
+    "swap": "Swap",
+    "details": "Transaction Details",
+    "m_ago": "m ago",
+    "h_ago": "h ago",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "hash": "Transaction Hash",
+    "type": "Type",
+    "amount": "Amount",
+    "date": "Date",
+    "details_hint": "Double tap to view full details"
+  },
+  "settings": {
+    "title": "Settings",
+    "account_preferences": "Account & Preferences",
+    "appearance": "Appearance",
+    "app_info": "App Info",
+    "manage_accounts": {
+      "title": "Manage Accounts",
+      "description": "Add linked Stellar public keys with QR and remove them when needed.",
+      "qr_code": "Scan QR to Add Account",
+      "scan_hint": "The scanner accepts a raw Stellar public key or a QR payload that contains one.",
+      "nickname_placeholder": "e.g. Trading Wallet",
+      "nickname_label": "Account nickname (optional)",
+      "add_account_title": "Add Account",
+      "linked_accounts": "Linked Accounts",
+      "no_linked_accounts": "No linked accounts yet",
+      "scan_to_attach": "Scan a Stellar account QR code above to attach it to this profile.",
+      "remove_confirm": "Remove linked account",
+      "remove_message": "Remove {{account}} from this profile?",
+      "remove": "Remove",
+      "cancel": "Cancel",
+      "camera_permission": "Camera permission required",
+      "camera_permission_message": "Allow camera access to scan a Stellar public key QR code.",
+      "unsupported_qr": "Unsupported QR payload",
+      "unsupported_qr_message": "Scan a Stellar public key QR code or a QR payload that contains one.",
+      "account_linked": "Account linked",
+      "account_linked_message": "is now available in Settings.",
+      "could_not_link": "Could not link account",
+      "could_not_remove": "Could not remove account",
+      "linked": "Linked",
+      "label": "Label",
+      "remove_button": "Remove",
+      "scanner_hint": "Point the camera at a Stellar public key QR code."
+    },
+    "notification_settings": {
+      "title": "Notification Settings",
+      "description": "Toggle the specific alerts you want. Each change is pushed to the backend immediately.",
+      "price_alerts": "Price Alerts",
+      "price_alerts_desc": "Immediate notifications when tracked market prices change meaningfully.",
+      "news_alerts": "News Alerts",
+      "news_alerts_desc": "Breaking ecosystem and market headlines relevant to your portfolio.",
+      "security_alerts": "Security Alerts",
+      "security_alerts_desc": "Critical account, phishing, and suspicious-activity notices."
+    },
+    "theme": {
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "biometric_lock": {
+      "enable": "Enable Biometric Lock",
+      "description": "Require Face ID, fingerprint, or passcode on every cold app start.",
+      "not_supported": "Biometric Not Supported",
+      "not_supported_message": "This device does not support biometric authentication.",
+      "no_biometrics": "No Biometrics Enrolled",
+      "no_biometrics_message": "Set up Face ID or fingerprint in your device settings before enabling this lock.",
+      "confirm_biometric": "Confirm biometric lock",
+      "update_failed": "Update Failed",
+      "update_failed_message": "Could not update biometric lock preference. Please try again."
+    },
+    "version": "Version",
+    "environment": "Environment",
+    "environment_production": "Production",
+    "environment_contributor": "Contributor Build",
+    "platform": "Platform",
+    "logout": "Log Out"
+  },
+  "errors": {
+    "something_went_wrong": "Something went wrong. Please try again.",
+    "network_error": "Network error. Please try again.",
+    "no_stellar_account": "No Stellar account linked. Please link one in Settings first.",
+    "transaction_failed": "Transaction failed. Please try again.",
+    "project_not_found": "Project not found.",
+    "round_not_found": "Round not found.",
+    "couldnt_load": "Couldn't load {{item}}",
+    "could_not_remove": "Could not remove",
+    "could_not_update": "Could not update"
+  }
+}
