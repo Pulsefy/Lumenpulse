@@ -6,6 +6,8 @@ import {
   NotificationType,
   NotificationSeverity,
 } from './notification.entity';
+import { NotificationFeedQueryDto } from './dto/notification-feed-query.dto';
+import { SortOrder } from '../common/dto/cursor-pagination.dto';
 
 export interface CreateNotificationDto {
   type: NotificationType;
@@ -50,5 +52,47 @@ export class NotificationService {
       .orderBy('n.createdAt', 'DESC')
       .take(50)
       .getMany();
+  }
+
+  async findFeed(
+    userId: string,
+    query: NotificationFeedQueryDto = {},
+  ): Promise<{
+    items: Notification[];
+    nextCursor?: string;
+    total: number;
+    limit: number;
+    sortOrder: SortOrder;
+  }> {
+    const limit = query.limit ?? 20;
+    const sortOrder = query.sortOrder ?? SortOrder.DESC;
+    const qb = this.notificationRepository
+      .createQueryBuilder('n')
+      .where('n.userId = :userId OR n.userId IS NULL', { userId });
+
+    if (query.type) qb.andWhere('n.type = :type', { type: query.type });
+    if (query.severity) {
+      qb.andWhere('n.severity = :severity', { severity: query.severity });
+    }
+    if (query.cursor) {
+      qb.andWhere(
+        sortOrder === SortOrder.ASC
+          ? 'n.createdAt > :cursor'
+          : 'n.createdAt < :cursor',
+        { cursor: query.cursor },
+      );
+    }
+
+    const total = await qb.getCount();
+    const items = await qb
+      .orderBy('n.createdAt', sortOrder.toUpperCase() as 'ASC' | 'DESC')
+      .addOrderBy('n.id', sortOrder.toUpperCase() as 'ASC' | 'DESC')
+      .take(limit)
+      .getMany();
+
+    const nextCursor =
+      items.length > 0 ? items[items.length - 1].createdAt.toISOString() : undefined;
+
+    return { items, nextCursor, total, limit, sortOrder };
   }
 }

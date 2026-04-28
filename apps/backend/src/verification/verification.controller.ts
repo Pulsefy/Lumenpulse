@@ -13,11 +13,15 @@ import { VerificationService } from './verification.service';
 import {
   CastVoteDto,
   OverrideDto,
+  ProjectVerificationDto,
   RegisterProjectDto,
   UpdateConfigDto,
-  VerificationStatus,
 } from './dto/verification.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import {
+  ProjectListQueryDto,
+  ProjectListResponseDto,
+} from './dto/project-list-query.dto';
 
 @Controller('verification')
 export class VerificationController {
@@ -35,8 +39,10 @@ export class VerificationController {
   }
 
   @Get('projects')
-  listProjects(@Query('status') status?: VerificationStatus) {
-    return this.svc.listProjects(status);
+  listProjects(
+    @Query() query: ProjectListQueryDto,
+  ): ProjectListResponseDto<ProjectVerificationDto> {
+    return this.svc.listProjects(query);
   }
 
   @Get('projects/:id')

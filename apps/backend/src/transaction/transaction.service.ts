@@ -2,10 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   TransactionDto,
-  TransactionType,
   TransactionStatus,
+  TransactionType,
 } from './dto/transaction.dto';
 import { getMockTransactions } from './mocks/mock-transactions';
+import { TransactionHistoryQueryDto } from './dto/transaction-history-query.dto';
+import { SortOrder } from '../common/dto/cursor-pagination.dto';
 
 interface HorizonOperation {
   id: string;
@@ -88,18 +90,31 @@ export class TransactionService {
 
   async getTransactionHistory(
     publicKey: string,
-    limit: number = 50,
-    cursor?: string,
-  ): Promise<{ transactions: TransactionDto[]; nextPage?: string }> {
+    query: TransactionHistoryQueryDto = {},
+  ): Promise<{
+    transactions: TransactionDto[];
+    nextCursor?: string;
+    limit: number;
+    sortOrder: SortOrder;
+  }> {
     this.logger.log(`Fetching transaction history for ${publicKey}`);
+    const limit = query.limit ?? 50;
+    const sortOrder = query.sortOrder ?? SortOrder.DESC;
+    const cursor = query.cursor;
 
     if (this.useMockData) {
       this.logger.log('Returning mock transaction data');
-      return getMockTransactions(limit, cursor);
+      const { transactions, nextPage } = getMockTransactions(limit, cursor);
+      const filtered = transactions.filter((tx) => {
+        if (query.type && tx.type !== query.type) return false;
+        if (query.status && tx.status !== query.status) return false;
+        return true;
+      });
+      return { transactions: filtered, nextCursor: nextPage, limit, sortOrder };
     }
 
     try {
-      let url = `${this.horizonUrl}/accounts/${publicKey}/transactions?order=desc&limit=${limit}`;
+      let url = `${this.horizonUrl}/accounts/${publicKey}/transactions?order=${sortOrder}&limit=${limit}`;
       if (cursor) {
         url += `&cursor=${cursor}`;
       }
@@ -120,19 +135,24 @@ export class TransactionService {
         horizonData._embedded.records,
         publicKey,
       );
-      let nextPage: string | undefined;
+      let nextCursor: string | undefined;
 
       if (horizonData._links?.next?.href) {
         const nextUrl = new URL(horizonData._links.next.href);
-        nextPage = nextUrl.searchParams.get('cursor') || undefined;
+        nextCursor = nextUrl.searchParams.get('cursor') || undefined;
       }
 
-      return { transactions, nextPage };
+      const filtered = transactions.filter((tx) => {
+        if (query.type && tx.type !== query.type) return false;
+        if (query.status && tx.status !== query.status) return false;
+        return true;
+      });
+      return { transactions: filtered, nextCursor, limit, sortOrder };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to fetch transactions: ${errorMessage}`);
-      return { transactions: [] };
+      return { transactions: [], limit, sortOrder };
     }
   }
 

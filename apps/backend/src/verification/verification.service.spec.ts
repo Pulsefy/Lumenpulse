@@ -228,14 +228,14 @@ describe('VerificationService', () => {
     svc.registerProject({ projectId: 2, ownerPublicKey: 'GB', name: 'P2' });
     svc.overrideVerification({ projectId: 1, verified: true });
 
-    const verified = svc.listProjects(VerificationStatus.Verified);
-    expect(verified).toHaveLength(1);
-    expect(verified[0].projectId).toBe(1);
+    const verified = svc.listProjects({ status: VerificationStatus.Verified });
+    expect(verified.items).toHaveLength(1);
+    expect(verified.items[0].projectId).toBe(1);
 
-    const pending = svc.listProjects(VerificationStatus.Pending);
-    expect(pending).toHaveLength(1);
-    expect(pending[0].projectId).toBe(2);
+    const pending = svc.listProjects({ status: VerificationStatus.Pending });
+    expect(pending.items).toHaveLength(1);
+    expect(pending.items[0].projectId).toBe(2);
 
-    expect(svc.listProjects()).toHaveLength(2);
+    expect(svc.listProjects().items).toHaveLength(2);
   });
 });

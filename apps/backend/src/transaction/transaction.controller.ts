@@ -9,6 +9,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TransactionService } from './transaction.service';
 import { UsersService } from '../users/users.service';
 import { TransactionHistoryResponseDto } from './dto/transaction.dto';
+import { TransactionHistoryQueryDto } from './dto/transaction-history-query.dto';
 
 interface RequestWithUser extends Request {
   user: {
@@ -46,8 +47,7 @@ export class TransactionController {
   })
   async getTransactionHistory(
     @Req() req: RequestWithUser,
-    @Query('limit') limit?: number,
-    @Query('cursor') cursor?: string,
+    @Query() query: TransactionHistoryQueryDto,
   ): Promise<TransactionHistoryResponseDto> {
     const accounts = await this.usersService.getStellarAccounts(req.user.id);
     const typedAccounts = accounts as StellarAccountWithPrimary[];
@@ -62,17 +62,18 @@ export class TransactionController {
       };
     }
 
-    const { transactions, nextPage } =
+    const { transactions, nextCursor, limit, sortOrder } =
       await this.transactionService.getTransactionHistory(
         primaryAccount.publicKey,
-        limit || 50,
-        cursor,
+        query,
       );
 
     return {
-      transactions,
+      items: transactions,
       total: transactions.length,
-      nextPage,
+      nextCursor,
+      limit,
+      sortOrder,
     };
   }
 
@@ -86,13 +87,8 @@ export class TransactionController {
   })
   async getTransactionHistoryForAccount(
     @Param('publicKey') publicKey: string,
-    @Query('limit') limit?: number,
-    @Query('cursor') cursor?: string,
+    @Query() query: TransactionHistoryQueryDto,
   ) {
-    return this.transactionService.getTransactionHistory(
-      publicKey,
-      limit,
-      cursor,
-    );
+    return this.transactionService.getTransactionHistory(publicKey, query);
   }
 }

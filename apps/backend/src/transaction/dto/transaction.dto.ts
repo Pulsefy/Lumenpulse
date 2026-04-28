@@ -58,11 +58,17 @@ export class TransactionDto {
 
 export class TransactionHistoryResponseDto {
   @ApiProperty({ type: [TransactionDto] })
-  transactions: TransactionDto[];
+  items: TransactionDto[];
 
   @ApiProperty()
   total: number;
 
+  @ApiProperty()
+  limit: number;
+
+  @ApiProperty({ enum: ['asc', 'desc'] })
+  sortOrder: 'asc' | 'desc';
+
   @ApiProperty({ required: false })
-  nextPage?: string;
+  nextCursor?: string;
 }

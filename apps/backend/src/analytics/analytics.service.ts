@@ -3,9 +3,11 @@ import { DataSource } from 'typeorm';
 import {
   ChartDataPointDto,
   ChartDataQueryDto,
+  ChartDataResponseDto,
   ChartInterval,
   ChartRange,
 } from './dto/chart-data.dto';
+import { SortOrder } from '../common/dto/cursor-pagination.dto';
 
 interface HourlyRow {
   bucket: Date;
@@ -25,19 +27,46 @@ export class AnalyticsService {
 
   constructor(private readonly dataSource: DataSource) {}
 
-  async getChartData(query: ChartDataQueryDto): Promise<ChartDataPointDto[]> {
+  async getChartData(query: ChartDataQueryDto): Promise<ChartDataResponseDto> {
     const { interval, range, asset } = query;
     const since = this.getStartDate(range);
+    const limit = query.limit ?? 20;
+    const sortOrder = query.sortOrder ?? SortOrder.DESC;
+    const cursor = query.cursor;
 
     this.logger.log(
       `Fetching chart data: interval=${interval}, range=${range}, asset=${asset || 'global'}`,
     );
 
-    if (interval === ChartInterval.ONE_HOUR) {
-      return this.getHourlyChartData(since, asset);
-    } else {
-      return this.getDailyChartData(since, asset);
-    }
+    const rows =
+      interval === ChartInterval.ONE_HOUR
+        ? await this.getHourlyChartData(since, asset)
+        : await this.getDailyChartData(since, asset);
+
+    const sorted = [...rows].sort((a, b) => {
+      const aTs = new Date(a.timestamp).getTime();
+      const bTs = new Date(b.timestamp).getTime();
+      return sortOrder === SortOrder.ASC ? aTs - bTs : bTs - aTs;
+    });
+
+    const filtered = cursor
+      ? sorted.filter((row) => {
+          const ts = new Date(row.timestamp).getTime();
+          const cursorTs = new Date(cursor).getTime();
+          return sortOrder === SortOrder.ASC ? ts > cursorTs : ts < cursorTs;
+        })
+      : sorted;
+
+    const items = filtered.slice(0, limit);
+    const nextCursor = items.length > 0 ? items[items.length - 1].timestamp : undefined;
+
+    return {
+      items,
+      total: sorted.length,
+      limit,
+      sortOrder,
+      nextCursor,
+    };
   }
 
   private async getHourlyChartData(
