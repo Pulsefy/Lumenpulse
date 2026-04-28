@@ -6,11 +6,13 @@ members = [
   "contracts/lumen_token",
   "contracts/matching_pool",
   "contracts/notification_interface",
+  "contracts/project_registry",
   "contracts/reentrancy-guard",
   "contracts/upgradable-contract",
   "contracts/vesting-wallet",
   "contracts/lumenpulse-curation",
-  "contracts/pricing_adapter"
+  "contracts/pricing_adapter",
+  "contracts/treasury"
 ]
 exclude = ["contracts/tests"]
 

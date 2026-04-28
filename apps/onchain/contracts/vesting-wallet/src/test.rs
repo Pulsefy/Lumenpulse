@@ -920,3 +920,135 @@ fn test_claim_cei_state_updated_before_balance_assertion() {
     assert_eq!(vesting.claimed_amount, amount / 2);
     assert_eq!(token_client.balance(&beneficiary), amount / 2);
 }
+
+// ---------------------------------------------------------------------------
+// Delegate claim permissions (issue #688)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_approve_and_get_delegates() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let delegate = Address::generate(&env);
+
+    assert_eq!(client.get_delegates(&beneficiary).len(), 0);
+
+    client.approve_delegate(&beneficiary, &delegate);
+
+    let delegates = client.get_delegates(&beneficiary);
+    assert_eq!(delegates.len(), 1);
+    assert!(delegates.contains(&delegate));
+}
+
+#[test]
+fn test_revoke_delegate() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let delegate = Address::generate(&env);
+    client.approve_delegate(&beneficiary, &delegate);
+    assert_eq!(client.get_delegates(&beneficiary).len(), 1);
+
+    client.revoke_delegate(&beneficiary, &delegate);
+    assert_eq!(client.get_delegates(&beneficiary).len(), 0);
+}
+
+#[test]
+fn test_claim_for_by_approved_delegate() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let delegate = Address::generate(&env);
+    client.approve_delegate(&beneficiary, &delegate);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000u64;
+    let amount: i128 = 1_000_000;
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+
+    // Fast-forward to halfway through vesting.
+    env.ledger().set_timestamp(start_time + duration / 2);
+
+    let claimed = client.claim_for(&delegate, &beneficiary);
+    assert_eq!(claimed, amount / 2);
+
+    // Tokens go to beneficiary, not delegate.
+    assert_eq!(token_client.balance(&beneficiary), amount / 2);
+    assert_eq!(token_client.balance(&delegate), 0);
+}
+
+#[test]
+fn test_claim_for_rejected_without_approval() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000u64;
+    let amount: i128 = 1_000_000;
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+
+    env.ledger().set_timestamp(start_time + duration / 2);
+
+    let unauthorized = Address::generate(&env);
+    let result = client.try_claim_for(&unauthorized, &beneficiary);
+    assert_eq!(result, Err(Ok(VestingError::DelegateNotAuthorized)));
+}
+
+#[test]
+fn test_claim_for_rejected_after_revocation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let delegate = Address::generate(&env);
+    client.approve_delegate(&beneficiary, &delegate);
+    client.revoke_delegate(&beneficiary, &delegate);
+
+    let current_time = env.ledger().timestamp();
+    let start_time = current_time + 100;
+    let duration = 10_000u64;
+    let amount: i128 = 1_000_000;
+    client.create_vesting(&admin, &beneficiary, &amount, &start_time, &duration);
+
+    env.ledger().set_timestamp(start_time + duration / 2);
+
+    let result = client.try_claim_for(&delegate, &beneficiary);
+    assert_eq!(result, Err(Ok(VestingError::DelegateNotAuthorized)));
+}
+
+#[test]
+fn test_multiple_delegates_for_one_beneficiary() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, beneficiary, token_client, _) = setup_test(&env);
+    client.initialize(&admin, &token_client.address);
+
+    let delegate1 = Address::generate(&env);
+    let delegate2 = Address::generate(&env);
+
+    client.approve_delegate(&beneficiary, &delegate1);
+    client.approve_delegate(&beneficiary, &delegate2);
+
+    let delegates = client.get_delegates(&beneficiary);
+    assert_eq!(delegates.len(), 2);
+    assert!(delegates.contains(&delegate1));
+    assert!(delegates.contains(&delegate2));
+}

@@ -13,8 +13,11 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLocalization } from '../../src/context';
 
 const RegisterScreen = () => {
+  const { colors, resolvedMode } = useLocalization();
+  const { t } = useLocalization();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -24,28 +27,28 @@ const RegisterScreen = () => {
 
   const validateInputs = () => {
     if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email address');
+      Alert.alert(t('errors.error'), t('auth.register.errors.email_required'));
       return false;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      Alert.alert(t('errors.error'), t('auth.register.errors.email_invalid'));
       return false;
     }
 
     if (!password) {
-      Alert.alert('Error', 'Please enter a password');
+      Alert.alert(t('errors.error'), t('auth.register.errors.password_required'));
       return false;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
+      Alert.alert(t('errors.error'), t('auth.register.errors.password_min_length'));
       return false;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      Alert.alert(t('errors.error'), t('auth.register.errors.passwords_mismatch'));
       return false;
     }
 
@@ -60,13 +63,12 @@ const RegisterScreen = () => {
     setLoading(true);
     try {
       await register(email, password);
-      // Navigate back to home after successful registration
-      router.replace('/'); // Go back to the main tab navigator
+      router.replace('/');
     } catch (error: any) {
       console.error('Registration error:', error);
       Alert.alert(
-        'Registration Failed',
-        error.message || 'An error occurred during registration. Please try again.',
+        t('auth.register.errors.registration_failed'),
+        error.message || t('errors.something_went_wrong'),
       );
     } finally {
       setLoading(false);
@@ -75,52 +77,75 @@ const RegisterScreen = () => {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      importantForAccessibility="yes"
     >
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
         <View style={styles.content}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join Lumenpulse today</Text>
+          <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+            {t('auth.register.title')}
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.accent }]} accessible>
+            {t('auth.register.subtitle')}
+          </Text>
 
-          <View style={styles.form}>
+          <View style={styles.form} importantForAccessibility="yes">
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={[styles.label, { color: colors.text }]} accessible>
+                {t('auth.register.email_label')}
+              </Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: colors.surface, color: colors.text }]}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="Enter your email"
+                placeholder={t('auth.register.email_placeholder')}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
                 textContentType="emailAddress"
+                importantForAccessibility="yes"
+                accessibilityLabel={t('auth.register.email_label')}
+                accessibilityHint={t('auth.register.email_placeholder')}
+                accessibilityRole="text"
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={[styles.label, { color: colors.text }]} accessible>
+                {t('auth.register.password_label')}
+              </Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: colors.surface, color: colors.text }]}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Enter your password"
+                placeholder={t('auth.register.password_placeholder')}
                 secureTextEntry
                 autoCapitalize="none"
                 textContentType="password"
+                importantForAccessibility="yes"
+                accessibilityLabel={t('auth.register.password_label')}
+                accessibilityHint={t('auth.register.password_placeholder')}
+                accessibilityRole="text"
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Confirm Password</Text>
+              <Text style={[styles.label, { color: colors.text }]} accessible>
+                {t('auth.register.confirm_password_label')}
+              </Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: colors.surface, color: colors.text }]}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                placeholder="Confirm your password"
+                placeholder={t('auth.register.confirm_password_placeholder')}
                 secureTextEntry
                 autoCapitalize="none"
                 textContentType="password"
+                importantForAccessibility="yes"
+                accessibilityLabel={t('auth.register.confirm_password_label')}
+                accessibilityHint={t('auth.register.confirm_password_placeholder')}
+                accessibilityRole="text"
               />
             </View>
 
@@ -128,17 +153,26 @@ const RegisterScreen = () => {
               style={[styles.button, loading && styles.disabledButton]}
               onPress={handleRegister}
               disabled={loading}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: loading }}
+              accessibilityLabel={t('auth.register.create_account_button')}
+              accessibilityHint={t('auth.register.create_account_button')}
             >
               {loading ? (
-                <ActivityIndicator color="#ffffff" />
+                <ActivityIndicator color="#ffffff" accessible accessibilityLabel={t('common.loading')} />
               ) : (
-                <Text style={styles.buttonText}>Create Account</Text>
+                <Text style={styles.buttonText} accessible>{t('auth.register.create_account_button')}</Text>
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.linkButton} onPress={() => router.push('/auth/login')}>
-              <Text style={styles.linkText}>
-                Already have an account? <Text style={styles.linkHighlight}>Sign In</Text>
+            <TouchableOpacity
+              style={styles.linkButton}
+              onPress={() => router.push('/auth/login')}
+              accessibilityRole="link"
+              accessibilityLabel={t('auth.register.login_link')}
+            >
+              <Text style={styles.linkText} accessible>
+                {t('auth.register.login_link')}
               </Text>
             </TouchableOpacity>
           </View>

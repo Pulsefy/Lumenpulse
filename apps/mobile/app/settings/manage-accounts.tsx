@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
 import { LinkedStellarAccount, usersApi } from '../../lib/api';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useLocalization } from '../../src/context';
 
 const STELLAR_PUBLIC_KEY_REGEX = /\bG[A-Z2-7]{55}\b/;
 
@@ -39,6 +40,7 @@ const extractPublicKey = (payload: string): string | null => {
 export default function ManageAccountsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useLocalization();
   const [accounts, setAccounts] = useState<LinkedStellarAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -60,12 +62,15 @@ export default function ManageAccountsScreen() {
     const response = await usersApi.getLinkedAccounts();
 
     if (!response.success) {
-      Alert.alert('Could not load accounts', response.error?.message ?? 'Try again in a moment.');
+      Alert.alert(
+        t('errors.error'),
+        response.error?.message ?? t('errors.couldnt_load', { item: 'accounts' }),
+      );
       return;
     }
 
     setAccounts(response.data ?? []);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -74,7 +79,7 @@ export default function ManageAccountsScreen() {
       setLoading(false);
     };
 
-    void bootstrap();
+    bootstrap();
   }, [loadAccounts]);
 
   const openScanner = async () => {
@@ -84,8 +89,8 @@ export default function ManageAccountsScreen() {
 
     if (!granted) {
       Alert.alert(
-        'Camera permission required',
-        'Allow camera access to scan a Stellar public key QR code.',
+        t('settings.manage_accounts.camera_permission'),
+        t('settings.manage_accounts.camera_permission_message'),
       );
       return;
     }
@@ -104,8 +109,8 @@ export default function ManageAccountsScreen() {
 
     if (!publicKey) {
       Alert.alert(
-        'Unsupported QR payload',
-        'Scan a Stellar public key QR code or a QR payload containing one.',
+        t('settings.manage_accounts.unsupported_qr'),
+        t('settings.manage_accounts.unsupported_qr_message'),
       );
       setScanLocked(false);
       return;
@@ -124,26 +129,31 @@ export default function ManageAccountsScreen() {
 
     if (!response.success) {
       Alert.alert(
-        'Could not link account',
-        response.error?.message ?? 'The account could not be linked.',
+        t('settings.manage_accounts.could_not_link'),
+        response.error?.message ?? t('errors.could_not_link'),
       );
       return;
     }
 
     setNickname('');
     await loadAccounts();
-    Alert.alert('Account linked', `${truncateKey(publicKey)} is now available in Settings.`);
+    Alert.alert(
+      t('settings.manage_accounts.account_linked'),
+      `${truncateKey(publicKey)} ${t('settings.manage_accounts.account_linked_message')}`,
+    );
   };
 
   const handleRemove = (account: LinkedStellarAccount) => {
     Alert.alert(
-      'Remove linked account',
-      `Remove ${account.label || truncateKey(account.publicKey)} from this profile?`,
+      t('settings.manage_accounts.remove_confirm'),
+      t('settings.manage_accounts.remove_message', {
+        account: account.label || truncateKey(account.publicKey),
+      }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Remove',
-          style: 'destructive',
+          text: t('settings.manage_accounts.remove'),
+          style: 'destructive' as const,
           onPress: () => {
             void (async () => {
               setSubmitting(true);
@@ -152,8 +162,8 @@ export default function ManageAccountsScreen() {
 
               if (!response.success) {
                 Alert.alert(
-                  'Could not remove account',
-                  response.error?.message ?? 'The account could not be removed.',
+                  t('errors.error'),
+                  response.error?.message ?? t('errors.could_not_remove', { item: 'account' }),
                 );
                 return;
               }
@@ -180,28 +190,36 @@ export default function ManageAccountsScreen() {
             style={[styles.headerButton, { backgroundColor: colors.card }]}
             onPress={() => router.back()}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            accessibilityHint="Go back to previous screen"
           >
             <Ionicons name="arrow-back" size={20} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
-            <Text style={[styles.title, { color: colors.text }]}>Manage Accounts</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Link Stellar public keys with QR, then remove them if you no longer want them attached
-              to this profile.
+            <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+              {t('settings.manage_accounts.title')}
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]} accessible>
+              {t('settings.manage_accounts.description')}
             </Text>
           </View>
         </View>
 
         <View
           style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessible
+          accessibilityLabel={t('settings.manage_accounts.add_account_title')}
         >
           <View style={styles.cardHeader}>
             <Ionicons name="qr-code-outline" size={20} color={colors.accent} />
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Add Account</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]} accessible>
+              {t('settings.manage_accounts.add_account_title')}
+            </Text>
           </View>
 
-          <Text style={[styles.helperText, { color: colors.textSecondary }]}>
-            Optional nickname for the next scanned account.
+          <Text style={[styles.helperText, { color: colors.textSecondary }]} accessible>
+            {t('settings.manage_accounts.nickname_hint')}
           </Text>
           <TextInput
             style={[
@@ -214,8 +232,11 @@ export default function ManageAccountsScreen() {
             ]}
             value={nickname}
             onChangeText={setNickname}
-            placeholder="e.g. Trading Wallet"
+            placeholder={t('settings.manage_accounts.nickname_placeholder')}
             placeholderTextColor={colors.textSecondary}
+            accessibilityLabel={t('settings.manage_accounts.nickname_label')}
+            accessibilityHint={t('settings.manage_accounts.nickname_hint')}
+            accessibilityRole="text"
           />
 
           <TouchableOpacity
@@ -223,34 +244,50 @@ export default function ManageAccountsScreen() {
             onPress={openScanner}
             activeOpacity={0.85}
             disabled={submitting}
+            accessibilityRole="button"
+            accessibilityLabel={t('settings.manage_accounts.scan_qr_label')}
+            accessibilityHint={t('settings.manage_accounts.scan_qr_hint')}
           >
             {submitting ? (
-              <ActivityIndicator color="#ffffff" />
+              <ActivityIndicator color="#ffffff" accessibilityLabel={t('common.loading')} />
             ) : (
               <>
                 <Ionicons name="scan-outline" size={18} color="#ffffff" />
-                <Text style={styles.primaryButtonText}>Scan QR to Add Account</Text>
+                <Text style={styles.primaryButtonText} accessible>
+                  {t('settings.manage_accounts.scan_qr_label')}
+                </Text>
               </>
             )}
           </TouchableOpacity>
 
-          <Text style={[styles.noteText, { color: colors.textSecondary }]}>
-            The scanner accepts a raw Stellar public key or a QR payload that contains one.
+          <Text style={[styles.noteText, { color: colors.textSecondary }]} accessible>
+            {t('settings.manage_accounts.scan_to_attach')}
           </Text>
         </View>
 
         <View
           style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessible
+          accessibilityLabel={t('settings.manage_accounts.linked_accounts')}
         >
           <View style={styles.sectionRow}>
             <View style={styles.cardHeader}>
               <Ionicons name="wallet-outline" size={20} color={colors.accent} />
-              <Text style={[styles.cardTitle, { color: colors.text }]}>Linked Accounts</Text>
+              <Text style={[styles.cardTitle, { color: colors.text }]} accessible>
+                {t('settings.manage_accounts.linked_accounts')}
+              </Text>
             </View>
 
-            <TouchableOpacity onPress={handleRefresh} disabled={refreshing} activeOpacity={0.8}>
+            <TouchableOpacity
+              onPress={handleRefresh}
+              disabled={refreshing}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.retry')}
+              accessibilityHint="Refresh linked accounts"
+            >
               {refreshing ? (
-                <ActivityIndicator size="small" color={colors.accent} />
+                <ActivityIndicator size="small" color={colors.accent} accessibilityLabel={t('common.loading')} />
               ) : (
                 <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
               )}
@@ -259,28 +296,28 @@ export default function ManageAccountsScreen() {
 
           {loading ? (
             <View style={styles.loadingWrap}>
-              <ActivityIndicator color={colors.accent} />
+              <ActivityIndicator color={colors.accent} accessibilityLabel={t('common.loading')} />
             </View>
           ) : sortedAccounts.length === 0 ? (
-            <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
+            <View style={[styles.emptyState, { backgroundColor: colors.card }]} accessible accessibilityLabel="No linked accounts">
               <Ionicons name="wallet-outline" size={22} color={colors.textSecondary} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                No linked accounts yet
+              <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+                {t('settings.manage_accounts.no_linked_accounts')}
               </Text>
-              <Text style={[styles.emptyDescription, { color: colors.textSecondary }]}>
-                Scan a Stellar account QR code above to attach it to this profile.
+              <Text style={[styles.emptyDescription, { color: colors.textSecondary }]} accessible>
+                {t('settings.manage_accounts.scan_to_attach')}
               </Text>
             </View>
           ) : (
             sortedAccounts.map((account, index) => (
               <View key={account.id}>
                 {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
-                <View style={styles.accountRow}>
+                <View style={styles.accountRow} accessible accessibilityLabel={`${account.label || 'Linked account'}: ${truncateKey(account.publicKey)}`}>
                   <View style={styles.accountCopy}>
-                    <Text style={[styles.accountLabel, { color: colors.text }]}>
+                    <Text style={[styles.accountLabel, { color: colors.text }]} accessible>
                       {account.label?.trim() || 'Linked account'}
                     </Text>
-                    <Text style={[styles.accountKey, { color: colors.textSecondary }]}>
+                    <Text style={[styles.accountKey, { color: colors.textSecondary }]} accessible>
                       {truncateKey(account.publicKey)}
                     </Text>
                   </View>
@@ -289,56 +326,66 @@ export default function ManageAccountsScreen() {
                     onPress={() => handleRemove(account)}
                     activeOpacity={0.8}
                     disabled={submitting}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('settings.manage_accounts.remove')} ${account.label || truncateKey(account.publicKey)}`}
+                    accessibilityHint="Remove this linked account"
                   >
                     <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                    <Text style={[styles.removeButtonText, { color: colors.danger }]}>Remove</Text>
+                    <Text style={[styles.removeButtonText, { color: colors.danger }]} accessible>
+                      {t('settings.manage_accounts.remove')}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
             ))
           )}
         </View>
-      </ScrollView>
 
-      <Modal
-        visible={scannerOpen}
-        animationType="slide"
-        onRequestClose={() => setScannerOpen(false)}
-      >
-        <SafeAreaView style={[styles.scannerContainer, { backgroundColor: '#000000' }]}>
-          <View style={styles.scannerHeader}>
-            <TouchableOpacity
-              style={styles.scannerClose}
-              onPress={() => setScannerOpen(false)}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="close" size={24} color="#ffffff" />
-            </TouchableOpacity>
-            <Text style={styles.scannerTitle}>Scan account QR</Text>
-            <View style={styles.scannerClose} />
-          </View>
+        <Modal
+          visible={scannerOpen}
+          animationType="slide"
+          onRequestClose={() => setScannerOpen(false)}
+          accessibilityViewIsModal={true}
+        >
+          <SafeAreaView style={[styles.scannerContainer, { backgroundColor: '#000000' }]}>
+            <View style={styles.scannerHeader}>
+              <TouchableOpacity
+                style={styles.scannerClose}
+                onPress={() => setScannerOpen(false)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.close')}
+              >
+                <Ionicons name="close" size={24} color="#ffffff" />
+              </TouchableOpacity>
+              <Text style={styles.scannerTitle} accessible accessibilityRole="header">
+                {t('settings.manage_accounts.scan_qr_label')}
+              </Text>
+              <View style={styles.scannerClose} />
+            </View>
 
-          {permissionGranted === false ? (
-            <View style={styles.permissionFallback}>
-              <Text style={styles.permissionFallbackText}>
-                Camera permission is required to scan account QR codes.
+            {permissionGranted === false ? (
+              <View style={styles.permissionFallback} accessible accessibilityLabel="Camera permission required">
+                <Text style={styles.permissionFallbackText} accessible>
+                  {t('settings.manage_accounts.camera_permission_message')}
+                </Text>
+              </View>
+            ) : (
+              <BarCodeScanner
+                onBarCodeScanned={handleScanned}
+                style={StyleSheet.absoluteFillObject}
+                barCodeTypes={[BarCodeScanner.Constants.BarCodeType.qr]}
+              />
+            )}
+
+            <View style={styles.scannerFooter}>
+              <Text style={styles.scannerHint} accessible>
+                {t('settings.manage_accounts.scanner_hint')}
               </Text>
             </View>
-          ) : (
-            <BarCodeScanner
-              onBarCodeScanned={handleScanned}
-              style={StyleSheet.absoluteFillObject}
-              barCodeTypes={[BarCodeScanner.Constants.BarCodeType.qr]}
-            />
-          )}
-
-          <View style={styles.scannerFooter}>
-            <Text style={styles.scannerHint}>
-              Point the camera at a Stellar public key QR code.
-            </Text>
-          </View>
-        </SafeAreaView>
-      </Modal>
+          </SafeAreaView>
+        </Modal>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -456,6 +503,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
     alignItems: 'center',
+    paddingVertical: 14,
   },
   accountCopy: {
     flex: 1,

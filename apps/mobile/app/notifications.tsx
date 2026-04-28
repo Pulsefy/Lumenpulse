@@ -5,11 +5,13 @@ import { useNotifications, Notification } from '../contexts/NotificationsContext
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalization } from '../src/context';
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const router = useRouter();
+  const { t } = useLocalization();
 
   const renderItem = useCallback(
     ({ item }: { item: Notification }) => (
@@ -22,58 +24,96 @@ export default function NotificationsScreen() {
           },
         ]}
         onPress={() => markAsRead(item.id)}
-        accessibilityLabel={`${item.title}. ${item.read ? 'Read' : 'Unread'}. Tap to mark as read.`}
+        accessibilityLabel={`${item.title}. ${
+          item.read ? t('notifications.read') : t('notifications.unread')
+        }. ${t('notifications.mark_as_read')}`}
+        accessibilityRole="button"
+        accessibilityState={{ selected: item.read }}
       >
-        {!item.read && <View style={styles.unreadDot} />}
-        <Text style={[styles.itemTitle, { color: colors.text }]}>{item.title}</Text>
-        <Text style={[styles.itemMessage, { color: colors.text }]}>{item.message}</Text>
+        {!item.read && (
+          <View
+            style={styles.unreadDot}
+            accessible
+            accessibilityLabel={t('notifications.unread')}
+          />
+        )}
+
+        <Text style={[styles.itemTitle, { color: colors.text }]} accessibilityRole="header">
+          {item.title}
+        </Text>
+
+        <Text style={[styles.itemMessage, { color: colors.text }]}>
+          {item.message}
+        </Text>
+
         <Text style={[styles.itemStatus, { color: colors.text }]}>
           {item.read ? '✓ Read' : '● Unread'}
         </Text>
       </TouchableOpacity>
     ),
-    [colors, markAsRead],
+    [colors, markAsRead, t],
   );
 
   return (
     <ProtectedRoute>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
+        
+        {/* HEADER */}
         <View style={styles.headerRow}>
+          
           {/* Back button */}
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backButton}
-            accessibilityLabel="Go back"
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
           >
             <Ionicons name="chevron-back" size={24} color={colors.accent} />
           </TouchableOpacity>
 
           {/* Title + badge */}
           <View style={styles.titleRow}>
-            <Text style={[styles.screenTitle, { color: colors.text }]}>Notifications</Text>
+            <Text style={[styles.screenTitle, { color: colors.text }]}>
+              {t('notifications.title')}
+            </Text>
+
             {unreadCount > 0 && (
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                <Text style={styles.badgeText}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Text>
               </View>
             )}
           </View>
 
-          {/* Mark all read — keeps the header balanced */}
+          {/* Mark all read */}
           {unreadCount > 0 ? (
-            <TouchableOpacity onPress={markAllAsRead} style={styles.markAllButton}>
-              <Text style={[styles.markAllText, { color: colors.accent }]}>Mark all</Text>
+            <TouchableOpacity
+              onPress={markAllAsRead}
+              style={styles.markAllButton}
+              accessibilityRole="button"
+              accessibilityLabel={t('notifications.mark_all_read')}
+            >
+              <Text style={[styles.markAllText, { color: colors.accent }]}>
+                {t('notifications.mark_all_read')}
+              </Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.markAllButton} />
           )}
         </View>
 
+        {/* EMPTY STATE */}
         {notifications.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>🔔</Text>
-            <Text style={[styles.emptyText, { color: colors.text }]}>No notifications yet</Text>
+
+            <Text style={[styles.emptyText, { color: colors.text }]}>
+              {t('notifications.no_notifications')}
+            </Text>
+
             <Text style={[styles.emptySubText, { color: colors.text }]}>
-              Price alerts and account activity will show up here.
+              {t('notifications.notification_text')}
             </Text>
           </View>
         ) : (
@@ -91,6 +131,7 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
+
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -98,12 +139,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     marginTop: 8,
   },
-  backButton: {
-    padding: 4,
-    marginRight: 4,
-  },
+
+  backButton: { padding: 4 },
+
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+
   screenTitle: { fontSize: 22, fontWeight: '700' },
+
   badge: {
     backgroundColor: '#ff4757',
     borderRadius: 10,
@@ -113,11 +155,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  badgeText: { color: '#ffffff', fontSize: 11, fontWeight: '700', lineHeight: 14 },
+
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 14,
+  },
+
   markAllButton: { paddingVertical: 4, paddingHorizontal: 8 },
+
   markAllText: { fontSize: 13, fontWeight: '600' },
+
   list: { paddingBottom: 24 },
-  item: { padding: 16, borderRadius: 12, marginVertical: 6, borderWidth: 1, position: 'relative' },
+
+  item: {
+    padding: 16,
+    borderRadius: 12,
+    marginVertical: 6,
+    borderWidth: 1,
+    position: 'relative',
+  },
+
   unreadDot: {
     position: 'absolute',
     top: 14,
@@ -127,11 +186,41 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#ff4757',
   },
-  itemTitle: { fontWeight: '700', fontSize: 15, marginBottom: 4, paddingRight: 16 },
-  itemMessage: { fontSize: 13, opacity: 0.85, marginBottom: 6 },
-  itemStatus: { fontSize: 10, opacity: 0.6, fontWeight: '600' },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
+
+  itemTitle: {
+    fontWeight: '700',
+    fontSize: 15,
+    marginBottom: 4,
+    paddingRight: 16,
+  },
+
+  itemMessage: {
+    fontSize: 13,
+    opacity: 0.85,
+    marginBottom: 6,
+  },
+
+  itemStatus: {
+    fontSize: 10,
+    opacity: 0.6,
+    fontWeight: '600',
+  },
+
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+
   emptyIcon: { fontSize: 40, marginBottom: 8 },
+
   emptyText: { fontSize: 17, fontWeight: '600' },
-  emptySubText: { fontSize: 13, opacity: 0.6, textAlign: 'center', paddingHorizontal: 32 },
+
+  emptySubText: {
+    fontSize: 13,
+    opacity: 0.6,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
 });

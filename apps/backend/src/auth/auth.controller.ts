@@ -16,6 +16,7 @@ import {
   ConflictException,
   NotFoundException,
   Param,
+  BadRequestException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request as ExpressRequest } from 'express';
@@ -29,6 +30,11 @@ import { GetChallengeDto, VerifyChallengeDto } from './dto/auth.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto, LogoutDto } from './dto/refresh-token.dto';
+import {
+  TwoFactorEnableDto,
+  TwoFactorVerifyDto,
+  TwoFactorDisableDto,
+} from './dto/two-factor.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -72,11 +78,29 @@ export class AuthController {
     },
   })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  @ApiResponse({
+    status: 200,
+    description: '2FA required',
+    schema: {
+      properties: {
+        requiresTwoFactor: {
+          type: 'boolean',
+          example: true,
+        },
+      },
+    },
+  })
   async login(@Body() body: LoginDto) {
     const user = await this.authService.validateUser(body.email, body.password);
     if (!user) {
       throw new UnauthorizedException();
     }
+
+    // Check if 2FA is enabled
+    if (user.twoFactorEnabled) {
+      return { requiresTwoFactor: true };
+    }
+
     return this.authService.login(user);
   }
 
@@ -359,5 +383,109 @@ export class AuthController {
     @Param('id') sessionId: string,
   ): Promise<{ message: string; sessionId: string }> {
     return this.authService.revokeSession(sessionId, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/generate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Generate 2FA secret and QR code' })
+  @ApiResponse({
+    status: 200,
+    description: '2FA secret generated successfully',
+    schema: {
+      properties: {
+        secret: { type: 'string' },
+        qrCode: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: '2FA already enabled' })
+  @ApiBearerAuth('JWT-auth')
+  async generateTwoFactorSecret(@Request() req: { user: { id: string } }) {
+    return this.authService.generateTwoFactorSecret(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/enable')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Enable 2FA with TOTP token' })
+  @ApiResponse({
+    status: 200,
+    description: '2FA enabled successfully',
+    schema: {
+      properties: {
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Invalid TOTP token' })
+  @ApiBearerAuth('JWT-auth')
+  async enableTwoFactor(
+    @Request() req: { user: { id: string } },
+    @Body() body: TwoFactorEnableDto,
+  ) {
+    return this.authService.enableTwoFactor(req.user.id, body.token);
+  }
+
+  @Post('2fa/verify')
+  @Throttle(getAuthThrottleOverride())
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify 2FA token during login' })
+  @ApiResponse({
+    status: 200,
+    description: '2FA verification successful',
+    schema: {
+      properties: {
+        access_token: { type: 'string' },
+        refresh_token: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials or TOTP token',
+  })
+  async verifyTwoFactor(@Body() body: TwoFactorVerifyDto) {
+    const user = await this.authService.validateUser(body.email, body.password);
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (!user.twoFactorEnabled) {
+      throw new BadRequestException('2FA is not enabled for this user');
+    }
+
+    const isValid = await this.authService.verifyTwoFactorToken(
+      user.id,
+      body.token,
+    );
+
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid TOTP token');
+    }
+
+    return this.authService.login(user);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/disable')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Disable 2FA' })
+  @ApiResponse({
+    status: 200,
+    description: '2FA disabled successfully',
+    schema: {
+      properties: {
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Invalid TOTP token' })
+  @ApiBearerAuth('JWT-auth')
+  async disableTwoFactor(
+    @Request() req: { user: { id: string } },
+    @Body() body: TwoFactorDisableDto,
+  ) {
+    return this.authService.disableTwoFactor(req.user.id, body.token);
   }
 }

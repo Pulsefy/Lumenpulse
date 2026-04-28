@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../contexts/ThemeContext';
+import { useLocalization } from '../src/context';
 
 export function OfflineIndicator() {
   const [isOffline, setIsOffline] = useState(false);
-  const { colors } = useTheme();
+  const { colors } = useLocalization();
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
@@ -21,9 +21,16 @@ export function OfflineIndicator() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.danger }]}>
+    <View
+      style={[styles.container, { backgroundColor: colors.danger }]}
+      accessible
+      accessibilityLabel="No internet connection"
+      accessibilityRole="alert"
+    >
       <Ionicons name="cloud-offline-outline" size={16} color="#ffffff" />
-      <Text style={styles.text}>No internet connection</Text>
+      <Text style={styles.text} accessible>
+        No internet connection
+      </Text>
     </View>
   );
 }
