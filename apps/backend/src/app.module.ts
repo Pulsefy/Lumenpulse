@@ -46,6 +46,7 @@ import { OutboxModule } from './outbox/outbox.module';
 import { VerificationModule } from './verification/verification.module';
 import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
+import { ExportModule } from './export/export.module';
 
 @Module({
   imports: [
@@ -109,6 +110,7 @@ import { IdempotencyInterceptor } from './common/interceptors/idempotency.interc
     VerificationModule,
     WatchlistModule,
     OutboxModule,
+    ExportModule,
     TelegramBotModule,
     ModerationModule,
   ],
