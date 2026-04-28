@@ -2340,6 +2340,33 @@ fn test_withdraw_with_fee() {
     assert_eq!(client.get_balance(&project_id), 400_000);
 }
 
+#[test]
+fn test_deposit_with_fee() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let treasury = Address::generate(&env);
+    client.set_fee_config(&admin, &500, &treasury); // 5% fee
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Fee"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let deposit_amount = 200_000;
+    client.deposit(&user, &project_id, &deposit_amount);
+
+    // 5% fee = 10,000, project gets 190,000
+    assert_eq!(token_client.balance(&treasury), 10_000);
+    assert_eq!(client.get_balance(&project_id), 190_000);
+    assert_eq!(client.get_total_contributions(&project_id), 190_000);
+}
+
 // ---------------------------------------------------------------------------
 // TTL / storage-rent tests
 // ---------------------------------------------------------------------------

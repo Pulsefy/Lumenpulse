@@ -153,6 +153,17 @@ impl CrowdfundVaultContract {
             .set(&DataKey::ProtocolStats, &stats);
     }
 
+    fn calculate_protocol_fee(env: &Env, amount: i128) -> i128 {
+        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
+        let treasury: Option<Address> = env.storage().instance().get(&DataKey::Treasury);
+
+        if treasury.is_some() && fee_bps > 0 {
+            (amount.checked_mul(fee_bps as i128).unwrap_or(0)) / 10_000
+        } else {
+            0
+        }
+    }
+
     /// Helper function to verify admin authorization
     /// Reduces code duplication and ensures consistent admin checks
     fn verify_admin(env: &Env, caller: &Address) -> Result<(), CrowdfundError> {
@@ -617,16 +628,43 @@ impl CrowdfundVaultContract {
 
             let contract_address = env.current_contract_address();
             let user_balance = token::balance(&env, &project.token_address, &user);
+            if user_balance < amount {
+                return Err(CrowdfundError::InsufficientBalance);
+            }
 
+            let fee_amount = Self::calculate_protocol_fee(&env, amount);
+            let net_amount = amount - fee_amount;
+
+            if fee_amount > 0 {
+                let treasury: Address = env.storage().instance().get(&DataKey::Treasury).unwrap();
+                token::transfer(&env, &project.token_address, &user, &treasury, &fee_amount);
+                events::ProtocolFeeDeductedEvent {
+                    project_id,
+                    amount: fee_amount,
+                }
+                .publish(&env);
+            }
+
+            // Transfer tokens from user to contract
+            token::transfer(
+                &env,
+                &project.token_address,
+                &user,
+                &contract_address,
+                &net_amount,
+            );
+
+            // Update project balance
             let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
             let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
             env.storage()
                 .persistent()
-                .set(&balance_key, &(current_balance + amount));
+                .set(&balance_key, &(current_balance + net_amount));
             env.storage()
                 .persistent()
                 .extend_ttl(&balance_key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
+            // Track individual contribution
             let contribution_key = DataKey::Contribution(project_id, user.clone());
             let current_contribution: i128 = env
                 .storage()
@@ -662,12 +700,13 @@ impl CrowdfundVaultContract {
 
             env.storage()
                 .persistent()
-                .set(&contribution_key, &(current_contribution + amount));
+                .set(&contribution_key, &(current_contribution + net_amount));
             env.storage()
                 .persistent()
                 .extend_ttl(&contribution_key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
-            project.total_deposited += amount;
+            // Update project total deposited
+            project.total_deposited += net_amount;
             env.storage()
                 .persistent()
                 .set(&DataKey::Project(project_id), &project);
@@ -677,6 +716,7 @@ impl CrowdfundVaultContract {
                 LEDGER_BUMP,
             );
 
+            // Update global protocol stats
             let mut stats: ProtocolStats = env
                 .storage()
                 .instance()
@@ -685,21 +725,11 @@ impl CrowdfundVaultContract {
                     tvl: 0,
                     cumulative_volume: 0,
                 });
-            stats.tvl += amount;
+            stats.tvl += net_amount;
             stats.cumulative_volume += amount;
             env.storage()
                 .instance()
                 .set(&DataKey::ProtocolStats, &stats);
-
-            if user_balance >= amount {
-                token::transfer(
-                    &env,
-                    &project.token_address,
-                    &user,
-                    &contract_address,
-                    &amount,
-                );
-            }
 
             events::DepositEvent {
                 user: user.clone(),
@@ -1073,6 +1103,12 @@ impl CrowdfundVaultContract {
             let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
             let local_balance = total_balance - current_invested;
 
+            if local_balance < amount {
+                let amount_to_divest = amount - local_balance;
+                Self::divest_funds_internal(&env, project_id, amount_to_divest)?;
+            }
+
+            let contract_address = env.current_contract_address();
             let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
             let treasury: Option<Address> = env.storage().instance().get(&DataKey::Treasury);
 
@@ -1082,7 +1118,30 @@ impl CrowdfundVaultContract {
                 0
             };
 
-            let withdraw_amount = amount - fee_amount;
+            let net_withdraw_amount = amount - fee_amount;
+
+            if fee_amount > 0 {
+                token::transfer(
+                    &env,
+                    &project.token_address,
+                    &contract_address,
+                    &treasury.unwrap(),
+                    &fee_amount,
+                );
+                events::ProtocolFeeDeductedEvent {
+                    project_id,
+                    amount: fee_amount,
+                }
+                .publish(&env);
+            }
+
+            token::transfer(
+                &env,
+                &project.token_address,
+                &contract_address,
+                &project.owner,
+                &net_withdraw_amount,
+            );
 
             env.storage()
                 .persistent()
@@ -1100,6 +1159,7 @@ impl CrowdfundVaultContract {
                 LEDGER_THRESHOLD,
                 LEDGER_BUMP,
             );
+
             let expiry_key = DataKey::ProjectMilestoneExpiry(project_id);
             env.storage().persistent().set(
                 &expiry_key,
@@ -1125,39 +1185,10 @@ impl CrowdfundVaultContract {
                 .instance()
                 .set(&DataKey::ProtocolStats, &stats);
 
-            if local_balance < amount {
-                let amount_to_divest = amount - local_balance;
-                Self::divest_funds_internal(&env, project_id, amount_to_divest)?;
-            }
-
-            let contract_address = env.current_contract_address();
-            if fee_amount > 0 {
-                token::transfer(
-                    &env,
-                    &project.token_address,
-                    &contract_address,
-                    &treasury.clone().unwrap(),
-                    &fee_amount,
-                );
-                events::ProtocolFeeDeductedEvent {
-                    project_id,
-                    amount: fee_amount,
-                }
-                .publish(&env);
-            }
-
-            token::transfer(
-                &env,
-                &project.token_address,
-                &contract_address,
-                &project.owner,
-                &withdraw_amount,
-            );
-
             events::WithdrawEvent {
                 owner: project.owner,
                 project_id,
-                amount: withdraw_amount,
+                amount: net_withdraw_amount,
             }
             .publish(&env);
 
