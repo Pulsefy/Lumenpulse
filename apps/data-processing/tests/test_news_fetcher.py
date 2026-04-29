@@ -111,6 +111,80 @@ class TestNewsFetcher(unittest.TestCase):
 
         fetcher.close()
 
+    @patch("src.ingestion.news_fetcher.requests.Session.get")
+    def test_fetch_newsapi_default_all_languages(self, mock_get):
+        """Test NewsAPI fetch does not restrict to English by default."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = self.mock_newsapi_response
+        mock_get.return_value = mock_response
+
+        fetcher = NewsFetcher(use_cryptocompare=False)
+        fetcher._fetch_newsapi(limit=5)
+
+        self.assertEqual(mock_get.call_count, 1)
+        params = mock_get.call_args[1]["params"]
+        self.assertNotIn("language", params)
+
+        fetcher.close()
+
+    @patch("src.ingestion.news_fetcher.requests.Session.post")
+    @patch("src.ingestion.news_fetcher.requests.Session.get")
+    def test_translate_non_english_article(self, mock_get, mock_post):
+        """Test translation of non-English news content before analytics."""
+        # Mock translation endpoint response
+        mock_translate_response = Mock()
+        mock_translate_response.status_code = 200
+        mock_translate_response.json.return_value = {
+            "translatedText": "Bitcoin reaches new all-time high today..."
+        }
+        mock_post.return_value = mock_translate_response
+
+        # Mock CryptoCompare response with a Spanish language hint
+        response = Mock()
+        response.status_code = 200
+        response.json.return_value = {
+            "Type": 100,
+            "Data": [
+                {
+                    "id": "12345",
+                    "title": "Bitcoin alcanza un nuevo máximo histórico",
+                    "body": "Bitcoin alcanzó un nuevo máximo histórico hoy...",
+                    "short_description": "BTC alcanza ATH",
+                    "source": "CryptoNews",
+                    "url": "https://example.com/btc-ath-es",
+                    "published_on": 1672531200,
+                    "categories": "BTC|Market",
+                    "tags": "Bitcoin|Precio",
+                    "lang": "es",
+                }
+            ],
+        }
+        mock_get.return_value = response
+
+        os.environ["TRANSLATION_API_URL"] = "https://example.com/translate"
+        fetcher = NewsFetcher(use_newsapi=False)
+
+        articles = fetcher._fetch_cryptocompare(limit=5)
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0].language, "es")
+        self.assertTrue(articles[0].translated)
+        self.assertEqual(articles[0].title, "Bitcoin reaches new all-time high today...")
+
+        fetcher.close()
+
+    def test_normalize_text_handles_unicode_and_whitespace(self):
+        """Test that normalization cleans unicode and whitespace."""
+        from src.ingestion.news_fetcher import NewsFetcher
+
+        os.environ["TRANSLATION_API_URL"] = "https://example.com/translate"
+        fetcher = NewsFetcher(use_cryptocompare=False, use_newsapi=False)
+
+        normalized = fetcher._normalize_text("  Cripto\u00a0noticias  \n  hoy ")
+        self.assertEqual(normalized, "Cripto noticias hoy")
+
+        fetcher.close()
+
     # @patch('src.ingestion.news_fetcher.requests.Session.get')
     # def test_fetch_latest_combined(self, mock_get):
     #     """Test combined fetch from both APIs"""

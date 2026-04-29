@@ -94,6 +94,13 @@ class TestSentimentAnalyzerWithCache(unittest.TestCase):
         self.assertEqual(result1.compound_score, result2.compound_score)
         self.assertEqual(result1.sentiment_label, result2.sentiment_label)
 
+    def test_non_english_text_is_detected_and_analyzed(self):
+        """Test that non-English text is detected and analyzed."""
+        result = self.analyzer.analyze("Bitcoin sube con fuerte rally en el mercado")
+
+        self.assertEqual(result.language, "es")
+        self.assertIn(result.sentiment_label, {"positive", "negative", "neutral"})
+
     def test_different_texts_not_cached_together(self):
         r1 = self.analyzer.analyze("This is a positive news article.")
         r2 = self.analyzer.analyze("This is a negative news article.")

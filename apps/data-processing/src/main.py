@@ -108,10 +108,14 @@ def run_data_pipeline():
 
         sentiment_analyzer = SentimentAnalyzer()
         if news_articles:
-            article_texts = [
-                (a.get("title", "") + " " + a.get("summary", "")).strip()
-                for a in news_articles
-            ]
+            article_texts = []
+            for a in news_articles:
+                title = a.get("title", "") or ""
+                summary = a.get("summary", "") or ""
+                content = a.get("content", "") or ""
+                article_texts.append(
+                    " ".join([title, summary, content]).strip()
+                )
             sentiment_results = sentiment_analyzer.analyze_batch_parallel(article_texts)
             summary = sentiment_analyzer.get_sentiment_summary(sentiment_results)
             avg_sentiment = summary["average_compound_score"]
