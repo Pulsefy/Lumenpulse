@@ -22,8 +22,19 @@ export class FeatureFlagsController {
   }
 
   @Post()
-  upsert(@Body() body: { key: string; enabled: boolean; conditions?: Record<string, unknown> }) {
-    return this.flags.upsert(body.key, body.enabled, body.conditions ?? undefined);
+  upsert(
+    @Body()
+    body: {
+      key: string;
+      enabled: boolean;
+      conditions?: Record<string, unknown>;
+    },
+  ) {
+    return this.flags.upsert(
+      body.key,
+      body.enabled,
+      body.conditions ?? undefined,
+    );
   }
 
   @Delete(':key')
