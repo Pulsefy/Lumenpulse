@@ -132,8 +132,9 @@ fn test_yield_investment_and_withdrawal() {
     // 500_000 deposited - 300_000 invested = 200_000 remaining in vault
     assert_eq!(token_client.balance(&client.address), 200_000);
 
-    // Approve milestone so we can withdraw
-    client.approve_milestone(&admin, &project_id, &0);
+    // Start milestone vote and cast winning vote so we can withdraw
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     // Withdraw more than local balance (requires auto-divest)
     // Local is 200_000, we want 400_000. It should divest 200_000.

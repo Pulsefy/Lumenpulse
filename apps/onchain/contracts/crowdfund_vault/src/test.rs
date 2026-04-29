@@ -259,8 +259,9 @@ fn test_withdraw_after_approval() {
     let deposit_amount: i128 = 500_000;
     client.deposit(&user, &project_id, &deposit_amount);
 
-    // Approve milestone
-    client.approve_milestone(&admin, &project_id, &0);
+    // Start milestone vote and cast winning vote
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     // Verify milestone is approved
     assert!(client.is_milestone_approved(&project_id, &0));
@@ -283,29 +284,6 @@ fn test_withdraw_after_approval() {
     assert_eq!(token_client.balance(&owner), withdraw_amount);
 }
 
-#[test]
-fn test_non_admin_cannot_approve() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let (client, admin, owner, _, token_client) = setup_test(&env);
-
-    // Initialize contract
-    client.initialize(&admin);
-
-    // Create project
-    let project_id = client.create_project(
-        &owner,
-        &symbol_short!("TestProj"),
-        &1_000_000,
-        &token_client.address,
-    );
-
-    // Non-admin tries to approve milestone - should fail
-    let non_admin = Address::generate(&env);
-    let result = client.try_approve_milestone(&non_admin, &project_id, &0);
-    assert_eq!(result, Err(Ok(CrowdfundError::Unauthorized)));
-}
 
 #[test]
 fn test_insufficient_balance_withdrawal() {
@@ -328,8 +306,9 @@ fn test_insufficient_balance_withdrawal() {
     // Deposit small amount
     client.deposit(&user, &project_id, &100_000);
 
-    // Approve milestone
-    client.approve_milestone(&admin, &project_id, &0);
+    // Start milestone vote and cast winning vote
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     // Try to withdraw more than balance - should fail
     let result = client.try_withdraw(&project_id, &0, &500_000);
@@ -414,18 +393,6 @@ fn test_deposit_project_not_found() {
     assert_eq!(result, Err(Ok(CrowdfundError::ProjectNotFound)));
 }
 
-#[test]
-fn test_approve_milestone_project_not_found() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let (client, admin, _, _, _) = setup_test(&env);
-
-    client.initialize(&admin);
-
-    let result = client.try_approve_milestone(&admin, &999, &0);
-    assert_eq!(result, Err(Ok(CrowdfundError::ProjectNotFound)));
-}
 
 #[test]
 fn test_withdraw_project_not_found() {
@@ -456,7 +423,8 @@ fn test_withdraw_invalid_amount() {
         &token_client.address,
     );
     client.deposit(&user, &project_id, &500000);
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     let result = client.try_withdraw(&project_id, &0, &0);
     assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
@@ -585,7 +553,8 @@ fn test_withdraw_from_inactive_project() {
     );
 
     client.deposit(&user, &project_id, &500_000);
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     // Withdraw works when project is active
     client.withdraw(&project_id, &0, &100_000);
@@ -646,7 +615,8 @@ fn test_partial_withdrawal() {
     client.deposit(&user, &project_id, &1_500_000);
     assert_eq!(client.get_balance(&project_id), 1_500_000);
 
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     // Withdraw partial amount
     client.withdraw(&project_id, &0, &500_000);
@@ -678,7 +648,8 @@ fn test_unauthorized_withdrawal() {
     );
 
     client.deposit(&user, &project_id, &500_000);
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     // User (non-owner) tries to withdraw - should fail due to authorization
     // The contract checks owner.require_auth() so it will panic
@@ -705,8 +676,9 @@ fn test_milestone_approval_status() {
     // Before approval
     assert!(!client.is_milestone_approved(&project_id, &0));
 
-    // Approve milestone
-    client.approve_milestone(&admin, &project_id, &0);
+    // Start milestone vote and cast winning vote
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     // After approval
     assert!(client.is_milestone_approved(&project_id, &0));
@@ -728,7 +700,8 @@ fn test_dispute_escrows_withdrawal_until_resolved() {
     );
 
     client.deposit(&user, &project_id, &500_000);
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     client.dispute_milestone(&user, &project_id, &0, &symbol_short!("quality"));
 
@@ -760,7 +733,8 @@ fn test_dispute_resolution_can_revoke_approval() {
     );
 
     client.deposit(&user, &project_id, &500_000);
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
     client.dispute_milestone(&user, &project_id, &0, &symbol_short!("quality"));
 
     client.resolve_milestone_dispute(&admin, &project_id, &0, &false);
@@ -788,7 +762,8 @@ fn test_only_contributors_can_dispute_milestones() {
     );
 
     client.deposit(&user, &project_id, &500_000);
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     let result =
         client.try_dispute_milestone(&outsider, &project_id, &0, &symbol_short!("quality"));
@@ -814,7 +789,8 @@ fn test_duplicate_dispute_is_rejected_and_metadata_is_readable() {
     );
 
     client.deposit(&user, &project_id, &500_000);
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
     client.dispute_milestone(&user, &project_id, &0, &symbol_short!("quality"));
 
     let dispute = client.get_milestone_dispute(&project_id, &0);
@@ -852,7 +828,8 @@ fn test_balance_tracking() {
     assert_eq!(client.get_balance(&project_id), 100_000);
 
     // After approval and withdrawal
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
     client.withdraw(&project_id, &0, &50_000);
     assert_eq!(client.get_balance(&project_id), 50_000);
 }
@@ -890,7 +867,8 @@ fn test_project_data_integrity() {
     assert_eq!(project_after_deposit.total_deposited, 500_000);
 
     // After approval and withdrawal
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
     client.withdraw(&project_id, &0, &200_000);
     let project_after_withdrawal = client.get_project(&project_id);
     assert_eq!(project_after_withdrawal.total_withdrawn, 200_000);
@@ -932,7 +910,8 @@ fn test_withdraw_exact_balance() {
     client.deposit(&user, &project_id, &deposit_amount);
     assert_eq!(client.get_balance(&project_id), deposit_amount);
 
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     // Withdraw exact balance
     client.withdraw(&project_id, &0, &deposit_amount);
@@ -2026,7 +2005,8 @@ fn test_milestone_expiry_enables_contributor_clawback() {
     );
 
     client.deposit(&user, &project_id, &400_000);
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     env.ledger()
         .set_timestamp(env.ledger().timestamp() + crate::DEFAULT_MILESTONE_EXPIRY_SECONDS + 1);
@@ -2060,7 +2040,8 @@ fn test_clawback_window_closes_after_deadline() {
     );
 
     client.deposit(&user, &project_id, &200_000);
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     env.ledger()
         .set_timestamp(env.ledger().timestamp() + crate::DEFAULT_MILESTONE_EXPIRY_SECONDS + 1);
@@ -2325,7 +2306,8 @@ fn test_withdraw_with_fee() {
     let deposit_amount = 500_000;
     client.deposit(&user, &project_id, &deposit_amount);
 
-    client.approve_milestone(&admin, &project_id, &0);
+    client.start_milestone_vote(&project_id, &0, &3600);
+    client.vote_milestone(&user, &project_id, &0, &true);
 
     // Withdraw amount
     client.withdraw(&project_id, &0, &100_000);
@@ -2338,6 +2320,33 @@ fn test_withdraw_with_fee() {
 
     // Check remaining project balance reflects gross deduction
     assert_eq!(client.get_balance(&project_id), 400_000);
+}
+
+#[test]
+fn test_deposit_with_fee() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let treasury = Address::generate(&env);
+    client.set_fee_config(&admin, &500, &treasury); // 5% fee
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Fee"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let deposit_amount = 200_000;
+    client.deposit(&user, &project_id, &deposit_amount);
+
+    // 5% fee = 10,000, project gets 190,000
+    assert_eq!(token_client.balance(&treasury), 10_000);
+    assert_eq!(client.get_balance(&project_id), 190_000);
+    assert_eq!(client.get_total_contributions(&project_id), 190_000);
 }
 
 // ---------------------------------------------------------------------------
@@ -2437,6 +2446,11 @@ fn test_campaign_entries_removed_after_refund() {
 }
 
 #[test]
+fn test_finalize_milestone_vote_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
 fn test_reentrancy_guard_withdraw_rejects_when_locked() {
     let env = Env::default();
     env.mock_all_auths();
@@ -2446,6 +2460,46 @@ fn test_reentrancy_guard_withdraw_rejects_when_locked() {
 
     let project_id = client.create_project(
         &owner,
+        &symbol_short!("Finalize"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &600_000);
+
+    // Start vote with 1 hour duration
+    client.start_milestone_vote(&project_id, &0, &3600);
+
+    // Cast vote FOR (not enough for auto-approval if we use a different threshold, but here 600k > 50% of 600k? wait)
+    // Wait, total_deposited = 600_000. 50% = 300_000.
+    // So 600_000 weight is ALREADY enough for auto-approval.
+    // Let's use two users to test finalize.
+    
+    let user2 = Address::generate(&env);
+    let (_, token_admin_client) = create_token_contract(&env, &admin);
+    token_admin_client.mint(&user2, &10_000_000);
+    client.deposit(&user2, &project_id, &600_000); // Total deposited: 1,200,000
+    
+    // User 1 votes FOR (600,000 weight). 600,000 is NOT > 1,200,000 / 2.
+    client.vote_milestone(&user, &project_id, &0, &true);
+    assert!(!client.is_milestone_approved(&project_id, &0));
+
+    // Fast forward 2 hours
+    env.ledger().set_timestamp(env.ledger().timestamp() + 7200);
+
+    // Finalize vote
+    client.finalize_milestone_vote(&project_id, &0);
+
+    // Verify approved (600k FOR vs 0 AGAINST)
+    assert!(client.is_milestone_approved(&project_id, &0));
+}
+
+#[test]
+fn test_finalize_milestone_vote_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
         &symbol_short!("Reent"),
         &1_000_000,
         &token_client.address,
@@ -2483,6 +2537,41 @@ fn test_reentrancy_guard_resets_for_sequential_withdraw_and_deposit() {
 
     let project_id = client.create_project(
         &owner,
+        &symbol_short!("Reject"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let user2 = Address::generate(&env);
+    let (_, token_admin_client) = create_token_contract(&env, &admin);
+    token_admin_client.mint(&user2, &10_000_000);
+    
+    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user2, &project_id, &600_000); // Total: 1,100,000
+
+    client.start_milestone_vote(&project_id, &0, &3600);
+
+    // User 1 (500k) votes FOR
+    // User 2 (600k) votes AGAINST
+    client.vote_milestone(&user, &project_id, &0, &true);
+    client.vote_milestone(&user2, &project_id, &0, &false);
+
+    // Fast forward
+    env.ledger().set_timestamp(env.ledger().timestamp() + 7200);
+
+    // Finalize
+    client.finalize_milestone_vote(&project_id, &0);
+
+    // Verify NOT approved
+    assert!(!client.is_milestone_approved(&project_id, &0));
+}
+
+#[test]
+fn test_finalize_milestone_vote_too_early() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
         &symbol_short!("Seq"),
         &1_000_000,
         &token_client.address,
@@ -2513,6 +2602,17 @@ fn test_withdraw_cei_state_written_before_balance_assertion() {
 
     let project_id = client.create_project(
         &owner,
+        &symbol_short!("Early"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    client.deposit(&user, &project_id, &500_000);
+    client.start_milestone_vote(&project_id, &0, &3600);
+
+    // Try to finalize while window is still open
+    let result = client.try_finalize_milestone_vote(&project_id, &0);
+    assert_eq!(result, Err(Ok(CrowdfundError::VotingWindowNotClosed)));
         &symbol_short!("CEI"),
         &1_000_000,
         &token_client.address,

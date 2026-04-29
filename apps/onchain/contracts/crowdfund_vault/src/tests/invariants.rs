@@ -133,8 +133,9 @@ mod prop4_tvl_tracking {
                 prop_assert!(stats_after.tvl >= 0, "TVL became negative after deposit");
             }
 
-            // Approve milestone so we can withdraw
-            client.approve_milestone(&admin, &project_id, &0u32);
+            // Start milestone vote and cast winning vote so we can withdraw
+            client.start_milestone_vote(&project_id, &0u32, &3600u64);
+            client.vote_milestone(&user, &project_id, &0u32, &true);
 
             let balance = client.get_balance(&project_id);
             if balance > 0 {
@@ -232,9 +233,6 @@ mod prop6_admin_only {
             // Generate a random non-admin address
             let non_admin = Address::generate(&env);
 
-            // try_approve_milestone must return Unauthorized
-            let result = client.try_approve_milestone(&non_admin, &project_id, &0u32);
-            prop_assert_eq!(result, Err(Ok(CrowdfundError::Unauthorized)));
 
             // try_fund_matching_pool must return Unauthorized
             let result = client.try_fund_matching_pool(&non_admin, &token_client.address, &1i128);
@@ -280,7 +278,8 @@ mod prop7_paused_vault {
                 &token_client.address,
             );
             do_deposit(&env, &client, &token_admin, &user, project_id, amount);
-            client.approve_milestone(&admin, &project_id, &0u32);
+            client.start_milestone_vote(&project_id, &0u32, &3600u64);
+            client.vote_milestone(&user, &project_id, &0u32, &true);
 
             // Pause the vault
             client.pause(&admin);
@@ -300,9 +299,6 @@ mod prop7_paused_vault {
             );
             prop_assert_eq!(result, Err(Ok(CrowdfundError::ContractPaused)));
 
-            // try_approve_milestone must return ContractPaused
-            let result = client.try_approve_milestone(&admin, &project_id, &1u32);
-            prop_assert_eq!(result, Err(Ok(CrowdfundError::ContractPaused)));
 
             // try_withdraw must return ContractPaused
             let result = client.try_withdraw(&project_id, &0u32, &1i128);
@@ -345,9 +341,6 @@ mod prop8_project_not_found {
             let result = client.try_get_balance(&nonexistent_id);
             prop_assert_eq!(result, Err(Ok(CrowdfundError::ProjectNotFound)));
 
-            // try_approve_milestone must return ProjectNotFound
-            let result = client.try_approve_milestone(&admin, &nonexistent_id, &0u32);
-            prop_assert_eq!(result, Err(Ok(CrowdfundError::ProjectNotFound)));
 
             // try_get_project must return ProjectNotFound
             let result = client.try_get_project(&nonexistent_id);
@@ -438,8 +431,9 @@ mod prop10_withdrawal_balance_cap {
             // Deposit a random amount
             do_deposit(&env, &client, &token_admin, &user, project_id, deposit_amount);
 
-            // Approve milestone 0
-            client.approve_milestone(&admin, &project_id, &0u32);
+            // Approve milestone 0 via voting
+            client.start_milestone_vote(&project_id, &0u32, &3600u64);
+            client.vote_milestone(&user, &project_id, &0u32, &true);
 
             let balance = client.get_balance(&project_id);
 

@@ -29,11 +29,13 @@ pub struct DepositEvent {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MilestoneApprovedEvent {
+pub struct MilestoneVoteFinalizedEvent {
     #[topic]
-    pub admin: Address,
     pub project_id: u64,
     pub milestone_id: u32,
+    pub votes_for: i128,
+    pub votes_against: i128,
+    pub approved: bool,
 }
 
 #[contractevent]

@@ -312,7 +312,7 @@ One-time initialization. Sets admin, pause state to `false`, and project ID coun
 ```rust
 pub fn pause(env: Env, admin: Address) -> Result<bool, CrowdfundError>
 ```
-Emergency pause. Prevents `create_project`, `deposit`, `approve_milestone`, and `withdraw`.
+Emergency pause. Prevents `create_project`, `deposit`, `start_milestone_vote`, and `withdraw`.
 
 **Returns**: `Ok(true)` on success.  
 **Auth**: Admin only.  
@@ -419,14 +419,44 @@ Deposit tokens into a project. Tracks individual contributions for quadratic fun
 
 ---
 
-##### `approve_milestone`
-```rust
-pub fn approve_milestone(env: Env, admin: Address, project_id: u64) -> Result<(), CrowdfundError>
-```
-Approve a project milestone, unlocking withdrawals for the project owner.
+#### Milestone Approval (Voting)
 
-**Auth**: Admin only. **Fails** if paused.  
-**Emits**: `MilestoneApprovedEvent`
+##### `start_milestone_vote`
+```rust
+pub fn start_milestone_vote(env: Env, project_id: u64, milestone_id: u32, duration: u64) -> Result<(), CrowdfundError>
+```
+Initiate a community vote to approve a project milestone.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `project_id` | `u64` | Target project |
+| `milestone_id` | `u32` | Milestone index |
+| `duration` | `u64` | Voting window in seconds |
+
+**Auth**: None (can be triggered by any interested party). **Fails** if paused or project inactive.  
+**Emits**: `MilestoneVoteStartedEvent`
+
+---
+
+##### `vote_milestone`
+```rust
+pub fn vote_milestone(env: Env, voter: Address, project_id: u64, milestone_id: u32, support: bool) -> Result<(), CrowdfundError>
+```
+Cast a vote for or against a milestone. Voting power is proportional to the user's contribution weight.
+
+**Auth**: Requires `voter` authorization. **Fails** if voter is not a contributor or if voting window is closed.  
+**Emits**: `MilestoneVotedEvent`
+
+---
+
+##### `finalize_milestone_vote`
+```rust
+pub fn finalize_milestone_vote(env: Env, project_id: u64, milestone_id: u32) -> Result<(), CrowdfundError>
+```
+Close a voting window after it has expired. If more votes were cast FOR than AGAINST, the milestone is approved.
+
+**Auth**: None (anyone can trigger finalization). **Fails** if voting window is still open.  
+**Emits**: `MilestoneVoteFinalizedEvent`
 
 ---
 
@@ -441,7 +471,7 @@ Withdraw funds from a project. Requires prior milestone approval.
 | `project_id` | `u64` | Target project |
 | `amount` | `i128` | Amount to withdraw (must be > 0) |
 
-**Auth**: Requires project owner authorization. **Fails** if milestone not approved, paused, or insufficient balance.  
+**Auth**: Requires project owner authorization. **Fails** if milestone not approved (via community vote), paused, or insufficient balance.  
 **Emits**: `WithdrawEvent`
 
 ---
@@ -528,7 +558,9 @@ Adjust a contributor's reputation score.
 | **`InitializedEvent`** | — | `admin: Address` | `initialize` |
 | **`ProjectCreatedEvent`** | `owner: Address`, `token_address: Address` | `project_id: u64` | `create_project` |
 | **`DepositEvent`** | `user: Address`, `project_id: u64` | `amount: i128` | `deposit` |
-| **`MilestoneApprovedEvent`** | `admin: Address` | `project_id: u64` | `approve_milestone` |
+| **`MilestoneVoteStartedEvent`** | `project_id: u64` | `milestone_id: u32`, `expiry: u64` | `start_milestone_vote` |
+| **`MilestoneVotedEvent`** | `voter: Address`, `project_id: u64` | `milestone_id: u32`, `support: bool`, `weight: i128` | `vote_milestone` |
+| **`MilestoneVoteFinalizedEvent`** | `project_id: u64` | `milestone_id: u32`, `approved: bool` | `finalize_milestone_vote` |
 | **`WithdrawEvent`** | `owner: Address`, `project_id: u64` | `amount: i128` | `withdraw` |
 | **`ContributorRegisteredEvent`** | — | `contributor: Address` | `register_contributor` |
 | **`ReputationUpdatedEvent`** | `contributor: Address` | `old_reputation: i128`, `new_reputation: i128` | `update_reputation` |
@@ -558,6 +590,14 @@ pub enum CrowdfundError {
     ProjectNotCancellable  = 13,
     RefundFailed        = 14,
     ContractNotPaused   = 15,
+    VotingWindowNotClosed = 16,
+    VotingWindowClosed    = 17,
+    InsufficientContributionToVote = 18,
+    MilestoneAlreadyApproved = 19,
+    MilestoneAlreadyDisputed = 20,
+    MilestoneEscrowed        = 21,
+    MigrationRequired        = 22,
+    InvalidRecipient         = 23,
 }
 ```
 

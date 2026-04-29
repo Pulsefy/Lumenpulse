@@ -71,8 +71,9 @@ fn test_lumenpulse_protocol_e2e() {
     assert_eq!(vault_client.get_balance(&project_id), 3000i128);
 
     // 8. WITHDRAWAL FLOW
-    // Admin must approve the milestone before withdrawal is possible
-    vault_client.approve_milestone(&admin, &project_id, &0u32);
+    // Community must approve the milestone before withdrawal is possible
+    vault_client.start_milestone_vote(&project_id, &0u32, &3600u64);
+    vault_client.vote_milestone(&contributor, &project_id, &0u32, &true);
 
     // Project owner withdraws 2,000 tokens
     vault_client.withdraw(&project_id, &0u32, &2000i128);
