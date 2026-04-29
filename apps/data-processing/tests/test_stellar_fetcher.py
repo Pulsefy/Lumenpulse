@@ -3,7 +3,6 @@ Unit tests for StellarDataFetcher.
 """
 
 import unittest
-from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timedelta
 import sys
 import os
@@ -58,7 +57,9 @@ class TestStellarDataFetcher(unittest.TestCase):
                 ]
             },
             "_links": {
-                "next": {"href": "https://horizon.stellar.org/transactions?cursor=123"}
+                "next": {
+                    "href": "https://horizon.stellar.org/transactions?cursor=123"
+                }
             },
         }
 
@@ -108,7 +109,10 @@ class TestStellarDataFetcher(unittest.TestCase):
         self.assertEqual(data_dict["total_volume"], 1500.5)
         self.assertEqual(data_dict["transaction_count"], 25)
         self.assertIn("average_hourly_volume", data_dict)
-        self.assertAlmostEqual(data_dict["average_hourly_volume"], 1500.5 / 24)
+        self.assertAlmostEqual(
+            data_dict["average_hourly_volume"],
+            1500.5 / 24
+        )
 
     def test_transaction_record_to_dict(self):
         """Test TransactionRecord serialization"""

@@ -5,7 +5,6 @@ Unit tests for the NewsDeduplicator module
 import unittest
 import tempfile
 import os
-from datetime import datetime, timedelta
 from src.ingestion.news_deduplicator import NewsDeduplicator
 
 
@@ -16,7 +15,7 @@ class TestNewsDeduplicator(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.storage_path = os.path.join(self.temp_dir, "test_dedup.json")
         self.deduplicator = NewsDeduplicator(
-            deduplication_window_days=7, 
+            deduplication_window_days=7,
             storage_path=self.storage_path
         )
 
@@ -35,17 +34,17 @@ class TestNewsDeduplicator(unittest.TestCase):
             'url': 'https://example.com/bitcoin-rise',
             'source': 'CryptoNews'
         }
-        
+
         article2 = {
             'title': 'Ethereum Falls',
             'content': 'Ethereum price decreases today',
             'url': 'https://example.com/ethereum-fall',
             'source': 'CryptoNews'
         }
-        
+
         hash1 = self.deduplicator._compute_hash(article1)
         hash2 = self.deduplicator._compute_hash(article2)
-        
+
         self.assertNotEqual(hash1, hash2)
 
     def test_compute_hash_similar_articles(self):
@@ -56,7 +55,7 @@ class TestNewsDeduplicator(unittest.TestCase):
             'url': 'https://example.com/bitcoin-rise',
             'source': 'CryptoNews'
         }
-        
+
         # Slightly different content
         article2 = {
             'title': 'Bitcoin Rises',
@@ -64,10 +63,10 @@ class TestNewsDeduplicator(unittest.TestCase):
             'url': 'https://example.com/bitcoin-rise',
             'source': 'CryptoNews'
         }
-        
+
         hash1 = self.deduplicator._compute_hash(article1)
         hash2 = self.deduplicator._compute_hash(article2)
-        
+
         self.assertNotEqual(hash1, hash2)
 
     def test_compute_hash_identical_articles(self):
@@ -78,17 +77,17 @@ class TestNewsDeduplicator(unittest.TestCase):
             'url': 'https://example.com/bitcoin-rise',
             'source': 'CryptoNews'
         }
-        
+
         article2 = {
             'title': 'Bitcoin Rises',
             'content': 'Bitcoin price increases today',
             'url': 'https://example.com/bitcoin-rise',
             'source': 'CryptoNews'
         }
-        
+
         hash1 = self.deduplicator._compute_hash(article1)
         hash2 = self.deduplicator._compute_hash(article2)
-        
+
         self.assertEqual(hash1, hash2)
 
     def test_is_duplicate_new_article(self):
@@ -99,7 +98,7 @@ class TestNewsDeduplicator(unittest.TestCase):
             'url': 'https://example.com/bitcoin-rise',
             'source': 'CryptoNews'
         }
-        
+
         # Initially should not be a duplicate
         self.assertFalse(self.deduplicator.is_duplicate(article))
 
@@ -111,13 +110,13 @@ class TestNewsDeduplicator(unittest.TestCase):
             'url': 'https://example.com/bitcoin-rise',
             'source': 'CryptoNews'
         }
-        
+
         # Initially not a duplicate
         self.assertFalse(self.deduplicator.is_duplicate(article))
-        
+
         # Mark as seen
         self.deduplicator.mark_seen(article)
-        
+
         # Now should be a duplicate
         self.assertTrue(self.deduplicator.is_duplicate(article))
 
@@ -137,9 +136,9 @@ class TestNewsDeduplicator(unittest.TestCase):
                 'source': 'CryptoNews'
             }
         ]
-        
+
         result = self.deduplicator.filter_duplicates(articles)
-        
+
         self.assertEqual(len(result), 2)
         self.assertEqual(len(self.deduplicator.seen_hashes), 2)
 
@@ -151,20 +150,22 @@ class TestNewsDeduplicator(unittest.TestCase):
             'url': 'https://example.com/bitcoin-rise',
             'source': 'CryptoNews'
         }
-        
+
         duplicate_article = {
             'title': 'Bitcoin Rises',
             'content': 'Bitcoin price increases today',
             'url': 'https://example.com/bitcoin-rise',
             'source': 'CryptoNews'
         }
-        
+
         articles = [original_article, duplicate_article]
-        
+
         result = self.deduplicator.filter_duplicates(articles)
-        
+
         self.assertEqual(len(result), 1)  # Only one unique article
-        self.assertEqual(len(self.deduplicator.seen_hashes), 1)  # Only one hash stored
+        self.assertEqual(
+            len(self.deduplicator.seen_hashes), 1
+        )  # Only one hash stored
 
     def test_filter_duplicates_multiple_duplicates(self):
         """Test filtering with multiple duplicates."""
@@ -174,13 +175,15 @@ class TestNewsDeduplicator(unittest.TestCase):
             'url': 'https://example.com/bitcoin-rise',
             'source': 'CryptoNews'
         }
-        
+
         articles = [original_article] * 5  # Five identical articles
-        
+
         result = self.deduplicator.filter_duplicates(articles)
-        
+
         self.assertEqual(len(result), 1)  # Only one unique article
-        self.assertEqual(len(self.deduplicator.seen_hashes), 1)  # Only one hash stored
+        self.assertEqual(
+            len(self.deduplicator.seen_hashes), 1
+        )  # Only one hash stored
 
     def test_normalization_case_insensitive(self):
         """Test that normalization is case insensitive."""
@@ -190,23 +193,23 @@ class TestNewsDeduplicator(unittest.TestCase):
             'url': 'HTTPS://EXAMPLE.COM/BITCOIN-RISE',
             'source': 'CRYPTONEWS'
         }
-        
+
         article2 = {
             'title': 'bitcoin rises',
             'content': 'bitcoin price increases today',
             'url': 'https://example.com/bitcoin-rise',
             'source': 'cryptonews'
         }
-        
+
         hash1 = self.deduplicator._compute_hash(article1)
         hash2 = self.deduplicator._compute_hash(article2)
-        
+
         self.assertEqual(hash1, hash2)
 
     def test_get_statistics(self):
         """Test getting deduplication statistics."""
         stats = self.deduplicator.get_statistics()
-        
+
         self.assertIn('seen_hashes_count', stats)
         self.assertIn('deduplication_window_days', stats)
         self.assertIn('cutoff_time', stats)
@@ -222,17 +225,17 @@ class TestNewsDeduplicator(unittest.TestCase):
             'url': 'https://example.com/bitcoin-rise',
             'source': 'CryptoNews'
         }
-        
+
         # Mark as seen
         self.deduplicator.mark_seen(article)
         self.deduplicator._save_seen_hashes()
-        
+
         # Create a new deduplicator with the same storage
         new_deduplicator = NewsDeduplicator(
             deduplication_window_days=7,
             storage_path=self.storage_path
         )
-        
+
         # The same article should be detected as duplicate
         self.assertTrue(new_deduplicator.is_duplicate(article))
 

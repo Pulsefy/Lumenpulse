@@ -11,16 +11,16 @@ def test_price_predictor_initialization():
 
 def test_price_predictor_fit_with_synthetic_data():
     predictor = PricePredictor()
-    
+
     np.random.seed(42)
     X = np.random.rand(100, 2)
     y = 2 * X[:, 0] + 3 * X[:, 1] + 10 + np.random.normal(0, 0.01, 100)
-    
+
     df = pd.DataFrame(X, columns=['feature1', 'feature2'])
     df['target'] = y
-    
+
     metrics = predictor.fit(df, target_column='target')
-    
+
     assert predictor.is_trained
     assert "mse" in metrics
     assert "r2" in metrics
@@ -28,17 +28,17 @@ def test_price_predictor_fit_with_synthetic_data():
 
 def test_price_predictor_predict():
     predictor = PricePredictor()
-    
+
     np.random.seed(42)
     X = np.random.rand(100, 1)
     y = 5 * X[:, 0] + 2
     df = pd.DataFrame(X, columns=['f1'])
     df['target'] = y
     predictor.fit(df, target_column='target')
-    
+
     test_features = pd.DataFrame([[0.5]], columns=['f1'])
     prediction = predictor.predict(test_features)
-    
+
     assert len(prediction) == 1
     assert pytest.approx(prediction[0], rel=1e-2) == 4.5
 

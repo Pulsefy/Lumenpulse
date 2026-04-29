@@ -16,12 +16,10 @@ Success Criteria (from the issue)
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
-from fastapi.testclient import TestClient
+from unittest.mock import patch
 
 from src.analytics.sentiment_indicators import (
     SentimentIndicatorMapper,
-    SentimentIndicator,
     SentimentColor,
     SentimentLabel,
     BULLISH_THRESHOLD,
@@ -88,7 +86,8 @@ class TestSentimentLabels:
     """Verify Bullish / Bearish / Neutral label assignment."""
 
     def test_positive_score_label_is_bullish(self, mapper):
-        """Issue criteria: asset details show "Sentiment Score" e.g. "0.85 Bullish"."""
+        """Issue criteria: asset details show "Sentiment Score"
+        e.g. "0.85 Bullish"."""
         ind = mapper.score_to_indicator(0.85)
         assert ind.label == SentimentLabel.BULLISH
 
@@ -122,7 +121,9 @@ class TestDisplayText:
         assert ind.display_text == "0.00 Neutral"
 
     def test_format_display_standalone(self):
-        text = SentimentIndicatorMapper.format_display(0.72, SentimentLabel.BULLISH)
+        text = SentimentIndicatorMapper.format_display(
+            0.72, SentimentLabel.BULLISH
+        )
         assert text == "0.72 Bullish"
 
     def test_format_display_derives_label_when_omitted(self):
@@ -143,7 +144,10 @@ class TestDisplayText:
 class TestToDict:
     def test_indicator_to_dict_keys(self, mapper):
         d = mapper.score_to_indicator(0.5).to_dict()
-        assert set(d.keys()) == {"score", "color", "hex_color", "label", "display_text"}
+        assert set(d.keys()) == {
+            "score", "color", "hex_color",
+            "label", "display_text"
+        }
 
     def test_indicator_to_dict_values(self, mapper):
         d = mapper.score_to_indicator(0.5).to_dict()
@@ -171,9 +175,14 @@ class TestLegend:
         assert colors == {"green", "red", "gray"}
 
     def test_legend_entries_have_required_keys(self, mapper):
-        required = {"color", "hex_color", "label", "description", "score_range"}
+        required = {
+            "color", "hex_color", "label",
+            "description", "score_range"
+        }
         for entry in mapper.get_legend():
-            assert required.issubset(entry.keys()), f"Entry missing keys: {entry}"
+            assert required.issubset(entry.keys()), (
+                f"Entry missing keys: {entry}"
+            )
 
     def test_legend_bullish_entry(self, mapper):
         legend = {e["color"]: e for e in mapper.get_legend()}
@@ -412,7 +421,8 @@ class TestNewsArticleResponseIndicator:
 # ---------------------------------------------------------------------------
 
 class TestAssetAnalysisResponseIndicator:
-    """Issue criteria: asset details show a Sentiment Score e.g. "0.85 Bullish"."""
+    """Issue criteria: asset details show a Sentiment Score
+    e.g. "0.85 Bullish"."""
 
     def test_asset_response_includes_indicator_field(self):
         from src.api.server import AssetAnalysisResponse, SentimentIndicatorResponse
