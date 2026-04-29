@@ -1,4 +1,7 @@
 {
+  "dependencies": {
+    "@nestjs/mapped-types": "*"
+  },
   "devDependencies": {
     "@types/node": "^25.3.0",
     "ts-node": "^10.9.2",
