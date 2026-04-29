@@ -5,6 +5,7 @@ Ecosystem Registry Service for Entity Linking.
 import logging
 from typing import List, Dict, Any, Optional
 from sqlalchemy import select, or_
+from sqlalchemy.orm import Session
 
 # Relative imports might fail depending on execution context, using absolute-ish path
 try:
