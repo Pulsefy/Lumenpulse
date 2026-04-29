@@ -16,4 +16,5 @@ pub enum RegistryError {
     ContractPaused = 10,
     ProjectAlreadyVerified = 11,
     ProjectAlreadyRejected = 12,
+    InvalidSignature = 13,
 }

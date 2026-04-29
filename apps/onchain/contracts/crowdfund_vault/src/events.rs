@@ -212,3 +212,18 @@ pub struct StorageMigratedEvent {
     pub admin: Address,
     pub storage_version: u32,
 }
+
+/// Emitted when a contribution (deposit) is submitted via a gasless
+/// meta-transaction relayed on behalf of the user.
+/// Relayers and indexers can use this to track gasless deposits separately.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GaslessDepositEvent {
+    #[topic]
+    pub user: Address,
+    #[topic]
+    pub project_id: u64,
+    pub amount: i128,
+    /// The nonce consumed by this gasless deposit. The next valid nonce is `consumed_nonce + 1`.
+    pub consumed_nonce: u64,
+}

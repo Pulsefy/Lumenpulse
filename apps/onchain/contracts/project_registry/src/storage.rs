@@ -60,4 +60,5 @@ pub enum DataKey {
     Project(u64),              // project_id -> ProjectEntry
     VoteCast(u64, Address),    // (project_id, voter) -> bool
     VoterWeight(u64, Address), // (project_id, voter) -> i128 (recorded at vote time)
+    RegistrationNonce(Address), // Address -> u64
 }

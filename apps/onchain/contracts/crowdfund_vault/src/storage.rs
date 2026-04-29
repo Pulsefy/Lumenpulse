@@ -38,6 +38,7 @@ pub enum DataKey {
     FeeBps,                      // -> u32
     Treasury,                    // -> Address
     Subscribers,
+    DepositNonce(Address),       // Address -> u64
 }
 
 #[contracttype]

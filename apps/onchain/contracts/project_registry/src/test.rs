@@ -338,3 +338,88 @@ fn test_pause_blocks_votes() {
         Err(Ok(RegistryError::ContractPaused))
     );
 }
+
+// ── Gas-less project registration (EIP-712 style) ─────────────────────────────
+
+/// A relayer-submitted registration must succeed and produce the same on-chain
+/// state as a regular registration: project entry stored, status Pending.
+#[test]
+fn test_register_project_with_sig_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _) = setup(&env, 100, WeightMode::Flat);
+
+    let owner = Address::generate(&env);
+
+    // Nonce must start at 0.
+    assert_eq!(client.get_registration_nonce(&owner), 0u64);
+
+    let sig = soroban_sdk::Bytes::from_slice(&env, &[1u8; 64]);
+    client.register_project_with_sig(&owner, &42u64, &symbol_short!("GSig"), &sig);
+
+    // Project entry created with Pending status.
+    let entry = client.get_project(&42u64);
+    assert_eq!(entry.project_id, 42);
+    assert_eq!(entry.owner, owner);
+    assert_eq!(entry.status, VerificationStatus::Pending);
+
+    // Nonce incremented.
+    assert_eq!(client.get_registration_nonce(&owner), 1u64);
+}
+
+/// Nonce must increment on each successful gasless registration (different
+/// project IDs since same project_id would fail as AlreadyRegistered).
+#[test]
+fn test_register_project_with_sig_nonce_increments() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _) = setup(&env, 100, WeightMode::Flat);
+
+    let owner = Address::generate(&env);
+    let sig1 = soroban_sdk::Bytes::from_slice(&env, &[1u8; 64]);
+    client.register_project_with_sig(&owner, &1u64, &symbol_short!("P1"), &sig1);
+    assert_eq!(client.get_registration_nonce(&owner), 1u64);
+
+    let sig2 = soroban_sdk::Bytes::from_slice(&env, &[2u8; 64]);
+    client.register_project_with_sig(&owner, &2u64, &symbol_short!("P2"), &sig2);
+    assert_eq!(client.get_registration_nonce(&owner), 2u64);
+}
+
+/// An empty signature must be rejected with InvalidSignature.
+#[test]
+fn test_register_project_with_sig_rejects_empty_sig() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _) = setup(&env, 100, WeightMode::Flat);
+
+    let owner = Address::generate(&env);
+    let empty_sig = soroban_sdk::Bytes::new(&env);
+    assert_eq!(
+        client.try_register_project_with_sig(
+            &owner,
+            &10u64,
+            &symbol_short!("Fail"),
+            &empty_sig
+        ),
+        Err(Ok(RegistryError::InvalidSignature))
+    );
+}
+
+/// Duplicate project registration via gasless path must fail with
+/// ProjectAlreadyRegistered just like the regular path.
+#[test]
+fn test_register_project_with_sig_duplicate_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _) = setup(&env, 100, WeightMode::Flat);
+
+    let owner = Address::generate(&env);
+    let sig1 = soroban_sdk::Bytes::from_slice(&env, &[1u8; 64]);
+    client.register_project_with_sig(&owner, &5u64, &symbol_short!("Dup"), &sig1);
+
+    let sig2 = soroban_sdk::Bytes::from_slice(&env, &[2u8; 64]);
+    assert_eq!(
+        client.try_register_project_with_sig(&owner, &5u64, &symbol_short!("Dup"), &sig2),
+        Err(Ok(RegistryError::ProjectAlreadyRegistered))
+    );
+}
