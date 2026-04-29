@@ -7,7 +7,7 @@ pub trait YieldProviderTrait {
     fn deposit(env: Env, from: Address, amount: i128);
 
     /// Withdraw funds from the yield provider
-    fn withdraw(env: Env, to: Address, amount: i128);
+    fn withdraw(env: Env, to: Address, amount: i128) -> i128;
 
     /// Get the balance of an address in the yield provider (in principal tokens)
     fn balance(env: Env, address: Address) -> i128;

@@ -34,6 +34,7 @@ pub enum DataKey {
     Paused,
     ProjectStatus(u64),
     YieldProvider(Address),      // token_address -> yield_provider_address
+    YieldProviders(Address),     // token_address -> Vec<yield_provider_addresses>
     ProjectInvestedBalance(u64), // project_id -> i128
     FeeBps,                      // -> u32
     Treasury,                    // -> Address
