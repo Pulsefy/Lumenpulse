@@ -141,7 +141,8 @@ class TestStellarDataFetcher(unittest.TestCase):
     # def test_cache_mechanism(self, mock_server_class):
     #     """Test caching functionality"""
     #     # Skip if we can't import properly
-    #     if hasattr(StellarDataFetcher, '__module__') and 'Mock' in StellarDataFetcher.__module__:
+    #     if hasattr(
+    StellarDataFetcher, '__module__') and 'Mock' in StellarDataFetcher.__module__
     #         self.skipTest("Skipping due to import issues")
 
     #     # Create mock server

@@ -3,11 +3,17 @@ import pandas as pd
 import numpy as np
 from src.ml.price_predictor import PricePredictor
 
+
+
+
 def test_price_predictor_initialization():
     predictor = PricePredictor()
     assert predictor.model_name == "linear_regression"
     assert not predictor.is_trained
     assert predictor.pipeline is not None
+
+
+
 
 def test_price_predictor_fit_with_synthetic_data():
     predictor = PricePredictor()
@@ -41,6 +47,9 @@ def test_price_predictor_predict():
 
     assert len(prediction) == 1
     assert pytest.approx(prediction[0], rel=1e-2) == 4.5
+
+
+
 
 def test_price_predictor_unfit_error():
     predictor = PricePredictor()

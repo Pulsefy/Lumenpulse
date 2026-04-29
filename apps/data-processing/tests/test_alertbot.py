@@ -11,7 +11,6 @@ Tests cover:
 import unittest
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone
-import json
 
 from src.alertbot import AlertBot
 
@@ -55,6 +54,8 @@ class TestAlertBotConfiguration(unittest.TestCase):
         )
         self.assertTrue(bot.dry_run)
         self.assertTrue(bot.is_configured)
+
+
 
 
 class TestSendAlert(unittest.TestCase):
@@ -228,6 +229,8 @@ class TestMessageTruncation(unittest.TestCase):
         self.assertEqual(result, exact_msg)
 
 
+
+
 class TestCheckAndAlert(unittest.TestCase):
     """Test check_and_alert() threshold logic"""
 
@@ -352,7 +355,8 @@ class TestMessageFormatting(unittest.TestCase):
             "total_analyzed": 30,
         }
 
-        message = self.bot._format_alert_message(0.85, sentiment_data, timestamp)
+        message = self.bot._format_alert_message(
+    0.85, sentiment_data, timestamp)
 
         self.assertIn("2026-01-25", message)
         self.assertIn("10:30:00", message)
@@ -392,12 +396,15 @@ class TestMessageFormatting(unittest.TestCase):
         self.assertIn("Anomalies detected: 2", message)
 
 
+
+
 class TestThreadSafety(unittest.TestCase):
     """Test thread safety of AlertBot"""
 
     def test_has_lock(self):
         """Test AlertBot has a threading lock"""
-        bot = AlertBot(telegram_bot_token="test_token", telegram_channel_id="@channel")
+        bot = AlertBot(
+    telegram_bot_token="test_token", telegram_channel_id="@channel")
         self.assertIsNotNone(bot._lock)
 
 

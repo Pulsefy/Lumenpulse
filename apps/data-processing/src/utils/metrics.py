@@ -3,18 +3,18 @@ from prometheus_client import start_http_server
 
 # Define simple Prometheus counters
 JOBS_RUN_TOTAL = Counter(
-    "jobs_run", 
+    "jobs_run",
     "Total number of jobs run in the pipeline"
 )
 
 API_FAILURES_TOTAL = Counter(
-    "api_failures", 
+    "api_failures",
     "Total number of API request failures",
     ["method", "endpoint"]
 )
 
 ANOMALIES_DETECTED_TOTAL = Counter(
-    "anomalies_detected", 
+    "anomalies_detected",
     "Total number of anomalies detected",
     ["metric_name"]
 )

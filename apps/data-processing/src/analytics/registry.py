@@ -4,7 +4,6 @@ Ecosystem Registry Service for Entity Linking.
 
 import logging
 from typing import List, Dict, Any, Optional
-from sqlalchemy.orm import Session
 from sqlalchemy import select, or_
 
 # Relative imports might fail depending on execution context, using absolute-ish path
@@ -97,7 +96,7 @@ class RegistryService:
         Finds a matching entity for a single mention string.
         """
         mention_lower = mention.lower().strip()
-        
+
         # 1. Check database if available
         if self.db_session:
             try:
@@ -126,7 +125,7 @@ class RegistryService:
         for entity in self._static_registry:
             if mention_lower == entity["name"].lower() or mention_lower == entity.get("asset_code", "").lower():
                 return entity
-            
+
             for alias in entity.get("aliases", []):
                 if mention_lower == alias.lower():
                     return entity

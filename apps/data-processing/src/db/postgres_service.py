@@ -4,7 +4,6 @@ PostgreSQL service for persisting analytics data
 
 import logging
 import os
-import time
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from contextlib import contextmanager
@@ -67,7 +66,7 @@ class PostgresService:
             summary=normalized.get("summary"),
             content=normalized.get("content"),
         )
-        
+
         # Link entities to the registry
         full_text = "\n".join([
             normalized.get("title") or "",
@@ -75,7 +74,7 @@ class PostgresService:
             normalized.get("content") or ""
         ])
         normalized["linked_entities"] = self.ner_service.extract_linked_entities(full_text)
-        
+
         return normalized
 
     @contextmanager
@@ -803,7 +802,7 @@ class PostgresService:
             with self.get_session() as session:
                 for i, result in enumerate(sentiment_results):
                     article_data = articles_data[i] if articles_data and i < len(articles_data) else None
-                    
+
                     insight = NewsInsight(
                         article_id=article_data.get("id") if article_data else None,
                         article_title=article_data.get("title") if article_data else None,
@@ -822,11 +821,11 @@ class PostgresService:
                     )
                     session.add(insight)
                     saved_count += 1
-                
+
                 logger.info(f"Saved {saved_count} news insights")
         except SQLAlchemyError as e:
             logger.error(f"Failed to save news insights batch: {e}")
-        
+
         return saved_count
 
     def get_recent_news_insights(
@@ -931,11 +930,11 @@ class PostgresService:
                     )
                     session.add(trend)
                     saved_count += 1
-                
+
                 logger.info(f"Saved {saved_count} asset trends for {asset}")
         except SQLAlchemyError as e:
             logger.error(f"Failed to save asset trends batch: {e}")
-        
+
         return saved_count
 
     def get_recent_asset_trends(
@@ -955,12 +954,12 @@ class PostgresService:
         try:
             with self.get_session() as session:
                 stmt = select(AssetTrend).where(AssetTrend.asset == asset)
-                
+
                 if metric_name:
                     stmt = stmt.where(AssetTrend.metric_name == metric_name)
-                
+
                 stmt = stmt.order_by(desc(AssetTrend.timestamp)).limit(limit)
-                
+
                 results = session.execute(stmt).scalars().all()
                 logger.debug(f"Retrieved {len(results)} asset trends for {asset}")
                 return results
@@ -981,11 +980,11 @@ class PostgresService:
         try:
             with self.get_session() as session:
                 cutoff_time = datetime.utcnow() - timedelta(hours=hours)
-                
+
                 insights = session.execute(
                     select(NewsInsight).where(NewsInsight.analyzed_at >= cutoff_time)
                 ).scalars().all()
-                
+
                 if not insights:
                     return {
                         "total_articles": 0,
@@ -994,13 +993,13 @@ class PostgresService:
                         "negative_count": 0,
                         "neutral_count": 0,
                     }
-                
+
                 total = len(insights)
                 avg_sentiment = sum(i.sentiment_score for i in insights) / total
                 positive = sum(1 for i in insights if i.sentiment_label == "positive")
                 negative = sum(1 for i in insights if i.sentiment_label == "negative")
                 neutral = sum(1 for i in insights if i.sentiment_label == "neutral")
-                
+
                 return {
                     "total_articles": total,
                     "average_sentiment": round(avg_sentiment, 4),
@@ -1034,38 +1033,38 @@ class PostgresService:
                 "news_insights": 0,
                 "asset_trends": 0,
             }
-            
+
             with self.get_session() as session:
                 # Delete old articles
                 articles_deleted = session.query(Article).filter(
                     Article.created_at < cutoff_date
                 ).delete()
                 deleted_counts["articles"] = articles_deleted
-                
+
                 # Delete old social posts
                 posts_deleted = session.query(SocialPost).filter(
                     SocialPost.created_at < cutoff_date
                 ).delete()
                 deleted_counts["social_posts"] = posts_deleted
-                
+
                 # Delete old analytics records
                 records_deleted = session.query(AnalyticsRecord).filter(
                     AnalyticsRecord.created_at < cutoff_date
                 ).delete()
                 deleted_counts["analytics_records"] = records_deleted
-                
+
                 # Delete old news insights (legacy)
                 news_deleted = session.query(NewsInsight).filter(
                     NewsInsight.created_at < cutoff_date
                 ).delete()
                 deleted_counts["news_insights"] = news_deleted
-                
+
                 # Delete old asset trends (legacy)
                 trends_deleted = session.query(AssetTrend).filter(
                     AssetTrend.created_at < cutoff_date
                 ).delete()
                 deleted_counts["asset_trends"] = trends_deleted
-                
+
                 logger.info(f"Cleaned up old data: {deleted_counts}")
                 return deleted_counts
         except SQLAlchemyError as e:

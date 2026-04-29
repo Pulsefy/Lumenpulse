@@ -131,7 +131,7 @@ class SentimentAnalyzer:
         """
         # Extract asset codes from text
         asset_codes = self.keyword_extractor.extract_tickers_only(text)
-        
+
         # If asset_filter is specified, check if text mentions that asset
         if asset_filter:
             asset_filter = asset_filter.upper()
@@ -146,7 +146,7 @@ class SentimentAnalyzer:
                     sentiment_label="neutral",
                     asset_codes=[],
                 )
-        
+
         cache_key = f"{text}:{asset_filter}" if asset_filter else text
         if self.cache:
             cached = self.cache.get(cache_key)

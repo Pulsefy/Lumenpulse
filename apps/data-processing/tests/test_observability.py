@@ -55,24 +55,24 @@ def test_prometheus_metrics():
 
     # API Failures
     api_fails_before = REGISTRY.get_sample_value(
-        'api_failures_total', 
+        'api_failures_total',
         {'method': 'GET', 'endpoint': '/test'}
     ) or 0.0
     API_FAILURES_TOTAL.labels(method='GET', endpoint='/test').inc()
     api_fails_after = REGISTRY.get_sample_value(
-        'api_failures_total', 
+        'api_failures_total',
         {'method': 'GET', 'endpoint': '/test'}
     ) or 0.0
     assert api_fails_after == api_fails_before + 1.0
 
     # Anomalies
     anomaly_before = REGISTRY.get_sample_value(
-        'anomalies_detected_total', 
+        'anomalies_detected_total',
         {'metric_name': 'test_metric'}
     ) or 0.0
     ANOMALIES_DETECTED_TOTAL.labels(metric_name='test_metric').inc()
     anomaly_after = REGISTRY.get_sample_value(
-        'anomalies_detected_total', 
+        'anomalies_detected_total',
         {'metric_name': 'test_metric'}
     ) or 0.0
     assert anomaly_after == anomaly_before + 1.0

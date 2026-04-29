@@ -53,11 +53,11 @@ class DatabaseService:
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.analytics_file = self.storage_dir / "analytics.jsonl"
         self.latest_file = self.storage_dir / "latest.json"
-        
+
         # PostgreSQL storage
         self.use_postgres = use_postgres
         self.postgres_service = postgres_service
-        
+
         if self.use_postgres and self.postgres_service:
             logger.info("DatabaseService initialized with PostgreSQL support")
         else:
@@ -74,7 +74,7 @@ class DatabaseService:
             True if successful, False otherwise
         """
         success = True
-        
+
         # Save to file-based storage (always for backward compatibility)
         try:
             # Append to JSONL file for historical data
@@ -89,7 +89,7 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Error saving analytics to file: {e}")
             success = False
-        
+
         # Save to PostgreSQL if enabled
         if self.use_postgres and self.postgres_service:
             try:
@@ -101,7 +101,7 @@ class DatabaseService:
                             [r.to_dict() if hasattr(r, "to_dict") else r for r in sentiment_results]
                         )
                         logger.info(f"Saved {saved_count} news insights to PostgreSQL")
-                
+
                 # Save trends as asset trends
                 if record.trends:
                     for trend in record.trends:
@@ -113,11 +113,11 @@ class DatabaseService:
                             trend_data=trend_data,
                         )
                     logger.info(f"Saved {len(record.trends)} trends to PostgreSQL")
-                    
+
             except Exception as e:
                 logger.error(f"Error saving analytics to PostgreSQL: {e}")
                 # Don't fail if PostgreSQL save fails
-        
+
         return success
 
     def get_latest_analytics(self) -> Dict[str, Any]:
@@ -175,7 +175,7 @@ class DatabaseService:
             "history_count": len(history),
             "last_updated": latest.get("timestamp") if latest else None,
         }
-        
+
         # Add PostgreSQL metrics if available
         if self.use_postgres and self.postgres_service:
             try:
@@ -183,7 +183,7 @@ class DatabaseService:
                 metrics["postgres_summary"] = pg_summary
             except Exception as e:
                 logger.error(f"Error getting PostgreSQL metrics: {e}")
-        
+
         return metrics
 
     def clear_old_data(self, days: int = 30) -> int:
@@ -197,7 +197,7 @@ class DatabaseService:
             Number of records deleted
         """
         deleted_count = 0
-        
+
         # Clear file-based data
         try:
             from datetime import timedelta
@@ -229,7 +229,7 @@ class DatabaseService:
             logger.info(f"Deleted {deleted_count} old analytics records from files")
         except Exception as e:
             logger.error(f"Error clearing old file data: {e}")
-        
+
         # Clear PostgreSQL data
         if self.use_postgres and self.postgres_service:
             try:
@@ -237,5 +237,5 @@ class DatabaseService:
                 logger.info(f"Deleted old PostgreSQL data: {pg_deleted}")
             except Exception as e:
                 logger.error(f"Error clearing old PostgreSQL data: {e}")
-        
+
         return deleted_count

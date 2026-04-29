@@ -36,7 +36,7 @@ def setup_logger(name: str = "lumenpulse", level: int = logging.INFO) -> logging
         }
     )
     handler.setFormatter(formatter)
-    
+
     # Add filter to inject correlation ID
     filter = CorrelationIdFilter()
     logger.addFilter(filter)

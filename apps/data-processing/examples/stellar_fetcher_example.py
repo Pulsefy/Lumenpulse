@@ -4,7 +4,6 @@ Example usage of StellarDataFetcher.
 
 import sys
 import os
-import time
 
 # Add parent directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))

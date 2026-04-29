@@ -7,17 +7,16 @@ Supports both Z-score and Isolation Forest configurations.
 from dataclasses import dataclass
 from typing import Optional
 import os
-import json
 
 
 @dataclass
 class ZScoreConfig:
     """Configuration for Z-score based anomaly detection."""
-    
+
     window_size_hours: int = 24
     z_threshold: float = 2.5
     min_data_points: int = 10
-    
+
     @classmethod
     def from_dict(cls, data: dict) -> 'ZScoreConfig':
         return cls(
@@ -30,7 +29,7 @@ class ZScoreConfig:
 @dataclass
 class IsolationForestConfig:
     """Configuration for Isolation Forest based anomaly detection."""
-    
+
     enabled: bool = True
     contamination: float = 0.1  # Expected proportion of anomalies (0.0 to 0.5)
     n_estimators: int = 100
@@ -39,11 +38,11 @@ class IsolationForestConfig:
     min_training_samples: int = 50
     auto_retrain_interval: int = 200  # Retrain every N new samples
     features: list = None  # Features to use for detection
-    
+
     def __post_init__(self):
         if self.features is None:
             self.features = ['volume', 'sentiment', 'volume_change_rate', 'sentiment_change_rate']
-    
+
     @classmethod
     def from_dict(cls, data: dict) -> 'IsolationForestConfig':
         return cls(
@@ -61,12 +60,12 @@ class IsolationForestConfig:
 @dataclass
 class AnomalyDetectionConfig:
     """Main configuration for anomaly detection system."""
-    
+
     zscore: ZScoreConfig
     isolation_forest: IsolationForestConfig
     enable_comparison_mode: bool = False
     model_save_path: str = "models/anomaly_detector"
-    
+
     @classmethod
     def from_dict(cls, data: dict) -> 'AnomalyDetectionConfig':
         return cls(
@@ -75,7 +74,7 @@ class AnomalyDetectionConfig:
             enable_comparison_mode=data.get('enable_comparison_mode', False),
             model_save_path=data.get('model_save_path', "models/anomaly_detector")
         )
-    
+
     @classmethod
     def from_env(cls) -> 'AnomalyDetectionConfig':
         """Load configuration from environment variables."""
@@ -93,7 +92,7 @@ class AnomalyDetectionConfig:
             'model_save_path': os.getenv('ANOMALY_MODEL_PATH', 'models/anomaly_detector')
         }
         return cls.from_dict(config)
-    
+
     def save_to_file(self, filepath: str):
         """Save configuration to JSON file."""
         with open(filepath, 'w') as f:
@@ -103,7 +102,7 @@ class AnomalyDetectionConfig:
                 'enable_comparison_mode': self.enable_comparison_mode,
                 'model_save_path': self.model_save_path
             }, f, indent=2)
-    
+
     @classmethod
     def load_from_file(cls, filepath: str) -> 'AnomalyDetectionConfig':
         """Load configuration from JSON file."""

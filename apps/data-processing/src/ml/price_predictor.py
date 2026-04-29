@@ -33,11 +33,11 @@ class PricePredictor:
     def fit(self, data: pd.DataFrame, target_column: str = 'target') -> Dict[str, float]:
         """
         Trains the model using the provided training data.
-        
+
         Args:
             data: DataFrame containing features and the target column.
             target_column: The name of the column to predict.
-            
+
         Returns:
             A dictionary containing training metrics.
         """
@@ -55,25 +55,25 @@ class PricePredictor:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
         self.pipeline.fit(X_train, y_train)
-        
+
         y_pred = self.pipeline.predict(X_test)
         self.metrics = {
             "mse": float(mean_squared_error(y_test, y_pred)),
             "r2": float(r2_score(y_test, y_pred))
         }
-        
+
         self.is_trained = True
         logger.info(f"Model trained successfully. Metrics: {self.metrics}")
-        
+
         return self.metrics
 
     def predict(self, features: pd.DataFrame) -> np.ndarray:
         """
         Predicts the price based on input features.
-        
+
         Args:
             features: DataFrame containing the features for prediction.
-            
+
         Returns:
             Array of predicted values.
         """

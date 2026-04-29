@@ -4,8 +4,6 @@ Fetches data from external APIs and standardizes the format.
 """
 
 import os
-import json
-import time
 from typing import List, Dict, Optional
 from dataclasses import dataclass, asdict
 from .news_deduplicator import NewsDeduplicator
@@ -85,7 +83,7 @@ class NewsFetcher:
 
         # Cache for avoiding duplicate articles
         self.seen_articles = set()
-        
+
         # Initialize deduplicator
         self.deduplicator = NewsDeduplicator(deduplication_window_days=7)
 
@@ -284,10 +282,10 @@ class NewsFetcher:
 
         # Convert to dictionaries
         articles_as_dicts = [article.to_dict() for article in all_articles]
-        
+
         # Apply deduplication filter
         deduplicated_articles = self.deduplicator.filter_duplicates(articles_as_dicts)
-        
+
         result = deduplicated_articles[:limit]
 
         if not result:

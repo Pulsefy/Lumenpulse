@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from src.ml.feature_store import FeatureStore
 
 @pytest.fixture
+
 def mock_db_session():
     """Fixture to provide a mocked SQLAlchemy session."""
     session = MagicMock()
@@ -13,11 +14,12 @@ def mock_db_session():
     return session
 
 @patch('src.ml.feature_store.pd.read_sql')
+
 def test_get_features_for_asset_success_btc(mock_read_sql, mock_db_session):
     """Test that features are correctly combined for an asset with full data."""
     now = datetime.now(timezone.utc)
 
-def mock_read_sql_side_effect(query, conn, params=None):
+    def mock_read_sql_side_effect(query, conn, params=None):
         query_str = str(query).lower()
         assert params['asset'] == 'BTC'
 
@@ -50,11 +52,13 @@ def mock_read_sql_side_effect(query, conn, params=None):
     assert df.iloc[1]['volatility'] == 0.05
 
 @patch('src.ml.feature_store.pd.read_sql')
+
 def test_get_features_missing_data_eth(mock_read_sql, mock_db_session):
-    """Test behavior when an asset is missing some metric (e.g., no volatility data)."""
+    """Test behavior when an asset is missing some metric 
+    (e.g., no volatility data)."""
     now = datetime.now(timezone.utc)
 
-def mock_read_sql_side_effect(query, conn, params=None):
+    def mock_read_sql_side_effect(query, conn, params=None):
         query_str = str(query).lower()
         assert params['asset'] == 'ETH'
 
@@ -83,6 +87,7 @@ def mock_read_sql_side_effect(query, conn, params=None):
     assert df.iloc[0]['volatility'] == 0.0
 
 @patch('src.ml.feature_store.pd.read_sql')
+
 def test_get_features_completely_empty(mock_read_sql, mock_db_session):
     """Test behavior when an obscure asset has absolutely no data."""
     mock_read_sql.return_value = pd.DataFrame()

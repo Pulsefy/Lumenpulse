@@ -3,7 +3,6 @@ Unit tests for CacheManager and sentiment analysis caching functionality.
 """
 
 import unittest
-import time
 from src.cache_manager import CacheManager
 from src.sentiment import SentimentAnalyzer
 
