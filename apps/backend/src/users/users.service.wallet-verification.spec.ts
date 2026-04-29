@@ -49,7 +49,10 @@ describe('UsersService Wallet Verification', () => {
         { provide: StellarService, useValue: mockStellarService },
         { provide: UploadService, useValue: mockUploadService },
         { provide: getRepositoryToken(User), useValue: mockUserRepository },
-        { provide: getRepositoryToken(StellarAccount), useValue: mockStellarAccountRepository },
+        {
+          provide: getRepositoryToken(StellarAccount),
+          useValue: mockStellarAccountRepository,
+        },
         {
           provide: ConfigService,
           useValue: {
@@ -73,10 +76,10 @@ describe('UsersService Wallet Verification', () => {
   });
 
   describe('generateWalletChallenge', () => {
-    it('should generate a valid challenge', async () => {
+    it('should generate a valid challenge', () => {
       stellarService.validatePublicKeyOrThrow.mockReturnValue();
 
-      const result = await service.generateWalletChallenge(testKeypair.publicKey);
+      const result = service.generateWalletChallenge(testKeypair.publicKey);
 
       expect(result).toHaveProperty('challenge');
       expect(result).toHaveProperty('nonce');
@@ -85,22 +88,25 @@ describe('UsersService Wallet Verification', () => {
       expect(result.expiresIn).toBe(300);
     });
 
-    it('should throw BadRequestException for invalid public key', async () => {
+    it('should throw BadRequestException for invalid public key', () => {
       stellarService.validatePublicKeyOrThrow.mockImplementation(() => {
         throw new Error('Invalid key');
       });
 
-      await expect(
-        service.generateWalletChallenge('INVALID'),
-      ).rejects.toThrow(BadRequestException);
+      expect(() => service.generateWalletChallenge('INVALID')).toThrow(
+        BadRequestException,
+      );
     });
   });
 
   describe('verifyWalletChallenge', () => {
-    it('should throw if no challenge exists', async () => {
-      await expect(
-        service.verifyWalletChallenge(testKeypair.publicKey, 'signed-challenge'),
-      ).rejects.toThrow(BadRequestException);
+    it('should throw if no challenge exists', () => {
+      expect(() =>
+        service.verifyWalletChallenge(
+          testKeypair.publicKey,
+          'signed-challenge',
+        ),
+      ).toThrow(BadRequestException);
     });
   });
 

@@ -314,7 +314,7 @@ export class UsersController {
       );
     }
 
-    const result = await this.usersService.verifyWalletChallenge(
+    const result = this.usersService.verifyWalletChallenge(
       dto.publicKey,
       dto.signedChallenge,
     );
@@ -333,9 +333,9 @@ export class UsersController {
       'Returns a challenge that the user must sign to prove ownership before linking',
   })
   @ApiResponse({ status: 200, type: WalletChallengeResponseDto })
-  async getWalletChallenge(
+  getWalletChallenge(
     @Query() query: GetWalletChallengeDto,
-  ): Promise<WalletChallengeResponseDto> {
+  ): WalletChallengeResponseDto {
     return this.usersService.generateWalletChallenge(query.publicKey);
   }
 
@@ -347,9 +347,9 @@ export class UsersController {
       'Verifies the signed challenge to prove ownership before linking to account',
   })
   @ApiResponse({ status: 200, type: WalletVerificationResponseDto })
-  async verifyWalletOwnership(
+  verifyWalletOwnership(
     @Body() dto: VerifyWalletDto,
-  ): Promise<WalletVerificationResponseDto> {
+  ): WalletVerificationResponseDto {
     return this.usersService.verifyWalletChallenge(
       dto.publicKey,
       dto.signedChallenge,
