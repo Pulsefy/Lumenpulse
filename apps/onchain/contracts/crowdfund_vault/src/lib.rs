@@ -5,6 +5,7 @@ mod events;
 mod math;
 mod storage;
 mod token;
+mod treasury_interface;
 mod yield_provider;
 
 use errors::CrowdfundError;
@@ -1160,6 +1161,81 @@ impl CrowdfundVaultContract {
                 amount: withdraw_amount,
             }
             .publish(&env);
+
+            Ok(())
+        })
+    }
+
+    /// Allocate approved milestone funds to a streaming treasury for gradual unlocking.
+    /// This allows projects to have their budget streamed over time instead of receiving it all at once.
+    pub fn allocate_to_streaming_treasury(
+        env: Env,
+        admin: Address,
+        project_id: u64,
+        milestone_id: u32,
+        treasury_contract: Address,
+        amount: i128,
+        duration: u64,
+    ) -> Result<(), CrowdfundError> {
+        Self::with_reentrancy_guard(&env, || {
+            Self::verify_admin(&env, &admin)?;
+
+            let mut project: ProjectData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Project(project_id))
+                .ok_or(CrowdfundError::ProjectNotFound)?;
+
+            let is_approved: bool = env
+                .storage()
+                .persistent()
+                .get(&DataKey::MilestoneApproved(project_id, milestone_id))
+                .unwrap_or(false);
+
+            if !is_approved {
+                return Err(CrowdfundError::MilestoneNotApproved);
+            }
+
+            let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+            let total_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+
+            if total_balance < amount {
+                return Err(CrowdfundError::InsufficientBalance);
+            }
+
+            // Deduct from project balance
+            env.storage()
+                .persistent()
+                .set(&balance_key, &(total_balance - amount));
+
+            project.total_withdrawn += amount;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Project(project_id), &project);
+
+            // Transfer to treasury contract
+            let contract_address = env.current_contract_address();
+            token::transfer(
+                &env,
+                &project.token_address,
+                &contract_address,
+                &treasury_contract,
+                &amount,
+            );
+
+            // Call treasury contract to start stream
+            let treasury_client = treasury_interface::TreasuryClient::new(&env, &treasury_contract);
+            let start_time = env.ledger().timestamp();
+
+            // The treasury contract expects the admin to authorize the allocation.
+            // We pass the admin address here.
+            treasury_client.allocate_budget(
+                &admin,
+                &project.owner,
+                &amount,
+                &start_time,
+                &duration,
+            );
 
             Ok(())
         })
