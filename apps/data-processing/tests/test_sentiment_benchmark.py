@@ -1,6 +1,9 @@
 import os
 
-from src.analytics.sentiment import SentimentAnalyzer, benchmark_vader_vs_transformer
+from src.analytics.sentiment import (
+    SentimentAnalyzer,
+    benchmark_vader_vs_transformer
+)
 
 
 def test_benchmark_with_transformer_disabled_by_env():

@@ -46,7 +46,7 @@ class TestAlertNotifier(unittest.TestCase):
 
         # Verify Telegram call
         self.assertTrue(any("api.telegram.org" in call.args[0] for call in mock_post.call_args_list))
-        
+
         # Verify Webhook call
         self.assertTrue(any("test.webhook.com" in call.args[0] for call in mock_post.call_args_list))
 

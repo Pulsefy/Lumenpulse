@@ -16,12 +16,10 @@ Success Criteria (from the issue)
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
-from fastapi.testclient import TestClient
+from unittest.mock import patch
 
 from src.analytics.sentiment_indicators import (
     SentimentIndicatorMapper,
-    SentimentIndicator,
     SentimentColor,
     SentimentLabel,
     BULLISH_THRESHOLD,
@@ -36,6 +34,8 @@ from src.analytics.sentiment_indicators import (
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
+
+
 def mapper():
     return SentimentIndicatorMapper()
 
@@ -84,11 +84,14 @@ class TestScoreToColor:
 # Label tests — Bullish / Bearish / Neutral
 # ---------------------------------------------------------------------------
 
+
+
 class TestSentimentLabels:
     """Verify Bullish / Bearish / Neutral label assignment."""
 
     def test_positive_score_label_is_bullish(self, mapper):
-        """Issue criteria: asset details show "Sentiment Score" e.g. "0.85 Bullish"."""
+        """Issue criteria: asset details show "Sentiment Score"
+        e.g. "0.85 Bullish"."""
         ind = mapper.score_to_indicator(0.85)
         assert ind.label == SentimentLabel.BULLISH
 
@@ -122,7 +125,9 @@ class TestDisplayText:
         assert ind.display_text == "0.00 Neutral"
 
     def test_format_display_standalone(self):
-        text = SentimentIndicatorMapper.format_display(0.72, SentimentLabel.BULLISH)
+        text = SentimentIndicatorMapper.format_display(
+            0.72, SentimentLabel.BULLISH
+        )
         assert text == "0.72 Bullish"
 
     def test_format_display_derives_label_when_omitted(self):
@@ -140,10 +145,15 @@ class TestDisplayText:
 # to_dict serialisation
 # ---------------------------------------------------------------------------
 
+
+
 class TestToDict:
     def test_indicator_to_dict_keys(self, mapper):
         d = mapper.score_to_indicator(0.5).to_dict()
-        assert set(d.keys()) == {"score", "color", "hex_color", "label", "display_text"}
+        assert set(d.keys()) == {
+            "score", "color", "hex_color",
+            "label", "display_text"
+        }
 
     def test_indicator_to_dict_values(self, mapper):
         d = mapper.score_to_indicator(0.5).to_dict()
@@ -171,9 +181,14 @@ class TestLegend:
         assert colors == {"green", "red", "gray"}
 
     def test_legend_entries_have_required_keys(self, mapper):
-        required = {"color", "hex_color", "label", "description", "score_range"}
+        required = {
+            "color", "hex_color", "label",
+            "description", "score_range"
+        }
         for entry in mapper.get_legend():
-            assert required.issubset(entry.keys()), f"Entry missing keys: {entry}"
+            assert required.issubset(entry.keys()), (
+                f"Entry missing keys: {entry}"
+            )
 
     def test_legend_bullish_entry(self, mapper):
         legend = {e["color"]: e for e in mapper.get_legend()}
@@ -197,6 +212,8 @@ class TestLegend:
 # ---------------------------------------------------------------------------
 # Module-level convenience function
 # ---------------------------------------------------------------------------
+
+
 
 class TestConvenienceFunction:
     def test_positive_score_returns_bullish_indicator(self):
@@ -251,6 +268,10 @@ class TestBoundaryValues:
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
+
+
+
+
 def api_client():
     """
     Create a FastAPI TestClient with the database and rate-limiter mocked out
@@ -276,6 +297,8 @@ def api_client():
 
 
 @pytest.fixture(scope="module")
+
+
 def api_client_simple():
     """Lightweight client — patches only heavy dependencies."""
     with (
@@ -284,6 +307,8 @@ def api_client_simple():
         from src.api.server import app
         from fastapi.testclient import TestClient as TC
         yield TC(app)
+
+
 
 
 class TestLegendEndpoint:
@@ -317,7 +342,8 @@ class TestLegendEndpoint:
 class TestAnalyzeEndpointIndicator:
     """Verify POST /analyze returns the indicator block."""
 
-    def test_analyze_positive_text_returns_green_indicator(self, api_client_simple):
+    def test_analyze_positive_text_returns_green_indicator(
+    self, api_client_simple):
         """High sentiment text → indicator.color == 'green'."""
         resp = api_client_simple.post(
             "/analyze",
@@ -331,7 +357,8 @@ class TestAnalyzeEndpointIndicator:
             assert data["indicator"]["color"] == "green"
             assert data["indicator"]["label"] == "Bullish"
 
-    def test_analyze_negative_text_returns_red_indicator(self, api_client_simple):
+    def test_analyze_negative_text_returns_red_indicator(
+    self, api_client_simple):
         """Negative sentiment text → indicator.color == 'red'."""
         resp = api_client_simple.post(
             "/analyze",
@@ -347,6 +374,8 @@ class TestAnalyzeEndpointIndicator:
 # ---------------------------------------------------------------------------
 # NewsArticleResponse indicator field
 # ---------------------------------------------------------------------------
+
+
 
 class TestNewsArticleResponseIndicator:
     """Verify the pydantic model accepts and exposes the indicator field."""
@@ -412,7 +441,8 @@ class TestNewsArticleResponseIndicator:
 # ---------------------------------------------------------------------------
 
 class TestAssetAnalysisResponseIndicator:
-    """Issue criteria: asset details show a Sentiment Score e.g. "0.85 Bullish"."""
+    """Issue criteria: asset details show a Sentiment Score
+    e.g. "0.85 Bullish"."""
 
     def test_asset_response_includes_indicator_field(self):
         from src.api.server import AssetAnalysisResponse, SentimentIndicatorResponse
@@ -453,6 +483,8 @@ class TestAssetAnalysisResponseIndicator:
 # ---------------------------------------------------------------------------
 # SentimentIndicator immutability
 # ---------------------------------------------------------------------------
+
+
 
 class TestSentimentIndicatorFrozen:
     def test_indicator_is_immutable(self, mapper):

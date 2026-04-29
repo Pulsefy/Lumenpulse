@@ -19,17 +19,17 @@ load_dotenv()
 
 class SecurityConfig:
     """Security configuration manager."""
-    
+
     def __init__(self):
         self.api_key = os.getenv("API_KEY", "")
         self.rate_limit_enabled = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
         self.rate_limit_default = os.getenv("RATE_LIMIT_DEFAULT", "100/minute")
         self.rate_limit_strict = os.getenv("RATE_LIMIT_STRICT", "10/minute")
-        
+
         # Parse rate limit strings
         self._validate_rate_limit(self.rate_limit_default)
         self._validate_rate_limit(self.rate_limit_strict)
-    
+
     def _validate_rate_limit(self, limit_string: str) -> None:
         """Validate rate limit string format (e.g., '100/minute')."""
         pattern = r'^\d+/(second|minute|hour|day)$'
@@ -38,30 +38,30 @@ class SecurityConfig:
                 f"Invalid rate limit format: {limit_string}. "
                 "Expected format: 'N/second', 'N/minute', 'N/hour', or 'N/day'"
             )
-    
+
     @property
     def limiter(self) -> Optional[Limiter]:
         """Create and configure the rate limiter."""
         if not self.rate_limit_enabled:
             return None
-        
+
         limiter = Limiter(
             key_func=get_remote_address,
             default_limits=[self.rate_limit_default],
             storage_uri="memory://",  # In-memory storage (use redis:// for production)
         )
         return limiter
-    
+
     def validate_api_key(self, request: Request) -> bool:
         """
         Validate API key from request headers.
-        
+
         Args:
             request: FastAPI request object
-            
+
         Returns:
             True if API key is valid
-            
+
         Raises:
             HTTPException: If API key is missing or invalid
         """
@@ -72,42 +72,42 @@ class SecurityConfig:
             )
 
         api_key_header = request.headers.get("X-API-Key")
-        
+
         if not api_key_header:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Missing API key. Please provide X-API-Key header.",
                 headers={"WWW-Authenticate": "ApiKey"},
             )
-        
+
         if api_key_header != self.api_key:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Invalid API key",
                 headers={"WWW-Authenticate": "ApiKey"},
             )
-        
+
         return True
-    
+
     def get_limiter_for_endpoint(self, endpoint_type: str = "default") -> Optional[Limiter]:
         """
         Get a limiter configured for a specific endpoint type.
-        
+
         Args:
             endpoint_type: Type of endpoint ('default' or 'strict')
-            
+
         Returns:
             Configured Limiter instance or None if rate limiting is disabled
         """
         if not self.rate_limit_enabled:
             return None
-        
+
         limit_string = (
-            self.rate_limit_strict 
-            if endpoint_type == "strict" 
+            self.rate_limit_strict
+            if endpoint_type == "strict"
             else self.rate_limit_default
         )
-        
+
         limiter = Limiter(
             key_func=get_remote_address,
             default_limits=[limit_string],
@@ -123,7 +123,7 @@ security_config = SecurityConfig()
 def require_api_key(func: Callable) -> Callable:
     """
     Decorator to require API key authentication for an endpoint.
-    
+
     Usage:
         @app.get("/protected")
         @require_api_key
@@ -140,7 +140,7 @@ def require_api_key(func: Callable) -> Callable:
 def setup_security_middleware(app) -> None:
     """
     Setup security middleware for a FastAPI application.
-    
+
     Args:
         app: FastAPI application instance
     """
@@ -157,10 +157,10 @@ def setup_security_middleware(app) -> None:
             "/openapi.json",
             "/sentiment/legend",
         ]
-        
+
         if request.url.path in excluded_paths:
             return await call_next(request)
-        
+
         # Validate API key
         try:
             security_config.validate_api_key(request)
@@ -170,7 +170,7 @@ def setup_security_middleware(app) -> None:
                 content={"detail": exc.detail},
                 headers=exc.headers,
             )
-        
+
         # Continue processing
         return await call_next(request)
 
@@ -178,14 +178,14 @@ def setup_security_middleware(app) -> None:
 def setup_rate_limiter(app, limiter: Limiter) -> None:
     """
     Setup rate limiting for a FastAPI application.
-    
+
     Args:
         app: FastAPI application instance
         limiter: Slowapi Limiter instance
     """
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-    
+
     @app.exception_handler(RateLimitExceeded)
     async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
         """Custom rate limit exceeded handler."""
@@ -202,11 +202,11 @@ def setup_rate_limiter(app, limiter: Limiter) -> None:
 def get_rate_limit_decorator(limiter: Limiter, limit_string: Optional[str] = None):
     """
     Get a rate limit decorator for specific endpoints.
-    
+
     Args:
         limiter: Slowapi Limiter instance
         limit_string: Optional custom limit (e.g., "10/minute")
-        
+
     Returns:
         Decorator function for rate limiting
     """

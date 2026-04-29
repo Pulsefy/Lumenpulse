@@ -92,7 +92,7 @@ export class SentimentService {
 
       const response = await firstValueFrom(
         this.httpService.post<SentimentResponse>(
-          `${this.pythonApiUrl}/analyze`,
+          `${this.pythonApiUrl}/v1/analyze`,
           request,
           {
             timeout: 10000, // 10 second timeout

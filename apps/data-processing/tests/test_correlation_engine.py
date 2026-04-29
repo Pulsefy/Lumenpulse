@@ -79,7 +79,8 @@ class TestCorrelationEngine(unittest.TestCase):
 
     def test_empty_data(self):
         """Test handling of empty datasets."""
-        result = CorrelationEngine.calculate_correlation([], [], metric_type="volume")
+        result = CorrelationEngine.calculate_correlation(
+    [], [], metric_type="volume")
 
         self.assertEqual(result.correlation_score, 0.0)
         self.assertEqual(result.sample_size, 0)

@@ -6,7 +6,7 @@ Tests statistical anomaly detection for trade volume and social sentiment.
 import unittest
 import math
 from datetime import datetime, timedelta
-from src.anomaly_detector import AnomalyDetector, AnomalyResult, detect_spike
+from src.anomaly_detector import AnomalyDetector, detect_spike
 
 
 class TestAnomalyDetector(unittest.TestCase):
@@ -80,7 +80,8 @@ class TestAnomalyDetector(unittest.TestCase):
         volume_list = list(self.detector.volume_data)
         mean, std = self.detector._calculate_statistics(volume_list)
 
-        self.assertGreater(mean, 1000.0)  # Mean should be greater than base value
+        self.assertGreater(
+    mean, 1000.0)  # Mean should be greater than base value)
         self.assertGreater(std, 0.0)  # Std should be positive
 
     def test_zero_standard_deviation_handling(self):
@@ -150,7 +151,8 @@ class TestAnomalyDetector(unittest.TestCase):
 
         # Should detect as anomaly with high severity
         self.assertTrue(result.is_anomaly)
-        self.assertGreater(result.severity_score, 0.8)  # High severity for 500% spike
+        self.assertGreater(
+    result.severity_score, 0.8)  # High severity for 500% spike)
         self.assertGreater(abs(result.z_score), self.detector.z_threshold)
         self.assertEqual(result.current_value, spike_volume)
 
@@ -209,12 +211,13 @@ class TestAnomalyDetector(unittest.TestCase):
         spike_volume = 5000.0  # 500% increase
         extreme_sentiment = 0.8  # Extreme positive
 
-        results = self.detector.detect_anomalies(spike_volume, extreme_sentiment)
+        results = self.detector.detect_anomalies(
+    spike_volume, extreme_sentiment)
 
         # Should return a dictionary with volume_anomaly and sentiment_anomaly
         self.assertIn('volume_anomaly', results)
         self.assertIn('sentiment_anomaly', results)
-        
+
         # Both should be detected as anomalies
         volume_result = results['volume_anomaly']
         sentiment_result = results['sentiment_anomaly']
@@ -223,7 +226,7 @@ class TestAnomalyDetector(unittest.TestCase):
         self.assertEqual(sentiment_result.metric_name, "sentiment")
         self.assertTrue(volume_result.is_anomaly)
         self.assertTrue(sentiment_result.is_anomaly)
-        
+
     def test_five_sigma_outlier_detection(self):
         """
         Test that a synthetic time series with one point exactly 5σ away from
@@ -248,7 +251,8 @@ class TestAnomalyDetector(unittest.TestCase):
 
         for i, vol in enumerate(baseline_values):
             ts = base_time - timedelta(minutes=(len(baseline_values) - i) * 15)
-            self.detector.add_data_point(volume=vol, sentiment_score=0.0, timestamp=ts)
+            self.detector.add_data_point(
+    volume=vol, sentiment_score=0.0, timestamp=ts)
 
         # Calculate the actual mean and std of what we fed in
         import numpy as np
@@ -306,7 +310,8 @@ class TestAnomalyDetector(unittest.TestCase):
         base_time = datetime.utcnow()
         for i in range(20):
             timestamp = base_time - timedelta(minutes=i * 15)
-            self.detector.add_data_point(1000.0 + i * 50, 0.1 + i * 0.05, timestamp)
+            self.detector.add_data_point(
+    1000.0 + i * 50, 0.1 + i * 0.05, timestamp)
 
         stats = self.detector.get_window_stats()
 
@@ -321,6 +326,8 @@ class TestAnomalyDetector(unittest.TestCase):
         self.assertEqual(stats["data_points_count"], 20)
         self.assertGreater(stats["volume_stats"]["mean"], 1000.0)
         self.assertGreater(stats["sentiment_stats"]["mean"], 0.1)
+
+
 
 
 class TestSpikeDetectionFunction(unittest.TestCase):

@@ -17,7 +17,7 @@ class TestNewsDeduplicationIntegration(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.storage_path = os.path.join(self.temp_dir, "test_dedup_integration.json")
         self.deduplicator = NewsDeduplicator(
-            deduplication_window_days=7, 
+            deduplication_window_days=7,
             storage_path=self.storage_path
         )
 
@@ -83,31 +83,31 @@ class TestNewsDeduplicationIntegration(unittest.TestCase):
 
         # Process first batch
         filtered_batch_1 = self.deduplicator.filter_duplicates(repeated_articles_batch_1)
-        
+
         # Process second batch (should filter out duplicates)
         filtered_batch_2 = self.deduplicator.filter_duplicates(repeated_articles_batch_2)
-        
+
         # Verify that duplicates were filtered out
         self.assertEqual(len(filtered_batch_1), 3)  # All 3 articles from batch 1 should pass through
         self.assertEqual(len(filtered_batch_2), 1)  # Only 1 new article from batch 2 should pass through
-        
+
         # Verify that the unique articles made it through
         batch_1_titles = {article['title'] for article in filtered_batch_1}
         batch_2_titles = {article['title'] for article in filtered_batch_2}
-        
+
         expected_batch_1 = {
             'Bitcoin Surges Past $50,000',
             'Ethereum Network Upgrade Completed',
             'DeFi Sector Shows Strong Growth'
         }
-        
+
         expected_batch_2 = {
             'New Exchange Launches Spot Trading'  # Only the new article
         }
-        
+
         self.assertEqual(batch_1_titles, expected_batch_1)
         self.assertEqual(batch_2_titles, expected_batch_2)
-        
+
         # Total unique articles seen should be 4 (3 from batch 1 + 1 from batch 2)
         self.assertEqual(len(self.deduplicator.seen_hashes), 4)
 
@@ -123,7 +123,7 @@ class TestNewsDeduplicationIntegration(unittest.TestCase):
             'source': 'CryptoNews',
             'published_at': datetime.now().isoformat()
         }
-        
+
         # Same article with variations that shouldn't matter for deduplication
         variation_1 = {
             'title': 'BITCOIN REACHES NEW HIGH',  # Uppercase
@@ -132,7 +132,7 @@ class TestNewsDeduplicationIntegration(unittest.TestCase):
             'source': 'CRYPTONEWS',  # Uppercase
             'published_at': datetime.now().isoformat()
         }
-        
+
         # Slightly different content (should be treated as different)
         different_article = {
             'title': 'Bitcoin Reaches New High',
@@ -141,19 +141,19 @@ class TestNewsDeduplicationIntegration(unittest.TestCase):
             'source': 'CryptoNews',
             'published_at': datetime.now().isoformat()
         }
-        
+
         # Process original
         result_1 = self.deduplicator.filter_duplicates([original_article])
         self.assertEqual(len(result_1), 1)
-        
+
         # Process variation (should be filtered as duplicate)
         result_2 = self.deduplicator.filter_duplicates([variation_1])
         self.assertEqual(len(result_2), 0)  # Should be filtered out as duplicate
-        
+
         # Process different article (should pass through)
         result_3 = self.deduplicator.filter_duplicates([different_article])
         self.assertEqual(len(result_3), 1)  # Should pass through as unique
-        
+
         # Total unique articles should be 2
         self.assertEqual(len(self.deduplicator.seen_hashes), 2)
 
@@ -169,18 +169,18 @@ class TestNewsDeduplicationIntegration(unittest.TestCase):
             'source': 'OldNews',
             'published_at': datetime.now().isoformat()
         }
-        
+
         # Add the article
         result_1 = self.deduplicator.filter_duplicates([article])
         self.assertEqual(len(result_1), 1)
-        
+
         # Verify it's in the seen hashes
         self.assertEqual(len(self.deduplicator.seen_hashes), 1)
-        
+
         # Try to add the same article again (should be filtered)
         result_2 = self.deduplicator.filter_duplicates([article])
         self.assertEqual(len(result_2), 0)
-        
+
         # Verify statistics
         stats = self.deduplicator.get_statistics()
         self.assertEqual(stats['deduplication_window_days'], 7)

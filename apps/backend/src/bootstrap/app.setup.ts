@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, VersioningType } from '@nestjs/common';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import helmet from 'helmet';
 import { GlobalExceptionFilter } from '../filters/global-exception.filter';
@@ -11,6 +11,10 @@ function getCorsOrigin(): string | string[] {
 }
 
 export function setupApp(app: INestApplication): void {
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
   app.useWebSocketAdapter(new IoAdapter(app));
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalPipes(new CustomValidationPipe(), new SanitizationPipe());

@@ -10,12 +10,13 @@ from __future__ import annotations
 import logging
 import re
 from functools import lru_cache
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import spacy
 from spacy.language import Language
 
 from .keywords import CRYPTO_PROJECT_MAP, KNOWN_TICKERS
+from .registry import RegistryService
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class NERService:
         self._canonical_names = self._build_canonical_name_map()
         self._known_tickers = {ticker.upper() for ticker in KNOWN_TICKERS}
         self._nlp = self._initialize_pipeline()
+        self._registry = RegistryService()
 
     def _build_canonical_name_map(self) -> Dict[str, str]:
         canonical_names: Dict[str, str] = {}
@@ -157,6 +159,13 @@ class NERService:
                 seen.add(key)
 
         return deduped
+
+    def extract_linked_entities(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Extract entities and link them to the ecosystem registry.
+        """
+        mentions = self.extract_entities(text)
+        return self._registry.link_entities(mentions)
 
     def extract_entities_from_article(
         self,

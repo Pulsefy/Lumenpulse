@@ -3,10 +3,10 @@ Main entry point for the data processing pipeline with both single-run and sched
 """
 
 import os
+import time
 import sys
 import logging
 import signal
-import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from dotenv import load_dotenv
@@ -228,7 +228,7 @@ def run_data_pipeline():
                     f"z_score={result.z_score:.2f}, "
                     f"severity={result.severity_score:.2f}"
                 )
-        
+
         # Trigger alerts for detected anomalies
         if anomalies_found:
             notifier.notify_batch([volume_anomaly, sentiment_anomaly])
@@ -309,8 +309,7 @@ def start_scheduler():
         logger.info("The Market Analyzer will run automatically every hour.")
 
         # Keep the application running
-        import time
-
+        
         while True:
             time.sleep(1)
 

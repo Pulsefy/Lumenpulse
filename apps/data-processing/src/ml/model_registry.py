@@ -17,7 +17,6 @@ Directory layout:
 
 import os
 import pickle
-import shutil
 import threading
 from datetime import datetime
 from pathlib import Path

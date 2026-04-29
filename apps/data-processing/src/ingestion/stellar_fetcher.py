@@ -3,14 +3,12 @@ Stellar Blockchain Data Fetcher
 Fetches historical transaction and volume data from Stellar Horizon API.
 """
 
-import time
 from typing import Dict, List, Optional, Tuple, Any
+import time
 from datetime import datetime, timedelta
 from dataclasses import dataclass
-import json
 from stellar_sdk import Server, Asset
 from stellar_sdk.exceptions import NotFoundError, BadRequestError, ConnectionError
-from stellar_sdk.call_builder.call_builder_async import PaymentsCallBuilder
 
 
 @dataclass

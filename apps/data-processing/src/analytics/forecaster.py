@@ -20,8 +20,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from src.analytics.market_analyzer import Trend
 from src.utils.logger import setup_logger
+from .market_analyzer import Trend
 
 logger = setup_logger(__name__)
 

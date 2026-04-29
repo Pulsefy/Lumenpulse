@@ -10,8 +10,8 @@ Run:
 """
 
 import json
-import logging
 import time
+import logging
 
 import pytest
 

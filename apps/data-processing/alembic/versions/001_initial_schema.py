@@ -1,7 +1,7 @@
 """Initial schema with Articles, SocialPosts, and AnalyticsRecords
 
 Revision ID: 001
-Revises: 
+Revises:
 Create Date: 2026-03-26 23:09:00.000000
 
 """

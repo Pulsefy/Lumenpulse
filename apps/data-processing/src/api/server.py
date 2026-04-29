@@ -1,35 +1,33 @@
-"""
-FastAPI server to expose sentiment analysis as an HTTP API
-for the Node.js backend to consume.
-"""
-
-from fastapi import FastAPI, HTTPException, Request, Response, Query
+from fastapi import FastAPI, HTTPException, Request, Response, Query, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-# Import your existing SentimentAnalyzer
 import sys
 import os
 
-# Add parent directory to path to import from src
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 from sentiment import SentimentAnalyzer
-from src.utils.logger import setup_logger, correlation_id_ctx, generate_correlation_id
-from src.utils.metrics import API_FAILURES_TOTAL, generate_latest, CONTENT_TYPE_LATEST
-from src.security import (
-    security_config,
-    setup_security_middleware,
-    setup_rate_limiter,
-    get_rate_limit_decorator,
-)
+from src.utils.logger import setup_logger
+from src.utils.metrics import API_FAILURES_TOTAL
+from src.security import get_rate_limit_decorator
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
 from src.ml.model_registry import get_registry_status
 from src.analytics.correlation_engine import CorrelationEngine
 from src.db import PostgresService
-from src.analytics.sentiment_indicators import SentimentIndicatorMapper, get_legend as sentiment_legend
+from src.analytics.sentiment_indicators import SentimentIndicatorMapper
+import uvicorn
+import asyncio
+from src.analytics.forecaster import SentimentForecaster
+
+"""
+FastAPI server to expose sentiment analysis as an HTTP API
+for the Node.js backend to consume.
+"""
+
+# Import your existing SentimentAnalyzer
+# Add parent directory to path to import from src
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 _indicator_mapper = SentimentIndicatorMapper()
 
@@ -42,6 +40,9 @@ app = FastAPI(
     description="Exposes sentiment analysis for Node.js backend integration",
     version="1.0.0",
 )
+
+# Create versioned router
+v1_router = APIRouter(prefix="/v1")
 
 # Setup security middleware (API key authentication)
 setup_security_middleware(app)
@@ -66,6 +67,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include versioned routers
+app.include_router(v1_router)
+
 @app.middleware("http")
 async def metrics_and_logging_middleware(request: Request, call_next):
     corr_id = request.headers.get("X-Correlation-ID", generate_correlation_id())
@@ -78,7 +82,8 @@ async def metrics_and_logging_middleware(request: Request, call_next):
         return response
     except Exception as e:
         API_FAILURES_TOTAL.labels(method=request.method, endpoint=request.url.path).inc()
-        logger.error("Unhandled exception during request processing", exc_info=True)
+        logger.error(
+    "Unhandled exception during request processing", exc_info=True)
         raise
 
 # Initialize your existing SentimentAnalyzer
@@ -88,7 +93,8 @@ try:
     postgres_service = PostgresService()
 except Exception as exc:
     postgres_service = None
-    logger.warning("PostgreSQL service unavailable for /news endpoint: %s", exc)
+    logger.warning(
+    "PostgreSQL service unavailable for /news endpoint: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +111,8 @@ class SentimentIndicatorResponse(BaseModel):
     display_text: str  # e.g. "0.85 Bullish"
 
 
+
+
 class AnalyzeRequest(BaseModel):
     text: str
     asset: Optional[str] = None  # Optional asset filter
@@ -115,6 +123,9 @@ class AnalyzeResponse(BaseModel):
     asset_codes: List[str] = []  # Asset codes found in text
     sentiment_label: str = ""  # positive/negative/neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
+    linked_entities: List[Dict[str, Any]] = []  # Entities linked to ecosystem registry
+
+
 
 
 class AssetAnalysisResponse(BaseModel):
@@ -133,6 +144,8 @@ class HealthResponse(BaseModel):
     service: str
 
 
+
+
 class NewsArticleResponse(BaseModel):
     article_id: str
     title: str
@@ -146,9 +159,14 @@ class NewsArticleResponse(BaseModel):
     categories: List[str] = []
     keywords: List[str] = []
     detected_entities: List[str] = []
+    linked_entities: List[Dict[str, Any]] = []  # Entities linked to ecosystem registry
     sentiment_score: Optional[float] = None  # Raw compound score stored in DB
     sentiment_label: Optional[str] = None  # positive / negative / neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
+
+# ---------------------------------------------------------------------------
+# Versioned Routers (Issue #2)
+# ---------------------------------------------------------------------------
 
 @app.get("/metrics")
 async def metrics():
@@ -187,21 +205,19 @@ async def health_check(request: Request) -> HealthResponse:
     )
 
 
-@app.get("/news", response_model=List[NewsArticleResponse])
+@v1_router.get("/news", response_model=List[NewsArticleResponse])
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def get_news(
     request: Request,
     limit: int = Query(50, ge=1, le=500),
     hours: int = Query(24, ge=1, le=168),
-    asset: Optional[str] = Query(None, description="Optional primary asset code filter"),
-    entity: Optional[str] = Query(
-        None,
-        description="Optional detected entity filter (example: Soroban)",
-    ),
+    asset: Optional[str] = Query(None, description="Optional primary asset code filter")
+    entity: Optional[str] = Query(None, description="Optional detected entity filter (example: Soroban)")
 ) -> List[NewsArticleResponse]:
     """Return recent articles with optional asset and entity filters."""
     if postgres_service is None:
-        raise HTTPException(status_code=503, detail="Database service unavailable")
+        raise HTTPException(
+    status_code=503, detail="Database service unavailable")
 
     try:
         articles = postgres_service.get_recent_articles(
@@ -236,14 +252,13 @@ async def get_news(
                 summary=article.summary,
                 source=article.source,
                 url=article.url,
-                published_at=(
-                    article.published_at.isoformat() if article.published_at else None
-                ),
+                published_at=article.published_at.isoformat() if article.published_at else None,
                 primary_asset=article.primary_asset,
                 asset_codes=article.asset_codes or [],
                 categories=article.categories or [],
                 keywords=article.keywords or [],
                 detected_entities=article.detected_entities or [],
+                linked_entities=article.linked_entities or [],
                 sentiment_score=article.sentiment_score,
                 sentiment_label=article.sentiment_label,
                 indicator=_build_indicator(article.sentiment_score),
@@ -252,12 +267,14 @@ async def get_news(
         ]
     except Exception as exc:
         logger.error("Error retrieving news: %s", str(exc), exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to fetch news articles")
+        raise HTTPException(
+    status_code=500, detail="Failed to fetch news articles")
 
 
-@app.post("/analyze", response_model=AnalyzeResponse)
+@v1_router.post("/analyze", response_model=AnalyzeResponse)
 @limiter.limit("50/minute") if limiter else lambda x: x
-async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeResponse:
+async def analyze_text(
+    body: AnalyzeRequest, request: Request) -> AnalyzeResponse:
     """
     Analyze the sentiment of provided text.
 
@@ -294,6 +311,7 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
             asset_codes=result.asset_codes,
             sentiment_label=result.sentiment_label,
             indicator=SentimentIndicatorResponse(**ind.to_dict()),
+            linked_entities=result.linked_entities,
         )
 
     except HTTPException:
@@ -303,7 +321,7 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-@app.get("/analyze", response_model=AssetAnalysisResponse)
+@v1_router.get("/analyze", response_model=AssetAnalysisResponse)
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def get_asset_analysis(
     request: Request,
@@ -311,7 +329,7 @@ async def get_asset_analysis(
 ) -> AssetAnalysisResponse:
     """
     Get sentiment analysis for a specific asset.
-    
+
     This endpoint provides asset-specific sentiment analysis by filtering
     news and social media content that mentions the specified asset.
 
@@ -323,16 +341,18 @@ async def get_asset_analysis(
     """
     try:
         if not asset or not asset.strip():
-            raise HTTPException(status_code=400, detail="Asset code cannot be empty")
-        
+            raise HTTPException(
+    status_code=400, detail="Asset code cannot be empty")
+
         asset = asset.upper().strip()
-        
+
         # For now, return a mock response since we need to integrate with actual data sources
         # In a real implementation, this would query the database for recent sentiment data
         # related to the specific asset
-        
-        logger.info(f"Requested asset analysis for: {asset} | client_ip: {request.client.host}")
-        
+
+        logger.info(
+    f"Requested asset analysis for: {asset} | client_ip: {request.client.host}")
+
         # Mock response - replace with actual database query
         mock_score = 0.0
         ind = _indicator_mapper.score_to_indicator(mock_score)
@@ -354,13 +374,15 @@ async def get_asset_analysis(
 
 
 # Optional: Batch analysis endpoint if needed
-@app.post("/analyze-batch")
+@v1_router.post("/analyze-batch")
 @limiter.limit("10/minute") if limiter else lambda x: x
-async def analyze_batch(request: Request, texts: list[str], asset: Optional[str] = None) -> Dict[str, Any]:
+async def analyze_batch(
+    request: Request, texts: list[str], asset: Optional[str] = None) -> Dict[str, Any]:
     """Batch analyze multiple texts with optional asset filter"""
     try:
         if not texts:
-            raise HTTPException(status_code=400, detail="Texts list cannot be empty")
+            raise HTTPException(
+    status_code=400, detail="Texts list cannot be empty")
 
         results = sentiment_analyzer.analyze_batch(texts, asset)
         summary = sentiment_analyzer.get_sentiment_summary(results)
@@ -375,7 +397,7 @@ async def analyze_batch(request: Request, texts: list[str], asset: Optional[str]
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/sentiment/legend")
+@v1_router.get("/sentiment/legend")
 async def get_sentiment_legend() -> Dict[str, Any]:
     """
     Return the colour legend that frontend clients use to render
@@ -401,8 +423,6 @@ async def get_sentiment_legend() -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    import uvicorn
-
     # Run the server
     uvicorn.run(
         "server:app",
@@ -420,6 +440,8 @@ class RetrainRequest(BaseModel):
     force: bool = False  # Skip quality gates when True
 
 
+
+
 class RetrainResponse(BaseModel):
     status: str
     started_at: Optional[str] = None
@@ -435,7 +457,7 @@ class ModelStatusResponse(BaseModel):
     registry: Dict[str, Any]
 
 
-@app.post("/retrain", response_model=RetrainResponse)
+@v1_router.post("/retrain", response_model=RetrainResponse)
 @limiter.limit("5/minute") if limiter else lambda x: x
 async def trigger_retraining(
     body: RetrainRequest,
@@ -450,8 +472,6 @@ async def trigger_retraining(
 
     Requires X-API-Key header.
     """
-    import asyncio
-
     logger.info(
         f"Retraining triggered via API | force={body.force} | "
         f"client_ip={request.client.host}"
@@ -465,7 +485,7 @@ async def trigger_retraining(
     return RetrainResponse(**{k: result.get(k) for k in RetrainResponse.model_fields if k in result})
 
 
-@app.get("/model/status", response_model=ModelStatusResponse)
+@v1_router.get("/model/status", response_model=ModelStatusResponse)
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def model_status(request: Request) -> ModelStatusResponse:
     """
@@ -484,6 +504,8 @@ async def model_status(request: Request) -> ModelStatusResponse:
 # ---------------------------------------------------------------------------
 
 
+
+
 class ForecastResponse(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
@@ -499,11 +521,12 @@ class ForecastResponse(BaseModel):
     generated_at: str
 
 
-@app.get("/analytics/forecast", response_model=ForecastResponse)
+@v1_router.get("/analytics/forecast", response_model=ForecastResponse)
 @limiter.limit("20/minute") if limiter else lambda x: x
 async def get_forecast(request: Request) -> ForecastResponse:
     """
-    Predict market trends (Bullish / Bearish / Neutral) for the next 24-48 hours.
+    Predict market trends (
+    Bullish / Bearish / Neutral) for the next 24-48 hours.)
 
     Uses historical sentiment data from *analytics.jsonl* to train a
     SentimentForecaster (Prophet when installed, sklearn Ridge otherwise)
@@ -512,13 +535,9 @@ async def get_forecast(request: Request) -> ForecastResponse:
 
     Requires X-API-Key header.
     """
-    import asyncio
-
     logger.info(f"Forecast requested | client_ip={request.client.host}")
 
     def _run_forecast():
-        from src.analytics.forecaster import SentimentForecaster
-
         forecaster = SentimentForecaster()
         return forecaster.run()
 
@@ -542,6 +561,8 @@ class CorrelationDataPoint(BaseModel):
     score: float
 
 
+
+
 class MetricDataPoint(BaseModel):
     timestamp: str
     value: float
@@ -552,6 +573,8 @@ class CorrelationRequest(BaseModel):
     price_data: Optional[List[MetricDataPoint]] = None
     volume_data: Optional[List[MetricDataPoint]] = None
     lag_hours: int = 0
+
+
 
 
 class CorrelationResponse(BaseModel):
@@ -567,6 +590,8 @@ class LagAnalysisRequest(BaseModel):
     max_lag_hours: int = 24
 
 
+
+
 class LagAnalysisResponse(BaseModel):
     best_lag_hours: int
     best_correlation: float
@@ -574,7 +599,7 @@ class LagAnalysisResponse(BaseModel):
     recommendation: str
 
 
-@app.post("/correlation/analyze", response_model=CorrelationResponse)
+@v1_router.post("/correlation/analyze", response_model=CorrelationResponse)
 @limiter.limit("20/minute") if limiter else lambda x: x
 async def analyze_correlation(
     body: CorrelationRequest,
@@ -618,7 +643,8 @@ async def analyze_correlation(
     )
 
 
-@app.post("/correlation/lag-analysis", response_model=LagAnalysisResponse)
+@v1_router.post(
+    "/correlation/lag-analysis", response_model=LagAnalysisResponse)
 @limiter.limit("10/minute") if limiter else lambda x: x
 async def analyze_lag_correlation(
     body: LagAnalysisRequest,

@@ -3,9 +3,9 @@ Unit tests for NewsFetcher service.
 """
 
 import unittest
-from unittest.mock import Mock, patch, MagicMock
 import os
 from datetime import datetime
+from unittest.mock import Mock, patch
 from src.ingestion.news_fetcher import NewsFetcher, NewsArticle, fetch_news
 
 

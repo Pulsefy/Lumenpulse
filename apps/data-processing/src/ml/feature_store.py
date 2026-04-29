@@ -1,6 +1,6 @@
 import pandas as pd
-from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 
 class FeatureStore:
@@ -35,17 +35,17 @@ class FeatureStore:
         Combines: Sentiment stats, Volume metrics, and Volatility indicators.
         """
         start_time = self._parse_window_to_datetime(window)
-        
+
         sentiment_query = text("""
             SELECT timestamp, sentiment_score FROM asset_sentiment_view
             WHERE asset = :asset AND timestamp >= :start_time
         """)
-        
+
         volume_query = text("""
             SELECT timestamp, volume FROM asset_volume_view
             WHERE asset = :asset AND timestamp >= :start_time
         """)
-        
+
         volatility_query = text("""
             SELECT timestamp, volatility FROM asset_volatility_view
             WHERE asset = :asset AND timestamp >= :start_time
