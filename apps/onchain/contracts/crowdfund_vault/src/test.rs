@@ -2527,3 +2527,120 @@ fn test_withdraw_cei_state_written_before_balance_assertion() {
     assert_eq!(client.get_balance(&project_id), 300_000);
     assert_eq!(token_client.balance(&owner), 200_000);
 }
+
+// ── Gas-less deposit (EIP-712 style) ─────────────────────────────────────────
+
+/// The relayer-submitted deposit path must work with mock_all_auths just like
+/// the regular deposit path: funds move, the project balance grows, and the
+/// per-address deposit nonce is incremented.
+#[test]
+fn test_deposit_with_sig_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("GasTest"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Nonce must start at 0 before any gasless deposit.
+    assert_eq!(client.get_deposit_nonce(&user), 0u64);
+
+    let signature = soroban_sdk::Bytes::from_slice(&env, &[1u8; 64]);
+    client.deposit_with_sig(&user, &project_id, &300_000, &signature);
+
+    // Balance updated.
+    assert_eq!(client.get_balance(&project_id), 300_000);
+    // Project total_deposited updated.
+    assert_eq!(client.get_project(&project_id).total_deposited, 300_000);
+    // Nonce incremented to 1.
+    assert_eq!(client.get_deposit_nonce(&user), 1u64);
+}
+
+/// Each successful gasless deposit must increment the nonce, preventing
+/// replay across multiple calls.
+#[test]
+fn test_deposit_with_sig_nonce_increments() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("NonceT"),
+        &2_000_000,
+        &token_client.address,
+    );
+
+    let sig = soroban_sdk::Bytes::from_slice(&env, &[2u8; 64]);
+    client.deposit_with_sig(&user, &project_id, &100_000, &sig);
+    assert_eq!(client.get_deposit_nonce(&user), 1u64);
+
+    let sig2 = soroban_sdk::Bytes::from_slice(&env, &[3u8; 64]);
+    client.deposit_with_sig(&user, &project_id, &200_000, &sig2);
+    assert_eq!(client.get_deposit_nonce(&user), 2u64);
+}
+
+/// An empty signature must be rejected with InvalidSignature.
+#[test]
+fn test_deposit_with_sig_rejects_empty_signature() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("SigFail"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let empty_sig = soroban_sdk::Bytes::new(&env);
+    let result = client.try_deposit_with_sig(&user, &project_id, &100_000, &empty_sig);
+    assert_eq!(result, Err(Ok(crate::errors::CrowdfundError::InvalidSignature)));
+}
+
+/// deposit_with_sig on a non-existent project must fail with ProjectNotFound.
+#[test]
+fn test_deposit_with_sig_project_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, user, _) = setup_test(&env);
+    client.initialize(&admin);
+
+    let sig = soroban_sdk::Bytes::from_slice(&env, &[1u8; 64]);
+    let result = client.try_deposit_with_sig(&user, &999, &100_000, &sig);
+    assert_eq!(result, Err(Ok(crate::errors::CrowdfundError::ProjectNotFound)));
+}
+
+/// deposit_with_sig with amount <= 0 must fail with InvalidAmount.
+#[test]
+fn test_deposit_with_sig_invalid_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("AmtFail"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let sig = soroban_sdk::Bytes::from_slice(&env, &[1u8; 64]);
+    let result = client.try_deposit_with_sig(&user, &project_id, &0, &sig);
+    assert_eq!(result, Err(Ok(crate::errors::CrowdfundError::InvalidAmount)));
+}

@@ -45,3 +45,16 @@ pub struct VerificationOverriddenEvent {
     pub admin: Address,
     pub verified: bool,
 }
+
+/// Emitted when a project is registered via a gasless meta-transaction
+/// relayed on behalf of the owner. Relayers and indexers can use this
+/// to track gasless registrations separately from direct ones.
+#[contractevent]
+pub struct GaslessProjectRegisteredEvent {
+    #[topic]
+    pub project_id: u64,
+    pub owner: Address,
+    pub name: Symbol,
+    /// The nonce consumed by this registration. The next valid nonce is `consumed_nonce + 1`.
+    pub consumed_nonce: u64,
+}

@@ -6,7 +6,7 @@ mod storage;
 
 use errors::RegistryError;
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal, Symbol};
+use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, Symbol};
 use storage::{DataKey, ProjectEntry, RegistryConfig, VerificationStatus, WeightMode};
 
 #[contract]
@@ -134,6 +134,69 @@ impl ProjectRegistryContract {
 
     // ── Project registration ──────────────────────────────────────────────────
 
+    /// Returns the current registration nonce for the given owner address.
+    /// Relayers must call this to determine the nonce to include in the
+    /// user's off-chain `SorobanAuthorizationEntry`.
+    pub fn get_registration_nonce(env: Env, address: Address) -> u64 {
+        Self::registration_nonce_of(&env, &address)
+    }
+
+    fn registration_nonce_of(env: &Env, address: &Address) -> u64 {
+        let key = DataKey::RegistrationNonce(address.clone());
+        let nonce: u64 = env.storage().persistent().get(&key).unwrap_or(0);
+        if env.storage().persistent().has(&key) {
+            // Bump TTL using reasonable defaults (~30 days at 5s/ledger)
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, 100_000u32, 518_400u32);
+        }
+        nonce
+    }
+
+    pub fn register_project_with_sig(
+        env: Env,
+        owner: Address,
+        project_id: u64,
+        name: Symbol,
+        signature: Bytes,
+    ) -> Result<(), RegistryError> {
+        Self::require_not_paused(&env)?;
+        if signature.is_empty() {
+            return Err(RegistryError::InvalidSignature);
+        }
+
+        let nonce = Self::registration_nonce_of(&env, &owner);
+
+        owner.require_auth_for_args(
+            (
+                Symbol::new(&env, "register_project_with_sig"),
+                owner.clone(),
+                project_id,
+                name.clone(),
+                nonce,
+            )
+                .into_val(&env),
+        );
+
+        let new_nonce = nonce + 1;
+        env.storage()
+            .persistent()
+            .set(&DataKey::RegistrationNonce(owner.clone()), &new_nonce);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::RegistrationNonce(owner.clone()), 100_000u32, 518_400u32);
+
+        events::GaslessProjectRegisteredEvent {
+            project_id,
+            owner: owner.clone(),
+            name: name.clone(),
+            consumed_nonce: nonce,
+        }
+        .publish(&env);
+
+        Self::register_project_internal(&env, owner, project_id, name)
+    }
+
     /// Register a project for community verification.
     /// Anyone can register a project they own.
     pub fn register_project(
@@ -145,6 +208,15 @@ impl ProjectRegistryContract {
         Self::require_not_paused(&env)?;
         owner.require_auth();
 
+        Self::register_project_internal(&env, owner, project_id, name)
+    }
+
+    fn register_project_internal(
+        env: &Env,
+        owner: Address,
+        project_id: u64,
+        name: Symbol,
+    ) -> Result<(), RegistryError> {
         if env
             .storage()
             .persistent()
@@ -173,7 +245,7 @@ impl ProjectRegistryContract {
             owner,
             name,
         }
-        .publish(&env);
+        .publish(env);
 
         Ok(())
     }
