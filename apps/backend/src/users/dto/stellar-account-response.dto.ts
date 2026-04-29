@@ -17,6 +17,9 @@ export class StellarAccountResponseDto {
   isActive: boolean;
 
   @ApiProperty()
+  isVerified: boolean;
+
+  @ApiProperty()
   createdAt: Date;
 
   @ApiProperty()

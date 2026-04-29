@@ -5,6 +5,7 @@ import {
   Delete,
   Patch,
   Param,
+  Query,
   Body,
   UseGuards,
   Req,
@@ -13,6 +14,7 @@ import {
   UsePipes,
   ValidationPipe,
   NotFoundException,
+  BadRequestException,
   UseInterceptors,
   UploadedFile,
   ParseFilePipe,
@@ -36,6 +38,12 @@ import { StellarAccountResponseDto } from './dto/stellar-account-response.dto';
 import { UpdateStellarAccountLabelDto } from './dto/update-stellar-account-label.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileResponseDto } from './dto/profile-response.dto';
+import {
+  GetWalletChallengeDto,
+  VerifyWalletDto,
+  WalletChallengeResponseDto,
+  WalletVerificationResponseDto,
+} from './dto/verify-wallet.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
@@ -262,5 +270,89 @@ export class UsersController {
     @Param('id') accountId: string,
   ): Promise<void> {
     await this.usersService.setPrimaryAccount(req.user.id, accountId);
+  }
+
+  @Get('me/accounts/:id/verify-challenge')
+  @ApiOperation({
+    summary: 'Get verification challenge for a Stellar account',
+    description:
+      'Returns a challenge that the user must sign to prove ownership of the Stellar account',
+  })
+  @ApiResponse({ status: 200, type: WalletChallengeResponseDto })
+  async getAccountVerificationChallenge(
+    @Req() req: RequestWithUser,
+    @Param('id') accountId: string,
+  ): Promise<WalletChallengeResponseDto> {
+    const account = await this.usersService.getStellarAccount(
+      req.user.id,
+      accountId,
+    );
+    return this.usersService.generateWalletChallenge(account.publicKey);
+  }
+
+  @Post('me/accounts/:id/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Verify ownership of a Stellar account',
+    description:
+      'Verifies the signed challenge to prove ownership of the Stellar account',
+  })
+  @ApiResponse({ status: 200, type: WalletVerificationResponseDto })
+  async verifyAccountOwnership(
+    @Req() req: RequestWithUser,
+    @Param('id') accountId: string,
+    @Body() dto: VerifyWalletDto,
+  ): Promise<WalletVerificationResponseDto> {
+    const account = await this.usersService.getStellarAccount(
+      req.user.id,
+      accountId,
+    );
+
+    if (account.publicKey !== dto.publicKey) {
+      throw new BadRequestException(
+        'Public key in body does not match account public key',
+      );
+    }
+
+    const result = this.usersService.verifyWalletChallenge(
+      dto.publicKey,
+      dto.signedChallenge,
+    );
+
+    if (result.verified) {
+      await this.usersService.markAccountVerified(dto.publicKey);
+    }
+
+    return result;
+  }
+
+  @Get('accounts/verify-challenge')
+  @ApiOperation({
+    summary: 'Get verification challenge for any Stellar public key',
+    description:
+      'Returns a challenge that the user must sign to prove ownership before linking',
+  })
+  @ApiResponse({ status: 200, type: WalletChallengeResponseDto })
+  getWalletChallenge(
+    @Query() query: GetWalletChallengeDto,
+  ): WalletChallengeResponseDto {
+    return this.usersService.generateWalletChallenge(query.publicKey);
+  }
+
+  @Post('accounts/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Verify ownership of a Stellar public key',
+    description:
+      'Verifies the signed challenge to prove ownership before linking to account',
+  })
+  @ApiResponse({ status: 200, type: WalletVerificationResponseDto })
+  verifyWalletOwnership(
+    @Body() dto: VerifyWalletDto,
+  ): WalletVerificationResponseDto {
+    return this.usersService.verifyWalletChallenge(
+      dto.publicKey,
+      dto.signedChallenge,
+    );
   }
 }
