@@ -1,4 +1,4 @@
-use soroban_sdk::{contractevent, Address, Symbol};
+use soroban_sdk::{contractevent, Address, BytesN, Symbol};
 
 #[contractevent]
 pub struct InitializedEvent {
@@ -44,4 +44,46 @@ pub struct VerificationOverriddenEvent {
     pub project_id: u64,
     pub admin: Address,
     pub verified: bool,
+}
+
+/// Event emitted when an admin action is queued for timelock execution
+#[contractevent]
+pub struct AdminActionQueuedEvent {
+    pub admin: Address,
+    pub action: Symbol,
+    pub proposal_id: BytesN<32>,
+}
+
+/// Event emitted when config is updated
+#[contractevent]
+pub struct ConfigUpdatedEvent {
+    pub admin: Address,
+    pub quorum_threshold: i128,
+    pub min_voter_weight: i128,
+}
+
+/// Event emitted when contract is paused
+#[contractevent]
+pub struct ContractPausedEvent {
+    pub admin: Address,
+}
+
+/// Event emitted when contract is unpaused
+#[contractevent]
+pub struct ContractUnpausedEvent {
+    pub admin: Address,
+}
+
+/// Event emitted when admin is changed
+#[contractevent]
+pub struct AdminChangedEvent {
+    pub old_admin: Address,
+    pub new_admin: Address,
+}
+
+/// Event emitted when contract is upgraded
+#[contractevent]
+pub struct ContractUpgradedEvent {
+    pub admin: Address,
+    pub new_wasm_hash: BytesN<32>,
 }

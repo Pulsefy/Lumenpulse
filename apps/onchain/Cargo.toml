@@ -12,7 +12,8 @@ members = [
   "contracts/vesting-wallet",
   "contracts/lumenpulse-curation",
   "contracts/pricing_adapter",
-  "contracts/treasury"
+  "contracts/treasury",
+  "contracts/timelock"
 ]
 exclude = ["contracts/tests"]
 

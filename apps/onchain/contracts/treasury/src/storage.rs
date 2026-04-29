@@ -9,6 +9,7 @@ pub enum DataKey {
     Admin,
     Token,
     Stream(Address), // beneficiary -> StreamData
+    TimelockContract, // Optional timelock contract address
 }
 
 #[contracttype]
