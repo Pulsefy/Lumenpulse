@@ -113,8 +113,8 @@ describe('GlobalExceptionFilter', () => {
   });
 
   it('hides internal error messages in production mode', () => {
-    const originalNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
+    const originalNodeEnv = process['env']['NODE_ENV'];
+    process['env']['NODE_ENV'] = 'production';
 
     filter.catch(new Error('Unexpected database error'), mockArgumentsHost);
 
@@ -127,6 +127,6 @@ describe('GlobalExceptionFilter', () => {
       requestId: 'req-123',
     });
 
-    process.env.NODE_ENV = originalNodeEnv;
+    process['env']['NODE_ENV'] = originalNodeEnv;
   });
 });

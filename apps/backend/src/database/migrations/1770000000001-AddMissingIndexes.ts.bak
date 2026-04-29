@@ -1,0 +1,337 @@
+import { MigrationInterface, QueryRunner } from 'typeorm';
+
+export class AddMissingIndexes1770000000001 implements MigrationInterface {
+  name = 'AddMissingIndexes1770000000001';
+
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    // Check if indexes exist before creating them
+    const checkIndex = async (
+      indexName: string,
+      tableName: string,
+    ): Promise<boolean> => {
+      const result = await queryRunner.query(
+        `SELECT 1 FROM pg_indexes WHERE indexname = $1 AND tablename = $2`,
+        [indexName, tableName],
+      );
+      return result.length > 0;
+    };
+
+    // Users table indexes
+    if (!(await checkIndex('IDX_users_email', 'users'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_users_email" ON "users" ("email")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_users_username', 'users'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_users_username" ON "users" ("username")`,
+      );
+    }
+
+    // Portfolio indexes
+    if (!(await checkIndex('IDX_portfolio_user_id', 'portfolios'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_portfolio_user_id" ON "portfolios" ("userId")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_portfolio_name', 'portfolios'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_portfolio_name" ON "portfolios" ("name")`,
+      );
+    }
+
+    // Portfolio asset indexes
+    if (
+      !(await checkIndex(
+        'IDX_portfolio_asset_portfolio_id',
+        'portfolio_assets',
+      ))
+    ) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_portfolio_asset_portfolio_id" ON "portfolio_assets" ("portfolioId")`,
+      );
+    }
+
+    if (
+      !(await checkIndex('IDX_portfolio_asset_asset_id', 'portfolio_assets'))
+    ) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_portfolio_asset_asset_id" ON "portfolio_assets" ("assetId")`,
+      );
+    }
+
+    // Transaction indexes
+    if (!(await checkIndex('IDX_transaction_portfolio_id', 'transactions'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_transaction_portfolio_id" ON "transactions" ("portfolioId")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_transaction_type', 'transactions'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_transaction_type" ON "transactions" ("type")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_transaction_created_at', 'transactions'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_transaction_created_at" ON "transactions" ("createdAt")`,
+      );
+    }
+
+    // Password reset tokens indexes
+    if (
+      !(await checkIndex('IDX_password_reset_token', 'password_reset_tokens'))
+    ) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_password_reset_token" ON "password_reset_tokens" ("token")`,
+      );
+    }
+
+    if (
+      !(await checkIndex('IDX_password_reset_user_id', 'password_reset_tokens'))
+    ) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_password_reset_user_id" ON "password_reset_tokens" ("userId")`,
+      );
+    }
+
+    if (
+      !(await checkIndex('IDX_password_reset_expires', 'password_reset_tokens'))
+    ) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_password_reset_expires" ON "password_reset_tokens" ("expiresAt")`,
+      );
+    }
+
+    // News/Article indexes
+    if (!(await checkIndex('IDX_articles_source', 'articles'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_articles_source" ON "articles" ("source")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_articles_published_at', 'articles'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_articles_published_at" ON "articles" ("publishedAt")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_articles_sentiment_score', 'articles'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_articles_sentiment_score" ON "articles" ("sentimentScore")`,
+      );
+    }
+
+    // Sentiment analysis indexes
+    if (!(await checkIndex('IDX_sentiment_asset_id', 'sentiment_analysis'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_sentiment_asset_id" ON "sentiment_analysis" ("assetId")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_sentiment_created_at', 'sentiment_analysis'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_sentiment_created_at" ON "sentiment_analysis" ("createdAt")`,
+      );
+    }
+
+    // Portfolio snapshot indexes
+    if (
+      !(await checkIndex('IDX_snapshot_portfolio_id', 'portfolio_snapshots'))
+    ) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_snapshot_portfolio_id" ON "portfolio_snapshots" ("portfolioId")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_snapshot_created_at', 'portfolio_snapshots'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_snapshot_created_at" ON "portfolio_snapshots" ("createdAt")`,
+      );
+    }
+
+    // User preferences indexes
+    if (
+      !(await checkIndex('IDX_user_preferences_user_id', 'user_preferences'))
+    ) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_user_preferences_user_id" ON "user_preferences" ("userId")`,
+      );
+    }
+
+    // Price data indexes
+    if (!(await checkIndex('IDX_price_asset_id', 'price_data'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_price_asset_id" ON "price_data" ("assetId")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_price_timestamp', 'price_data'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_price_timestamp" ON "price_data" ("timestamp")`,
+      );
+    }
+
+    // Notification indexes
+    if (!(await checkIndex('IDX_notification_user_id', 'notifications'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_notification_user_id" ON "notifications" ("userId")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_notification_read', 'notifications'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_notification_read" ON "notifications" ("isRead")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_notification_created_at', 'notifications'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_notification_created_at" ON "notifications" ("createdAt")`,
+      );
+    }
+
+    // Exchange rate indexes
+    if (!(await checkIndex('IDX_exchange_rate_from_to', 'exchange_rates'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_exchange_rate_from_to" ON "exchange_rates" ("fromCurrency", "toCurrency")`,
+      );
+    }
+
+    // Model retraining indexes
+    if (!(await checkIndex('IDX_retraining_status', 'model_retraining'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_retraining_status" ON "model_retraining" ("status")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_retraining_created_at', 'model_retraining'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_retraining_created_at" ON "model_retraining" ("createdAt")`,
+      );
+    }
+
+    // Webhook indexes
+    if (!(await checkIndex('IDX_webhook_event_type', 'webhook_events'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_webhook_event_type" ON "webhook_events" ("eventType")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_webhook_processed', 'webhook_events'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_webhook_processed" ON "webhook_events" ("isProcessed")`,
+      );
+    }
+
+    // Analytics indexes
+    if (!(await checkIndex('IDX_analytics_user_id', 'analytics_events'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_analytics_user_id" ON "analytics_events" ("userId")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_analytics_event_type', 'analytics_events'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_analytics_event_type" ON "analytics_events" ("eventType")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_analytics_created_at', 'analytics_events'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_analytics_created_at" ON "analytics_events" ("createdAt")`,
+      );
+    }
+
+    // Stellar transaction indexes
+    if (!(await checkIndex('IDX_stellar_tx_hash', 'stellar_transactions'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_stellar_tx_hash" ON "stellar_transactions" ("transactionHash")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_stellar_account', 'stellar_transactions'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_stellar_account" ON "stellar_transactions" ("account")`,
+      );
+    }
+
+    // Composite indexes for common queries
+    if (
+      !(await checkIndex('IDX_portfolio_asset_composite', 'portfolio_assets'))
+    ) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_portfolio_asset_composite" ON "portfolio_assets" ("portfolioId", "assetId")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_transaction_portfolio_type', 'transactions'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_transaction_portfolio_type" ON "transactions" ("portfolioId", "type")`,
+      );
+    }
+
+    if (!(await checkIndex('IDX_articles_source_published', 'articles'))) {
+      await queryRunner.query(
+        `CREATE INDEX "IDX_articles_source_published" ON "articles" ("source", "publishedAt")`,
+      );
+    }
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    // Drop all indexes created in up()
+    const indexesToDrop: string[] = [
+      'IDX_users_email',
+      'IDX_users_username',
+      'IDX_portfolio_user_id',
+      'IDX_portfolio_name',
+      'IDX_portfolio_asset_portfolio_id',
+      'IDX_portfolio_asset_asset_id',
+      'IDX_transaction_portfolio_id',
+      'IDX_transaction_type',
+      'IDX_transaction_created_at',
+      'IDX_password_reset_token',
+      'IDX_password_reset_user_id',
+      'IDX_password_reset_expires',
+      'IDX_articles_source',
+      'IDX_articles_published_at',
+      'IDX_articles_sentiment_score',
+      'IDX_sentiment_asset_id',
+      'IDX_sentiment_created_at',
+      'IDX_snapshot_portfolio_id',
+      'IDX_snapshot_created_at',
+      'IDX_user_preferences_user_id',
+      'IDX_price_asset_id',
+      'IDX_price_timestamp',
+      'IDX_notification_user_id',
+      'IDX_notification_read',
+      'IDX_notification_created_at',
+      'IDX_exchange_rate_from_to',
+      'IDX_retraining_status',
+      'IDX_retraining_created_at',
+      'IDX_webhook_event_type',
+      'IDX_webhook_processed',
+      'IDX_analytics_user_id',
+      'IDX_analytics_event_type',
+      'IDX_analytics_created_at',
+      'IDX_stellar_tx_hash',
+      'IDX_stellar_account',
+      'IDX_portfolio_asset_composite',
+      'IDX_transaction_portfolio_type',
+      'IDX_articles_source_published',
+    ];
+
+    for (const indexName of indexesToDrop) {
+      const result = await queryRunner.query(
+        `SELECT 1 FROM pg_indexes WHERE indexname = $1`,
+        [indexName],
+      );
+      if (result.length > 0) {
+        await queryRunner.query(`DROP INDEX "${indexName}"`);
+      }
+    }
+  }
+}

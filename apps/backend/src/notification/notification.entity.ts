@@ -21,6 +21,10 @@ export enum NotificationSeverity {
 
 @Entity('notifications')
 @Index(['userId', 'createdAt'])
+@Index(['read'])
+@Index(['type'])
+@Index(['severity'])
+@Index(['createdAt'])
 export class Notification {
   @PrimaryGeneratedColumn('uuid')
   id: string;

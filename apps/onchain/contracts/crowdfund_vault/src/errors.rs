@@ -34,4 +34,5 @@ pub enum CrowdfundError {
     MilestoneExpired = 28,
     RefundWindowClosed = 29,
     RefundWindowNotOpen = 30,
+    Reentrancy = 31,
 }

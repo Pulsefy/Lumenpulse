@@ -23,6 +23,8 @@ import { QueueModule } from './queue/queue.module';
 import { StellarSyncModule } from './stellar-sync/stellar-sync.module';
 import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
+import { ModerationModule } from './moderation/moderation.module';
+import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 
 import databaseConfig from './database/database.config';
 import stellarConfig from './stellar/config/stellar.config';
@@ -55,13 +57,20 @@ import { StellarController } from './routes/stellar';
 import { GrantsModule } from './grants/grants.module';
 import { HealthModule } from './health/health.module';
 import { OutboxModule } from './outbox/outbox.module';
+import { VerificationModule } from './verification/verification.module';
+import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
+<<<<<<< HEAD
 >>>>>>> 8ac87a7a55f7617bca2a78c4d4bf2c6ecf4d7757
+=======
+import { ExportModule } from './export/export.module';
+>>>>>>> 24af299369a41e0f5687ed7bec1261d2e41026b7
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      ignoreEnvFile: true,
       load: [databaseConfig, stellarConfig],
     }),
 
@@ -116,8 +125,13 @@ import { IdempotencyInterceptor } from './common/interceptors/idempotency.interc
     StellarSyncModule,
     ExchangeRatesModule,
     GrantsModule,
+    VerificationModule,
     WatchlistModule,
     OutboxModule,
+    ExportModule,
+    TelegramBotModule,
+    ModerationModule,
+    FeatureFlagsModule,
   ],
   controllers: [AppController, TestController, TestExceptionController, StellarController],
   providers: [

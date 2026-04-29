@@ -1,4 +1,4 @@
-import config from './config';
+import { config } from './config';
 
 /**
  * Possible states for a Stellar/Soroban transaction lifecycle.

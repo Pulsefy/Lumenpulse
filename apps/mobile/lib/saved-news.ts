@@ -41,7 +41,7 @@ export const savedNewsService = {
     try {
       const saved = await this.getSavedArticles();
       return saved.some((a) => a.id === articleId);
-    } catch (error) {
+    } catch {
       return false;
     }
   },

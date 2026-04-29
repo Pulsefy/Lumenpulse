@@ -4,22 +4,47 @@ mod errors;
 mod events;
 mod storage;
 mod token;
+mod vault_interface;
 
 use errors::VestingError;
 use events::{AdminChangedEvent, UpgradedEvent};
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
-use storage::{DataKey, VestingData, LEDGER_BUMP, LEDGER_THRESHOLD};
+use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
+use storage::{
+    DataKey, MilestoneLink, MilestoneRequirement, VestingData, LEDGER_BUMP, LEDGER_THRESHOLD,
+};
 use token::transfer;
+use vault_interface::CrowdfundVaultClient;
 
 #[contract]
 pub struct VestingWalletContract;
 
 #[contractimpl]
 impl VestingWalletContract {
+    fn with_reentrancy_guard<T, F>(env: &Env, f: F) -> Result<T, VestingError>
+    where
+        F: FnOnce() -> Result<T, VestingError>,
+    {
+        acquire_reentrancy(env).map_err(|_| VestingError::Reentrancy)?;
+        let result = f();
+        release_reentrancy(env);
+        result
+    }
+
+    fn milestone_completed(env: &Env, vesting: &VestingData) -> bool {
+        match &vesting.milestone_requirement {
+            MilestoneRequirement::External(link) => {
+                let vault_client = CrowdfundVaultClient::new(env, &link.vault_contract);
+                vault_client.is_milestone_approved(&link.project_id, &link.milestone_id)
+            }
+            MilestoneRequirement::None => true,
+        }
+    }
+
     /// Helper function to calculate claimable amount for a vesting schedule
     /// This is used by both get_claimable and claim to ensure consistency
-    fn calculate_claimable_amount(current_time: u64, vesting: &VestingData) -> i128 {
-        if current_time < vesting.start_time {
+    fn calculate_claimable_amount(env: &Env, current_time: u64, vesting: &VestingData) -> i128 {
+        if !Self::milestone_completed(env, vesting) || current_time < vesting.start_time {
             // Vesting hasn't started yet
             0
         } else if current_time >= vesting.start_time + vesting.duration {
@@ -64,6 +89,51 @@ impl VestingWalletContract {
         amount: i128,
         start_time: u64,
         duration: u64,
+    ) -> Result<(), VestingError> {
+        Self::with_reentrancy_guard(&env, || {
+            Self::create_vesting_internal(
+                env.clone(),
+                admin,
+                beneficiary,
+                amount,
+                start_time,
+                duration,
+                MilestoneRequirement::None,
+            )
+        })
+    }
+
+    /// Create a vesting schedule that is gated by an external crowdfund vault milestone.
+    pub fn create_vesting_with_milestone(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+        amount: i128,
+        start_time: u64,
+        duration: u64,
+        milestone_link: MilestoneLink,
+    ) -> Result<(), VestingError> {
+        Self::with_reentrancy_guard(&env, || {
+            Self::create_vesting_internal(
+                env.clone(),
+                admin,
+                beneficiary,
+                amount,
+                start_time,
+                duration,
+                MilestoneRequirement::External(milestone_link),
+            )
+        })
+    }
+
+    fn create_vesting_internal(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+        amount: i128,
+        start_time: u64,
+        duration: u64,
+        milestone_requirement: MilestoneRequirement,
     ) -> Result<(), VestingError> {
         // Check if contract is initialized
         let stored_admin: Address = env
@@ -111,26 +181,25 @@ impl VestingWalletContract {
 
         let contract_address = env.current_contract_address();
 
-        // If vesting already exists, return remaining tokens to admin
-        // (total_amount - claimed_amount)
-        if let Some(existing_vesting) = env
-            .storage()
-            .persistent()
-            .get::<_, VestingData>(&DataKey::Vesting(beneficiary.clone()))
+        if let MilestoneRequirement::External(link) = &milestone_requirement {
+            let vault_client = CrowdfundVaultClient::new(&env, &link.vault_contract);
+            let _ = vault_client.is_milestone_approved(&link.project_id, &link.milestone_id);
+        }
+
+        let remaining_from_previous = if let Some(existing_vesting) =
+            env.storage()
+                .persistent()
+                .get::<_, VestingData>(&DataKey::Vesting(beneficiary.clone()))
         {
             env.storage().persistent().extend_ttl(
                 &DataKey::Vesting(beneficiary.clone()),
                 LEDGER_THRESHOLD,
                 LEDGER_BUMP,
             );
-            let remaining = existing_vesting.total_amount - existing_vesting.claimed_amount;
-            if remaining > 0 {
-                transfer(&env, &token, &contract_address, &admin, &remaining);
-            }
-        }
-
-        // Transfer tokens from admin to contract
-        transfer(&env, &token, &admin, &contract_address, &amount);
+            existing_vesting.total_amount - existing_vesting.claimed_amount
+        } else {
+            0
+        };
 
         // Create vesting data
         let vesting = VestingData {
@@ -139,6 +208,7 @@ impl VestingWalletContract {
             start_time,
             duration,
             claimed_amount: 0,
+            milestone_requirement,
         };
 
         // Store vesting data
@@ -150,6 +220,18 @@ impl VestingWalletContract {
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
+
+        if remaining_from_previous > 0 {
+            transfer(
+                &env,
+                &token,
+                &contract_address,
+                &admin,
+                &remaining_from_previous,
+            );
+        }
+
+        transfer(&env, &token, &admin, &contract_address, &amount);
 
         // Emit VestingCreated event
         events::VestingCreatedEvent {
@@ -165,106 +247,92 @@ impl VestingWalletContract {
 
     /// Claim available tokens based on linear vesting schedule
     pub fn claim(env: Env, beneficiary: Address) -> Result<i128, VestingError> {
-        // Check if contract is initialized
-        if !env.storage().instance().has(&DataKey::Admin) {
-            return Err(VestingError::NotInitialized);
-        }
-        env.storage()
-            .instance()
-            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        Self::with_reentrancy_guard(&env, || {
+            if !env.storage().instance().has(&DataKey::Admin) {
+                return Err(VestingError::NotInitialized);
+            }
+            env.storage()
+                .instance()
+                .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
-        // Require beneficiary authorization
-        beneficiary.require_auth();
+            beneficiary.require_auth();
 
-        // Get vesting data
-        let vesting_key = DataKey::Vesting(beneficiary.clone());
-        let mut vesting: VestingData = env
-            .storage()
-            .persistent()
-            .get(&vesting_key)
-            .ok_or(VestingError::VestingNotFound)?;
-        env.storage()
-            .persistent()
-            .extend_ttl(&vesting_key, LEDGER_THRESHOLD, LEDGER_BUMP);
-
-        // Get current time
-        let current_time = env.ledger().timestamp();
-
-        // Calculate available amount using the helper function
-        let available_amount = Self::calculate_claimable_amount(current_time, &vesting);
-
-        // Check if there's anything to claim
-        if available_amount <= 0 {
-            return Err(VestingError::NothingToClaim);
-        }
-
-        // Get token address
-        let token: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Token)
-            .ok_or(VestingError::NotInitialized)?;
-        env.storage()
-            .instance()
-            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
-
-        // Transfer tokens from contract to beneficiary
-        let contract_address = env.current_contract_address();
-        transfer(
-            &env,
-            &token,
-            &contract_address,
-            &beneficiary,
-            &available_amount,
-        );
-
-        // Update claimed amount
-        vesting.claimed_amount += available_amount;
-
-        let remaining = vesting.total_amount - vesting.claimed_amount;
-
-        if remaining == 0 {
-            // State compaction: remove the entry once fully claimed to reclaim rent.
-            env.storage().persistent().remove(&vesting_key);
-        } else {
-            env.storage().persistent().set(&vesting_key, &vesting);
+            let vesting_key = DataKey::Vesting(beneficiary.clone());
+            let mut vesting: VestingData = env
+                .storage()
+                .persistent()
+                .get(&vesting_key)
+                .ok_or(VestingError::VestingNotFound)?;
             env.storage()
                 .persistent()
                 .extend_ttl(&vesting_key, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
 
-        // Emit TokensClaimed event
-        events::TokensClaimedEvent {
-            beneficiary: vesting.beneficiary.clone(),
-            amount_claimed: available_amount,
-            remaining,
-        }
-        .publish(&env);
+            let current_time = env.ledger().timestamp();
+            let available_amount = Self::calculate_claimable_amount(&env, current_time, &vesting);
+            if available_amount <= 0 {
+                return Err(VestingError::NothingToClaim);
+            }
 
-        Ok(available_amount)
+            let token: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::Token)
+                .ok_or(VestingError::NotInitialized)?;
+            env.storage()
+                .instance()
+                .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            vesting.claimed_amount += available_amount;
+            let remaining = vesting.total_amount - vesting.claimed_amount;
+
+            if remaining == 0 {
+                env.storage().persistent().remove(&vesting_key);
+            } else {
+                env.storage().persistent().set(&vesting_key, &vesting);
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&vesting_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            }
+
+            let contract_address = env.current_contract_address();
+            transfer(
+                &env,
+                &token,
+                &contract_address,
+                &beneficiary,
+                &available_amount,
+            );
+
+            events::TokensClaimedEvent {
+                beneficiary: vesting.beneficiary.clone(),
+                amount_claimed: available_amount,
+                remaining,
+            }
+            .publish(&env);
+
+            Ok(available_amount)
+        })
     }
 
     /// Get the claimable amount for a beneficiary without modifying state
     /// This is a pure view method that returns how much a beneficiary could claim at the current time
     pub fn get_claimable(env: Env, beneficiary: Address) -> Result<i128, VestingError> {
-        // Get vesting data
-        let key = DataKey::Vesting(beneficiary);
-        let vesting: VestingData = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .ok_or(VestingError::VestingNotFound)?;
-        env.storage()
-            .persistent()
-            .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        Self::with_reentrancy_guard(&env, || {
+            let key = DataKey::Vesting(beneficiary);
+            let vesting: VestingData = env
+                .storage()
+                .persistent()
+                .get(&key)
+                .ok_or(VestingError::VestingNotFound)?;
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
-        // Get current time
-        let current_time = env.ledger().timestamp();
+            let current_time = env.ledger().timestamp();
+            let claimable_amount = Self::calculate_claimable_amount(&env, current_time, &vesting);
 
-        // Calculate claimable amount using the helper function
-        let claimable_amount = Self::calculate_claimable_amount(current_time, &vesting);
-
-        Ok(claimable_amount)
+            Ok(claimable_amount)
+        })
     }
 
     /// Get vesting data for a beneficiary
@@ -283,24 +351,22 @@ impl VestingWalletContract {
 
     /// Get the available amount that can be claimed by a beneficiary
     pub fn get_available_amount(env: Env, beneficiary: Address) -> Result<i128, VestingError> {
-        // Get vesting data
-        let key = DataKey::Vesting(beneficiary);
-        let vesting: VestingData = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .ok_or(VestingError::VestingNotFound)?;
-        env.storage()
-            .persistent()
-            .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        Self::with_reentrancy_guard(&env, || {
+            let key = DataKey::Vesting(beneficiary);
+            let vesting: VestingData = env
+                .storage()
+                .persistent()
+                .get(&key)
+                .ok_or(VestingError::VestingNotFound)?;
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
-        // Get current time
-        let current_time = env.ledger().timestamp();
+            let current_time = env.ledger().timestamp();
+            let available_amount = Self::calculate_claimable_amount(&env, current_time, &vesting);
 
-        // Calculate available amount using the helper function
-        let available_amount = Self::calculate_claimable_amount(current_time, &vesting);
-
-        Ok(available_amount)
+            Ok(available_amount)
+        })
     }
 
     /// Get admin address
@@ -386,6 +452,196 @@ impl VestingWalletContract {
         }
         .publish(&env);
         Ok(())
+    }
+
+    // ── Delegate claim permissions ────────────────────────────
+
+    /// Approve `delegate` to execute claim actions on behalf of `beneficiary`.
+    ///
+    /// Requires authorization from `beneficiary`. Delegates can only call
+    /// `claim_for`; they cannot modify vesting schedules or admin settings.
+    pub fn approve_delegate(
+        env: Env,
+        beneficiary: Address,
+        delegate: Address,
+    ) -> Result<(), VestingError> {
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(VestingError::NotInitialized);
+        }
+        beneficiary.require_auth();
+
+        let key = DataKey::Delegates(beneficiary.clone());
+        let mut delegates: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+
+        if !delegates.contains(&delegate) {
+            delegates.push_back(delegate.clone());
+            env.storage().persistent().set(&key, &delegates);
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+
+        events::DelegateApprovedEvent {
+            beneficiary,
+            delegate,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Revoke a previously approved delegate.
+    ///
+    /// Requires authorization from `beneficiary`.
+    pub fn revoke_delegate(
+        env: Env,
+        beneficiary: Address,
+        delegate: Address,
+    ) -> Result<(), VestingError> {
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(VestingError::NotInitialized);
+        }
+        beneficiary.require_auth();
+
+        let key = DataKey::Delegates(beneficiary.clone());
+        let mut delegates: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+
+        if let Some(idx) = delegates.first_index_of(&delegate) {
+            delegates.remove(idx);
+            if delegates.is_empty() {
+                env.storage().persistent().remove(&key);
+            } else {
+                env.storage().persistent().set(&key, &delegates);
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            }
+        }
+
+        events::DelegateRevokedEvent {
+            beneficiary,
+            delegate,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Execute a claim on behalf of `beneficiary`.
+    ///
+    /// Requires authorization from `delegate`. The delegate must have been
+    /// previously approved by the beneficiary via `approve_delegate`.
+    /// Tokens are always transferred to the beneficiary, never to the delegate.
+    pub fn claim_for(
+        env: Env,
+        delegate: Address,
+        beneficiary: Address,
+    ) -> Result<i128, VestingError> {
+        Self::with_reentrancy_guard(&env, || {
+            if !env.storage().instance().has(&DataKey::Admin) {
+                return Err(VestingError::NotInitialized);
+            }
+            env.storage()
+                .instance()
+                .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            delegate.require_auth();
+
+            // Verify delegate is approved by beneficiary.
+            let delegates_key = DataKey::Delegates(beneficiary.clone());
+            let delegates: Vec<Address> = env
+                .storage()
+                .persistent()
+                .get(&delegates_key)
+                .unwrap_or(Vec::new(&env));
+            if !delegates.contains(&delegate) {
+                return Err(VestingError::DelegateNotAuthorized);
+            }
+            env.storage()
+                .persistent()
+                .extend_ttl(&delegates_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            let vesting_key = DataKey::Vesting(beneficiary.clone());
+            let mut vesting: VestingData = env
+                .storage()
+                .persistent()
+                .get(&vesting_key)
+                .ok_or(VestingError::VestingNotFound)?;
+            env.storage()
+                .persistent()
+                .extend_ttl(&vesting_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            let current_time = env.ledger().timestamp();
+            let available_amount = Self::calculate_claimable_amount(&env, current_time, &vesting);
+            if available_amount <= 0 {
+                return Err(VestingError::NothingToClaim);
+            }
+
+            let token: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::Token)
+                .ok_or(VestingError::NotInitialized)?;
+            env.storage()
+                .instance()
+                .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            vesting.claimed_amount += available_amount;
+            let remaining = vesting.total_amount - vesting.claimed_amount;
+
+            if remaining == 0 {
+                env.storage().persistent().remove(&vesting_key);
+            } else {
+                env.storage().persistent().set(&vesting_key, &vesting);
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&vesting_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            }
+
+            let contract_address = env.current_contract_address();
+            // Tokens always go to the beneficiary, not the delegate.
+            transfer(
+                &env,
+                &token,
+                &contract_address,
+                &beneficiary,
+                &available_amount,
+            );
+
+            events::DelegatedClaimEvent {
+                beneficiary: vesting.beneficiary.clone(),
+                delegate,
+                amount_claimed: available_amount,
+                remaining,
+            }
+            .publish(&env);
+
+            Ok(available_amount)
+        })
+    }
+
+    /// Returns the list of approved delegates for a beneficiary.
+    pub fn get_delegates(env: Env, beneficiary: Address) -> Vec<Address> {
+        let key = DataKey::Delegates(beneficiary);
+        let delegates: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+        if env.storage().persistent().has(&key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        delegates
     }
 }
 

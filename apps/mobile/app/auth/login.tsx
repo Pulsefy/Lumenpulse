@@ -14,10 +14,11 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
-import { useTheme } from '../../contexts/ThemeContext';
+import { useLocalization } from '../../src/context';
 
 const LoginScreen = () => {
-  const { colors, resolvedMode } = useTheme();
+  const { colors, resolvedMode } = useLocalization();
+  const { t } = useLocalization();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,28 +27,171 @@ const LoginScreen = () => {
 
   const validateInputs = () => {
     if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email address');
+      Alert.alert(t('errors.error'), t('auth.login.errors.email_required'));
       return false;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      Alert.alert(t('errors.error'), t('auth.login.errors.email_invalid'));
       return false;
     }
 
     if (!password) {
-      Alert.alert('Error', 'Please enter your password');
+      Alert.alert(t('errors.error'), t('auth.login.errors.password_required'));
       return false;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
+      Alert.alert(t('errors.error'), t('auth.login.errors.password_min_length'));
       return false;
     }
 
     return true;
   };
+
+  const handleLogin = async () => {
+    if (!validateInputs()) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await login(email, password);
+      router.replace('/');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      Alert.alert(
+        t('auth.login.errors.login_failed'),
+        error.message || t('errors.something_went_wrong'),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      importantForAccessibility="yes"
+    >
+      <StatusBar barStyle={resolvedMode === 'dark' ? 'light-content' : 'dark-content'} />
+      <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
+        <View style={styles.content}>
+          <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+            {t('auth.login.title')}
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.accent }]} accessible>
+            {t('auth.login.subtitle')}
+          </Text>
+
+          <View style={styles.form} importantForAccessibility="yes">
+            <View style={styles.inputContainer}>
+              <Text style={[styles.label, { color: colors.text }]} accessible>
+                {t('auth.login.email_label')}
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.surface,
+                    color: colors.text,
+                    borderColor: `${colors.accent}33`,
+                  },
+                ]}
+                value={email}
+                onChangeText={setEmail}
+                placeholder={t('auth.login.email_placeholder')}
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="emailAddress"
+                importantForAccessibility="yes"
+                accessibilityLabel={t('auth.login.email_label')}
+                accessibilityHint={t('auth.login.email_placeholder')}
+                accessibilityRole="text"
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={[styles.label, { color: colors.text }]} accessible>
+                {t('auth.login.password_label')}
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.surface,
+                    color: colors.text,
+                    borderColor: `${colors.accent}33`,
+                  },
+                ]}
+                value={password}
+                onChangeText={setPassword}
+                placeholder={t('auth.login.password_placeholder')}
+                placeholderTextColor={colors.textSecondary}
+                secureTextEntry
+                autoCapitalize="none"
+                textContentType="password"
+                importantForAccessibility="yes"
+                accessibilityLabel={t('auth.login.password_label')}
+                accessibilityHint={t('auth.login.password_placeholder')}
+                accessibilityRole="text"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.button,
+                { backgroundColor: colors.accent, shadowColor: colors.accent },
+                loading && styles.disabledButton,
+              ]}
+              onPress={handleLogin}
+              disabled={loading}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: loading }}
+              accessibilityLabel={t('auth.login.sign_in_button')}
+              accessibilityHint={t('auth.login.sign_in_button')}
+            >
+              {loading ? (
+                <ActivityIndicator color="#ffffff" accessible accessibilityLabel={t('common.loading')} />
+              ) : (
+                <Text style={styles.buttonText} accessible>{t('auth.login.sign_in_button')}</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.linkButton}
+              onPress={() => router.push('/auth/register')}
+              accessibilityRole="link"
+              accessibilityLabel={t('auth.login.sign_up_link')}
+            >
+              <Text style={[styles.linkText, { color: colors.textSecondary }]} accessible>
+                {t('auth.login.sign_up_link')}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.linkButton, { marginTop: 20 }]}
+              onPress={() => router.replace('/(tabs)')}
+              accessibilityRole="button"
+              accessibilityLabel={t('auth.login.bypass_login')}
+            >
+              <Text style={[styles.linkText, { color: colors.textSecondary, fontSize: 14 }]} accessible>
+                (Debug){' '}
+                <Text style={{ color: colors.accent, fontWeight: 'bold' }}>
+                  {t('auth.login.bypass_login')}
+                </Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+};
 
   const handleLogin = async () => {
     if (!validateInputs()) {

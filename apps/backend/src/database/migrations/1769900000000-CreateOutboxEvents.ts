@@ -28,9 +28,7 @@ export class CreateOutboxEvents1769900000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DROP INDEX "IDX_outbox_events_status_created"`,
-    );
+    await queryRunner.query(`DROP INDEX "IDX_outbox_events_status_created"`);
     await queryRunner.query(`DROP TABLE "outbox_events"`);
     await queryRunner.query(`DROP TYPE "outbox_events_status_enum"`);
   }

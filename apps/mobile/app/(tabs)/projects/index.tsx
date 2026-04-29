@@ -11,16 +11,17 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useLocalization } from '../../../src/context';
 import { crowdfundApi, CrowdfundProject } from '../../../lib/crowdfund';
 import { computeFundingProgress, formatTokenAmount } from '../../../lib/stellar';
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
 function ProgressBar({ progress, accentColor }: { progress: number; accentColor: string }) {
   return (
-    <View style={styles.progressTrack}>
+    <View style={styles.progressTrack} accessible accessibilityLabel={`${progress}% funded`}>
       <View
         style={[styles.progressFill, { width: `${progress}%`, backgroundColor: accentColor }]}
+        accessibilityRole="progressbar"
+        accessibilityValue={{ min: 0, max: 100, now: progress }}
       />
     </View>
   );
@@ -42,14 +43,19 @@ function ProjectCard({
       style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}
       onPress={onPress}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`${project.name}, ${progress}% funded, ${project.contributorCount} contributors, ${formatTokenAmount(project.totalDeposited)} XLM of ${formatTokenAmount(project.targetAmount)} XLM`}
+      accessibilityHint="Double tap to view project details and contribute"
     >
       <View style={styles.cardHeader}>
-        <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+        <Text style={[styles.cardTitle, { color: colors.text }]} accessible accessibilityRole="header">
           {project.name}
         </Text>
         {!project.isActive && (
-          <View style={[styles.statusBadge, { backgroundColor: colors.danger + '22' }]}>
-            <Text style={[styles.statusBadgeText, { color: colors.danger }]}>Closed</Text>
+          <View style={[styles.statusBadge, { backgroundColor: colors.danger + '22' }]} accessible>
+            <Text style={[styles.statusBadgeText, { color: colors.danger }]} accessible>
+              Closed
+            </Text>
           </View>
         )}
       </View>
@@ -58,22 +64,26 @@ function ProjectCard({
 
       <View style={styles.cardStats}>
         <View>
-          <Text style={[styles.statValue, { color: colors.text }]}>
+          <Text style={[styles.statValue, { color: colors.text }]} accessible>
             {formatTokenAmount(project.totalDeposited)} XLM
           </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]} accessible>
             of {formatTokenAmount(project.targetAmount)} XLM
           </Text>
         </View>
         <View style={styles.statRight}>
-          <Text style={[styles.statValue, { color: colors.text }]}>{progress}%</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>funded</Text>
+          <Text style={[styles.statValue, { color: colors.text }]} accessible>
+            {progress}%
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]} accessible>
+            funded
+          </Text>
         </View>
       </View>
 
       <View style={styles.cardFooter}>
         <Ionicons name="people-outline" size={14} color={colors.textSecondary} />
-        <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+        <Text style={[styles.footerText, { color: colors.textSecondary }]} accessible>
           {project.contributorCount} contributor{project.contributorCount !== 1 ? 's' : ''}
         </Text>
       </View>
@@ -81,10 +91,9 @@ function ProjectCard({
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-
 export default function ProjectsScreen() {
   const { colors } = useTheme();
+  const { t } = useLocalization();
   const router = useRouter();
 
   const [projects, setProjects] = useState<CrowdfundProject[]>([]);
@@ -105,25 +114,24 @@ export default function ProjectsScreen() {
       if (response.success && response.data) {
         setProjects(response.data);
       } else {
-        setError(response.error?.message ?? 'Failed to load projects.');
+        setError(response.error?.message ?? t('errors.couldnt_load', { item: 'projects' }));
       }
     } catch {
-      setError('Something went wrong. Please try again.');
+      setError(t('errors.something_went_wrong'));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void fetchProjects(false);
   }, [fetchProjects]);
 
-  // ── Loading skeleton ─────────────────────────────────────────────────────
   if (isLoading && projects.length === 0) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.skeletonWrap}>
+        <View style={styles.skeletonWrap} accessible accessibilityLabel={t('common.loading')}>
           {[1, 2, 3].map((i) => (
             <View
               key={i}
@@ -131,6 +139,8 @@ export default function ProjectsScreen() {
                 styles.card,
                 { backgroundColor: colors.surface, borderColor: colors.cardBorder },
               ]}
+              accessible
+              accessibilityLabel="Loading project"
             >
               <View
                 style={[
@@ -157,7 +167,6 @@ export default function ProjectsScreen() {
     );
   }
 
-  // ── Error state ──────────────────────────────────────────────────────────
   if (error && projects.length === 0) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background, padding: 32 }]}>
@@ -166,21 +175,29 @@ export default function ProjectsScreen() {
           size={56}
           color={colors.danger}
           style={{ marginBottom: 20 }}
+          accessible
+          accessibilityLabel={t('errors.couldnt_load', { item: 'projects' })}
         />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn&apos;t load projects</Text>
-        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{error}</Text>
+        <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+          {t('errors.couldnt_load', { item: 'projects' })}
+        </Text>
+        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} accessible>
+          {error}
+        </Text>
         <TouchableOpacity
           style={[styles.ctaButton, { backgroundColor: colors.accent }]}
           onPress={() => void fetchProjects(false)}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.retry')}
+          accessibilityHint="Retry loading projects"
         >
-          <Text style={styles.ctaButtonText}>Retry</Text>
+          <Text style={styles.ctaButtonText} accessible>{t('common.retry')}</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  // ── Project list ─────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
@@ -193,6 +210,7 @@ export default function ProjectsScreen() {
             onRefresh={() => void fetchProjects(true)}
             tintColor={colors.accent}
             colors={[colors.accent]}
+            accessibilityLabel="Pull to refresh projects"
           />
         }
         renderItem={({ item }: { item: CrowdfundProject }) => (
@@ -203,24 +221,28 @@ export default function ProjectsScreen() {
           />
         )}
         ListEmptyComponent={
-          <View style={[styles.center, { paddingVertical: 60 }]}>
-            <Ionicons
-              name="rocket-outline"
-              size={48}
-              color={colors.textSecondary}
-              style={{ marginBottom: 12 }}
-            />
-            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-              No crowdfund projects available yet.
-            </Text>
-          </View>
+          !loading ? (
+            <View style={[styles.center, { paddingVertical: 60 }]} accessible>
+              <Ionicons
+                name="rocket-outline"
+                size={48}
+                color={colors.textSecondary}
+                style={{ marginBottom: 12 }}
+                accessible
+                accessibilityLabel="No projects"
+              />
+              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} accessible>
+                No crowdfund projects available yet.
+              </Text>
+            </View>
+          ) : null
         }
+        accessibilityLabel="Projects list"
+        accessibilityRole="list"
       />
     </SafeAreaView>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
@@ -235,8 +257,6 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
-
-  // Card
   card: {
     borderRadius: 16,
     borderWidth: 1,
@@ -269,8 +289,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-
-  // Progress bar
   progressTrack: {
     height: 8,
     borderRadius: 4,
@@ -282,8 +300,6 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 4,
   },
-
-  // Stats
   cardStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -300,8 +316,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-
-  // Footer
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -311,8 +325,6 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
   },
-
-  // Empty / error
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
@@ -336,8 +348,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-
-  // Skeleton
   skeletonWrap: {
     padding: 16,
   },

@@ -9,6 +9,7 @@ import { NewsService } from './news.service';
 import { NewsSentimentService } from './news-sentiment.services';
 import { NewsProviderService } from './news-provider.service';
 import { CacheService } from '../cache/cache.service';
+import { QueryProfilerService } from '../common/profiling/query-profiler.service';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -238,6 +239,14 @@ describe('NewsService - sentiment methods', () => {
     getLatestArticles: jest.fn(),
   };
 
+  const mockQueryProfilerService = {
+    profile: jest
+      .fn()
+      .mockImplementation(async <T>(fn: () => Promise<T>): Promise<T> => {
+        return await fn();
+      }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -253,6 +262,10 @@ describe('NewsService - sentiment methods', () => {
         {
           provide: CacheService,
           useValue: { invalidateNewsCache: jest.fn() },
+        },
+        {
+          provide: QueryProfilerService,
+          useValue: mockQueryProfilerService,
         },
       ],
     }).compile();

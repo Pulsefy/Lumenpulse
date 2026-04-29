@@ -2435,3 +2435,95 @@ fn test_campaign_entries_removed_after_refund() {
     let project = client.get_project(&project_id);
     assert!(!project.is_active);
 }
+
+#[test]
+fn test_reentrancy_guard_withdraw_rejects_when_locked() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client, _, contract_id) = setup_test_with_admin(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Reent"),
+        &1_000_000,
+        &token_client.address,
+    );
+    client.deposit(&user, &project_id, &500_000);
+    client.approve_milestone(&admin, &project_id, &0);
+
+    env.as_contract(&contract_id, || {
+        env.storage()
+            .instance()
+            .set(&symbol_short!("REENTRANT"), &true);
+    });
+
+    let before_balance = client.get_balance(&project_id);
+    let result = client.try_withdraw(&project_id, &0, &100_000);
+    assert_eq!(result, Err(Ok(CrowdfundError::Reentrancy)));
+    assert_eq!(client.get_balance(&project_id), before_balance);
+
+    let lock_state: bool = env.as_contract(&contract_id, || {
+        env.storage()
+            .instance()
+            .get(&symbol_short!("REENTRANT"))
+            .unwrap_or(false)
+    });
+    assert!(lock_state);
+}
+
+#[test]
+fn test_reentrancy_guard_resets_for_sequential_withdraw_and_deposit() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client, _, contract_id) = setup_test_with_admin(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Seq"),
+        &1_000_000,
+        &token_client.address,
+    );
+    client.deposit(&user, &project_id, &600_000);
+    client.approve_milestone(&admin, &project_id, &0);
+
+    client.withdraw(&project_id, &0, &100_000);
+    client.deposit(&user, &project_id, &200_000);
+    client.withdraw(&project_id, &0, &50_000);
+
+    let lock_state: bool = env.as_contract(&contract_id, || {
+        env.storage()
+            .instance()
+            .get(&symbol_short!("REENTRANT"))
+            .unwrap_or(false)
+    });
+    assert!(!lock_state);
+}
+
+#[test]
+fn test_withdraw_cei_state_written_before_balance_assertion() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client, _, _) = setup_test_with_admin(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("CEI"),
+        &1_000_000,
+        &token_client.address,
+    );
+    client.deposit(&user, &project_id, &500_000);
+    client.approve_milestone(&admin, &project_id, &0);
+
+    client.withdraw(&project_id, &0, &200_000);
+
+    let project = client.get_project(&project_id);
+    assert_eq!(project.total_withdrawn, 200_000);
+    assert_eq!(client.get_balance(&project_id), 300_000);
+    assert_eq!(token_client.balance(&owner), 200_000);
+}

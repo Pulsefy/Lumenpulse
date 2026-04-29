@@ -44,6 +44,8 @@
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^11.1.17",
     "@stellar/stellar-sdk": "^14.4.3",
+    "@types/qrcode": "^1.5.6",
+    "@types/speakeasy": "^2.0.10",
     "axios": "^1.13.6",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.71.1",
@@ -54,18 +56,24 @@
     "dotenv": "^17.2.3",
     "helmet": "^8.1.0",
     "ioredis": "^5.6.1",
+    "ip-range-check": "^0.2.0",
     "keyv": "^5.6.0",
     "multer": "^2.1.1",
+    "node-telegram-bot-api": "^0.66.0",
+    "otplib": "^13.4.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.17.2",
     "prom-client": "^15.1.3",
+    "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sharp": "^0.34.5",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
-    "stellar-sdk": "^13.3.0"
+    "speakeasy": "^2.0.0",
+    "stellar-sdk": "^13.3.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^0.1.0",
@@ -78,6 +86,7 @@
     "@types/jest": "^29.5.14",
     "@types/multer": "^2.1.0",
     "@types/node": "^22.19.7",
+    "@types/node-telegram-bot-api": "^0.64.14",
     "@types/passport-jwt": "^4.0.1",
     "@types/sharp": "^0.31.1",
     "@types/supertest": "^6.0.3",
@@ -116,6 +125,9 @@
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
+    ],
+    "setupFiles": [
+      "<rootDir>/../test/setup-env.ts"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
