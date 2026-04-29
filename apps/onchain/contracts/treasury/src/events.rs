@@ -1,4 +1,4 @@
-use soroban_sdk::{contractevent, Address, Env};
+use soroban_sdk::{contractevent, Address, BytesN, Env, Symbol};
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -47,4 +47,28 @@ pub fn publish_tokens_claimed(
         remaining,
     }
     .publish(env);
+}
+
+/// Event emitted when an admin action is queued for timelock execution
+#[contractevent]
+pub struct AdminActionQueuedEvent {
+    pub admin: Address,
+    pub action: Symbol,
+    pub proposal_id: BytesN<32>,
+}
+
+/// Event emitted when a budget allocation is created
+#[contractevent]
+pub struct BudgetAllocatedEvent {
+    pub admin: Address,
+    pub beneficiary: Address,
+    pub amount: i128,
+}
+
+/// Event emitted when treasury destination is changed
+#[contractevent]
+pub struct TreasuryDestinationChangedEvent {
+    pub admin: Address,
+    pub old_token: Address,
+    pub new_token: Address,
 }

@@ -6,7 +6,7 @@ mod storage;
 
 use errors::TreasuryError;
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
-use soroban_sdk::{contract, contractimpl, token, Address, Env};
+use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, Symbol};
 use storage::{DataKey, StreamData, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 #[contract]
@@ -22,6 +22,44 @@ impl TreasuryContract {
         let result = f();
         release_reentrancy(env);
         result
+    }
+
+    /// Check if timelock is enabled
+    fn is_timelock_enabled(env: &Env) -> bool {
+        env.storage().instance().has(&DataKey::TimelockContract)
+    }
+
+    /// Get timelock contract address
+    fn get_timelock_contract(env: &Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::TimelockContract)
+    }
+
+    /// Queue a timelocked admin action
+    fn queue_timelocked_action(
+        env: &Env,
+        admin: &Address,
+        action_type: Symbol,
+        payload: Bytes,
+        delay: u64,
+    ) -> Result<BytesN<32>, TreasuryError> {
+        let timelock = Self::get_timelock_contract(env)
+            .ok_or(TreasuryError::TimelockNotConfigured)?;
+
+        // Call timelock contract to queue the action
+        let proposal_id: BytesN<32> = env.invoke_contract(
+            &timelock,
+            &Symbol::new(env, "queue_action"),
+            soroban_sdk::vec![
+                env,
+                admin.into_val(env),
+                action_type.into_val(env),
+                env.current_contract_address().into_val(env),
+                payload.into_val(env),
+                delay.into_val(env),
+            ],
+        );
+
+        Ok(proposal_id)
     }
 
     /// Calculate how much is currently unlocked for a stream
@@ -41,17 +79,29 @@ impl TreasuryContract {
     }
 
     /// Initialize the treasury with admin and token
-    pub fn initialize(env: Env, admin: Address, token: Address) -> Result<(), TreasuryError> {
+    /// `timelock_contract` - optional timelock contract for admin actions
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        token: Address,
+        timelock_contract: Option<Address>,
+    ) -> Result<(), TreasuryError> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(TreasuryError::AlreadyInitialized);
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Token, &token);
+        
+        if let Some(ref timelock) = timelock_contract {
+            env.storage().instance().set(&DataKey::TimelockContract, timelock);
+        }
+        
         Ok(())
     }
 
     /// Allocate a budget and start a stream
+    /// If timelock is enabled, this action will be queued for delayed execution
     pub fn allocate_budget(
         env: Env,
         admin: Address,
@@ -60,6 +110,26 @@ impl TreasuryContract {
         start_time: u64,
         duration: u64,
     ) -> Result<(), TreasuryError> {
+        // If timelock is enabled, queue the action
+        if Self::is_timelock_enabled(&env) {
+            let payload = env.serialize((&beneficiary, amount, start_time, duration));
+            let proposal_id = Self::queue_timelocked_action(
+                &env,
+                &admin,
+                Symbol::new(&env, "allocate_budget"),
+                payload,
+                86400, // 24 hour delay
+            )?;
+            
+            events::AdminActionQueuedEvent {
+                admin,
+                action: Symbol::new(&env, "allocate_budget"),
+                proposal_id,
+            }.publish(&env);
+            
+            return Ok(());
+        }
+        
         Self::with_reentrancy_guard(&env, || {
             let stored_admin: Address = env
                 .storage()
@@ -182,6 +252,106 @@ impl TreasuryContract {
             .instance()
             .get(&DataKey::Token)
             .ok_or(TreasuryError::NotInitialized)
+    }
+
+    // ── Admin controls with timelock support ──────────────────────────────────
+
+    /// Change the treasury token destination (requires timelock if enabled)
+    pub fn set_token(
+        env: Env,
+        admin: Address,
+        new_token: Address,
+    ) -> Result<(), TreasuryError> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(TreasuryError::NotInitialized)?;
+
+        if admin != stored_admin {
+            return Err(TreasuryError::Unauthorized);
+        }
+        admin.require_auth();
+
+        // If timelock is enabled, queue the action
+        if Self::is_timelock_enabled(&env) {
+            let payload = env.serialize(&new_token);
+            let proposal_id = Self::queue_timelocked_action(
+                &env,
+                &admin,
+                Symbol::new(&env, "set_token"),
+                payload,
+                86400, // 24 hour delay
+            )?;
+            
+            events::AdminActionQueuedEvent {
+                admin,
+                action: Symbol::new(&env, "set_token"),
+                proposal_id,
+            }.publish(&env);
+            
+            return Ok(());
+        }
+
+        // Immediate execution if no timelock
+        let old_token: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Token)
+            .ok_or(TreasuryError::NotInitialized)?;
+
+        env.storage().instance().set(&DataKey::Token, &new_token);
+
+        events::TreasuryDestinationChangedEvent {
+            admin,
+            old_token,
+            new_token,
+        }.publish(&env);
+
+        Ok(())
+    }
+
+    /// Transfer admin role (requires timelock if enabled)
+    pub fn set_admin(
+        env: Env,
+        current_admin: Address,
+        new_admin: Address,
+    ) -> Result<(), TreasuryError> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(TreasuryError::NotInitialized)?;
+
+        if current_admin != stored_admin {
+            return Err(TreasuryError::Unauthorized);
+        }
+        current_admin.require_auth();
+
+        // If timelock is enabled, queue the action
+        if Self::is_timelock_enabled(&env) {
+            let payload = env.serialize(&new_admin);
+            let proposal_id = Self::queue_timelocked_action(
+                &env,
+                &current_admin,
+                Symbol::new(&env, "set_admin"),
+                payload,
+                86400, // 24 hour delay
+            )?;
+            
+            events::AdminActionQueuedEvent {
+                admin: current_admin,
+                action: Symbol::new(&env, "set_admin"),
+                proposal_id,
+            }.publish(&env);
+            
+            return Ok(());
+        }
+
+        // Immediate execution if no timelock
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+
+        Ok(())
     }
 }
 
