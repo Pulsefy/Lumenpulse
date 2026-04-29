@@ -50,7 +50,9 @@ export class UsersService {
     private uploadService: UploadService,
     private configService: ConfigService,
   ) {
-    const serverSecret = this.configService.get<string>('STELLAR_SERVER_SECRET');
+    const serverSecret = this.configService.get<string>(
+      'STELLAR_SERVER_SECRET',
+    );
     if (!serverSecret) {
       throw new Error('STELLAR_SERVER_SECRET is not configured');
     }
@@ -61,7 +63,7 @@ export class UsersService {
       'testnet',
     );
 
-    setInterval(() => this.cleanupExpiredChallenges(), 60000);
+    setInterval(() => this.cleanupExpiredChallenges(), 60000).unref();
   }
 
   // --- BASIC CRUD ---
@@ -252,12 +254,12 @@ export class UsersService {
     await this.usersRepository.save(user);
   }
 
-  async generateWalletChallenge(publicKey: string): Promise<{
+  generateWalletChallenge(publicKey: string): {
     challenge: string;
     nonce: string;
     expiresIn: number;
     publicKey: string;
-  }> {
+  } {
     this.stellarService.validatePublicKeyOrThrow(publicKey);
 
     const nonce = crypto.randomBytes(32).toString('hex');
@@ -315,10 +317,10 @@ export class UsersService {
     };
   }
 
-  async verifyWalletChallenge(
+  verifyWalletChallenge(
     publicKey: string,
     signedChallenge: string,
-  ): Promise<{ verified: boolean; publicKey: string; message: string }> {
+  ): { verified: boolean; publicKey: string; message: string } {
     this.stellarService.validatePublicKeyOrThrow(publicKey);
 
     const storedChallenge = this.challengeStore.get(publicKey);
