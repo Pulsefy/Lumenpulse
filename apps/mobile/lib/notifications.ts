@@ -1,5 +1,5 @@
 import axios from 'axios';
-import config from './config'; // your base API URL
+import { config } from './config'; // your base API URL
 
 export async function getNotifications(p0: string) {
   try {

@@ -62,13 +62,13 @@ export function matchShare(estimatedMatch: string, poolBalance: string): number 
 }
 
 /** Human-readable round status label */
-export function roundStatusLabel(status: GrantRound['status']): string {
+export function roundStatusLabel(status: GrantRound['status'], t?: (key: string) => string): string {
   const labels: Record<GrantRound['status'], string> = {
-    PENDING: 'Upcoming',
-    ACTIVE: 'Active',
-    ENDED: 'Ended',
-    FINALIZED: 'Finalized',
-    DISTRIBUTED: 'Distributed',
+    PENDING: t ? t('grants.status.pending') : 'Upcoming',
+    ACTIVE: t ? t('grants.status.active') : 'Active',
+    ENDED: t ? t('grants.status.ended') : 'Ended',
+    FINALIZED: t ? t('grants.status.finalized') : 'Finalized',
+    DISTRIBUTED: t ? t('grants.status.distributed') : 'Distributed',
   };
   return labels[status] ?? status;
 }

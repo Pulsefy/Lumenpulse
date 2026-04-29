@@ -11,13 +11,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useLocalization } from '../../src/context';
 import { portfolioApi, AssetBalance, PortfolioSummary } from '../../lib/api';
 import { transactionApi } from '../../lib/transaction';
 import { Transaction, TransactionType } from '../../lib/types/transaction';
 import { useCachedData } from '../../hooks/useCachedData';
 import { CACHE_CONFIGS } from '../../lib/cache';
-
-/* ================= Helpers ================= */
 
 function formatUsd(value: string | number): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -62,61 +61,74 @@ function assetColor(code: string): string {
   return palette[Math.abs(hash) % palette.length];
 }
 
-/* ================= Components ================= */
-
-function AssetRow({ asset, colors }: { asset: AssetBalance; colors: any }) {
+function AssetRow({ asset, colors, t }: { asset: AssetBalance; colors: any; t: (key: string) => string }) {
   const color = assetColor(asset.assetCode);
 
   return (
-    <View style={[styles.assetRow, { borderBottomColor: colors.border }]}>
-      <View style={[styles.assetIcon, { backgroundColor: `${color}22` }]}>
-        <Text style={{ color }}>{asset.assetCode[0]}</Text>
+    <View style={[styles.assetRow, { borderBottomColor: colors.border }]} accessible>
+      <View style={[styles.assetIcon, { backgroundColor: `${color}22` }]} accessible>
+        <Text style={{ color }} accessible>
+          {asset.assetCode[0]}
+        </Text>
       </View>
 
       <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.text }}>{asset.assetCode}</Text>
-        <Text style={{ color: colors.textSecondary }}>{formatAmount(asset.amount)}</Text>
+        <Text style={{ color: colors.text }} accessible accessibilityRole="header">
+          {asset.assetCode}
+        </Text>
+        <Text style={{ color: colors.textSecondary }} accessible>
+          {formatAmount(asset.amount)}
+        </Text>
       </View>
 
-      <Text style={{ color: colors.text }}>{formatUsd(asset.valueUsd)}</Text>
+      <Text style={{ color: colors.text }} accessible>
+        {formatUsd(asset.valueUsd)}
+      </Text>
     </View>
   );
 }
 
-function RecentTransactionItem({ tx, colors }: { tx: Transaction; colors: any }) {
+function RecentTransactionItem({ tx, colors, t }: { tx: Transaction; colors: any; t: (key: string) => string }) {
   return (
-    <View style={[styles.assetRow, { borderBottomColor: colors.border }]}>
-      <Ionicons name={getTransactionIcon(tx.type) as any} size={20} color={colors.accent} />
-      <Text style={{ marginLeft: 10, color: colors.text }}>
+    <View style={[styles.assetRow, { borderBottomColor: colors.border }]} accessible>
+      <Ionicons
+        name={getTransactionIcon(tx.type) as any}
+        size={20}
+        color={colors.accent}
+        accessible
+        accessibilityLabel={tx.type}
+      />
+      <Text style={{ marginLeft: 10, color: colors.text }} accessible>
         {tx.type} • {formatTransactionDate(tx.date)}
       </Text>
     </View>
   );
 }
 
-function Header({ summary, colors }: { summary: PortfolioSummary; colors: any }) {
+function Header({ summary, colors, t }: { summary: PortfolioSummary; colors: any; t: (key: string) => string }) {
   return (
-    <View style={[styles.header, { backgroundColor: colors.surface }]}>
-      <Text style={{ color: colors.textSecondary }}>Total Balance</Text>
-      <Text style={[styles.balance, { color: colors.text }]}>
+    <View style={[styles.header, { backgroundColor: colors.surface }]} accessible>
+      <Text style={{ color: colors.textSecondary }} accessible>
+        {t('portfolio.total_balance')}
+      </Text>
+      <Text style={[styles.balance, { color: colors.text }]} accessible accessibilityRole="header">
         {formatUsd(summary.totalValueUsd)}
       </Text>
     </View>
   );
 }
 
-/* ================= Screen ================= */
-
 export default function PortfolioScreen() {
   const { isAuthenticated } = useAuth();
   const { colors } = useTheme();
+  const { t } = useLocalization();
 
-  // Use cached data for portfolio summary
   const {
     data: summary,
     loading: summaryLoading,
     refresh: refreshSummary,
     isStale: summaryStale,
+    error: summaryError,
   } = useCachedData({
     key: `portfolio_summary_default`,
     fetcher: async () => {
@@ -124,13 +136,12 @@ export default function PortfolioScreen() {
       if (response.success && response.data) {
         return response.data;
       }
-      throw new Error(response.error?.message || 'Failed to fetch portfolio');
+      throw new Error(response.error?.message || t('errors.couldnt_load', { item: 'portfolio' }));
     },
     enabled: isAuthenticated,
     ...CACHE_CONFIGS.PORTFOLIO,
   });
 
-  // Use cached data for transactions
   const {
     data: transactionData,
     loading: transactionsLoading,
@@ -143,7 +154,7 @@ export default function PortfolioScreen() {
       if (response.transactions) {
         return response.transactions;
       }
-      throw new Error('Failed to fetch transactions');
+      throw new Error(t('errors.couldnt_load', { item: 'transactions' }));
     },
     enabled: isAuthenticated,
     ...CACHE_CONFIGS.TRANSACTIONS,
@@ -162,25 +173,23 @@ export default function PortfolioScreen() {
     }
   }, [refreshSummary, refreshTransactions]);
 
-  // Show stale data indicator
   const isStale = summaryStale || transactionsStale;
 
-  //if (!isAuthenticated) {
-  //return (
-  //<View style={styles.center}>
-  //<Text>Login required</Text>
-  //</View>
-  //);
-  //}
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.center} accessible accessibilityLabel={t('portfolio.login_required')}>
+        <Text style={{ color: colors.text }} accessible>{t('portfolio.login_required')}</Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Stale data indicator */}
       {isStale && (
-        <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}>
+        <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]} accessible>
           <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
-          <Text style={[styles.staleText, { color: colors.warning }]}>
-            Showing cached data - Pull to refresh
+          <Text style={[styles.staleText, { color: colors.warning }]} accessible>
+            {t('portfolio.showing_cached')}
           </Text>
         </View>
       )}
@@ -191,27 +200,31 @@ export default function PortfolioScreen() {
         ListHeaderComponent={
           summary && (
             <>
-              <Text style={[styles.title, { color: colors.text }]}>Portfolio</Text>
-              <Header summary={summary} colors={colors} />
+              <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+                {t('portfolio.title')}
+              </Text>
+              <Header summary={summary} colors={colors} t={t} />
 
-              <Text style={[styles.section, { color: colors.text }]}>Recent Transactions</Text>
+              <Text style={[styles.section, { color: colors.text }]} accessible accessibilityRole="header">
+                {t('portfolio.recent_transactions')}
+              </Text>
 
               {transactions.map((tx) => (
-                <RecentTransactionItem key={tx.id} tx={tx} colors={colors} />
+                <RecentTransactionItem key={tx.id} tx={tx} colors={colors} t={t} />
               ))}
             </>
           )
         }
-        renderItem={({ item }) => <AssetRow asset={item} colors={colors} />}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        renderItem={({ item }) => <AssetRow asset={item} colors={colors} t={t} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} accessibilityLabel="Pull to refresh portfolio" />}
         ListEmptyComponent={
           !loading ? (
-            <View style={styles.center}>
-              <Text>No assets</Text>
+            <View style={styles.center} accessible accessibilityLabel="Portfolio empty">
+              <Text style={{ color: colors.text }} accessible>{t('portfolio.no_assets')}</Text>
             </View>
           ) : null
         }
-        ListFooterComponent={loading ? <ActivityIndicator style={{ margin: 20 }} /> : null}
+        ListFooterComponent={loading ? <ActivityIndicator style={{ margin: 20 }} accessibilityLabel={t('common.loading')} /> : null}
         onEndReached={() => {
           if (!loading) console.log('pagination');
         }}
@@ -219,32 +232,29 @@ export default function PortfolioScreen() {
         initialNumToRender={10}
         windowSize={5}
         removeClippedSubviews
+        accessibilityLabel={t('portfolio.title')}
+        accessibilityRole="list"
       />
     </SafeAreaView>
   );
 }
 
-/* ================= Styles ================= */
-
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 26, fontWeight: '700', margin: 20 },
   section: { margin: 20, fontWeight: '600' },
-
   header: {
     marginHorizontal: 16,
     padding: 20,
     borderRadius: 12,
   },
   balance: { fontSize: 32, fontWeight: '800' },
-
   assetRow: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
   },
-
   assetIcon: {
     width: 40,
     height: 40,
@@ -253,7 +263,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 10,
   },
-
   staleIndicator: {
     flexDirection: 'row',
     alignItems: 'center',

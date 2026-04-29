@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { CanActivate } from '@nestjs/common';
 import type { Request } from 'express';
+import { config } from '../lib/config';
 
 /**
  * Guard that allows access based on IP allowlist or JWT authentication
@@ -79,14 +80,7 @@ export class IpAllowlistGuard implements CanActivate {
    * Format: METRICS_ALLOWED_IPS=127.0.0.1,192.168.1.0/24,::1
    */
   private getAllowedIps(): string[] {
-    const ipsEnv = process.env.METRICS_ALLOWED_IPS || '';
-    if (!ipsEnv.trim()) {
-      return [];
-    }
-    return ipsEnv
-      .split(',')
-      .map((ip) => ip.trim())
-      .filter(Boolean);
+    return [...config.metrics.allowedIps];
   }
 
   /**

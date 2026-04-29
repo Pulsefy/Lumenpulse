@@ -1,8 +1,6 @@
-/* eslint-disable prettier/prettier */
 import { getNotifications, markAsRead as markAsReadApi } from '@/lib/notifications';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'expo-router';
 
@@ -49,23 +47,6 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     }
   }, []);
 
-  useEffect(() => {
-    fetchNotifications();
-
-    // Register for push notifications
-    registerForPushNotificationsAsync();
-
-    // Clean up listeners on unmount
-    return () => {
-      if (notificationListenerRef.current) {
-        notificationListenerRef.current.remove();
-      }
-      if (responseListenerRef.current) {
-        responseListenerRef.current.remove();
-      }
-    };
-  }, [fetchNotifications]);
-
   const registerForPushNotificationsAsync = useCallback(async () => {
     if (!Device.isDevice) {
       alert('Must use physical device for push notifications');
@@ -86,6 +67,23 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     console.log('Push token:', token);
     return token;
   }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+
+    // Register for push notifications
+    registerForPushNotificationsAsync();
+
+    // Clean up listeners on unmount
+    return () => {
+      if (notificationListenerRef.current) {
+        notificationListenerRef.current.remove();
+      }
+      if (responseListenerRef.current) {
+        responseListenerRef.current.remove();
+      }
+    };
+  }, [fetchNotifications, registerForPushNotificationsAsync]);
 
   const handleNotification = useCallback((notification: Notifications.Notification) => {
     // When a notification is received while the app is in foreground
@@ -148,7 +146,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     // Listen for notification responses (when user taps on notification)
     responseListenerRef.current = Notifications.addNotificationResponseReceivedListener(
       (response) => {
-        const { notification, actionIdentifier } = response;
+        const { notification } = response;
         const { data } = notification.request.content;
 
         // Handle deep linking based on notification data

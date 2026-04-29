@@ -98,12 +98,12 @@ describe('Security hardening (e2e)', () => {
   const getHttpServer = (): Server => app.getHttpServer() as Server;
 
   beforeAll(async () => {
-    originalNodeEnv = process.env.NODE_ENV;
-    originalTrackByApiKey = process.env.RATE_LIMIT_TRACK_BY_API_KEY;
-    originalCorsOrigin = process.env.CORS_ORIGIN;
-    process.env.NODE_ENV = 'production';
-    process.env.RATE_LIMIT_TRACK_BY_API_KEY = 'true';
-    process.env.CORS_ORIGIN = 'http://localhost:3000';
+    originalNodeEnv = process['env']['NODE_ENV'];
+    originalTrackByApiKey = process['env']['RATE_LIMIT_TRACK_BY_API_KEY'];
+    originalCorsOrigin = process['env']['CORS_ORIGIN'];
+    process['env']['NODE_ENV'] = 'production';
+    process['env']['RATE_LIMIT_TRACK_BY_API_KEY'] = 'true';
+    process['env']['CORS_ORIGIN'] = 'http://localhost:3000';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [SecurityTestModule],
@@ -115,9 +115,9 @@ describe('Security hardening (e2e)', () => {
   });
 
   afterAll(async () => {
-    process.env.NODE_ENV = originalNodeEnv;
-    process.env.RATE_LIMIT_TRACK_BY_API_KEY = originalTrackByApiKey;
-    process.env.CORS_ORIGIN = originalCorsOrigin;
+    process['env']['NODE_ENV'] = originalNodeEnv;
+    process['env']['RATE_LIMIT_TRACK_BY_API_KEY'] = originalTrackByApiKey;
+    process['env']['CORS_ORIGIN'] = originalCorsOrigin;
     await app.close();
   });
 

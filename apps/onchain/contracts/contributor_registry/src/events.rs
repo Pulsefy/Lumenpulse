@@ -1,7 +1,7 @@
 use soroban_sdk::{contractevent, Address, BytesN, String};
 
 use crate::multisig::{ProposalAction, ProposalStatus};
-use crate::storage::Badge;
+use crate::storage::{Badge, PenaltySeverity};
 
 #[contractevent]
 pub struct UpgradedEvent {
@@ -86,5 +86,16 @@ pub struct BadgeRevokedEvent {
     #[topic]
     pub contributor: Address,
     pub badge: Badge,
+    pub executor: Address,
+}
+
+#[contractevent]
+pub struct ReputationPenaltyAppliedEvent {
+    #[topic]
+    pub contributor: Address,
+    pub dispute_id: u64,
+    pub severity: PenaltySeverity,
+    pub points_deducted: u64,
+    pub reason: String,
     pub executor: Address,
 }

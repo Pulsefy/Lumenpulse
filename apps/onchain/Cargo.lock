@@ -361,6 +361,7 @@ version = "0.0.0"
 dependencies = [
  "notification_interface",
  "proptest",
+ "reentrancy-guard",
  "soroban-sdk 23.5.2",
 ]
 
@@ -1050,6 +1051,7 @@ dependencies = [
 name = "matching_pool"
 version = "0.0.0"
 dependencies = [
+ "reentrancy-guard",
  "soroban-sdk 23.5.2",
 ]
 
@@ -1214,6 +1216,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "project_registry"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk 23.5.2",
+]
+
+[[package]]
 name = "proptest"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1325,6 +1334,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a"
 dependencies = [
  "rand_core 0.9.5",
+]
+
+[[package]]
+name = "reentrancy-guard"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk 23.5.2",
 ]
 
 [[package]]
@@ -2139,6 +2155,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "treasury"
+version = "0.1.0"
+dependencies = [
+ "reentrancy-guard",
+ "soroban-sdk 23.5.2",
+]
+
+[[package]]
 name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2180,6 +2204,7 @@ name = "vesting-wallet"
 version = "0.0.0"
 dependencies = [
  "crowdfund_vault",
+ "reentrancy-guard",
  "soroban-sdk 23.5.2",
 ]
 

@@ -391,3 +391,96 @@ fn test_preview_distribution() {
     let alloc1 = preview.get(3).unwrap();
     assert_eq!(alloc0 + alloc1, 1_000_000);
 }
+
+#[test]
+fn test_reentrancy_guard_fund_pool_rejects_when_locked() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, token_admin) = setup(&env);
+    client.initialize(&admin);
+
+    let funder = Address::generate(&env);
+    token_admin.mint(&funder, &1_000_000);
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("RG"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    env.as_contract(&client.address, || {
+        env.storage()
+            .instance()
+            .set(&symbol_short!("REENTRANT"), &true);
+    });
+
+    let result = client.try_fund_pool(&funder, &round_id, &100_000);
+    assert_eq!(result, Err(Ok(MatchingPoolError::Reentrancy)));
+
+    let lock_state: bool = env.as_contract(&client.address, || {
+        env.storage()
+            .instance()
+            .get(&symbol_short!("REENTRANT"))
+            .unwrap_or(false)
+    });
+    assert!(lock_state);
+}
+
+#[test]
+fn test_reentrancy_guard_resets_for_sequential_fund_pool_calls() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, token_admin) = setup(&env);
+    client.initialize(&admin);
+
+    let funder = Address::generate(&env);
+    token_admin.mint(&funder, &1_000_000);
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("SEQ"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    client.fund_pool(&funder, &round_id, &200_000);
+    client.fund_pool(&funder, &round_id, &300_000);
+    assert_eq!(client.get_pool_balance(&round_id), 500_000);
+
+    let lock_state: bool = env.as_contract(&client.address, || {
+        env.storage()
+            .instance()
+            .get(&symbol_short!("REENTRANT"))
+            .unwrap_or(false)
+    });
+    assert!(!lock_state);
+}
+
+#[test]
+fn test_fund_pool_cei_state_written_before_token_balance_assertion() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, token_admin) = setup(&env);
+    client.initialize(&admin);
+
+    let funder = Address::generate(&env);
+    token_admin.mint(&funder, &1_000_000);
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("CEI"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    client.fund_pool(&funder, &round_id, &250_000);
+
+    let round = client.get_round(&round_id);
+    assert_eq!(round.total_pool, 250_000);
+    assert_eq!(client.get_pool_balance(&round_id), 250_000);
+    assert_eq!(token.balance(&client.address), 250_000);
+}

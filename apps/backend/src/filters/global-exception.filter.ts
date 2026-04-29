@@ -10,6 +10,7 @@ import { Request, Response } from 'express';
 import { REQUEST_ID_HEADER } from '../common/constants/request.constants';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import { ErrorResponse } from '../interfaces/error-response.interface';
+import { resolveNodeEnv } from '../lib/config';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -46,7 +47,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     status: number,
     requestId: string,
   ): ErrorResponse {
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction = resolveNodeEnv() === 'production';
 
     if (exception instanceof HttpException) {
       const exceptionResponse = exception.getResponse();

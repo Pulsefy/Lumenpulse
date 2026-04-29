@@ -1,14 +1,15 @@
+import './lib/config';
 import { NestFactory } from '@nestjs/core';
-import 'dotenv/config';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { setupApp } from './bootstrap/app.setup';
+import { config } from './lib/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   setupApp(app);
 
-  const config = new DocumentBuilder()
+  const swaggerConfig = new DocumentBuilder()
     .setTitle('LumenPulse API')
     .setDescription(
       'Comprehensive API documentation for LumenPulse - A decentralized crypto news aggregator and portfolio management platform built on Stellar blockchain',
@@ -32,12 +33,10 @@ async function bootstrap() {
     .addServer('https://api.lumenpulse.io', 'Production')
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT ?? 3000;
-
-  // await app.listen(port);
+  const port = config.port;
   await app.listen(port);
 
   console.log(`Application is running on: http://localhost:${port}`);

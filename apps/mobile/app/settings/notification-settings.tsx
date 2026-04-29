@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { NotificationPreferences, usersApi } from '../../lib/api';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useLocalization } from '../../src/context';
 
 const DEFAULT_PREFERENCES: NotificationPreferences = {
   priceAlerts: true,
@@ -21,45 +22,48 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   securityAlerts: true,
 };
 
-const NOTIFICATION_ROWS: {
+interface NotificationRow {
   key: keyof NotificationPreferences;
   title: string;
   description: string;
   icon: keyof typeof Ionicons.glyphMap;
-}[] = [
-  {
-    key: 'priceAlerts',
-    title: 'Price Alerts',
-    description: 'Immediate notifications when tracked market prices change meaningfully.',
-    icon: 'pulse-outline',
-  },
-  {
-    key: 'newsAlerts',
-    title: 'News Alerts',
-    description: 'Breaking ecosystem and market headlines relevant to your portfolio.',
-    icon: 'newspaper-outline',
-  },
-  {
-    key: 'securityAlerts',
-    title: 'Security Alerts',
-    description: 'Critical account, phishing, and suspicious-activity notices.',
-    icon: 'shield-checkmark-outline',
-  },
-];
+}
 
 export default function NotificationSettingsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useLocalization();
   const [preferences, setPreferences] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<keyof NotificationPreferences | null>(null);
+
+  const NOTIFICATION_ROWS: NotificationRow[] = [
+    {
+      key: 'priceAlerts',
+      title: t('settings.notification_settings.price_alerts'),
+      description: t('settings.notification_settings.price_alerts_desc'),
+      icon: 'pulse-outline',
+    },
+    {
+      key: 'newsAlerts',
+      title: t('settings.notification_settings.news_alerts'),
+      description: t('settings.notification_settings.news_alerts_desc'),
+      icon: 'newspaper-outline',
+    },
+    {
+      key: 'securityAlerts',
+      title: t('settings.notification_settings.security_alerts'),
+      description: t('settings.notification_settings.security_alerts_desc'),
+      icon: 'shield-checkmark-outline',
+    },
+  ];
 
   const loadPreferences = useCallback(async () => {
     const response = await usersApi.getProfile();
     if (!response.success) {
       Alert.alert(
-        'Could not load preferences',
-        response.error?.message ?? 'Try again in a moment.',
+        t('errors.error'),
+        response.error?.message ?? t('errors.couldnt_load', { item: 'preferences' }),
       );
       return;
     }
@@ -68,7 +72,7 @@ export default function NotificationSettingsScreen() {
       ...DEFAULT_PREFERENCES,
       ...(response.data?.preferences?.notifications ?? {}),
     });
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -77,7 +81,7 @@ export default function NotificationSettingsScreen() {
       setLoading(false);
     };
 
-    void bootstrap();
+    bootstrap();
   }, [loadPreferences]);
 
   const handleToggle = async (key: keyof NotificationPreferences, nextValue: boolean) => {
@@ -98,8 +102,8 @@ export default function NotificationSettingsScreen() {
     if (!response.success) {
       setPreferences(previous);
       Alert.alert(
-        'Could not update preferences',
-        response.error?.message ?? 'Your notification settings could not be saved.',
+        t('errors.error'),
+        response.error?.message ?? t('errors.could_not_update', { item: 'preferences' }),
       );
       return;
     }
@@ -118,56 +122,64 @@ export default function NotificationSettingsScreen() {
             style={[styles.headerButton, { backgroundColor: colors.card }]}
             onPress={() => router.back()}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            accessibilityHint="Go back to previous screen"
           >
             <Ionicons name="arrow-back" size={20} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
-            <Text style={[styles.title, { color: colors.text }]}>Notification Settings</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Toggle the specific alerts you want. Each change is pushed to the backend immediately.
+            <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+              {t('settings.notification_settings.title')}
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]} accessible>
+              {t('settings.notification_settings.description')}
             </Text>
           </View>
         </View>
 
         <View
           style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessible
+          accessibilityLabel={t('settings.notification_settings.title')}
         >
           {loading ? (
             <View style={styles.loadingWrap}>
-              <ActivityIndicator color={colors.accent} />
+              <ActivityIndicator color={colors.accent} accessibilityLabel={t('common.loading')} />
             </View>
           ) : (
             NOTIFICATION_ROWS.map((row, index) => (
               <View key={row.key}>
-                {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
+                {index > 0 && (
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} accessible={false} />
+                )}
                 <View style={styles.preferenceRow}>
                   <View style={styles.preferenceCopy}>
-                    <View style={[styles.iconShell, { backgroundColor: colors.card }]}>
+                    <View style={[styles.iconShell, { backgroundColor: colors.card }]} accessible>
                       <Ionicons name={row.icon} size={18} color={colors.accent} />
                     </View>
                     <View style={styles.preferenceTextWrap}>
-                      <Text style={[styles.preferenceTitle, { color: colors.text }]}>
+                      <Text style={[styles.preferenceTitle, { color: colors.text }]} accessible>
                         {row.title}
                       </Text>
-                      <Text style={[styles.preferenceDescription, { color: colors.textSecondary }]}>
+                      <Text style={[styles.preferenceDescription, { color: colors.textSecondary }]} accessible>
                         {row.description}
                       </Text>
                     </View>
                   </View>
 
-                  {savingKey === row.key ? (
-                    <ActivityIndicator color={colors.accent} />
-                  ) : (
-                    <Switch
-                      value={preferences[row.key]}
-                      onValueChange={(value) => void handleToggle(row.key, value)}
-                      trackColor={{
-                        false: colors.cardBorder,
-                        true: colors.accent,
-                      }}
-                      thumbColor="#ffffff"
-                    />
-                  )}
+                  <Switch
+                    value={preferences[row.key]}
+                    onValueChange={(value) => void handleToggle(row.key, value)}
+                    trackColor={{
+                      false: colors.cardBorder,
+                      true: colors.accent,
+                    }}
+                    thumbColor="#ffffff"
+                    accessibilityLabel={row.title}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: preferences[row.key] }}
+                  />
                 </View>
               </View>
             ))

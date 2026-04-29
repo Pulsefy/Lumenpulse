@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Text,
   StyleSheet,
@@ -24,17 +24,29 @@ export default function ArticleDetail() {
   const [isSaved, setIsSaved] = useState(false);
   const { colors } = useTheme();
 
-  useEffect(() => {
-    fetchArticle();
-    checkIfSaved();
+  const fetchArticle = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const response = await apiClient.get<Article>(`/news/${id}`);
+    if (response.success && response.data) {
+      setArticle(response.data);
+    } else {
+      setError(response.error?.message || 'Article not found.');
+    }
+    setLoading(false);
   }, [id]);
 
-  const checkIfSaved = async () => {
+  const checkIfSaved = useCallback(async () => {
     if (typeof id === 'string') {
       const saved = await savedNewsService.isArticleSaved(id);
       setIsSaved(saved);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    fetchArticle();
+    checkIfSaved();
+  }, [fetchArticle, checkIfSaved]);
 
   const toggleSave = async () => {
     if (!article) return;
@@ -58,18 +70,6 @@ export default function ArticleDetail() {
     } catch (error) {
       console.error('Error sharing article:', error);
     }
-  };
-
-  const fetchArticle = async () => {
-    setLoading(true);
-    setError(null);
-    const response = await apiClient.get<Article>(`/news/${id}`);
-    if (response.success && response.data) {
-      setArticle(response.data);
-    } else {
-      setError(response.error?.message || 'Article not found.');
-    }
-    setLoading(false);
   };
 
   if (loading) {

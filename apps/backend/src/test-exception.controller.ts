@@ -12,6 +12,7 @@ import {
   SentimentResponse,
   HealthResponse,
 } from './sentiment/sentiment.service';
+import { config } from './lib/config';
 
 // DTO for sentiment analysis
 interface AnalyzeDto {
@@ -127,7 +128,7 @@ export class TestExceptionController {
         successful: 0,
         matches: 0,
         testCases: [],
-        pythonApiUrl: process.env.PYTHON_API_URL || 'http://localhost:8000',
+        pythonApiUrl: config.python.apiUrl,
         serviceAvailable: false,
       };
     }
@@ -200,7 +201,7 @@ export class TestExceptionController {
       successful: successCount,
       matches: matchCount,
       testCases: results,
-      pythonApiUrl: process.env.PYTHON_API_URL || 'http://localhost:8000',
+      pythonApiUrl: config.python.apiUrl,
       serviceAvailable: true,
     };
   }
@@ -262,7 +263,7 @@ export class TestExceptionController {
               error: errorMessage,
             },
           ],
-          pythonApiUrl: process.env.PYTHON_API_URL || 'http://localhost:8000',
+          pythonApiUrl: config.python.apiUrl,
           serviceAvailable: false,
         };
       }
