@@ -212,7 +212,7 @@ async def get_news(
     limit: int = Query(50, ge=1, le=500),
     hours: int = Query(24, ge=1, le=168),
     asset: Optional[str] = Query(
-    None, description="Optional primary asset code filter")
+        None, description="Optional primary asset code filter")
     entity: Optional[str] = Query(
         None,
         description="Optional detected entity filter (example: Soroban)",
