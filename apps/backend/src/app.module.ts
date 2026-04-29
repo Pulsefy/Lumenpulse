@@ -41,13 +41,30 @@ import { TestController } from './test/test.controller';
 import { UploadModule } from './upload/upload.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+<<<<<<< HEAD
+<<<<<<< HEAD
+import { EmailModule } from './email/email.module';
+import { PortfolioModule } from './portfolio/portfolio.module';
+import databaseConfig from './database/database.config';
+import { LoggerMiddleware } from './common/middleware/logger.middleware';
+import { TestController } from './test/test.controller';
+import { Module } from '@nestjs/common'; 
+import { StellarService } from './services/StellarService'; 
+import { StellarController } from './routes/stellar';
+=======
+>>>>>>> 32ecf6ba4de3e51a30acc180ef439b0291d4ebf9
+=======
 import { GrantsModule } from './grants/grants.module';
 import { HealthModule } from './health/health.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { VerificationModule } from './verification/verification.module';
 import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
+<<<<<<< HEAD
+>>>>>>> 8ac87a7a55f7617bca2a78c4d4bf2c6ecf4d7757
+=======
 import { ExportModule } from './export/export.module';
+>>>>>>> 24af299369a41e0f5687ed7bec1261d2e41026b7
 
 @Module({
   imports: [
@@ -116,9 +133,9 @@ import { ExportModule } from './export/export.module';
     ModerationModule,
     FeatureFlagsModule,
   ],
-  controllers: [AppController, TestController, TestExceptionController],
+  controllers: [AppController, TestController, TestExceptionController, StellarController],
   providers: [
-    AppService,
+    AppService, StellarService,
     {
       provide: APP_GUARD,
       useClass: RateLimitGuard,

@@ -162,3 +162,55 @@ This flow describes how users participate in crowdfunding campaigns governed by 
 *   **Blockchain Security**: Smart contracts undergo rigorous testing (snapshot testing) to prevent logic errors. Users maintain custody of their private keys; the backend never stores raw private keys for transaction signing.
 
 ---
+# 🏗 Contract Architecture Overview
+
+This document describes the core smart contracts, their responsibilities, and how they interact within the funding lifecycle.
+
+---
+
+## 🧩 Core Contracts
+
+| Contract | Responsibility |
+|----------|--------------|
+| ProjectRegistry | Stores project metadata and ownership |
+| ContributionContract | Handles incoming funds from contributors |
+| MilestoneContract | Tracks milestone creation, approval, and completion |
+| DisputeContract | Handles disputes and arbitration |
+| TreasuryContract | Manages pooled funds and disbursement |
+| MatchingPool | Matches contributions based on rules |
+| AccessControl | Role-based permissions |
+| UpgradeManager | Handles contract upgrades |
+
+---
+
+## 🔗 Contract Relationships
+
+```mermaid
+graph TD
+  User --> ContributionContract
+  ContributionContract --> TreasuryContract
+  TreasuryContract --> MilestoneContract
+  MilestoneContract --> DisputeContract
+  TreasuryContract --> MatchingPool
+  AccessControl --> AllContracts
+  UpgradeManager --> AllContracts
+``` id="8f8w2n"
+
+---
+
+## 🔐 Access Control Model
+
+- Admin: manages contracts and upgrades
+- Project Owner: manages milestones
+- Contributor: funds projects
+- Arbitrator: resolves disputes
+
+All access checks are enforced via AccessControl contract.
+
+---
+
+## 🔄 Upgrade Strategy
+
+- Contracts are registered in a central registry
+- UpgradeManager controls version changes
+- Proxy or registry-based lookup ensures safe upgrades
