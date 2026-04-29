@@ -4,6 +4,7 @@ Fetches data from Twitter/X and Reddit APIs with proper rate limiting.
 """
 
 import json
+import time
 import logging
 import math
 import os

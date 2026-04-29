@@ -5,6 +5,7 @@ Supports both Z-score and Isolation Forest configurations.
 """
 
 from dataclasses import dataclass
+import json
 from typing import Optional
 import os
 

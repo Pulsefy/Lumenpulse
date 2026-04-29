@@ -4,6 +4,7 @@ Fetches historical transaction and volume data from Stellar Horizon API.
 """
 
 from typing import Dict, List, Optional, Tuple, Any
+import time
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from stellar_sdk import Server, Asset

@@ -3,6 +3,7 @@ Example usage of StellarDataFetcher.
 """
 
 import sys
+import time
 import os
 
 # Add parent directory to path

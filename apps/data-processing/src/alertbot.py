@@ -6,6 +6,7 @@ to send alerts when the MarketAnalyzer detects high sentiment scores (>0.8).
 """
 
 import os
+import time
 import logging
 import threading
 from datetime import datetime, timezone

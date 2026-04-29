@@ -5,6 +5,7 @@ outliers and complex pump-and-dump patterns.
 """
 
 from src.utils.logger import setup_logger
+import json
 from src.utils.metrics import ANOMALIES_DETECTED_TOTAL
 from typing import List, Dict, Any, Tuple, Optional, Union
 from datetime import datetime, timedelta

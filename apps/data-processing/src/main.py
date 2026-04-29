@@ -3,6 +3,7 @@ Main entry point for the data processing pipeline with both single-run and sched
 """
 
 import os
+import time
 import sys
 import logging
 import signal

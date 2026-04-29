@@ -10,17 +10,15 @@ import os
 from sentiment import SentimentAnalyzer
 from src.utils.logger import setup_logger
 from src.utils.metrics import API_FAILURES_TOTAL
-from src.security import (
+from src.security import get_rate_limit_decorator
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
 from src.ml.model_registry import get_registry_status
 from src.analytics.correlation_engine import CorrelationEngine
 from src.db import PostgresService
 from src.analytics.sentiment_indicators import SentimentIndicatorMapper
-    import uvicorn
-
-    import asyncio
-
-        from src.analytics.forecaster import SentimentForecaster
+import uvicorn
+import asyncio
+from src.analytics.forecaster import SentimentForecaster
 
 """
 FastAPI server to expose sentiment analysis as an HTTP API
@@ -30,17 +28,6 @@ for the Node.js backend to consume.
 # Import your existing SentimentAnalyzer
 # Add parent directory to path to import from src
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
-    correlation_id_ctx
-    generate_correlation_id
-    generate_latest
-    CONTENT_TYPE_LATEST
-    security_config,
-    setup_security_middleware,
-    setup_rate_limiter,
-    get_rate_limit_decorator,
-)
-    get_legend as sentiment_legend
 
 _indicator_mapper = SentimentIndicatorMapper()
 
@@ -197,12 +184,9 @@ async def root(request: Request) -> Dict[str, Any]:
             "GET /health": "Health check (no auth required)",
             "GET /metrics": "Prometheus metrics (no auth required)",
             "GET /news": "Get recent news with optional ?entity=... filter (requires X-API-Key header)",
-            "POST /analyze": "Analyze text sentiment (
-    requires X-API-Key header)",)
-            "GET /analyze": "Get asset-specific sentiment analysis (
-    requires X-API-Key header)",)
-            "POST /analyze-batch": "Batch analyze multiple texts (
-    requires X-API-Key header)",)
+            "POST /analyze": "Analyze text sentiment (requires X-API-Key header)",
+            "GET /analyze": "Get asset-specific sentiment analysis (requires X-API-Key header)",
+            "POST /analyze-batch": "Batch analyze multiple texts (requires X-API-Key header)",
             "GET /sentiment/legend": "Get colour legend for sentiment indicators (no auth required)",
         },
         "note": "Returns sentiment score between -1 (negative) and 1 (positive)",
@@ -228,7 +212,7 @@ async def get_news(
     limit: int = Query(50, ge=1, le=500),
     hours: int = Query(24, ge=1, le=168),
     asset: Optional[str] = Query(
-    None, description="Optional primary asset code filter"),)
+    None, description="Optional primary asset code filter")
     entity: Optional[str] = Query(
         None,
         description="Optional detected entity filter (example: Soroban)",
@@ -272,10 +256,7 @@ async def get_news(
                 summary=article.summary,
                 source=article.source,
                 url=article.url,
-                published_at=(
-                    article.published_at.isoformat(
-    ) if article.published_at else None)
-                ),
+                published_at=article.published_at.isoformat() if article.published_at else None,
                 primary_asset=article.primary_asset,
                 asset_codes=article.asset_codes or [],
                 categories=article.categories or [],
@@ -297,7 +278,7 @@ async def get_news(
 @v1_router.post("/analyze", response_model=AnalyzeResponse)
 @limiter.limit("50/minute") if limiter else lambda x: x
 async def analyze_text(
-    body: AnalyzeRequest, request: Request) -> AnalyzeResponse:)
+    body: AnalyzeRequest, request: Request) -> AnalyzeResponse:
     """
     Analyze the sentiment of provided text.
 
@@ -400,7 +381,7 @@ async def get_asset_analysis(
 @v1_router.post("/analyze-batch")
 @limiter.limit("10/minute") if limiter else lambda x: x
 async def analyze_batch(
-    request: Request, texts: list[str], asset: Optional[str] = None) -> Dict[str, Any]:)
+    request: Request, texts: list[str], asset: Optional[str] = None) -> Dict[str, Any]:
     """Batch analyze multiple texts with optional asset filter"""
     try:
         if not texts:
@@ -647,8 +628,7 @@ async def analyze_correlation(
     )
 
     logger.info(
-        f"Correlation analysis requested | sentiment_points={len(
-    sentiment_list)} | ")
+        f"Correlation analysis requested | sentiment_points={len(sentiment_list)} | "
         f"price_points={len(price_list)} | volume_points={len(volume_list)} | "
         f"lag_hours={body.lag_hours} | client_ip={request.client.host}"
     )

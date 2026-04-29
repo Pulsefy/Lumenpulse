@@ -3,6 +3,7 @@ PostgreSQL service for persisting analytics data
 """
 
 import logging
+import time
 import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta

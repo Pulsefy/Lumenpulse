@@ -2,6 +2,7 @@
 News deduplication module - removes duplicate articles to prevent re-processing
 """
 import hashlib
+import json
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Set
 from pathlib import Path

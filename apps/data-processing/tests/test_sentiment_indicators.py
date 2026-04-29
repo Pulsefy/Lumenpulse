@@ -445,8 +445,7 @@ class TestAssetAnalysisResponseIndicator:
     e.g. "0.85 Bullish"."""
 
     def test_asset_response_includes_indicator_field(self):
-        from src.api.server import AssetAnalysisResponse
-    SentimentIndicatorResponse
+        from src.api.server import AssetAnalysisResponse, SentimentIndicatorResponse
 
         ind = SentimentIndicatorResponse(
             score=0.85,
@@ -466,8 +465,7 @@ class TestAssetAnalysisResponseIndicator:
         assert resp.indicator.display_text == "0.85 Bullish"
 
     def test_asset_response_bearish_indicator(self):
-        from src.api.server import AssetAnalysisResponse
-    SentimentIndicatorResponse
+        from src.api.server import AssetAnalysisResponse, SentimentIndicatorResponse
 
         score = -0.60
         ind_data = SentimentIndicatorMapper().score_to_indicator(score).to_dict()

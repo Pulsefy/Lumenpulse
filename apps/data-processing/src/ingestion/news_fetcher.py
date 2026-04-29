@@ -4,6 +4,8 @@ Fetches data from external APIs and standardizes the format.
 """
 
 import os
+import json
+import time
 from typing import List, Dict, Optional
 from dataclasses import dataclass, asdict
 from .news_deduplicator import NewsDeduplicator
