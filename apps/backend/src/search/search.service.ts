@@ -215,8 +215,7 @@ export class SearchService {
       LIMIT $${params.length};
     `;
 
-    const rows = (await this.newsRepository.query(sql, params)) as TagRow[];
-    return rows;
+    return (await this.newsRepository.query(sql, params)) as TagRow[];
   }
 
   private async fetchCategories(opts: {
@@ -242,8 +241,7 @@ export class SearchService {
       LIMIT $${params.length};
     `;
 
-    const rows = (await this.newsRepository.query(sql, params)) as CategoryRow[];
-    return rows;
+    return (await this.newsRepository.query(sql, params)) as CategoryRow[];
   }
 }
 
