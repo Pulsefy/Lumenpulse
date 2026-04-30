@@ -24,6 +24,7 @@ import { StellarSyncModule } from './stellar-sync/stellar-sync.module';
 import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
 import { ModerationModule } from './moderation/moderation.module';
+import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 
 import databaseConfig from './database/database.config';
 import stellarConfig from './stellar/config/stellar.config';
@@ -47,6 +48,7 @@ import { VerificationModule } from './verification/verification.module';
 import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 import { SearchModule } from './search/search.module';
+import { ExportModule } from './export/export.module';
 
 @Module({
   imports: [
@@ -110,9 +112,11 @@ import { SearchModule } from './search/search.module';
     VerificationModule,
     WatchlistModule,
     OutboxModule,
+    ExportModule,
     TelegramBotModule,
     ModerationModule,
     SearchModule,
+    FeatureFlagsModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
