@@ -1,0 +1,310 @@
+# Analytics Data Flow Diagram
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Crowdfund Vault Contract                      │
+│                                                                   │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │              Instance Storage (Cheap)                       │ │
+│  │                                                              │ │
+│  │  ┌──────────────────────────────────────────────────────┐  │ │
+│  │  │         ProtocolStats                                 │  │ │
+│  │  │  ┌──────────────────────────────────────────────┐    │  │ │
+│  │  │  │  tvl: i128                                    │    │  │ │
+│  │  │  │  cumulative_volume: i128                      │    │  │ │
+│  │  │  └──────────────────────────────────────────────┘    │  │ │
+│  │  └──────────────────────────────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                   │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │              Public API (Read-Only)                         │ │
+│  │                                                              │ │
+│  │  • get_protocol_stats() → ProtocolStats                    │ │
+│  │  • get_tvl() → i128                                         │ │
+│  │  • get_cumulative_volume() → i128                           │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                   │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │         Automatic Update Functions (Internal)               │ │
+│  │                                                              │ │
+│  │  • deposit()              → ↑ TVL, ↑ Volume                │ │
+│  │  • withdraw()             → ↓ TVL                           │ │
+│  │  • refund_contributors()  → ↓ TVL                           │ │
+│  │  • clawback_contribution()→ ↓ TVL                           │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Data Flow: Deposit Operation
+
+```
+User calls deposit()
+        │
+        ↓
+┌───────────────────┐
+│ Transfer tokens   │
+│ to contract       │
+└────────┬──────────┘
+         │
+         ↓
+┌───────────────────┐
+│ Update project    │
+│ balance           │
+└────────┬──────────┘
+         │
+         ↓
+┌───────────────────────────────┐
+│ Update Protocol Stats:        │
+│  stats.tvl += amount          │
+│  stats.cumulative_volume +=   │
+│         amount                │
+└────────┬──────────────────────┘
+         │
+         ↓
+┌───────────────────┐
+│ Emit event        │
+└───────────────────┘
+```
+
+## Data Flow: Withdrawal Operation
+
+```
+Owner calls withdraw()
+        │
+        ↓
+┌───────────────────┐
+│ Check milestone   │
+│ approval          │
+└────────┬──────────┘
+         │
+         ↓
+┌───────────────────┐
+│ Transfer tokens   │
+│ to owner          │
+└────────┬──────────┘
+         │
+         ↓
+┌───────────────────┐
+│ Update project    │
+│ balance           │
+└────────┬──────────┘
+         │
+         ↓
+┌───────────────────────────────┐
+│ Update Protocol Stats:        │
+│  stats.tvl -= amount          │
+│  (volume unchanged)           │
+└────────┬──────────────────────┘
+         │
+         ↓
+┌───────────────────┐
+│ Emit event        │
+└───────────────────┘
+```
+
+## Metric Lifecycle
+
+### Total Value Locked (TVL)
+
+```
+Initialization
+     │
+     ↓
+   TVL = 0
+     │
+     ├─→ deposit(100) ──→ TVL = 100
+     │
+     ├─→ deposit(50)  ──→ TVL = 150
+     │
+     ├─→ withdraw(30) ──→ TVL = 120
+     │
+     ├─→ deposit(80)  ──→ TVL = 200
+     │
+     └─→ refund(50)   ──→ TVL = 150
+```
+
+### Cumulative Volume (Monotonic)
+
+```
+Initialization
+     │
+     ↓
+ Volume = 0
+     │
+     ├─→ deposit(100) ──→ Volume = 100
+     │
+     ├─→ deposit(50)  ──→ Volume = 150
+     │
+     ├─→ withdraw(30) ──→ Volume = 150 (unchanged)
+     │
+     ├─→ deposit(80)  ──→ Volume = 230
+     │
+     └─→ refund(50)   ──→ Volume = 230 (unchanged)
+```
+
+## Multi-Project Aggregation
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Project 1   │     │  Project 2   │     │  Project 3   │
+│              │     │              │     │              │
+│ Balance: 100 │     │ Balance: 200 │     │ Balance: 150 │
+└──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+       │                    │                    │
+       └────────────────────┼────────────────────┘
+                            │
+                            ↓
+                  ┌─────────────────┐
+                  │  Protocol TVL   │
+                  │                 │
+                  │   TVL = 450     │
+                  └─────────────────┘
+```
+
+## Query Patterns
+
+### Pattern 1: Complete Stats (Most Efficient)
+```
+Client
+  │
+  ├─→ get_protocol_stats()
+  │         │
+  │         ↓
+  │   ┌─────────────────┐
+  │   │ Single storage  │
+  │   │ read            │
+  │   └────────┬────────┘
+  │            │
+  │            ↓
+  └─────→ { tvl: 1000, volume: 5000 }
+```
+
+### Pattern 2: Individual Metrics
+```
+Client
+  │
+  ├─→ get_tvl()
+  │      │
+  │      ↓
+  │   ┌─────────────────┐
+  │   │ Storage read    │
+  │   └────────┬────────┘
+  │            │
+  │            ↓
+  └─────→ 1000
+
+Client
+  │
+  ├─→ get_cumulative_volume()
+  │      │
+  │      ↓
+  │   ┌─────────────────┐
+  │   │ Storage read    │
+  │   └────────┬────────┘
+  │            │
+  │            ↓
+  └─────→ 5000
+```
+
+## Integration Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    External Systems                          │
+│                                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │  Dashboard   │  │  Monitoring  │  │  Analytics   │      │
+│  │  Frontend    │  │  Service     │  │  API         │      │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
+│         │                 │                 │               │
+└─────────┼─────────────────┼─────────────────┼───────────────┘
+          │                 │                 │
+          └─────────────────┼─────────────────┘
+                            │
+                            ↓
+          ┌─────────────────────────────────┐
+          │   Soroban RPC / Horizon API     │
+          └─────────────────┬───────────────┘
+                            │
+                            ↓
+          ┌─────────────────────────────────┐
+          │   Crowdfund Vault Contract      │
+          │                                 │
+          │   get_protocol_stats()          │
+          │   get_tvl()                     │
+          │   get_cumulative_volume()       │
+          └─────────────────────────────────┘
+```
+
+## State Transitions
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Contract Lifecycle                        │
+│                                                               │
+│  Initialize                                                  │
+│      │                                                        │
+│      ↓                                                        │
+│  ┌─────────────┐                                            │
+│  │ TVL = 0     │                                            │
+│  │ Volume = 0  │                                            │
+│  └──────┬──────┘                                            │
+│         │                                                    │
+│         ↓                                                    │
+│  ┌─────────────────────────────────────┐                   │
+│  │     Active Operations                │                   │
+│  │                                       │                   │
+│  │  • Deposits  → ↑ TVL, ↑ Volume      │                   │
+│  │  • Withdrawals → ↓ TVL               │                   │
+│  │  • Refunds   → ↓ TVL                │                   │
+│  │  • Clawbacks → ↓ TVL                │                   │
+│  └─────────────────────────────────────┘                   │
+│         │                                                    │
+│         ↓                                                    │
+│  ┌─────────────────────────────────────┐                   │
+│  │  Queryable at any time:              │                   │
+│  │  • get_protocol_stats()              │                   │
+│  │  • get_tvl()                         │                   │
+│  │  • get_cumulative_volume()           │                   │
+│  └─────────────────────────────────────┘                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Error Handling Flow
+
+```
+Client Query
+     │
+     ↓
+┌─────────────────┐
+│ Version Check   │
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │ Valid?  │
+    └────┬────┘
+         │
+    ┌────┴────────────────┐
+    │                     │
+   Yes                   No
+    │                     │
+    ↓                     ↓
+┌─────────────┐    ┌──────────────────┐
+│ Read Stats  │    │ Return Error:    │
+└──────┬──────┘    │ - NotInitialized │
+       │           │ - UnsupportedVer │
+       ↓           └──────────────────┘
+┌─────────────┐
+│ Return Data │
+└─────────────┘
+```
+
+## Legend
+
+- `↑` = Increases
+- `↓` = Decreases
+- `→` = Data flow
+- `┌─┐` = Component/Process
+- `│` = Connection
