@@ -192,7 +192,7 @@ export class SearchService {
     q: string;
     limit: number;
   }): Promise<TagRow[]> {
-    const params: any[] = [];
+    const params: (string | number)[] = [];
     let where = '';
 
     if (opts.q) {
@@ -223,7 +223,7 @@ export class SearchService {
     q: string;
     limit: number;
   }): Promise<CategoryRow[]> {
-    const params: any[] = [];
+    const params: (string | number)[] = [];
     let where = `WHERE category IS NOT NULL`;
 
     if (opts.q) {
