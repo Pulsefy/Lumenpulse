@@ -44,6 +44,10 @@ class OnChainMetric(BaseModel):
         return v
 
 def validate_news_article(data: dict) -> Optional[NewsArticle]:
+    # Handle non-dict inputs gracefully
+    if not isinstance(data, dict):
+        logger.warning(f"Invalid input type: expected dict, got {type(data)}")
+        return None
     try:
         return NewsArticle(**data)
     except ValidationError as e:
@@ -51,6 +55,10 @@ def validate_news_article(data: dict) -> Optional[NewsArticle]:
         return None
 
 def validate_onchain_metric(data: dict) -> Optional[OnChainMetric]:
+    # Handle non-dict inputs gracefully
+    if not isinstance(data, dict):
+        logger.warning(f"Invalid input type: expected dict, got {type(data)}")
+        return None
     try:
         return OnChainMetric(**data)
     except ValidationError as e:
