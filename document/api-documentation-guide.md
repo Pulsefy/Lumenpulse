@@ -198,6 +198,14 @@ Passwordless authentication using Stellar wallet signatures:
 | GET | `/stellar/health` | Check Horizon API health | No |
 | GET | `/stellar/assets` | Discover Stellar assets | No |
 
+### Search (`/search`)
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/search/projects` | Search registered projects | No |
+| GET | `/search/assets` | Search Stellar assets (rank + filters) | No |
+| GET | `/search/ecosystem` | Search top tags/categories from stored news | No |
+
 ## Common Request/Response Patterns
 
 ### Pagination

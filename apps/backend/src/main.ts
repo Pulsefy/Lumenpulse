@@ -29,6 +29,7 @@ async function bootstrap() {
     .addTag('news', 'Crypto news aggregation and sentiment analysis')
     .addTag('portfolio', 'Portfolio tracking and performance metrics')
     .addTag('stellar', 'Stellar blockchain integration')
+    .addTag('search', 'Search and discovery endpoints')
     .addServer('http://localhost:3000', 'Development')
     .addServer('https://api.lumenpulse.io', 'Production')
     .build();
