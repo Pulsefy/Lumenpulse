@@ -29,6 +29,8 @@ from src.ml.retraining_pipeline import run_retraining, get_last_run_status
 from src.ml.model_registry import get_registry_status
 from src.analytics.correlation_engine import CorrelationEngine
 from src.db import PostgresService
+from src.ingestion.stellar_ingestion_checks import run_all_checks
+
 from src.analytics.sentiment_indicators import SentimentIndicatorMapper, get_legend as sentiment_legend
 
 _indicator_mapper = SentimentIndicatorMapper()
@@ -83,6 +85,11 @@ async def metrics_and_logging_middleware(request: Request, call_next):
 
 # Initialize your existing SentimentAnalyzer
 sentiment_analyzer = SentimentAnalyzer()
+
+# Ingestion quality check routes
+from src.api.ingestion_quality_routes import router as ingestion_quality_router
+app.include_router(ingestion_quality_router)
+
 
 try:
     postgres_service = PostgresService()
@@ -179,6 +186,7 @@ async def root(request: Request) -> Dict[str, Any]:
 @app.get("/health", response_model=HealthResponse)
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def health_check(request: Request) -> HealthResponse:
+
     """Health check endpoint for monitoring"""
     return HealthResponse(
         status="healthy",
