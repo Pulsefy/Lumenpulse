@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Trophy, Users, Wallet, Clock, ChevronRight, Info } from "lucide-react";
+import SorobanContributeModal from "@/components/soroban-contribute-modal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -124,11 +125,13 @@ function ProjectAllocationRow({
   item,
   rank,
   poolBalance,
+  onContribute,
 }: {
   item: ProjectQf;
   rank: number;
   poolBalance: string;
   key?: number;
+  onContribute?: (projectId: number) => void;
 }) {
   const share = matchShare(item.estimatedMatch, poolBalance);
   const rankColors = ["text-amber-400", "text-slate-400", "text-amber-700"];
@@ -161,6 +164,16 @@ function ProjectAllocationRow({
           <span className="text-foreground font-semibold">{share.toFixed(1)}%</span> of pool
         </span>
       </div>
+
+      {onContribute && (
+        <button
+          onClick={() => onContribute(item.projectId)}
+          className="mt-1 w-full rounded-lg py-2 text-xs font-semibold bg-primary/10 text-primary hover:bg-primary hover:text-white border border-primary/20 transition-all duration-200"
+        >
+          <Wallet className="inline w-3.5 h-3.5 mr-1.5 -mt-0.5" />
+          Contribute via Soroban
+        </button>
+      )}
     </div>
   );
 }
@@ -170,9 +183,11 @@ function ProjectAllocationRow({
 function RoundDetail({
   summary,
   onBack,
+  onContribute,
 }: {
   summary: RoundSummary;
   onBack: () => void;
+  onContribute: (projectId: number) => void;
 }) {
   const { round, poolBalance, projects } = summary;
   const startDate = new Date(round.startTime * 1000).toLocaleDateString();
@@ -245,6 +260,7 @@ function RoundDetail({
                 item={p}
                 rank={idx}
                 poolBalance={poolBalance}
+                onContribute={onContribute}
               />
             ))}
           </div>
@@ -262,6 +278,7 @@ export default function GrantsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contributeProjectId, setContributeProjectId] = useState<number | null>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/grants/rounds`)
@@ -312,6 +329,7 @@ export default function GrantsPage() {
             <RoundDetail
               summary={selectedSummary}
               onBack={() => setSelectedSummary(null)}
+              onContribute={(pid) => setContributeProjectId(pid)}
             />
           ) : (
             <>
@@ -333,6 +351,12 @@ export default function GrantsPage() {
           )}
         </div>
       </section>
+      {/* Soroban Contribute Modal */}
+      <SorobanContributeModal
+        isOpen={contributeProjectId !== null}
+        onClose={() => setContributeProjectId(null)}
+        projectId={contributeProjectId ?? 0}
+      />
     </div>
   );
 }

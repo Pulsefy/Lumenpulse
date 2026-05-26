@@ -8,9 +8,6 @@ import { WalletButton } from "./wallet-button";
 import { ThemeSelector } from "./theme-selector";
 import { WalletSwitcher } from "@/components/wallet-switcher";
 
-// inside the navbar JSX, next to existing nav items:
-<WalletSwitcher />
-
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -102,7 +99,8 @@ export function Navbar() {
           </div>
 
           {/* Wallet Button */}
-          <div className="hidden md:block">
+          <div className="hidden md:flex items-center gap-3">
+            <WalletSwitcher />
             <WalletButton />
           </div>
 

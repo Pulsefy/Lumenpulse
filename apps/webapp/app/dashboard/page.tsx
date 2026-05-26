@@ -9,6 +9,7 @@ import WatchlistPanel from "@/components/watchlist-panel";
 import { WatchlistProvider } from "@/hooks/use-watchlist";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<{
@@ -30,9 +31,7 @@ export default function DashboardPage() {
     setIsLoading(false);
   }, []);
 
-  const { balances, transactions, isLoading: isLoadingStellar, error } = useStellarAccount(publicKey);
-
-  if (isLoadingAuth) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>

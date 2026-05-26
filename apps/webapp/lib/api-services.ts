@@ -16,6 +16,8 @@ export interface CryptoApiData {
   };
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+
 // CoinGecko API service (No API key needed)
 export class CryptoApiService {
   private static readonly BASE_URL = 'https://api.coingecko.com/api/v3';
@@ -58,3 +60,27 @@ export const transformCryptoData = (apiData: CryptoApiData, index: number) => ({
   marketCap: apiData.market_cap,
   sparkline: apiData.sparkline_in_7d?.price?.slice(-15) || Array(15).fill(50),
 });
+
+export class StellarApiService {
+  static async getAccountBalances(publicKey: string) {
+    const response = await fetch(`${API_BASE_URL}/stellar/accounts/${publicKey}/balances`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch Stellar balances (${response.status})`);
+    }
+
+    return response.json();
+  }
+
+  static async getAccountTransactions(publicKey: string, limit = 5) {
+    const response = await fetch(
+      `${API_BASE_URL}/stellar/accounts/${publicKey}/transactions?limit=${limit}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch Stellar transactions (${response.status})`);
+    }
+
+    return response.json();
+  }
+}

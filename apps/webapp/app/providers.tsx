@@ -1,12 +1,5 @@
 "use client";
 
-import { WalletProvider } from "@/contexts/WalletContext";
-
-// inside your existing providers tree, add:
-<WalletProvider>
-  {children}
-</WalletProvider>
-
 import {
   ReactNode,
   createContext,
@@ -16,10 +9,13 @@ import {
   useState,
 } from "react";
 import {
-  isConnected as freighterIsConnected,
   getAddress as freighterGetAddress,
+  isConnected as freighterIsConnected,
   requestAccess,
 } from "@stellar/freighter-api";
+import { ThemeProvider } from "@/components/theme-provider";
+import { WalletProvider } from "@/contexts/WalletContext";
+import { OnboardingProvider } from "@/lib/onboarding";
 
 export type WalletStatus =
   | "disconnected"
@@ -60,6 +56,20 @@ const StellarWalletContext = createContext<StellarWalletState>({
   resetError: () => {},
 });
 
+function getFreighterErrorMessage(error: unknown): string {
+  if (!error) return "Freighter request failed.";
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message);
+  }
+  return "Freighter request failed.";
+}
+
+function checkFreighterInstalled(): boolean {
+  return typeof window !== "undefined" && "freighter" in window;
+}
+
 export function useStellarWallet() {
   return useContext(StellarWalletContext);
 }
@@ -71,44 +81,43 @@ export function StellarProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<WalletErrorType>(null);
 
-  const checkFreighterInstalled = (): boolean => {
-    return typeof window !== "undefined" && "freighter" in window;
-  };
-
   useEffect(() => {
     async function checkConnection() {
       try {
         const wasConnected = localStorage.getItem(STORAGE_KEY) === "true";
         const storedAddress = localStorage.getItem(STORAGE_ADDRESS_KEY);
-        const installed = checkFreighterInstalled();
 
         if (storedAddress) setLastAddress(storedAddress);
 
-        if (!installed) {
+        if (!checkFreighterInstalled()) {
           if (wasConnected) setStatus("missing_extension");
           return;
         }
 
-        const { isConnected } = await freighterIsConnected();
-        if (isConnected) {
-          const { address } = await freighterGetAddress();
-          if (address) {
-            setPublicKey(address);
-            setLastAddress(address);
+        const connection = await freighterIsConnected();
+        if (connection.error) {
+          return;
+        }
+
+        if (connection.isConnected) {
+          const addressResult = await freighterGetAddress();
+          if (addressResult.address) {
+            setPublicKey(addressResult.address);
+            setLastAddress(addressResult.address);
             setStatus("connected");
             localStorage.setItem(STORAGE_KEY, "true");
-            localStorage.setItem(STORAGE_ADDRESS_KEY, address);
+            localStorage.setItem(STORAGE_ADDRESS_KEY, addressResult.address);
             return;
           }
         }
 
         if (wasConnected) setStatus("previously_connected");
       } catch {
-        // Silently fail
+        // Connection restoration is best-effort on page load.
       }
     }
 
-    checkConnection();
+    void checkConnection();
   }, []);
 
   const connect = useCallback(async () => {
@@ -128,7 +137,8 @@ export function StellarProvider({ children }: { children: ReactNode }) {
       const result = await requestAccess();
 
       if (result.error) {
-        const errLower = result.error.toLowerCase();
+        const message = getFreighterErrorMessage(result.error);
+        const errLower = message.toLowerCase();
         const isRejection =
           errLower.includes("user") ||
           errLower.includes("denied") ||
@@ -143,25 +153,23 @@ export function StellarProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        throw new Error(result.error);
+        throw new Error(message);
       }
 
       if (!result.address) {
         setStatus("missing_extension");
         setErrorType("missing_extension");
-        setError("Freighter wallet extension not detected. Please install it from freighter.app");
+        setError("Freighter wallet extension not detected. Please install it from freighter.app.");
         return;
       }
 
       setPublicKey(result.address);
       setLastAddress(result.address);
       setStatus("connected");
-      setError(null);
-      setErrorType(null);
       localStorage.setItem(STORAGE_KEY, "true");
       localStorage.setItem(STORAGE_ADDRESS_KEY, result.address);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to connect wallet";
+      const message = err instanceof Error ? err.message : "Failed to connect wallet.";
       setError(message);
       setErrorType("unknown");
       setStatus("disconnected");
@@ -191,5 +199,17 @@ export function StellarProvider({ children }: { children: ReactNode }) {
     >
       {children}
     </StellarWalletContext.Provider>
+  );
+}
+
+export function Providers({ children }: { children: ReactNode }) {
+  return (
+    <ThemeProvider>
+      <OnboardingProvider>
+        <WalletProvider>
+          <StellarProvider>{children}</StellarProvider>
+        </WalletProvider>
+      </OnboardingProvider>
+    </ThemeProvider>
   );
 }
