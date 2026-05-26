@@ -1,5 +1,7 @@
 import { apiClient, ApiResponse } from './api-client';
 
+export type OnChainStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED' | 'PENDING';
+
 /**
  * Crowdfund Project — mirrors the on-chain ProjectData structure
  */
@@ -11,9 +13,12 @@ export interface CrowdfundProject {
   bannerUrl?: string;
   targetAmount: string;
   tokenAddress: string;
+  contractAddress?: string;
   totalDeposited: string;
   totalWithdrawn: string;
   isActive: boolean;
+  onChainStatus: OnChainStatus;
+  lastSyncedAt?: string;
   contributorCount: number;
   roadmap?: RoadmapItem[];
   createdAt?: string;

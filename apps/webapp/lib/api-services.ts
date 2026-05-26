@@ -84,3 +84,71 @@ export class StellarApiService {
     return response.json();
   }
 }
+export interface StellarBalance {
+  assetType: string;
+  balance: string;
+  assetCode?: string;
+  assetIssuer?: string;
+}
+
+export class StellarApiService {
+  private static readonly BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+  static async getAccountBalances(publicKey: string): Promise<{ balances: StellarBalance[] }> {
+    try {
+      const response = await fetch(`${this.BASE_URL}/stellar/accounts/${publicKey}/balances`, {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (response.status === 404) {
+        // Unfunded/empty account: return 0 XLM balance
+        return {
+          balances: [
+            {
+              assetType: 'native',
+              balance: '0.0000000',
+            },
+          ],
+        };
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching Stellar balances:', error);
+      throw error;
+    }
+  }
+
+  static async getAccountTransactions(publicKey: string, limit: number = 5): Promise<any[]> {
+    try {
+      const response = await fetch(`${this.BASE_URL}/stellar/accounts/${publicKey}/transactions?limit=${limit}`, {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (response.status === 404) {
+        // Empty transactions for unfunded/empty account
+        return [];
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching Stellar transactions:', error);
+      return []; // Return empty array on transaction fetch error to fail gracefully
+    }
+  }
+}
+

@@ -1,6 +1,7 @@
 import { cache, CACHE_CONFIGS } from './cache';
 import { portfolioApi, stellarApi } from './api';
 import { apiClient } from './api-client';
+import { crowdfundApi, CrowdfundProject } from './crowdfund';
 import { Article } from './types/news';
 
 /**
@@ -143,6 +144,42 @@ export class CachedApi {
     }
 
     return { success: false, error: { message: 'No transaction history available offline' } };
+  }
+
+  // Projects list with caching for offline resilience
+  static async getProjects() {
+    const cacheKey = 'crowdfund_projects';
+
+    const cached = await cache.get<CrowdfundProject[]>(cacheKey, CACHE_CONFIGS.PROJECTS);
+    if (
+      cached &&
+      (!cache.isOnlineStatus() || Date.now() - cached.timestamp < CACHE_CONFIGS.PROJECTS.ttl)
+    ) {
+      return { success: true, data: cached.data, fromCache: true };
+    }
+
+    if (cache.isOnlineStatus()) {
+      try {
+        const response = await crowdfundApi.listProjects();
+        if (response.success && response.data) {
+          await cache.set(cacheKey, response.data, CACHE_CONFIGS.PROJECTS);
+          return { ...response, fromCache: false };
+        }
+      } catch (error) {
+        console.warn('Failed to fetch fresh projects data:', error);
+      }
+    }
+
+    if (cached) {
+      return { success: true, data: cached.data, fromCache: true, isStale: true };
+    }
+
+    return { success: false, error: { message: 'No projects available offline' } };
+  }
+
+  // Single project — not cached (detail screens should always show fresh on-chain state)
+  static async getProject(id: number) {
+    return crowdfundApi.getProject(id);
   }
 
   // Clear all cached data

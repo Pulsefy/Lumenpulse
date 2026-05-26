@@ -1,5 +1,6 @@
 "use client";
 
+import { WalletProvider } from "@/contexts/WalletContext";
 import {
   ReactNode,
   createContext,
@@ -8,6 +9,17 @@ import {
   useEffect,
   useState,
 } from "react";
+
+export function Providers({ children }: { children: ReactNode }) {
+  return (
+    <WalletProvider>
+      <StellarProvider>
+        {children}
+      </StellarProvider>
+    </WalletProvider>
+  );
+}
+
 import {
   getAddress as freighterGetAddress,
   isConnected as freighterIsConnected,

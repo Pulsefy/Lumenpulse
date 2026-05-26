@@ -86,7 +86,7 @@ describe('Theme Initialization Script', () => {
   describe('Script execution simulation', () => {
     let originalLocalStorage: Storage;
     let originalMatchMedia: typeof window.matchMedia;
-    let mockDocumentElement: { setAttribute: jest.Mock };
+    let mockDocumentElement: { setAttribute: any };
 
     beforeEach(() => {
       // Save originals
