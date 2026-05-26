@@ -78,6 +78,32 @@ groups:
           summary: 'Job queue backlog warning'
           description: '{{ .Labels.queue_name }} queue has {{ $value }} jobs pending'
 
+      # ====================
+      # Ingestion Monitoring
+      # ====================
+
+      - alert: IngestionLagHigh
+        expr: ingestion_lag_seconds{network="testnet"} > 300
+        for: 5m
+        labels:
+          severity: critical
+          service: data-processing
+        annotations:
+          summary: 'Stellar ingestion lag is high'
+          description: 'ingestion_lag_seconds is > 300s for network=testnet (value={{ $value }}s).'
+
+      # News fetch failures: emit log-based alerts as fallback; this rule triggers on metrics.
+      - alert: NewsFetchFailuresHigh
+        expr: increase(news_fetch_errors_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: 'High news fetch failures'
+          description: 'Detected >10 news fetch errors in the last 5m (value={{ $value }}).'
+
+
       - alert: QueueBacklogCritical
         expr: job_queue_size > 1000
         for: 5m

@@ -9,6 +9,8 @@ import { NewsProviderService } from './news-provider.service';
 import { NewsArticleDto } from './dto/news-article.dto';
 import { CacheService } from '../cache/cache.service';
 import { QueryProfilerService } from '../common/profiling/query-profiler.service';
+import { MetricsService } from '../metrics/metrics.service';
+
 
 interface RawOverallResult {
   average: string | null;
@@ -31,7 +33,9 @@ export class NewsService {
     private readonly newsProviderService: NewsProviderService,
     private readonly cacheService: CacheService,
     private readonly profiler: QueryProfilerService,
+    private readonly metricsService: MetricsService,
   ) {}
+
 
   async create(createArticleDto: CreateArticleDto): Promise<News> {
     const news = this.newsRepository.create(createArticleDto);
@@ -200,6 +204,7 @@ export class NewsService {
         lang: 'EN',
       });
 
+
       const articles = response.articles;
       let newCount = 0;
       let skippedCount = 0;
@@ -222,9 +227,16 @@ export class NewsService {
         await this.cacheService.invalidateNewsCache();
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      // Best-effort: we don't currently categorize error codes for this fetcher,
+      // so we record UNKNOWN.
+      // This drives MVP alerting for external source failures.
+      this.metricsService.recordFetchError('news_provider', 'UNKNOWN');
+
       this.logger.error(
-        `Failed to fetch and save articles: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to fetch and save articles: ${message}`,
       );
     }
+
   }
 }

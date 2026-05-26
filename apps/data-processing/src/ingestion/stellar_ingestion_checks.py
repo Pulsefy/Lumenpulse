@@ -28,6 +28,13 @@ from typing import Any, Dict, List, Optional, Tuple
 from src.db import PostgresService
 from src.ingestion.stellar_fetcher import StellarDataFetcher
 
+from src.utils.metrics import (
+    INGESTION_LAG_SECONDS,
+    INGESTION_QUALITY_CHECK_PASSED,
+    INGESTION_QUALITY_REPORTS_TOTAL,
+)
+
+
 
 REPORT_DIR_DEFAULT = "./data/ingestion_reports"
 
@@ -78,11 +85,21 @@ def _horizon_latest_ledger(fetcher: StellarDataFetcher) -> Dict[str, Any]:
     }
 
 
+from src.utils.metrics import (
+    INGESTION_LAG_SECONDS,
+    INGESTION_QUALITY_CHECK_PASSED,
+    INGESTION_QUALITY_REPORTS_TOTAL,
+)
+
+
 def check_ingestion_lag(
     *,
     fetcher: StellarDataFetcher,
     allowed_lag_seconds: int,
+    network: str,
+    asset: str,
 ) -> CheckFinding:
+
     """Detect ingestion lag.
 
     We can only reliably measure *network freshness* (latest ledger close time).
@@ -106,6 +123,15 @@ def check_ingestion_lag(
     lag = (now - dt).total_seconds()
 
     passed = lag <= allowed_lag_seconds
+
+    # Publish lag metric + pass/fail indicator
+    INGESTION_LAG_SECONDS.labels(asset=asset, network=network).set(lag)
+    INGESTION_QUALITY_CHECK_PASSED.labels(
+        check_id="missing_ledger_ranges_or_ingestion_lag",
+        network=network,
+        asset=asset,
+    ).set(1 if passed else 0)
+
     return CheckFinding(
         check_id="missing_ledger_ranges_or_ingestion_lag",
         severity="warning" if not passed else "warning",
@@ -121,11 +147,15 @@ def check_ingestion_lag(
     )
 
 
+
 def check_duplicate_events_best_effort(
     *,
     postgres: Optional[PostgresService],
     window_hours: int,
+    network: str,
+    asset: str,
 ) -> CheckFinding:
+
     """Detect duplicates.
 
     The current ingestion pipeline persists analytics_records (aggregates) and
@@ -138,12 +168,18 @@ def check_duplicate_events_best_effort(
     Idempotent + safe: read-only.
     """
     if postgres is None:
+        INGESTION_QUALITY_CHECK_PASSED.labels(
+            check_id="duplicate_events",
+            network=network,
+            asset=asset,
+        ).set(1)
         return CheckFinding(
             check_id="duplicate_events",
             severity="warning",
             passed=True,
             details={"note": "PostgreSQL unavailable; skipping duplicate event checks"},
         )
+
 
     cutoff = datetime.utcnow() - timedelta(hours=window_hours)
 
@@ -170,6 +206,13 @@ def check_duplicate_events_best_effort(
     dupes = [{"key": list(k), "count": c} for k, c in seen.items() if c > 1]
 
     passed = len(dupes) == 0
+
+    INGESTION_QUALITY_CHECK_PASSED.labels(
+        check_id="duplicate_events",
+        network=network,
+        asset=asset,
+    ).set(1 if passed else 0)
+
     return CheckFinding(
         check_id="duplicate_events",
         severity="warning" if not passed else "warning",
@@ -183,6 +226,7 @@ def check_duplicate_events_best_effort(
             "cutoff_utc": cutoff.isoformat(),
         },
     )
+
 
 
 def _compute_expected_volume_windows(asset: str, hours_list: List[int], network: str) -> Dict[str, float]:
@@ -207,6 +251,7 @@ def check_drift_between_raw_and_materialized(
     compare_window_hours: int,
     drift_ratio_threshold: float,
 ) -> CheckFinding:
+
     """Detect drift between raw fetch results and materialized views.
 
     In this codebase, "materialized views" are approximated by analytics_records
@@ -217,12 +262,18 @@ def check_drift_between_raw_and_materialized(
     If no matching records exist, we pass with note (low-noise).
     """
     if postgres is None:
+        INGESTION_QUALITY_CHECK_PASSED.labels(
+            check_id="drift_between_raw_and_materialized_views",
+            network=network,
+            asset=asset,
+        ).set(1)
         return CheckFinding(
             check_id="drift_between_raw_and_materialized_views",
             severity="warning",
             passed=True,
             details={"note": "PostgreSQL unavailable; skipping drift checks"},
         )
+
 
     # Fetch raw volume windows (fresh)
     raw = _compute_expected_volume_windows(asset, hours_list, network)
@@ -302,6 +353,12 @@ def check_drift_between_raw_and_materialized(
             "passed": passed,
         })
 
+    INGESTION_QUALITY_CHECK_PASSED.labels(
+        check_id="drift_between_raw_and_materialized_views",
+        network=network,
+        asset=asset,
+    ).set(1 if passed_all else 0)
+
     return CheckFinding(
         check_id="drift_between_raw_and_materialized_views",
         severity="warning" if not passed_all else "warning",
@@ -316,6 +373,7 @@ def check_drift_between_raw_and_materialized(
             "drift_reports": drift_reports,
         },
     )
+
 
 
 def run_all_checks(
@@ -354,6 +412,8 @@ def run_all_checks(
         check_ingestion_lag(
             fetcher=fetcher,
             allowed_lag_seconds=ingestion_lag_seconds,
+            network=network,
+            asset=asset,
         )
     )
 
@@ -361,8 +421,11 @@ def run_all_checks(
         check_duplicate_events_best_effort(
             postgres=postgres,
             window_hours=dup_window_hours,
+            network=network,
+            asset=asset,
         )
     )
+
 
     findings.append(
         check_drift_between_raw_and_materialized(
@@ -415,11 +478,23 @@ def run_all_checks(
     # If we want low-noise: exit non-zero only when ingestion lag fails.
     # Drift/duplicates are warning-level (but can still be useful).
     # Keep this as MVP behavior.
-    critical_fail = any((f.check_id == "missing_ledger_ranges_or_ingestion_lag") and (not f.passed) for f in findings)
+    critical_fail = any(
+        (f.check_id == "missing_ledger_ranges_or_ingestion_lag") and (not f.passed)
+        for f in findings
+    )
+    exit_code = 1 if critical_fail else 0
+
+    INGESTION_QUALITY_REPORTS_TOTAL.labels(
+        network=network,
+        asset=asset,
+        exit_code=str(exit_code),
+    ).inc()
+
     return {
         **report,
-        "exit_code": 1 if critical_fail else 0,
+        "exit_code": exit_code,
     }
+
 
 
 def main(argv: Optional[List[str]] = None) -> int:
