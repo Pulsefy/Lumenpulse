@@ -1,6 +1,8 @@
 "use client";
 
 import { WalletProvider } from "@/contexts/WalletContext";
+import { StellarConfigProvider, useStellarConfig } from "@/contexts/StellarConfigContext";
+import { ConfigErrorBanner } from "@/components/config-error-banner";
 import {
   ReactNode,
   createContext,
@@ -10,13 +12,39 @@ import {
   useState,
 } from "react";
 
+/**
+ * Inner wrapper that gates the rest of the app behind a successful config load.
+ * Renders a full-page error UI if the Stellar config cannot be fetched.
+ */
+function ConfigGate({ children }: { children: ReactNode }) {
+  const { status, error, retry } = useStellarConfig();
+
+  if (status === "error") {
+    return (
+      <ConfigErrorBanner
+        error={error}
+        onRetry={retry}
+        isRetrying={false}
+      />
+    );
+  }
+
+  // While loading we let the app render normally — individual components
+  // can show their own skeletons. The config is available as soon as it resolves.
+  return <>{children}</>;
+}
+
 export function Providers({ children }: { children: ReactNode }) {
   return (
-    <WalletProvider>
-      <StellarProvider>
-        {children}
-      </StellarProvider>
-    </WalletProvider>
+    <StellarConfigProvider>
+      <WalletProvider>
+        <StellarProvider>
+          <ConfigGate>
+            {children}
+          </ConfigGate>
+        </StellarProvider>
+      </WalletProvider>
+    </StellarConfigProvider>
   );
 }
 

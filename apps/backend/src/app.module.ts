@@ -49,6 +49,7 @@ import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 import { SearchModule } from './search/search.module';
 import { ExportModule } from './export/export.module';
+import { AppConfigModule } from './config/config.module';
 import { CrowdfundModule } from './crowdfund/crowdfund.module';
 
 @Module({
@@ -119,6 +120,7 @@ import { CrowdfundModule } from './crowdfund/crowdfund.module';
     SearchModule,
     FeatureFlagsModule,
     CrowdfundModule,
+    AppConfigModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
