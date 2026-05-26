@@ -81,3 +81,7 @@ class AlertNotifier:
                 time.sleep(self.base_backoff_seconds * (2 ** attempt))
 
         return False
+
+
+# Export a singleton notifier instance for the pipeline.
+notifier = AlertNotifier()
