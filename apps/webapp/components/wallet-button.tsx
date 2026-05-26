@@ -1,46 +1,26 @@
-'use client';
+"use client";
 
-<<<<<<< HEAD
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from "react";
 import {
   Wallet,
+  Copy,
+  ExternalLink,
+  Check,
   LogOut,
   X,
   XCircle,
   RefreshCw,
-  ExternalLink,
   Loader2,
   CircleCheck,
   RotateCcw,
-} from 'lucide-react';
-import { useStellarWallet, WalletId } from '@/app/providers';
-=======
-import { useState } from "react";
-import { Wallet, Copy, ExternalLink, Check, LogOut } from "lucide-react";
-import { useStellarWallet } from "@/app/providers";
+} from "lucide-react";
+import { useStellarWallet, WalletId } from "@/app/providers";
 import { cn } from "@/lib/utils";
->>>>>>> 32ecf6ba4de3e51a30acc180ef439b0291d4ebf9
 
 // ─── wallet icons ─────────────────────────────────────────────────────────────
 // Defined as named components so they can be referenced by the WALLETS registry
 // without pre-evaluating JSX at module initialisation time.
 
-function FreighterIcon() {
-  return (
-    <svg viewBox="0 0 32 32" fill="none" className="w-full h-full">
-      <rect width="32" height="32" rx="8" fill="#6B46C1" />
-      <path
-        d="M8 16C8 11.582 11.582 8 16 8s8 3.582 8 8-3.582 8-8 8-8-3.582-8-8z"
-        fill="white"
-        fillOpacity="0.2"
-      />
-      <path d="M11 16l3.5-5 3.5 5-3.5 2.5L11 16z" fill="white" />
-      <path d="M18 16l3 2-3 2v-4z" fill="white" fillOpacity="0.7" />
-    </svg>
-  );
-}
-
-<<<<<<< HEAD
 function BraavosIcon() {
   return (
     <svg viewBox="0 0 32 32" fill="none" className="w-full h-full">
@@ -56,43 +36,6 @@ function BraavosIcon() {
     </svg>
   );
 }
-=======
-export function WalletButton({ className }: { className?: string }) {
-  const { publicKey, status, connect, disconnect } = useStellarWallet();
-
-  if (status === "connected" && publicKey) {
-    return (
-      <AccountSummary
-        address={publicKey}
-        onDisconnect={disconnect}
-      />
-    );
-  }
-
-  return (
-    <button
-      onClick={connect}
-      disabled={status === "connecting"}
-      className={cn(
-        "relative rounded-lg px-4 py-2 font-medium flex items-center gap-2 transition-all duration-300",
-        "bg-primary text-primary-foreground hover:opacity-90",
-        "disabled:opacity-50 disabled:cursor-not-allowed",
-        className
-      )}
-    >
-      <Wallet className="w-4 h-4" />
-      {status === "connecting" ? "Connecting..." : "Connect Wallet"}
-    </button>
-  );
-}
-
-export function AccountSummary({
-  address,
-  network = "testnet",
-  onDisconnect,
-}: AccountSummaryProps) {
-  const [copied, setCopied] = useState(false);
->>>>>>> 32ecf6ba4de3e51a30acc180ef439b0291d4ebf9
 
 function ArgentIcon() {
   return (
@@ -118,25 +61,25 @@ interface WalletMeta {
 
 const WALLETS: WalletMeta[] = [
   {
-    id: 'freighter',
-    name: 'Freighter',
-    description: 'Stellar wallet',
-    installUrl: 'https://www.freighter.app/',
+    id: "freighter",
+    name: "Freighter",
+    description: "Stellar wallet",
+    installUrl: "https://www.freighter.app/",
     Icon: FreighterIcon,
   },
   {
-    id: 'braavos',
-    name: 'Braavos',
-    description: 'Starknet wallet',
+    id: "braavos",
+    name: "Braavos",
+    description: "Starknet wallet",
     installUrl:
-      'https://chrome.google.com/webstore/detail/braavos-smart-wallet/jnlgamecbpmbajjfhmmmlhejkemejdma',
+      "https://chrome.google.com/webstore/detail/braavos-smart-wallet/jnlgamecbpmbajjfhmmmlhejkemejdma",
     Icon: BraavosIcon,
   },
   {
-    id: 'argent',
-    name: 'Argent',
-    description: 'Starknet wallet',
-    installUrl: 'https://www.argent.xyz/argent-x/',
+    id: "argent",
+    name: "Argent",
+    description: "Starknet wallet",
+    installUrl: "https://www.argent.xyz/argent-x/",
     Icon: ArgentIcon,
   },
 ];
@@ -144,11 +87,11 @@ const WALLETS: WalletMeta[] = [
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function truncateAddress(addr: string | null) {
-  if (!addr) return '';
+  if (!addr) return "";
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-function Spinner({ className = '' }: { className?: string }) {
+function Spinner({ className = "" }: { className?: string }) {
   return <Loader2 className={`animate-spin ${className}`} aria-hidden />;
 }
 
@@ -173,7 +116,7 @@ function WalletRow({
 
   const handleClick = () => {
     if (!isInstalled) {
-      window.open(wallet.installUrl, '_blank', 'noopener,noreferrer');
+      window.open(wallet.installUrl, "_blank", "noopener,noreferrer");
       return;
     }
     onConnect(wallet.id);
@@ -184,17 +127,17 @@ function WalletRow({
       onClick={handleClick}
       disabled={isConnecting}
       className={[
-        'w-full flex items-center gap-4 px-4 py-3 rounded-xl border transition-all duration-200 group text-left',
-        'disabled:cursor-not-allowed',
+        "w-full flex items-center gap-4 px-4 py-3 rounded-xl border transition-all duration-200 group text-left",
+        "disabled:cursor-not-allowed",
         isLastUsed && isInstalled
-          ? 'bg-[#db74cf]/[0.08] border-[#db74cf]/30 hover:bg-[#db74cf]/[0.12] hover:border-[#db74cf]/60'
+          ? "bg-[#db74cf]/[0.08] border-[#db74cf]/30 hover:bg-[#db74cf]/[0.12] hover:border-[#db74cf]/60"
           : isInstalled
-          ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-[#db74cf]/60'
-          : 'bg-white/[0.02] border-white/5 opacity-50 hover:opacity-70',
-      ].join(' ')}
+            ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-[#db74cf]/60"
+            : "bg-white/[0.02] border-white/5 opacity-50 hover:opacity-70",
+      ].join(" ")}
       aria-label={
         isInstalled
-          ? `Connect ${wallet.name}${isLastUsed ? ' (last used)' : ''}`
+          ? `Connect ${wallet.name}${isLastUsed ? " (last used)" : ""}`
           : `${wallet.name} not installed — click to install`
       }
     >
@@ -208,11 +151,11 @@ function WalletRow({
         <div className="flex items-center gap-2 flex-wrap">
           <span
             className={[
-              'font-semibold text-sm transition-colors',
+              "font-semibold text-sm transition-colors",
               isInstalled
-                ? 'text-white group-hover:text-[#db74cf]'
-                : 'text-white/60',
-            ].join(' ')}
+                ? "text-white group-hover:text-[#db74cf]"
+                : "text-white/60",
+            ].join(" ")}
           >
             {wallet.name}
           </span>
@@ -267,13 +210,15 @@ function ModalStateBanner({
   connectingWalletId,
   onRetry,
 }: ModalStateBannerProps) {
-  if (status === 'rejected') {
+  if (status === "rejected") {
     return (
       <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3">
         <div className="flex items-start gap-3">
           <XCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-red-300">Connection Rejected</p>
+            <p className="text-sm font-medium text-red-300">
+              Connection Rejected
+            </p>
             <p className="text-xs text-white/50 mt-0.5">
               You cancelled the request. Try again when ready.
             </p>
@@ -290,13 +235,15 @@ function ModalStateBanner({
     );
   }
 
-  if (status === 'disconnected' && error) {
+  if (status === "disconnected" && error) {
     return (
       <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3">
         <div className="flex items-start gap-3">
           <XCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-red-300">Connection Failed</p>
+            <p className="text-sm font-medium text-red-300">
+              Connection Failed
+            </p>
             <p className="text-xs text-white/50 mt-0.5 truncate">{error}</p>
           </div>
           <button
@@ -312,18 +259,18 @@ function ModalStateBanner({
   }
 
   if (
-    (status === 'idle' || status === 'disconnected') &&
+    (status === "idle" || status === "disconnected") &&
     wasPreviouslyConnected &&
     !error
   ) {
     const walletName =
-      WALLETS.find((w) => w.id === lastWallet)?.name ?? 'your wallet';
+      WALLETS.find((w) => w.id === lastWallet)?.name ?? "your wallet";
     return (
       <div className="mb-4 rounded-xl border border-[#db74cf]/25 bg-[#db74cf]/5 px-4 py-3">
         <div className="flex items-center gap-3">
           <RotateCcw className="w-4 h-4 text-[#db74cf]/70 flex-shrink-0" />
           <p className="text-xs text-white/60">
-            Previously connected with{' '}
+            Previously connected with{" "}
             <span className="text-[#db74cf] font-medium">{walletName}</span>.
             Select it below to reconnect.
           </p>
@@ -332,15 +279,15 @@ function ModalStateBanner({
     );
   }
 
-  if (status === 'connecting' && connectingWalletId) {
+  if (status === "connecting" && connectingWalletId) {
     const walletName =
-      WALLETS.find((w) => w.id === connectingWalletId)?.name ?? 'wallet';
+      WALLETS.find((w) => w.id === connectingWalletId)?.name ?? "wallet";
     return (
       <div className="mb-4 rounded-xl border border-[#db74cf]/25 bg-[#db74cf]/5 px-4 py-3">
         <div className="flex items-center gap-3">
           <Spinner className="w-4 h-4 text-[#db74cf]" />
           <p className="text-xs text-white/60">
-            Waiting for{' '}
+            Waiting for{" "}
             <span className="text-[#db74cf] font-medium">{walletName}</span> —
             approve the request in the extension popup.
           </p>
@@ -356,10 +303,13 @@ function ModalStateBanner({
 
 interface WalletButtonProps {
   className?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: "sm" | "md" | "lg";
 }
 
-export function WalletButton({ className = '', size = 'md' }: WalletButtonProps) {
+export function WalletButton({
+  className = "",
+  size = "md",
+}: WalletButtonProps) {
   const {
     publicKey,
     status,
@@ -373,7 +323,9 @@ export function WalletButton({ className = '', size = 'md' }: WalletButtonProps)
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
-  const [connectingWalletId, setConnectingWalletId] = useState<WalletId | null>(null);
+  const [connectingWalletId, setConnectingWalletId] = useState<WalletId | null>(
+    null,
+  );
 
   useEffect(() => {
     setIsClient(true);
@@ -381,7 +333,7 @@ export function WalletButton({ className = '', size = 'md' }: WalletButtonProps)
 
   // Auto-close on successful connection
   useEffect(() => {
-    if (status === 'connected' && isModalOpen) {
+    if (status === "connected" && isModalOpen) {
       setIsModalOpen(false);
       setConnectingWalletId(null);
     }
@@ -389,9 +341,9 @@ export function WalletButton({ className = '', size = 'md' }: WalletButtonProps)
 
   // Body scroll lock
   useEffect(() => {
-    document.body.style.overflow = isModalOpen ? 'hidden' : '';
+    document.body.style.overflow = isModalOpen ? "hidden" : "";
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = "";
     };
   }, [isModalOpen]);
 
@@ -399,19 +351,19 @@ export function WalletButton({ className = '', size = 'md' }: WalletButtonProps)
   useEffect(() => {
     if (!isModalOpen) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsModalOpen(false);
+      if (e.key === "Escape") setIsModalOpen(false);
     };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
   }, [isModalOpen]);
 
   const sizeClasses = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2',
-    lg: 'px-6 py-3 text-lg',
+    sm: "px-3 py-1.5 text-sm",
+    md: "px-4 py-2",
+    lg: "px-6 py-3 text-lg",
   };
   const iconSize =
-    size === 'sm' ? 'w-3.5 h-3.5' : size === 'lg' ? 'w-5 h-5' : 'w-4 h-4';
+    size === "sm" ? "w-3.5 h-3.5" : size === "lg" ? "w-5 h-5" : "w-4 h-4";
 
   const handleConnect = async (walletId: WalletId) => {
     setConnectingWalletId(walletId);
@@ -422,22 +374,22 @@ export function WalletButton({ className = '', size = 'md' }: WalletButtonProps)
     if (connectingWalletId) handleConnect(connectingWalletId);
   };
 
-  const isConnecting = status === 'connecting';
-  const isReconnecting = status === 'reconnecting';
+  const isConnecting = status === "connecting";
+  const isReconnecting = status === "reconnecting";
 
   if (!isClient) return null;
 
   // ── Connected ──────────────────────────────────────────────────────────────
-  if (status === 'connected') {
+  if (status === "connected") {
     return (
       <div className="flex items-center gap-2">
         <button
           title={publicKey ?? undefined}
           className={[
-            'relative group rounded-lg font-medium flex items-center gap-2 transition-all duration-300',
+            "relative group rounded-lg font-medium flex items-center gap-2 transition-all duration-300",
             sizeClasses[size],
             className,
-          ].join(' ')}
+          ].join(" ")}
         >
           <span className="absolute inset-0 rounded-lg bg-black/30 backdrop-blur-sm" />
           <span className="absolute inset-0 rounded-lg border-2 border-[#db74cf] border-opacity-70 group-hover:border-opacity-100 transition-all" />
@@ -464,10 +416,10 @@ export function WalletButton({ className = '', size = 'md' }: WalletButtonProps)
       <button
         disabled
         className={[
-          'relative group rounded-lg font-medium flex items-center gap-2 transition-all duration-300 opacity-70 cursor-wait',
+          "relative group rounded-lg font-medium flex items-center gap-2 transition-all duration-300 opacity-70 cursor-wait",
           sizeClasses[size],
           className,
-        ].join(' ')}
+        ].join(" ")}
       >
         <span className="absolute inset-0 rounded-lg bg-black/30 backdrop-blur-sm" />
         <span className="absolute inset-0 rounded-lg border-2 border-[#db74cf]/50" />
@@ -485,10 +437,10 @@ export function WalletButton({ className = '', size = 'md' }: WalletButtonProps)
       <button
         onClick={() => setIsModalOpen(true)}
         className={[
-          'relative group rounded-lg font-medium flex items-center gap-2 transition-all duration-300',
+          "relative group rounded-lg font-medium flex items-center gap-2 transition-all duration-300",
           sizeClasses[size],
           className,
-        ].join(' ')}
+        ].join(" ")}
       >
         <span className="absolute inset-0 rounded-lg bg-black/30 backdrop-blur-sm" />
         <span className="absolute inset-0 rounded-lg border-2 border-[#db74cf] border-opacity-70 group-hover:border-opacity-100 transition-all" />
@@ -509,9 +461,9 @@ export function WalletButton({ className = '', size = 'md' }: WalletButtonProps)
           aria-labelledby="wallet-modal-title"
           className="fixed inset-0 z-[9999]"
           style={{
-            backgroundColor: 'rgba(0,0,0,0.80)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
+            backgroundColor: "rgba(0,0,0,0.80)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
           }}
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsModalOpen(false);
@@ -523,7 +475,7 @@ export function WalletButton({ className = '', size = 'md' }: WalletButtonProps)
               className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0d0d0f] shadow-2xl"
               style={{
                 boxShadow:
-                  '0 0 0 1px rgba(219,116,207,0.15), 0 32px 64px -16px rgba(0,0,0,0.9), 0 0 48px rgba(219,116,207,0.08)',
+                  "0 0 0 1px rgba(219,116,207,0.15), 0 32px 64px -16px rgba(0,0,0,0.9), 0 0 48px rgba(219,116,207,0.08)",
               }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -580,7 +532,9 @@ export function WalletButton({ className = '', size = 'md' }: WalletButtonProps)
                       key={wallet.id}
                       wallet={wallet}
                       isInstalled={installState[wallet.id]}
-                      isConnecting={isConnecting && connectingWalletId === wallet.id}
+                      isConnecting={
+                        isConnecting && connectingWalletId === wallet.id
+                      }
                       isLastUsed={wallet.id === lastWallet}
                       onConnect={handleConnect}
                     />
@@ -590,11 +544,11 @@ export function WalletButton({ className = '', size = 'md' }: WalletButtonProps)
               {/* Footer */}
               <div className="relative px-6 pb-5 pt-3 border-t border-white/[0.08]">
                 <p className="text-center text-[11px] text-white/30 leading-relaxed">
-                  By connecting you agree to our{' '}
+                  By connecting you agree to our{" "}
                   <span className="text-[#db74cf]/70 hover:text-[#db74cf] cursor-pointer transition-colors">
                     Terms of Service
                   </span>
-                  . New to wallets?{' '}
+                  . New to wallets?{" "}
                   <a
                     href="https://www.freighter.app/"
                     target="_blank"

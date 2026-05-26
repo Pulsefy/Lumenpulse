@@ -3,13 +3,21 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import { Menu, X, Layers, Users, LayoutDashboard, Trophy, ShieldCheck } from "lucide-react";
+import {
+  Menu,
+  X,
+  Layers,
+  Users,
+  LayoutDashboard,
+  Trophy,
+  ShieldCheck,
+} from "lucide-react";
 import { WalletButton } from "./wallet-button";
 import { ThemeSelector } from "./theme-selector";
 import { WalletSwitcher } from "@/components/wallet-switcher";
 
 // inside the navbar JSX, next to existing nav items:
-<WalletSwitcher />
+<WalletSwitcher />;
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -20,7 +28,7 @@ export function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex-shrink-0 -ml-2">
-            <Link href="/" className="flex items-center">
+            <Link href="/" className="flex items-center gap-3">
               <Image
                 src="/assets/lumenpulse-03.svg"
                 alt="LumenPulse Logo"
@@ -29,6 +37,9 @@ export function Navbar() {
                 className="h-28 w-auto ml-2 my-auto"
                 priority
               />
+              <span className="hidden md:inline-flex items-center rounded-full border border-[#db74cf]/30 bg-[#db74cf]/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#db74cf]">
+                {process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "testnet"}
+              </span>
             </Link>
           </div>
 
