@@ -18,6 +18,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from sentiment import SentimentAnalyzer
 from src.utils.logger import setup_logger, correlation_id_ctx, generate_correlation_id
 from src.utils.metrics import API_FAILURES_TOTAL, generate_latest, CONTENT_TYPE_LATEST
+from src.analytics.crowdfund_metrics import load_persisted_series
 
 # Initialize structured logger
 logger = setup_logger(__name__)
@@ -103,6 +104,16 @@ async def health_check() -> HealthResponse:
         timestamp=datetime.now().isoformat(),
         service="sentiment-analysis",
     )
+
+
+@app.get("/crowdfund/metrics")
+async def crowdfund_metrics():
+    """Return persisted crowdfund KPI series (TVL and cumulative deposits)."""
+    try:
+        data = load_persisted_series()
+        return {"count": len(data), "series": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
