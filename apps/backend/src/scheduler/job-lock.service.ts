@@ -25,13 +25,14 @@ export class JobLockService {
    */
   async tryAcquire(jobName: string): Promise<boolean> {
     const key = this.nameToKey(jobName);
-    const result = await this.dataSource.query<[{ pg_try_advisory_lock: boolean }]>(
-      'SELECT pg_try_advisory_lock($1) AS pg_try_advisory_lock',
-      [key],
-    );
+    const result = await this.dataSource.query<
+      [{ pg_try_advisory_lock: boolean }]
+    >('SELECT pg_try_advisory_lock($1) AS pg_try_advisory_lock', [key]);
     const acquired = result[0]?.pg_try_advisory_lock === true;
     if (!acquired) {
-      this.logger.warn(`Job "${jobName}" skipped — lock held by another instance`);
+      this.logger.warn(
+        `Job "${jobName}" skipped — lock held by another instance`,
+      );
     }
     return acquired;
   }
@@ -49,10 +50,7 @@ export class JobLockService {
    * Convenience wrapper: acquire → run fn → release.
    * Returns null when the lock could not be acquired (another instance running).
    */
-  async withLock<T>(
-    jobName: string,
-    fn: () => Promise<T>,
-  ): Promise<T | null> {
+  async withLock<T>(jobName: string, fn: () => Promise<T>): Promise<T | null> {
     const acquired = await this.tryAcquire(jobName);
     if (!acquired) return null;
     try {
