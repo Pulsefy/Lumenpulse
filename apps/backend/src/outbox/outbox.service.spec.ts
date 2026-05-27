@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { OutboxService } from './outbox.service';
 import { OutboxEvent, OutboxEventStatus } from './outbox-event.entity';
+import { JobLockService } from '../scheduler/job-lock.service';
 
 const mockRepo = () => ({
   create: jest.fn(),
@@ -20,6 +21,10 @@ describe('OutboxService', () => {
       providers: [
         OutboxService,
         { provide: getRepositoryToken(OutboxEvent), useFactory: mockRepo },
+        {
+          provide: JobLockService,
+          useValue: { tryAcquire: jest.fn().mockResolvedValue(true), release: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 

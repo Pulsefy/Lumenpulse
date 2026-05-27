@@ -35,9 +35,16 @@ import { z } from 'zod';
  * - JWT_EXPIRES_IN
  * - STELLAR_NETWORK
  * - STELLAR_HORIZON_URL
+ * - STELLAR_SOROBAN_RPC_URL
  * - STELLAR_TIMEOUT
  * - STELLAR_RETRY_ATTEMPTS
  * - STELLAR_RETRY_DELAY
+ * - STELLAR_CONTRACT_LUMEN_TOKEN
+ * - STELLAR_CONTRACT_CROWDFUND_VAULT
+ * - STELLAR_CONTRACT_PROJECT_REGISTRY
+ * - STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY
+ * - STELLAR_CONTRACT_MATCHING_POOL
+ * - STELLAR_CONTRACT_TREASURY
  * - WEBHOOK_SECRET
  * - WEBHOOK_PROVIDERS
  * - TELEGRAM_BOT_TOKEN
@@ -352,10 +359,19 @@ const envSchema = z
 
     STELLAR_NETWORK: z.enum(['testnet', 'mainnet']).default('testnet'),
     STELLAR_HORIZON_URL: z.string().trim().optional(),
+    STELLAR_SOROBAN_RPC_URL: z.string().trim().optional(),
     STELLAR_TIMEOUT: z.coerce.number().int().min(1).default(30_000),
     STELLAR_RETRY_ATTEMPTS: z.coerce.number().int().min(0).default(3),
     STELLAR_RETRY_DELAY: z.coerce.number().int().min(0).default(1_000),
     STELLAR_SERVER_SECRET: z.string().min(1), // SECRET — never log
+
+    // Soroban contract addresses (optional — null when not yet deployed)
+    STELLAR_CONTRACT_LUMEN_TOKEN: z.string().trim().optional(),
+    STELLAR_CONTRACT_CROWDFUND_VAULT: z.string().trim().optional(),
+    STELLAR_CONTRACT_PROJECT_REGISTRY: z.string().trim().optional(),
+    STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY: z.string().trim().optional(),
+    STELLAR_CONTRACT_MATCHING_POOL: z.string().trim().optional(),
+    STELLAR_CONTRACT_TREASURY: z.string().trim().optional(),
 
     PYTHON_API_URL: z.string().trim().default('http://localhost:8000'),
     PYTHON_SERVICE_URL: z.string().trim().optional(),
@@ -603,9 +619,34 @@ const optionalSummary = [
   ],
   ['STELLAR_NETWORK', parsedEnv.STELLAR_NETWORK],
   ['STELLAR_HORIZON_URL', parsedEnv.STELLAR_HORIZON_URL ?? '(auto)'],
+  ['STELLAR_SOROBAN_RPC_URL', parsedEnv.STELLAR_SOROBAN_RPC_URL ?? '(auto)'],
   ['STELLAR_TIMEOUT', String(parsedEnv.STELLAR_TIMEOUT)],
   ['STELLAR_RETRY_ATTEMPTS', String(parsedEnv.STELLAR_RETRY_ATTEMPTS)],
   ['STELLAR_RETRY_DELAY', String(parsedEnv.STELLAR_RETRY_DELAY)],
+  [
+    'STELLAR_CONTRACT_LUMEN_TOKEN',
+    parsedEnv.STELLAR_CONTRACT_LUMEN_TOKEN ?? '(not set)',
+  ],
+  [
+    'STELLAR_CONTRACT_CROWDFUND_VAULT',
+    parsedEnv.STELLAR_CONTRACT_CROWDFUND_VAULT ?? '(not set)',
+  ],
+  [
+    'STELLAR_CONTRACT_PROJECT_REGISTRY',
+    parsedEnv.STELLAR_CONTRACT_PROJECT_REGISTRY ?? '(not set)',
+  ],
+  [
+    'STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY',
+    parsedEnv.STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY ?? '(not set)',
+  ],
+  [
+    'STELLAR_CONTRACT_MATCHING_POOL',
+    parsedEnv.STELLAR_CONTRACT_MATCHING_POOL ?? '(not set)',
+  ],
+  [
+    'STELLAR_CONTRACT_TREASURY',
+    parsedEnv.STELLAR_CONTRACT_TREASURY ?? '(not set)',
+  ],
   ['PYTHON_API_URL', parsedEnv.PYTHON_API_URL],
   [
     'PYTHON_SERVICE_URL',
@@ -754,10 +795,20 @@ export const config = Object.freeze({
     horizonUrl:
       parsedEnv.STELLAR_HORIZON_URL ||
       defaultHorizonUrls[parsedEnv.STELLAR_NETWORK],
+    sorobanRpcUrl: parsedEnv.STELLAR_SOROBAN_RPC_URL ?? null,
     timeout: parsedEnv.STELLAR_TIMEOUT,
     retryAttempts: parsedEnv.STELLAR_RETRY_ATTEMPTS,
     retryDelay: parsedEnv.STELLAR_RETRY_DELAY,
     serverSecret: new SecretString(parsedEnv.STELLAR_SERVER_SECRET),
+    contracts: Object.freeze({
+      lumenToken: parsedEnv.STELLAR_CONTRACT_LUMEN_TOKEN ?? null,
+      crowdfundVault: parsedEnv.STELLAR_CONTRACT_CROWDFUND_VAULT ?? null,
+      projectRegistry: parsedEnv.STELLAR_CONTRACT_PROJECT_REGISTRY ?? null,
+      contributorRegistry:
+        parsedEnv.STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY ?? null,
+      matchingPool: parsedEnv.STELLAR_CONTRACT_MATCHING_POOL ?? null,
+      treasury: parsedEnv.STELLAR_CONTRACT_TREASURY ?? null,
+    }),
   }),
   auth: Object.freeze({
     jwtSecret: new SecretString(parsedEnv.JWT_SECRET),
