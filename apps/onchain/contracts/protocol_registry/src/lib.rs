@@ -153,11 +153,7 @@ impl ProtocolRegistryContract {
 
     /// Mark a module inactive. Inactive modules are rejected by `resolve`.
     /// The entry is retained for historical querying via `get_module`.
-    pub fn deactivate_module(
-        env: Env,
-        admin: Address,
-        name: Symbol,
-    ) -> Result<(), RegistryError> {
+    pub fn deactivate_module(env: Env, admin: Address, name: Symbol) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
 
         let mut entry: ModuleEntry = env
@@ -172,21 +168,13 @@ impl ProtocolRegistryContract {
             .persistent()
             .set(&DataKey::Module(name.clone()), &entry);
 
-        events::ModuleDeactivatedEvent {
-            name,
-            admin,
-        }
-        .publish(&env);
+        events::ModuleDeactivatedEvent { name, admin }.publish(&env);
 
         Ok(())
     }
 
     /// Re-enable a previously deactivated module.
-    pub fn activate_module(
-        env: Env,
-        admin: Address,
-        name: Symbol,
-    ) -> Result<(), RegistryError> {
+    pub fn activate_module(env: Env, admin: Address, name: Symbol) -> Result<(), RegistryError> {
         Self::require_not_paused(&env)?;
         Self::require_admin(&env, &admin)?;
 
@@ -202,11 +190,7 @@ impl ProtocolRegistryContract {
             .persistent()
             .set(&DataKey::Module(name.clone()), &entry);
 
-        events::ModuleActivatedEvent {
-            name,
-            admin,
-        }
-        .publish(&env);
+        events::ModuleActivatedEvent { name, admin }.publish(&env);
 
         Ok(())
     }
