@@ -166,6 +166,38 @@ class AnalyticsRecord(Base):
         return f"<AnalyticsRecord(type={self.record_type}, asset={self.asset}, metric={self.metric_name}, value={self.value})>"
 
 
+class ProjectContributionMaterializedView(Base):
+    """
+    Stores incremental rollups for project totals, contributors, and milestone status.
+    """
+
+    __tablename__ = "project_contribution_materialized_views"
+
+    project_id = Column(Integer, primary_key=True, index=True)
+    total_contributed = Column(BigInteger, nullable=False, default=0)
+    contributor_count = Column(Integer, nullable=False, default=0)
+    milestone_approved = Column(Integer, nullable=False, default=0)
+    contributors = Column(JSON, nullable=True)
+    last_processed_ledger = Column(BigInteger, nullable=False, default=0)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("idx_project_contribution_rollup_project_id", "project_id"),
+        Index("idx_project_contribution_rollup_ledger", "last_processed_ledger"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ProjectContributionMaterializedView(project_id={self.project_id}, "
+            f"total_contributed={self.total_contributed}, contributor_count={self.contributor_count})>"
+        )
+
+
 class NewsInsight(Base):
     """
     Stores sentiment analysis results for news articles (legacy table, kept for backward compatibility)

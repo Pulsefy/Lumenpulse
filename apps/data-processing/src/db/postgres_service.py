@@ -13,7 +13,15 @@ from sqlalchemy import create_engine, select, and_, desc
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
-from .models import Base, Article, SocialPost, AnalyticsRecord, NewsInsight, AssetTrend
+from .models import (
+    Base,
+    Article,
+    SocialPost,
+    AnalyticsRecord,
+    ProjectContributionMaterializedView,
+    NewsInsight,
+    AssetTrend,
+)
 from src.analytics.ner_service import NERService
 
 logger = logging.getLogger(__name__)
@@ -683,6 +691,71 @@ class PostgresService:
             logger.error(f"Failed to save analytics records batch: {e}")
 
         return saved_count
+
+    def upsert_project_contribution_rollup(
+        self,
+        project_id: int,
+        total_contributed: int,
+        contributor_count: int,
+        milestone_approved: bool,
+        contributors: Optional[List[str]] = None,
+        last_processed_ledger: Optional[int] = None,
+    ) -> Optional[ProjectContributionMaterializedView]:
+        """
+        Persist incremental project contribution rollups.
+        """
+
+        def _upsert():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(ProjectContributionMaterializedView).where(
+                        ProjectContributionMaterializedView.project_id == project_id
+                    )
+                ).scalar_one_or_none()
+
+                if existing is None:
+                    record = ProjectContributionMaterializedView(
+                        project_id=project_id,
+                        total_contributed=total_contributed,
+                        contributor_count=contributor_count,
+                        milestone_approved=int(bool(milestone_approved)),
+                        contributors=contributors or [],
+                        last_processed_ledger=last_processed_ledger or 0,
+                    )
+                    session.add(record)
+                    session.flush()
+                    logger.debug(f"Saved project contribution rollup for project {project_id}")
+                    return record
+
+                existing.total_contributed = total_contributed
+                existing.contributor_count = contributor_count
+                existing.milestone_approved = int(bool(milestone_approved))
+                existing.contributors = contributors or []
+                if last_processed_ledger is not None:
+                    existing.last_processed_ledger = last_processed_ledger
+                session.flush()
+                logger.debug(f"Updated project contribution rollup for project {project_id}")
+                return existing
+
+        try:
+            return self._retry_operation(_upsert)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to upsert project contribution rollup: {e}")
+            return None
+
+    def get_project_contribution_rollups(self) -> List[ProjectContributionMaterializedView]:
+        """Fetch persisted project contribution materialized views."""
+        try:
+            with self.get_session() as session:
+                stmt = select(ProjectContributionMaterializedView).order_by(
+                    ProjectContributionMaterializedView.project_id
+                )
+                results = session.execute(stmt).scalars().all()
+                logger.debug(f"Retrieved {len(results)} project contribution rollups")
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve project contribution rollups: {e}")
+            return []
 
     def get_analytics_records(
         self,
