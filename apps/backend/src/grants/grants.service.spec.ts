@@ -422,7 +422,11 @@ describe('GrantsService', () => {
     expect(summary.participationMetrics.totalContributionAmount).toBe('400');
     expect(summary.participationMetrics.totalContributionRecords).toBe(3);
     expect(summary.participationMetrics.totalProjectsWithContributions).toBe(2);
-    expect(summary.projects.every((project) => project.contributionPercentage !== undefined)).toBe(true);
+    expect(
+      summary.projects.every(
+        (project) => project.contributionPercentage !== undefined,
+      ),
+    ).toBe(true);
 
     const exportData = service.getRoundExport(round.id);
     expect(exportData.contributions).toHaveLength(3);

@@ -90,11 +90,19 @@ describe('NewsSentimentService', () => {
         },
         {
           provide: JobLockService,
-          useValue: { tryAcquire: jest.fn().mockResolvedValue(true), release: jest.fn().mockResolvedValue(undefined) },
+          useValue: {
+            tryAcquire: jest.fn().mockResolvedValue(true),
+            release: jest.fn().mockResolvedValue(undefined),
+          },
         },
         {
           provide: JobHistoryService,
-          useValue: { start: jest.fn().mockResolvedValue({ startedAt: new Date() }), complete: jest.fn().mockResolvedValue(undefined), fail: jest.fn().mockResolvedValue(undefined), markSkipped: jest.fn().mockResolvedValue(undefined) },
+          useValue: {
+            start: jest.fn().mockResolvedValue({ startedAt: new Date() }),
+            complete: jest.fn().mockResolvedValue(undefined),
+            fail: jest.fn().mockResolvedValue(undefined),
+            markSkipped: jest.fn().mockResolvedValue(undefined),
+          },
         },
       ],
     }).compile();
@@ -279,11 +287,19 @@ describe('NewsService - sentiment methods', () => {
         },
         {
           provide: JobLockService,
-          useValue: { tryAcquire: jest.fn().mockResolvedValue(true), release: jest.fn().mockResolvedValue(undefined) },
+          useValue: {
+            tryAcquire: jest.fn().mockResolvedValue(true),
+            release: jest.fn().mockResolvedValue(undefined),
+          },
         },
         {
           provide: JobHistoryService,
-          useValue: { start: jest.fn().mockResolvedValue({ startedAt: new Date() }), complete: jest.fn().mockResolvedValue(undefined), fail: jest.fn().mockResolvedValue(undefined), markSkipped: jest.fn().mockResolvedValue(undefined) },
+          useValue: {
+            start: jest.fn().mockResolvedValue({ startedAt: new Date() }),
+            complete: jest.fn().mockResolvedValue(undefined),
+            fail: jest.fn().mockResolvedValue(undefined),
+            markSkipped: jest.fn().mockResolvedValue(undefined),
+          },
         },
       ],
     }).compile();

@@ -29,7 +29,9 @@ export class SearchController {
     description: 'Project search results',
     type: ProjectSearchResponseDto,
   })
-  searchProjects(@Query() query: ProjectSearchQueryDto): ProjectSearchResponseDto {
+  searchProjects(
+    @Query() query: ProjectSearchQueryDto,
+  ): ProjectSearchResponseDto {
     return this.searchService.searchProjects(query);
   }
 
@@ -69,4 +71,3 @@ export class SearchController {
     return this.searchService.searchEcosystemEntities(query);
   }
 }
-

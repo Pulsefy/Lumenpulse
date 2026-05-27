@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 
 export type EcosystemEntityKind = 'tag' | 'category';
 
@@ -64,4 +72,3 @@ export class EcosystemSearchResponseDto {
   @ApiProperty({ type: [EcosystemEntityDto] })
   items: EcosystemEntityDto[];
 }
-

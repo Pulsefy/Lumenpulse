@@ -1,12 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsEnum,
-  IsInt,
-  IsOptional,
-  IsString,
-  Max,
-  Min,
-} from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { VerificationStatus } from '../../verification/dto/verification.dto';
 
 export class ProjectSearchQueryDto {
@@ -77,7 +70,10 @@ export class ProjectSearchItemDto {
   })
   ownerPublicKey: string;
 
-  @ApiProperty({ enum: VerificationStatus, example: VerificationStatus.Pending })
+  @ApiProperty({
+    enum: VerificationStatus,
+    example: VerificationStatus.Pending,
+  })
   status: VerificationStatus;
 
   @ApiProperty({ example: 0 })
@@ -118,4 +114,3 @@ export class ProjectSearchResponseDto {
   @ApiProperty({ example: 0 })
   offset: number;
 }
-

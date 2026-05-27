@@ -213,11 +213,7 @@ export class GrantsService {
       low > 0n ? ((value - low * low) * scale) / (2n * low) : 0n;
     return intPart + remainder;
   }
-  private formatPercentage(
-    part: bigint,
-    total: bigint,
-    decimals = 2,
-  ): string {
+  private formatPercentage(part: bigint, total: bigint, decimals = 2): string {
     if (total === 0n) return `0.${'0'.repeat(decimals)}`;
     const scale = 10n ** BigInt(decimals);
     const value = (part * 100n * scale + total / 2n) / total;
@@ -235,7 +231,8 @@ export class GrantsService {
     const uniqueContributors = new Set<string>();
 
     for (const pid of record.eligibleProjects) {
-      const contribs = record.contributions.get(pid) ?? new Map<string, bigint>();
+      const contribs =
+        record.contributions.get(pid) ?? new Map<string, bigint>();
       const projectTotal = [...contribs.values()].reduce(
         (a: bigint, b: bigint) => a + b,
         0n,
@@ -257,12 +254,15 @@ export class GrantsService {
       totalProjectsWithContributions,
       averageContributionPerContributor:
         uniqueContributors.size > 0
-          ? (totalContributionAmount / BigInt(uniqueContributors.size)).toString()
+          ? (
+              totalContributionAmount / BigInt(uniqueContributors.size)
+            ).toString()
           : '0',
       averageContributionPerProject:
         totalProjectsWithContributions > 0
-          ? (totalContributionAmount /
-              BigInt(totalProjectsWithContributions)).toString()
+          ? (
+              totalContributionAmount / BigInt(totalProjectsWithContributions)
+            ).toString()
           : '0',
     };
   }
@@ -276,7 +276,8 @@ export class GrantsService {
     const allocations: ProjectAllocationDto[] = [];
 
     for (const pid of record.eligibleProjects) {
-      const contribs = record.contributions.get(pid) ?? new Map<string, bigint>();
+      const contribs =
+        record.contributions.get(pid) ?? new Map<string, bigint>();
       const score = scores.get(pid) ?? 0n;
       const totalContribs = [...contribs.values()].reduce(
         (a: bigint, b: bigint) => a + b,
@@ -317,7 +318,8 @@ export class GrantsService {
     const contributions: ContributionRecordDto[] = [];
 
     for (const pid of record.eligibleProjects) {
-      const contribs = record.contributions.get(pid) ?? new Map<string, bigint>();
+      const contribs =
+        record.contributions.get(pid) ?? new Map<string, bigint>();
       for (const [contributorPublicKey, amount] of contribs.entries()) {
         contributions.push({
           projectId: pid,
@@ -327,8 +329,10 @@ export class GrantsService {
       }
     }
 
-    contributions.sort((a, b) =>
-      a.projectId - b.projectId || a.contributorPublicKey.localeCompare(b.contributorPublicKey),
+    contributions.sort(
+      (a, b) =>
+        a.projectId - b.projectId ||
+        a.contributorPublicKey.localeCompare(b.contributorPublicKey),
     );
     return contributions;
   }
@@ -348,7 +352,9 @@ export class GrantsService {
     }
 
     const participationMetrics = this.computeParticipationMetrics(record);
-    const totalContributionAmount = BigInt(participationMetrics.totalContributionAmount);
+    const totalContributionAmount = BigInt(
+      participationMetrics.totalContributionAmount,
+    );
     const projects = this.buildProjectAllocations(
       record,
       scores,

@@ -29,7 +29,8 @@ export class ReconciliationScheduler {
 
     const run = await this.jobHistory.start(JOB_NAME);
     try {
-      const job = await this.reconciliationService.runReconciliation('scheduled');
+      const job =
+        await this.reconciliationService.runReconciliation('scheduled');
       await this.jobHistory.complete(run, {
         reconciliationJobId: job.id,
         driftsDetected: job.driftsDetected,
