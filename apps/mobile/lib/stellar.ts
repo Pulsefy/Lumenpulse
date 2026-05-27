@@ -1,4 +1,4 @@
-import { config } from './config';
+import { config, getEnvironmentConfig } from './config';
 
 /**
  * Possible states for a Stellar/Soroban transaction lifecycle.
@@ -84,7 +84,7 @@ export function validateContributionAmount(amount: string): string | null {
  * Build a Stellar Explorer link for a transaction hash.
  */
 export function buildExplorerUrl(transactionHash: string): string {
-  const network = config.stellar.network === 'mainnet' ? 'public' : 'testnet';
+  const network = getEnvironmentConfig().explorerNetwork;
   return `${config.stellar.explorerUrl}/${network}/tx/${transactionHash}`;
 }
 

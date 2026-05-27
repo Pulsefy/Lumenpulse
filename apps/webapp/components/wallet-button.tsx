@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Wallet, Copy, ExternalLink, Check, LogOut } from "lucide-react";
 import { useStellarWallet } from "@/app/providers";
-import { cn } from "@/lib/utils";
+import { cn, getExplorerUrl } from "@/lib/utils";
 
 export function WalletButton({ className }: { className?: string }) {
   const { publicKey, status, connect, disconnect } = useStellarWallet();
@@ -70,7 +70,7 @@ export function AccountSummary({
       </button>
 
       <a
-        href={`https://stellar.expert/explorer/testnet/account/${address}`}
+        href={getExplorerUrl("account", address)}
         target="_blank"
         rel="noopener noreferrer"
         className="p-1 hover:bg-white/10 rounded text-gray-400 hover:text-white transition-colors"

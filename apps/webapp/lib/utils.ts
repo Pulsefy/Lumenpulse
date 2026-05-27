@@ -17,3 +17,15 @@ export const formatNumber = (num: number) => {
     return `$${num.toFixed(2)}`;
   }
 };
+
+// Stellar explorer URL helpers
+const STELLAR_EXPERT_BASE = "https://stellar.expert/explorer";
+
+export function getExplorerUrl(
+  type: "tx" | "account",
+  id: string,
+  network: "testnet" | "mainnet" = "testnet"
+): string {
+  const net = network === "mainnet" ? "public" : "testnet";
+  return `${STELLAR_EXPERT_BASE}/${net}/${type}/${id}`;
+}

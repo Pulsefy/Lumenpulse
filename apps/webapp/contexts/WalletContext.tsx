@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
-export type Chain = "ETH" | "SOL" | "BNB" | "MATIC";
+export type Chain = "XLM" | "USDC" | "EURC" | "AQUA";
 
 export interface Wallet {
   id: string;

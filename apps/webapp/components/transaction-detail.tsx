@@ -12,6 +12,7 @@ import {
   ArrowLeftRight,
 } from "lucide-react";
 import { useState } from "react";
+import { getExplorerUrl } from "@/lib/utils";
 
 interface Transaction {
   id: string;
@@ -45,9 +46,6 @@ export default function TransactionDetail({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const getExplorerUrl = (hash: string) => {
-    return `https://stellar.expert/explorer/public/tx/${hash}`;
-  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -191,7 +189,7 @@ export default function TransactionDetail({
         {/* Footer */}
         <div className="p-6 border-t border-white/10 bg-white/5 relative z-10">
           <a
-            href={getExplorerUrl(transaction.hash)}
+            href={getExplorerUrl("tx", transaction.hash)}
             target="_blank"
             rel="noopener noreferrer"
             className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/20"

@@ -9,6 +9,7 @@ import WatchlistPanel from "@/components/watchlist-panel";
 import { WatchlistProvider } from "@/hooks/use-watchlist";
 import { useStellarAccount } from "@/hooks/useStellarAccount";
 import { useStellarWallet } from "@/app/providers";
+import { getExplorerUrl } from "@/lib/utils";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -110,7 +111,7 @@ export default function DashboardPage() {
                             </p>
                           )}
                           <a
-                            href={`https://stellar.expert/explorer/testnet/tx/${tx.transaction_hash}`}
+                            href={getExplorerUrl("tx", tx.transaction_hash)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs text-blue-400 hover:text-blue-300 hover:underline mt-1"

@@ -17,7 +17,7 @@ import {
  * Renders a full-page error UI if the Stellar config cannot be fetched.
  */
 function ConfigGate({ children }: { children: ReactNode }) {
-  const { status, error, retry } = useStellarConfig();
+  const { config, status, error, retry } = useStellarConfig();
 
   if (status === "error") {
     return (
@@ -29,9 +29,24 @@ function ConfigGate({ children }: { children: ReactNode }) {
     );
   }
 
+  const isTestnet = config?.network === "testnet";
+
   // While loading we let the app render normally — individual components
   // can show their own skeletons. The config is available as soon as it resolves.
-  return <>{children}</>;
+  return (
+    <>
+      {isTestnet && (
+        <div
+          id="testnet-banner"
+          className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-center gap-2 bg-amber-500/10 border-b border-amber-500/30 py-1.5 text-xs font-medium text-amber-400 backdrop-blur-sm"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+          You are on Stellar Testnet — assets have no real value
+        </div>
+      )}
+      {children}
+    </>
+  );
 }
 
 export function Providers({ children }: { children: ReactNode }) {
