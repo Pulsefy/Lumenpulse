@@ -12,6 +12,8 @@ pub enum DataKey {
     Admin,            // -> Address
     Token,            // -> Address
     Vesting(Address), // beneficiary -> VestingData
+    /// Approved delegates for a beneficiary: beneficiary -> Vec<Address>
+    Delegates(Address),
 }
 
 #[contracttype]

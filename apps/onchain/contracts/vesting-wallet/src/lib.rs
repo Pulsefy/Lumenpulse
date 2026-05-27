@@ -9,7 +9,7 @@ mod vault_interface;
 use errors::VestingError;
 use events::{AdminChangedEvent, UpgradedEvent};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 use storage::{
     DataKey, MilestoneLink, MilestoneRequirement, VestingData, LEDGER_BUMP, LEDGER_THRESHOLD,
 };
@@ -452,6 +452,196 @@ impl VestingWalletContract {
         }
         .publish(&env);
         Ok(())
+    }
+
+    // ── Delegate claim permissions ────────────────────────────
+
+    /// Approve `delegate` to execute claim actions on behalf of `beneficiary`.
+    ///
+    /// Requires authorization from `beneficiary`. Delegates can only call
+    /// `claim_for`; they cannot modify vesting schedules or admin settings.
+    pub fn approve_delegate(
+        env: Env,
+        beneficiary: Address,
+        delegate: Address,
+    ) -> Result<(), VestingError> {
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(VestingError::NotInitialized);
+        }
+        beneficiary.require_auth();
+
+        let key = DataKey::Delegates(beneficiary.clone());
+        let mut delegates: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+
+        if !delegates.contains(&delegate) {
+            delegates.push_back(delegate.clone());
+            env.storage().persistent().set(&key, &delegates);
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+
+        events::DelegateApprovedEvent {
+            beneficiary,
+            delegate,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Revoke a previously approved delegate.
+    ///
+    /// Requires authorization from `beneficiary`.
+    pub fn revoke_delegate(
+        env: Env,
+        beneficiary: Address,
+        delegate: Address,
+    ) -> Result<(), VestingError> {
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(VestingError::NotInitialized);
+        }
+        beneficiary.require_auth();
+
+        let key = DataKey::Delegates(beneficiary.clone());
+        let mut delegates: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+
+        if let Some(idx) = delegates.first_index_of(&delegate) {
+            delegates.remove(idx);
+            if delegates.is_empty() {
+                env.storage().persistent().remove(&key);
+            } else {
+                env.storage().persistent().set(&key, &delegates);
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            }
+        }
+
+        events::DelegateRevokedEvent {
+            beneficiary,
+            delegate,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Execute a claim on behalf of `beneficiary`.
+    ///
+    /// Requires authorization from `delegate`. The delegate must have been
+    /// previously approved by the beneficiary via `approve_delegate`.
+    /// Tokens are always transferred to the beneficiary, never to the delegate.
+    pub fn claim_for(
+        env: Env,
+        delegate: Address,
+        beneficiary: Address,
+    ) -> Result<i128, VestingError> {
+        Self::with_reentrancy_guard(&env, || {
+            if !env.storage().instance().has(&DataKey::Admin) {
+                return Err(VestingError::NotInitialized);
+            }
+            env.storage()
+                .instance()
+                .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            delegate.require_auth();
+
+            // Verify delegate is approved by beneficiary.
+            let delegates_key = DataKey::Delegates(beneficiary.clone());
+            let delegates: Vec<Address> = env
+                .storage()
+                .persistent()
+                .get(&delegates_key)
+                .unwrap_or(Vec::new(&env));
+            if !delegates.contains(&delegate) {
+                return Err(VestingError::DelegateNotAuthorized);
+            }
+            env.storage()
+                .persistent()
+                .extend_ttl(&delegates_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            let vesting_key = DataKey::Vesting(beneficiary.clone());
+            let mut vesting: VestingData = env
+                .storage()
+                .persistent()
+                .get(&vesting_key)
+                .ok_or(VestingError::VestingNotFound)?;
+            env.storage()
+                .persistent()
+                .extend_ttl(&vesting_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            let current_time = env.ledger().timestamp();
+            let available_amount = Self::calculate_claimable_amount(&env, current_time, &vesting);
+            if available_amount <= 0 {
+                return Err(VestingError::NothingToClaim);
+            }
+
+            let token: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::Token)
+                .ok_or(VestingError::NotInitialized)?;
+            env.storage()
+                .instance()
+                .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            vesting.claimed_amount += available_amount;
+            let remaining = vesting.total_amount - vesting.claimed_amount;
+
+            if remaining == 0 {
+                env.storage().persistent().remove(&vesting_key);
+            } else {
+                env.storage().persistent().set(&vesting_key, &vesting);
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&vesting_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            }
+
+            let contract_address = env.current_contract_address();
+            // Tokens always go to the beneficiary, not the delegate.
+            transfer(
+                &env,
+                &token,
+                &contract_address,
+                &beneficiary,
+                &available_amount,
+            );
+
+            events::DelegatedClaimEvent {
+                beneficiary: vesting.beneficiary.clone(),
+                delegate,
+                amount_claimed: available_amount,
+                remaining,
+            }
+            .publish(&env);
+
+            Ok(available_amount)
+        })
+    }
+
+    /// Returns the list of approved delegates for a beneficiary.
+    pub fn get_delegates(env: Env, beneficiary: Address) -> Vec<Address> {
+        let key = DataKey::Delegates(beneficiary);
+        let delegates: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+        if env.storage().persistent().has(&key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        delegates
     }
 }
 

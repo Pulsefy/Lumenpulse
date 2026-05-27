@@ -83,8 +83,8 @@ class TestNewsFetcher(unittest.TestCase):
         self.assertEqual(articles[0].title, "Bitcoin Hits All-Time High")
         self.assertEqual(articles[0].source, "CryptoNews")
 
-        # Verify API call was made correctly
-        mock_get.assert_called_once()
+        # Verify API calls were made correctly (for EN, ES, PT)
+        self.assertEqual(mock_get.call_count, 3)
         call_args = mock_get.call_args
         self.assertIn("Authorization", call_args[1]["headers"])
         self.assertEqual(

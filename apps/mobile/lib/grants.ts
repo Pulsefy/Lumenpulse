@@ -25,6 +25,14 @@ export interface ProjectQf {
 export interface RoundSummary {
   round: GrantRound;
   poolBalance: string;
+  participationMetrics: {
+    totalContributors: number;
+    totalContributionAmount: string;
+    totalContributionRecords: number;
+    totalProjectsWithContributions: number;
+    averageContributionPerContributor: string;
+    averageContributionPerProject: string;
+  };
   projects: ProjectQf[];
 }
 

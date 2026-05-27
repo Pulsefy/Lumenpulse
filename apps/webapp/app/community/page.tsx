@@ -298,7 +298,7 @@ export default function CommunityPage() {
             >
               CONTRIBUTING.md
             </Link>
-            . Here's the short version.
+            . Here&apos;s the short version.
           </p>
           <div className="relative">
             {/* vertical line */}

@@ -8,7 +8,7 @@ mod storage;
 use errors::ContributorError;
 use events::{
     AdminChangedEvent, BadgeGrantedEvent, BadgeRevokedEvent, GaslessRegistrationEvent,
-    MultisigConfiguredEvent, UpgradedEvent,
+    MultisigConfiguredEvent, ReputationPenaltyAppliedEvent, UpgradedEvent,
 };
 use multisig::{
     cancel, consume_approval, expire, get_config, get_proposal, propose, sign, validate_config,
@@ -19,7 +19,10 @@ use soroban_sdk::xdr::FromXdr;
 use soroban_sdk::{
     contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
-use storage::{Badge, ContributorData, ContributorTier, DataKey, LEDGER_BUMP, LEDGER_THRESHOLD};
+use storage::{
+    Badge, ContributorData, ContributorTier, DataKey, PenaltyRecord, PenaltySeverity, LEDGER_BUMP,
+    LEDGER_THRESHOLD,
+};
 
 #[contract]
 pub struct ContributorRegistryContract;
@@ -510,6 +513,73 @@ impl ContributorRegistryContract {
         Ok(())
     }
 
+    /// Apply a reputation penalty triggered by a resolved dispute.
+    ///
+    /// Requires multisig approval for `ProposalAction::ApplyPenalty`.
+    /// Deducts `points` from the contributor's reputation (floored at 0),
+    /// stores a `PenaltyRecord` for auditability, and emits
+    /// `ReputationPenaltyAppliedEvent`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn apply_reputation_penalty(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        contributor_address: Address,
+        dispute_id: u64,
+        severity: PenaltySeverity,
+        points: u64,
+        reason: String,
+    ) -> Result<(), ContributorError> {
+        consume_approval(&env, &executor, proposal_id, &ProposalAction::ApplyPenalty)?;
+
+        let mut contributor: ContributorData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contributor(contributor_address.clone()))
+            .ok_or(ContributorError::ContributorNotFound)?;
+        env.storage().persistent().extend_ttl(
+            &DataKey::Contributor(contributor_address.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        contributor.reputation_score = contributor.reputation_score.saturating_sub(points);
+        env.storage().persistent().set(
+            &DataKey::Contributor(contributor_address.clone()),
+            &contributor,
+        );
+        env.storage().persistent().extend_ttl(
+            &DataKey::Contributor(contributor_address.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        let record = PenaltyRecord {
+            dispute_id,
+            severity,
+            points_deducted: points,
+            reason: reason.clone(),
+            applied_at: env.ledger().timestamp(),
+        };
+        let penalty_key = DataKey::ReputationPenalty(contributor_address.clone());
+        env.storage().persistent().set(&penalty_key, &record);
+        env.storage()
+            .persistent()
+            .extend_ttl(&penalty_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        ReputationPenaltyAppliedEvent {
+            contributor: contributor_address,
+            dispute_id,
+            severity,
+            points_deducted: points,
+            reason,
+            executor,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
     pub fn upgrade(
         env: Env,
         executor: Address,
@@ -581,6 +651,18 @@ impl ContributorRegistryContract {
                 .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
         }
         badges
+    }
+
+    /// Returns the most recent penalty record for a contributor, if any.
+    pub fn get_penalty_record(env: Env, contributor: Address) -> Option<PenaltyRecord> {
+        let key = DataKey::ReputationPenalty(contributor);
+        let record: Option<PenaltyRecord> = env.storage().persistent().get(&key);
+        if record.is_some() {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        record
     }
 
     pub fn get_contributor(
@@ -1245,5 +1327,129 @@ mod test {
         client.revoke_badge(&s.alice, &id2, &contributor, &Badge::EarlyAdopter);
 
         assert_eq!(client.get_badges(&contributor).len(), 0);
+    }
+
+    // ── Reputation penalty hooks (issue #691) ─────────────────
+
+    #[test]
+    fn test_apply_penalty_deducts_reputation() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "penalty_dev");
+        client.register_contributor(&contributor, &handle);
+
+        // Give the contributor some reputation first.
+        let id = client.propose(&s.alice, &ProposalAction::UpdateReputation);
+        client.sign(&s.bob, &id);
+        client.update_reputation(&s.alice, &id, &contributor, &100i64);
+        assert_eq!(client.get_reputation(&contributor), 100);
+
+        // Apply a penalty via multisig.
+        let pid = client.propose(&s.alice, &ProposalAction::ApplyPenalty);
+        client.sign(&s.bob, &pid);
+        let reason = soroban_sdk::String::from_str(&s.env, "fraudulent milestone");
+        client.apply_reputation_penalty(
+            &s.alice,
+            &pid,
+            &contributor,
+            &1u64,
+            &PenaltySeverity::Moderate,
+            &30u64,
+            &reason,
+        );
+
+        assert_eq!(client.get_reputation(&contributor), 70);
+    }
+
+    #[test]
+    fn test_apply_penalty_floors_at_zero() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "floor_dev");
+        client.register_contributor(&contributor, &handle);
+
+        // Reputation is 0; penalty should not underflow.
+        let pid = client.propose(&s.alice, &ProposalAction::ApplyPenalty);
+        client.sign(&s.bob, &pid);
+        let reason = soroban_sdk::String::from_str(&s.env, "severe violation");
+        client.apply_reputation_penalty(
+            &s.alice,
+            &pid,
+            &contributor,
+            &2u64,
+            &PenaltySeverity::Severe,
+            &999u64,
+            &reason,
+        );
+
+        assert_eq!(client.get_reputation(&contributor), 0);
+    }
+
+    #[test]
+    fn test_apply_penalty_stores_record() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "record_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::ApplyPenalty);
+        client.sign(&s.bob, &pid);
+        let reason = soroban_sdk::String::from_str(&s.env, "dispute resolved against");
+        client.apply_reputation_penalty(
+            &s.alice,
+            &pid,
+            &contributor,
+            &42u64,
+            &PenaltySeverity::Minor,
+            &10u64,
+            &reason,
+        );
+
+        let record = client.get_penalty_record(&contributor).unwrap();
+        assert_eq!(record.dispute_id, 42);
+        assert_eq!(record.severity, PenaltySeverity::Minor);
+        assert_eq!(record.points_deducted, 10);
+    }
+
+    #[test]
+    fn test_apply_penalty_requires_multisig() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "noauth_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let reason = soroban_sdk::String::from_str(&s.env, "test");
+        let fake_id = 999u64;
+        assert!(client
+            .try_apply_reputation_penalty(
+                &s.alice,
+                &fake_id,
+                &contributor,
+                &1u64,
+                &PenaltySeverity::Minor,
+                &5u64,
+                &reason,
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn test_get_penalty_record_returns_none_when_absent() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "no_penalty_dev");
+        client.register_contributor(&contributor, &handle);
+
+        assert!(client.get_penalty_record(&contributor).is_none());
     }
 }

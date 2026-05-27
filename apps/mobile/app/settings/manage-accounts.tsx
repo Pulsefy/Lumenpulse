@@ -15,12 +15,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
 import { LinkedStellarAccount, usersApi } from '../../lib/api';
+import { storage } from '../../lib/storage';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
 
 const STELLAR_PUBLIC_KEY_REGEX = /\bG[A-Z2-7]{55}\b/;
 
-const truncateKey = (value: string) => `${value.slice(0, 6)}…${value.slice(-6)}`;
+const truncateKey = (value: string) => `${value.slice(0, 6)}...${value.slice(-6)}`;
 
 const extractPublicKey = (payload: string): string | null => {
   const directMatch = payload.match(STELLAR_PUBLIC_KEY_REGEX);
@@ -58,28 +59,45 @@ export default function ManageAccountsScreen() {
     [accounts],
   );
 
-  const loadAccounts = useCallback(async () => {
-    const response = await usersApi.getLinkedAccounts();
+  const loadAccounts = useCallback(
+    async (showError = true) => {
+      const response = await usersApi.getLinkedAccounts();
 
-    if (!response.success) {
-      Alert.alert(
-        t('errors.error'),
-        response.error?.message ?? t('errors.couldnt_load', { item: 'accounts' }),
-      );
-      return;
-    }
+      if (!response.success) {
+        if (showError) {
+          Alert.alert(
+            t('errors.error'),
+            response.error?.message ?? t('errors.couldnt_load', { item: 'accounts' }),
+          );
+        }
+        return false;
+      }
 
-    setAccounts(response.data ?? []);
-  }, [t]);
+      const nextAccounts = response.data ?? [];
+      setAccounts(nextAccounts);
+      await storage.storeLinkedAccountsMetadata(nextAccounts);
+      return true;
+    },
+    [t],
+  );
 
   useEffect(() => {
     const bootstrap = async () => {
       setLoading(true);
-      await loadAccounts();
-      setLoading(false);
+
+      try {
+        const cachedAccounts = await storage.getLinkedAccountsMetadata();
+        if (cachedAccounts.length > 0) {
+          setAccounts(cachedAccounts);
+        }
+
+        await loadAccounts(cachedAccounts.length === 0);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    bootstrap();
+    void bootstrap();
   }, [loadAccounts]);
 
   const openScanner = async () => {
@@ -137,6 +155,7 @@ export default function ManageAccountsScreen() {
 
     setNickname('');
     await loadAccounts();
+    await storage.setActiveWalletPublicKey(publicKey);
     Alert.alert(
       t('settings.manage_accounts.account_linked'),
       `${truncateKey(publicKey)} ${t('settings.manage_accounts.account_linked_message')}`,
@@ -299,7 +318,11 @@ export default function ManageAccountsScreen() {
               <ActivityIndicator color={colors.accent} accessibilityLabel={t('common.loading')} />
             </View>
           ) : sortedAccounts.length === 0 ? (
-            <View style={[styles.emptyState, { backgroundColor: colors.card }]} accessible accessibilityLabel="No linked accounts">
+            <View
+              style={[styles.emptyState, { backgroundColor: colors.card }]}
+              accessible
+              accessibilityLabel="No linked accounts"
+            >
               <Ionicons name="wallet-outline" size={22} color={colors.textSecondary} />
               <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
                 {t('settings.manage_accounts.no_linked_accounts')}
@@ -312,7 +335,11 @@ export default function ManageAccountsScreen() {
             sortedAccounts.map((account, index) => (
               <View key={account.id}>
                 {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
-                <View style={styles.accountRow} accessible accessibilityLabel={`${account.label || 'Linked account'}: ${truncateKey(account.publicKey)}`}>
+                <View
+                  style={styles.accountRow}
+                  accessible
+                  accessibilityLabel={`${account.label || 'Linked account'}: ${truncateKey(account.publicKey)}`}
+                >
                   <View style={styles.accountCopy}>
                     <Text style={[styles.accountLabel, { color: colors.text }]} accessible>
                       {account.label?.trim() || 'Linked account'}

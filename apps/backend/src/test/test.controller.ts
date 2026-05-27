@@ -6,11 +6,16 @@ import {
   Delete,
   Body,
   Param,
+  UseGuards,
 } from '@nestjs/common';
+import { FeatureFlag } from '../feature-flags/feature-flag.decorator';
+import { FeatureFlagGuard } from '../feature-flags/feature-flag.guard';
 
 @Controller('test')
 export class TestController {
   @Get('hello')
+  @UseGuards(FeatureFlagGuard)
+  @FeatureFlag('test.hello')
   getHello(): string {
     return 'Hello World!';
   }

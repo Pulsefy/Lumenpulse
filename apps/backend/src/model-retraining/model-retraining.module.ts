@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ModelRetrainingService } from './model-retraining.service';
 import { ModelRetrainingScheduler } from './model-retraining.scheduler';
 import { ModelRetrainingController } from './model-retraining.controller';
+import { SchedulerModule } from '../scheduler/scheduler.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { ModelRetrainingController } from './model-retraining.controller';
       }),
     }),
     ConfigModule,
+    SchedulerModule,
   ],
   providers: [ModelRetrainingService, ModelRetrainingScheduler],
   controllers: [ModelRetrainingController],

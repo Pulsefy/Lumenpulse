@@ -49,6 +49,10 @@ Lumenpulse Mobile is the cross-platform mobile client for the Lumenpulse ecosyst
 - `pnpm lint`: Run ESLint.
 - `pnpm tsc`: Run TypeScript compiler check.
 
+## Validation
+
+- Secure session and wallet metadata validation steps live in [SECURE_STORAGE_VALIDATION.md](./SECURE_STORAGE_VALIDATION.md).
+
 ## Architecture
 
 The app follows a modern Expo Router structure with the following key components:

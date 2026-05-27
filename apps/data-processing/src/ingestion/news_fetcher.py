@@ -10,6 +10,7 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass, asdict
 from .news_deduplicator import NewsDeduplicator
 from datetime import datetime
+from src.utils.translator import translate_and_normalize
 import requests
 from requests.exceptions import RequestException, Timeout
 
@@ -115,64 +116,65 @@ class NewsFetcher:
         articles = []
 
         try:
-            self._respect_rate_limit()
-
-            params = {
-                "lang": "EN",
-                "categories": "BTC,ETH,BLOCKCHAIN",
-                "excludeCategories": "Sponsored",
-            }
-
             headers = {"Authorization": f"Apikey {self.cryptocompare_key}"}
 
-            response = self.session.get(
-                APIConfig.CRYPTOCOMPARE_URL,
-                params=params,
-                headers=headers,
-                timeout=APIConfig.TIMEOUT,
-            )
+            for lang in ["EN", "ES", "PT"]:
+                self._respect_rate_limit()
 
-            if response.status_code != 200:
-                self._handle_api_error(response, "CryptoCompare")
+                params = {
+                    "lang": lang,
+                    "categories": "BTC,ETH,BLOCKCHAIN",
+                    "excludeCategories": "Sponsored",
+                }
 
-            data = response.json()
-
-            if data.get("Type") != 100:
-                raise ValueError(
-                    f"CryptoCompare API returned error: {data.get('Message', 'Unknown error')}"
+                response = self.session.get(
+                    APIConfig.CRYPTOCOMPARE_URL,
+                    params=params,
+                    headers=headers,
+                    timeout=APIConfig.TIMEOUT,
                 )
 
-            # Parse articles
-            for item in data.get("Data", [])[:limit]:
-                try:
-                    article = NewsArticle(
-                        id=f"cc_{item['id']}",
-                        title=item.get("title", ""),
-                        content=item.get("body", ""),
-                        summary=item.get("short_description", ""),
-                        source=item.get("source", "Unknown"),
-                        url=item.get("url", ""),
-                        published_at=datetime.fromtimestamp(
-                            item.get("published_on", 0)
-                        ),
-                        categories=(
-                            item.get("categories", "").split("|")
-                            if item.get("categories")
-                            else []
-                        ),
-                        tags=(
-                            item.get("tags", "").split("|") if item.get("tags") else []
-                        ),
+                if response.status_code != 200:
+                    self._handle_api_error(response, "CryptoCompare")
+
+                data = response.json()
+
+                if data.get("Type") != 100:
+                    raise ValueError(
+                        f"CryptoCompare API returned error: {data.get('Message', 'Unknown error')}"
                     )
 
-                    # Avoid duplicates
-                    if article.id not in self.seen_articles:
-                        articles.append(article)
-                        self.seen_articles.add(article.id)
+                # Parse articles
+                for item in data.get("Data", [])[:limit]:
+                    try:
+                        article = NewsArticle(
+                            id=f"cc_{item['id']}",
+                            title=translate_and_normalize(item.get("title", "")),
+                            content=translate_and_normalize(item.get("body", "")),
+                            summary=translate_and_normalize(item.get("short_description", "")),
+                            source=item.get("source", "Unknown"),
+                            url=item.get("url", ""),
+                            published_at=datetime.fromtimestamp(
+                                item.get("published_on", 0)
+                            ),
+                            categories=(
+                                item.get("categories", "").split("|")
+                                if item.get("categories")
+                                else []
+                            ),
+                            tags=(
+                                item.get("tags", "").split("|") if item.get("tags") else []
+                            ),
+                        )
 
-                except KeyError as e:
-                    print(f"Warning: Missing key in CryptoCompare data: {e}")
-                    continue
+                        # Avoid duplicates
+                        if article.id not in self.seen_articles:
+                            articles.append(article)
+                            self.seen_articles.add(article.id)
+
+                    except KeyError as e:
+                        print(f"Warning: Missing key in CryptoCompare data: {e}")
+                        continue
 
         except RequestException as e:
             print(f"Error fetching from CryptoCompare: {e}")
@@ -186,60 +188,61 @@ class NewsFetcher:
         articles = []
 
         try:
-            self._respect_rate_limit()
-
             # Calculate date range (last 7 days for recent news)
             to_date = datetime.now()
             from_date = datetime.fromtimestamp(to_date.timestamp() - (7 * 24 * 3600))
 
-            params = {
-                "q": "cryptocurrency OR blockchain OR bitcoin OR ethereum",
-                "language": "en",
-                "sortBy": "publishedAt",
-                "pageSize": min(limit, 100),  # NewsAPI max is 100
-                "from": from_date.strftime("%Y-%m-%d"),
-                "to": to_date.strftime("%Y-%m-%d"),
-                "apiKey": self.newsapi_key,
-            }
+            for lang in ["en", "es", "pt"]:
+                self._respect_rate_limit()
 
-            response = self.session.get(
-                APIConfig.NEWSAPI_URL, params=params, timeout=APIConfig.TIMEOUT
-            )
+                params = {
+                    "q": "cryptocurrency OR blockchain OR bitcoin OR ethereum",
+                    "language": lang,
+                    "sortBy": "publishedAt",
+                    "pageSize": min(limit, 100),  # NewsAPI max is 100
+                    "from": from_date.strftime("%Y-%m-%d"),
+                    "to": to_date.strftime("%Y-%m-%d"),
+                    "apiKey": self.newsapi_key,
+                }
 
-            if response.status_code != 200:
-                self._handle_api_error(response, "NewsAPI")
+                response = self.session.get(
+                    APIConfig.NEWSAPI_URL, params=params, timeout=APIConfig.TIMEOUT
+                )
 
-            data = response.json()
+                if response.status_code != 200:
+                    self._handle_api_error(response, "NewsAPI")
 
-            # Parse articles
-            for item in data.get("articles", [])[:limit]:
-                try:
-                    published_at = datetime.fromisoformat(
-                        item["publishedAt"].replace("Z", "+00:00")
-                    )
+                data = response.json()
 
-                    article = NewsArticle(
-                        id=f"na_{hash(item['url']) & 0xFFFFFFFF}",
-                        title=item.get("title", ""),
-                        content=item.get("content", ""),
-                        summary=item.get("description", ""),
-                        source=item.get("source", {}).get("name", "Unknown"),
-                        url=item.get("url", ""),
-                        published_at=published_at,
-                        categories=[
-                            "crypto",
-                            "blockchain",
-                        ],  # NewsAPI doesn't provide categories
-                    )
+                # Parse articles
+                for item in data.get("articles", [])[:limit]:
+                    try:
+                        published_at = datetime.fromisoformat(
+                            item["publishedAt"].replace("Z", "+00:00")
+                        )
 
-                    # Avoid duplicates
-                    if article.id not in self.seen_articles:
-                        articles.append(article)
-                        self.seen_articles.add(article.id)
+                        article = NewsArticle(
+                            id=f"na_{hash(item['url']) & 0xFFFFFFFF}",
+                            title=translate_and_normalize(item.get("title", "")),
+                            content=translate_and_normalize(item.get("content", "")),
+                            summary=translate_and_normalize(item.get("description", "")),
+                            source=item.get("source", {}).get("name", "Unknown"),
+                            url=item.get("url", ""),
+                            published_at=published_at,
+                            categories=[
+                                "crypto",
+                                "blockchain",
+                            ],  # NewsAPI doesn't provide categories
+                        )
 
-                except (KeyError, ValueError) as e:
-                    print(f"Warning: Error parsing NewsAPI article: {e}")
-                    continue
+                        # Avoid duplicates
+                        if article.id not in self.seen_articles:
+                            articles.append(article)
+                            self.seen_articles.add(article.id)
+
+                    except (KeyError, ValueError) as e:
+                        print(f"Warning: Error parsing NewsAPI article: {e}")
+                        continue
 
         except RequestException as e:
             print(f"Error fetching from NewsAPI: {e}")

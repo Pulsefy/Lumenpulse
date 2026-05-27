@@ -3,29 +3,30 @@ import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'rea
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { healthApi } from '../../lib/api';
-import { config } from '../../lib/config';
 import { useRouter } from 'expo-router';
 import { useLocalization } from '../../src/context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNotifications } from '../../contexts/NotificationsContext';
+import { useEnvironment } from '../../contexts/EnvironmentContext';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useLocalization();
   const { t } = useLocalization();
   const { unreadCount } = useNotifications();
+  const { environmentConfig } = useEnvironment();
   const [healthStatus, setHealthStatus] = useState<string>(t('common.loading'));
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     testApiConnection();
-  }, []);
+  }, [environmentConfig.apiBaseUrl]);
 
   const testApiConnection = async () => {
     setIsLoading(true);
     const response = await healthApi.check();
     if (response.success && response.data) {
-      setHealthStatus(`${t('home.connected_to')} ${config.api.baseUrl}`);
+      setHealthStatus(`${t('home.connected_to')} ${environmentConfig.apiBaseUrl}`);
     } else {
       setHealthStatus(`${t('home.failed')}: ${response.error?.message || t('errors.something_went_wrong')}`);
     }

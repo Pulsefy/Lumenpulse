@@ -44,6 +44,7 @@ pub enum ProposalAction {
     UpdateReputation,
     GrantBadge,
     RevokeBadge,
+    ApplyPenalty,
 }
 
 #[contracttype]

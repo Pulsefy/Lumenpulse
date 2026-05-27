@@ -3,12 +3,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, LessThan, Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { OutboxEvent, OutboxEventStatus } from './outbox-event.entity';
+import { JobLockService } from '../scheduler/job-lock.service';
 
 /** Maximum dispatch attempts before an event is permanently marked failed */
 const MAX_ATTEMPTS = 5;
 
 /** How many pending events to process per poll cycle */
 const BATCH_SIZE = 50;
+
+const OUTBOX_LOCK = 'outbox-poll';
 
 export type OutboxEventHandler = (
   eventType: string,
@@ -23,6 +26,7 @@ export class OutboxService {
   constructor(
     @InjectRepository(OutboxEvent)
     private readonly outboxRepo: Repository<OutboxEvent>,
+    private readonly jobLock: JobLockService,
   ) {}
 
   /**
@@ -65,22 +69,30 @@ export class OutboxService {
   /**
    * Poll for pending events and dispatch them to all registered handlers.
    * Runs every 5 seconds. Events exceeding MAX_ATTEMPTS are marked failed.
+   * Advisory lock prevents two instances from processing the same batch.
    */
   @Cron(CronExpression.EVERY_5_SECONDS)
   async pollAndDispatch(): Promise<void> {
-    const events = await this.outboxRepo.find({
-      where: {
-        status: OutboxEventStatus.PENDING,
-        attempts: LessThan(MAX_ATTEMPTS),
-      },
-      order: { createdAt: 'ASC' },
-      take: BATCH_SIZE,
-    });
+    const acquired = await this.jobLock.tryAcquire(OUTBOX_LOCK);
+    if (!acquired) return; // another instance is already polling
 
-    if (events.length === 0) return;
+    try {
+      const events = await this.outboxRepo.find({
+        where: {
+          status: OutboxEventStatus.PENDING,
+          attempts: LessThan(MAX_ATTEMPTS),
+        },
+        order: { createdAt: 'ASC' },
+        take: BATCH_SIZE,
+      });
 
-    for (const event of events) {
-      await this.dispatch(event);
+      if (events.length === 0) return;
+
+      for (const event of events) {
+        await this.dispatch(event);
+      }
+    } finally {
+      await this.jobLock.release(OUTBOX_LOCK);
     }
   }
 

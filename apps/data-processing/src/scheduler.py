@@ -17,6 +17,8 @@ from database import DatabaseService, AnalyticsRecord
 from anomaly_detector import AnomalyDetector, AnomalyResult
 from alertbot import AlertBot
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
+from src.ingestion.run_ingestion_quality_checks import main as run_ingestion_quality_checks
+
 
 logger = setup_logger(__name__)
 
@@ -177,7 +179,22 @@ def _retraining_job() -> None:
         logger.error(f"Scheduled retraining job raised an exception: {exc}", exc_info=True)
 
 
+def _ingestion_quality_checks_job() -> None:
+    """Run Stellar testnet ingestion quality checks.
+
+    Scheduled wrapper. Errors are caught so the scheduler keeps running.
+    """
+    try:
+        run_ingestion_quality_checks(argv=None)
+    except SystemExit:
+        # CLI may call sys.exit; ignore to keep scheduler alive.
+        pass
+    except Exception as e:
+        logger.error(f"Ingestion quality checks failed: {e}", exc_info=True)
+
+
 class AnalyticsScheduler:
+
     """Manages the APScheduler scheduler for analytics jobs"""
 
     def __init__(self, pipeline_fn=None):
@@ -196,6 +213,16 @@ class AnalyticsScheduler:
                 trigger=IntervalTrigger(hours=1),
                 id="market_analyzer_hourly",
                 name="Market Analyzer - Hourly Analytics",
+                replace_existing=True,
+            )
+
+            # ── Stellar ingestion quality checks: every hour ──────────
+            # Low-noise: only fails CI/process when ingestion lag is critical.
+            quality_job = self.scheduler.add_job(
+                func=self._ingestion_quality_checks_job,
+                trigger=IntervalTrigger(hours=1),
+                id="stellar_ingestion_quality_checks_hourly",
+                name="Stellar Ingestion Quality Checks - Hourly",
                 replace_existing=True,
             )
 

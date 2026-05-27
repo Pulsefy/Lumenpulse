@@ -17,6 +17,10 @@ Designed for crypto enthusiasts, traders, and developers worldwide, LumenPulse s
 - **RESTful API**: Scalable backend for data queries and integrations.
 - **Intelligent Data Processing**: Automated analytics for market trends and portfolio optimization.
 
+## Local Development
+
+For a step-by-step guide to running the complete LumenPulse stack locally—including wallet setup, Soroban tooling, environment variables, seeded data, and service startup order—see **[document/LOCAL_SETUP.md](document/LOCAL_SETUP.md)**.
+
 ## Migration Notes
 
 LumenPulse has migrated to Stellar/Soroban architecture. For details on changes from prior chain assumptions, completed migrations, and legacy cleanup, see [Stellar Migration Notes](document/STELLAR_MIGRATION_NOTES.md).

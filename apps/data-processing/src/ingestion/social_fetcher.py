@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 
 import requests
 from requests.exceptions import RequestException
+from src.utils.translator import translate_and_normalize
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +238,7 @@ class TwitterFetcher:
 
         # Normalize hashtag
         query = hashtag if hashtag.startswith("#") else f"#{hashtag}"
-        query = f"{query} -is:retweet lang:en"  # Exclude retweets, English only
+        query = f"{query} -is:retweet (lang:en OR lang:es OR lang:pt)"  # Exclude retweets, English/Spanish/Portuguese
 
         params = {
             "query": query,
@@ -287,7 +288,7 @@ class TwitterFetcher:
                 post = SocialPost(
                     id=tweet["id"],
                     platform=SocialPlatform.TWITTER.value,
-                    content=tweet.get("text", ""),
+                    content=translate_and_normalize(tweet.get("text", "")),
                     author=user.get("username", "unknown"),
                     posted_at=datetime.fromisoformat(tweet["created_at"].replace("Z", "+00:00")),
                     url=f"https://twitter.com/user/status/{tweet['id']}",
@@ -406,7 +407,7 @@ class RedditFetcher:
                 post = SocialPost(
                     id=post_data.get("id", ""),
                     platform=SocialPlatform.REDDIT.value,
-                    content=post_data.get("selftext", "") or post_data.get("title", ""),
+                    content=translate_and_normalize(post_data.get("selftext", "") or post_data.get("title", "")),
                     author=post_data.get("author", "[deleted]"),
                     posted_at=datetime.fromtimestamp(post_data.get("created_utc", time.time()), tz=timezone.utc),
                     url=f"https://reddit.com{post_data.get('permalink', '')}",
@@ -475,7 +476,7 @@ class RedditFetcher:
                 post = SocialPost(
                     id=post_data.get("id", ""),
                     platform=SocialPlatform.REDDIT.value,
-                    content=post_data.get("selftext", "") or post_data.get("title", ""),
+                    content=translate_and_normalize(post_data.get("selftext", "") or post_data.get("title", "")),
                     author=post_data.get("author", "[deleted]"),
                     posted_at=datetime.fromtimestamp(post_data.get("created_utc", time.time()), tz=timezone.utc),
                     url=f"https://reddit.com{post_data.get('permalink', '')}",

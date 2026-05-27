@@ -16,6 +16,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 # Import both pipeline and scheduler
 from src.ingestion.news_fetcher import fetch_news
+from src.ingestion.price_fetcher import PriceFetcher
 from src.ingestion.stellar_fetcher import get_asset_volume, get_network_overview
 from src.validators import validate_news_article, validate_onchain_metric
 from src.analytics.market_analyzer import MarketAnalyzer, MarketData
@@ -77,16 +78,19 @@ def run_data_pipeline():
         print("1. FETCHING DATA (news + on-chain in parallel)")
         print("-" * 40)
 
-        with ThreadPoolExecutor(max_workers=4) as io_pool:
+        price_fetcher = PriceFetcher()
+        with ThreadPoolExecutor(max_workers=5) as io_pool:
             news_future = io_pool.submit(fetch_news, limit=5)
             vol_24h_future = io_pool.submit(get_asset_volume, "XLM", hours=24)
             vol_48h_future = io_pool.submit(get_asset_volume, "XLM", hours=48)
             network_future = io_pool.submit(get_network_overview)
+            price_future = io_pool.submit(price_fetcher.fetch_all_prices, ["XLM", "USDC"])
 
             raw_news_articles = news_future.result()
             raw_volume_24h = vol_24h_future.result()
             raw_volume_48h = vol_48h_future.result()
             network_stats = network_future.result()
+            raw_price_feed = price_future.result()
 
         fetch_elapsed = time.perf_counter() - pipeline_start
         print(f"All fetches completed in {fetch_elapsed:.2f}s (parallel)")
@@ -102,8 +106,20 @@ def run_data_pipeline():
 
         print(f"Fetched {len(raw_news_articles)} raw → {len(news_articles)} validated articles")
 
+        print("\n2. PRICE FEED")
+        print("-" * 40)
+        if raw_price_feed:
+            for price_point in raw_price_feed:
+                status = "stale" if price_point.get("is_stale") else "fresh"
+                print(
+                    f"{price_point['asset_code']}: ${price_point['price_usd']:.7f} "
+                    f"({price_point['price']} scaled, decimals={price_point['asset_decimals']}, {status})"
+                )
+        else:
+            print("Price feed unavailable")
+
         # ── Sentiment analysis (parallel for large batches) ──────────
-        print("\n2. SENTIMENT ANALYSIS")
+        print("\n3. SENTIMENT ANALYSIS")
         print("-" * 40)
 
         sentiment_analyzer = SentimentAnalyzer()
@@ -125,7 +141,7 @@ def run_data_pipeline():
             print("No valid articles, using neutral sentiment")
 
         # ── Validate on-chain metrics ────────────────────────────────
-        print("\n3. STELLAR ON-CHAIN DATA")
+        print("\n4. STELLAR ON-CHAIN DATA")
         print("-" * 40)
 
         validated_volume_24h = validate_onchain_metric({
@@ -171,8 +187,8 @@ def run_data_pipeline():
             print(f"Latest Ledger: {network_stats.get('latest_ledger', 'N/A')}")
             print(f"Transaction Count: {network_stats.get('transaction_count', 0)}")
 
-        # Step 4: Market Analysis
-        print("\n4. MARKET ANALYSIS")
+        # Step 5: Market Analysis
+        print("\n5. MARKET ANALYSIS")
         print("-" * 40)
 
         # Create market data
@@ -192,8 +208,8 @@ def run_data_pipeline():
         explanation = get_explanation(score, trend)
         print(f"\nAnalysis: {explanation}")
 
-        # Step 5: Anomaly Detection
-        print("\n5. ANOMALY DETECTION")
+        # Step 6: Anomaly Detection
+        print("\n6. ANOMALY DETECTION")
         print("-" * 40)
 
         current_volume = float(volume_24h["total_volume"])
@@ -255,6 +271,7 @@ def run_data_pipeline():
             "success": True,
             "news_count": len(news_articles),
             "volume_xlm": volume_24h["total_volume"],
+            "price_feed": raw_price_feed,
             "market_trend": trend.value,
             "health_score": score,
             "anomalies": anomalies_found,

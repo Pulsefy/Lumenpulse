@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View, Modal } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View, Modal, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -7,6 +7,7 @@ import { useLocalization } from '../../src/context';
 import { transactionApi } from '../../lib/transaction';
 import { Transaction, TransactionType } from '../../lib/types/transaction';
 import StandardList from '@/components/StandardList';
+import { buildExplorerUrl } from '../../lib/stellar';
 
 function formatAmount(amount: string, assetCode: string): string {
   const num = parseFloat(amount);
@@ -30,6 +31,14 @@ function getTransactionIcon(type: TransactionType): string {
       return 'send-outline';
     case TransactionType.SWAP:
       return 'swap-horizontal-outline';
+    case TransactionType.TRUSTLINE:
+      return 'link-outline';
+    case TransactionType.CREATE_ACCOUNT:
+      return 'person-add-outline';
+    case TransactionType.ACCOUNT_MERGE:
+      return 'git-merge-outline';
+    case TransactionType.INFLATION:
+      return 'cash-outline';
     default:
       return 'document-text-outline';
   }
@@ -91,14 +100,17 @@ function TransactionDetailModal({ transaction, visible, onClose, colors, t }: an
         <Text style={{ color: colors.textSecondary, marginTop: 16 }} accessible>
           {t('transactions.hash')}
         </Text>
-        <Text
-          style={{ color: colors.text, fontSize: 12, marginTop: 4 }}
-          selectable
-          accessible
-          accessibilityLabel={transaction.transactionHash}
-        >
-          {transaction.transactionHash}
-        </Text>
+        <TouchableOpacity onPress={() => Linking.openURL(buildExplorerUrl(transaction.transactionHash)).catch(err => console.error("Couldn't open link", err))}>
+          <Text
+            style={{ color: colors.accent, fontSize: 12, marginTop: 4, textDecorationLine: 'underline' }}
+            selectable
+            accessible
+            accessibilityLabel={transaction.transactionHash}
+            accessibilityRole="link"
+          >
+            {transaction.transactionHash}
+          </Text>
+        </TouchableOpacity>
 
         <Text style={{ color: colors.textSecondary, marginTop: 16 }} accessible>
           {t('transactions.type')}
@@ -214,6 +226,11 @@ export default function TransactionHistoryScreen() {
         onEndReached={handleLoadMore}
         error={error}
         onRetry={() => fetchTransactions(true)}
+        ListEmptyComponent={
+          <View style={{ padding: 16, alignItems: 'center' }}>
+            <Text style={{ color: colors.textSecondary }}>{t('transactions.empty') || 'No recent transactions.'}</Text>
+          </View>
+        }
       />
 
       <TransactionDetailModal
