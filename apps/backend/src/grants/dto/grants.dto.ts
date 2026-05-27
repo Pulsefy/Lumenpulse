@@ -98,8 +98,34 @@ export interface ProjectQfDto {
   estimatedMatch: string;
 }
 
+export interface ProjectAllocationDto extends ProjectQfDto {
+  contributionPercentage: string;
+  qfPercentage: string;
+  allocationPercentage: string;
+}
+
+export interface RoundParticipationMetricsDto {
+  totalContributors: number;
+  totalContributionAmount: string;
+  totalContributionRecords: number;
+  totalProjectsWithContributions: number;
+  averageContributionPerContributor: string;
+  averageContributionPerProject: string;
+}
+
+export interface ContributionRecordDto {
+  projectId: number;
+  contributorPublicKey: string;
+  amount: string;
+}
+
 export interface RoundSummaryDto {
   round: RoundDto;
   poolBalance: string;
-  projects: ProjectQfDto[];
+  participationMetrics: RoundParticipationMetricsDto;
+  projects: ProjectAllocationDto[];
+}
+
+export interface RoundExportDto extends RoundSummaryDto {
+  contributions: ContributionRecordDto[];
 }

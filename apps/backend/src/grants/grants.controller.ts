@@ -42,6 +42,11 @@ export class GrantsController {
     return this.grantsService.getRoundSummary(id);
   }
 
+  @Get('rounds/:id/export')
+  getRoundExport(@Param('id', ParseIntPipe) id: number) {
+    return this.grantsService.getRoundExport(id);
+  }
+
   @Post('rounds')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
