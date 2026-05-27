@@ -1,12 +1,7 @@
 "use client";
 
 import { useStellarAccount, StellarBalance } from "@/hooks/useStellarAccount";
-
-export interface Asset {
-  code: string;
-  issuer?: string;
-  balance: string;
-}
+import { UIAsset } from "@/types/asset";
 
 export default function StellarBalancesPanel({
   publicKey,
