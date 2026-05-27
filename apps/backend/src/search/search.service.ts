@@ -114,7 +114,8 @@ export class SearchService {
         const diff = (b.numAccounts ?? 0) - (a.numAccounts ?? 0);
         if (diff !== 0) return diff;
       } else if (normalizedQueryLower) {
-        const diff = this.assetScore(b, normalizedQueryLower) -
+        const diff =
+          this.assetScore(b, normalizedQueryLower) -
           this.assetScore(a, normalizedQueryLower);
         if (diff !== 0) return diff;
       }
@@ -149,7 +150,11 @@ export class SearchService {
     return {
       items: rows.map((r) =>
         includeCounts
-          ? ({ kind: 'tag', value: r.value, count: r.count } satisfies EcosystemEntityDto)
+          ? ({
+              kind: 'tag',
+              value: r.value,
+              count: r.count,
+            } satisfies EcosystemEntityDto)
           : ({ kind: 'tag', value: r.value } satisfies EcosystemEntityDto),
       ),
     };
@@ -215,7 +220,7 @@ export class SearchService {
       LIMIT $${params.length};
     `;
 
-    return (await this.newsRepository.query(sql, params)) as TagRow[];
+    return await this.newsRepository.query(sql, params);
   }
 
   private async fetchCategories(opts: {
@@ -241,7 +246,6 @@ export class SearchService {
       LIMIT $${params.length};
     `;
 
-    return (await this.newsRepository.query(sql, params)) as CategoryRow[];
+    return await this.newsRepository.query(sql, params);
   }
 }
-

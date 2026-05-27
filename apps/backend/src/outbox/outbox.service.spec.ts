@@ -23,7 +23,10 @@ describe('OutboxService', () => {
         { provide: getRepositoryToken(OutboxEvent), useFactory: mockRepo },
         {
           provide: JobLockService,
-          useValue: { tryAcquire: jest.fn().mockResolvedValue(true), release: jest.fn().mockResolvedValue(undefined) },
+          useValue: {
+            tryAcquire: jest.fn().mockResolvedValue(true),
+            release: jest.fn().mockResolvedValue(undefined),
+          },
         },
       ],
     }).compile();

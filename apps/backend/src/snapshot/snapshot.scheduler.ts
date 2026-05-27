@@ -54,7 +54,9 @@ export class SnapshotScheduler {
         globalRowWritten: result.globalRowWritten,
         durationMs: result.durationMs,
       });
-      this.logger.log(`Nightly snapshot job finished: ${JSON.stringify(result)}`);
+      this.logger.log(
+        `Nightly snapshot job finished: ${JSON.stringify(result)}`,
+      );
     } catch (err) {
       // Log but don't rethrow — a failed snapshot job must not crash the process.
       await this.jobHistory.fail(run, err);

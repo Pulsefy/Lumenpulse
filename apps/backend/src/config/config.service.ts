@@ -28,8 +28,7 @@ export class ConfigService {
       network,
       horizonUrl: this.stellarCfg.horizonUrl,
       sorobanRpcUrl:
-        config.stellar.sorobanRpcUrl ??
-        DEFAULT_SOROBAN_RPC_URLS[network],
+        config.stellar.sorobanRpcUrl ?? DEFAULT_SOROBAN_RPC_URLS[network],
       networkPassphrase: NETWORK_PASSPHRASES[network],
       contracts: {
         lumenToken: config.stellar.contracts.lumenToken ?? null,

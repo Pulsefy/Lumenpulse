@@ -12,7 +12,11 @@ export class JobHistoryService {
 
   /** Create a RUNNING record and return it so callers can update it later. */
   async start(jobName: string, triggeredBy = 'scheduled'): Promise<JobRun> {
-    const run = this.repo.create({ jobName, triggeredBy, status: JobRunStatus.RUNNING });
+    const run = this.repo.create({
+      jobName,
+      triggeredBy,
+      status: JobRunStatus.RUNNING,
+    });
     return this.repo.save(run);
   }
 
@@ -28,10 +32,7 @@ export class JobHistoryService {
   }
 
   /** Mark an existing run as COMPLETED with an optional result payload. */
-  async complete(
-    run: JobRun,
-    result?: Record<string, unknown>,
-  ): Promise<void> {
+  async complete(run: JobRun, result?: Record<string, unknown>): Promise<void> {
     run.status = JobRunStatus.COMPLETED;
     run.result = result ?? null;
     run.finishedAt = new Date();
