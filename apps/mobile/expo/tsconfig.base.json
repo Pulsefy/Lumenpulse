@@ -1,7 +1,7 @@
-{
+﻿{
   "compilerOptions": {
-    "target": "esnext",
-    "lib": ["esnext", "dom"],
+    "target": "ES2020",
+    "lib": ["es2020", "dom"],
     "jsx": "react-native",
     "module": "esnext",
     "moduleResolution": "bundler",
@@ -18,8 +18,5 @@
     "paths": {
       "@/*": ["./*"]
     }
-  },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules"],
-  "extends": "./expo/tsconfig.base.json"
+  }
 }

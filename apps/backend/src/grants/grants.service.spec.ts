@@ -382,4 +382,54 @@ describe('GrantsService', () => {
     );
     expect(total).toBe(BigInt(summary.poolBalance));
   });
+
+  it('adds participation metrics and provides an exportable round dataset', () => {
+    const round = service.createRound({
+      name: 'R',
+      tokenAddress: 'GT',
+      startTime: past,
+      endTime: future,
+    });
+    service.fundPool({
+      roundId: round.id,
+      funderPublicKey: 'GF',
+      amount: '1000',
+    });
+    service.approveProject({ roundId: round.id, projectId: 1 });
+    service.approveProject({ roundId: round.id, projectId: 2 });
+
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 1,
+      contributorPublicKey: 'GA',
+      amount: '100',
+    });
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 1,
+      contributorPublicKey: 'GB',
+      amount: '100',
+    });
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 2,
+      contributorPublicKey: 'GC',
+      amount: '200',
+    });
+
+    const summary = service.getRoundSummary(round.id);
+    expect(summary.participationMetrics.totalContributors).toBe(3);
+    expect(summary.participationMetrics.totalContributionAmount).toBe('400');
+    expect(summary.participationMetrics.totalContributionRecords).toBe(3);
+    expect(summary.participationMetrics.totalProjectsWithContributions).toBe(2);
+    expect(summary.projects.every((project) => project.contributionPercentage !== undefined)).toBe(true);
+
+    const exportData = service.getRoundExport(round.id);
+    expect(exportData.contributions).toHaveLength(3);
+    expect(exportData.contributions[0]).toMatchObject({
+      projectId: 1,
+      contributorPublicKey: 'GA',
+      amount: '100',
+    });
+  });
 });

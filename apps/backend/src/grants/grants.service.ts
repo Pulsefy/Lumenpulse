@@ -7,8 +7,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   RoundDto,
-  ProjectQfDto,
+  // ProjectQfDto,
+  ProjectAllocationDto,
+  RoundParticipationMetricsDto,
+  ContributionRecordDto,
   RoundSummaryDto,
+  RoundExportDto,
   CreateRoundDto,
   FundPoolDto,
   ApproveProjectDto,
@@ -209,11 +213,129 @@ export class GrantsService {
       low > 0n ? ((value - low * low) * scale) / (2n * low) : 0n;
     return intPart + remainder;
   }
+  private formatPercentage(
+    part: bigint,
+    total: bigint,
+    decimals = 2,
+  ): string {
+    if (total === 0n) return `0.${'0'.repeat(decimals)}`;
+    const scale = 10n ** BigInt(decimals);
+    const value = (part * 100n * scale + total / 2n) / total;
+    const integer = value / scale;
+    const fraction = (value % scale).toString().padStart(decimals, '0');
+    return `${integer}.${fraction}`;
+  }
+
+  private computeParticipationMetrics(
+    record: RoundRecord,
+  ): RoundParticipationMetricsDto {
+    let totalContributionAmount = 0n;
+    let totalContributionRecords = 0;
+    let totalProjectsWithContributions = 0;
+    const uniqueContributors = new Set<string>();
+
+    for (const pid of record.eligibleProjects) {
+      const contribs = record.contributions.get(pid) ?? new Map<string, bigint>();
+      const projectTotal = [...contribs.values()].reduce(
+        (a: bigint, b: bigint) => a + b,
+        0n,
+      );
+      if (projectTotal > 0n) {
+        totalProjectsWithContributions += 1;
+      }
+      totalContributionAmount += projectTotal;
+      totalContributionRecords += contribs.size;
+      for (const contributor of contribs.keys()) {
+        uniqueContributors.add(contributor);
+      }
+    }
+
+    return {
+      totalContributors: uniqueContributors.size,
+      totalContributionAmount: totalContributionAmount.toString(),
+      totalContributionRecords,
+      totalProjectsWithContributions,
+      averageContributionPerContributor:
+        uniqueContributors.size > 0
+          ? (totalContributionAmount / BigInt(uniqueContributors.size)).toString()
+          : '0',
+      averageContributionPerProject:
+        totalProjectsWithContributions > 0
+          ? (totalContributionAmount /
+              BigInt(totalProjectsWithContributions)).toString()
+          : '0',
+    };
+  }
+
+  private buildProjectAllocations(
+    record: RoundRecord,
+    scores: Map<number, bigint>,
+    totalQf: bigint,
+    totalContributionAmount: bigint,
+  ): ProjectAllocationDto[] {
+    const allocations: ProjectAllocationDto[] = [];
+
+    for (const pid of record.eligibleProjects) {
+      const contribs = record.contributions.get(pid) ?? new Map<string, bigint>();
+      const score = scores.get(pid) ?? 0n;
+      const totalContribs = [...contribs.values()].reduce(
+        (a: bigint, b: bigint) => a + b,
+        0n,
+      );
+      const estimatedMatch =
+        totalQf > 0n && record.totalPool > 0n
+          ? (record.totalPool * score) / totalQf
+          : 0n;
+
+      allocations.push({
+        projectId: pid,
+        qfScore: score.toString(),
+        totalContributions: totalContribs.toString(),
+        contributorCount: contribs.size,
+        estimatedMatch: estimatedMatch.toString(),
+        contributionPercentage: this.formatPercentage(
+          totalContribs,
+          totalContributionAmount,
+        ),
+        qfPercentage: this.formatPercentage(score, totalQf),
+        allocationPercentage: this.formatPercentage(
+          estimatedMatch,
+          record.totalPool,
+        ),
+      });
+    }
+
+    allocations.sort((a, b) =>
+      Number(BigInt(b.estimatedMatch) - BigInt(a.estimatedMatch)),
+    );
+    return allocations;
+  }
+
+  private buildContributionRecords(
+    record: RoundRecord,
+  ): ContributionRecordDto[] {
+    const contributions: ContributionRecordDto[] = [];
+
+    for (const pid of record.eligibleProjects) {
+      const contribs = record.contributions.get(pid) ?? new Map<string, bigint>();
+      for (const [contributorPublicKey, amount] of contribs.entries()) {
+        contributions.push({
+          projectId: pid,
+          contributorPublicKey,
+          amount: amount.toString(),
+        });
+      }
+    }
+
+    contributions.sort((a, b) =>
+      a.projectId - b.projectId || a.contributorPublicKey.localeCompare(b.contributorPublicKey),
+    );
+    return contributions;
+  }
 
   getRoundSummary(roundId: number): RoundSummaryDto {
     const record = this.getRecord(roundId);
 
-    // Compute all QF scores
     const scores = new Map<number, bigint>();
     let totalQf = 0n;
 
@@ -225,40 +347,29 @@ export class GrantsService {
       totalQf += score;
     }
 
-    const projects: ProjectQfDto[] = [];
-
-    for (const pid of record.eligibleProjects) {
-      const contribs =
-        record.contributions.get(pid) ?? new Map<string, bigint>();
-      const score = scores.get(pid) ?? 0n;
-      const totalContribs = [...contribs.values()].reduce(
-        (a: bigint, b: bigint) => a + b,
-        0n,
-      );
-
-      const estimatedMatch =
-        totalQf > 0n && record.totalPool > 0n
-          ? (record.totalPool * score) / totalQf
-          : 0n;
-
-      projects.push({
-        projectId: pid,
-        qfScore: score.toString(),
-        totalContributions: totalContribs.toString(),
-        contributorCount: contribs.size,
-        estimatedMatch: estimatedMatch.toString(),
-      });
-    }
-
-    // Sort by estimated match descending
-    projects.sort((a, b) =>
-      Number(BigInt(b.estimatedMatch) - BigInt(a.estimatedMatch)),
+    const participationMetrics = this.computeParticipationMetrics(record);
+    const totalContributionAmount = BigInt(participationMetrics.totalContributionAmount);
+    const projects = this.buildProjectAllocations(
+      record,
+      scores,
+      totalQf,
+      totalContributionAmount,
     );
 
     return {
       round: this.toRoundDto(record),
       poolBalance: record.totalPool.toString(),
+      participationMetrics,
       projects,
+    };
+  }
+
+  getRoundExport(roundId: number): RoundExportDto {
+    const summary = this.getRoundSummary(roundId);
+    const record = this.getRecord(roundId);
+    return {
+      ...summary,
+      contributions: this.buildContributionRecords(record),
     };
   }
 
