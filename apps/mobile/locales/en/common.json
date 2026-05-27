@@ -272,6 +272,15 @@
       "update_failed": "Update Failed",
       "update_failed_message": "Could not update biometric lock preference. Please try again."
     },
+    "network": {
+      "title": "Network",
+      "active": "Active Network",
+      "testnet": "Testnet",
+      "mainnet": "Mainnet",
+      "endpoint_not_configured": "Endpoint not configured",
+      "mainnet_unavailable": "Mainnet Unavailable",
+      "mainnet_unavailable_message": "Configure mainnet API and Soroban RPC endpoints before switching."
+    },
     "version": "Version",
     "environment": "Environment",
     "environment_production": "Production",

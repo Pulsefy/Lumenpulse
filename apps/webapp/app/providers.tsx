@@ -49,13 +49,20 @@ function ConfigGate({ children }: { children: ReactNode }) {
   );
 }
 
+import { OnboardingProvider } from "@/lib/onboarding";
+import { ThemeProvider } from "@/components/theme-provider";
+
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <StellarConfigProvider>
       <WalletProvider>
         <StellarProvider>
           <ConfigGate>
-            {children}
+            <ThemeProvider>
+              <OnboardingProvider>
+                {children}
+              </OnboardingProvider>
+            </ThemeProvider>
           </ConfigGate>
         </StellarProvider>
       </WalletProvider>

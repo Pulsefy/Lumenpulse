@@ -4,6 +4,8 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,6 +16,7 @@ import { LinkStellarAccountDto } from './dto/link-stellar-account.dto';
 import { StellarAccountResponseDto } from './dto/stellar-account-response.dto';
 import { UpdateStellarAccountLabelDto } from './dto/update-stellar-account-label.dto';
 import { UploadService } from '../upload/upload.service';
+import { AuthService } from '../auth/auth.service';
 import crypto from 'crypto';
 
 @Injectable()
@@ -27,6 +30,8 @@ export class UsersService {
     private stellarAccountRepository: Repository<StellarAccount>,
     private stellarService: StellarService,
     private uploadService: UploadService,
+    @Inject(forwardRef(() => AuthService))
+    private authService: AuthService,
   ) {}
 
   // --- BASIC CRUD ---
@@ -78,6 +83,12 @@ export class UsersService {
     userId: string,
     dto: LinkStellarAccountDto,
   ): Promise<StellarAccountResponseDto> {
+    // Verify ownership via challenge-response signature first
+    await this.authService.verifyChallengeOnly(
+      dto.publicKey,
+      dto.signedChallenge,
+    );
+
     this.stellarService.validatePublicKeyOrThrow(dto.publicKey);
 
     const user = await this.usersRepository.findOne({ where: { id: userId } });

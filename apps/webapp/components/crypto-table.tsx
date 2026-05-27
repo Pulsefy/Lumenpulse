@@ -31,7 +31,9 @@ export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<number[]>([]);
-  const { toggleItem, isInWatchlist } = showWatchlistToggle ? useWatchlist() : { toggleItem: async () => ({ added: false }), isInWatchlist: () => false };
+  const watchlist = useWatchlist();
+  const toggleItem = showWatchlistToggle ? watchlist.toggleItem : async () => ({ added: false });
+  const isInWatchlist = showWatchlistToggle ? watchlist.isInWatchlist : () => false;
 
   // Fetch real crypto data
   useEffect(() => {

@@ -194,6 +194,64 @@ export class AuthService {
   }
 
   /**
+   * Verify the signed challenge without creating a user session or issuing JWT.
+   * Used for secure account linking.
+   */
+  async verifyChallengeOnly(
+    publicKey: string,
+    signedChallenge: string,
+  ): Promise<boolean> {
+    await Promise.resolve();
+    const storedChallenge = this.challengeStore.get(publicKey);
+
+    if (!storedChallenge) {
+      throw new BadRequestException(
+        'No challenge found for this public key. Please request a new challenge.',
+      );
+    }
+
+    if (Date.now() > storedChallenge.expiresAt) {
+      this.challengeStore.delete(publicKey);
+      throw new BadRequestException(
+        'Challenge has expired. Please request a new challenge.',
+      );
+    }
+
+    const networkPassphrase =
+      this.stellarNetwork === 'testnet' ? Networks.TESTNET : Networks.PUBLIC;
+
+    let transaction: Transaction;
+
+    try {
+      transaction = new Transaction(signedChallenge, networkPassphrase);
+    } catch {
+      this.challengeStore.delete(publicKey);
+      throw new BadRequestException('Invalid transaction format');
+    }
+
+    // Verify the transaction was signed by the user
+    const userSignature = transaction.signatures.find((sig) => {
+      try {
+        const keypair = Keypair.fromPublicKey(publicKey);
+        return keypair.verify(transaction.hash(), sig.signature());
+      } catch {
+        return false;
+      }
+    });
+
+    if (!userSignature) {
+      this.challengeStore.delete(publicKey);
+      throw new BadRequestException(
+        'Invalid signature. Transaction was not signed by the provided public key.',
+      );
+    }
+
+    // Remove used challenge
+    this.challengeStore.delete(publicKey);
+    return true;
+  }
+
+  /**
    * Verify the signed challenge and issue a JWT
    */
   async verifyChallenge(
