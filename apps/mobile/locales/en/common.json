@@ -279,7 +279,9 @@
       "mainnet": "Mainnet",
       "endpoint_not_configured": "Endpoint not configured",
       "mainnet_unavailable": "Mainnet Unavailable",
-      "mainnet_unavailable_message": "Configure mainnet API and Soroban RPC endpoints before switching."
+      "mainnet_unavailable_message": "Configure mainnet API and Soroban RPC endpoints before switching.",
+      "offline": "Offline mode",
+      "offline_description": "No internet connection. Showing cached content where available."
     },
     "version": "Version",
     "environment": "Environment",

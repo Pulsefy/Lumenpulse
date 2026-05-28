@@ -6,11 +6,12 @@ import { useLocalization } from '../src/context';
 
 export function OfflineIndicator() {
   const [isOffline, setIsOffline] = useState(false);
-  const { colors } = useLocalization();
+  const { colors, t } = useLocalization();
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
-      setIsOffline(!state.isConnected);
+      const offline = !(state.isConnected && state.isInternetReachable !== false);
+      setIsOffline(offline);
     });
 
     return unsubscribe;
@@ -24,12 +25,12 @@ export function OfflineIndicator() {
     <View
       style={[styles.container, { backgroundColor: colors.danger }]}
       accessible
-      accessibilityLabel="No internet connection"
+      accessibilityLabel={t('network.offline_description')}
       accessibilityRole="alert"
     >
       <Ionicons name="cloud-offline-outline" size={16} color="#ffffff" />
       <Text style={styles.text} accessible>
-        No internet connection
+        {t('network.offline_description')}
       </Text>
     </View>
   );

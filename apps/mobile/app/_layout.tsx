@@ -5,6 +5,7 @@ import { EnvironmentProvider } from '../contexts/EnvironmentContext';
 import { NotificationsProvider } from '../contexts/NotificationsContext';
 import BiometricLockGuard from '../components/BiometricLockGuard';
 import NetworkBadge from '../components/NetworkBadge';
+import { OfflineIndicator } from '../lib/offline-indicator';
 import { LocalizationProvider } from '../src/context';
 
 export default function RootLayout() {
@@ -26,6 +27,7 @@ export default function RootLayout() {
                   <Stack.Screen name="auth" />
                 </Stack>
                 <NetworkBadge />
+                <OfflineIndicator />
               </View>
             </NotificationsProvider>
           </AuthProvider>
