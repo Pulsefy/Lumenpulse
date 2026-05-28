@@ -55,6 +55,7 @@ import { AppConfigModule } from './config/config.module';
 import { CrowdfundModule } from './crowdfund/crowdfund.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
+import { SorobanEventsModule } from './soroban-events/soroban-events.module';
 
 @Module({
   imports: [
@@ -127,6 +128,7 @@ import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor'
     CrowdfundModule,
     AppConfigModule,
     AuditModule,
+    SorobanEventsModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
