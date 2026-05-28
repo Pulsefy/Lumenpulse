@@ -160,16 +160,15 @@ export class StellarService {
   ): Promise<any> {
     validateStellarPublicKey(publicKey);
     this.logger.debug(`Fetching transactions for account: ${publicKey}`);
-
     try {
-      const payments = await this.server
-        .payments()
+      const operations = await this.server
+        .operations()
         .forAccount(publicKey)
         .order('desc')
         .limit(limit)
         .call();
 
-      return payments.records;
+      return operations.records;
     } catch (error: unknown) {
       this.logger.error(`Error fetching transactions for ${publicKey}:`, error);
       throw new HorizonUnavailableException(

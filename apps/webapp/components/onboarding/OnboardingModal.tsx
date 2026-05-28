@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useOnboarding } from '@/lib/onboarding';
 import { useStellarWallet } from '@/app/providers';
+import { useStellarConfig } from '@/contexts/StellarConfigContext';
+import { signTransaction } from '@stellar/freighter-api';
+import { StellarApiService } from '@/lib/api-services';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import gsap from 'gsap';
@@ -36,9 +39,13 @@ const steps = [
 
 export default function OnboardingModal() {
   const { state, nextStep, prevStep, closeOnboarding, completeOnboarding, skipOnboarding } = useOnboarding();
-  const { status: walletStatus, connect: connectWallet } = useStellarWallet();
+  const { status: walletStatus, connect: connectWallet, publicKey } = useStellarWallet();
+  const { config } = useStellarConfig();
   const modalRef = useRef<HTMLDivElement>(null);
   const stepRef = useRef<HTMLDivElement>(null);
+
+  const [linkingState, setLinkingState] = useState<'idle' | 'fetching_challenge' | 'signing' | 'linking' | 'success' | 'error'>('idle');
+  const [linkingError, setLinkingError] = useState<string | null>(null);
 
   // Auto-advance logic (optional, lightweight)
   useEffect(() => {
@@ -70,13 +77,48 @@ export default function OnboardingModal() {
     }
   }, [state.step]);
 
+  const handleLinkWallet = useCallback(async () => {
+    if (!publicKey) return;
+    setLinkingState('fetching_challenge');
+    setLinkingError(null);
+    try {
+      const challengeRes = await StellarApiService.getChallenge(publicKey);
+      const challengeXDR = challengeRes.challenge;
+
+      setLinkingState('signing');
+      const networkPassphrase = config?.networkPassphrase;
+      const result = await signTransaction(challengeXDR, { networkPassphrase });
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      setLinkingState('linking');
+      await StellarApiService.linkAccount(publicKey, result.signedTxXdr, "Onboarding Wallet");
+
+      setLinkingState('success');
+      setTimeout(() => {
+        nextStep();
+        setLinkingState('idle');
+      }, 1500);
+    } catch (err: any) {
+      console.error('Wallet linking error:', err);
+      setLinkingState('error');
+      setLinkingError(err.message || 'Failed to sign or verify challenge.');
+    }
+  }, [publicKey, config, nextStep]);
+
   const handleNextOrConnect = useCallback(() => {
-    if (state.step === 2 && walletStatus !== 'connected') {
-      connectWallet();
+    if (state.step === 2) {
+      if (walletStatus !== 'connected') {
+        connectWallet();
+      } else {
+        handleLinkWallet();
+      }
     } else {
       nextStep();
     }
-  }, [state.step, walletStatus, connectWallet, nextStep]);
+  }, [state.step, walletStatus, connectWallet, nextStep, handleLinkWallet]);
 
   const handlePrimaryAction = useCallback(() => {
     if (state.step === 3) {
@@ -134,8 +176,15 @@ export default function OnboardingModal() {
             />
           </div>
 
+          {/* Link Error Message */}
+          {state.step === 2 && (linkingState === 'error' || linkingError) && (
+            <div className="mt-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl text-center">
+              {linkingError || "An error occurred during wallet verification."}
+            </div>
+          )}
+
           {/* Skip Button */}
-          {state.step < 3 && (
+          {state.step < 3 && linkingState === 'idle' && (
             <button
               onClick={skipOnboarding}
               className="mt-6 w-full text-sm text-gray-500 hover:text-gray-300 transition-colors py-2"
@@ -147,7 +196,7 @@ export default function OnboardingModal() {
 
         {/* Footer Actions */}
         <div className="p-6 pt-0 border-t border-gray-800/50 space-y-2">
-          {state.step > 1 && (
+          {state.step > 1 && linkingState === 'idle' && (
             <button
               onClick={prevStep}
               className="w-full text-gray-400 hover:text-white transition-colors py-2 text-sm"
@@ -157,14 +206,23 @@ export default function OnboardingModal() {
           )}
           <button
             onClick={handlePrimaryAction}
-            className="w-full bg-gradient-to-r from-[#db74cf] to-blue-500 hover:from-[#db74cf]/90 hover:to-blue-500/90 text-white font-medium py-3 px-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+            disabled={linkingState !== 'idle' && linkingState !== 'error'}
+            className="w-full bg-gradient-to-r from-[#db74cf] to-blue-500 hover:from-[#db74cf]/90 hover:to-blue-500/90 disabled:opacity-50 text-white font-medium py-3 px-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-1"
           >
-            {state.step === 2 && walletStatus !== 'connected' ? 'Connect Wallet' : 
-             state.step === 3 ? 'Get Started' : 'Next'}
-            <ChevronRight className="ml-2 w-5 h-5 inline group-hover:translate-x-1 transition-transform" />
+            {state.step === 2 ? (
+              walletStatus !== 'connected' ? 'Connect Wallet' :
+              linkingState === 'fetching_challenge' ? 'Requesting Challenge...' :
+              linkingState === 'signing' ? 'Please Sign in Freighter...' :
+              linkingState === 'linking' ? 'Verifying Ownership...' :
+              linkingState === 'success' ? 'Linked Successfully!' :
+              'Verify & Link Wallet'
+            ) : state.step === 3 ? 'Get Started' : 'Next'}
+            {(linkingState === 'idle' || linkingState === 'error') && (
+              <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            )}
           </button>
 
-          {state.step === 2 && (
+          {state.step === 2 && linkingState === 'idle' && (
             <div className="pt-2">
               <Link href="/auth/login" className="text-xs text-gray-500 hover:text-gray-300 block text-center">
                 Or use email signup →
