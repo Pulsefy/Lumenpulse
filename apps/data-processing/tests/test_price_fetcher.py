@@ -35,7 +35,7 @@ def test_fetch_all_prices_success(monkeypatch):
             )
         raise AssertionError("Unexpected URL: %s" % url)
 
-    monkeypatch.setattr("src.ingestion.price_fetcher.requests.get", mock_get)
+    monkeypatch.setattr(fetcher.session, "get", mock_get)
     prices = fetcher.fetch_all_prices(["XLM", "USDC"])
 
     assert len(prices) == 2
@@ -73,7 +73,7 @@ def test_fetch_all_prices_uses_cache_when_source_fails(monkeypatch):
     def mock_get(url, params=None, timeout=None):
         raise Exception("Source unreachable")
 
-    monkeypatch.setattr("src.ingestion.price_fetcher.requests.get", mock_get)
+    monkeypatch.setattr(fetcher.session, "get", mock_get)
     prices = fetcher.fetch_all_prices(["XLM"])
 
     assert len(prices) == 1
@@ -90,7 +90,7 @@ def test_fetch_all_prices_returns_error_when_no_source_and_no_cache(monkeypatch)
     def mock_get(url, params=None, timeout=None):
         raise Exception("Source unreachable")
 
-    monkeypatch.setattr("src.ingestion.price_fetcher.requests.get", mock_get)
+    monkeypatch.setattr(fetcher.session, "get", mock_get)
     prices = fetcher.fetch_all_prices(["XLM"])
 
     assert len(prices) == 1

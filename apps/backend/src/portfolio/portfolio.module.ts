@@ -3,7 +3,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Queue } from 'bullmq';
-import IORedis from 'ioredis';
+import IORedis, { type Redis } from 'ioredis';
 import { PortfolioAsset } from './portfolio-asset.entity';
 import { PortfolioSnapshot } from './entities/portfolio-snapshot.entity';
 import { PortfolioMaterializedSnapshot } from './entities/portfolio-materialized-snapshot.entity';
@@ -50,7 +50,7 @@ import { ProfilingModule } from '../common/profiling/profiling.module';
     PortfolioSnapshotWorker,
     {
       provide: PORTFOLIO_SNAPSHOT_CONNECTION,
-      useFactory: (configService: ConfigService) => {
+      useFactory: (configService: ConfigService): Redis => {
         const host = configService.get<string>('REDIS_HOST', 'localhost');
         const port = configService.get<number>('REDIS_PORT', 6379);
         return new IORedis({
@@ -63,7 +63,7 @@ import { ProfilingModule } from '../common/profiling/profiling.module';
     },
     {
       provide: PORTFOLIO_SNAPSHOT_QUEUE,
-      useFactory: (connection: IORedis) =>
+      useFactory: (connection: Redis) =>
         new Queue(PORTFOLIO_SNAPSHOT_QUEUE_NAME, {
           connection,
           defaultJobOptions: {

@@ -85,7 +85,7 @@ describe('NotificationPreferenceService', () => {
         ...dto,
       });
 
-      const result = await service.createOrUpdate(dto as any);
+      const result = await service.createOrUpdate(dto);
 
       expect(result).toBeDefined();
       expect(mockNotificationPreferenceRepository.save).toHaveBeenCalled();

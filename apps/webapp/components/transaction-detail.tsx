@@ -172,7 +172,7 @@ export default function TransactionDetail({
               <div className="space-y-1">
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Memo</p>
                 <div className="p-3 bg-black/40 rounded-xl border border-white/5">
-                  <p className="text-sm text-gray-300 italic">"{transaction.memo}"</p>
+                  <p className="text-sm text-gray-300 italic">&ldquo;{transaction.memo}&rdquo;</p>
                 </div>
               </div>
             )}

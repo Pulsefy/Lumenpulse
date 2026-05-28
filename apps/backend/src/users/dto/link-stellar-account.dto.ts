@@ -22,4 +22,12 @@ export class LinkStellarAccountDto {
   @IsOptional()
   @MaxLength(100)
   label?: string;
+
+  @ApiProperty({
+    description:
+      'Signed challenge transaction XDR proving ownership of public key',
+    example: 'AAAAA...',
+  })
+  @IsString()
+  signedChallenge: string;
 }
