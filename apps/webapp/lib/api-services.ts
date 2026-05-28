@@ -125,5 +125,51 @@ export class StellarApiService {
       return []; // Return empty array on transaction fetch error to fail gracefully
     }
   }
+
+  private static getAuthHeaders(): Record<string, string> {
+    if (typeof document === 'undefined') return {};
+    const match = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith('auth-token='));
+    const token = match?.split('=')[1];
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }
+
+  static async getChallenge(publicKey: string): Promise<{ challenge: string }> {
+    const response = await fetch(`${this.BASE_URL}/auth/challenge?publicKey=${publicKey}`, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to get auth challenge');
+    }
+
+    return response.json();
+  }
+
+  static async linkAccount(publicKey: string, signedChallenge: string, label?: string): Promise<any> {
+    const response = await fetch(`${this.BASE_URL}/users/me/accounts`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({
+        publicKey,
+        signedChallenge,
+        label,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to link Stellar account');
+    }
+
+    return response.json();
+  }
 }
 

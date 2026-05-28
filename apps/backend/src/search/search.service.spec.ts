@@ -57,7 +57,11 @@ describe('SearchService', () => {
         },
       ]);
 
-      const byName = service.searchProjects({ q: 'lumen', limit: 10, offset: 0 });
+      const byName = service.searchProjects({
+        q: 'lumen',
+        limit: 10,
+        offset: 0,
+      });
       expect(byName.total).toBe(1);
       expect(byName.items[0].projectId).toBe(1);
       expect(byName.items[0].score).toBeGreaterThan(0);
@@ -102,9 +106,24 @@ describe('SearchService', () => {
     it('filters and sorts assets by relevance and account count', async () => {
       stellarService.discoverAssets.mockResolvedValue({
         assets: [
-          { assetCode: 'USDC', assetIssuer: 'GI', assetType: 'credit', numAccounts: 10 },
-          { assetCode: 'USD', assetIssuer: 'GI', assetType: 'credit', numAccounts: 5 },
-          { assetCode: 'XLM', assetIssuer: 'native', assetType: 'native', numAccounts: 999 },
+          {
+            assetCode: 'USDC',
+            assetIssuer: 'GI',
+            assetType: 'credit',
+            numAccounts: 10,
+          },
+          {
+            assetCode: 'USD',
+            assetIssuer: 'GI',
+            assetType: 'credit',
+            numAccounts: 5,
+          },
+          {
+            assetCode: 'XLM',
+            assetIssuer: 'native',
+            assetType: 'native',
+            numAccounts: 999,
+          },
         ],
         hasMore: false,
         nextCursor: undefined,
@@ -114,7 +133,9 @@ describe('SearchService', () => {
       const res = await service.searchAssets({ q: 'usd', minAccounts: 0 });
       expect(res.assets[0].assetCode).toBe('USD');
 
-      const resAccounts = await service.searchAssets({ sort: 'accounts' } as any);
+      const resAccounts = await service.searchAssets({
+        sort: 'accounts',
+      } as any);
       expect(resAccounts.assets[0].assetCode).toBe('XLM');
     });
 
@@ -126,14 +147,22 @@ describe('SearchService', () => {
             assetIssuer: 'GI',
             assetType: 'credit',
             numAccounts: 5,
-            flags: { authRequired: true, authRevocable: false, authImmutable: false },
+            flags: {
+              authRequired: true,
+              authRevocable: false,
+              authImmutable: false,
+            },
           },
           {
             assetCode: 'B',
             assetIssuer: 'GI',
             assetType: 'credit',
             numAccounts: 500,
-            flags: { authRequired: false, authRevocable: false, authImmutable: false },
+            flags: {
+              authRequired: false,
+              authRevocable: false,
+              authImmutable: false,
+            },
           },
         ],
         hasMore: false,
@@ -158,11 +187,17 @@ describe('SearchService', () => {
 
       const res = await service.searchEcosystemEntities({ q: 'st', limit: 25 });
       expect(newsRepo.query).toHaveBeenCalled();
-      expect(res.items[0]).toEqual({ kind: 'tag', value: 'stellar', count: 10 });
+      expect(res.items[0]).toEqual({
+        kind: 'tag',
+        value: 'stellar',
+        count: 10,
+      });
     });
 
     it('supports category kind and omitting counts', async () => {
-      (newsRepo.query as jest.Mock).mockResolvedValue([{ value: 'defi', count: 3 }]);
+      (newsRepo.query as jest.Mock).mockResolvedValue([
+        { value: 'defi', count: 3 },
+      ]);
       const res = await service.searchEcosystemEntities({
         kind: 'category',
         includeCounts: false,
@@ -171,5 +206,55 @@ describe('SearchService', () => {
       expect(res.items[0]).toEqual({ kind: 'category', value: 'defi' });
     });
   });
-});
 
+  describe('linkEntities', () => {
+    it('links text mentions to known projects/assets/ecosystem entries', async () => {
+      verificationService.listProjects.mockReturnValue([
+        {
+          projectId: 1,
+          name: 'LumenPulse Wallet',
+          ownerPublicKey: 'G1',
+          status: VerificationStatus.Pending,
+          votesFor: 0,
+          votesAgainst: 0,
+          registeredAt: 1,
+          resolvedAt: 0,
+          quorumProgress: 0,
+        },
+      ]);
+
+      stellarService.discoverAssets.mockResolvedValue({
+        assets: [
+          {
+            assetCode: 'XLM',
+            assetIssuer: 'native',
+            assetType: 'native',
+            numAccounts: 1000,
+          },
+        ],
+        hasMore: false,
+      });
+
+      (newsRepo.query as jest.Mock).mockResolvedValue([
+        { kind: 'tag', value: 'stellar' },
+      ]);
+
+      const res = await service.linkEntities({
+        text: 'LumenPulse Wallet tracks XLM in the Stellar ecosystem',
+      });
+
+      expect(res.projects[0]).toMatchObject({
+        projectId: 1,
+        matchedMention: 'lumenpulse',
+      });
+      expect(res.assets[0]).toMatchObject({
+        assetCode: 'XLM',
+        matchedMention: 'xlm',
+      });
+      expect(res.ecosystem[0]).toMatchObject({
+        kind: 'tag',
+        value: 'stellar',
+      });
+    });
+  });
+});

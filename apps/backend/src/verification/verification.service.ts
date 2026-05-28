@@ -16,6 +16,10 @@ import {
   VerificationStatus,
   VoteResultDto,
   WeightMode,
+  ProjectSubmissionDto,
+  SubmissionActionDto,
+  SubmissionStatus,
+  UpsertSubmissionDto,
 } from './dto/verification.dto';
 
 interface ProjectRecord {
@@ -41,10 +45,22 @@ interface RegistryConfig {
   tokenBalanceStore: Map<string, number>;
 }
 
+interface ProjectSubmissionRecord {
+  projectId: number;
+  creatorPublicKey: string;
+  title: string;
+  content: string;
+  status: SubmissionStatus;
+  reviewerId?: string;
+  reviewNote?: string;
+  updatedAt: number;
+}
+
 @Injectable()
 export class VerificationService {
   private readonly logger = new Logger(VerificationService.name);
   private projects = new Map<number, ProjectRecord>();
+  private submissions = new Map<number, ProjectSubmissionRecord>();
   private config: RegistryConfig;
 
   constructor(private readonly configSvc: ConfigService) {
@@ -244,5 +260,138 @@ export class VerificationService {
       resolvedAt: r.resolvedAt,
       quorumProgress,
     };
+  }
+
+  // ── Submission workflow ────────────────────────────────────────────────────
+
+  upsertSubmission(dto: UpsertSubmissionDto): ProjectSubmissionDto {
+    const existing = this.submissions.get(dto.projectId);
+
+    if (!existing) {
+      const created: ProjectSubmissionRecord = {
+        projectId: dto.projectId,
+        creatorPublicKey: dto.creatorPublicKey,
+        title: dto.title,
+        content: dto.content,
+        status: SubmissionStatus.Draft,
+        updatedAt: Math.floor(Date.now() / 1000),
+      };
+      this.submissions.set(dto.projectId, created);
+      return this.toSubmissionDto(created);
+    }
+
+    if (existing.status === SubmissionStatus.Published) {
+      throw new BadRequestException(
+        `Submission ${dto.projectId} is already published and cannot be edited`,
+      );
+    }
+
+    existing.title = dto.title;
+    existing.content = dto.content;
+    existing.creatorPublicKey = dto.creatorPublicKey;
+    existing.updatedAt = Math.floor(Date.now() / 1000);
+
+    // Editing after reviewer feedback moves it back to draft for resubmission.
+    if (existing.status === SubmissionStatus.ChangesRequested) {
+      existing.status = SubmissionStatus.Draft;
+    }
+
+    return this.toSubmissionDto(existing);
+  }
+
+  getSubmission(projectId: number): ProjectSubmissionDto {
+    return this.toSubmissionDto(this.getSubmissionRecord(projectId));
+  }
+
+  listSubmissions(status?: SubmissionStatus): ProjectSubmissionDto[] {
+    return [...this.submissions.values()]
+      .filter((submission) => !status || submission.status === status)
+      .map((submission) => this.toSubmissionDto(submission));
+  }
+
+  submitForReview(projectId: number): ProjectSubmissionDto {
+    const submission = this.getSubmissionRecord(projectId);
+    if (submission.status === SubmissionStatus.Published) {
+      throw new BadRequestException(
+        `Submission ${projectId} is already published`,
+      );
+    }
+    if (submission.status === SubmissionStatus.InReview) {
+      throw new BadRequestException(
+        `Submission ${projectId} is already in review`,
+      );
+    }
+
+    submission.status = SubmissionStatus.InReview;
+    submission.updatedAt = Math.floor(Date.now() / 1000);
+    return this.toSubmissionDto(submission);
+  }
+
+  requestSubmissionChanges(
+    projectId: number,
+    dto: SubmissionActionDto,
+  ): ProjectSubmissionDto {
+    const submission = this.getSubmissionRecord(projectId);
+    if (submission.status !== SubmissionStatus.InReview) {
+      throw new BadRequestException(
+        `Submission ${projectId} must be in review to request changes`,
+      );
+    }
+
+    submission.status = SubmissionStatus.ChangesRequested;
+    submission.reviewerId = dto.actorId;
+    submission.reviewNote = dto.note;
+    submission.updatedAt = Math.floor(Date.now() / 1000);
+    return this.toSubmissionDto(submission);
+  }
+
+  approveSubmission(
+    projectId: number,
+    dto: SubmissionActionDto,
+  ): ProjectSubmissionDto {
+    const submission = this.getSubmissionRecord(projectId);
+    if (submission.status !== SubmissionStatus.InReview) {
+      throw new BadRequestException(
+        `Submission ${projectId} must be in review to approve`,
+      );
+    }
+
+    submission.status = SubmissionStatus.Approved;
+    submission.reviewerId = dto.actorId;
+    submission.reviewNote = dto.note;
+    submission.updatedAt = Math.floor(Date.now() / 1000);
+    return this.toSubmissionDto(submission);
+  }
+
+  publishSubmission(
+    projectId: number,
+    dto: SubmissionActionDto,
+  ): ProjectSubmissionDto {
+    const submission = this.getSubmissionRecord(projectId);
+    if (submission.status !== SubmissionStatus.Approved) {
+      throw new BadRequestException(
+        `Submission ${projectId} must be approved before publishing`,
+      );
+    }
+
+    submission.status = SubmissionStatus.Published;
+    submission.reviewerId = dto.actorId;
+    submission.reviewNote = dto.note;
+    submission.updatedAt = Math.floor(Date.now() / 1000);
+    return this.toSubmissionDto(submission);
+  }
+
+  private getSubmissionRecord(projectId: number): ProjectSubmissionRecord {
+    const submission = this.submissions.get(projectId);
+    if (!submission) {
+      throw new NotFoundException(`Submission for project ${projectId} not found`);
+    }
+    return submission;
+  }
+
+  private toSubmissionDto(
+    submission: ProjectSubmissionRecord,
+  ): ProjectSubmissionDto {
+    return { ...submission };
   }
 }

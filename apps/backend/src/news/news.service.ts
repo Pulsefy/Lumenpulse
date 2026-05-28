@@ -9,6 +9,10 @@ import { NewsProviderService } from './news-provider.service';
 import { NewsArticleDto } from './dto/news-article.dto';
 import { CacheService } from '../cache/cache.service';
 import { QueryProfilerService } from '../common/profiling/query-profiler.service';
+import { JobLockService } from '../scheduler/job-lock.service';
+import { JobHistoryService } from '../scheduler/job-history.service';
+
+const FETCH_JOB_NAME = 'news-fetch';
 
 interface RawOverallResult {
   average: string | null;
@@ -31,6 +35,8 @@ export class NewsService {
     private readonly newsProviderService: NewsProviderService,
     private readonly cacheService: CacheService,
     private readonly profiler: QueryProfilerService,
+    private readonly jobLock: JobLockService,
+    private readonly jobHistory: JobHistoryService,
   ) {}
 
   async create(createArticleDto: CreateArticleDto): Promise<News> {
@@ -193,6 +199,13 @@ export class NewsService {
   async fetchAndSaveArticles(): Promise<void> {
     this.logger.log('Running scheduled news fetch job...');
 
+    const acquired = await this.jobLock.tryAcquire(FETCH_JOB_NAME);
+    if (!acquired) {
+      await this.jobHistory.markSkipped(FETCH_JOB_NAME);
+      return;
+    }
+
+    const run = await this.jobHistory.start(FETCH_JOB_NAME);
     try {
       // Fetch latest articles from provider
       const response = await this.newsProviderService.getLatestArticles({
@@ -214,6 +227,12 @@ export class NewsService {
         }
       }
 
+      await this.jobHistory.complete(run, {
+        fetched: articles.length,
+        newArticles: newCount,
+        duplicatesSkipped: skippedCount,
+      });
+
       this.logger.log(
         `News fetch completed. Fetched ${articles.length} articles, ${newCount} new, ${skippedCount} duplicates skipped.`,
       );
@@ -222,9 +241,12 @@ export class NewsService {
         await this.cacheService.invalidateNewsCache();
       }
     } catch (error) {
+      await this.jobHistory.fail(run, error);
       this.logger.error(
         `Failed to fetch and save articles: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
+    } finally {
+      await this.jobLock.release(FETCH_JOB_NAME);
     }
   }
 }

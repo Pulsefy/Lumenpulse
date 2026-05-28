@@ -11,6 +11,10 @@ import {
   EcosystemSearchQueryDto,
   EcosystemSearchResponseDto,
 } from './dto/ecosystem-search.dto';
+import {
+  EntityLinkingQueryDto,
+  EntityLinkingResponseDto,
+} from './dto/entity-linking.dto';
 
 @ApiTags('search')
 @Controller('search')
@@ -29,7 +33,9 @@ export class SearchController {
     description: 'Project search results',
     type: ProjectSearchResponseDto,
   })
-  searchProjects(@Query() query: ProjectSearchQueryDto): ProjectSearchResponseDto {
+  searchProjects(
+    @Query() query: ProjectSearchQueryDto,
+  ): ProjectSearchResponseDto {
     return this.searchService.searchProjects(query);
   }
 
@@ -68,5 +74,22 @@ export class SearchController {
   ): Promise<EcosystemSearchResponseDto> {
     return this.searchService.searchEcosystemEntities(query);
   }
-}
 
+  @Get('entity-links')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Link extracted mentions to known entities',
+    description:
+      'Links mentions in free text to known projects, Stellar assets, and ecosystem entries.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Linked entities resolved from the input text',
+    type: EntityLinkingResponseDto,
+  })
+  async linkEntities(
+    @Query() query: EntityLinkingQueryDto,
+  ): Promise<EntityLinkingResponseDto> {
+    return this.searchService.linkEntities(query);
+  }
+}

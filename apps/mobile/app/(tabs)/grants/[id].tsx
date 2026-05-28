@@ -42,7 +42,13 @@ function InfoRow({
   );
 }
 
-function QfBar({ share, colors }: { share: number; colors: ReturnType<typeof useTheme>['colors'] }) {
+function QfBar({
+  share,
+  colors,
+}: {
+  share: number;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
   return (
     <View style={styles.qfTrack} accessible accessibilityLabel={`${share.toFixed(1)}% of pool`}>
       <View
@@ -83,7 +89,11 @@ function ProjectRow({
             #{rank + 1}
           </Text>
         </View>
-        <Text style={[styles.projectId, { color: colors.text }]} accessible accessibilityRole="header">
+        <Text
+          style={[styles.projectId, { color: colors.text }]}
+          accessible
+          accessibilityRole="header"
+        >
           {t('grants.project')} #{item.projectId}
         </Text>
         <Text style={[styles.matchAmount, { color: colors.accent }]} accessible>
@@ -178,7 +188,11 @@ export default function GrantRoundDetailScreen() {
           accessible
           accessibilityLabel={t('errors.error')}
         />
-        <Text style={[styles.errorText, { color: colors.text }]} accessible accessibilityRole="alert">
+        <Text
+          style={[styles.errorText, { color: colors.text }]}
+          accessible
+          accessibilityRole="alert"
+        >
           {error ?? t('errors.couldnt_load', { item: 'round' })}
         </Text>
         <TouchableOpacity
@@ -188,7 +202,9 @@ export default function GrantRoundDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('common.retry')}
         >
-          <Text style={styles.retryBtnText} accessible>{t('common.retry')}</Text>
+          <Text style={styles.retryBtnText} accessible>
+            {t('common.retry')}
+          </Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -231,7 +247,31 @@ export default function GrantRoundDetailScreen() {
 
         <InfoRow label={t('grants.start')} value={startDate} colors={colors} />
         <InfoRow label={t('grants.end')} value={endDate} colors={colors} />
-        <InfoRow label={t('grant_detail.eligible_projects')} value={String(projects.length)} colors={colors} />
+        <InfoRow
+          label={t('grant_detail.eligible_projects')}
+          value={String(projects.length)}
+          colors={colors}
+        />
+        <InfoRow
+          label="Total contributors"
+          value={String(summary.participationMetrics.totalContributors)}
+          colors={colors}
+        />
+        <InfoRow
+          label="Total contributions"
+          value={`${formatPoolAmount(summary.participationMetrics.totalContributionAmount)} XLM`}
+          colors={colors}
+        />
+        <InfoRow
+          label="Average per contributor"
+          value={`${formatPoolAmount(summary.participationMetrics.averageContributionPerContributor)} XLM`}
+          colors={colors}
+        />
+        <InfoRow
+          label="Average per project"
+          value={`${formatPoolAmount(summary.participationMetrics.averageContributionPerProject)} XLM`}
+          colors={colors}
+        />
 
         <View
           style={[styles.infoBox, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
@@ -243,143 +283,17 @@ export default function GrantRoundDetailScreen() {
           </Text>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.text }]} accessible accessibilityRole="header">
+        <Text
+          style={[styles.sectionTitle, { color: colors.text }]}
+          accessible
+          accessibilityRole="header"
+        >
           {t('grant_detail.estimated_allocations')}
         </Text>
 
         {projects.length === 0 ? (
           <Text style={[styles.emptyText, { color: colors.textSecondary }]} accessible>
             {t('grants.no_rounds')}
-          </Text>
-        ) : (
-          projects.map((p, idx) => (
-            <ProjectRow
-              key={p.projectId}
-              item={p}
-              rank={idx}
-              poolBalance={poolBalance}
-              colors={colors}
-              t={t}
-            />
-          ))
-        )}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-    } catch {
-      setError(t('errors.something_went_wrong'));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [roundId, t]);
-
-  useEffect(() => {
-    void fetchSummary();
-  }, [fetchSummary]);
-
-  if (isLoading) {
-    return (
-      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator
-          size="large"
-          color={colors.accent}
-          accessible
-          accessibilityLabel={t('common.loading')}
-        />
-      </SafeAreaView>
-    );
-  }
-
-  if (error || !summary) {
-    return (
-      <SafeAreaView style={[styles.center, { backgroundColor: colors.background, padding: 32 }]}>
-        <Ionicons
-          name="alert-circle-outline"
-          size={52}
-          color={colors.danger}
-          style={{ marginBottom: 16 }}
-          accessible
-          accessibilityLabel={t('errors.error')}
-        />
-        <Text style={[styles.errorText, { color: colors.text }]} accessible accessibilityRole="alert">
-          {error ?? t('errors.couldnt_load', { item: 'round' })}
-        </Text>
-        <TouchableOpacity
-          style={[styles.retryBtn, { backgroundColor: colors.accent }]}
-          onPress={() => void fetchSummary()}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.retry')}
-        >
-          <Text style={styles.retryBtnText} accessible>{t('common.retry')}</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    );
-  }
-
-  const { round, poolBalance, projects } = summary;
-  const endDate = new Date(round.endTime * 1000).toLocaleDateString();
-  const startDate = new Date(round.startTime * 1000).toLocaleDateString();
-
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Header */}
-        <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
-          {round.name}
-        </Text>
-        <View style={[styles.statusChip, { backgroundColor: colors.accent + '22' }]} accessible>
-          <Text style={[styles.statusText, { color: colors.accent }]} accessible>
-            {roundStatusLabel(round.status, t)}
-          </Text>
-        </View>
-
-        {/* Pool card */}
-        <View
-          style={[
-            styles.poolCard,
-            { backgroundColor: colors.surface, borderColor: colors.cardBorder },
-          ]}
-          accessible
-          accessibilityLabel={`${t('grants.matching_pool')}: ${formatTokenAmount(poolBalance)} XLM`}
-        >
-          <Text style={[styles.poolLabel, { color: colors.textSecondary }]} accessible>
-            {t('grants.matching_pool')}
-          </Text>
-          <Text style={[styles.poolValue, { color: colors.text }]} accessible>
-            {formatTokenAmount(poolBalance)} XLM
-          </Text>
-          <Text style={[styles.poolSub, { color: colors.textSecondary }]} accessible>
-            {t('grants.qf_explanation')}
-          </Text>
-        </View>
-
-        {/* Round info */}
-        <InfoRow label={t('grants.start')} value={startDate} colors={colors} />
-        <InfoRow label={t('grants.end')} value={endDate} colors={colors} />
-        <InfoRow label={t('grant_detail.eligible_projects')} value={String(projects.length)} colors={colors} />
-
-        {/* QF explanation */}
-        <View
-          style={[styles.infoBox, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-          accessible
-        >
-          <Ionicons name="information-circle-outline" size={18} color={colors.accent} />
-          <Text style={[styles.infoBoxText, { color: colors.textSecondary }]} accessible>
-            {t('grants.qf_explanation')}
-          </Text>
-        </View>
-
-        {/* Project allocations */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]} accessible accessibilityRole="header">
-          {t('grant_detail.estimated_allocations')}
-        </Text>
-
-        {projects.length === 0 ? (
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]} accessible>
-            {t('grants.no_projects')}
           </Text>
         ) : (
           projects.map((p, idx) => (

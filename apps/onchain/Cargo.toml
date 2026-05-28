@@ -7,6 +7,7 @@ members = [
   "contracts/matching_pool",
   "contracts/notification_interface",
   "contracts/project_registry",
+  "contracts/protocol_registry",
   "contracts/reentrancy-guard",
   "contracts/upgradable-contract",
   "contracts/vesting-wallet",

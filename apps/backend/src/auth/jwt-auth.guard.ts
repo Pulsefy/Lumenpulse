@@ -68,7 +68,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         info instanceof Error
           ? info.message
           : typeof info === 'object' && info !== null && 'message' in info
-            ? String((info as { message: unknown }).message)
+            ? String(info.message)
             : 'Invalid or expired token';
 
       this.logger.warn(`Authentication failed: ${message}`);

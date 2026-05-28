@@ -17,6 +17,10 @@ import {
   EcosystemSearchQueryDto,
   EcosystemSearchResponseDto,
 } from './dto/ecosystem-search.dto';
+import {
+  EntityLinkingQueryDto,
+  EntityLinkingResponseDto,
+} from './dto/entity-linking.dto';
 
 type TagRow = { value: string; count: number };
 type CategoryRow = { value: string; count: number };
@@ -114,7 +118,8 @@ export class SearchService {
         const diff = (b.numAccounts ?? 0) - (a.numAccounts ?? 0);
         if (diff !== 0) return diff;
       } else if (normalizedQueryLower) {
-        const diff = this.assetScore(b, normalizedQueryLower) -
+        const diff =
+          this.assetScore(b, normalizedQueryLower) -
           this.assetScore(a, normalizedQueryLower);
         if (diff !== 0) return diff;
       }
@@ -149,9 +154,79 @@ export class SearchService {
     return {
       items: rows.map((r) =>
         includeCounts
-          ? ({ kind: 'tag', value: r.value, count: r.count } satisfies EcosystemEntityDto)
+          ? ({
+              kind: 'tag',
+              value: r.value,
+              count: r.count,
+            } satisfies EcosystemEntityDto)
           : ({ kind: 'tag', value: r.value } satisfies EcosystemEntityDto),
       ),
+    };
+  }
+
+  async linkEntities(
+    query: EntityLinkingQueryDto,
+  ): Promise<EntityLinkingResponseDto> {
+    const limitPerType = Math.min(query.limitPerType ?? 5, 20);
+    const normalizedText = query.text.trim().toLowerCase();
+    const mentions = this.extractMentions(normalizedText);
+
+    const projectMatches = this.verificationService
+      .listProjects()
+      .filter((project) =>
+        mentions.some((mention) =>
+          project.name.toLowerCase().includes(mention),
+        ),
+      )
+      .slice(0, limitPerType)
+      .map((project) => {
+        const matchedMention =
+          mentions.find((mention) =>
+            project.name.toLowerCase().includes(mention),
+          ) ?? project.name.toLowerCase();
+        return {
+          projectId: project.projectId,
+          name: project.name,
+          matchedMention,
+        };
+      });
+
+    const assetMatches: Array<{
+      assetCode: string;
+      assetIssuer: string;
+      matchedMention: string;
+    }> = [];
+    const seenAssetKeys = new Set<string>();
+
+    for (const mention of mentions.slice(0, 8)) {
+      if (assetMatches.length >= limitPerType) break;
+      const res = await this.stellarService.discoverAssets({
+        q: mention,
+        limit: 5,
+      });
+      for (const asset of res.assets) {
+        const key = `${asset.assetCode}:${asset.assetIssuer}`;
+        if (seenAssetKeys.has(key)) continue;
+        if (asset.assetCode.toLowerCase() !== mention) continue;
+        seenAssetKeys.add(key);
+        assetMatches.push({
+          assetCode: asset.assetCode,
+          assetIssuer: asset.assetIssuer,
+          matchedMention: mention,
+        });
+        if (assetMatches.length >= limitPerType) break;
+      }
+    }
+
+    const ecosystemRows = await this.fetchEcosystemByMentions(
+      mentions,
+      limitPerType,
+    );
+
+    return {
+      projects: projectMatches,
+      assets: assetMatches,
+      ecosystem: ecosystemRows,
     };
   }
 
@@ -215,7 +290,7 @@ export class SearchService {
       LIMIT $${params.length};
     `;
 
-    return (await this.newsRepository.query(sql, params)) as TagRow[];
+    return await this.newsRepository.query(sql, params);
   }
 
   private async fetchCategories(opts: {
@@ -241,7 +316,90 @@ export class SearchService {
       LIMIT $${params.length};
     `;
 
-    return (await this.newsRepository.query(sql, params)) as CategoryRow[];
+    return await this.newsRepository.query(sql, params);
+  }
+
+  private extractMentions(text: string): string[] {
+    const tokens = text
+      .split(/[^a-z0-9_]+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length >= 2);
+    return [...new Set(tokens)];
+  }
+
+  private async fetchEcosystemByMentions(
+    mentions: string[],
+    limit: number,
+  ): Promise<
+    Array<{ kind: 'tag' | 'category'; value: string; matchedMention: string }>
+  > {
+    if (mentions.length === 0) return [];
+
+    const params = [...mentions, limit];
+    const mentionPlaceholders = mentions
+      .map((_, idx) => `$${idx + 1}`)
+      .join(', ');
+    const limitParam = `$${mentions.length + 1}`;
+
+    const sql = `
+      WITH matched_tags AS (
+        SELECT 'tag'::text AS kind, tag AS value
+        FROM (
+          SELECT LOWER(UNNEST(tags)) AS tag
+          FROM articles
+          WHERE tags IS NOT NULL AND array_length(tags, 1) > 0
+        ) t
+        WHERE tag IN (${mentionPlaceholders})
+      ),
+      matched_categories AS (
+        SELECT 'category'::text AS kind, LOWER(category) AS value
+        FROM articles
+        WHERE category IS NOT NULL
+          AND LOWER(category) IN (${mentionPlaceholders})
+      )
+      SELECT DISTINCT kind, value
+      FROM (
+        SELECT * FROM matched_tags
+        UNION ALL
+        SELECT * FROM matched_categories
+      ) all_matches
+      LIMIT ${limitParam};
+    `;
+
+    const rawRows: unknown = await this.newsRepository.query(sql, params);
+    const rows = this.asEcosystemRows(rawRows);
+
+    return rows.map((row) => ({
+      kind: row.kind,
+      value: row.value,
+      matchedMention: row.value,
+    }));
+  }
+
+  private asEcosystemRows(
+    value: unknown,
+  ): Array<{ kind: 'tag' | 'category'; value: string }> {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value.flatMap((row) => {
+      if (!row || typeof row !== 'object') {
+        return [];
+      }
+
+      const record = row as Record<string, unknown>;
+      const kind = record.kind;
+      const rowValue = record.value;
+
+      if (
+        (kind === 'tag' || kind === 'category') &&
+        typeof rowValue === 'string'
+      ) {
+        return [{ kind, value: rowValue }];
+      }
+
+      return [];
+    });
   }
 }
-

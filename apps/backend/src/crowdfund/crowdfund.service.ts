@@ -71,7 +71,9 @@ export class CrowdfundService {
       name: dto.name,
       description: dto.description,
       bannerUrl: dto.bannerUrl,
-      targetAmount: BigInt(Math.round(parseFloat(dto.targetAmount) * Number(STROOP))),
+      targetAmount: BigInt(
+        Math.round(parseFloat(dto.targetAmount) * Number(STROOP)),
+      ),
       tokenAddress: dto.tokenAddress,
       contractAddress: dto.contractAddress,
       totalDeposited: 0n,
@@ -121,7 +123,9 @@ export class CrowdfundService {
     // Auto-complete if target reached
     if (project.totalDeposited >= project.targetAmount) {
       project.onChainStatus = OnChainStatus.COMPLETED;
-      this.logger.log(`Project ${project.id} reached funding goal — marked COMPLETED`);
+      this.logger.log(
+        `Project ${project.id} reached funding goal — marked COMPLETED`,
+      );
     }
 
     this.logger.log(
@@ -156,7 +160,10 @@ export class CrowdfundService {
     return { balance: this.fromStroops(balance) };
   }
 
-  getMyContributions(projectId: number, publicKey: string): ContributionRecordDto[] {
+  getMyContributions(
+    projectId: number,
+    publicKey: string,
+  ): ContributionRecordDto[] {
     const project = this.findOrThrow(projectId);
     const entries = project.contributions.get(publicKey) ?? [];
 
@@ -217,8 +224,10 @@ export class CrowdfundService {
         description:
           'A community-governed fund to support open-source Stellar ecosystem tooling and developer education.',
         targetAmount: '50000',
-        tokenAddress: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
-        contractAddress: 'CABL2E2NKLCQIRSF6BXVB4NLSDBNJ2QBFVGXNLGBMZFDWRQKQ7MWDKD',
+        tokenAddress:
+          'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+        contractAddress:
+          'CABL2E2NKLCQIRSF6BXVB4NLSDBNJ2QBFVGXNLGBMZFDWRQKQ7MWDKD',
         roadmap: [
           {
             title: 'Launch fundraiser',
@@ -227,7 +236,8 @@ export class CrowdfundService {
           },
           {
             title: 'Distribute first tranche',
-            description: 'Allocate 50% of funds to approved grant applications.',
+            description:
+              'Allocate 50% of funds to approved grant applications.',
             targetDate: '2026-06-01',
           },
         ],
@@ -238,12 +248,15 @@ export class CrowdfundService {
         description:
           'Building a cross-chain bridge between Stellar and EVM networks with a mobile-first UX.',
         targetAmount: '25000',
-        tokenAddress: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
-        contractAddress: 'CBSXTJCDVNR4QSUVVNRPUOMXZUWUBEYZQQKDXIYWF2FNXLBOPSTXGAGK',
+        tokenAddress:
+          'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+        contractAddress:
+          'CBSXTJCDVNR4QSUVVNRPUOMXZUWUBEYZQQKDXIYWF2FNXLBOPSTXGAGK',
         roadmap: [
           {
             title: 'Testnet prototype',
-            description: 'Working bridge on Testnet with basic swap functionality.',
+            description:
+              'Working bridge on Testnet with basic swap functionality.',
             targetDate: '2026-04-15',
           },
           {
@@ -264,8 +277,10 @@ export class CrowdfundService {
         description:
           'Providing micro-grants up to $500 to African developers building on Stellar.',
         targetAmount: '10000',
-        tokenAddress: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
-        contractAddress: 'CDRP4QZJFJDUGBMN35GGRQBIZSGD3CQZIJFM4CLHZLGQDGZQ3JKWFPQ',
+        tokenAddress:
+          'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+        contractAddress:
+          'CDRP4QZJFJDUGBMN35GGRQBIZSGD3CQZIJFM4CLHZLGQDGZQ3JKWFPQ',
       },
     ];
 
@@ -276,8 +291,14 @@ export class CrowdfundService {
 
       // Add a few synthetic contributions
       const synthetic = [
-        { pk: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN', amt: '500' },
-        { pk: 'GBYD6MQZFKGTX4XFNXMZPTBOHSXMCURJJR7JTXRLDTZBQ7IJQFZUWEJ', amt: '1200' },
+        {
+          pk: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+          amt: '500',
+        },
+        {
+          pk: 'GBYD6MQZFKGTX4XFNXMZPTBOHSXMCURJJR7JTXRLDTZBQ7IJQFZUWEJ',
+          amt: '1200',
+        },
       ];
 
       for (const c of synthetic) {
@@ -285,7 +306,9 @@ export class CrowdfundService {
         const entries = record.contributions.get(c.pk) ?? [];
         entries.push({
           amount,
-          timestamp: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
+          timestamp: new Date(
+            Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000,
+          ),
           transactionHash: `0x${randomUUID().replace(/-/g, '')}`,
         });
         record.contributions.set(c.pk, entries);

@@ -12,6 +12,8 @@ import { ErrorCode } from '../common/enums/error-code.enum';
 import { ErrorResponse } from '../interfaces/error-response.interface';
 import { resolveNodeEnv } from '../lib/config';
 
+type RequestWithRequestId = Request & { requestId?: string };
+
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
@@ -19,7 +21,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    const request = ctx.getRequest<RequestWithRequestId>();
     const status = this.getStatus(exception);
     const requestId =
       typeof request.requestId === 'string' ? request.requestId : 'unknown';
@@ -28,14 +30,32 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     response.setHeader(REQUEST_ID_HEADER, requestId);
 
     if (status >= 500) {
-      const stack = exception instanceof Error ? exception.stack : undefined;
+      const stack = exception instanceof Error ? (exception.stack ?? '') : '';
       this.logger.error(
-        `[${requestId}] ${request.method} ${request.url} -> ${status}`,
+        JSON.stringify({
+          event: 'http_request_failed',
+          requestId,
+          method: request.method,
+          url: request.originalUrl ?? request.url,
+          statusCode: status,
+          errorCode: errorResponse.code,
+          message: errorResponse.message,
+          timestamp: new Date().toISOString(),
+        }),
         stack,
       );
     } else {
       this.logger.warn(
-        `[${requestId}] ${request.method} ${request.url} -> ${status} ${errorResponse.code}`,
+        JSON.stringify({
+          event: 'http_request_failed',
+          requestId,
+          method: request.method,
+          url: request.originalUrl ?? request.url,
+          statusCode: status,
+          errorCode: errorResponse.code,
+          message: errorResponse.message,
+          timestamp: new Date().toISOString(),
+        }),
       );
     }
 
