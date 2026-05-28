@@ -10,6 +10,7 @@ from .stellar_fetcher import (
     get_asset_volume,
     get_network_overview,
 )
+from .price_fetcher import PriceFetcher
 from .social_fetcher import (
     SocialFetcher,
     SocialPost,
@@ -29,6 +30,7 @@ __all__ = [
     "TransactionRecord",
     "get_asset_volume",
     "get_network_overview",
+    "PriceFetcher",
     # Social media fetchers
     "SocialFetcher",
     "SocialPost",
