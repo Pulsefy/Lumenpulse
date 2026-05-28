@@ -12,6 +12,8 @@ import { ErrorCode } from '../common/enums/error-code.enum';
 import { ErrorResponse } from '../interfaces/error-response.interface';
 import { resolveNodeEnv } from '../lib/config';
 
+type RequestWithRequestId = Request & { requestId?: string };
+
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
@@ -19,7 +21,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    const request = ctx.getRequest<RequestWithRequestId>();
     const status = this.getStatus(exception);
     const requestId =
       typeof request.requestId === 'string' ? request.requestId : 'unknown';
@@ -28,7 +30,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     response.setHeader(REQUEST_ID_HEADER, requestId);
 
     if (status >= 500) {
-      const stack = exception instanceof Error ? exception.stack : undefined;
+      const stack = exception instanceof Error ? (exception.stack ?? '') : '';
       this.logger.error(
         `[${requestId}] ${request.method} ${request.url} -> ${status}`,
         stack,

@@ -95,7 +95,7 @@ describe('HealthService', () => {
 
     expect(report.status).toBe('ok');
     expect(report.summary).toBe('degraded');
-    expect(report.error.redis).toEqual({
+    expect(report.error!.redis).toEqual({
       status: 'down',
       message: 'Redis cache is unavailable',
     });
@@ -111,7 +111,7 @@ describe('HealthService', () => {
 
     expect(report.status).toBe('error');
     expect(report.summary).toBe('down');
-    expect(report.error.database).toEqual({
+    expect(report.error!.database).toEqual({
       status: 'down',
       message: 'connect ECONNREFUSED',
     });
@@ -132,7 +132,7 @@ describe('HealthService', () => {
 
     expect(report.status).toBe('ok');
     expect(report.summary).toBe('degraded');
-    expect(report.error.externalApis).toEqual(
+    expect(report.error!.externalApis).toEqual(
       expect.objectContaining({
         status: 'down',
         message: 'One or more external APIs are unavailable',

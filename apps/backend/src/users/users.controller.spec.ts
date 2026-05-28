@@ -28,6 +28,8 @@ describe('UsersController', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     passwordHash: 'hashed-password',
+    twoFactorEnabled: false,
+    twoFactorSecret: null,
   };
 
   beforeEach(async () => {

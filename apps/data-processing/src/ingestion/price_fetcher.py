@@ -12,8 +12,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-import requests
 from requests.exceptions import RequestException
+from src.utils.http_client import RobustHTTPClient
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +54,11 @@ class PriceFetcher:
         self.stale_ttl_seconds = stale_ttl_seconds
         self.request_timeout = request_timeout
         self.cache: Dict[str, Dict[str, Any]] = {}
+        self.session = RobustHTTPClient()
 
-    def fetch_all_prices(self, asset_codes: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    def fetch_all_prices(
+        self, asset_codes: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
         """Fetch prices for supported assets and return adapter-ready values."""
         asset_codes = asset_codes or list(SUPPORTED_ASSETS.keys())
         now = datetime.now(timezone.utc)
@@ -134,7 +137,7 @@ class PriceFetcher:
     def _fetch_coingecko(self, asset_codes: List[str]) -> Dict[str, float]:
         """Fetch usd prices from CoinGecko."""
         asset_ids = self._asset_ids(asset_codes, key="coingecko_id")
-        response = requests.get(
+        response = self.session.get(
             COINGECKO_URL,
             params={"ids": ",".join(asset_ids), "vs_currencies": "usd"},
             timeout=self.request_timeout,
@@ -155,7 +158,7 @@ class PriceFetcher:
     def _fetch_coincap(self, asset_codes: List[str]) -> Dict[str, float]:
         """Fetch usd prices from CoinCap as a fallback."""
         asset_ids = self._asset_ids(asset_codes, key="coincap_id")
-        response = requests.get(
+        response = self.session.get(
             COINCAP_URL,
             params={"ids": ",".join(asset_ids)},
             timeout=self.request_timeout,
@@ -173,7 +176,7 @@ class PriceFetcher:
         return prices
 
     def _scale_price(self, price_usd: float) -> int:
-        return int(round(price_usd * (10 ** BASE_DECIMALS)))
+        return int(round(price_usd * (10**BASE_DECIMALS)))
 
     def _build_price_payload(
         self,
