@@ -206,4 +206,55 @@ describe('SearchService', () => {
       expect(res.items[0]).toEqual({ kind: 'category', value: 'defi' });
     });
   });
+
+  describe('linkEntities', () => {
+    it('links text mentions to known projects/assets/ecosystem entries', async () => {
+      verificationService.listProjects.mockReturnValue([
+        {
+          projectId: 1,
+          name: 'LumenPulse Wallet',
+          ownerPublicKey: 'G1',
+          status: VerificationStatus.Pending,
+          votesFor: 0,
+          votesAgainst: 0,
+          registeredAt: 1,
+          resolvedAt: 0,
+          quorumProgress: 0,
+        },
+      ]);
+
+      stellarService.discoverAssets.mockResolvedValue({
+        assets: [
+          {
+            assetCode: 'XLM',
+            assetIssuer: 'native',
+            assetType: 'native',
+            numAccounts: 1000,
+          },
+        ],
+        hasMore: false,
+      });
+
+      (newsRepo.query as jest.Mock).mockResolvedValue([
+        { kind: 'tag', value: 'stellar' },
+      ]);
+
+      const res = await service.linkEntities({
+        text: 'LumenPulse Wallet tracks XLM in the Stellar ecosystem',
+      });
+
+      expect(res.projects[0]).toMatchObject({
+        projectId: 1,
+        matchedMention: 'lumenpulse',
+      });
+      expect(res.assets[0]).toMatchObject({
+        assetCode: 'XLM',
+        matchedMention: 'xlm',
+      });
+      expect(res.ecosystem[0]).toMatchObject({
+        kind: 'tag',
+        value: 'stellar',
+      });
+    });
+  });
 });

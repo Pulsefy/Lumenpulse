@@ -32,12 +32,30 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (status >= 500) {
       const stack = exception instanceof Error ? (exception.stack ?? '') : '';
       this.logger.error(
-        `[${requestId}] ${request.method} ${request.url} -> ${status}`,
+        JSON.stringify({
+          event: 'http_request_failed',
+          requestId,
+          method: request.method,
+          url: request.originalUrl ?? request.url,
+          statusCode: status,
+          errorCode: errorResponse.code,
+          message: errorResponse.message,
+          timestamp: new Date().toISOString(),
+        }),
         stack,
       );
     } else {
       this.logger.warn(
-        `[${requestId}] ${request.method} ${request.url} -> ${status} ${errorResponse.code}`,
+        JSON.stringify({
+          event: 'http_request_failed',
+          requestId,
+          method: request.method,
+          url: request.originalUrl ?? request.url,
+          statusCode: status,
+          errorCode: errorResponse.code,
+          message: errorResponse.message,
+          timestamp: new Date().toISOString(),
+        }),
       );
     }
 

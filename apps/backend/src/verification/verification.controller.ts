@@ -26,6 +26,10 @@ import {
   ProjectVerificationDto,
   VoteResultDto,
   RegistryConfigDto,
+  UpsertSubmissionDto,
+  ProjectSubmissionDto,
+  SubmissionStatus,
+  SubmissionActionDto,
 } from './dto/verification.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -172,5 +176,100 @@ export class VerificationController {
   @ApiResponse({ status: 404, description: 'Record not found' })
   override(@Body() dto: OverrideDto) {
     return this.svc.overrideVerification(dto);
+  }
+
+  @Get('submissions')
+  @ApiOperation({
+    summary: 'List project submissions',
+    description:
+      'Returns project submissions across draft/review/approval/publish workflow states.',
+  })
+  @ApiQuery({ name: 'status', required: false, enum: SubmissionStatus })
+  @ApiResponse({
+    status: 200,
+    description: 'Submission records retrieved successfully',
+    type: [ProjectSubmissionDto],
+  })
+  listSubmissions(@Query('status') status?: SubmissionStatus) {
+    return this.svc.listSubmissions(status);
+  }
+
+  @Get('submissions/:id')
+  @ApiOperation({
+    summary: 'Get project submission details',
+  })
+  @ApiResponse({
+    status: 200,
+    type: ProjectSubmissionDto,
+  })
+  @ApiResponse({ status: 404, description: 'Submission not found' })
+  getSubmission(@Param('id', ParseIntPipe) id: number) {
+    return this.svc.getSubmission(id);
+  }
+
+  @Post('submissions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Save submission draft',
+    description:
+      'Creates or updates a project submission draft that can later enter review.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Submission draft saved',
+    type: ProjectSubmissionDto,
+  })
+  upsertSubmission(@Body() dto: UpsertSubmissionDto) {
+    return this.svc.upsertSubmission(dto);
+  }
+
+  @Post('submissions/:id/submit')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Submit draft for review',
+  })
+  submitForReview(@Param('id', ParseIntPipe) id: number) {
+    return this.svc.submitForReview(id);
+  }
+
+  @Post('submissions/:id/request-changes')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Request changes on submission',
+  })
+  requestChanges(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SubmissionActionDto,
+  ) {
+    return this.svc.requestSubmissionChanges(id, dto);
+  }
+
+  @Post('submissions/:id/approve')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Approve submission for publishing',
+  })
+  approveSubmission(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SubmissionActionDto,
+  ) {
+    return this.svc.approveSubmission(id, dto);
+  }
+
+  @Post('submissions/:id/publish')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Publish approved submission',
+  })
+  publishSubmission(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SubmissionActionDto,
+  ) {
+    return this.svc.publishSubmission(id, dto);
   }
 }

@@ -1,4 +1,11 @@
-import { IsString, IsNumber, IsInt, IsBoolean, Min } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsInt,
+  IsBoolean,
+  Min,
+  IsOptional,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export enum WeightMode {
@@ -11,6 +18,14 @@ export enum VerificationStatus {
   Pending = 'PENDING',
   Verified = 'VERIFIED',
   Rejected = 'REJECTED',
+}
+
+export enum SubmissionStatus {
+  Draft = 'DRAFT',
+  InReview = 'IN_REVIEW',
+  ChangesRequested = 'CHANGES_REQUESTED',
+  Approved = 'APPROVED',
+  Published = 'PUBLISHED',
 }
 
 export class RegisterProjectDto {
@@ -203,4 +218,88 @@ export class RegistryConfigDto {
     example: 1,
   })
   minVoterWeight: number;
+}
+
+export class UpsertSubmissionDto {
+  @ApiProperty({ description: 'ID of the project submission', example: 42 })
+  @IsNumber()
+  @IsInt()
+  @Min(0)
+  projectId: number;
+
+  @ApiProperty({
+    description: 'Stellar public key of the creator saving this submission',
+    example: 'G...CREATOR',
+  })
+  @IsString()
+  creatorPublicKey: string;
+
+  @ApiProperty({
+    description: 'Title for the submission payload',
+    example: 'Community Wallet',
+  })
+  @IsString()
+  title: string;
+
+  @ApiProperty({
+    description: 'Submission body/content',
+    example: 'Detailed project proposal and milestones.',
+  })
+  @IsString()
+  content: string;
+}
+
+export class SubmissionActionDto {
+  @ApiProperty({
+    description: 'Actor performing workflow action (reviewer/admin)',
+    example: 'reviewer-1',
+  })
+  @IsString()
+  actorId: string;
+
+  @ApiProperty({
+    description: 'Optional notes for this action',
+    required: false,
+    example: 'Please clarify your budget assumptions.',
+  })
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class ProjectSubmissionDto {
+  @ApiProperty({ example: 42 })
+  projectId: number;
+
+  @ApiProperty({ example: 'G...CREATOR' })
+  creatorPublicKey: string;
+
+  @ApiProperty({ example: 'Community Wallet' })
+  title: string;
+
+  @ApiProperty({ example: 'Detailed project proposal and milestones.' })
+  content: string;
+
+  @ApiProperty({
+    enum: SubmissionStatus,
+    example: SubmissionStatus.Draft,
+  })
+  status: SubmissionStatus;
+
+  @ApiProperty({
+    required: false,
+    example: 'reviewer-1',
+    description: 'Most recent reviewer/admin actor',
+  })
+  reviewerId?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Most recent workflow note',
+    example: 'Please update technical risks section.',
+  })
+  reviewNote?: string;
+
+  @ApiProperty({ example: 1775000000 })
+  updatedAt: number;
 }

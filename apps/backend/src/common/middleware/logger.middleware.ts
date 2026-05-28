@@ -29,7 +29,15 @@ export class LoggerMiddleware implements NestMiddleware {
       const duration = Date.now() - startTime;
       const requestId =
         typeof request.requestId === 'string' ? request.requestId : 'unknown';
-      const message = `[Request:${requestId}] ${req.method} ${req.url} - ${res.statusCode} - ${duration}ms`;
+      const message = JSON.stringify({
+        event: 'http_request_completed',
+        requestId,
+        method: req.method,
+        url: req.originalUrl ?? req.url,
+        statusCode: res.statusCode,
+        durationMs: duration,
+        timestamp: new Date().toISOString(),
+      });
 
       // Log based on status code
       if (res.statusCode >= 500) {
