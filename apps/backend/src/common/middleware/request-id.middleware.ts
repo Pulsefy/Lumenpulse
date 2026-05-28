@@ -6,13 +6,16 @@ import {
   REQUEST_ID_HEADER_LOWER,
 } from '../constants/request.constants';
 
+type RequestWithRequestId = Request & { requestId?: string };
+
 @Injectable()
 export class RequestIdMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction): void {
-    const incomingRequestId = req.header(REQUEST_ID_HEADER_LOWER)?.trim();
+    const request = req as RequestWithRequestId;
+    const incomingRequestId = request.header(REQUEST_ID_HEADER_LOWER)?.trim();
     const requestId = incomingRequestId || randomUUID();
 
-    req.requestId = requestId;
+    request.requestId = requestId;
     res.setHeader(REQUEST_ID_HEADER, requestId);
 
     next();

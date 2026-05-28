@@ -43,6 +43,8 @@ import {
 } from '@nestjs/swagger';
 import { ProfileResponseDto } from '../users/dto/profile-response.dto';
 import { getAuthThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import { AuditLogAction } from '../audit/decorators/audit-log.decorator';
+
 import {
   ActiveSessionsResponseDto,
   RevokeSessionResponseDto,
@@ -90,6 +92,7 @@ export class AuthController {
       },
     },
   })
+  @AuditLogAction('login')
   async login(@Body() body: LoginDto) {
     const user = await this.authService.validateUser(body.email, body.password);
     if (!user) {
@@ -172,6 +175,7 @@ export class AuthController {
     status: 400,
     description: 'Invalid, expired, or already-used token',
   })
+  @AuditLogAction('password_change')
   async resetPassword(@Body() body: ResetPasswordDto) {
     return this.authService.resetPassword(body.token, body.newPassword);
   }

@@ -12,7 +12,8 @@ from .news_deduplicator import NewsDeduplicator
 from datetime import datetime
 from src.utils.translator import translate_and_normalize
 import requests
-from requests.exceptions import RequestException, Timeout
+from requests.exceptions import RequestException
+from src.utils.http_client import RobustHTTPClient
 
 
 @dataclass
@@ -81,12 +82,12 @@ class NewsFetcher:
             raise ValueError("NEWSAPI_API_KEY environment variable not set")
 
         # Session for connection pooling
-        self.session = requests.Session()
+        self.session = RobustHTTPClient()
         self.last_request_time = 0
 
         # Cache for avoiding duplicate articles
         self.seen_articles = set()
-        
+
         # Initialize deduplicator
         self.deduplicator = NewsDeduplicator(deduplication_window_days=7)
 
@@ -151,7 +152,9 @@ class NewsFetcher:
                             id=f"cc_{item['id']}",
                             title=translate_and_normalize(item.get("title", "")),
                             content=translate_and_normalize(item.get("body", "")),
-                            summary=translate_and_normalize(item.get("short_description", "")),
+                            summary=translate_and_normalize(
+                                item.get("short_description", "")
+                            ),
                             source=item.get("source", "Unknown"),
                             url=item.get("url", ""),
                             published_at=datetime.fromtimestamp(
@@ -163,7 +166,9 @@ class NewsFetcher:
                                 else []
                             ),
                             tags=(
-                                item.get("tags", "").split("|") if item.get("tags") else []
+                                item.get("tags", "").split("|")
+                                if item.get("tags")
+                                else []
                             ),
                         )
 
@@ -225,7 +230,9 @@ class NewsFetcher:
                             id=f"na_{hash(item['url']) & 0xFFFFFFFF}",
                             title=translate_and_normalize(item.get("title", "")),
                             content=translate_and_normalize(item.get("content", "")),
-                            summary=translate_and_normalize(item.get("description", "")),
+                            summary=translate_and_normalize(
+                                item.get("description", "")
+                            ),
                             source=item.get("source", {}).get("name", "Unknown"),
                             url=item.get("url", ""),
                             published_at=published_at,
@@ -287,10 +294,10 @@ class NewsFetcher:
 
         # Convert to dictionaries
         articles_as_dicts = [article.to_dict() for article in all_articles]
-        
+
         # Apply deduplication filter
         deduplicated_articles = self.deduplicator.filter_duplicates(articles_as_dicts)
-        
+
         result = deduplicated_articles[:limit]
 
         if not result:

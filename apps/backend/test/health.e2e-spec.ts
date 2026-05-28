@@ -107,7 +107,7 @@ describe('Health Check (e2e)', () => {
 
     expect(body.status).toBe('ok');
     expect(body.summary).toBe('degraded');
-    expect(body.error.redis.status).toBe('down');
+    expect(body.error!.redis!.status).toBe('down');
   });
 
   it('returns 503 when the database is down', async () => {

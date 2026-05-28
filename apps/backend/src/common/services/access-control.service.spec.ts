@@ -155,7 +155,9 @@ describe('AccessControlService', () => {
         provider: 'github',
         algorithm: 'hmac-sha256',
       };
-      webhookService.verifySignature.mockReturnValue(mockVerificationResult);
+      webhookService.verifySignature.mockReturnValue(
+        mockVerificationResult as any,
+      );
 
       const request = {
         verificationType: VerificationType.WEBHOOK_SIGNATURE,

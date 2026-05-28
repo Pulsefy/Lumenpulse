@@ -1,9 +1,12 @@
 import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 
+type RequestWithRequestId = Request & { requestId?: string };
+
 @Injectable()
 export class LoggerMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction): void {
+    const request = req as RequestWithRequestId;
     const startTime = Date.now();
 
     // Store original end method with proper typing
@@ -25,7 +28,7 @@ export class LoggerMiddleware implements NestMiddleware {
     ): void => {
       const duration = Date.now() - startTime;
       const requestId =
-        typeof req.requestId === 'string' ? req.requestId : 'unknown';
+        typeof request.requestId === 'string' ? request.requestId : 'unknown';
       const message = `[Request:${requestId}] ${req.method} ${req.url} - ${res.statusCode} - ${duration}ms`;
 
       // Log based on status code
