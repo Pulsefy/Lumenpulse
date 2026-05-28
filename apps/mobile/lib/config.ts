@@ -70,6 +70,12 @@ export const config = {
   api: {
     baseUrl: environmentConfigs.testnet.apiBaseUrl,
     timeout: 30000, // 30 seconds
+    // Retry/backoff defaults for transient network errors and 5xx responses
+    maxRetries: 3,
+    backoffBaseMs: 300,
+    backoffMultiplier: 2,
+    // When true, adds random jitter to backoff delays
+    backoffJitter: true,
   },
 
   /**

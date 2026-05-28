@@ -1,4 +1,4 @@
-import { config, getEnvironmentConfig } from './config';
+import { config as appConfig, getEnvironmentConfig } from './config';
 
 /**
  * API Client Configuration
@@ -51,7 +51,7 @@ class ApiClient {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     };
-    this.defaultTimeout = config.api.timeout;
+    this.defaultTimeout = appConfig.api.timeout;
   }
 
   /**
@@ -113,64 +113,125 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = { ...this.defaultHeaders, ...config.headers };
 
-    // Setup timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), config.timeout || this.defaultTimeout);
+    const maxRetries = (appConfig.api.maxRetries as number) ?? 3;
+    const baseMs = (appConfig.api.backoffBaseMs as number) ?? 300;
+    const multiplier = (appConfig.api.backoffMultiplier as number) ?? 2;
+    const jitter = (appConfig.api.backoffJitter as boolean) ?? true;
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-        signal: config.signal || controller.signal,
-      });
+    const method = (options.method || 'GET').toUpperCase();
 
-      clearTimeout(timeoutId);
+    // Helper to perform a single fetch attempt with timeout
+    const singleAttempt = async (): Promise<{ response?: Response; error?: unknown }>
+ => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), config.timeout || this.defaultTimeout);
 
-      // Handle non-OK responses
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({
-          message: `HTTP ${response.status}: ${response.statusText}`,
-        }));
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers,
+          signal: config.signal || controller.signal,
+        });
 
-        return {
-          success: false,
-          error: this.normalizeError(errorData, response.status),
-        };
+        clearTimeout(timeoutId);
+        return { response };
+      } catch (err) {
+        clearTimeout(timeoutId);
+        return { error: err };
       }
+    };
 
-      // Handle empty responses (204 No Content)
-      if (response.status === 204) {
-        return {
-          success: true,
-          data: undefined as T,
-        };
-      }
-
-      const data = await response.json();
-      return {
-        success: true,
-        data,
-      };
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      // Handle timeout
-      if (error instanceof Error && error.name === 'AbortError') {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      // If caller aborted, stop retrying
+      if (config.signal && config.signal.aborted) {
         return {
           success: false,
           error: {
-            message: 'Request timeout',
-            error: 'TimeoutError',
+            message: 'Request aborted',
+            error: 'AbortError',
           },
         };
       }
 
-      // Handle network errors
-      return {
-        success: false,
-        error: this.normalizeError(error),
-      };
+      const { response, error } = await singleAttempt();
+
+      // If we have a response
+      if (response) {
+        if (!response.ok) {
+          // Parse error body if available
+          const errorData = await response.json().catch(() => ({
+            message: `HTTP ${response.status}: ${response.statusText}`,
+          }));
+
+          // Retry on 5xx or 429 for idempotent methods
+          const status = response.status;
+          const shouldRetry = (status >= 500 || status === 429) && method !== 'POST';
+
+          if (shouldRetry && attempt < maxRetries) {
+            const backoff = Math.pow(multiplier, attempt) * baseMs;
+            const delay = jitter ? Math.round(backoff * (0.5 + Math.random() * 0.5)) : backoff;
+            await new Promise((r) => setTimeout(r, delay));
+            continue;
+          }
+
+          return {
+            success: false,
+            error: this.normalizeError(errorData, status),
+          };
+        }
+
+        // 204 No Content
+        if (response.status === 204) {
+          return {
+            success: true,
+            data: undefined as T,
+          };
+        }
+
+        const data = await response.json();
+        return {
+          success: true,
+          data,
+        };
+      }
+
+      // If there was a fetch error (network, timeout, DNS, etc.)
+      if (error) {
+        // Timeout / Abort
+        if (error instanceof Error && error.name === 'AbortError') {
+          // Do not retry on explicit abort
+          return {
+            success: false,
+            error: {
+              message: 'Request timeout',
+              error: 'TimeoutError',
+            },
+          };
+        }
+
+        // For network errors, retry for idempotent methods
+        const shouldRetryNetwork = method !== 'POST' && attempt < maxRetries;
+        if (shouldRetryNetwork) {
+          const backoff = Math.pow(multiplier, attempt) * baseMs;
+          const delay = jitter ? Math.round(backoff * (0.5 + Math.random() * 0.5)) : backoff;
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+
+        return {
+          success: false,
+          error: this.normalizeError(error),
+        };
+      }
     }
+
+    return {
+      success: false,
+      error: {
+        message: 'Request failed after retries',
+        error: 'RetryError',
+      },
+    };
   }
 
   /**

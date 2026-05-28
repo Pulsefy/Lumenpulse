@@ -189,3 +189,4 @@ MIT License. See [LICENSE](LICENSE).
 - Have questions? Open an issue or DM @pulsefy.
 
 Built with ❤️ by the LumenPulse Team. Powered by Stellar. 🚀
+.
