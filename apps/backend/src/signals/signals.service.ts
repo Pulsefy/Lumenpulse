@@ -8,7 +8,11 @@ import {
   UserSignalDto,
   UserSignalsResponseDto,
 } from './dto/signals.dto';
-import { TransactionType, TransactionDto } from '../transaction/dto/transaction.dto';
+import {
+  TransactionDto,
+  TransactionStatus,
+  TransactionType,
+} from '../transaction/dto/transaction.dto';
 import { PortfolioSummaryResponseDto } from '../portfolio/dto/portfolio-snapshot.dto';
 import { StellarAccountResponseDto } from '../users/dto/stellar-account-response.dto';
 
@@ -32,7 +36,10 @@ export class SignalsService {
     }
 
     const accounts = await this.usersService.getStellarAccounts(userId);
-    const publicKey = this.determinePrimaryPublicKey(accounts, user.stellarPublicKey);
+    const publicKey = this.determinePrimaryPublicKey(
+      accounts,
+      user.stellarPublicKey,
+    );
 
     const [portfolioSummary, transactionHistory] = await Promise.all([
       this.portfolioService.getPortfolioSummary(userId),
@@ -79,7 +86,6 @@ export class SignalsService {
     const totalValueUsd = Number(portfolioSummary.totalValueUsd) || 0;
     const assets = portfolioSummary.assets || [];
     const assetCount = assets.length;
-    const assetCodes = assets.map((asset) => asset.assetCode?.toUpperCase() ?? 'UNKNOWN');
 
     if (!hasAuthenticatedAccount && totalValueUsd === 0 && assetCount === 0) {
       signals.push({
@@ -93,7 +99,8 @@ export class SignalsService {
         category: SignalCategory.FALLBACK,
         severity: SignalSeverity.LOW,
         title: 'No recent activity available',
-        detail: 'Transaction history is unavailable until a linked account is configured.',
+        detail:
+          'Transaction history is unavailable until a linked account is configured.',
       });
       return signals;
     }
@@ -109,11 +116,13 @@ export class SignalsService {
     } else {
       const sortedAssets = [...assets].sort((a, b) => b.valueUsd - a.valueUsd);
       const topAsset = sortedAssets[0];
-      const topConcentration = totalValueUsd > 0 ? topAsset.valueUsd / totalValueUsd : 0;
+      const topConcentration =
+        totalValueUsd > 0 ? topAsset.valueUsd / totalValueUsd : 0;
       const stablecoinExposure = assets
         .filter((asset) => STABLECOIN_CODES.has(asset.assetCode.toUpperCase()))
         .reduce((sum, asset) => sum + asset.valueUsd, 0);
-      const stablecoinExposurePct = totalValueUsd > 0 ? stablecoinExposure / totalValueUsd : 0;
+      const stablecoinExposurePct =
+        totalValueUsd > 0 ? stablecoinExposure / totalValueUsd : 0;
 
       if (totalValueUsd > 0 && totalValueUsd < 1000) {
         signals.push({
@@ -154,7 +163,9 @@ export class SignalsService {
         signals.push({
           category: SignalCategory.RISK,
           severity:
-            stablecoinExposurePct >= 0.4 ? SignalSeverity.MEDIUM : SignalSeverity.LOW,
+            stablecoinExposurePct >= 0.4
+              ? SignalSeverity.MEDIUM
+              : SignalSeverity.LOW,
           title: 'Stablecoin exposure',
           detail: `Stablecoins represent ${Math.round(stablecoinExposurePct * 100)}% of the portfolio, which may reduce volatility and limit short-term upside.`,
         });
@@ -177,14 +188,17 @@ export class SignalsService {
     return signals.slice(0, 6);
   }
 
-  private buildActivitySignals(transactions: TransactionDto[]): UserSignalDto[] {
+  private buildActivitySignals(
+    transactions: TransactionDto[],
+  ): UserSignalDto[] {
     if (!transactions || transactions.length === 0) {
       return [
         {
           category: SignalCategory.ACTIVITY,
           severity: SignalSeverity.LOW,
           title: 'No recent activity',
-          detail: 'No recent transaction history is available for the selected account.',
+          detail:
+            'No recent transaction history is available for the selected account.',
         },
       ];
     }
@@ -198,13 +212,12 @@ export class SignalsService {
       .filter((entry) => !Number.isNaN(entry.timestamp));
 
     const latest = parsedTransactions.reduce(
-      (best, current) =>
-        current.timestamp > best.timestamp ? current : best,
+      (best, current) => (current.timestamp > best.timestamp ? current : best),
       parsedTransactions[0],
     );
     const latestAgeDays = Math.floor((now - latest.timestamp) / MS_PER_DAY);
     const failedCount = transactions.filter(
-      (transaction) => transaction.status === 'failed',
+      (transaction) => transaction.status === TransactionStatus.FAILED,
     ).length;
     const swapCount = transactions.filter(
       (transaction) => transaction.type === TransactionType.SWAP,
@@ -245,14 +258,16 @@ export class SignalsService {
         category: SignalCategory.ACTIVITY,
         severity: SignalSeverity.LOW,
         title: 'No activity in the last 30 days',
-        detail: 'The account has been quiet for more than 30 days. A dormant account may miss market signals.',
+        detail:
+          'The account has been quiet for more than 30 days. A dormant account may miss market signals.',
       });
     } else if (latestAgeDays > 7) {
       signals.push({
         category: SignalCategory.ACTIVITY,
         severity: SignalSeverity.LOW,
         title: 'Moderately quiet account',
-        detail: 'Recent activity is older than one week, but the account is not fully dormant.',
+        detail:
+          'Recent activity is older than one week, but the account is not fully dormant.',
       });
     }
 
@@ -261,7 +276,8 @@ export class SignalsService {
         category: SignalCategory.ACTIVITY,
         severity: SignalSeverity.LOW,
         title: 'Normal recent activity',
-        detail: 'Recent transactions are available and do not indicate unusual risk behavior.',
+        detail:
+          'Recent transactions are available and do not indicate unusual risk behavior.',
       });
     }
 

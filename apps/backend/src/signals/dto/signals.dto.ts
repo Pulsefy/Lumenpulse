@@ -34,6 +34,9 @@ export class UserSignalsResponseDto {
   @ApiProperty({ description: 'Time when signals were generated' })
   generatedAt: Date;
 
-  @ApiProperty({ type: [UserSignalDto], description: 'Latest deterministic signals for the user' })
+  @ApiProperty({
+    type: [UserSignalDto],
+    description: 'Latest deterministic signals for the user',
+  })
   signals: UserSignalDto[];
 }

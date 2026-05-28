@@ -3,7 +3,10 @@ import { SignalsService } from './signals.service';
 import { UsersService } from '../users/users.service';
 import { TransactionService } from '../transaction/transaction.service';
 import { PortfolioService } from '../portfolio/portfolio.service';
-import { TransactionType, TransactionStatus } from '../transaction/dto/transaction.dto';
+import {
+  TransactionType,
+  TransactionStatus,
+} from '../transaction/dto/transaction.dto';
 
 describe('SignalsService', () => {
   let service: SignalsService;
@@ -33,7 +36,10 @@ describe('SignalsService', () => {
   });
 
   it('returns fallback signals when the user has no linked account and no holdings', async () => {
-    usersServiceMock.findById.mockResolvedValue({ id: 'user-1', stellarPublicKey: null });
+    usersServiceMock.findById.mockResolvedValue({
+      id: 'user-1',
+      stellarPublicKey: null,
+    });
     usersServiceMock.getStellarAccounts.mockResolvedValue([]);
     portfolioServiceMock.getPortfolioSummary.mockResolvedValue({
       totalValueUsd: '0.00',
@@ -70,7 +76,12 @@ describe('SignalsService', () => {
       totalValueUsd: '10000.00',
       assets: [
         { assetCode: 'XLM', assetIssuer: null, amount: '9000', valueUsd: 8000 },
-        { assetCode: 'USDC', assetIssuer: null, amount: '2000', valueUsd: 2000 },
+        {
+          assetCode: 'USDC',
+          assetIssuer: null,
+          amount: '2000',
+          valueUsd: 2000,
+        },
       ],
       lastUpdated: new Date(),
       hasLinkedAccount: true,
