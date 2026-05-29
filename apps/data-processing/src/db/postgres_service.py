@@ -13,7 +13,7 @@ from sqlalchemy import create_engine, select, and_, desc
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
-from .models import Base, Article, SocialPost, AnalyticsRecord, NewsInsight, AssetTrend
+from .models import Base, Article, SocialPost, AnalyticsRecord, NewsInsight, AssetTrend, ContributorReputationSnapshot
 from src.analytics.ner_service import NERService
 
 logger = logging.getLogger(__name__)

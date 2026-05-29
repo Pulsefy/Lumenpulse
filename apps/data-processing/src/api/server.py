@@ -31,7 +31,11 @@ from src.analytics.correlation_engine import CorrelationEngine
 from src.db import PostgresService
 from src.ingestion.stellar_ingestion_checks import run_all_checks
 
-from src.analytics.sentiment_indicators import SentimentIndicatorMapper, get_legend as sentiment_legend
+from src.analytics.sentiment_indicators import (
+    SentimentIndicatorMapper,
+    get_legend as sentiment_legend,
+)
+from src.analytics.contributor_reputation import ContributorReputationSnapshotBuilder
 
 _indicator_mapper = SentimentIndicatorMapper()
 
@@ -68,6 +72,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.middleware("http")
 async def metrics_and_logging_middleware(request: Request, call_next):
     corr_id = request.headers.get("X-Correlation-ID", generate_correlation_id())
@@ -75,19 +80,25 @@ async def metrics_and_logging_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         if response.status_code >= 500:
-            API_FAILURES_TOTAL.labels(method=request.method, endpoint=request.url.path).inc()
+            API_FAILURES_TOTAL.labels(
+                method=request.method, endpoint=request.url.path
+            ).inc()
         response.headers["X-Correlation-ID"] = corr_id
         return response
     except Exception as e:
-        API_FAILURES_TOTAL.labels(method=request.method, endpoint=request.url.path).inc()
+        API_FAILURES_TOTAL.labels(
+            method=request.method, endpoint=request.url.path
+        ).inc()
         logger.error("Unhandled exception during request processing", exc_info=True)
         raise
+
 
 # Initialize your existing SentimentAnalyzer
 sentiment_analyzer = SentimentAnalyzer()
 
 # Ingestion quality check routes
 from src.api.ingestion_quality_routes import router as ingestion_quality_router
+
 app.include_router(ingestion_quality_router)
 
 
@@ -101,6 +112,7 @@ except Exception as exc:
 # ---------------------------------------------------------------------------
 # Request/Response models
 # ---------------------------------------------------------------------------
+
 
 class SentimentIndicatorResponse(BaseModel):
     """Visual indicator fields attached to every sentiment-bearing response."""
@@ -157,10 +169,12 @@ class NewsArticleResponse(BaseModel):
     sentiment_label: Optional[str] = None  # positive / negative / neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
 
+
 @app.get("/metrics")
 async def metrics():
     """Expose Prometheus metrics"""
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 
 @app.get("/")
 @limiter.limit("20/minute") if limiter else lambda x: x
@@ -177,6 +191,9 @@ async def root(request: Request) -> Dict[str, Any]:
             "GET /analyze": "Get asset-specific sentiment analysis (requires X-API-Key header)",
             "POST /analyze-batch": "Batch analyze multiple texts (requires X-API-Key header)",
             "GET /sentiment/legend": "Get colour legend for sentiment indicators (no auth required)",
+            "GET /contributors/top": "Get top N contributors by reputation (requires X-API-Key header)",
+            "POST /contributors/snapshot": "Manually trigger snapshot build (requires X-API-Key header)",
+            "GET /contributors/snapshot/schedule": "Get snapshot schedule documentation (requires X-API-Key header)",
         },
         "note": "Returns sentiment score between -1 (negative) and 1 (positive)",
         "security": "All endpoints except /health and /metrics require X-API-Key header",
@@ -186,7 +203,6 @@ async def root(request: Request) -> Dict[str, Any]:
 @app.get("/health", response_model=HealthResponse)
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def health_check(request: Request) -> HealthResponse:
-
     """Health check endpoint for monitoring"""
     return HealthResponse(
         status="healthy",
@@ -201,7 +217,9 @@ async def get_news(
     request: Request,
     limit: int = Query(50, ge=1, le=500),
     hours: int = Query(24, ge=1, le=168),
-    asset: Optional[str] = Query(None, description="Optional primary asset code filter"),
+    asset: Optional[str] = Query(
+        None, description="Optional primary asset code filter"
+    ),
     entity: Optional[str] = Query(
         None,
         description="Optional detected entity filter (example: Soroban)",
@@ -315,11 +333,11 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def get_asset_analysis(
     request: Request,
-    asset: str = Query(..., description="Asset code (e.g., XLM, USDC, BTC)")
+    asset: str = Query(..., description="Asset code (e.g., XLM, USDC, BTC)"),
 ) -> AssetAnalysisResponse:
     """
     Get sentiment analysis for a specific asset.
-    
+
     This endpoint provides asset-specific sentiment analysis by filtering
     news and social media content that mentions the specified asset.
 
@@ -332,15 +350,17 @@ async def get_asset_analysis(
     try:
         if not asset or not asset.strip():
             raise HTTPException(status_code=400, detail="Asset code cannot be empty")
-        
+
         asset = asset.upper().strip()
-        
+
         # For now, return a mock response since we need to integrate with actual data sources
         # In a real implementation, this would query the database for recent sentiment data
         # related to the specific asset
-        
-        logger.info(f"Requested asset analysis for: {asset} | client_ip: {request.client.host}")
-        
+
+        logger.info(
+            f"Requested asset analysis for: {asset} | client_ip: {request.client.host}"
+        )
+
         # Mock response - replace with actual database query
         mock_score = 0.0
         ind = _indicator_mapper.score_to_indicator(mock_score)
@@ -364,7 +384,9 @@ async def get_asset_analysis(
 # Optional: Batch analysis endpoint if needed
 @app.post("/analyze-batch")
 @limiter.limit("10/minute") if limiter else lambda x: x
-async def analyze_batch(request: Request, texts: list[str], asset: Optional[str] = None) -> Dict[str, Any]:
+async def analyze_batch(
+    request: Request, texts: list[str], asset: Optional[str] = None
+) -> Dict[str, Any]:
     """Batch analyze multiple texts with optional asset filter"""
     try:
         if not texts:
@@ -424,6 +446,7 @@ if __name__ == "__main__":
 # Model retraining endpoints (Issue #454)
 # ---------------------------------------------------------------------------
 
+
 class RetrainRequest(BaseModel):
     force: bool = False  # Skip quality gates when True
 
@@ -466,11 +489,11 @@ async def trigger_retraining(
     )
 
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        None, lambda: run_retraining(force=body.force)
-    )
+    result = await loop.run_in_executor(None, lambda: run_retraining(force=body.force))
 
-    return RetrainResponse(**{k: result.get(k) for k in RetrainResponse.model_fields if k in result})
+    return RetrainResponse(
+        **{k: result.get(k) for k in RetrainResponse.model_fields if k in result}
+    )
 
 
 @app.get("/model/status", response_model=ModelStatusResponse)
@@ -582,6 +605,193 @@ class LagAnalysisResponse(BaseModel):
     recommendation: str
 
 
+class ContributorMetricsResponse(BaseModel):
+    contributor_address: str
+    total_contributions: int
+    total_value_xlm: float
+    first_contribution_date: Optional[str] = None
+    last_contribution_date: Optional[str] = None
+    activity_streak_days: int
+    unique_projects: int
+    reputation_score: float
+    snapshot_date: Optional[str] = None
+    metadata: Dict[str, Any] = {}
+
+
+class TopContributorsResponse(BaseModel):
+    contributors: List[ContributorMetricsResponse]
+    total_count: int
+    snapshot_date: str
+    generated_at: str
+
+
+class SnapshotJobResponse(BaseModel):
+    status: str
+    snapshots_saved: Optional[int] = None
+    top_contributor: Optional[str] = None
+    top_score: Optional[float] = None
+    duration_seconds: Optional[float] = None
+    error: Optional[str] = None
+    timestamp: str
+
+
+@app.get("/contributors/top", response_model=TopContributorsResponse)
+@limiter.limit("30/minute") if limiter else lambda x: x
+async def get_top_contributors(
+    request: Request,
+    n: int = Query(
+        default=10, ge=1, le=100, description="Number of top contributors to return"
+    ),
+) -> TopContributorsResponse:
+    """
+    Get top N contributors by reputation score for leaderboards.
+
+    Works with Stellar testnet data from contributor registry.
+    Returns contributor metrics including reputation score, activity streak,
+    and contribution statistics.
+
+    Args:
+        n: Number of top contributors (1-100, default: 10)
+
+    Returns:
+        List of top contributors with their metrics
+    """
+    try:
+        logger.info(
+            f"Top contributors request | n={n} | client_ip={request.client.host}"
+        )
+
+        builder = ContributorReputationSnapshotBuilder()
+        top_contributors = builder.get_top_n(n)
+
+        contributor_list = []
+        for metrics in top_contributors:
+            data = metrics.to_dict()
+            contributor_list.append(
+                ContributorMetricsResponse(
+                    contributor_address=data["contributor_address"],
+                    total_contributions=data["total_contributions"],
+                    total_value_xlm=round(data["total_value_xlm"], 2),
+                    first_contribution_date=(
+                        data["first_contribution_date"].isoformat()
+                        if data["first_contribution_date"]
+                        else None
+                    ),
+                    last_contribution_date=(
+                        data["last_contribution_date"].isoformat()
+                        if data["last_contribution_date"]
+                        else None
+                    ),
+                    activity_streak_days=data["activity_streak_days"],
+                    unique_projects=data["unique_projects"],
+                    reputation_score=data["reputation_score"],
+                    snapshot_date=(
+                        data["snapshot_date"].isoformat()
+                        if data["snapshot_date"]
+                        else None
+                    ),
+                    metadata=data.get("metadata", {}),
+                )
+            )
+
+        return TopContributorsResponse(
+            contributors=contributor_list,
+            total_count=len(contributor_list),
+            snapshot_date=datetime.utcnow().isoformat(),
+            generated_at=datetime.utcnow().isoformat(),
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get top contributors: {e}", exc_info=True)
+        API_FAILURES_TOTAL.labels(method="GET", endpoint="/contributors/top").inc()
+        raise HTTPException(
+            status_code=500, detail=f"Failed to retrieve top contributors: {str(e)}"
+        )
+
+
+@app.post("/contributors/snapshot", response_model=SnapshotJobResponse)
+@limiter.limit("5/minute") if limiter else lambda x: x
+async def trigger_contributor_snapshot(request: Request) -> SnapshotJobResponse:
+    """
+    Manually trigger a contributor reputation snapshot build.
+
+    This endpoint builds snapshots of contributor reputation and activity
+    from the contributor registry. Normally runs daily at 00:00 UTC via
+    the scheduler, but can be triggered manually for testing or on-demand
+    updates.
+
+    Returns:
+        Job execution result metadata
+    """
+    try:
+        logger.info(f"Manual snapshot trigger | client_ip={request.client.host}")
+
+        builder = ContributorReputationSnapshotBuilder()
+        result = builder.run_snapshot_job()
+
+        return SnapshotJobResponse(
+            status=result.get("status", "unknown"),
+            snapshots_saved=result.get("snapshots_saved"),
+            top_contributor=result.get("top_contributor"),
+            top_score=result.get("top_score"),
+            duration_seconds=result.get("duration_seconds"),
+            error=result.get("error"),
+            timestamp=result.get("timestamp", datetime.utcnow().isoformat()),
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to trigger snapshot: {e}", exc_info=True)
+        API_FAILURES_TOTAL.labels(
+            method="POST", endpoint="/contributors/snapshot"
+        ).inc()
+        raise HTTPException(
+            status_code=500, detail=f"Failed to trigger snapshot: {str(e)}"
+        )
+
+
+@app.get("/contributors/snapshot/schedule")
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def get_snapshot_schedule(request: Request) -> Dict[str, Any]:
+    """
+    Get the contributor reputation snapshot schedule documentation.
+
+    Returns schedule configuration and next run time information.
+    """
+    return {
+        "schedule": {
+            "cron": "0 0 * * *",
+            "description": "Daily at 00:00 UTC",
+            "timezone": "UTC",
+            "job_id": "contributor_reputation_snapshot_daily",
+            "job_name": "Contributor Reputation Snapshot - Daily",
+        },
+        "configuration": {
+            "data_source": "Stellar testnet contributor registry contract",
+            "metrics_captured": [
+                "total_contributions",
+                "total_value_xlm",
+                "activity_streak_days",
+                "unique_projects",
+                "reputation_score",
+                "ranking_percentile",
+            ],
+            "scoring_algorithm": {
+                "total_contributions": "30% (log-scaled)",
+                "total_value": "40% (log-scaled)",
+                "activity_streak": "20%",
+                "unique_projects": "10%",
+            },
+        },
+        "endpoints": {
+            "GET /contributors/top?n=10": "Get top N contributors",
+            "POST /contributors/snapshot": "Manually trigger snapshot build",
+            "GET /contributors/snapshot/schedule": "Get schedule documentation",
+        },
+        "note": "Works with Stellar testnet data. Mock data generated if no real events found.",
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
 @app.post("/correlation/analyze", response_model=CorrelationResponse)
 @limiter.limit("20/minute") if limiter else lambda x: x
 async def analyze_correlation(
@@ -594,7 +804,9 @@ async def analyze_correlation(
     Returns correlation scores (-1 to 1) and scatter plot data points.
     Requires X-API-Key header.
     """
-    sentiment_list = [{"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data]
+    sentiment_list = [
+        {"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data
+    ]
     price_list = (
         [{"timestamp": dp.timestamp, "value": dp.value} for dp in body.price_data]
         if body.price_data
@@ -638,8 +850,12 @@ async def analyze_lag_correlation(
     Returns the best lag hours and correlation strength for predicting market changes.
     Requires X-API-Key header.
     """
-    sentiment_list = [{"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data]
-    metric_list = [{"timestamp": dp.timestamp, "value": dp.value} for dp in body.metric_data]
+    sentiment_list = [
+        {"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data
+    ]
+    metric_list = [
+        {"timestamp": dp.timestamp, "value": dp.value} for dp in body.metric_data
+    ]
 
     logger.info(
         f"Lag correlation analysis | metric_type={body.metric_type} | "
