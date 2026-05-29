@@ -56,6 +56,8 @@ import { CrowdfundModule } from './crowdfund/crowdfund.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
 import { SorobanEventsModule } from './soroban-events/soroban-events.module';
+import { MatchingPoolModule } from './matching-pool/matching-pool.module';
+
 
 @Module({
   imports: [
@@ -129,6 +131,7 @@ import { SorobanEventsModule } from './soroban-events/soroban-events.module';
     AppConfigModule,
     AuditModule,
     SorobanEventsModule,
+    MatchingPoolModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
