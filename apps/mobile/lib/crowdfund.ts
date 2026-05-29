@@ -62,6 +62,7 @@ export interface ContributionResponse {
   status: 'SUCCESS' | 'FAILED' | 'PENDING';
   ledger?: number;
   message?: string;
+  unsignedXdr?: string;
 }
 
 /**
