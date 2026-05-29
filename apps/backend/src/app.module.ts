@@ -50,8 +50,12 @@ import { IdempotencyInterceptor } from './common/interceptors/idempotency.interc
 import { DeprecationInterceptor } from './common/interceptors/deprecation.interceptor';
 import { SearchModule } from './search/search.module';
 import { ExportModule } from './export/export.module';
+import { SignalsModule } from './signals/signals.module';
 import { AppConfigModule } from './config/config.module';
 import { CrowdfundModule } from './crowdfund/crowdfund.module';
+import { AuditModule } from './audit/audit.module';
+import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
+import { SorobanEventsModule } from './soroban-events/soroban-events.module';
 
 @Module({
   imports: [
@@ -116,12 +120,15 @@ import { CrowdfundModule } from './crowdfund/crowdfund.module';
     WatchlistModule,
     OutboxModule,
     ExportModule,
+    SignalsModule,
     TelegramBotModule,
     ModerationModule,
     SearchModule,
     FeatureFlagsModule,
     CrowdfundModule,
     AppConfigModule,
+    AuditModule,
+    SorobanEventsModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
@@ -133,6 +140,10 @@ import { CrowdfundModule } from './crowdfund/crowdfund.module';
     {
       provide: APP_INTERCEPTOR,
       useClass: IdempotencyInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,

@@ -46,7 +46,10 @@ export class DeprecationInterceptor implements NestInterceptor {
     }
 
     if (meta.replacement) {
-      response.setHeader('Link', `<${meta.replacement}>; rel="successor-version"`);
+      response.setHeader(
+        'Link',
+        `<${meta.replacement}>; rel="successor-version"`,
+      );
     }
 
     this.logger.warn(

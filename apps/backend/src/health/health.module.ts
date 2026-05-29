@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { TerminusModule } from '@nestjs/terminus';
 import { AppCacheModule } from '../cache/cache.module';
 import { StellarModule } from '../stellar/stellar.module';
+import { ContractHealthService } from './contract-health.service';
 import { HealthController } from './health.controller';
 import { HealthService } from './health.service';
 
@@ -17,6 +18,6 @@ import { HealthService } from './health.service';
     StellarModule,
   ],
   controllers: [HealthController],
-  providers: [HealthService],
+  providers: [HealthService, ContractHealthService],
 })
 export class HealthModule {}

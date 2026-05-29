@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 
-import requests
 from requests.exceptions import RequestException
+from src.utils.http_client import RobustHTTPClient
 from src.utils.translator import translate_and_normalize
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 class SocialPlatform(Enum):
     """Supported social media platforms"""
+
     TWITTER = "twitter"
     REDDIT = "reddit"
 
@@ -33,6 +34,7 @@ class SocialPost:
     Standardized social media post format.
     Normalizes data from different platforms (Twitter/X, Reddit).
     """
+
     id: str
     platform: str
     content: str
@@ -72,7 +74,9 @@ class SocialPost:
         """
         return {
             "id": f"social_{self.platform}_{self.id}",
-            "title": self.content[:100] + "..." if len(self.content) > 100 else self.content,
+            "title": (
+                self.content[:100] + "..." if len(self.content) > 100 else self.content
+            ),
             "content": self.content,
             "summary": self.content[:200] if len(self.content) > 200 else self.content,
             "source": f"{self.platform.title()} - {self.subreddit or 'feed'}",
@@ -128,7 +132,9 @@ class RateLimiter:
     Ensures we stay within API tier limits.
     """
 
-    def __init__(self, requests_per_window: int, window_seconds: int, min_delay: float = 0):
+    def __init__(
+        self, requests_per_window: int, window_seconds: int, min_delay: float = 0
+    ):
         """
         Initialize rate limiter.
 
@@ -174,7 +180,11 @@ class RateLimiter:
                 time.sleep(wait_time)
                 waited += wait_time
                 # Clean again after waiting
-                self.request_times = [t for t in self.request_times if t > time.time() - self.window_seconds]
+                self.request_times = [
+                    t
+                    for t in self.request_times
+                    if t > time.time() - self.window_seconds
+                ]
 
         # Record this request
         self.last_request_time = time.time()
@@ -198,26 +208,23 @@ class TwitterFetcher:
         """
         self.bearer_token = bearer_token or os.getenv("TWITTER_BEARER_TOKEN")
         if not self.bearer_token:
-            logger.warning("TWITTER_BEARER_TOKEN not set. Twitter fetching will be disabled.")
+            logger.warning(
+                "TWITTER_BEARER_TOKEN not set. Twitter fetching will be disabled."
+            )
 
-        self.session = requests.Session()
-        self.session.headers.update({
-            "Authorization": f"Bearer {self.bearer_token}"
-        })
+        self.session = RobustHTTPClient()
+        self.session.headers.update({"Authorization": f"Bearer {self.bearer_token}"})
 
         self.rate_limiter = RateLimiter(
             SocialAPIConfig.TWITTER_REQUESTS_PER_WINDOW,
             SocialAPIConfig.TWITTER_WINDOW_SECONDS,
-            SocialAPIConfig.TWITTER_RATE_LIMIT_DELAY
+            SocialAPIConfig.TWITTER_RATE_LIMIT_DELAY,
         )
 
         self.enabled = bool(self.bearer_token)
 
     def fetch_hashtag(
-        self,
-        hashtag: str,
-        limit: int = 50,
-        since_id: Optional[str] = None
+        self, hashtag: str, limit: int = 50, since_id: Optional[str] = None
     ) -> List[SocialPost]:
         """
         Fetch recent tweets containing a hashtag.
@@ -257,13 +264,15 @@ class TwitterFetcher:
             response = self.session.get(
                 f"{SocialAPIConfig.TWITTER_BASE_URL}{SocialAPIConfig.TWITTER_SEARCH_ENDPOINT}",
                 params=params,
-                timeout=SocialAPIConfig.TIMEOUT
+                timeout=SocialAPIConfig.TIMEOUT,
             )
 
             if response.status_code == 429:
                 logger.warning("Twitter rate limit exceeded. Waiting...")
                 # Get reset time from header
-                reset_time = int(response.headers.get("x-rate-limit-reset", time.time() + 900))
+                reset_time = int(
+                    response.headers.get("x-rate-limit-reset", time.time() + 900)
+                )
                 wait_seconds = reset_time - time.time()
                 if wait_seconds > 0:
                     time.sleep(wait_seconds)
@@ -290,7 +299,9 @@ class TwitterFetcher:
                     platform=SocialPlatform.TWITTER.value,
                     content=translate_and_normalize(tweet.get("text", "")),
                     author=user.get("username", "unknown"),
-                    posted_at=datetime.fromisoformat(tweet["created_at"].replace("Z", "+00:00")),
+                    posted_at=datetime.fromisoformat(
+                        tweet["created_at"].replace("Z", "+00:00")
+                    ),
                     url=f"https://twitter.com/user/status/{tweet['id']}",
                     likes=metrics.get("like_count", 0),
                     comments=metrics.get("reply_count", 0),
@@ -309,9 +320,7 @@ class TwitterFetcher:
         return posts
 
     def fetch_multiple_hashtags(
-        self,
-        hashtags: List[str] = None,
-        limit_per_hashtag: int = 25
+        self, hashtags: List[str] = None, limit_per_hashtag: int = 25
     ) -> List[SocialPost]:
         """
         Fetch tweets for multiple hashtags.
@@ -347,22 +356,21 @@ class RedditFetcher:
 
     def __init__(self):
         """Initialize Reddit fetcher"""
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": "LumenPulseSentimentBot/1.0 (cryptocurrency sentiment analysis)"
-        })
+        self.session = RobustHTTPClient()
+        self.session.headers.update(
+            {
+                "User-Agent": "LumenPulseSentimentBot/1.0 (cryptocurrency sentiment analysis)"
+            }
+        )
 
         self.rate_limiter = RateLimiter(
             SocialAPIConfig.REDDIT_REQUESTS_PER_MINUTE,
             60,
-            SocialAPIConfig.REDDIT_RATE_LIMIT_DELAY
+            SocialAPIConfig.REDDIT_RATE_LIMIT_DELAY,
         )
 
     def fetch_subreddit(
-        self,
-        subreddit: str,
-        limit: int = 50,
-        after: Optional[str] = None
+        self, subreddit: str, limit: int = 50, after: Optional[str] = None
     ) -> List[SocialPost]:
         """
         Fetch recent posts from a subreddit.
@@ -387,9 +395,7 @@ class RedditFetcher:
             self.rate_limiter.wait_if_needed()
 
             response = self.session.get(
-                url,
-                params=params,
-                timeout=SocialAPIConfig.TIMEOUT
+                url, params=params, timeout=SocialAPIConfig.TIMEOUT
             )
 
             if response.status_code == 429:
@@ -407,9 +413,13 @@ class RedditFetcher:
                 post = SocialPost(
                     id=post_data.get("id", ""),
                     platform=SocialPlatform.REDDIT.value,
-                    content=translate_and_normalize(post_data.get("selftext", "") or post_data.get("title", "")),
+                    content=translate_and_normalize(
+                        post_data.get("selftext", "") or post_data.get("title", "")
+                    ),
                     author=post_data.get("author", "[deleted]"),
-                    posted_at=datetime.fromtimestamp(post_data.get("created_utc", time.time()), tz=timezone.utc),
+                    posted_at=datetime.fromtimestamp(
+                        post_data.get("created_utc", time.time()), tz=timezone.utc
+                    ),
                     url=f"https://reddit.com{post_data.get('permalink', '')}",
                     likes=post_data.get("ups", 0),
                     comments=post_data.get("num_comments", 0),
@@ -429,10 +439,7 @@ class RedditFetcher:
         return posts
 
     def fetch_search(
-        self,
-        query: str,
-        subreddits: List[str] = None,
-        limit: int = 50
+        self, query: str, subreddits: List[str] = None, limit: int = 50
     ) -> List[SocialPost]:
         """
         Search Reddit for specific terms.
@@ -447,12 +454,7 @@ class RedditFetcher:
         """
         posts = []
 
-        params = {
-            "q": query,
-            "limit": min(limit, 100),
-            "sort": "new",
-            "type": "link"
-        }
+        params = {"q": query, "limit": min(limit, 100), "sort": "new", "type": "link"}
 
         if subreddits:
             params["restrict_sr"] = True
@@ -464,7 +466,7 @@ class RedditFetcher:
             response = self.session.get(
                 f"{SocialAPIConfig.REDDIT_BASE_URL}{SocialAPIConfig.REDDIT_SEARCH_ENDPOINT}",
                 params=params,
-                timeout=SocialAPIConfig.TIMEOUT
+                timeout=SocialAPIConfig.TIMEOUT,
             )
 
             response.raise_for_status()
@@ -476,9 +478,13 @@ class RedditFetcher:
                 post = SocialPost(
                     id=post_data.get("id", ""),
                     platform=SocialPlatform.REDDIT.value,
-                    content=translate_and_normalize(post_data.get("selftext", "") or post_data.get("title", "")),
+                    content=translate_and_normalize(
+                        post_data.get("selftext", "") or post_data.get("title", "")
+                    ),
                     author=post_data.get("author", "[deleted]"),
-                    posted_at=datetime.fromtimestamp(post_data.get("created_utc", time.time()), tz=timezone.utc),
+                    posted_at=datetime.fromtimestamp(
+                        post_data.get("created_utc", time.time()), tz=timezone.utc
+                    ),
                     url=f"https://reddit.com{post_data.get('permalink', '')}",
                     likes=post_data.get("ups", 0),
                     comments=post_data.get("num_comments", 0),
@@ -497,9 +503,7 @@ class RedditFetcher:
         return posts
 
     def fetch_multiple_subreddits(
-        self,
-        subreddits: List[str] = None,
-        limit_per_subreddit: int = 25
+        self, subreddits: List[str] = None, limit_per_subreddit: int = 25
     ) -> List[SocialPost]:
         """
         Fetch posts from multiple subreddits.
@@ -528,7 +532,7 @@ class RedditFetcher:
         text = f"{post_data.get('title', '')} {post_data.get('selftext', '')}"
 
         # Simple hashtag extraction
-        hashtags = re.findall(r'#\w+', text)
+        hashtags = re.findall(r"#\w+", text)
 
         # Also add link flair as hashtag
         if post_data.get("link_flair_text"):
@@ -551,7 +555,7 @@ class SocialFetcher:
         self,
         use_twitter: bool = True,
         use_reddit: bool = True,
-        twitter_token: Optional[str] = None
+        twitter_token: Optional[str] = None,
     ):
         """
         Initialize SocialFetcher.
@@ -565,7 +569,9 @@ class SocialFetcher:
         self.use_reddit = use_reddit
 
         # Initialize fetchers
-        self.twitter = TwitterFetcher(bearer_token=twitter_token) if use_twitter else None
+        self.twitter = (
+            TwitterFetcher(bearer_token=twitter_token) if use_twitter else None
+        )
         self.reddit = RedditFetcher() if use_reddit else None
 
         # Deduplication tracking
@@ -575,7 +581,7 @@ class SocialFetcher:
         self,
         hashtags: List[str] = None,
         subreddits: List[str] = None,
-        limit_per_source: int = 25
+        limit_per_source: int = 25,
     ) -> List[Dict]:
         """
         Fetch social posts from all configured sources.
@@ -593,16 +599,14 @@ class SocialFetcher:
         # Fetch from Twitter
         if self.twitter and self.use_twitter:
             twitter_posts = self.twitter.fetch_multiple_hashtags(
-                hashtags=hashtags,
-                limit_per_hashtag=limit_per_source
+                hashtags=hashtags, limit_per_hashtag=limit_per_source
             )
             all_posts.extend(twitter_posts)
 
         # Fetch from Reddit
         if self.reddit and self.use_reddit:
             reddit_posts = self.reddit.fetch_multiple_subreddits(
-                subreddits=subreddits,
-                limit_per_subreddit=limit_per_source
+                subreddits=subreddits, limit_per_subreddit=limit_per_source
             )
             all_posts.extend(reddit_posts)
 
@@ -625,7 +629,7 @@ class SocialFetcher:
         self,
         hashtags: List[str] = None,
         subreddits: List[str] = None,
-        limit_per_source: int = 25
+        limit_per_source: int = 25,
     ) -> List[Dict]:
         """
         Fetch posts in NewsArticle-compatible format.
@@ -640,9 +644,7 @@ class SocialFetcher:
             List of posts in article-compatible format
         """
         posts = self.fetch_all(
-            hashtags=hashtags,
-            subreddits=subreddits,
-            limit_per_source=limit_per_source
+            hashtags=hashtags, subreddits=subreddits, limit_per_source=limit_per_source
         )
 
         return [
@@ -706,7 +708,7 @@ def fetch_social(
     subreddits: List[str] = None,
     limit_per_source: int = 25,
     use_twitter: bool = True,
-    use_reddit: bool = True
+    use_reddit: bool = True,
 ) -> List[Dict]:
     """
     Convenience function to fetch social posts.
@@ -733,9 +735,7 @@ def fetch_social(
     fetcher = SocialFetcher(use_twitter=use_twitter, use_reddit=use_reddit)
     try:
         return fetcher.fetch_all(
-            hashtags=hashtags,
-            subreddits=subreddits,
-            limit_per_source=limit_per_source
+            hashtags=hashtags, subreddits=subreddits, limit_per_source=limit_per_source
         )
     finally:
         fetcher.close()

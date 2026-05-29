@@ -1,9 +1,13 @@
 import logging
 import unicodedata
-import requests
+from src.utils.http_client import RobustHTTPClient
+
 from langdetect import detect
 
 logger = logging.getLogger(__name__)
+
+_client = RobustHTTPClient()
+
 
 def normalize_text(text: str) -> str:
     """
@@ -12,10 +16,10 @@ def normalize_text(text: str) -> str:
     """
     if not text:
         return ""
-    
+
     # NFKD normalization decomposes characters (e.g. accented characters)
     normalized = unicodedata.normalize("NFKD", text)
-    
+
     # Clean up whitespace and join
     lines = normalized.splitlines()
     cleaned_lines = []
@@ -23,8 +27,9 @@ def normalize_text(text: str) -> str:
         cleaned_words = " ".join(line.split())
         if cleaned_words:
             cleaned_lines.append(cleaned_words)
-            
+
     return "\n".join(cleaned_lines).strip()
+
 
 def translate_to_english(text: str, source_lang: str = "auto") -> str:
     """
@@ -35,19 +40,13 @@ def translate_to_english(text: str, source_lang: str = "auto") -> str:
         return text
 
     url = "https://translate.googleapis.com/translate_a/single"
-    params = {
-        "client": "gtx",
-        "sl": source_lang,
-        "tl": "en",
-        "dt": "t",
-        "q": text
-    }
+    params = {"client": "gtx", "sl": source_lang, "tl": "en", "dt": "t", "q": text}
 
     try:
-        response = requests.get(url, params=params, timeout=5)
+        response = _client.get(url, params=params, timeout=5)
         response.raise_for_status()
         data = response.json()
-        
+
         # Parse the translation chunks returned by Google Translate
         if data and len(data) > 0 and data[0]:
             translated_chunks = []
@@ -56,11 +55,12 @@ def translate_to_english(text: str, source_lang: str = "auto") -> str:
                     translated_chunks.append(chunk[0])
             if translated_chunks:
                 return "".join(translated_chunks)
-                
+
     except Exception as e:
         logger.warning(f"Translation failed, falling back to original text. Error: {e}")
-        
+
     return text
+
 
 def translate_and_normalize(text: str) -> str:
     """
@@ -72,7 +72,7 @@ def translate_and_normalize(text: str) -> str:
 
     # 1. Normalize first (helpful for language detection)
     normalized = normalize_text(text)
-    
+
     # 2. Detect language
     try:
         lang = detect(normalized)
@@ -84,5 +84,5 @@ def translate_and_normalize(text: str) -> str:
     if lang != "en":
         logger.info(f"Detected language '{lang}'. Translating to English.")
         return translate_to_english(normalized, source_lang=lang)
-        
+
     return normalized

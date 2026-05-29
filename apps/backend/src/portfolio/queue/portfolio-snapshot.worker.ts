@@ -8,7 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Job, Queue, Worker } from 'bullmq';
-import IORedis from 'ioredis';
+import { type Redis } from 'ioredis';
 import { Repository } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { MetricsService } from '../../metrics/metrics.service';
@@ -44,7 +44,7 @@ export class PortfolioSnapshotWorker implements OnModuleInit, OnModuleDestroy {
       PortfolioSnapshotBatchJobData | PortfolioSnapshotUserJobData
     >,
     @Inject(PORTFOLIO_SNAPSHOT_CONNECTION)
-    private readonly connection: IORedis,
+    private readonly connection: Redis,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly portfolioService: PortfolioService,

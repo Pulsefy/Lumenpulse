@@ -6,7 +6,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { VerificationService } from './verification.service';
-import { VerificationStatus, WeightMode } from './dto/verification.dto';
+import {
+  SubmissionStatus,
+  VerificationStatus,
+  WeightMode,
+} from './dto/verification.dto';
 
 describe('VerificationService', () => {
   let svc: VerificationService;
@@ -237,5 +241,68 @@ describe('VerificationService', () => {
     expect(pending[0].projectId).toBe(2);
 
     expect(svc.listProjects()).toHaveLength(2);
+  });
+
+  // ── Submission workflow ─────────────────────────────────────────────────────
+
+  it('creates submission drafts and sends them to review', () => {
+    const draft = svc.upsertSubmission({
+      projectId: 77,
+      creatorPublicKey: 'GCREATOR',
+      title: 'Project 77',
+      content: 'Draft content',
+    });
+    expect(draft.status).toBe(SubmissionStatus.Draft);
+
+    const inReview = svc.submitForReview(77);
+    expect(inReview.status).toBe(SubmissionStatus.InReview);
+  });
+
+  it('supports changes requested -> draft -> review -> approved -> published', () => {
+    svc.upsertSubmission({
+      projectId: 88,
+      creatorPublicKey: 'GCREATOR',
+      title: 'Project 88',
+      content: 'First draft',
+    });
+    svc.submitForReview(88);
+
+    const changes = svc.requestSubmissionChanges(88, {
+      actorId: 'reviewer-1',
+      note: 'Please refine milestones.',
+    });
+    expect(changes.status).toBe(SubmissionStatus.ChangesRequested);
+    expect(changes.reviewerId).toBe('reviewer-1');
+
+    const revisedDraft = svc.upsertSubmission({
+      projectId: 88,
+      creatorPublicKey: 'GCREATOR',
+      title: 'Project 88 revised',
+      content: 'Updated content',
+    });
+    expect(revisedDraft.status).toBe(SubmissionStatus.Draft);
+
+    svc.submitForReview(88);
+    const approved = svc.approveSubmission(88, { actorId: 'reviewer-2' });
+    expect(approved.status).toBe(SubmissionStatus.Approved);
+
+    const published = svc.publishSubmission(88, {
+      actorId: 'admin-1',
+      note: 'Ready for launch.',
+    });
+    expect(published.status).toBe(SubmissionStatus.Published);
+  });
+
+  it('prevents publishing without approval', () => {
+    svc.upsertSubmission({
+      projectId: 99,
+      creatorPublicKey: 'GCREATOR',
+      title: 'Project 99',
+      content: 'Draft',
+    });
+    svc.submitForReview(99);
+    expect(() =>
+      svc.publishSubmission(99, { actorId: 'admin-1' }),
+    ).toThrow(BadRequestException);
   });
 });
