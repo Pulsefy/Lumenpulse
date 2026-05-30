@@ -15,6 +15,13 @@ export enum SorobanEventStatus {
 @Entity('soroban_events')
 @Index(['txHash', 'eventIndex'], { unique: true })
 @Index(['status'])
+@Index('IDX_soroban_events_contract_type_created_at', [
+  'contractId',
+  'eventType',
+  'createdAt',
+])
+@Index('IDX_soroban_events_status_created_at', ['status', 'createdAt'])
+@Index('IDX_soroban_events_processed_at', ['processedAt'])
 export class SorobanEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;

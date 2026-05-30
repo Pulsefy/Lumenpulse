@@ -10,7 +10,7 @@ import {
 import { User } from '../../users/entities/user.entity';
 
 @Entity('portfolio_snapshots')
-@Index(['userId', 'createdAt'])
+@Index('IDX_portfolio_snapshots_user_created_at_desc', ['userId', 'createdAt'])
 @Index(['createdAt'])
 export class PortfolioSnapshot {
   @PrimaryGeneratedColumn('uuid')
