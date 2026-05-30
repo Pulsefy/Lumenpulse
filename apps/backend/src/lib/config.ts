@@ -50,6 +50,7 @@ import { z } from 'zod';
  * - TELEGRAM_BOT_TOKEN
  * - METRICS_ALLOWED_IPS
  * - USE_MOCK_TRANSACTIONS
+ * - BOOTSTRAP_ENABLED
  * - LOGGING_ENABLED
  * - LOGGING_LEVEL
  * - LOGGING_INCLUDE_BODY
@@ -391,6 +392,11 @@ const envSchema = z
     USE_MOCK_TRANSACTIONS: z.preprocess(
       parseBoolean,
       z.boolean().default(true),
+    ),
+
+    BOOTSTRAP_ENABLED: z.preprocess(
+      parseBoolean,
+      z.boolean().default(false),
     ),
 
     LOGGING_ENABLED: z.preprocess(parseBoolean, z.boolean().default(true)),
