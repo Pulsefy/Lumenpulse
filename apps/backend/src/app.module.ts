@@ -57,6 +57,7 @@ import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
 import { SorobanEventsModule } from './soroban-events/soroban-events.module';
 import { TreasuryModule } from './treasury/treasury.module';
+import { BootstrapModule } from './bootstrap/bootstrap.module';
 
 @Module({
   imports: [
@@ -131,6 +132,7 @@ import { TreasuryModule } from './treasury/treasury.module';
     AuditModule,
     SorobanEventsModule,
     TreasuryModule,
+    BootstrapModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
