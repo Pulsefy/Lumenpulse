@@ -13,6 +13,7 @@ export default new DataSource({
   entities: ['dist/**/*.entity.js', 'src/**/*.entity.ts'],
 
   migrations: ['dist/database/migrations/*.js', 'src/database/migrations/*.ts'],
+  migrationsTransactionMode: 'each',
 
   logging: true,
 });
