@@ -166,6 +166,156 @@ class AnalyticsRecord(Base):
         return f"<AnalyticsRecord(type={self.record_type}, asset={self.asset}, metric={self.metric_name}, value={self.value})>"
 
 
+class ContractEvent(Base):
+    """
+    Stores raw Soroban contract events for project-state materialization.
+    """
+
+    __tablename__ = "contract_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    contract_id = Column(String(255), nullable=False, index=True)
+    event_id = Column(String(255), nullable=False, index=True)
+    ledger = Column(BigInteger, nullable=False, index=True)
+    event_type = Column(String(100), nullable=False, index=True)
+    project_id = Column(BigInteger, nullable=True, index=True)
+    contributor = Column(String(255), nullable=True, index=True)
+    amount = Column(Float, nullable=True)
+    milestone_id = Column(Integer, nullable=True, index=True)
+    status = Column(String(50), nullable=True, index=True)
+    topics = Column(JSON, nullable=True)
+    raw_data = Column(JSON, nullable=True)
+    timestamp = Column(DateTime(timezone=True), nullable=True, index=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_contract_events_contract_id_event_id",
+            "contract_id",
+            "event_id",
+            unique=True,
+        ),
+        Index("idx_contract_events_project_type", "project_id", "event_type"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ContractEvent(contract_id={self.contract_id}, event_id={self.event_id}, "
+            f"project_id={self.project_id}, event_type={self.event_type})>"
+        )
+
+
+class ProjectView(Base):
+    """
+    Stores aggregated project state for fast reads.
+    """
+
+    __tablename__ = "project_views"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(BigInteger, nullable=False, unique=True, index=True)
+    contract_id = Column(String(255), nullable=True, index=True)
+    owner = Column(String(255), nullable=True, index=True)
+    total_contributions = Column(Float, nullable=False, default=0.0)
+    unique_contributors = Column(Integer, nullable=False, default=0)
+    status = Column(String(50), nullable=True, index=True)
+    last_event_ledger = Column(BigInteger, nullable=True, index=True)
+    extra_data = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("idx_project_views_status", "status"),
+        Index("idx_project_views_contract_id", "contract_id"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ProjectView(project_id={self.project_id}, total_contributions={self.total_contributions}, "
+            f"unique_contributors={self.unique_contributors}, status={self.status})>"
+        )
+
+
+class ProjectContributor(Base):
+    """
+    Stores per-project contributor contribution totals and history.
+    """
+
+    __tablename__ = "project_contributors"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(BigInteger, nullable=False, index=True)
+    contributor = Column(String(255), nullable=False, index=True)
+    total_contributed = Column(Float, nullable=False, default=0.0)
+    first_contribution_ledger = Column(BigInteger, nullable=True)
+    last_contribution_ledger = Column(BigInteger, nullable=True)
+    extra_data = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_project_contributors_project_id_contributor",
+            "project_id",
+            "contributor",
+            unique=True,
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ProjectContributor(project_id={self.project_id}, contributor={self.contributor}, "
+            f"total_contributed={self.total_contributed})>"
+        )
+
+
+class ProjectMilestone(Base):
+    """
+    Stores the latest milestone state for each project milestone.
+    """
+
+    __tablename__ = "project_milestones"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(BigInteger, nullable=False, index=True)
+    milestone_id = Column(Integer, nullable=False, index=True)
+    status = Column(String(50), nullable=False, default="pending", index=True)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    last_event_ledger = Column(BigInteger, nullable=True)
+    extra_data = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_project_milestones_project_id_milestone_id",
+            "project_id",
+            "milestone_id",
+            unique=True,
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ProjectMilestone(project_id={self.project_id}, milestone_id={self.milestone_id}, "
+            f"status={self.status})>"
+        )
+
+
 class NewsInsight(Base):
     """
     Stores sentiment analysis results for news articles (legacy table, kept for backward compatibility)

@@ -21,6 +21,8 @@ import { User } from '../../users/entities/user.entity';
  */
 @Entity('portfolio_materialized_snapshots')
 @Index('UQ_materialized_user', ['userId'], { unique: true })
+@Index('IDX_materialized_snapshots_updated_at', ['updatedAt'])
+@Index('IDX_materialized_snapshots_source_snapshot', ['sourceSnapshotId'])
 export class PortfolioMaterializedSnapshot {
   @PrimaryGeneratedColumn('uuid')
   id: string;
