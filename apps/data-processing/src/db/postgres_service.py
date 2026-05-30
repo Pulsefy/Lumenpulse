@@ -9,11 +9,22 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, select, and_, desc
+from sqlalchemy import create_engine, select, and_, desc, func
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
-from .models import Base, Article, SocialPost, AnalyticsRecord, NewsInsight, AssetTrend
+from .models import (
+    Base,
+    Article,
+    SocialPost,
+    AnalyticsRecord,
+    ContractEvent,
+    ProjectView,
+    ProjectContributor,
+    ProjectMilestone,
+    NewsInsight,
+    AssetTrend,
+)
 from src.analytics.ner_service import NERService
 
 logger = logging.getLogger(__name__)
@@ -727,6 +738,391 @@ class PostgresService:
                 return results
         except SQLAlchemyError as e:
             logger.error(f"Failed to retrieve analytics records: {e}")
+            return []
+
+    # Contract Event & Project View Methods
+
+    def save_contract_event(
+        self,
+        contract_id: str,
+        event_id: str,
+        ledger: int,
+        event_type: str,
+        project_id: Optional[int] = None,
+        contributor: Optional[str] = None,
+        amount: Optional[float] = None,
+        milestone_id: Optional[int] = None,
+        status: Optional[str] = None,
+        topics: Optional[Dict[str, Any]] = None,
+        raw_data: Optional[Dict[str, Any]] = None,
+        timestamp: Optional[datetime] = None,
+    ) -> Optional[ContractEvent]:
+        """
+        Save a raw contract event and honor idempotency by contract_id/event_id.
+        """
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(ContractEvent)
+                    .where(
+                        and_(
+                            ContractEvent.contract_id == contract_id,
+                            ContractEvent.event_id == event_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if existing:
+                    logger.debug(
+                        "Contract event already exists: %s/%s",
+                        contract_id,
+                        event_id,
+                    )
+                    return existing
+
+                event = ContractEvent(
+                    contract_id=contract_id,
+                    event_id=event_id,
+                    ledger=ledger,
+                    event_type=event_type,
+                    project_id=project_id,
+                    contributor=contributor,
+                    amount=amount,
+                    milestone_id=milestone_id,
+                    status=status,
+                    topics=topics,
+                    raw_data=raw_data,
+                    timestamp=timestamp or datetime.utcnow(),
+                )
+
+                session.add(event)
+                session.flush()
+                logger.debug("Saved contract event: %s/%s", contract_id, event_id)
+                return event
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save contract event: {e}")
+            return None
+
+    def get_contract_events(
+        self,
+        project_id: Optional[int] = None,
+        contract_id: Optional[str] = None,
+        event_type: Optional[str] = None,
+        limit: int = 200,
+    ) -> List[ContractEvent]:
+        """
+        Retrieve raw contract events, optionally filtered by project, contract, or event type.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = select(ContractEvent).order_by(desc(ContractEvent.ledger)).limit(limit)
+                if project_id is not None:
+                    stmt = stmt.where(ContractEvent.project_id == project_id)
+                if contract_id is not None:
+                    stmt = stmt.where(ContractEvent.contract_id == contract_id)
+                if event_type is not None:
+                    stmt = stmt.where(ContractEvent.event_type == event_type)
+
+                results = session.execute(stmt).scalars().all()
+                logger.debug(f"Retrieved {len(results)} contract events")
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve contract events: {e}")
+            return []
+
+    def get_contract_event_stats(self, project_id: int) -> Dict[str, Any]:
+        """
+        Aggregate raw contract events for a project.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = select(ContractEvent).where(ContractEvent.project_id == project_id)
+                events = session.execute(stmt).scalars().all()
+
+                total_amount = 0.0
+                contributors = set()
+                for event in events:
+                    if event.amount is None:
+                        continue
+                    amount = float(event.amount)
+                    if str(event.event_type).lower() in {
+                        "contributionrefundableevent",
+                        "contributionclawbackedevent",
+                    }:
+                        amount = -amount
+
+                    if str(event.event_type).lower() in {
+                        "depositevent",
+                        "contributionrecordedevent",
+                        "contributionrefundableevent",
+                        "contributionclawbackedevent",
+                    }:
+                        total_amount += amount
+                    if event.contributor:
+                        contributors.add(event.contributor)
+
+                return {
+                    "project_id": project_id,
+                    "total_amount": total_amount,
+                    "unique_contributors": len(contributors),
+                    "event_count": len(events),
+                }
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to compute contract event stats: {e}")
+            return {
+                "project_id": project_id,
+                "total_amount": 0.0,
+                "unique_contributors": 0,
+                "event_count": 0,
+            }
+
+    def save_project_view(
+        self,
+        project_id: int,
+        contract_id: Optional[str] = None,
+        owner: Optional[str] = None,
+        status: Optional[str] = None,
+        add_total_contributions: Optional[float] = None,
+        unique_contributors: Optional[int] = None,
+        last_event_ledger: Optional[int] = None,
+        extra_data: Optional[Dict[str, Any]] = None,
+    ) -> Optional[ProjectView]:
+        """
+        Save or update a materialized project summary row.
+        """
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(ProjectView).where(ProjectView.project_id == project_id)
+                ).scalar_one_or_none()
+
+                if existing:
+                    if contract_id is not None:
+                        existing.contract_id = contract_id
+                    if owner is not None:
+                        existing.owner = owner
+                    if status is not None:
+                        existing.status = status
+                    if add_total_contributions is not None:
+                        existing.total_contributions = (
+                            (existing.total_contributions or 0.0) + add_total_contributions
+                        )
+                    if unique_contributors is not None:
+                        existing.unique_contributors = unique_contributors
+                    if last_event_ledger is not None:
+                        existing.last_event_ledger = last_event_ledger
+                    existing.extra_data = extra_data or existing.extra_data
+                    session.flush()
+                    return existing
+
+                view = ProjectView(
+                    project_id=project_id,
+                    contract_id=contract_id,
+                    owner=owner,
+                    total_contributions=add_total_contributions or 0.0,
+                    unique_contributors=unique_contributors or 0,
+                    status=status,
+                    last_event_ledger=last_event_ledger,
+                    extra_data=extra_data,
+                )
+                session.add(view)
+                session.flush()
+                return view
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save project view: {e}")
+            return None
+
+    def get_project_view(self, project_id: int) -> Optional[ProjectView]:
+        """Retrieve a single project view by project_id."""
+        try:
+            with self.get_session() as session:
+                return session.execute(
+                    select(ProjectView).where(ProjectView.project_id == project_id)
+                ).scalar_one_or_none()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve project view: {e}")
+            return None
+
+    def get_project_views(
+        self,
+        status: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[ProjectView]:
+        """Retrieve materialized project views."""
+        try:
+            with self.get_session() as session:
+                stmt = select(ProjectView).order_by(desc(ProjectView.last_event_ledger)).limit(limit)
+                if status is not None:
+                    stmt = stmt.where(ProjectView.status == status)
+                results = session.execute(stmt).scalars().all()
+                logger.debug(f"Retrieved {len(results)} project views")
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve project views: {e}")
+            return []
+
+    def save_project_contributor(
+        self,
+        project_id: int,
+        contributor: str,
+        amount: float,
+        ledger: Optional[int] = None,
+        extra_data: Optional[Dict[str, Any]] = None,
+    ) -> Optional[ProjectContributor]:
+        """Save or update a contributor record for a project."""
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(ProjectContributor)
+                    .where(
+                        and_(
+                            ProjectContributor.project_id == project_id,
+                            ProjectContributor.contributor == contributor,
+                        )
+                    )
+                ).scalar_one_or_none()
+
+                if existing:
+                    existing.total_contributed = (
+                        (existing.total_contributed or 0.0) + amount
+                    )
+                    if ledger is not None:
+                        existing.last_contribution_ledger = ledger
+                        existing.first_contribution_ledger = (
+                            existing.first_contribution_ledger
+                            or ledger
+                        )
+                    existing.extra_data = extra_data or existing.extra_data
+                    session.flush()
+                    return existing
+
+                contributor_row = ProjectContributor(
+                    project_id=project_id,
+                    contributor=contributor,
+                    total_contributed=amount,
+                    first_contribution_ledger=ledger,
+                    last_contribution_ledger=ledger,
+                    extra_data=extra_data,
+                )
+                session.add(contributor_row)
+                session.flush()
+                return contributor_row
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save project contributor: {e}")
+            return None
+
+    def get_project_contributor_count(self, project_id: int) -> int:
+        """Return the current number of unique contributors for a project."""
+        try:
+            with self.get_session() as session:
+                count = session.execute(
+                    select(func.count())
+                    .select_from(ProjectContributor)
+                    .where(ProjectContributor.project_id == project_id)
+                ).scalar_one()
+                return int(count or 0)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to count project contributors: {e}")
+            return 0
+
+    def get_project_contributors(
+        self,
+        project_id: int,
+        limit: int = 100,
+    ) -> List[ProjectContributor]:
+        """Retrieve contributor summaries for a project."""
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(ProjectContributor)
+                    .where(ProjectContributor.project_id == project_id)
+                    .order_by(desc(ProjectContributor.total_contributed))
+                    .limit(limit)
+                )
+                results = session.execute(stmt).scalars().all()
+                logger.debug(f"Retrieved {len(results)} contributors for project %s", project_id)
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve project contributors: {e}")
+            return []
+
+    def save_project_milestone(
+        self,
+        project_id: int,
+        milestone_id: int,
+        status: str,
+        approved_at: Optional[datetime] = None,
+        last_event_ledger: Optional[int] = None,
+        extra_data: Optional[Dict[str, Any]] = None,
+    ) -> Optional[ProjectMilestone]:
+        """Save or update the current state of a project milestone."""
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(ProjectMilestone)
+                    .where(
+                        and_(
+                            ProjectMilestone.project_id == project_id,
+                            ProjectMilestone.milestone_id == milestone_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+
+                if existing:
+                    existing.status = status
+                    if approved_at is not None:
+                        existing.approved_at = approved_at
+                    if last_event_ledger is not None:
+                        existing.last_event_ledger = last_event_ledger
+                    existing.extra_data = extra_data or existing.extra_data
+                    session.flush()
+                    return existing
+
+                milestone = ProjectMilestone(
+                    project_id=project_id,
+                    milestone_id=milestone_id,
+                    status=status,
+                    approved_at=approved_at,
+                    last_event_ledger=last_event_ledger,
+                    extra_data=extra_data,
+                )
+                session.add(milestone)
+                session.flush()
+                return milestone
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save project milestone: {e}")
+            return None
+
+    def get_project_milestones(
+        self,
+        project_id: int,
+        limit: int = 100,
+    ) -> List[ProjectMilestone]:
+        """Retrieve milestone state records for a project."""
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(ProjectMilestone)
+                    .where(ProjectMilestone.project_id == project_id)
+                    .order_by(ProjectMilestone.milestone_id)
+                    .limit(limit)
+                )
+                results = session.execute(stmt).scalars().all()
+                logger.debug(f"Retrieved {len(results)} milestones for project %s", project_id)
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve project milestones: {e}")
             return []
 
     # Legacy News Insights Methods (kept for backward compatibility)

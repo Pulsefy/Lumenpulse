@@ -259,17 +259,17 @@ export default function GrantRoundDetailScreen() {
         />
         <InfoRow
           label="Total contributions"
-          value={`${formatPoolAmount(summary.participationMetrics.totalContributionAmount)} XLM`}
+          value={`${formatTokenAmount(summary.participationMetrics.totalContributionAmount)} XLM`}
           colors={colors}
         />
         <InfoRow
           label="Average per contributor"
-          value={`${formatPoolAmount(summary.participationMetrics.averageContributionPerContributor)} XLM`}
+          value={`${formatTokenAmount(summary.participationMetrics.averageContributionPerContributor)} XLM`}
           colors={colors}
         />
         <InfoRow
           label="Average per project"
-          value={`${formatPoolAmount(summary.participationMetrics.averageContributionPerProject)} XLM`}
+          value={`${formatTokenAmount(summary.participationMetrics.averageContributionPerProject)} XLM`}
           colors={colors}
         />
 

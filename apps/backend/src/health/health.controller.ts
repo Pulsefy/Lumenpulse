@@ -7,12 +7,16 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { ContractHealthService } from './contract-health.service';
 import { HealthService } from './health.service';
 
 @ApiTags('health')
 @Controller()
 export class HealthController {
-  constructor(private readonly healthService: HealthService) {}
+  constructor(
+    private readonly healthService: HealthService,
+    private readonly contractHealthService: ContractHealthService,
+  ) {}
 
   @Get('health')
   @HealthCheck()
@@ -28,6 +32,27 @@ export class HealthController {
     const healthReport = await this.healthService.getHealthReport();
 
     response.status(healthReport.status === 'error' ? 503 : 200);
+
+    return healthReport;
+  }
+
+  @Get('health/contracts')
+  @ApiOperation({
+    summary: 'Reports configured Stellar contract reachability and readiness',
+  })
+  @ApiOkResponse({
+    description:
+      'Returns reachable contract status for all configured contract IDs.',
+  })
+  @ApiServiceUnavailableResponse({
+    description:
+      'Returns when one or more configured contract IDs are missing, invalid, or not callable.',
+  })
+  async getContractHealth(@Res({ passthrough: true }) response: Response) {
+    const healthReport =
+      await this.contractHealthService.getContractHealthReport();
+
+    response.status(healthReport.status === 'ok' ? 200 : 503);
 
     return healthReport;
   }
