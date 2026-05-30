@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
+import { Server } from 'http';
+import request from 'supertest';
 import { PaymentsModule } from '../src/payments/payments.module';
 import { PaymentsService } from '../src/payments/payments.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -16,6 +17,7 @@ describe('Payments Performance (e2e)', () => {
   let paymentTransactionsRepo: Repository<PaymentTransaction>;
 
   const testOrgId = '550e8400-e29b-41d4-a716-446655440001';
+  const getHttpServer = (): Server => app.getHttpServer() as Server;
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -77,7 +79,7 @@ describe('Payments Performance (e2e)', () => {
       const startTime = Date.now();
 
       const promises = Array.from({ length: concurrentRequests }, (_, i) =>
-        request(app.getHttpServer())
+        request(getHttpServer())
           .get('/payments/links')
           .set('x-organization-id', testOrgId)
           .set('idempotency-key', `perf-test-${i}`)
@@ -111,7 +113,7 @@ describe('Payments Performance (e2e)', () => {
 
       (paymentLinksRepo.findAndCount as jest.Mock).mockResolvedValue([mockLinks, 25]);
 
-      const response = await request(app.getHttpServer())
+      const response = await request(getHttpServer())
         .get('/payments/links')
         .query({ status: PaymentLinkStatus.ACTIVE, limit: 100 })
         .set('x-organization-id', testOrgId)
@@ -141,7 +143,7 @@ describe('Payments Performance (e2e)', () => {
 
       (paymentLinksRepo.findOne as jest.Mock).mockResolvedValue(mockLink);
 
-      const response = await request(app.getHttpServer())
+      const response = await request(getHttpServer())
         .get('/payments/links/perf-link')
         .set('x-organization-id', testOrgId)
         .expect(200);
@@ -172,7 +174,7 @@ describe('Payments Performance (e2e)', () => {
 
       (paymentTransactionsRepo.findAndCount as jest.Mock).mockResolvedValue([mockTransactions, 30]);
 
-      const response = await request(app.getHttpServer())
+      const response = await request(getHttpServer())
         .get('/payments/transactions')
         .query({ limit: 50, offset: 0 })
         .set('x-organization-id', testOrgId)
@@ -204,7 +206,7 @@ describe('Payments Performance (e2e)', () => {
 
       (paymentTransactionsRepo.findAndCount as jest.Mock).mockResolvedValue([mockTransactions, 1]);
 
-      await request(app.getHttpServer())
+      await request(getHttpServer())
         .get('/payments/transactions')
         .query({ status: PaymentTransactionStatus.SUCCESS })
         .set('x-organization-id', testOrgId)
@@ -242,7 +244,7 @@ describe('Payments Performance (e2e)', () => {
       (idempotencyKeysRepo.findOne as jest.Mock).mockResolvedValue(existingKey);
       (paymentTransactionsRepo.findOne as jest.Mock).mockResolvedValue(mockTx);
 
-      const response = await request(app.getHttpServer())
+      const response = await request(getHttpServer())
         .post('/payments/transactions')
         .set('x-organization-id', testOrgId)
         .set('idempotency-key', 'idempotency-test-123')
