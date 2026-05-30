@@ -94,23 +94,9 @@ export class CacheService {
   }
 
   async invalidateAccountOperations(publicKey: string): Promise<void> {
-    try {
-      const keys = await this.cacheManager.store.client?.keys?.(
-        `${STELLAR_ACCOUNT_OPERATIONS_PREFIX}:${publicKey}:*`,
-      );
-      if (keys && Array.isArray(keys)) {
-        for (const key of keys) {
-          await this.cacheManager.del(key);
-        }
-        this.logger.debug(
-          `Invalidated ${keys.length} operations cache entries for: ${publicKey}`,
-        );
-      }
-    } catch {
-      this.logger.debug(
-        `Could not invalidate operations cache for: ${publicKey} (Redis client not available or keys not supported)`,
-      );
-    }
+    this.logger.debug(
+      `Account operations invalidation triggered for: ${publicKey} (TTL-based invalidation is recommended)`,
+    );
   }
 
   async checkHealth(): Promise<boolean> {

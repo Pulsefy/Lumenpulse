@@ -118,7 +118,7 @@ export class StellarService {
     );
   }
 
-  private async fetchAccountBalances(publicKey: string): Promise<AccountBalancesDto> {
+private async fetchAccountBalances(publicKey: string): Promise<AccountBalancesDto> {
     try {
       // Retry logic for network failures
       const account: Horizon.AccountResponse = await retryWithBackoff(
@@ -157,7 +157,7 @@ export class StellarService {
 
       return result;
     } catch (error: unknown) {
-      return this.handleError(error, publicKey);
+      throw this.handleError(error, publicKey);
     }
   }
 

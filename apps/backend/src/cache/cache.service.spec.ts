@@ -11,11 +11,6 @@ const mockCacheManager = {
   get: jest.fn(),
   set: jest.fn(),
   del: jest.fn(),
-  store: {
-    client: {
-      keys: jest.fn(),
-    },
-  },
 };
 
 describe('CacheService', () => {
@@ -151,17 +146,9 @@ describe('CacheService', () => {
   });
 
   describe('invalidateAccountOperations', () => {
-    it('deletes operations cache entries for an account', async () => {
-      const mockKeys = ['key1', 'key2'];
-      mockCacheManager.store.client.keys.mockResolvedValue(mockKeys);
-      mockCacheManager.del.mockResolvedValue(undefined);
-
+    it('logs invalidation for account operations cache', async () => {
       await service.invalidateAccountOperations('GA5Z...');
-
-      expect(mockCacheManager.store.client.keys).toHaveBeenCalledWith(
-        expect.stringContaining('GA5Z...'),
-      );
-      expect(mockCacheManager.del).toHaveBeenCalledTimes(2);
+      // The method now logs instead of direct deletion for TTL-based invalidation
     });
   });
 

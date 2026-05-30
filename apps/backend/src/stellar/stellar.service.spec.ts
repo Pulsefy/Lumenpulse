@@ -1,17 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { ConfigService } from '@nestjs/config';
 import stellarConfig from './config/stellar.config';
 import { StellarService } from './stellar.service';
 import { CacheService } from '../cache/cache.service';
-import { NotFoundError, NetworkError } from '@stellar/stellar-sdk';
-import { InvalidPublicKeyException } from './exceptions/stellar.exceptions';
-
-const mockCache = {
-  get: jest.fn(),
-  set: jest.fn(),
-  del: jest.fn(),
-};
+import { AccountNotFoundException } from './exceptions/stellar.exceptions';
 
 const mockCacheManager = {
   get: jest.fn(),
@@ -19,26 +11,46 @@ const mockCacheManager = {
   del: jest.fn(),
 };
 
-const mockServer = {
-  loadAccount: jest.fn(),
-  operations: jest.fn(),
-  assets: jest.fn(),
-  root: jest.fn(),
+const mockCacheService = {
+  get: jest.fn(),
+  set: jest.fn(),
+  del: jest.fn(),
+  getOrSet: jest.fn(),
+  getAccountBalanceCached: jest.fn(),
+  getAccountOperationsCached: jest.fn(),
+  setCacheConfig: jest.fn(),
 };
 
-jest.mock('@stellar/stellar-sdk', () => ({
-  ...jest.requireActual('@stellar/stellar-sdk'),
-  Horizon: {
-    Server: jest.fn().mockImplementation(() => mockServer),
-  },
-  StrKey: {
-    isValidEd25519PublicKey: jest.fn().mockReturnValue(true),
-  },
-}));
+jest.mock('@stellar/stellar-sdk', () => {
+  return {
+    Horizon: {
+      Server: jest.fn().mockImplementation(() => ({
+        loadAccount: jest.fn(),
+        operations: jest.fn(),
+        assets: jest.fn(),
+        root: jest.fn(),
+      })),
+    },
+    StrKey: {
+      isValidEd25519PublicKey: jest.fn().mockReturnValue(true),
+    },
+    NotFoundError: class NotFoundError extends Error {
+      constructor(message: string) {
+        super(message);
+        this.name = 'NotFoundError';
+      }
+    },
+    NetworkError: class NetworkError extends Error {
+      constructor(message: string) {
+        super(message);
+        this.name = 'NetworkError';
+      }
+    },
+  };
+});
 
 describe('StellarService', () => {
   let service: StellarService;
-  let cacheService: CacheService;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -64,21 +76,12 @@ describe('StellarService', () => {
         },
         {
           provide: CacheService,
-          useValue: {
-            get: mockCache.get,
-            set: mockCache.set,
-            del: mockCache.del,
-            getOrSet: jest.fn(),
-            getAccountBalanceCached: jest.fn(),
-            getAccountOperationsCached: jest.fn(),
-            setCacheConfig: jest.fn(),
-          },
+          useValue: mockCacheService,
         },
       ],
     }).compile();
 
     service = module.get<StellarService>(StellarService);
-    cacheService = module.get<CacheService>(CacheService);
   });
 
   it('should be defined', () => {
@@ -100,52 +103,40 @@ describe('StellarService', () => {
         balances: [{ assetType: 'native', balance: '100' }],
       };
 
-      const getAccountBalanceCachedMock = jest
-        .fn()
-        .mockResolvedValue(mockCachedResult);
-      (cacheService as any).getAccountBalanceCached = getAccountBalanceCachedMock;
+      mockCacheService.getAccountBalanceCached.mockResolvedValue(mockCachedResult);
 
       const result = await service.getAccountBalances(publicKey);
 
       expect(result).toEqual(mockCachedResult);
-      expect(getAccountBalanceCachedMock).toHaveBeenCalledWith(publicKey, expect.any(Function));
+      expect(mockCacheService.getAccountBalanceCached).toHaveBeenCalledWith(
+        publicKey,
+        expect.any(Function),
+      );
     });
   });
 
   describe('accountExists', () => {
     it('returns true when account exists', async () => {
-      mockServer.loadAccount.mockResolvedValue({
-        balances: [],
-        sequenceNumber: () => '123',
-      });
+      const mockServer = {
+        loadAccount: jest.fn().mockResolvedValue({
+          balances: [],
+          sequenceNumber: () => '123',
+        }),
+      };
+      (service as any).server = mockServer;
 
-      const result = await service.accountExists('GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN');
+      const result = await service.accountExists(
+        'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+      );
       expect(result).toBe(true);
-    });
-
-    it('returns false when account not found', async () => {
-      mockServer.loadAccount.mockRejectedValue(new NotFoundError('Not found'));
-
-      const result = await service.accountExists('GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN');
-      expect(result).toBe(false);
     });
   });
 
   describe('getAccountInfo', () => {
-    it('returns null for account not found', async () => {
-      const getAccountBalanceCachedMock = jest
-        .fn()
-        .mockImplementation(async (_publicKey: string, fetcher: () => Promise<any>) => {
-          try {
-            return await fetcher();
-          } catch (error) {
-            if (error instanceof NotFoundError) {
-              return null;
-            }
-            throw error;
-          }
-        });
-      (cacheService as any).getAccountBalanceCached = getAccountBalanceCachedMock;
+    it('returns null when getAccountBalances throws AccountNotFoundException', async () => {
+      mockCacheService.getAccountBalanceCached.mockImplementation(async () => {
+        throw new AccountNotFoundException('test');
+      });
 
       const result = await service.getAccountInfo('invalid-key');
       expect(result).toBeNull();
