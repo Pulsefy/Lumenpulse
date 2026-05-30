@@ -45,7 +45,7 @@ export class PaymentTransaction {
   @Column({ type: 'bigint' })
   amount: string;
 
-  @Column({ type: 'bigserial' })
+  @Column({ type: 'bigint' })
   fee: string;
 
   @Column({
