@@ -49,7 +49,7 @@ def upgrade() -> None:
                   comment='Number of unique projects contributed to'),
         sa.Column('reputation_score', sa.Float(), nullable=False, server_default='0.0',
                   comment='Weighted reputation score (0-100)'),
-        sa.Column('metadata', sa.JSON(), nullable=True,
+        sa.Column('snapshot_metadata', sa.JSON(), nullable=True,
                   comment='Additional metadata including rank and percentile'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),

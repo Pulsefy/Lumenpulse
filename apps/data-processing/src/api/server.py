@@ -615,7 +615,7 @@ class ContributorMetricsResponse(BaseModel):
     unique_projects: int
     reputation_score: float
     snapshot_date: Optional[str] = None
-    metadata: Dict[str, Any] = {}
+    snapshot_snapshot_metadata: Dict[str, Any] = {}
 
 
 class TopContributorsResponse(BaseModel):
@@ -690,7 +690,7 @@ async def get_top_contributors(
                         if data["snapshot_date"]
                         else None
                     ),
-                    metadata=data.get("metadata", {}),
+                    snapshot_metadata=data.get("snapshot_metadata", {}),
                 )
             )
 

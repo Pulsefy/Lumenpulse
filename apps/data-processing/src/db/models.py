@@ -358,7 +358,8 @@ class ContributorReputationSnapshot(Base):
         server_default="0.0",
         comment="Weighted reputation score (0-100)",
     )
-    metadata = Column(
+    # Renamed from 'metadata' to 'snapshot_metadata' to avoid SQLAlchemy reserved name conflict
+    snapshot_metadata = Column(
         JSON, nullable=True, comment="Additional metadata including rank and percentile"
     )
 

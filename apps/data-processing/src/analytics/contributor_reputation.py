@@ -43,7 +43,7 @@ class ContributorMetrics:
     unique_projects: int = 0
     reputation_score: float = 0.0
     snapshot_date: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    snapshot_metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for database storage"""
@@ -57,7 +57,7 @@ class ContributorMetrics:
             "unique_projects": self.unique_projects,
             "reputation_score": self.reputation_score,
             "snapshot_date": self.snapshot_date,
-            "metadata": self.metadata,
+            "snapshot_metadata": self.snapshot_metadata,
         }
 
 
@@ -429,8 +429,8 @@ class ContributorReputationSnapshotBuilder:
 
         for rank, snapshot in enumerate(snapshots, start=1):
             percentile = ((total - rank) / total) * 100 if total > 0 else 0
-            snapshot.metadata["rank"] = rank
-            snapshot.metadata["percentile"] = round(percentile, 1)
+            snapshot.snapshot_metadata["rank"] = rank
+            snapshot.snapshot_metadata["percentile"] = round(percentile, 1)
 
         return snapshots
 

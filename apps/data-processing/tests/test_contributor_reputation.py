@@ -27,7 +27,7 @@ class TestContributorMetrics:
             unique_projects=3,
             reputation_score=85.5,
             snapshot_date=now,
-            metadata={"rank": 1, "percentile": 100.0},
+            snapshot_metadata={"rank": 1, "percentile": 100.0},
         )
 
         result = metrics.to_dict()
@@ -37,7 +37,7 @@ class TestContributorMetrics:
         assert result["total_value_xlm"] == 100.5
         assert result["activity_streak_days"] == 5
         assert result["reputation_score"] == 85.5
-        assert result["metadata"]["rank"] == 1
+        assert result["snapshot_metadata"]["rank"] == 1
 
     def test_default_values(self):
         """Test default values for optional fields"""
@@ -47,7 +47,7 @@ class TestContributorMetrics:
         assert metrics.total_value_xlm == 0.0
         assert metrics.activity_streak_days == 0
         assert metrics.reputation_score == 0.0
-        assert metrics.metadata == {}
+        assert metrics.snapshot_metadata == {}
 
 
 class TestContributorReputationSnapshotBuilder:
@@ -176,12 +176,12 @@ class TestContributorReputationSnapshotBuilder:
         result = builder._calculate_percentiles(snapshots)
 
         # First should be 100th percentile (rank 1)
-        assert result[0].metadata["rank"] == 1
-        assert result[0].metadata["percentile"] == 90.0
+        assert result[0].snapshot_metadata["rank"] == 1
+        assert result[0].snapshot_metadata["percentile"] == 90.0
 
         # Last should be 0th percentile
-        assert result[-1].metadata["rank"] == 10
-        assert result[-1].metadata["percentile"] == 0.0
+        assert result[-1].snapshot_metadata["rank"] == 10
+        assert result[-1].snapshot_metadata["percentile"] == 0.0
 
     def test_generate_mock_contributor_data(self, builder):
         """Test mock data generation"""
@@ -355,8 +355,8 @@ class TestContributorReputationIntegration:
 
             assert len(snapshots) > 0
             assert snapshots[0].reputation_score > 0
-            assert "rank" in snapshots[0].metadata
-            assert "percentile" in snapshots[0].metadata
+            assert "rank" in snapshots[0].snapshot_metadata
+            assert "percentile" in snapshots[0].snapshot_metadata
 
     def test_top_n_sorted_correctly(self):
         """Test that top-N returns contributors sorted by score"""

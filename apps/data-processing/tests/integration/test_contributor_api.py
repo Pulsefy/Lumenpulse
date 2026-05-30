@@ -43,7 +43,7 @@ class TestContributorAPIEndpoints:
                     unique_projects=5,
                     reputation_score=95.5,
                     snapshot_date=datetime.utcnow(),
-                    metadata={"rank": 1, "percentile": 100.0},
+                    snapshot_metadata={"rank": 1, "percentile": 100.0},
                 ),
                 ContributorMetrics(
                     contributor_address="GDEF456",
@@ -53,7 +53,7 @@ class TestContributorAPIEndpoints:
                     unique_projects=3,
                     reputation_score=80.0,
                     snapshot_date=datetime.utcnow(),
-                    metadata={"rank": 2, "percentile": 90.0},
+                    snapshot_metadata={"rank": 2, "percentile": 90.0},
                 ),
             ]
             mock_builder_class.return_value = mock_builder
@@ -212,7 +212,7 @@ class TestContributorAPIEndpoints:
                     unique_projects=10,
                     reputation_score=99.9,
                     snapshot_date=now,
-                    metadata={"rank": 1, "percentile": 100.0},
+                    snapshot_metadata={"rank": 1, "percentile": 100.0},
                 )
             ]
             mock_builder_class.return_value = mock_builder
@@ -229,8 +229,8 @@ class TestContributorAPIEndpoints:
             assert contributor["activity_streak_days"] == 15
             assert contributor["unique_projects"] == 10
             assert contributor["reputation_score"] == 99.9
-            assert contributor["metadata"]["rank"] == 1
-            assert contributor["metadata"]["percentile"] == 100.0
+            assert contributor["snapshot_metadata"]["rank"] == 1
+            assert contributor["snapshot_metadata"]["percentile"] == 100.0
 
 
 class TestContributorAPIAuthentication:
