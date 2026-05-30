@@ -1,11 +1,10 @@
 import { Injectable, Logger, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike } from 'typeorm';
+import { Repository } from 'typeorm';
 import { PaymentLink, PaymentLinkStatus } from './entities/payment-link.entity';
 import { IdempotencyKey } from './entities/idempotency-key.entity';
 import { PaymentTransaction, PaymentTransactionStatus } from './entities/payment-transaction.entity';
-import { CreatePaymentLinkDto } from './dto/payment-link.dto';
-import { ListPaymentLinksQueryDto, PaymentLinkResponseDto } from './dto/payment-link.dto';
+import { CreatePaymentLinkDto, PaymentLinkResponseDto, ListPaymentLinksQueryDto } from './dto/payment-link.dto';
 import { CreatePaymentTransactionDto, PaymentTransactionResponseDto } from './dto/payment-transaction.dto';
 
 @Injectable()
@@ -26,7 +25,7 @@ export class PaymentsService {
     dto: CreatePaymentLinkDto,
   ): Promise<PaymentLinkResponseDto> {
     const existing = await this.paymentLinksRepo.findOne({
-      where: { organizationId, linkId: dto.linkId },
+      where: { organizationId, linkId: dto.linkId } as any,
     });
     if (existing) {
       throw new ConflictException('Payment link with this ID already exists');
@@ -44,7 +43,7 @@ export class PaymentsService {
 
   async getPaymentLink(organizationId: string, linkId: string): Promise<PaymentLinkResponseDto> {
     const link = await this.paymentLinksRepo.findOne({
-      where: { organizationId, linkId },
+      where: { organizationId, linkId } as any,
     });
     if (!link) {
       throw new NotFoundException('Payment link not found');
@@ -56,7 +55,7 @@ export class PaymentsService {
     organizationId: string,
     query: ListPaymentLinksQueryDto,
   ): Promise<{ links: PaymentLinkResponseDto[]; total: number }> {
-    const where: Partial<PaymentLink> = { organizationId };
+    const where: any = { organizationId };
     if (query.status) {
       where.status = query.status;
     }
@@ -77,11 +76,11 @@ export class PaymentsService {
     dto: CreatePaymentTransactionDto,
   ): Promise<PaymentTransactionResponseDto> {
     const existingKey = await this.idempotencyKeysRepo.findOne({
-      where: { key: idempotencyKey },
+      where: { key: idempotencyKey } as any,
     });
     if (existingKey) {
       const existingTx = await this.paymentTransactionsRepo.findOne({
-        where: { id: existingKey.id },
+        where: { id: existingKey.id } as any,
       });
       if (existingTx) {
         this.logger.log(`Returning cached transaction for idempotency key ${idempotencyKey}`);
@@ -90,7 +89,7 @@ export class PaymentsService {
     }
 
     const paymentLink = await this.paymentLinksRepo.findOne({
-      where: { id: dto.paymentLinkId, organizationId },
+      where: { id: dto.paymentLinkId, organizationId } as any,
     });
     if (!paymentLink) {
       throw new NotFoundException('Payment link not found');
@@ -131,7 +130,7 @@ export class PaymentsService {
     organizationId: string,
     query: { paymentLinkId?: string; status?: PaymentTransactionStatus; senderPublicKey?: string; limit?: number; offset?: number },
   ): Promise<{ transactions: PaymentTransactionResponseDto[]; total: number }> {
-    const where: Partial<PaymentTransaction> = { organizationId };
+    const where: any = { organizationId };
     if (query.paymentLinkId) where.paymentLinkId = query.paymentLinkId;
     if (query.status) where.status = query.status;
     if (query.senderPublicKey) where.senderPublicKey = query.senderPublicKey;
@@ -151,7 +150,7 @@ export class PaymentsService {
 
   async getTransaction(organizationId: string, transactionHash: string): Promise<PaymentTransactionResponseDto> {
     const tx = await this.paymentTransactionsRepo.findOne({
-      where: { organizationId, transactionHash },
+      where: { organizationId, transactionHash } as any,
     });
     if (!tx) {
       throw new NotFoundException('Transaction not found');

@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
-import { PaymentsModule } from './src/payments/payments.module';
-import { PaymentsService } from './src/payments/payments.service';
+import { PaymentsModule } from '../src/payments/payments.module';
+import { PaymentsService } from '../src/payments/payments.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { PaymentLink, PaymentLinkStatus } from './src/payments/entities/payment-link.entity';
-import { IdempotencyKey } from './src/payments/entities/idempotency-key.entity';
-import { PaymentTransaction, PaymentTransactionStatus } from './src/payments/entities/payment-transaction.entity';
+import { PaymentLink, PaymentLinkStatus } from '../src/payments/entities/payment-link.entity';
+import { IdempotencyKey } from '../src/payments/entities/idempotency-key.entity';
+import { PaymentTransaction, PaymentTransactionStatus } from '../src/payments/entities/payment-transaction.entity';
 import { Repository } from 'typeorm';
 
 describe('Payments Performance (e2e)', () => {
