@@ -9,13 +9,23 @@ import { ProjectRegistryEntity } from '../database/entities/project-registry.ent
 export const SOROBAN_EVENTS_QUEUE = 'soroban-events';
 export const PROCESS_EVENT_JOB = 'process-event';
 
+// 1. We define a strict interface for your event data to satisfy ESLint
+export interface ProjectEventPayload {
+  projectId: string;
+  owner: string;
+  name: string;
+  metadataCid?: string;
+  ledgerSeq: number;
+  txHash: string;
+}
+
 @Injectable()
 export class SorobanEventsService {
   private readonly logger = new Logger(SorobanEventsService.name);
 
   constructor(
     @InjectQueue(SOROBAN_EVENTS_QUEUE) private readonly queue: Queue,
-    
+
     @InjectRepository(ProjectRegistryEntity)
     private readonly projectRepo: Repository<ProjectRegistryEntity>,
   ) {}
@@ -23,7 +33,6 @@ export class SorobanEventsService {
   async ingest(dto: IngestSorobanEventDto): Promise<{ queued: boolean }> {
     const jobId = `${dto.txHash}:${dto.eventIndex}`;
 
-    
     await this.queue.add(PROCESS_EVENT_JOB, dto, {
       jobId,
       attempts: 3,
@@ -36,13 +45,16 @@ export class SorobanEventsService {
     return { queued: true };
   }
 
-  
-  async syncProjectRegistryEvent(eventData: any): Promise<void> {
-    const { projectId, owner, name, metadataCid, ledgerSeq, txHash } = eventData;
+  // 2. We replace 'any' with our new 'ProjectEventPayload' interface
+  async syncProjectRegistryEvent(
+    eventData: ProjectEventPayload,
+  ): Promise<void> {
+    // ESLint is now happy because it knows exactly what types these variables are
+    const { projectId, owner, name, metadataCid, ledgerSeq, txHash } =
+      eventData;
 
     const existing = await this.projectRepo.findOne({ where: { projectId } });
 
-    
     if (existing && existing.lastLedgerSeq > ledgerSeq) {
       this.logger.debug(`Skipping stale event for Project ${projectId}`);
       return;
@@ -55,7 +67,7 @@ export class SorobanEventsService {
         name,
         metadataCid: metadataCid ?? existing?.metadataCid,
         lastLedgerSeq: ledgerSeq, // Traceability pointer
-        lastTxHash: txHash,       // Traceability pointer
+        lastTxHash: txHash, // Traceability pointer
       },
       ['projectId'], // Conflict target prevents duplicate rows
     );
