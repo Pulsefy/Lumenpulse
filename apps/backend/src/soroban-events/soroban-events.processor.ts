@@ -63,15 +63,20 @@ export class SorobanEventsProcessor extends WorkerHost {
 
     try {
       if (contractId === process.env.PROJECT_REGISTRY_CONTRACT_ID) {
-        // Map the parsed JSON payload to the format expected by the sync service.
-        // Note: Adjust the keys mapped from `rawPayload` if your ingestor names them differently!
+        // Cast rawPayload to any so we can access its nested properties safely
+        const payloadData = rawPayload as Record<string, any>;
+
         const projectData = {
-          projectId: rawPayload?.projectId || rawPayload?.id,
-          owner: rawPayload?.owner,
-          name: rawPayload?.name,
-          metadataCid: rawPayload?.metadataCid,
-          ledgerSeq: rawPayload?.ledgerSeq || 0, // Fallback if ledgerSeq isn't strictly in the payload
-          txHash: txHash,
+          projectId: String(payloadData?.projectId || ''),
+          owner: String(payloadData?.owner || ''),
+          name: String(payloadData?.name || ''),
+          metadataCid: payloadData?.metadataCid
+            ? String(payloadData.metadataCid)
+            : undefined,
+          // If ledgerSeq isn't in job.data, it should be in rawPayload.
+          // Fallback to 0 if it's missing to satisfy the interface.
+          ledgerSeq: Number(payloadData?.ledgerSeq || 0),
+          txHash: String(txHash),
         };
 
         await this.sorobanEventsService.syncProjectRegistryEvent(projectData);
