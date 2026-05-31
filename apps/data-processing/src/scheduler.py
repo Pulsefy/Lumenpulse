@@ -17,7 +17,10 @@ from database import DatabaseService, AnalyticsRecord
 from anomaly_detector import AnomalyDetector, AnomalyResult
 from alertbot import AlertBot
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
-from src.ingestion.run_ingestion_quality_checks import main as run_ingestion_quality_checks
+from src.ingestion.run_ingestion_quality_checks import (
+    main as run_ingestion_quality_checks,
+)
+from src.analytics.contributor_reputation import ContributorReputationSnapshotBuilder
 
 
 logger = setup_logger(__name__)
@@ -174,9 +177,13 @@ def _retraining_job() -> None:
                 f"models: {list(result.get('models', {}).keys())}"
             )
         else:
-            logger.warning(f"Scheduled retraining ended with status: {result.get('status')}")
+            logger.warning(
+                f"Scheduled retraining ended with status: {result.get('status')}"
+            )
     except Exception as exc:
-        logger.error(f"Scheduled retraining job raised an exception: {exc}", exc_info=True)
+        logger.error(
+            f"Scheduled retraining job raised an exception: {exc}", exc_info=True
+        )
 
 
 def _ingestion_quality_checks_job() -> None:
@@ -193,8 +200,35 @@ def _ingestion_quality_checks_job() -> None:
         logger.error(f"Ingestion quality checks failed: {e}", exc_info=True)
 
 
-class AnalyticsScheduler:
+def _contributor_snapshot_job() -> None:
+    """Build contributor reputation snapshots for leaderboards.
 
+    Scheduled to run daily at 00:00 UTC. Wraps the snapshot builder
+    and logs the outcome. Errors are caught so the scheduler keeps running.
+    """
+    logger.info("Contributor reputation snapshot job triggered")
+    try:
+        builder = ContributorReputationSnapshotBuilder()
+        result = builder.run_snapshot_job()
+
+        if result.get("status") == "completed":
+            logger.info(
+                f"Contributor snapshot completed in "
+                f"{result.get('duration_seconds', 0):.1f}s — "
+                f"snapshots: {result.get('snapshots_saved', 0)}, "
+                f"top score: {result.get('top_score', 0):.2f}"
+            )
+        else:
+            logger.warning(
+                f"Contributor snapshot ended with status: {result.get('status')}"
+            )
+    except Exception as exc:
+        logger.error(
+            f"Contributor snapshot job raised an exception: {exc}", exc_info=True
+        )
+
+
+class AnalyticsScheduler:
     """Manages the APScheduler scheduler for analytics jobs"""
 
     def __init__(self, pipeline_fn=None):
@@ -235,10 +269,30 @@ class AnalyticsScheduler:
                 replace_existing=True,
             )
 
+            # ── Contributor Reputation Snapshot: daily at 00:00 UTC ──────
+            # Builds leaderboard snapshots from contributor registry data
+            snapshot_job = self.scheduler.add_job(
+                func=_contributor_snapshot_job,
+                trigger=CronTrigger(hour=0, minute=0, timezone="UTC"),
+                id="contributor_reputation_snapshot_daily",
+                name="Contributor Reputation Snapshot - Daily",
+                replace_existing=True,
+            )
+
             self.scheduler.start()
             logger.info("✓ Analytics scheduler started")
-            logger.info(f"  - Job: {market_job.name} | Next: {market_job.next_run_time}")
-            logger.info(f"  - Job: {retrain_job.name} | Next: {retrain_job.next_run_time}")
+            logger.info(
+                f"  - Job: {market_job.name} | Next: {market_job.next_run_time}"
+            )
+            logger.info(
+                f"  - Job: {quality_job.name} | Next: {quality_job.next_run_time}"
+            )
+            logger.info(
+                f"  - Job: {retrain_job.name} | Next: {retrain_job.next_run_time}"
+            )
+            logger.info(
+                f"  - Job: {snapshot_job.name} | Next: {snapshot_job.next_run_time}"
+            )
         except Exception as e:
             logger.error(f"Error starting scheduler: {e}")
             raise
@@ -283,3 +337,34 @@ class AnalyticsScheduler:
     def get_retraining_status(self) -> dict:
         """Return the last retraining run metadata."""
         return get_last_run_status()
+
+    def trigger_contributor_snapshot(self) -> dict:
+        """Manually trigger a contributor reputation snapshot build."""
+        logger.info("Manual contributor snapshot triggered")
+        try:
+            builder = ContributorReputationSnapshotBuilder()
+            return builder.run_snapshot_job()
+        except Exception as e:
+            logger.error(f"Manual contributor snapshot failed: {e}", exc_info=True)
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+    def get_top_contributors(self, n: int = 10) -> list:
+        """Get top N contributors by reputation score.
+
+        Args:
+            n: Number of top contributors to return
+
+        Returns:
+            List of top contributor metrics dictionaries
+        """
+        try:
+            builder = ContributorReputationSnapshotBuilder()
+            top_n = builder.get_top_n(n)
+            return [m.to_dict() for m in top_n]
+        except Exception as e:
+            logger.error(f"Failed to get top contributors: {e}", exc_info=True)
+            return []
