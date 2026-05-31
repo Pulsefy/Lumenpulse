@@ -50,6 +50,7 @@ import { IdempotencyInterceptor } from './common/interceptors/idempotency.interc
 import { SearchModule } from './search/search.module';
 import { ExportModule } from './export/export.module';
 import { CrowdfundModule } from './crowdfund/crowdfund.module';
+import { ClientConfigModule } from './client-config/client-config.module';
 
 @Module({
   imports: [
@@ -119,6 +120,7 @@ import { CrowdfundModule } from './crowdfund/crowdfund.module';
     SearchModule,
     FeatureFlagsModule,
     CrowdfundModule,
+    ClientConfigModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

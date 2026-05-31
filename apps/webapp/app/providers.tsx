@@ -1,6 +1,8 @@
 "use client";
 
 import { WalletProvider } from "@/contexts/WalletContext";
+import { StellarConfigProvider } from "@/contexts/StellarConfigContext";
+import { StellarConfigError } from "@/components/stellar-config-error";
 import {
   ReactNode,
   createContext,
@@ -12,11 +14,15 @@ import {
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
-    <WalletProvider>
-      <StellarProvider>
-        {children}
-      </StellarProvider>
-    </WalletProvider>
+    <StellarConfigProvider>
+      <WalletProvider>
+        <StellarProvider>
+          {/* Global error banner — shown when /v1/config/stellar is unreachable */}
+          <StellarConfigError />
+          {children}
+        </StellarProvider>
+      </WalletProvider>
+    </StellarConfigProvider>
   );
 }
 

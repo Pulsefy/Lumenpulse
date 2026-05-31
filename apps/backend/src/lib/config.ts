@@ -38,6 +38,9 @@ import { z } from 'zod';
  * - STELLAR_TIMEOUT
  * - STELLAR_RETRY_ATTEMPTS
  * - STELLAR_RETRY_DELAY
+ * - SOROBAN_RPC_URL
+ * - CROWDFUND_CONTRACT_ID
+ * - STELLAR_EXPLORER_URL
  * - WEBHOOK_SECRET
  * - WEBHOOK_PROVIDERS
  * - TELEGRAM_BOT_TOKEN
@@ -357,6 +360,14 @@ const envSchema = z
     STELLAR_RETRY_DELAY: z.coerce.number().int().min(0).default(1_000),
     STELLAR_SERVER_SECRET: z.string().min(1), // SECRET — never log
 
+    // Soroban / contract config (client-safe — no secrets)
+    SOROBAN_RPC_URL: z.string().trim().optional(),
+    CROWDFUND_CONTRACT_ID: z.string().trim().optional(),
+    STELLAR_EXPLORER_URL: z
+      .string()
+      .trim()
+      .default('https://stellar.expert/explorer'),
+
     PYTHON_API_URL: z.string().trim().default('http://localhost:8000'),
     PYTHON_SERVICE_URL: z.string().trim().optional(),
     PYTHON_API_KEY: z.string().trim().optional(),
@@ -606,6 +617,9 @@ const optionalSummary = [
   ['STELLAR_TIMEOUT', String(parsedEnv.STELLAR_TIMEOUT)],
   ['STELLAR_RETRY_ATTEMPTS', String(parsedEnv.STELLAR_RETRY_ATTEMPTS)],
   ['STELLAR_RETRY_DELAY', String(parsedEnv.STELLAR_RETRY_DELAY)],
+  ['SOROBAN_RPC_URL', parsedEnv.SOROBAN_RPC_URL ?? '(auto)'],
+  ['CROWDFUND_CONTRACT_ID', parsedEnv.CROWDFUND_CONTRACT_ID ?? '(not set)'],
+  ['STELLAR_EXPLORER_URL', parsedEnv.STELLAR_EXPLORER_URL],
   ['PYTHON_API_URL', parsedEnv.PYTHON_API_URL],
   [
     'PYTHON_SERVICE_URL',
@@ -758,6 +772,14 @@ export const config = Object.freeze({
     retryAttempts: parsedEnv.STELLAR_RETRY_ATTEMPTS,
     retryDelay: parsedEnv.STELLAR_RETRY_DELAY,
     serverSecret: new SecretString(parsedEnv.STELLAR_SERVER_SECRET),
+    // Client-safe Soroban / contract config
+    sorobanRpcUrl:
+      parsedEnv.SOROBAN_RPC_URL ||
+      (parsedEnv.STELLAR_NETWORK === 'mainnet'
+        ? 'https://soroban.stellar.org'
+        : 'https://soroban-testnet.stellar.org'),
+    crowdfundContractId: parsedEnv.CROWDFUND_CONTRACT_ID ?? null,
+    explorerUrl: parsedEnv.STELLAR_EXPLORER_URL,
   }),
   auth: Object.freeze({
     jwtSecret: new SecretString(parsedEnv.JWT_SECRET),
