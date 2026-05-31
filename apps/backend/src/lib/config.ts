@@ -45,6 +45,7 @@ import { z } from 'zod';
  * - STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY
  * - STELLAR_CONTRACT_MATCHING_POOL
  * - STELLAR_CONTRACT_TREASURY
+ * - STELLAR_CONTRACT_VESTING_WALLET
  * - WEBHOOK_SECRET
  * - WEBHOOK_PROVIDERS
  * - TELEGRAM_BOT_TOKEN
@@ -377,19 +378,11 @@ const envSchema = z
 
     RATE_LIMIT_NEWS_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_NEWS_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
-    RATE_LIMIT_NEWS_READ_BLOCK_MS: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .optional(),
+    RATE_LIMIT_NEWS_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
 
     RATE_LIMIT_PROJECT_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_PROJECT_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
-    RATE_LIMIT_PROJECT_READ_BLOCK_MS: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .optional(),
+    RATE_LIMIT_PROJECT_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
 
     RATE_LIMIT_CROWDFUND_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_CROWDFUND_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
@@ -401,19 +394,11 @@ const envSchema = z
 
     RATE_LIMIT_STELLAR_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_STELLAR_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
-    RATE_LIMIT_STELLAR_READ_BLOCK_MS: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .optional(),
+    RATE_LIMIT_STELLAR_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
 
     RATE_LIMIT_SEARCH_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_SEARCH_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
-    RATE_LIMIT_SEARCH_READ_BLOCK_MS: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .optional(),
+    RATE_LIMIT_SEARCH_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
 
     RATE_LIMIT_ANALYTICS_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_ANALYTICS_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
@@ -443,6 +428,7 @@ const envSchema = z
     STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY: z.string().trim().optional(),
     STELLAR_CONTRACT_MATCHING_POOL: z.string().trim().optional(),
     STELLAR_CONTRACT_TREASURY: z.string().trim().optional(),
+    STELLAR_CONTRACT_VESTING_WALLET: z.string().trim().optional(),
 
     PYTHON_API_URL: z.string().trim().default('http://localhost:8000'),
     PYTHON_SERVICE_URL: z.string().trim().optional(),
@@ -456,6 +442,9 @@ const envSchema = z
 
     WEBHOOK_SECRET: z.string().trim().optional(),
     WEBHOOK_PROVIDERS: z.string().trim().optional(),
+
+    SOROBAN_INGEST_SECRET: z.string().trim().optional(),
+    SOROBAN_TIMESTAMP_TOLERANCE_MS: z.coerce.number().int().min(1_000).optional(),
 
     TELEGRAM_BOT_TOKEN: z.string().trim().optional(),
     METRICS_ALLOWED_IPS: z.string().trim().optional(),
@@ -601,11 +590,9 @@ const resolvedRateLimit = {
   },
   newsRead: {
     limit:
-      parsedEnv.RATE_LIMIT_NEWS_READ_LIMIT ??
-      rateLimitDefaults.newsRead.limit,
+      parsedEnv.RATE_LIMIT_NEWS_READ_LIMIT ?? rateLimitDefaults.newsRead.limit,
     ttl:
-      parsedEnv.RATE_LIMIT_NEWS_READ_TTL_MS ??
-      rateLimitDefaults.newsRead.ttl,
+      parsedEnv.RATE_LIMIT_NEWS_READ_TTL_MS ?? rateLimitDefaults.newsRead.ttl,
     blockDuration:
       parsedEnv.RATE_LIMIT_NEWS_READ_BLOCK_MS ??
       rateLimitDefaults.newsRead.blockDuration,
@@ -754,14 +741,8 @@ const optionalSummary = [
     'RATE_LIMIT_WATCHLIST_WRITE_BLOCK_MS',
     String(resolvedRateLimit.watchlistWrite.blockDuration),
   ],
-  [
-    'RATE_LIMIT_NEWS_READ_LIMIT',
-    String(resolvedRateLimit.newsRead.limit),
-  ],
-  [
-    'RATE_LIMIT_NEWS_READ_TTL_MS',
-    String(resolvedRateLimit.newsRead.ttl),
-  ],
+  ['RATE_LIMIT_NEWS_READ_LIMIT', String(resolvedRateLimit.newsRead.limit)],
+  ['RATE_LIMIT_NEWS_READ_TTL_MS', String(resolvedRateLimit.newsRead.ttl)],
   [
     'RATE_LIMIT_NEWS_READ_BLOCK_MS',
     String(resolvedRateLimit.newsRead.blockDuration),
@@ -770,10 +751,7 @@ const optionalSummary = [
     'RATE_LIMIT_PROJECT_READ_LIMIT',
     String(resolvedRateLimit.projectRead.limit),
   ],
-  [
-    'RATE_LIMIT_PROJECT_READ_TTL_MS',
-    String(resolvedRateLimit.projectRead.ttl),
-  ],
+  ['RATE_LIMIT_PROJECT_READ_TTL_MS', String(resolvedRateLimit.projectRead.ttl)],
   [
     'RATE_LIMIT_PROJECT_READ_BLOCK_MS',
     String(resolvedRateLimit.projectRead.blockDuration),
@@ -794,22 +772,13 @@ const optionalSummary = [
     'RATE_LIMIT_STELLAR_READ_LIMIT',
     String(resolvedRateLimit.stellarRead.limit),
   ],
-  [
-    'RATE_LIMIT_STELLAR_READ_TTL_MS',
-    String(resolvedRateLimit.stellarRead.ttl),
-  ],
+  ['RATE_LIMIT_STELLAR_READ_TTL_MS', String(resolvedRateLimit.stellarRead.ttl)],
   [
     'RATE_LIMIT_STELLAR_READ_BLOCK_MS',
     String(resolvedRateLimit.stellarRead.blockDuration),
   ],
-  [
-    'RATE_LIMIT_SEARCH_READ_LIMIT',
-    String(resolvedRateLimit.searchRead.limit),
-  ],
-  [
-    'RATE_LIMIT_SEARCH_READ_TTL_MS',
-    String(resolvedRateLimit.searchRead.ttl),
-  ],
+  ['RATE_LIMIT_SEARCH_READ_LIMIT', String(resolvedRateLimit.searchRead.limit)],
+  ['RATE_LIMIT_SEARCH_READ_TTL_MS', String(resolvedRateLimit.searchRead.ttl)],
   [
     'RATE_LIMIT_SEARCH_READ_BLOCK_MS',
     String(resolvedRateLimit.searchRead.blockDuration),
@@ -858,6 +827,10 @@ const optionalSummary = [
     'STELLAR_CONTRACT_TREASURY',
     parsedEnv.STELLAR_CONTRACT_TREASURY ?? '(not set)',
   ],
+  [
+    'STELLAR_CONTRACT_VESTING_WALLET',
+    parsedEnv.STELLAR_CONTRACT_VESTING_WALLET ?? '(not set)',
+  ],
   ['PYTHON_API_URL', parsedEnv.PYTHON_API_URL],
   [
     'PYTHON_SERVICE_URL',
@@ -871,6 +844,16 @@ const optionalSummary = [
   [
     'WEBHOOK_PROVIDERS',
     parsedEnv.WEBHOOK_PROVIDERS ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'SOROBAN_INGEST_SECRET',
+    parsedEnv.SOROBAN_INGEST_SECRET ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'SOROBAN_TIMESTAMP_TOLERANCE_MS',
+    String(
+      parsedEnv.SOROBAN_TIMESTAMP_TOLERANCE_MS ?? 300_000,
+    ),
   ],
   [
     'TELEGRAM_BOT_TOKEN',
@@ -1023,6 +1006,27 @@ export const config = Object.freeze({
        treasury: parsedEnv.STELLAR_CONTRACT_TREASURY ?? null,
      }),
    }),
+  stellar: Object.freeze({
+    network: parsedEnv.STELLAR_NETWORK,
+    horizonUrl:
+      parsedEnv.STELLAR_HORIZON_URL ||
+      defaultHorizonUrls[parsedEnv.STELLAR_NETWORK],
+    sorobanRpcUrl: parsedEnv.STELLAR_SOROBAN_RPC_URL ?? null,
+    timeout: parsedEnv.STELLAR_TIMEOUT,
+    retryAttempts: parsedEnv.STELLAR_RETRY_ATTEMPTS,
+    retryDelay: parsedEnv.STELLAR_RETRY_DELAY,
+    serverSecret: new SecretString(parsedEnv.STELLAR_SERVER_SECRET),
+    contracts: Object.freeze({
+      lumenToken: parsedEnv.STELLAR_CONTRACT_LUMEN_TOKEN ?? null,
+      crowdfundVault: parsedEnv.STELLAR_CONTRACT_CROWDFUND_VAULT ?? null,
+      projectRegistry: parsedEnv.STELLAR_CONTRACT_PROJECT_REGISTRY ?? null,
+      contributorRegistry:
+        parsedEnv.STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY ?? null,
+      matchingPool: parsedEnv.STELLAR_CONTRACT_MATCHING_POOL ?? null,
+      treasury: parsedEnv.STELLAR_CONTRACT_TREASURY ?? null,
+      vestingWallet: parsedEnv.STELLAR_CONTRACT_VESTING_WALLET ?? null,
+    }),
+  }),
   auth: Object.freeze({
     jwtSecret: new SecretString(parsedEnv.JWT_SECRET),
     jwtExpiresIn: parsedEnv.JWT_EXPIRES_IN,
@@ -1038,6 +1042,11 @@ export const config = Object.freeze({
     webhookSecret: parsedEnv.WEBHOOK_SECRET,
     webhookProviders: parsedEnv.WEBHOOK_PROVIDERS,
     telegramBotToken: parsedEnv.TELEGRAM_BOT_TOKEN,
+  }),
+  soroban: Object.freeze({
+    ingestSecret: parsedEnv.SOROBAN_INGEST_SECRET,
+    timestampToleranceMs:
+      parsedEnv.SOROBAN_TIMESTAMP_TOLERANCE_MS ?? 300_000,
   }),
   metrics: Object.freeze({
     allowedIps: Object.freeze(splitCsv(parsedEnv.METRICS_ALLOWED_IPS)),

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddTestnetOnchainQueryIndexes1780148000000
-  implements MigrationInterface
-{
+export class AddTestnetOnchainQueryIndexes1780148000000 implements MigrationInterface {
   name = 'AddTestnetOnchainQueryIndexes1780148000000';
   transaction = false;
 

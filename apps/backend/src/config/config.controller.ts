@@ -34,7 +34,7 @@ export class ConfigController {
       'network passphrase for transaction signing, and all deployed smart contract addresses. ' +
       'This endpoint is public (no authentication required) as it only exposes environment-specific, non-sensitive configuration ' +
       'that frontend applications need at startup. The response is cached for 5 minutes. ' +
-      'This endpoint supports both testnet and mainnet depending on the server\'s configuration.',
+      "This endpoint supports both testnet and mainnet depending on the server's configuration.",
   })
   @ApiResponse({
     status: 200,

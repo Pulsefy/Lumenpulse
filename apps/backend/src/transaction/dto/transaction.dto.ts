@@ -116,7 +116,8 @@ export class TransactionHistoryResponseDto {
   total: number;
 
   @ApiProperty({
-    description: 'Cursor for pagination - use as query parameter for next page (if available)',
+    description:
+      'Cursor for pagination - use as query parameter for next page (if available)',
     example: 'eyJvZmZzZXQiOiA1MCwgImxpbWl0IjogNTB9',
     required: false,
     nullable: true,

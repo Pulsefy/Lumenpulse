@@ -38,7 +38,8 @@ export class IngestSorobanEventDto {
   @IsString()
   @IsOptional()
   @ApiProperty({
-    description: 'Type of Soroban event (e.g., "transfer", "mint", "burn", "contribution")',
+    description:
+      'Type of Soroban event (e.g., "transfer", "mint", "burn", "contribution")',
     example: 'transfer',
     required: false,
     nullable: true,
@@ -47,7 +48,8 @@ export class IngestSorobanEventDto {
 
   @IsObject()
   @ApiProperty({
-    description: 'Raw event payload as emitted by the Soroban contract (event data)',
+    description:
+      'Raw event payload as emitted by the Soroban contract (event data)',
     example: {
       from: 'GBUQWP3BOUZX34ULNQG23RQ6F4BWFIREXOWJ2GY2FOLGABIDESX56JP2',
       to: 'GBUQWP3BOUZX34ULNQG23RQ6F4BWFIREGOWJ2GY2FOLGABIDES4PJ4Q',

@@ -43,7 +43,7 @@ export class TransactionController {
   @ApiOperation({
     summary: 'Get transaction history for authenticated user',
     description:
-      'Retrieves paginated transaction history for the currently authenticated user\'s primary Stellar account. ' +
+      "Retrieves paginated transaction history for the currently authenticated user's primary Stellar account. " +
       'Results are cached for 60 seconds. Supports pagination via limit and cursor parameters.',
   })
   @ApiQuery({
@@ -55,7 +55,8 @@ export class TransactionController {
   })
   @ApiQuery({
     name: 'cursor',
-    description: 'Pagination cursor from previous response (nextPage field) for fetching subsequent pages',
+    description:
+      'Pagination cursor from previous response (nextPage field) for fetching subsequent pages',
     example: 'eyJvZmZzZXQiOiA1MCwgImxpbWl0IjogNTB9',
     required: false,
     type: String,
@@ -63,7 +64,7 @@ export class TransactionController {
   @ApiResponse({
     status: 200,
     description:
-      'Successfully retrieved transaction history for the authenticated user\'s primary account. ' +
+      "Successfully retrieved transaction history for the authenticated user's primary account. " +
       'Use the nextPage cursor to fetch additional pages if available.',
     type: TransactionHistoryResponseDto,
   })
@@ -123,14 +124,16 @@ export class TransactionController {
   })
   @ApiQuery({
     name: 'limit',
-    description: 'Maximum number of transactions to return per page (default: 50)',
+    description:
+      'Maximum number of transactions to return per page (default: 50)',
     example: 50,
     required: false,
     type: Number,
   })
   @ApiQuery({
     name: 'cursor',
-    description: 'Pagination cursor from previous response for fetching subsequent pages',
+    description:
+      'Pagination cursor from previous response for fetching subsequent pages',
     example: 'eyJvZmZzZXQiOiA1MCwgImxpbWl0IjogNTB9',
     required: false,
     type: String,

@@ -8,8 +8,28 @@ import { AppCacheModule } from '../cache/cache.module';
 
 @Module({
   imports: [ConfigModule.forFeature(stellarConfig), TransactionModule, AppCacheModule],
+import { ContractRotationService } from './services/contract-rotation.service';
+import { StellarContractRotationService } from './services/stellar-contract-rotation.service';
+import { AuditModule } from '../audit/audit.module';
+import { AppConfigModule } from '../config/config.module';
+
+@Module({
+  imports: [
+    ConfigModule.forFeature(stellarConfig),
+    TransactionModule,
+    AuditModule,
+    AppConfigModule,
+  ],
   controllers: [StellarController],
-  providers: [StellarService],
-  exports: [StellarService],
+  providers: [
+    StellarService,
+    ContractRotationService,
+    StellarContractRotationService,
+  ],
+  exports: [
+    StellarService,
+    ContractRotationService,
+    StellarContractRotationService,
+  ],
 })
 export class StellarModule {}

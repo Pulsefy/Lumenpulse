@@ -31,7 +31,10 @@ async function bootstrap() {
     .addTag('auth', 'Authentication and authorization endpoints')
     .addTag('config', 'Client-safe testnet/mainnet runtime configuration')
     .addTag('transactions', 'Transaction history and Stellar ledger queries')
-    .addTag('soroban-events', 'Soroban smart contract event ingestion and tracking')
+    .addTag(
+      'soroban-events',
+      'Soroban smart contract event ingestion and tracking',
+    )
     .addTag('users', 'User profile and account management')
     .addTag('news', 'Crypto news aggregation and sentiment analysis')
     .addTag('portfolio', 'Portfolio tracking and performance metrics')
