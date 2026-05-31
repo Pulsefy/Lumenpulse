@@ -14,7 +14,9 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { GrantsService } from './grants.service';
+import { getProjectReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
 import {
   ApproveProjectDto,
   CreateRoundDto,
@@ -32,6 +34,7 @@ import { UserRole } from '../users/entities/user.entity';
 
 @ApiTags('grants')
 @Controller('grants')
+@Throttle(getProjectReadThrottleOverride())
 export class GrantsController {
   constructor(private readonly grantsService: GrantsService) {}
 

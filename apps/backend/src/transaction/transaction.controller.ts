@@ -4,6 +4,8 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
+  ApiQuery,
+  ApiParam,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TransactionService } from './transaction.service';
@@ -38,11 +40,40 @@ export class TransactionController {
   ) {}
 
   @Get('history')
-  @ApiOperation({ summary: 'Get transaction history for current user' })
+  @ApiOperation({
+    summary: 'Get transaction history for authenticated user',
+    description:
+      'Retrieves paginated transaction history for the currently authenticated user\'s primary Stellar account. ' +
+      'Results are cached for 60 seconds. Supports pagination via limit and cursor parameters.',
+  })
+  @ApiQuery({
+    name: 'limit',
+    description: 'Maximum number of transactions to return per page',
+    example: 50,
+    required: false,
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'cursor',
+    description: 'Pagination cursor from previous response (nextPage field) for fetching subsequent pages',
+    example: 'eyJvZmZzZXQiOiA1MCwgImxpbWl0IjogNTB9',
+    required: false,
+    type: String,
+  })
   @ApiResponse({
     status: 200,
-    description: 'Returns transaction history',
+    description:
+      'Successfully retrieved transaction history for the authenticated user\'s primary account. ' +
+      'Use the nextPage cursor to fetch additional pages if available.',
     type: TransactionHistoryResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT token is missing or invalid',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No Stellar accounts found for this user',
   })
   async getTransactionHistory(
     @Req() req: RequestWithUser,
@@ -78,11 +109,46 @@ export class TransactionController {
 
   @Get('account/:publicKey')
   @ApiOperation({
-    summary: 'Get transaction history for a specific public key',
+    summary: 'Get transaction history for a specific Stellar account',
+    description:
+      'Retrieves paginated transaction history for any Stellar public key (no authentication required). ' +
+      'This endpoint is public and can be used to query transaction history for any account on the Stellar network. ' +
+      'Results are cached for 60 seconds.',
+  })
+  @ApiParam({
+    name: 'publicKey',
+    description:
+      'Stellar public key (account ID) to retrieve transaction history for. Must be a valid 56-character public key starting with "G".',
+    example: 'GBUQWP3BOUZX34ULNQG23RQ6F4BWFIREXOWJ2GY2FOLGABIDESX56JP2',
+  })
+  @ApiQuery({
+    name: 'limit',
+    description: 'Maximum number of transactions to return per page (default: 50)',
+    example: 50,
+    required: false,
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'cursor',
+    description: 'Pagination cursor from previous response for fetching subsequent pages',
+    example: 'eyJvZmZzZXQiOiA1MCwgImxpbWl0IjogNTB9',
+    required: false,
+    type: String,
   })
   @ApiResponse({
     status: 200,
-    description: 'Returns transaction history for the specified account',
+    description:
+      'Successfully retrieved transaction history for the specified account. ' +
+      'Use the nextPage cursor to fetch additional pages if available.',
+    type: TransactionHistoryResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid public key format',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Account not found or has no transactions',
   })
   async getTransactionHistoryForAccount(
     @Param('publicKey') publicKey: string,

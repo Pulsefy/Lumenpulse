@@ -12,6 +12,7 @@ import {
   DefaultValuePipe,
 } from '@nestjs/common';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -21,6 +22,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { StellarService } from './stellar.service';
+import { getStellarReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
 import { AccountBalancesDto } from './dto/balance.dto';
 import {
   AssetDiscoveryQueryDto,
@@ -35,6 +37,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('stellar')
 @Controller('stellar')
+@Throttle(getStellarReadThrottleOverride())
 export class StellarController {
   constructor(
     private readonly stellarService: StellarService,

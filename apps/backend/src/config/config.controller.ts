@@ -28,15 +28,24 @@ export class ConfigController {
   @UseInterceptors(CacheInterceptor)
   @CacheTTL(300_000) // 5 minutes — config rarely changes at runtime
   @ApiOperation({
-    summary: 'Get Stellar network configuration',
+    summary: 'Get Stellar testnet/mainnet configuration',
     description:
-      'Returns client-safe Stellar network info and deployed contract addresses. ' +
-      'No authentication required. Intended to be fetched by the frontend on startup.',
+      'Returns client-safe Stellar network configuration including network name, API endpoints (Horizon and Soroban RPC), ' +
+      'network passphrase for transaction signing, and all deployed smart contract addresses. ' +
+      'This endpoint is public (no authentication required) as it only exposes environment-specific, non-sensitive configuration ' +
+      'that frontend applications need at startup. The response is cached for 5 minutes. ' +
+      'This endpoint supports both testnet and mainnet depending on the server\'s configuration.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Stellar configuration retrieved successfully',
+    description:
+      'Stellar configuration retrieved successfully. Contains network identification, API endpoints for Horizon and Soroban, ' +
+      'and all deployed contract addresses on the network. Any null contract addresses indicate that contract has not been deployed on this network.',
     type: StellarConfigResponseDto,
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error - Failed to retrieve configuration',
   })
   getStellarConfig(): StellarConfigResponseDto {
     return this.configService.getStellarConfig();
