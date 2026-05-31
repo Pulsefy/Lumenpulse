@@ -45,6 +45,7 @@ import { z } from 'zod';
  * - STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY
  * - STELLAR_CONTRACT_MATCHING_POOL
  * - STELLAR_CONTRACT_TREASURY
+ * - STELLAR_CONTRACT_VESTING_WALLET
  * - WEBHOOK_SECRET
  * - WEBHOOK_PROVIDERS
  * - TELEGRAM_BOT_TOKEN
@@ -378,6 +379,7 @@ const envSchema = z
     RATE_LIMIT_NEWS_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_NEWS_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_NEWS_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_NEWS_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
 
     RATE_LIMIT_PROJECT_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_PROJECT_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
@@ -431,6 +433,7 @@ const envSchema = z
     STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY: z.string().trim().optional(),
     STELLAR_CONTRACT_MATCHING_POOL: z.string().trim().optional(),
     STELLAR_CONTRACT_TREASURY: z.string().trim().optional(),
+    STELLAR_CONTRACT_VESTING_WALLET: z.string().trim().optional(),
 
     PYTHON_API_URL: z.string().trim().default('http://localhost:8000'),
     PYTHON_SERVICE_URL: z.string().trim().optional(),
@@ -444,6 +447,9 @@ const envSchema = z
 
     WEBHOOK_SECRET: z.string().trim().optional(),
     WEBHOOK_PROVIDERS: z.string().trim().optional(),
+
+    SOROBAN_INGEST_SECRET: z.string().trim().optional(),
+    SOROBAN_TIMESTAMP_TOLERANCE_MS: z.coerce.number().int().min(1_000).optional(),
 
     TELEGRAM_BOT_TOKEN: z.string().trim().optional(),
     METRICS_ALLOWED_IPS: z.string().trim().optional(),
@@ -826,6 +832,10 @@ const optionalSummary = [
     'STELLAR_CONTRACT_TREASURY',
     parsedEnv.STELLAR_CONTRACT_TREASURY ?? '(not set)',
   ],
+  [
+    'STELLAR_CONTRACT_VESTING_WALLET',
+    parsedEnv.STELLAR_CONTRACT_VESTING_WALLET ?? '(not set)',
+  ],
   ['PYTHON_API_URL', parsedEnv.PYTHON_API_URL],
   [
     'PYTHON_SERVICE_URL',
@@ -839,6 +849,16 @@ const optionalSummary = [
   [
     'WEBHOOK_PROVIDERS',
     parsedEnv.WEBHOOK_PROVIDERS ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'SOROBAN_INGEST_SECRET',
+    parsedEnv.SOROBAN_INGEST_SECRET ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'SOROBAN_TIMESTAMP_TOLERANCE_MS',
+    String(
+      parsedEnv.SOROBAN_TIMESTAMP_TOLERANCE_MS ?? 300_000,
+    ),
   ],
   [
     'TELEGRAM_BOT_TOKEN',
@@ -1006,6 +1026,11 @@ export const config = Object.freeze({
     webhookSecret: parsedEnv.WEBHOOK_SECRET,
     webhookProviders: parsedEnv.WEBHOOK_PROVIDERS,
     telegramBotToken: parsedEnv.TELEGRAM_BOT_TOKEN,
+  }),
+  soroban: Object.freeze({
+    ingestSecret: parsedEnv.SOROBAN_INGEST_SECRET,
+    timestampToleranceMs:
+      parsedEnv.SOROBAN_TIMESTAMP_TOLERANCE_MS ?? 300_000,
   }),
   metrics: Object.freeze({
     allowedIps: Object.freeze(splitCsv(parsedEnv.METRICS_ALLOWED_IPS)),

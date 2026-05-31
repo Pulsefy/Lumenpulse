@@ -36,7 +36,7 @@ export class News {
   @Column('text', { array: true, nullable: true, default: [] })
   tags: string[];
 
-  @Column({ nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   category: string | null;
 
   @CreateDateColumn()
