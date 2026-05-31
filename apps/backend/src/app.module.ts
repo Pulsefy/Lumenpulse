@@ -57,6 +57,7 @@ import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
 import { SorobanEventsModule } from './soroban-events/soroban-events.module';
 import { TreasuryModule } from './treasury/treasury.module';
+import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
 
 @Module({
   imports: [
@@ -88,13 +89,6 @@ import { TreasuryModule } from './treasury/treasury.module';
       useFactory: (storageService: RateLimitStorageService) =>
         createThrottlerOptions(getRateLimitSettings(), storageService),
     }),
-
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
     MulterModule.register({
       storage: memoryStorage(),
       limits: {
@@ -131,6 +125,7 @@ import { TreasuryModule } from './treasury/treasury.module';
     AuditModule,
     SorobanEventsModule,
     TreasuryModule,
+    VestingWalletModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

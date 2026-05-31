@@ -8,6 +8,7 @@ import {
 } from './soroban-events.service';
 import { SorobanEventsProcessor } from './soroban-events.processor';
 import { SorobanEventsController } from './soroban-events.controller';
+import { SorobanEventIngestionGuard } from './guards/soroban-event-ingestion.guard';
 
 @Module({
   imports: [
@@ -15,6 +16,6 @@ import { SorobanEventsController } from './soroban-events.controller';
     BullModule.registerQueue({ name: SOROBAN_EVENTS_QUEUE }),
   ],
   controllers: [SorobanEventsController],
-  providers: [SorobanEventsService, SorobanEventsProcessor],
+  providers: [SorobanEventsService, SorobanEventsProcessor, SorobanEventIngestionGuard],
 })
 export class SorobanEventsModule {}

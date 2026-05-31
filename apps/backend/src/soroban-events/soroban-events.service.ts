@@ -14,10 +14,12 @@ export class SorobanEventsService {
     @InjectQueue(SOROBAN_EVENTS_QUEUE) private readonly queue: Queue,
   ) {}
 
-  async ingest(dto: IngestSorobanEventDto): Promise<{ queued: boolean }> {
+  async ingest(
+    dto: IngestSorobanEventDto,
+    requestId?: string,
+  ): Promise<{ queued: boolean }> {
     const jobId = `${dto.txHash}:${dto.eventIndex}`;
 
-    // BullMQ deduplicates by jobId — duplicate submissions are silently dropped
     await this.queue.add(PROCESS_EVENT_JOB, dto, {
       jobId,
       attempts: 3,
@@ -26,7 +28,10 @@ export class SorobanEventsService {
       removeOnFail: { count: 200 },
     });
 
-    this.logger.debug(`Queued soroban event ${jobId}`);
+    this.logger.log(
+      { requestId, jobId, txHash: dto.txHash, eventIndex: dto.eventIndex },
+      'Queued soroban event',
+    );
     return { queued: true };
   }
 }

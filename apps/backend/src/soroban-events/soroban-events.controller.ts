@@ -4,39 +4,46 @@ import {
   HttpCode,
   HttpStatus,
   Post,
-  UnauthorizedException,
-  Headers,
+  UseGuards,
+  Req,
+  Logger,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Request } from 'express';
 import { IngestSorobanEventDto } from './dto/ingest-soroban-event.dto';
 import { SorobanEventsService } from './soroban-events.service';
+import { SorobanEventIngestionGuard } from './guards/soroban-event-ingestion.guard';
+import { VerifiedWebhookRequest } from './interfaces/soroban-webhook.interface';
+
+type RequestWithVerification = Request & {
+  requestId?: string;
+  verifiedWebhook?: VerifiedWebhookRequest;
+};
 
 @ApiTags('soroban-events')
 @Controller('soroban-events')
 export class SorobanEventsController {
-  private readonly ingestSecret: string;
+  private readonly logger = new Logger(SorobanEventsController.name);
 
-  constructor(
-    private readonly service: SorobanEventsService,
-    private readonly config: ConfigService,
-  ) {
-    this.ingestSecret = this.config.get<string>('SOROBAN_INGEST_SECRET', '');
-  }
+  constructor(private readonly service: SorobanEventsService) {}
 
   @Post('ingest')
+  @UseGuards(SorobanEventIngestionGuard)
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Ingest a Soroban event from the indexer/cron' })
+  @ApiOperation({ summary: 'Ingest a Soroban event from the testnet indexer' })
   @ApiResponse({ status: 202, description: 'Event accepted for processing' })
-  @ApiResponse({ status: 401, description: 'Missing or invalid ingest secret' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid signature' })
   async ingest(
-    @Headers('x-ingest-secret') secret: string,
+    @Req() req: RequestWithVerification,
     @Body() dto: IngestSorobanEventDto,
   ) {
-    if (!this.ingestSecret || secret !== this.ingestSecret) {
-      throw new UnauthorizedException('Invalid ingest secret');
-    }
+    const requestId = req.requestId ?? 'unknown';
 
-    return this.service.ingest(dto);
+    this.logger.log(
+      { requestId, txHash: dto.txHash, eventIndex: dto.eventIndex },
+      'Ingesting soroban event',
+    );
+
+    return this.service.ingest(dto, requestId);
   }
 }
