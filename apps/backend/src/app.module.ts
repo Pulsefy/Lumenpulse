@@ -89,13 +89,6 @@ import { ProjectsModule } from './projects/projects.module';
       useFactory: (storageService: RateLimitStorageService) =>
         createThrottlerOptions(getRateLimitSettings(), storageService),
     }),
-
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
     MulterModule.register({
       storage: memoryStorage(),
       limits: {

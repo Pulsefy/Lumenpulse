@@ -1,6 +1,8 @@
 import { Controller, Get, HttpCode, HttpStatus, Query } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { SearchService } from './search.service';
+import { getSearchReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
 import {
   ProjectSearchQueryDto,
   ProjectSearchResponseDto,
@@ -18,6 +20,7 @@ import {
 
 @ApiTags('search')
 @Controller('search')
+@Throttle(getSearchReadThrottleOverride())
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 

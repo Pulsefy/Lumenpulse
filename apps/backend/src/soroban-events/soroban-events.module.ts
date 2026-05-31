@@ -8,13 +8,16 @@ import {
 } from './soroban-events.service';
 import { SorobanEventsProcessor } from './soroban-events.processor';
 import { SorobanEventsController } from './soroban-events.controller';
+import { SorobanEventIngestionGuard } from './guards/soroban-event-ingestion.guard';
+
+import { ProjectRegistryEntity } from '../database/entities/project-registry.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SorobanEvent]),
+    TypeOrmModule.forFeature([SorobanEvent, ProjectRegistryEntity]),
     BullModule.registerQueue({ name: SOROBAN_EVENTS_QUEUE }),
   ],
   controllers: [SorobanEventsController],
-  providers: [SorobanEventsService, SorobanEventsProcessor],
+  providers: [SorobanEventsService, SorobanEventsProcessor, SorobanEventIngestionGuard],
 })
 export class SorobanEventsModule {}

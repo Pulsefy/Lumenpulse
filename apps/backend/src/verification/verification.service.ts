@@ -384,7 +384,9 @@ export class VerificationService {
   private getSubmissionRecord(projectId: number): ProjectSubmissionRecord {
     const submission = this.submissions.get(projectId);
     if (!submission) {
-      throw new NotFoundException(`Submission for project ${projectId} not found`);
+      throw new NotFoundException(
+        `Submission for project ${projectId} not found`,
+      );
     }
     return submission;
   }
