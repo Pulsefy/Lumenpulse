@@ -7,6 +7,7 @@ import {
     xdr,
     StrKey,
     Address,
+    Horizon,
 } from '@stellar/stellar-sdk';
 import * as crypto from 'crypto';
 
@@ -57,13 +58,49 @@ export function parseContractIdFromCreateResult(
 
 export async function uploadWasm(
     server: rpc.Server,
+    horizonServer: Horizon.Server,
     adminKeypair: Keypair,
     networkPassphrase: string,
-    wasmFile: Buffer
+    wasmFile: Buffer,
+    rpcUrl?: string
 ): Promise<string> {
-    const account = await server.getAccount(adminKeypair.publicKey());
+    // Try Soroban RPC /wasm endpoint first (no-signed-tx path)
+    try {
+        if (rpcUrl) {
+            const url = rpcUrl.replace(/\/$/, '') + '/wasm';
+            console.log(`Attempting direct Soroban RPC wasm upload to ${url}`);
+            // prefer global fetch when available
+            const wasmBase64 = wasmFile.toString('base64');
+            // @ts-ignore runtime fetch may exist in Node 18+
+            if (typeof fetch !== 'undefined') {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ wasm: wasmBase64 }),
+                });
+                if (!res.ok) {
+                    const body = await res.text();
+                    console.warn('Soroban RPC /wasm upload returned non-OK:', res.status, body);
+                    throw new Error('Soroban RPC upload failed');
+                }
+                const json = await res.json();
+                // RPC may return different keys; try common ones
+                const wasmHash = json.hash || json.wasm_hash || json.wasmHash || json.wasm;
+                if (wasmHash) {
+                    console.log('Soroban RPC /wasm upload successful, hash:', wasmHash);
+                    return wasmHash;
+                }
+                console.warn('Soroban RPC /wasm upload returned unexpected body:', json);
+            }
+        }
+    } catch (e) {
+        console.warn('Direct Soroban RPC wasm upload failed, falling back to signed transaction path:', e);
+    }
 
-    const tx = new TransactionBuilder(account, {
+    // Fallback: submit an Upload WASM operation via Stellar SDK (signed transaction)
+    const account = await horizonServer.loadAccount(adminKeypair.publicKey());
+
+    const unsignedTx = new TransactionBuilder(account, {
         fee: '10000',
         networkPassphrase,
     })
@@ -71,8 +108,10 @@ export async function uploadWasm(
         .setTimeout(TimeoutInfinite)
         .build();
 
+    const tx = await server.prepareTransaction(unsignedTx);
     tx.sign(adminKeypair);
 
+    console.log('Submitting signed transaction for WASM upload (fallback).');
     const submission = await server.sendTransaction(tx);
 
     if (submission.status === 'ERROR') {
@@ -85,13 +124,14 @@ export async function uploadWasm(
 
 export async function createContract(
     server: rpc.Server,
+    horizonServer: Horizon.Server,
     adminKeypair: Keypair,
     networkPassphrase: string,
     wasmHashStub: string
 ): Promise<string> {
-    const account = await server.getAccount(adminKeypair.publicKey());
+    const account = await horizonServer.loadAccount(adminKeypair.publicKey());
 
-    const tx = new TransactionBuilder(account, {
+    const unsignedTx = new TransactionBuilder(account, {
         fee: '10000',
         networkPassphrase,
     })
@@ -102,6 +142,7 @@ export async function createContract(
         .setTimeout(TimeoutInfinite)
         .build();
 
+    const tx = await server.prepareTransaction(unsignedTx);
     tx.sign(adminKeypair);
 
     const submission = await server.sendTransaction(tx);
@@ -122,15 +163,16 @@ export async function createContract(
 
 export async function initializeContract(
     server: rpc.Server,
+    horizonServer: Horizon.Server,
     adminKeypair: Keypair,
     networkPassphrase: string,
     contractId: string,
     functionName: string,
     args: xdr.ScVal[]
 ): Promise<void> {
-    const account = await server.getAccount(adminKeypair.publicKey());
+    const account = await horizonServer.loadAccount(adminKeypair.publicKey());
 
-    const tx = new TransactionBuilder(account, {
+    const unsignedTx = new TransactionBuilder(account, {
         fee: '10000',
         networkPassphrase,
     })
@@ -144,6 +186,7 @@ export async function initializeContract(
         .setTimeout(TimeoutInfinite)
         .build();
 
+    const tx = await server.prepareTransaction(unsignedTx);
     tx.sign(adminKeypair);
 
     const submission = await server.sendTransaction(tx);

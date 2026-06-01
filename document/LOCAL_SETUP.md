@@ -375,7 +375,9 @@ soroban contract deploy \
   --source <your-stellar-secret-key>
 ```
 
-The deploy command prints a **contract ID**. Record it and add it to `scripts/.env` or to the relevant env variable if the backend or mobile app needs to call that contract.
+The deploy command prints a **contract ID**. Record it and add it to the canonical backend environment variable `STELLAR_CONTRACT_LUMEN_TOKEN` in `apps/backend/.env.local` or to the environment where the backend is configured. The backend then exposes this contract ID through its Stellar config API, which the web and mobile apps can consume for testnet usage.
+
+If you are using `scripts/.env`, keep the same contract ID there so the helper script, deployment outputs, and app environments stay aligned.
 
 To deploy all contracts at once using the monorepo helper script:
 
