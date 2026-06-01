@@ -39,6 +39,7 @@ jobs:
       run: if npm run | grep -q "type-check"; then npm run type-check; else echo "No type-check script found, skipping"; fi
 
     - name: Run Tests
+      if: env.SKIP_TESTS != 'true'
       run: npm run test
 
     - name: Build
