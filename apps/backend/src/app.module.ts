@@ -56,6 +56,7 @@ import { CrowdfundModule } from './crowdfund/crowdfund.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
 import { SorobanEventsModule } from './soroban-events/soroban-events.module';
+import { CrowdfundVaultSyncModule } from './crowdfund-vault-sync/crowdfund-vault-sync.module';
 import { TreasuryModule } from './treasury/treasury.module';
 import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
 
@@ -124,6 +125,7 @@ import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
     AppConfigModule,
     AuditModule,
     SorobanEventsModule,
+    CrowdfundVaultSyncModule,
     TreasuryModule,
     VestingWalletModule,
   ],
