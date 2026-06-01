@@ -3,6 +3,7 @@ import {
     Networks,
     rpc,
     xdr,
+    Horizon,
 } from '@stellar/stellar-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -13,7 +14,8 @@ import { getContractConfigs, DeploymentContext } from './contracts.config';
 dotenv.config();
 
 const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || Networks.TESTNET;
-const RPC_URL = process.env.RPC_URL || 'https://soroban-testnet.stellar.org';
+const SOROBAN_RPC_URL = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+const HORIZON_URL = process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org';
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 
 if (!ADMIN_SECRET) {
@@ -21,7 +23,8 @@ if (!ADMIN_SECRET) {
     process.exit(1);
 }
 
-const server = new rpc.Server(RPC_URL);
+const rpcServer = new rpc.Server(SOROBAN_RPC_URL);
+const horizonServer = new Horizon.Server(HORIZON_URL);
 
 async function main() {
     try {
@@ -53,12 +56,12 @@ async function main() {
 
             // 2. Upload WASM
             console.log('Uploading WASM...');
-            const wasmHash = await uploadWasm(server, adminKeypair, NETWORK_PASSPHRASE, wasmFile);
+            const wasmHash = await uploadWasm(rpcServer, horizonServer, adminKeypair, NETWORK_PASSPHRASE, wasmFile, SOROBAN_RPC_URL);
             console.log(`WASM Hash: ${wasmHash}`);
 
             // 3. Create Contract
             console.log('Creating Contract...');
-            const contractId = await createContract(server, adminKeypair, NETWORK_PASSPHRASE, wasmHash);
+            const contractId = await createContract(rpcServer, horizonServer, adminKeypair, NETWORK_PASSPHRASE, wasmHash);
             console.log(`Contract ID: ${contractId}`);
 
             // Store contract ID before initialization so subsequent contracts can reference it
@@ -69,7 +72,8 @@ async function main() {
                 console.log(`Initializing with function: ${config.init.fn}...`);
                 const args = config.init.args(context);
                 await initializeContract(
-                    server,
+                    rpcServer,
+                    horizonServer,
                     adminKeypair,
                     NETWORK_PASSPHRASE,
                     contractId,
