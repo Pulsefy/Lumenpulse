@@ -7,16 +7,19 @@ import { rpc } from '@stellar/stellar-sdk';
 import { SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
 import { JobLockService } from '../scheduler/job-lock.service';
 import { JobHistoryService } from '../scheduler/job-history.service';
-import { SorobanEvent, SorobanEventStatus } from './entities/soroban-event.entity';
+import {
+  SorobanEvent,
+  SorobanEventStatus,
+} from './entities/soroban-event.entity';
 import { SorobanIndexerCursor } from './entities/soroban-indexer-cursor.entity';
 
 const JOB_NAME = 'soroban-event-indexer';
 const GLOBAL_CURSOR_KEY = '__global__';
 
-/** Max ledgers to scan per cron tick to avoid long-running queries */
+/** Max ledgers to scan per cron tick */
 const MAX_LEDGER_RANGE_PER_RUN = 1000;
 
-/** Soroban RPC getEvents page size limit */
+/** Soroban RPC getEvents page size */
 const PAGE_LIMIT = 100;
 
 @Injectable()
@@ -45,8 +48,7 @@ export class SorobanEventIndexerService {
 
   /**
    * Backfill from a specific start ledger.
-   * Call this manually (e.g. via a one-off script or admin endpoint) to
-   * re-index historical data.
+   * Call this to re-index historical data from any point.
    */
   async backfill(fromLedger: number): Promise<{ indexed: number }> {
     this.logger.log(`Starting backfill from ledger ${fromLedger}`);
@@ -66,7 +68,10 @@ export class SorobanEventIndexerService {
     try {
       const latestLedger = await this.fetchLatestLedger();
       if (latestLedger === null) {
-        await this.jobHistory.complete(run, { indexed: 0, reason: 'rpc-unavailable' });
+        await this.jobHistory.complete(run, {
+          indexed: 0,
+          reason: 'rpc-unavailable',
+        });
         return { indexed: 0 };
       }
 
@@ -98,11 +103,7 @@ export class SorobanEventIndexerService {
         lastLedgerSequence: endLedger,
       });
 
-      await this.jobHistory.complete(run, {
-        indexed,
-        startLedger,
-        endLedger,
-      });
+      await this.jobHistory.complete(run, { indexed, startLedger, endLedger });
 
       this.logger.log(
         `Indexed ${indexed} events for ledgers ${startLedger}–${endLedger}`,
@@ -117,8 +118,13 @@ export class SorobanEventIndexerService {
   }
 
   /**
-   * Fetch all Soroban events in [startLedger, endLedger] using pagination,
-   * then upsert them idempotently.
+   * Fetch all Soroban events in [startLedger, endLedger] using cursor
+   * pagination, then upsert them idempotently.
+   *
+   * The SDK's GetEventsRequest is a discriminated union:
+   *   - ledger-range mode:  { startLedger, endLedger?, filters, limit }
+   *   - cursor mode:        { cursor, filters, limit }
+   * These two modes are mutually exclusive, so we build them separately.
    */
   private async indexLedgerRange(
     startLedger: number,
@@ -126,16 +132,14 @@ export class SorobanEventIndexerService {
   ): Promise<number> {
     const server = this.rpcClient.rawServer;
     let indexed = 0;
-    let cursor: string | undefined;
+    let pageCursor: string | undefined;
 
     let hasMore = true;
     while (hasMore) {
-      const request: rpc.Server.GetEventsRequest = {
-        startLedger,
-        filters: [],
-        limit: PAGE_LIMIT,
-        ...(cursor ? { cursor } : {}),
-      };
+      // Build the correct discriminated union variant
+      const request: rpc.Api.GetEventsRequest = pageCursor
+        ? { filters: [], cursor: pageCursor, limit: PAGE_LIMIT }
+        : { filters: [], startLedger, endLedger, limit: PAGE_LIMIT };
 
       const response = await server.getEvents(request);
 
@@ -143,22 +147,20 @@ export class SorobanEventIndexerService {
         break;
       }
 
-      // Filter to events within our target range
-      const eventsInRange = response.events.filter((e) => {
-        const seq = Number(e.ledger);
-        return seq >= startLedger && seq <= endLedger;
-      });
+      // Filter to events strictly within our target ledger range
+      const eventsInRange = response.events.filter(
+        (e) => e.ledger >= startLedger && e.ledger <= endLedger,
+      );
 
       await this.upsertEvents(eventsInRange);
       indexed += eventsInRange.length;
 
-      // Advance pagination cursor
-      const lastEvent = response.events[response.events.length - 1];
-      cursor = lastEvent?.id;
+      // The SDK returns a string cursor on the response object for pagination
+      pageCursor = response.cursor || undefined;
 
-      // Stop if the last event is beyond our range or no more pages
-      const lastLedger = Number(lastEvent?.ledger ?? 0);
-      if (lastLedger > endLedger || response.events.length < PAGE_LIMIT) {
+      // Stop if we've passed the end ledger or exhausted pages
+      const lastLedger = response.events[response.events.length - 1]?.ledger ?? 0;
+      if (lastLedger >= endLedger || response.events.length < PAGE_LIMIT || !pageCursor) {
         hasMore = false;
       }
     }
@@ -167,53 +169,49 @@ export class SorobanEventIndexerService {
   }
 
   /**
-   * Upsert a batch of raw RPC events into the soroban_events table.
-   * Uses (txHash, eventIndex) as the idempotency key.
+   * Upsert a batch of parsed EventResponse objects into soroban_events.
+   * Uses (txHash, eventIndex) as the idempotency key — duplicate rows are
+   * silently ignored via the unique constraint.
    */
   private async upsertEvents(
-    events: rpc.Api.RawEventResponse[],
+    events: rpc.Api.EventResponse[],
   ): Promise<void> {
     if (events.length === 0) return;
 
     const rows = events.map((e) => {
-      const txHash = e.txHash ?? '';
-      // eventIndex is the numeric part after the last dash in the event id
-      // e.g. "0000000012345678-0000000001" → index 1
-      const eventIndex = this.parseEventIndex(e.id);
-      const contractId = e.contractId ?? null;
+      // contractId is a Contract object in the parsed response; get its address
+      const contractId = e.contractId?.address().toString() ?? null;
       const eventType = this.extractEventType(e);
-      const ledgerSequence = Number(e.ledger);
+      const eventIndex = this.parseEventIndex(e.id);
 
-      return this.eventRepo.create({
-        txHash,
+      return {
+        txHash: e.txHash,
         eventIndex,
         contractId,
         eventType,
-        ledgerSequence,
+        ledgerSequence: e.ledger,
         rawPayload: {
           id: e.id,
           type: e.type,
           ledger: e.ledger,
           ledgerClosedAt: e.ledgerClosedAt,
-          pagingToken: e.pagingToken,
-          topic: e.topic,
-          value: e.value,
+          txHash: e.txHash,
+          // Store topic and value as base64 strings for portability
+          topic: e.topic.map((t) => t.toXDR('base64')),
+          value: e.value.toXDR('base64'),
           inSuccessfulContractCall: e.inSuccessfulContractCall,
         } as Record<string, unknown>,
         status: SorobanEventStatus.PENDING,
         errorMessage: null,
         processedAt: null,
-      });
+      };
     });
 
-    // Upsert — on conflict (txHash, eventIndex) do nothing (idempotent)
-    await this.eventRepo
-      .createQueryBuilder()
-      .insert()
-      .into(SorobanEvent)
-      .values(rows)
-      .orIgnore()
-      .execute();
+    // upsert: on conflict (tx_hash, event_index) do nothing — fully idempotent
+    await this.eventRepo.upsert(rows, {
+      conflictPaths: ['txHash', 'eventIndex'],
+      skipUpdateIfNoValuesChanged: true,
+    });
   }
 
   private async fetchLatestLedger(): Promise<number | null> {
@@ -233,42 +231,44 @@ export class SorobanEventIndexerService {
     });
     if (existing) return existing;
 
-    // Bootstrap: start from the configured backfill ledger or 0
     const bootstrapLedger = this.configService.get<number>(
       'SOROBAN_INDEXER_START_LEDGER',
       0,
     );
 
-    const cursor = this.cursorRepo.create({
+    const newCursor = this.cursorRepo.create({
       cursorKey: key,
       lastLedgerSequence: bootstrapLedger,
     });
-    return this.cursorRepo.save(cursor);
+    return this.cursorRepo.save(newCursor);
   }
 
-  /** Parse the numeric event index from a Soroban event ID string. */
+  /**
+   * Parse the numeric event index from a Soroban event ID string.
+   * Format: "{ledger_hex}-{index_hex}", e.g. "0000000012345678-0000000001"
+   */
   private parseEventIndex(eventId: string): number {
     if (!eventId) return 0;
     const parts = eventId.split('-');
     const last = parts[parts.length - 1];
-    const parsed = parseInt(last, 10);
+    const parsed = parseInt(last, 16);
     return Number.isNaN(parsed) ? 0 : parsed;
   }
 
-  /** Extract a human-readable event type from the topic array. */
-  private extractEventType(e: rpc.Api.RawEventResponse): string | null {
+  /**
+   * Extract a human-readable event type from the first topic ScVal.
+   * Soroban contracts conventionally use a Symbol as the first topic.
+   */
+  private extractEventType(e: rpc.Api.EventResponse): string | null {
     try {
       const topics = e.topic;
       if (!topics || topics.length === 0) return null;
-      // First topic is typically the event name as a Symbol SCVal
       const first = topics[0];
-      if (typeof first === 'string') return first;
-      // If it's an object with a sym field (XDR decoded)
-      if (typeof first === 'object' && first !== null) {
-        const obj = first as Record<string, unknown>;
-        if (typeof obj['sym'] === 'string') return obj['sym'];
-        if (typeof obj['str'] === 'string') return obj['str'];
-      }
+      // xdr.ScVal — try to extract a symbol or string arm
+      const sym = first.sym?.();
+      if (sym) return sym;
+      const str = first.str?.();
+      if (str) return str.toString();
       return null;
     } catch {
       return null;
