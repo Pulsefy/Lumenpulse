@@ -1791,9 +1791,15 @@ impl CrowdfundVaultContract {
         admin: Address,
         token_address: Address,
         recipients: Vec<(Address, i128)>,
+        batch_id: BytesN<32>,
     ) -> Result<(), CrowdfundError> {
         Self::with_reentrancy_guard(&env, || {
             Self::verify_admin(&env, &admin)?;
+
+            let batch_key = DataKey::ExecutedBatch(batch_id.clone());
+            if env.storage().persistent().has(&batch_key) {
+                return Err(CrowdfundError::DuplicateExecution);
+            }
 
             let is_paused: bool = env
                 .storage()
@@ -1840,6 +1846,8 @@ impl CrowdfundVaultContract {
                 token::transfer(&env, &token_address, &contract_address, &recipient, &amount);
                 events::ContributorPayoutEvent { recipient, amount }.publish(&env);
             }
+
+            env.storage().persistent().set(&batch_key, &true);
 
             Ok(())
         })

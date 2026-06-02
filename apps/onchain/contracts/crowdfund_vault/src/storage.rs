@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Symbol};
+use soroban_sdk::{contracttype, Address, BytesN, Symbol};
 
 // TTL constants for Soroban storage rent management.
 // LEDGER_THRESHOLD: if the remaining TTL falls below this value, extend it.
@@ -38,6 +38,7 @@ pub enum DataKey {
     FeeBps,                      // -> u32
     Treasury,                    // -> Address
     Subscribers,
+    ExecutedBatch(BytesN<32>),
 }
 
 #[contracttype]
