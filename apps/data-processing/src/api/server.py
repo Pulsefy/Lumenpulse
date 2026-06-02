@@ -153,6 +153,7 @@ class NewsArticleResponse(BaseModel):
     categories: List[str] = []
     keywords: List[str] = []
     detected_entities: List[str] = []
+    onchain_entity_links: List[Dict[str, Any]] = []
     sentiment_score: Optional[float] = None  # Raw compound score stored in DB
     sentiment_label: Optional[str] = None  # positive / negative / neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
@@ -252,6 +253,7 @@ async def get_news(
                 categories=article.categories or [],
                 keywords=article.keywords or [],
                 detected_entities=article.detected_entities or [],
+                onchain_entity_links=article.onchain_entity_links or [],
                 sentiment_score=article.sentiment_score,
                 sentiment_label=article.sentiment_label,
                 indicator=_build_indicator(article.sentiment_score),

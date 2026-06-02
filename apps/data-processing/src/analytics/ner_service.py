@@ -10,10 +10,12 @@ from __future__ import annotations
 import logging
 import re
 from functools import lru_cache
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-import spacy
-from spacy.language import Language
+try:
+    import spacy
+except ImportError:  # pragma: no cover - exercised in minimal test envs
+    spacy = None
 
 from .keywords import CRYPTO_PROJECT_MAP, KNOWN_TICKERS
 
@@ -28,6 +30,7 @@ class NERService:
         r"\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+)\b"
     )
     _TICKER_PATTERN = re.compile(r"(?:\$)?\b([A-Z]{2,6})\b")
+    _PERSON_PREFIX_EXCLUSIONS = {"The", "This", "That", "New"}
 
     def __init__(self) -> None:
         self._canonical_names = self._build_canonical_name_map()
@@ -48,8 +51,14 @@ class NERService:
 
         return canonical_names
 
-    def _initialize_pipeline(self) -> Language:
-        nlp: Optional[Language] = None
+    def _initialize_pipeline(self) -> Optional[Any]:
+        if spacy is None:
+            logger.warning(
+                "spaCy is not installed; using regex-only entity extraction fallback"
+            )
+            return None
+
+        nlp: Optional[Any] = None
 
         for model_name in self._MODEL_CANDIDATES:
             try:
@@ -62,7 +71,8 @@ class NERService:
         if nlp is None:
             nlp = spacy.blank("en")
             logger.warning(
-                "spaCy pretrained model not found; using blank English pipeline with custom entity rules"
+                "spaCy pretrained model not found; using blank English "
+                "pipeline with custom entity rules"
             )
 
         if "entity_ruler" in nlp.pipe_names:
@@ -119,23 +129,36 @@ class NERService:
             text = text[:20000]
 
         candidates: List[str] = []
-        doc = self._nlp(text)
+        doc = self._nlp(text) if self._nlp is not None else None
 
-        for ent in doc.ents:
-            if ent.label_ in {
-                "PERSON",
-                "ORG",
-                "PRODUCT",
-                "NORP",
-                "GPE",
-                "EVENT",
-                "PROJECT",
-                "ASSET",
-            }:
-                candidates.append(ent.text)
+        if doc is not None:
+            for ent in doc.ents:
+                if ent.label_ in {
+                    "PERSON",
+                    "ORG",
+                    "PRODUCT",
+                    "NORP",
+                    "GPE",
+                    "EVENT",
+                    "PROJECT",
+                    "ASSET",
+                }:
+                    candidates.append(ent.text)
+
+        for alias in sorted(self._canonical_names, key=len, reverse=True):
+            if len(alias) < 3:
+                continue
+            pattern = r"(?<![\w$])" + re.escape(alias) + r"(?![\w-])"
+            if re.search(pattern, text, flags=re.IGNORECASE):
+                candidates.append(self._canonical_names[alias])
 
         # Heuristic for names when running without a pretrained NER model.
         for match in self._PERSON_PATTERN.findall(text):
+            first_word = match.split()[0]
+            if first_word in self._PERSON_PREFIX_EXCLUSIONS:
+                continue
+            if any(part.isupper() for part in match.split()):
+                continue
             candidates.append(match)
 
         # Explicit ticker extraction catches tokens that may not be tagged as entities.
@@ -165,7 +188,11 @@ class NERService:
         content: Optional[str] = None,
     ) -> List[str]:
         """Extract entities from combined article fields."""
-        chunks = [value.strip() for value in [title or "", summary or "", content or ""] if value and value.strip()]
+        chunks = [
+            value.strip()
+            for value in [title or "", summary or "", content or ""]
+            if value and value.strip()
+        ]
         if not chunks:
             return []
         return self.extract_entities("\n".join(chunks))
