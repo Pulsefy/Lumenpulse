@@ -453,6 +453,7 @@ const envSchema = z
       .int()
       .min(1_000)
       .optional(),
+    SOROBAN_INDEXER_START_LEDGER: z.coerce.number().int().min(0).default(0),
 
     TELEGRAM_BOT_TOKEN: z.string().trim().optional(),
     METRICS_ALLOWED_IPS: z.string().trim().optional(),
@@ -862,6 +863,10 @@ const optionalSummary = [
     String(parsedEnv.SOROBAN_TIMESTAMP_TOLERANCE_MS ?? 300_000),
   ],
   [
+    'SOROBAN_INDEXER_START_LEDGER',
+    String(parsedEnv.SOROBAN_INDEXER_START_LEDGER),
+  ],
+  [
     'TELEGRAM_BOT_TOKEN',
     parsedEnv.TELEGRAM_BOT_TOKEN ? '[REDACTED]' : '(not set)',
   ],
@@ -1031,6 +1036,7 @@ export const config = Object.freeze({
   soroban: Object.freeze({
     ingestSecret: parsedEnv.SOROBAN_INGEST_SECRET,
     timestampToleranceMs: parsedEnv.SOROBAN_TIMESTAMP_TOLERANCE_MS ?? 300_000,
+    indexerStartLedger: parsedEnv.SOROBAN_INDEXER_START_LEDGER,
   }),
   metrics: Object.freeze({
     allowedIps: Object.freeze(splitCsv(parsedEnv.METRICS_ALLOWED_IPS)),

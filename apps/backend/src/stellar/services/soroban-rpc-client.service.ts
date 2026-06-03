@@ -244,9 +244,9 @@ export class SorobanRpcClientService {
           clearTimeout(id);
           resolve(v);
         },
-        (e) => {
+        (e: unknown) => {
           clearTimeout(id);
-          reject(new Error(e));
+          reject(new Error(e instanceof Error ? e.message : String(e)));
         },
       );
     });

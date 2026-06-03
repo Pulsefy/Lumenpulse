@@ -46,6 +46,17 @@ export class IngestSorobanEventDto {
   })
   eventType?: string;
 
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  @ApiProperty({
+    description: 'Ledger sequence number where this event was emitted',
+    example: 12345678,
+    required: false,
+    nullable: true,
+  })
+  ledgerSequence?: number;
+
   @IsObject()
   @ApiProperty({
     description:
