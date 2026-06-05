@@ -22,6 +22,7 @@ export enum SorobanEventStatus {
 ])
 @Index('IDX_soroban_events_status_created_at', ['status', 'createdAt'])
 @Index('IDX_soroban_events_processed_at', ['processedAt'])
+@Index('IDX_soroban_events_ledger_sequence', ['ledgerSequence'])
 export class SorobanEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -45,6 +46,10 @@ export class SorobanEvent {
   /** Full raw payload stored for audit/debug */
   @Column({ type: 'jsonb' })
   rawPayload: Record<string, unknown>;
+
+  /** Ledger sequence number where this event was emitted */
+  @Column({ type: 'bigint', nullable: true })
+  ledgerSequence: number | null;
 
   @Column({
     type: 'enum',

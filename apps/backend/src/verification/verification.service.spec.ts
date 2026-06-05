@@ -301,8 +301,8 @@ describe('VerificationService', () => {
       content: 'Draft',
     });
     svc.submitForReview(99);
-    expect(() =>
-      svc.publishSubmission(99, { actorId: 'admin-1' }),
-    ).toThrow(BadRequestException);
+    expect(() => svc.publishSubmission(99, { actorId: 'admin-1' })).toThrow(
+      BadRequestException,
+    );
   });
 });

@@ -32,4 +32,8 @@ export class AuditService {
       skip: offset,
     });
   }
+
+  async delete(id: string): Promise<void> {
+    await this.auditLogRepo.delete(id);
+  }
 }

@@ -45,6 +45,7 @@ import { z } from 'zod';
  * - STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY
  * - STELLAR_CONTRACT_MATCHING_POOL
  * - STELLAR_CONTRACT_TREASURY
+ * - STELLAR_CONTRACT_VESTING_WALLET
  * - WEBHOOK_SECRET
  * - WEBHOOK_PROVIDERS
  * - TELEGRAM_BOT_TOKEN
@@ -148,6 +149,12 @@ const RATE_LIMIT_DEFAULTS = {
     portfolioWrite: { limit: 20, ttl: 60_000, blockDuration: 120_000 },
     watchlistRead: { limit: 200, ttl: 60_000, blockDuration: 60_000 },
     watchlistWrite: { limit: 30, ttl: 60_000, blockDuration: 120_000 },
+    newsRead: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
+    projectRead: { limit: 100, ttl: 60_000, blockDuration: 60_000 },
+    crowdfundRead: { limit: 100, ttl: 60_000, blockDuration: 60_000 },
+    stellarRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    searchRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    analyticsRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
   },
   staging: {
     global: { limit: 180, ttl: 60_000, blockDuration: 60_000 },
@@ -156,6 +163,12 @@ const RATE_LIMIT_DEFAULTS = {
     portfolioWrite: { limit: 12, ttl: 60_000, blockDuration: 120_000 },
     watchlistRead: { limit: 150, ttl: 60_000, blockDuration: 60_000 },
     watchlistWrite: { limit: 20, ttl: 60_000, blockDuration: 120_000 },
+    newsRead: { limit: 80, ttl: 60_000, blockDuration: 60_000 },
+    projectRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    crowdfundRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    stellarRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    searchRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    analyticsRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
   },
   production: {
     global: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
@@ -164,6 +177,12 @@ const RATE_LIMIT_DEFAULTS = {
     portfolioWrite: { limit: 10, ttl: 60_000, blockDuration: 120_000 },
     watchlistRead: { limit: 100, ttl: 60_000, blockDuration: 60_000 },
     watchlistWrite: { limit: 15, ttl: 60_000, blockDuration: 120_000 },
+    newsRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    projectRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    crowdfundRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    stellarRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
+    searchRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
+    analyticsRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
   },
 } as const;
 
@@ -358,6 +377,41 @@ const envSchema = z
       .min(1)
       .optional(),
 
+    RATE_LIMIT_NEWS_READ_LIMIT: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_NEWS_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_NEWS_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
+
+    RATE_LIMIT_PROJECT_READ_LIMIT: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_PROJECT_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_PROJECT_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
+
+    RATE_LIMIT_CROWDFUND_READ_LIMIT: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_CROWDFUND_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_CROWDFUND_READ_BLOCK_MS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .optional(),
+
+    RATE_LIMIT_STELLAR_READ_LIMIT: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_STELLAR_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_STELLAR_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
+
+    RATE_LIMIT_SEARCH_READ_LIMIT: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_SEARCH_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_SEARCH_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
+
+    RATE_LIMIT_ANALYTICS_READ_LIMIT: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_ANALYTICS_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_ANALYTICS_READ_BLOCK_MS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .optional(),
+
+    IP_ALLOWLIST: z.string().trim().optional(),
+    IP_DENYLIST: z.string().trim().optional(),
+
     STELLAR_NETWORK: z.enum(['testnet', 'mainnet']).default('testnet'),
     STELLAR_HORIZON_URL: z.string().trim().optional(),
     STELLAR_SOROBAN_RPC_URL: z.string().trim().optional(),
@@ -365,6 +419,12 @@ const envSchema = z
     STELLAR_RETRY_ATTEMPTS: z.coerce.number().int().min(0).default(3),
     STELLAR_RETRY_DELAY: z.coerce.number().int().min(0).default(1_000),
     STELLAR_SERVER_SECRET: z.string().min(1), // SECRET — never log
+    STELLAR_BALANCE_CACHE_TTL: z.coerce.number().int().min(1).default(30_000),
+    STELLAR_OPERATIONS_CACHE_TTL: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(15_000),
 
     // Soroban contract addresses (optional — null when not yet deployed)
     STELLAR_CONTRACT_LUMEN_TOKEN: z.string().trim().optional(),
@@ -373,6 +433,7 @@ const envSchema = z
     STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY: z.string().trim().optional(),
     STELLAR_CONTRACT_MATCHING_POOL: z.string().trim().optional(),
     STELLAR_CONTRACT_TREASURY: z.string().trim().optional(),
+    STELLAR_CONTRACT_VESTING_WALLET: z.string().trim().optional(),
 
     PYTHON_API_URL: z.string().trim().default('http://localhost:8000'),
     PYTHON_SERVICE_URL: z.string().trim().optional(),
@@ -386,6 +447,14 @@ const envSchema = z
 
     WEBHOOK_SECRET: z.string().trim().optional(),
     WEBHOOK_PROVIDERS: z.string().trim().optional(),
+
+    SOROBAN_INGEST_SECRET: z.string().trim().optional(),
+    SOROBAN_TIMESTAMP_TOLERANCE_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .optional(),
+    SOROBAN_INDEXER_START_LEDGER: z.coerce.number().int().min(0).default(0),
 
     TELEGRAM_BOT_TOKEN: z.string().trim().optional(),
     METRICS_ALLOWED_IPS: z.string().trim().optional(),
@@ -534,6 +603,70 @@ const resolvedRateLimit = {
       parsedEnv.RATE_LIMIT_WATCHLIST_WRITE_BLOCK_MS ??
       rateLimitDefaults.watchlistWrite.blockDuration,
   },
+  newsRead: {
+    limit:
+      parsedEnv.RATE_LIMIT_NEWS_READ_LIMIT ?? rateLimitDefaults.newsRead.limit,
+    ttl:
+      parsedEnv.RATE_LIMIT_NEWS_READ_TTL_MS ?? rateLimitDefaults.newsRead.ttl,
+    blockDuration:
+      parsedEnv.RATE_LIMIT_NEWS_READ_BLOCK_MS ??
+      rateLimitDefaults.newsRead.blockDuration,
+  },
+  projectRead: {
+    limit:
+      parsedEnv.RATE_LIMIT_PROJECT_READ_LIMIT ??
+      rateLimitDefaults.projectRead.limit,
+    ttl:
+      parsedEnv.RATE_LIMIT_PROJECT_READ_TTL_MS ??
+      rateLimitDefaults.projectRead.ttl,
+    blockDuration:
+      parsedEnv.RATE_LIMIT_PROJECT_READ_BLOCK_MS ??
+      rateLimitDefaults.projectRead.blockDuration,
+  },
+  crowdfundRead: {
+    limit:
+      parsedEnv.RATE_LIMIT_CROWDFUND_READ_LIMIT ??
+      rateLimitDefaults.crowdfundRead.limit,
+    ttl:
+      parsedEnv.RATE_LIMIT_CROWDFUND_READ_TTL_MS ??
+      rateLimitDefaults.crowdfundRead.ttl,
+    blockDuration:
+      parsedEnv.RATE_LIMIT_CROWDFUND_READ_BLOCK_MS ??
+      rateLimitDefaults.crowdfundRead.blockDuration,
+  },
+  stellarRead: {
+    limit:
+      parsedEnv.RATE_LIMIT_STELLAR_READ_LIMIT ??
+      rateLimitDefaults.stellarRead.limit,
+    ttl:
+      parsedEnv.RATE_LIMIT_STELLAR_READ_TTL_MS ??
+      rateLimitDefaults.stellarRead.ttl,
+    blockDuration:
+      parsedEnv.RATE_LIMIT_STELLAR_READ_BLOCK_MS ??
+      rateLimitDefaults.stellarRead.blockDuration,
+  },
+  searchRead: {
+    limit:
+      parsedEnv.RATE_LIMIT_SEARCH_READ_LIMIT ??
+      rateLimitDefaults.searchRead.limit,
+    ttl:
+      parsedEnv.RATE_LIMIT_SEARCH_READ_TTL_MS ??
+      rateLimitDefaults.searchRead.ttl,
+    blockDuration:
+      parsedEnv.RATE_LIMIT_SEARCH_READ_BLOCK_MS ??
+      rateLimitDefaults.searchRead.blockDuration,
+  },
+  analyticsRead: {
+    limit:
+      parsedEnv.RATE_LIMIT_ANALYTICS_READ_LIMIT ??
+      rateLimitDefaults.analyticsRead.limit,
+    ttl:
+      parsedEnv.RATE_LIMIT_ANALYTICS_READ_TTL_MS ??
+      rateLimitDefaults.analyticsRead.ttl,
+    blockDuration:
+      parsedEnv.RATE_LIMIT_ANALYTICS_READ_BLOCK_MS ??
+      rateLimitDefaults.analyticsRead.blockDuration,
+  },
 };
 
 const requiredConfigSummary = [
@@ -623,6 +756,62 @@ const optionalSummary = [
     'RATE_LIMIT_WATCHLIST_WRITE_BLOCK_MS',
     String(resolvedRateLimit.watchlistWrite.blockDuration),
   ],
+  ['RATE_LIMIT_NEWS_READ_LIMIT', String(resolvedRateLimit.newsRead.limit)],
+  ['RATE_LIMIT_NEWS_READ_TTL_MS', String(resolvedRateLimit.newsRead.ttl)],
+  [
+    'RATE_LIMIT_NEWS_READ_BLOCK_MS',
+    String(resolvedRateLimit.newsRead.blockDuration),
+  ],
+  [
+    'RATE_LIMIT_PROJECT_READ_LIMIT',
+    String(resolvedRateLimit.projectRead.limit),
+  ],
+  ['RATE_LIMIT_PROJECT_READ_TTL_MS', String(resolvedRateLimit.projectRead.ttl)],
+  [
+    'RATE_LIMIT_PROJECT_READ_BLOCK_MS',
+    String(resolvedRateLimit.projectRead.blockDuration),
+  ],
+  [
+    'RATE_LIMIT_CROWDFUND_READ_LIMIT',
+    String(resolvedRateLimit.crowdfundRead.limit),
+  ],
+  [
+    'RATE_LIMIT_CROWDFUND_READ_TTL_MS',
+    String(resolvedRateLimit.crowdfundRead.ttl),
+  ],
+  [
+    'RATE_LIMIT_CROWDFUND_READ_BLOCK_MS',
+    String(resolvedRateLimit.crowdfundRead.blockDuration),
+  ],
+  [
+    'RATE_LIMIT_STELLAR_READ_LIMIT',
+    String(resolvedRateLimit.stellarRead.limit),
+  ],
+  ['RATE_LIMIT_STELLAR_READ_TTL_MS', String(resolvedRateLimit.stellarRead.ttl)],
+  [
+    'RATE_LIMIT_STELLAR_READ_BLOCK_MS',
+    String(resolvedRateLimit.stellarRead.blockDuration),
+  ],
+  ['RATE_LIMIT_SEARCH_READ_LIMIT', String(resolvedRateLimit.searchRead.limit)],
+  ['RATE_LIMIT_SEARCH_READ_TTL_MS', String(resolvedRateLimit.searchRead.ttl)],
+  [
+    'RATE_LIMIT_SEARCH_READ_BLOCK_MS',
+    String(resolvedRateLimit.searchRead.blockDuration),
+  ],
+  [
+    'RATE_LIMIT_ANALYTICS_READ_LIMIT',
+    String(resolvedRateLimit.analyticsRead.limit),
+  ],
+  [
+    'RATE_LIMIT_ANALYTICS_READ_TTL_MS',
+    String(resolvedRateLimit.analyticsRead.ttl),
+  ],
+  [
+    'RATE_LIMIT_ANALYTICS_READ_BLOCK_MS',
+    String(resolvedRateLimit.analyticsRead.blockDuration),
+  ],
+  ['IP_ALLOWLIST', parsedEnv.IP_ALLOWLIST ?? '(not set)'],
+  ['IP_DENYLIST', parsedEnv.IP_DENYLIST ?? '(not set)'],
   ['STELLAR_NETWORK', parsedEnv.STELLAR_NETWORK],
   ['STELLAR_HORIZON_URL', parsedEnv.STELLAR_HORIZON_URL ?? '(auto)'],
   ['STELLAR_SOROBAN_RPC_URL', parsedEnv.STELLAR_SOROBAN_RPC_URL ?? '(auto)'],
@@ -653,6 +842,10 @@ const optionalSummary = [
     'STELLAR_CONTRACT_TREASURY',
     parsedEnv.STELLAR_CONTRACT_TREASURY ?? '(not set)',
   ],
+  [
+    'STELLAR_CONTRACT_VESTING_WALLET',
+    parsedEnv.STELLAR_CONTRACT_VESTING_WALLET ?? '(not set)',
+  ],
   ['PYTHON_API_URL', parsedEnv.PYTHON_API_URL],
   [
     'PYTHON_SERVICE_URL',
@@ -666,6 +859,18 @@ const optionalSummary = [
   [
     'WEBHOOK_PROVIDERS',
     parsedEnv.WEBHOOK_PROVIDERS ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'SOROBAN_INGEST_SECRET',
+    parsedEnv.SOROBAN_INGEST_SECRET ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'SOROBAN_TIMESTAMP_TOLERANCE_MS',
+    String(parsedEnv.SOROBAN_TIMESTAMP_TOLERANCE_MS ?? 300_000),
+  ],
+  [
+    'SOROBAN_INDEXER_START_LEDGER',
+    String(parsedEnv.SOROBAN_INDEXER_START_LEDGER),
   ],
   [
     'TELEGRAM_BOT_TOKEN',
@@ -805,6 +1010,8 @@ export const config = Object.freeze({
     timeout: parsedEnv.STELLAR_TIMEOUT,
     retryAttempts: parsedEnv.STELLAR_RETRY_ATTEMPTS,
     retryDelay: parsedEnv.STELLAR_RETRY_DELAY,
+    balanceCacheTTL: parsedEnv.STELLAR_BALANCE_CACHE_TTL,
+    operationsCacheTTL: parsedEnv.STELLAR_OPERATIONS_CACHE_TTL,
     serverSecret: new SecretString(parsedEnv.STELLAR_SERVER_SECRET),
     contracts: Object.freeze({
       lumenToken: parsedEnv.STELLAR_CONTRACT_LUMEN_TOKEN ?? null,
@@ -831,6 +1038,11 @@ export const config = Object.freeze({
     webhookSecret: parsedEnv.WEBHOOK_SECRET,
     webhookProviders: parsedEnv.WEBHOOK_PROVIDERS,
     telegramBotToken: parsedEnv.TELEGRAM_BOT_TOKEN,
+  }),
+  soroban: Object.freeze({
+    ingestSecret: parsedEnv.SOROBAN_INGEST_SECRET,
+    timestampToleranceMs: parsedEnv.SOROBAN_TIMESTAMP_TOLERANCE_MS ?? 300_000,
+    indexerStartLedger: parsedEnv.SOROBAN_INDEXER_START_LEDGER,
   }),
   metrics: Object.freeze({
     allowedIps: Object.freeze(splitCsv(parsedEnv.METRICS_ALLOWED_IPS)),
@@ -905,6 +1117,40 @@ export const config = Object.freeze({
       ttl: resolvedRateLimit.watchlistWrite.ttl,
       blockDuration: resolvedRateLimit.watchlistWrite.blockDuration,
     }),
+    newsRead: Object.freeze({
+      limit: resolvedRateLimit.newsRead.limit,
+      ttl: resolvedRateLimit.newsRead.ttl,
+      blockDuration: resolvedRateLimit.newsRead.blockDuration,
+    }),
+    projectRead: Object.freeze({
+      limit: resolvedRateLimit.projectRead.limit,
+      ttl: resolvedRateLimit.projectRead.ttl,
+      blockDuration: resolvedRateLimit.projectRead.blockDuration,
+    }),
+    crowdfundRead: Object.freeze({
+      limit: resolvedRateLimit.crowdfundRead.limit,
+      ttl: resolvedRateLimit.crowdfundRead.ttl,
+      blockDuration: resolvedRateLimit.crowdfundRead.blockDuration,
+    }),
+    stellarRead: Object.freeze({
+      limit: resolvedRateLimit.stellarRead.limit,
+      ttl: resolvedRateLimit.stellarRead.ttl,
+      blockDuration: resolvedRateLimit.stellarRead.blockDuration,
+    }),
+    searchRead: Object.freeze({
+      limit: resolvedRateLimit.searchRead.limit,
+      ttl: resolvedRateLimit.searchRead.ttl,
+      blockDuration: resolvedRateLimit.searchRead.blockDuration,
+    }),
+    analyticsRead: Object.freeze({
+      limit: resolvedRateLimit.analyticsRead.limit,
+      ttl: resolvedRateLimit.analyticsRead.ttl,
+      blockDuration: resolvedRateLimit.analyticsRead.blockDuration,
+    }),
+  }),
+  ipAccess: Object.freeze({
+    allowlist: parsedEnv.IP_ALLOWLIST ?? null,
+    denylist: parsedEnv.IP_DENYLIST ?? null,
   }),
 });
 

@@ -52,3 +52,5 @@ export const GetStellarPublicKey = createParamDecorator(
     return user.stellarPublicKey;
   },
 );
+
+export { UserRole };

@@ -41,6 +41,7 @@ class Article(Base):
     # Keywords and metadata
     keywords = Column(JSON, nullable=True)  # Array of keywords
     detected_entities = Column(JSON, nullable=True)  # NER entities detected in article text
+    onchain_entity_links = Column(JSON, nullable=True)  # Stable project/asset links
     language = Column(String(10), nullable=True)
     
     # Timestamps
@@ -66,6 +67,42 @@ class Article(Base):
 
     def __repr__(self):
         return f"<Article(id={self.article_id}, title={self.title[:50]}, asset={self.primary_asset}, sentiment={self.sentiment_label})>"
+
+
+class ArticleOnchainEntityLink(Base):
+    """
+    Normalized article-to-on-chain entity links for backend consumption.
+    """
+
+    __tablename__ = "article_onchain_entity_links"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    article_id = Column(String(255), nullable=False, index=True)
+    stable_entity_id = Column(String(255), nullable=False, index=True)
+    entity_type = Column(String(50), nullable=False, index=True)
+    display_name = Column(String(255), nullable=False)
+    matched_text = Column(String(255), nullable=False)
+    confidence = Column(Float, nullable=False)
+    source = Column(String(100), nullable=False)
+    asset_code = Column(String(20), nullable=True, index=True)
+    project_id = Column(BigInteger, nullable=True, index=True)
+    contract_id = Column(String(255), nullable=True, index=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_article_onchain_links_article_entity",
+            "article_id",
+            "stable_entity_id",
+            unique=True,
+        ),
+        Index("idx_article_onchain_links_type", "entity_type"),
+    )
 
 
 class SocialPost(Base):
