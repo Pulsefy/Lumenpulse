@@ -1,0 +1,35 @@
+{
+  "network": "testnet",
+  "rpc_url": "https://soroban-testnet.stellar.org:443",
+  "admin_address": "GA5TBSBGERHVMEFBJGEM3KYMRLWO73Y2QRAV6P66GPEBOJ5ZMJUT7LLY",
+  "contracts": {
+    "contributor_registry": {
+      "id": "CCOVDGHF3XQ5RAFY6DJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLDGXQJSB",
+      "wasm_hash": "4a25619b8fea02f3447e7b700e2f2b0ed575f62679006ddc981009b26d9d5e71"
+    },
+    "project_registry": {
+      "id": "CBYFZU7C5TV2J56PEOXI5Q53HNFYFOW4USEBG4M6BCV7RUIMJI7JISLC",
+      "wasm_hash": "847355767f5f67e68eb46cd2533c16718ac4cd5f37ae298227bb2e98419579cf"
+    },
+    "crowdfund_vault": {
+      "id": "CBBQW7T65XBDPIPXEIIPJVJEEIBSPC566HMEU2LTBAULLKCNUFRFBKRO",
+      "wasm_hash": "0ee5515ec21d8ff0b7f9d1620c343d866f29a146a7789d330327b1df8753ac38"
+    },
+    "matching_pool": {
+      "id": "CBQJ2E2MPYRCQDHZZYJXHRKUTCTIJFO55AVGHB2WDZSLS2OOENUDC6HH",
+      "wasm_hash": "c917f2f45736cbd7854a33ec68bf59e591dd0c830cf1203ffb780ed88498247f"
+    },
+    "treasury": {
+      "id": "CC5XSIUYIZ2OQLBNYRJPCGV4465DJ4UXD23BBCBCJGZ7CVPY3NI2T6ZL",
+      "wasm_hash": "d0810d0e018cc2ae005b660b0d1e5073deff9f342b67c12e010a40c152fc4198"
+    },
+    "lumen_token": {
+      "id": "CDAQQJHUVNQLSUDEXOTPT3V5GWGH5VFVGHMZRE5CCMHUTIORWWH6R3ZR",
+      "wasm_hash": "143ce02a24f71f8a0423d49dce69f9f4cee7a23abb01a4153207ecdb4545c731"
+    },
+    "pricing_adapter": {
+      "id": "CCW2EF3M5GXWM2ZTOAUPKC3CY7W42T3QJEK72WO7VEOR5ONBUTCUWDVM",
+      "wasm_hash": "477ccd47cbc96421dc872650ea2ab703b58195c3d16606b48813636cc669289f"
+    }
+  }
+}
