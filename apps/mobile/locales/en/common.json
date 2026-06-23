@@ -115,13 +115,22 @@
     "amount_label": "Contribution amount in XLM",
     "estimated_fee": "Estimated network fee: ~{{amount}} XLM",
     "disclaimer": "This is an on-chain transaction on the Stellar network. Contributions are non-refundable unless the project is cancelled.",
+    "review": "Review Contribution",
     "submit": "Confirm Contribution",
     "submitting": "Submitting...",
     "done": "Done",
     "success": "Contribution Successful!",
     "success_message": "You contributed {{amount}} XLM to {{project}}.",
     "failed": "Contribution Failed",
-    "transaction_hash": "Transaction Hash"
+    "transaction_hash": "Transaction Hash",
+    "confirm_title": "Review & Sign",
+    "confirm_amount": "You are sending",
+    "confirm_project": "Project",
+    "confirm_network": "Network",
+    "confirm_wallet": "Wallet",
+    "confirm_wallet_missing": "No wallet connected",
+    "confirm_network_missing": "Contract not configured for this network.",
+    "confirm_sign": "Sign & Submit"
   },
   "grants": {
     "title": "Grants Rounds",
