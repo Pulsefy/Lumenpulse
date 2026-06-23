@@ -15,6 +15,7 @@ type NotificationsContextType = {
   fetchNotifications: () => Promise<void>;
   markAsRead: (id: number) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  resetNotifications: () => void;
 };
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
@@ -60,9 +61,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     }
   }, []);
 
+  const resetNotifications = useCallback(() => {
+    setNotifications([]);
+  }, []);
+
   return (
     <NotificationsContext.Provider
-      value={{ notifications, unreadCount, fetchNotifications, markAsRead, markAllAsRead }}
+      value={{ notifications, unreadCount, fetchNotifications, markAsRead, markAllAsRead, resetNotifications }}
     >
       {children}
     </NotificationsContext.Provider>

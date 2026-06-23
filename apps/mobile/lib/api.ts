@@ -120,6 +120,20 @@ export const authApi = {
   async register(credentials: RegisterCredentials): Promise<ApiResponse<RegisterResponse>> {
     return apiClient.post<RegisterResponse>('/auth/register', credentials);
   },
+
+  /**
+   * Logout user by revoking refresh token server-side
+   */
+  async logout(refreshToken: string): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.post<{ message: string }>('/auth/logout', { refreshToken });
+  },
+
+  /**
+   * Logout from all devices
+   */
+  async logoutAll(): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.post<{ message: string }>('/auth/logout-all');
+  },
 };
 
 /**

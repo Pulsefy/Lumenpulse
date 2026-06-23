@@ -89,8 +89,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     try {
       setIsLoading(true);
-      const { apiClient } = await import('../lib/api');
-      await storage.removeTokens();
+      const { apiClient, authApi } = await import('../lib/api');
+
+      // Best-effort server-side token revocation
+      const refreshToken = await storage.getRefreshToken();
+      if (refreshToken) {
+        authApi.logout(refreshToken).catch((err) =>
+          console.warn('Backend logout call failed (non-blocking):', err),
+        );
+      }
+
+      // Clear all local session & wallet-cached data
+      await storage.clearAll();
       apiClient.setAuthToken(null);
       setIsAuthenticated(false);
     } catch (error) {

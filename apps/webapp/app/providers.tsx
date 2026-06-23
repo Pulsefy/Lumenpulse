@@ -100,6 +100,12 @@ export function StellarProvider({ children }: { children: ReactNode }) {
     setPublicKey(null);
     setStatus("disconnected");
     setError(null);
+    try {
+      localStorage.removeItem("stellar_wallet_public_key");
+      sessionStorage.clear();
+    } catch {
+      // Storage may not be available (SSR or privacy mode)
+    }
   }, []);
 
   return (
