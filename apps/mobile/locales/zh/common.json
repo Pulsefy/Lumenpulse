@@ -115,13 +115,22 @@
     "amount_label": "贡献金额（XLM）",
     "estimated_fee": "预估网络费用：约 {{amount}} XLM",
     "disclaimer": "这是 Stellar 网络上的链上交易。除非项目被取消，否则贡献不可退款。",
+    "review": "查看贡献详情",
     "submit": "确认贡献",
     "submitting": "提交中...",
     "done": "完成",
     "success": "贡献成功！",
     "success_message": "您已向 {{project}} 贡献了 {{amount}} XLM。",
     "failed": "贡献失败",
-    "transaction_hash": "交易哈希"
+    "transaction_hash": "交易哈希",
+    "confirm_title": "确认并签名",
+    "confirm_amount": "您将发送",
+    "confirm_project": "项目",
+    "confirm_network": "网络",
+    "confirm_wallet": "钱包",
+    "confirm_wallet_missing": "未连接钱包",
+    "confirm_network_missing": "当前网络未配置合约。",
+    "confirm_sign": "签名并提交"
   },
   "grants": {
     "title": "资助轮次",

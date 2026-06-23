@@ -21,17 +21,56 @@ import {
   buildExplorerUrl,
   validateContributionAmount,
 } from '../lib/stellar';
+import { getEnvironmentConfig } from '../lib/config';
 
 interface ContributionModalProps {
   visible: boolean;
   projectName: string;
+  walletPublicKey?: string | null;
   onClose: () => void;
   onSubmit: (amount: string) => Promise<{ transactionHash?: string; errorMessage?: string }>;
+}
+
+type Step = 'input' | 'confirm';
+
+function truncateKey(key: string): string {
+  if (key.length <= 12) return key;
+  return `${key.slice(0, 6)}…${key.slice(-6)}`;
+}
+
+function SummaryRow({
+  label,
+  value,
+  valueColor,
+  colors,
+  isLast = false,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+  colors: ReturnType<typeof useTheme>['colors'];
+  isLast?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.summaryRow,
+        !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+      ]}
+      accessible
+    >
+      <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.summaryValue, { color: valueColor ?? colors.text }]} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
 }
 
 export default function ContributionModal({
   visible,
   projectName,
+  walletPublicKey,
   onClose,
   onSubmit,
 }: ContributionModalProps) {
@@ -39,6 +78,7 @@ export default function ContributionModal({
   const { t } = useLocalization();
   const inputRef = useRef<TextInput>(null);
 
+  const [step, setStep] = useState<Step>('input');
   const [amount, setAmount] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<TransactionStatus>('idle');
@@ -46,6 +86,7 @@ export default function ContributionModal({
   const [txError, setTxError] = useState<string | null>(null);
 
   const handleShow = useCallback(() => {
+    setStep('input');
     setAmount('');
     setValidationError(null);
     setTxStatus('idle');
@@ -60,21 +101,18 @@ export default function ContributionModal({
     if (validationError) setValidationError(null);
   };
 
-  const handleConfirm = async () => {
+  const handleReview = () => {
     Keyboard.dismiss();
-
     const error = validateContributionAmount(amount);
-    if (error) {
-      setValidationError(error);
-      return;
-    }
+    if (error) { setValidationError(error); return; }
+    setStep('confirm');
+  };
 
+  const handleConfirm = async () => {
     try {
       setTxStatus('submitting');
       setTxError(null);
-
       const result = await onSubmit(amount.trim());
-
       if (result.transactionHash) {
         setTxHash(result.transactionHash);
         setTxStatus('confirmed');
@@ -83,8 +121,7 @@ export default function ContributionModal({
         setTxStatus('failed');
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('errors.something_went_wrong');
-      setTxError(message);
+      setTxError(err instanceof Error ? err.message : t('errors.something_went_wrong'));
       setTxStatus('failed');
     }
   };
@@ -97,12 +134,13 @@ export default function ContributionModal({
   const isSubmitting = txStatus === 'submitting';
   const showResult = txStatus === 'confirmed' || txStatus === 'failed';
 
+  // ── Result screen ────────────────────────────────────────────────────────
   if (showResult) {
     const isSuccess = txStatus === 'confirmed';
     return (
       <Modal visible={visible} transparent animationType="fade" onRequestClose={handleDismiss}>
         <TouchableWithoutFeedback onPress={handleDismiss}>
-          <View style={styles.overlay} accessible accessibilityLabel={t('contribution_modal.title')}>
+          <View style={styles.overlay}>
             <TouchableWithoutFeedback>
               <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
                 <View style={styles.resultContainer}>
@@ -110,39 +148,21 @@ export default function ContributionModal({
                     name={isSuccess ? 'checkmark-circle' : 'close-circle'}
                     size={64}
                     color={isSuccess ? '#4ecdc4' : colors.danger}
-                    accessibilityLabel={
-                      isSuccess
-                        ? t('contribution_modal.success')
-                        : t('contribution_modal.failed')
-                    }
                   />
-                  <Text style={[styles.resultTitle, { color: colors.text }]} accessible accessibilityRole="header">
-                    {isSuccess
-                      ? t('contribution_modal.success')
-                      : t('contribution_modal.failed')}
+                  <Text style={[styles.resultTitle, { color: colors.text }]} accessibilityRole="header">
+                    {isSuccess ? t('contribution_modal.success') : t('contribution_modal.failed')}
                   </Text>
-                  <Text style={[styles.resultMessage, { color: colors.textSecondary }]} accessible>
+                  <Text style={[styles.resultMessage, { color: colors.textSecondary }]}>
                     {isSuccess
-                      ? t('contribution_modal.success_message', {
-                          amount,
-                          project: projectName,
-                        })
+                      ? t('contribution_modal.success_message', { amount, project: projectName })
                       : txError || t('errors.something_went_wrong')}
                   </Text>
-
                   {isSuccess && txHash && (
-                    <Text
-                      style={[styles.explorerLink, { color: colors.accent }]}
-                      selectable
-                      numberOfLines={1}
-                      accessible
-                      accessibilityLabel={t('contribution_modal.transaction_hash')}
-                    >
+                    <Text style={[styles.explorerLink, { color: colors.accent }]} selectable numberOfLines={1}>
                       {buildExplorerUrl(txHash)}
                     </Text>
                   )}
                 </View>
-
                 <TouchableOpacity
                   style={[styles.primaryButton, { backgroundColor: colors.accent }]}
                   onPress={handleDismiss}
@@ -150,7 +170,7 @@ export default function ContributionModal({
                   accessibilityRole="button"
                   accessibilityLabel={t('common.done')}
                 >
-                  <Text style={styles.primaryButtonText} accessible>{t('common.done')}</Text>
+                  <Text style={styles.primaryButtonText}>{t('common.done')}</Text>
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
@@ -160,6 +180,143 @@ export default function ContributionModal({
     );
   }
 
+  // ── Confirmation screen ──────────────────────────────────────────────────
+  if (step === 'confirm') {
+    const envConfig = getEnvironmentConfig();
+    const networkConfigured = !!envConfig.crowdfundContractId;
+    const canSign = !!walletPublicKey && networkConfigured;
+
+    return (
+      <Modal
+        visible={visible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setStep('input')}
+        accessibilityViewIsModal={true}
+      >
+        <TouchableWithoutFeedback onPress={isSubmitting ? undefined : () => setStep('input')}>
+          <View style={styles.overlay}>
+            <TouchableWithoutFeedback>
+              <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
+                <View style={styles.sheetHeader}>
+                  <Text style={[styles.sheetTitle, { color: colors.text }]} accessibilityRole="header">
+                    {t('contribution_modal.confirm_title')}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setStep('input')}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    disabled={isSubmitting}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.close')}
+                  >
+                    <Ionicons name="close" size={24} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Amount highlight */}
+                <View style={[styles.amountBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.amountBoxLabel, { color: colors.textSecondary }]}>
+                    {t('contribution_modal.confirm_amount')}
+                  </Text>
+                  <Text style={[styles.amountBoxValue, { color: colors.text }]}>
+                    {amount}{' '}
+                    <Text style={{ color: colors.textSecondary, fontSize: 18, fontWeight: '400' }}>XLM</Text>
+                  </Text>
+                </View>
+
+                {/* Details */}
+                <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <SummaryRow
+                    label={t('contribution_modal.confirm_project')}
+                    value={projectName}
+                    colors={colors}
+                  />
+                  <SummaryRow
+                    label={t('contribution_modal.confirm_network')}
+                    value={envConfig.label}
+                    valueColor={networkConfigured ? colors.accent : colors.danger}
+                    colors={colors}
+                  />
+                  <SummaryRow
+                    label={t('contribution_modal.confirm_wallet')}
+                    value={
+                      walletPublicKey
+                        ? truncateKey(walletPublicKey)
+                        : t('contribution_modal.confirm_wallet_missing')
+                    }
+                    valueColor={walletPublicKey ? colors.text : colors.danger}
+                    colors={colors}
+                    isLast
+                  />
+                </View>
+
+                <View style={styles.feeRow}>
+                  <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.feeText, { color: colors.textSecondary }]}>
+                    {t('contribution_modal.estimated_fee', { amount: ESTIMATED_FEE_XLM })}
+                  </Text>
+                </View>
+
+                {/* Missing config warning */}
+                {!canSign && (
+                  <View style={[styles.warningBox, { backgroundColor: colors.danger + '18', borderColor: colors.danger + '44' }]}
+                    accessibilityRole="alert"
+                  >
+                    <Ionicons name="warning-outline" size={16} color={colors.danger} />
+                    <Text style={[styles.warningText, { color: colors.danger }]}>
+                      {!walletPublicKey
+                        ? t('errors.no_stellar_account')
+                        : t('contribution_modal.confirm_network_missing')}
+                    </Text>
+                  </View>
+                )}
+
+                <Text style={[styles.disclaimer, { color: colors.textSecondary }]}>
+                  {t('contribution_modal.disclaimer')}
+                </Text>
+
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={[styles.cancelButton, { borderColor: colors.border }]}
+                    onPress={() => setStep('input')}
+                    disabled={isSubmitting}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.cancel')}
+                  >
+                    <Text style={[styles.cancelButtonText, { color: colors.text }]}>{t('common.cancel')}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.confirmButton, { backgroundColor: canSign && !isSubmitting ? colors.accent : colors.border }]}
+                    onPress={handleConfirm}
+                    disabled={!canSign || isSubmitting}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !canSign || isSubmitting }}
+                    accessibilityLabel={isSubmitting ? t('contribution_modal.submitting') : t('contribution_modal.confirm_sign')}
+                  >
+                    {isSubmitting ? (
+                      <View style={styles.loadingRow}>
+                        <ActivityIndicator color="#ffffff" size="small" />
+                        <Text style={[styles.primaryButtonText, { marginLeft: 8 }]}>
+                          {t('contribution_modal.submitting')}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.primaryButtonText}>{t('contribution_modal.confirm_sign')}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+    );
+  }
+
+  // ── Input screen ─────────────────────────────────────────────────────────
   return (
     <Modal
       visible={visible}
@@ -170,21 +327,17 @@ export default function ContributionModal({
       accessibilityViewIsModal={true}
     >
       <TouchableWithoutFeedback onPress={handleDismiss}>
-        <View style={styles.overlay} accessible accessibilityLabel={t('contribution_modal.title')}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.keyboardView}
-          >
+        <View style={styles.overlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
               <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
                 <View style={styles.sheetHeader}>
-                  <Text style={[styles.sheetTitle, { color: colors.text }]} accessible accessibilityRole="header">
+                  <Text style={[styles.sheetTitle, { color: colors.text }]} accessibilityRole="header">
                     {t('contribution_modal.title')}
                   </Text>
                   <TouchableOpacity
                     onPress={handleDismiss}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                    disabled={isSubmitting}
                     accessibilityRole="button"
                     accessibilityLabel={t('common.close')}
                   >
@@ -192,25 +345,15 @@ export default function ContributionModal({
                   </TouchableOpacity>
                 </View>
 
-                <Text style={[styles.projectLabel, { color: colors.textSecondary }]} accessible>
-                  {projectName}
-                </Text>
+                <Text style={[styles.projectLabel, { color: colors.textSecondary }]}>{projectName}</Text>
 
                 <View
                   style={[
                     styles.inputWrapper,
-                    {
-                      borderColor: validationError ? colors.danger : colors.border,
-                      backgroundColor: colors.card,
-                    },
+                    { borderColor: validationError ? colors.danger : colors.border, backgroundColor: colors.card },
                   ]}
-                  accessible
-                  accessibilityLabel={t('contribution_modal.amount_label')}
-                  accessibilityRole="text"
                 >
-                  <Text style={[styles.currencyLabel, { color: colors.textSecondary }]} accessible>
-                    XLM
-                  </Text>
+                  <Text style={[styles.currencyLabel, { color: colors.textSecondary }]}>XLM</Text>
                   <TextInput
                     ref={inputRef}
                     style={[styles.amountInput, { color: colors.text }]}
@@ -220,58 +363,34 @@ export default function ContributionModal({
                     returnKeyType="done"
                     value={amount}
                     onChangeText={handleAmountChange}
-                    editable={!isSubmitting}
                     maxLength={15}
                     accessibilityLabel={t('contribution_modal.amount_label')}
-                    accessibilityHint={t('contribution_modal.amount_label')}
-                    accessibilityRole="text"
                   />
                 </View>
 
                 {validationError && (
-                  <Text style={[styles.errorText, { color: colors.danger }]} accessible>
-                    {validationError}
-                  </Text>
+                  <Text style={[styles.errorText, { color: colors.danger }]}>{validationError}</Text>
                 )}
 
                 <View style={styles.feeRow}>
-                  <Ionicons
-                    name="information-circle-outline"
-                    size={16}
-                    color={colors.textSecondary}
-                    accessibilityLabel={t('contribution_modal.estimated_fee', { amount: ESTIMATED_FEE_XLM })}
-                  />
-                  <Text style={[styles.feeText, { color: colors.textSecondary }]} accessible>
+                  <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.feeText, { color: colors.textSecondary }]}>
                     {t('contribution_modal.estimated_fee', { amount: ESTIMATED_FEE_XLM })}
                   </Text>
                 </View>
 
-                <Text style={[styles.disclaimer, { color: colors.textSecondary }]} accessible>
+                <Text style={[styles.disclaimer, { color: colors.textSecondary }]}>
                   {t('contribution_modal.disclaimer')}
                 </Text>
 
                 <TouchableOpacity
-                  style={[
-                    styles.primaryButton,
-                    { backgroundColor: isSubmitting ? colors.border : colors.accent },
-                  ]}
-                  onPress={handleConfirm}
-                  disabled={isSubmitting}
+                  style={[styles.primaryButton, { backgroundColor: colors.accent }]}
+                  onPress={handleReview}
                   activeOpacity={0.8}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: isSubmitting }}
-                  accessibilityLabel={isSubmitting ? t('contribution_modal.submitting') : t('contribution_modal.submit')}
+                  accessibilityLabel={t('contribution_modal.review')}
                 >
-                  {isSubmitting ? (
-                    <View style={styles.loadingRow}>
-                      <ActivityIndicator color="#ffffff" size="small" accessible accessibilityLabel={t('common.loading')} />
-                      <Text style={[styles.primaryButtonText, { marginLeft: 8 }]} accessible>
-                        {t('contribution_modal.submitting')}
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.primaryButtonText} accessible>{t('contribution_modal.submit')}</Text>
-                  )}
+                  <Text style={styles.primaryButtonText}>{t('contribution_modal.review')}</Text>
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
@@ -283,14 +402,8 @@ export default function ContributionModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'flex-end',
-  },
-  keyboardView: {
-    justifyContent: 'flex-end',
-  },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  keyboardView: { justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -298,96 +411,41 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: Platform.OS === 'ios' ? 40 : 28,
   },
-  sheetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  sheetTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  projectLabel: {
-    fontSize: 14,
-    marginBottom: 20,
-  },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  sheetTitle: { fontSize: 20, fontWeight: '700' },
+  projectLabel: { fontSize: 14, marginBottom: 20 },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    height: 56,
-    marginBottom: 6,
+    flexDirection: 'row', alignItems: 'center', borderWidth: 1,
+    borderRadius: 14, paddingHorizontal: 16, height: 56, marginBottom: 6,
   },
-  currencyLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginRight: 10,
+  currencyLabel: { fontSize: 16, fontWeight: '600', marginRight: 10 },
+  amountInput: { flex: 1, fontSize: 24, fontWeight: '700', paddingVertical: 0 },
+  errorText: { fontSize: 13, marginBottom: 4, marginLeft: 4 },
+  feeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 8, gap: 6 },
+  feeText: { fontSize: 13 },
+  disclaimer: { fontSize: 12, lineHeight: 18, marginBottom: 20 },
+  primaryButton: { height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  primaryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+  loadingRow: { flexDirection: 'row', alignItems: 'center' },
+  resultContainer: { alignItems: 'center', paddingVertical: 24 },
+  resultTitle: { fontSize: 22, fontWeight: '700', marginTop: 16, marginBottom: 8, textAlign: 'center' },
+  resultMessage: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 12, paddingHorizontal: 8 },
+  explorerLink: { fontSize: 12, textDecorationLine: 'underline', marginTop: 4 },
+  // Confirmation
+  amountBox: {
+    borderRadius: 14, borderWidth: 1, paddingHorizontal: 20, paddingVertical: 16,
+    alignItems: 'center', marginBottom: 16,
   },
-  amountInput: {
-    flex: 1,
-    fontSize: 24,
-    fontWeight: '700',
-    paddingVertical: 0,
-  },
-  errorText: {
-    fontSize: 13,
-    marginBottom: 4,
-    marginLeft: 4,
-  },
-  feeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    marginBottom: 8,
-    gap: 6,
-  },
-  feeText: {
-    fontSize: 13,
-  },
-  disclaimer: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 20,
-  },
-  primaryButton: {
-    height: 52,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  resultContainer: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  resultTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  resultMessage: {
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 12,
-    paddingHorizontal: 8,
-  },
-  explorerLink: {
-    fontSize: 12,
-    textDecorationLine: 'underline',
-    marginTop: 4,
-  },
+  amountBoxLabel: { fontSize: 13, marginBottom: 6 },
+  amountBoxValue: { fontSize: 36, fontWeight: '800', letterSpacing: -1 },
+  detailCard: { borderRadius: 14, borderWidth: 1, marginBottom: 16, overflow: 'hidden' },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+  summaryLabel: { fontSize: 14, flex: 1 },
+  summaryValue: { fontSize: 14, fontWeight: '600', flex: 1, textAlign: 'right' },
+  warningBox: { flexDirection: 'row', alignItems: 'flex-start', borderRadius: 10, borderWidth: 1, padding: 12, gap: 8, marginBottom: 12 },
+  warningText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  actionRow: { flexDirection: 'row', gap: 12 },
+  cancelButton: { flex: 1, height: 52, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  cancelButtonText: { fontSize: 16, fontWeight: '600' },
+  confirmButton: { flex: 1, height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
 });

@@ -521,6 +521,7 @@ export default function ProjectDetailScreen() {
       <ContributionModal
         visible={showContributeModal}
         projectName={project.name}
+        walletPublicKey={stellarPublicKey}
         onClose={() => setShowContributeModal(false)}
         onSubmit={handleContribute}
       />
