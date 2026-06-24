@@ -395,6 +395,24 @@ npx ts-node deploy.ts
 
 The backend does not ship an automatic seed script yet. To populate basic data for local testing, run the backend with `USE_MOCK_TRANSACTIONS=true` (already set in the example `.env`). This flag makes the portfolio and transaction endpoints return synthetic Stellar data without requiring live on-chain calls.
 
+### Synthetic datasets for dashboards and APIs
+
+The data-processing service includes a synthetic dataset generator for local stress testing and API validation. Run it from `apps/data-processing`:
+
+```bash
+python scripts/generate_synthetic_data.py \
+  --seed 42 \
+  --project-count 10 \
+  --contributors-per-project 5 \
+  --articles 80 \
+  --social-posts 80 \
+  --analytics-records 50 \
+  --contract-events 40 \
+  --output-dir data/synthetic
+```
+
+The generated files are stored under `apps/data-processing/data/synthetic`, keeping test data distinct from real ingested news.
+
 ### Testnet XLM
 
 Use the [Stellar Friendbot](https://laboratory.stellar.org/#?network=test) to fund any testnet address with 10,000 XLM. This is free and instant.
