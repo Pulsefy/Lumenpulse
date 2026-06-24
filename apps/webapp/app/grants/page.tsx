@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Trophy, Users, Wallet, Clock, ChevronRight, Info } from "lucide-react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { Trophy, Users, Wallet, Clock, ChevronRight, Info, Filter, ChevronDown, Check } from "lucide-react";
 import { useStellarConfig } from "@/contexts/StellarConfigContext";
 import { useStellarWallet } from "@/app/providers";
 import { signTransaction } from "@stellar/freighter-api";
@@ -76,6 +77,22 @@ const STATUS_LABELS: Record<string, string> = {
   FINALIZED: "Finalized",
   DISTRIBUTED: "Distributed",
 };
+
+const STATUS_FILTERS = [
+  { label: "All", value: "ALL" },
+  { label: "Active", value: "ACTIVE" },
+  { label: "Upcoming", value: "PENDING" },
+  { label: "Ended", value: "ENDED" },
+  { label: "Finalized", value: "FINALIZED" },
+  { label: "Distributed", value: "DISTRIBUTED" },
+] as const;
+
+const SORT_OPTIONS = [
+  { label: "Newest", value: "newest" },
+  { label: "Oldest", value: "oldest" },
+  { label: "Ending Soon", value: "endingSoon" },
+  { label: "Largest Pool", value: "largestPool" },
+] as const;
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -517,6 +534,50 @@ export default function GrantsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSortOpen, setIsSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const activeStatus = searchParams?.get("status") ?? "ALL";
+  const activeSort = searchParams?.get("sort") ?? "newest";
+
+  useEffect(() => {
+    if (!isSortOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
+        setIsSortOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [isSortOpen]);
+
+  const setFilter = useCallback(
+    (key: string, value: string) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      params.set(key, value);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [searchParams, router, pathname],
+  );
+
+  const visibleRounds = rounds
+    .filter((r) => activeStatus === "ALL" || r.status === activeStatus)
+    .sort((a, b) => {
+      switch (activeSort) {
+        case "oldest":
+          return a.startTime - b.startTime;
+        case "endingSoon":
+          return a.endTime - b.endTime;
+        case "largestPool":
+          return Number(b.totalPool) - Number(a.totalPool);
+        default:
+          return b.startTime - a.startTime;
+      }
+    });
 
   useEffect(() => {
     fetch(`${API_BASE}/grants/rounds`)
@@ -570,14 +631,76 @@ export default function GrantsPage() {
             />
           ) : (
             <>
-              {rounds.length === 0 ? (
+              {/* Filter & Sort Controls */}
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-6 p-4 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-md">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Filter className="w-4 h-4 text-primary flex-shrink-0" />
+                  <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by status">
+                    {STATUS_FILTERS.map((f) => (
+                      <button
+                        key={f.value}
+                        onClick={() => setFilter("status", f.value)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          activeStatus === f.value
+                            ? "bg-primary text-white shadow-sm"
+                            : "text-foreground/50 hover:text-foreground hover:bg-white/5"
+                        }`}
+                        aria-pressed={activeStatus === f.value}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="relative" ref={sortRef}>
+                  <button
+                    onClick={() => setIsSortOpen((prev) => !prev)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 text-xs font-semibold text-foreground/70 hover:text-foreground hover:bg-white/5 transition-all"
+                    aria-expanded={isSortOpen}
+                    aria-haspopup="listbox"
+                  >
+                    {SORT_OPTIONS.find((o) => o.value === activeSort)?.label}
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isSortOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {isSortOpen && (
+                    <div
+                      className="absolute right-0 mt-2 w-44 bg-black/90 border border-white/10 rounded-xl shadow-2xl z-20 overflow-hidden backdrop-blur-2xl"
+                      role="listbox"
+                      aria-label="Sort options"
+                    >
+                      {SORT_OPTIONS.map((o) => (
+                        <button
+                          key={o.value}
+                          role="option"
+                          aria-selected={activeSort === o.value}
+                          onClick={() => {
+                            setFilter("sort", o.value);
+                            setIsSortOpen(false);
+                          }}
+                          className="w-full flex items-center justify-between px-4 py-3 text-sm text-white hover:bg-primary/20 transition-all"
+                        >
+                          {o.label}
+                          {activeSort === o.value && <Check className="w-4 h-4 text-primary" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {visibleRounds.length === 0 ? (
                 <div className="text-center py-20">
                   <Trophy className="w-12 h-12 text-foreground/20 mx-auto mb-4" />
-                  <p className="text-foreground/40">No grant rounds available yet.</p>
+                  <p className="text-foreground/40">
+                    {rounds.length === 0
+                      ? "No grant rounds available yet."
+                      : "No rounds match the selected filters."}
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {rounds.map((r: GrantRound) => (
+                  {visibleRounds.map((r: GrantRound) => (
                     <div key={r.id} onClick={() => void openRound(r.id)} className="cursor-pointer">
                       <RoundCard round={r} />
                     </div>
