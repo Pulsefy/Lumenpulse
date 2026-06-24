@@ -46,7 +46,7 @@ describe('GET /api/config/stellar', () => {
     const res = await GET()
     expect(res.status).toBe(200)
     expect(res.body).toEqual(MOCK_CONFIG)
-    expect((res.headers as Record<string, string>)['Cache-Control']).toContain('max-age=300')
+    expect(((res.headers as unknown) as Record<string, string>)['Cache-Control']).toContain('max-age=300')
   })
 
   it('returns 502 when backend returns non-ok status', async () => {
@@ -63,7 +63,7 @@ describe('GET /api/config/stellar', () => {
     const { GET } = await import('./route')
     const res = await GET()
     expect(res.status).toBe(502)
-    expect((res.body as { error: string }).error).toContain('Failed to fetch')
+    expect(((res.body as unknown) as { error: string }).error).toContain('Failed to fetch')
   })
 
   it('uses BACKEND_API_URL env var for the backend request', async () => {

@@ -53,7 +53,31 @@ Create a `.env` file in the root of `apps/data-processing` and add any necessary
 python src/main.py
 ```
 
-## Telegram Alert Bot Setup
+## 6. Synthetic Data Generator
+
+A synthetic dataset generator is available for local development, dashboard stress testing, and API validation. It writes clearly separated JSON fixtures under `data/synthetic` and can optionally persist data to PostgreSQL.
+
+```bash
+python scripts/generate_synthetic_data.py \
+  --seed 42 \
+  --project-count 12 \
+  --contributors-per-project 8 \
+  --articles 120 \
+  --social-posts 100 \
+  --analytics-records 80 \
+  --contract-events 60 \
+  --output-dir data/synthetic
+```
+
+To persist synthetic records into the local database:
+
+```bash
+python scripts/generate_synthetic_data.py --save-to-db --create-tables
+```
+
+This generator keeps synthetic data separate by writing a dedicated output directory and by marking each record with a synthetic source label.
+
+## 7. Telegram Alert Bot Setup
 
 The data processing service can send Telegram alerts when high sentiment scores (>0.8) are detected. Follow these steps to enable alerts:
 

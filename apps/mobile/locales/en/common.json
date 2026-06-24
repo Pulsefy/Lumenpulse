@@ -115,6 +115,8 @@
     "amount_label": "Contribution amount in XLM",
     "estimated_fee": "Estimated network fee: ~{{amount}} XLM",
     "disclaimer": "This is an on-chain transaction on the Stellar network. Contributions are non-refundable unless the project is cancelled.",
+    "amount_hint": "Enter an amount using up to {{decimals}} decimal places. Minimum {{min}} XLM.",
+    "clear_amount": "Clear amount",
     "submit": "Confirm Contribution",
     "submitting": "Submitting...",
     "done": "Done",
