@@ -1,0 +1,495 @@
+{
+  "metadata": {
+    "dataset_name": "asset_issuer_normalization_qa",
+    "version": "1.0.0",
+    "description": "Validation dataset for Stellar asset issuer-aware normalization. Each entry maps a raw asset input to its expected canonical normalized output. Used for regression testing of the normalize_asset() function.",
+    "created_at": "2026-06-24",
+    "schema": {
+      "test_id": "Unique test case identifier",
+      "category": "Test category grouping (native, issued, edge_case, malformed)",
+      "description": "Human-readable description of what this case validates",
+      "raw_input": "The raw input to pass to normalize_asset(). Type matches input_type.",
+      "input_type": "Expected Python type of raw_input: 'string', 'dict', or 'tuple'",
+      "expected_output": "Expected canonical NormalizedAsset fields (null if should_succeed=false)",
+      "should_succeed": "Whether normalization is expected to succeed (true) or raise an error (false)"
+    },
+    "canonical_form_spec": {
+      "native": "asset_type='native', asset_code='XLM', asset_issuer=null, canonical='native'",
+      "issued_alphanum4": "asset_type='credit_alphanum4', asset_code='CODE' (uppercase, <=4 chars), asset_issuer='G...' (56-char), canonical='CODE:ISSUER'",
+      "issued_alphanum12": "asset_type='credit_alphanum12', asset_code='CODE' (uppercase, 5-12 chars), asset_issuer='G...' (56-char), canonical='CODE:ISSUER'"
+    }
+  },
+  "test_cases": [
+    {
+      "test_id": "native_001",
+      "category": "native",
+      "description": "Lowercase 'xlm' string is recognized as native asset",
+      "raw_input": "xlm",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "native",
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical": "native"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "native_002",
+      "category": "native",
+      "description": "Uppercase 'XLM' string is recognized as native asset",
+      "raw_input": "XLM",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "native",
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical": "native"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "native_003",
+      "category": "native",
+      "description": "Mixed case 'Xlm' string is recognized as native asset",
+      "raw_input": "Xlm",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "native",
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical": "native"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "native_004",
+      "category": "native",
+      "description": "'native' string keyword is recognized as native asset",
+      "raw_input": "native",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "native",
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical": "native"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "native_005",
+      "category": "native",
+      "description": "'NATIVE' uppercase keyword is recognized as native asset",
+      "raw_input": "NATIVE",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "native",
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical": "native"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "native_006",
+      "category": "native",
+      "description": "'lumens' string is recognized as native asset",
+      "raw_input": "lumens",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "native",
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical": "native"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "native_007",
+      "category": "native",
+      "description": "'LUMEN' singular uppercase is recognized as native asset",
+      "raw_input": "LUMEN",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "native",
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical": "native"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "native_008",
+      "category": "native",
+      "description": "'stellar' string is recognized as native asset",
+      "raw_input": "stellar",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "native",
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical": "native"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "native_009",
+      "category": "native",
+      "description": "Native asset via dict with asset_type='native'",
+      "raw_input": {"asset_type": "native"},
+      "input_type": "dict",
+      "expected_output": {
+        "asset_type": "native",
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical": "native"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "native_010",
+      "category": "native",
+      "description": "Native asset via dict with asset_code='XLM' and no issuer",
+      "raw_input": {"asset_code": "XLM"},
+      "input_type": "dict",
+      "expected_output": {
+        "asset_type": "native",
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical": "native"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "native_011",
+      "category": "native",
+      "description": "Native asset via single-element tuple ('xlm',)",
+      "raw_input": ["xlm"],
+      "input_type": "tuple",
+      "expected_output": {
+        "asset_type": "native",
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical": "native"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "native_012",
+      "category": "native",
+      "description": "Native asset string with leading/trailing whitespace",
+      "raw_input": "  XLM  ",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "native",
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical": "native"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "issued_001",
+      "category": "issued",
+      "description": "USDC with valid issuer (Centre/Stellar anchor) using colon delimiter",
+      "raw_input": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "credit_alphanum4",
+        "asset_code": "USDC",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+        "canonical": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "issued_002",
+      "category": "issued",
+      "description": "USDC with valid issuer using dash delimiter",
+      "raw_input": "USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "credit_alphanum4",
+        "asset_code": "USDC",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+        "canonical": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "issued_003",
+      "category": "issued",
+      "description": "Lowercase asset code 'usdc' is uppercased in output",
+      "raw_input": "usdc:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "credit_alphanum4",
+        "asset_code": "USDC",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+        "canonical": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "issued_004",
+      "category": "issued",
+      "description": "yXLM (yield-bearing XLM wrapper) with UltraStellar issuer",
+      "raw_input": "yXLM:GARDNV3Q7YGT4AKSDF25LT32YSCCW4EV22Y2TV3I2PU2MMXBER7OVCRE",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "credit_alphanum4",
+        "asset_code": "YXLM",
+        "asset_issuer": "GARDNV3Q7YGT4AKSDF25LT32YSCCW4EV22Y2TV3I2PU2MMXBER7OVCRE",
+        "canonical": "YXLM:GARDNV3Q7YGT4AKSDF25LT32YSCCW4EV22Y2TV3I2PU2MMXBER7OVCRE"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "issued_005",
+      "category": "issued",
+      "description": "AQUA token via dict with asset_code and asset_issuer keys",
+      "raw_input": {"asset_code": "AQUA", "asset_issuer": "GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA"},
+      "input_type": "dict",
+      "expected_output": {
+        "asset_type": "credit_alphanum4",
+        "asset_code": "AQUA",
+        "asset_issuer": "GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA",
+        "canonical": "AQUA:GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "issued_006",
+      "category": "issued",
+      "description": "SHX token via dict using shorthand 'code' and 'issuer' keys",
+      "raw_input": {"code": "SHX", "issuer": "GDSTRSHXHGJ7ZIVRBXEYE5Q74XUVCUSEZ6YMW3LBH33YNRSYTU2LR2CP"},
+      "input_type": "dict",
+      "expected_output": {
+        "asset_type": "credit_alphanum4",
+        "asset_code": "SHX",
+        "asset_issuer": "GDSTRSHXHGJ7ZIVRBXEYE5Q74XUVCUSEZ6YMW3LBH33YNRSYTU2LR2CP",
+        "canonical": "SHX:GDSTRSHXHGJ7ZIVRBXEYE5Q74XUVCUSEZ6YMW3LBH33YNRSYTU2LR2CP"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "issued_007",
+      "category": "issued",
+      "description": "Issued asset via 2-element tuple",
+      "raw_input": ["USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"],
+      "input_type": "tuple",
+      "expected_output": {
+        "asset_type": "credit_alphanum4",
+        "asset_code": "USDC",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+        "canonical": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "issued_008",
+      "category": "issued",
+      "description": "12-character asset code (credit_alphanum12) via string",
+      "raw_input": "BANANACOIN12:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "credit_alphanum12",
+        "asset_code": "BANANACOIN12",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+        "canonical": "BANANACOIN12:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "issued_009",
+      "category": "issued",
+      "description": "5-character asset code (credit_alphanum12 boundary) via string",
+      "raw_input": "MOBI5:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "credit_alphanum12",
+        "asset_code": "MOBI5",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+        "canonical": "MOBI5:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "issued_010",
+      "category": "issued",
+      "description": "Issued asset string with extra whitespace around code and issuer",
+      "raw_input": "  USDC  :  GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN  ",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "credit_alphanum4",
+        "asset_code": "USDC",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+        "canonical": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "issued_011",
+      "category": "issued",
+      "description": "Issued asset with lowercase issuer key gets uppercased",
+      "raw_input": "USDC:ga5zsejyb37jrc5avcia5mop4rhtm335x2kgx3ihojapp5re34k4kzvn",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "credit_alphanum4",
+        "asset_code": "USDC",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+        "canonical": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "issued_012",
+      "category": "issued",
+      "description": "Single-character asset code with valid issuer",
+      "raw_input": "X:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "input_type": "string",
+      "expected_output": {
+        "asset_type": "credit_alphanum4",
+        "asset_code": "X",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+        "canonical": "X:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+      },
+      "should_succeed": true
+    },
+    {
+      "test_id": "edge_001",
+      "category": "edge_case",
+      "description": "Empty string input should fail",
+      "raw_input": "",
+      "input_type": "string",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "edge_002",
+      "category": "edge_case",
+      "description": "Whitespace-only string input should fail",
+      "raw_input": "   ",
+      "input_type": "string",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "edge_003",
+      "category": "edge_case",
+      "description": "Non-native asset code without issuer should fail",
+      "raw_input": "USDC",
+      "input_type": "string",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "edge_004",
+      "category": "edge_case",
+      "description": "Native asset with an issuer via string should fail",
+      "raw_input": "XLM:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "input_type": "string",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "edge_005",
+      "category": "edge_case",
+      "description": "Native asset with an issuer via dict should fail",
+      "raw_input": {"asset_code": "XLM", "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"},
+      "input_type": "dict",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "edge_006",
+      "category": "edge_case",
+      "description": "Dict with empty asset_code should fail",
+      "raw_input": {"asset_code": "", "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"},
+      "input_type": "dict",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "edge_007",
+      "category": "edge_case",
+      "description": "Issued asset with empty issuer string in dict should fail",
+      "raw_input": {"asset_code": "USDC", "asset_issuer": ""},
+      "input_type": "dict",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "malformed_001",
+      "category": "malformed",
+      "description": "Truncated issuer key (less than 56 chars) should fail",
+      "raw_input": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I",
+      "input_type": "string",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "malformed_002",
+      "category": "malformed",
+      "description": "Issuer not starting with 'G' should fail",
+      "raw_input": "USDC:XA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "input_type": "string",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "malformed_003",
+      "category": "malformed",
+      "description": "Asset code exceeding 12 characters should fail",
+      "raw_input": "LONGASSETCODE99:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "input_type": "string",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "malformed_004",
+      "category": "malformed",
+      "description": "Asset code with special characters should fail",
+      "raw_input": "US$C:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "input_type": "string",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "malformed_005",
+      "category": "malformed",
+      "description": "Colon delimiter with missing issuer should fail",
+      "raw_input": "USDC:",
+      "input_type": "string",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "malformed_006",
+      "category": "malformed",
+      "description": "Issuer with lowercase invalid base32 characters should fail",
+      "raw_input": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZV!",
+      "input_type": "string",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "malformed_007",
+      "category": "malformed",
+      "description": "Dict missing both asset_code and code keys should fail",
+      "raw_input": {"asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"},
+      "input_type": "dict",
+      "expected_output": null,
+      "should_succeed": false
+    },
+    {
+      "test_id": "malformed_008",
+      "category": "malformed",
+      "description": "Three-element tuple should fail",
+      "raw_input": ["USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN", "extra"],
+      "input_type": "tuple",
+      "expected_output": null,
+      "should_succeed": false
+    }
+  ]
+}
