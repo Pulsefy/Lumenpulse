@@ -52,7 +52,10 @@ export function validateContributionAmount(amount: string): string | null {
     return 'Please enter an amount.';
   }
 
-  // Reject anything that isn't a valid positive decimal
+  if (trimmed.startsWith('-')) {
+    return 'Amount must be greater than zero.';
+  }
+
   if (!/^\d+(\.\d+)?$/.test(trimmed)) {
     return 'Enter a valid number (e.g. 10 or 5.5).';
   }
@@ -74,7 +77,7 @@ export function validateContributionAmount(amount: string): string | null {
   // Guard against absurd decimal precision (7 decimals is Stellar's max)
   const parts = trimmed.split('.');
   if (parts[1] && parts[1].length > 7) {
-    return 'Too many decimal places (max 7).';
+    return 'Amount may include up to 7 decimal places.';
   }
 
   return null;

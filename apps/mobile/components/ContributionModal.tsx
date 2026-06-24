@@ -17,6 +17,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../src/context';
 import {
   ESTIMATED_FEE_XLM,
+  MIN_CONTRIBUTION_AMOUNT,
   TransactionStatus,
   buildExplorerUrl,
   validateContributionAmount,
@@ -85,6 +86,48 @@ export default function ContributionModal({
   const [txHash, setTxHash] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
 
+  const sanitizeContributionAmount = (text: string) => {
+    const cleaned = text.replace(/[^0-9.\-]/g, '');
+    const isNegative = cleaned.startsWith('-');
+    const numeric = cleaned.replace(/-/g, '');
+    const parts = numeric.split('.');
+    const normalized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : numeric;
+    const formatted = normalized.startsWith('.') ? `0${normalized}` : normalized;
+
+    return isNegative ? `-${formatted}` : formatted;
+  };
+
+  const amountHint = t('contribution_modal.amount_hint', {
+    min: MIN_CONTRIBUTION_AMOUNT,
+    decimals: 7,
+  });
+
+  const handleAmountChange = (text: string) => {
+    const sanitized = sanitizeContributionAmount(text);
+    setAmount(sanitized);
+
+    if (!sanitized || sanitized.endsWith('.')) {
+      setValidationError(null);
+      return;
+    }
+
+    const error = validateContributionAmount(sanitized);
+    setValidationError(error);
+  };
+
+  const handleClearAmount = () => {
+    setAmount('');
+    setValidationError(null);
+    inputRef.current?.focus();
+  };
+
+  const trimmedAmount = amount.trim();
+  const isSubmitting = txStatus === 'submitting';
+  const isSubmitDisabled =
+    isSubmitting ||
+    !trimmedAmount ||
+    Boolean(validateContributionAmount(trimmedAmount));
+
   const handleShow = useCallback(() => {
     setStep('input');
     setAmount('');
@@ -95,13 +138,7 @@ export default function ContributionModal({
     setTimeout(() => inputRef.current?.focus(), 300);
   }, []);
 
-  const handleAmountChange = (text: string) => {
-    const sanitized = text.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
-    setAmount(sanitized);
-    if (validationError) setValidationError(null);
-  };
-
-  const handleReview = () => {
+  const handleConfirm = async () => {
     Keyboard.dismiss();
     const error = validateContributionAmount(amount);
     if (error) { setValidationError(error); return; }
@@ -131,7 +168,6 @@ export default function ContributionModal({
     onClose();
   };
 
-  const isSubmitting = txStatus === 'submitting';
   const showResult = txStatus === 'confirmed' || txStatus === 'failed';
 
   // ── Result screen ────────────────────────────────────────────────────────
@@ -366,10 +402,26 @@ export default function ContributionModal({
                     maxLength={15}
                     accessibilityLabel={t('contribution_modal.amount_label')}
                   />
+                  {amount.length > 0 && !isSubmitting && (
+                    <TouchableOpacity
+                      onPress={handleClearAmount}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('contribution_modal.clear_amount')}
+                    >
+                      <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  )}
                 </View>
 
-                {validationError && (
-                  <Text style={[styles.errorText, { color: colors.danger }]}>{validationError}</Text>
+                {validationError ? (
+                  <Text style={[styles.errorText, { color: colors.danger }]} accessible>
+                    {validationError}
+                  </Text>
+                ) : (
+                  <Text style={[styles.hintText, { color: colors.textSecondary }]} accessible>
+                    {amountHint}
+                  </Text>
                 )}
 
                 <View style={styles.feeRow}>
@@ -384,11 +436,16 @@ export default function ContributionModal({
                 </Text>
 
                 <TouchableOpacity
-                  style={[styles.primaryButton, { backgroundColor: colors.accent }]}
-                  onPress={handleReview}
+                  style={[
+                    styles.primaryButton,
+                    { backgroundColor: isSubmitDisabled ? colors.border : colors.accent },
+                  ]}
+                  onPress={handleConfirm}
+                  disabled={isSubmitDisabled}
                   activeOpacity={0.8}
                   accessibilityRole="button"
-                  accessibilityLabel={t('contribution_modal.review')}
+                  accessibilityState={{ disabled: isSubmitDisabled }}
+                  accessibilityLabel={isSubmitting ? t('contribution_modal.submitting') : t('contribution_modal.submit')}
                 >
                   <Text style={styles.primaryButtonText}>{t('contribution_modal.review')}</Text>
                 </TouchableOpacity>
@@ -415,8 +472,94 @@ const styles = StyleSheet.create({
   sheetTitle: { fontSize: 20, fontWeight: '700' },
   projectLabel: { fontSize: 14, marginBottom: 20 },
   inputWrapper: {
-    flexDirection: 'row', alignItems: 'center', borderWidth: 1,
-    borderRadius: 14, paddingHorizontal: 16, height: 56, marginBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    height: 56,
+    marginBottom: 6,
+  },
+  currencyLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 10,
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '700',
+    paddingVertical: 0,
+  },
+  hintText: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 4,
+    marginLeft: 4,
+  },
+  errorText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 10,
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '700',
+    paddingVertical: 0,
+  },
+  errorText: {
+    fontSize: 13,
+    marginBottom: 4,
+    marginLeft: 4,
+  },
+  feeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+    gap: 6,
+  },
+  feeText: {
+    fontSize: 13,
+  },
+  disclaimer: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  primaryButton: {
+    height: 52,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  resultContainer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  resultTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  resultMessage: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 12,
+    paddingHorizontal: 8,
   },
   currencyLabel: { fontSize: 16, fontWeight: '600', marginRight: 10 },
   amountInput: { flex: 1, fontSize: 24, fontWeight: '700', paddingVertical: 0 },

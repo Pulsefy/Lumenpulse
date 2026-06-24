@@ -159,8 +159,13 @@ export class SorobanEventIndexerService {
       pageCursor = response.cursor || undefined;
 
       // Stop if we've passed the end ledger or exhausted pages
-      const lastLedger = response.events[response.events.length - 1]?.ledger ?? 0;
-      if (lastLedger >= endLedger || response.events.length < PAGE_LIMIT || !pageCursor) {
+      const lastLedger =
+        response.events[response.events.length - 1]?.ledger ?? 0;
+      if (
+        lastLedger >= endLedger ||
+        response.events.length < PAGE_LIMIT ||
+        !pageCursor
+      ) {
         hasMore = false;
       }
     }
@@ -173,9 +178,7 @@ export class SorobanEventIndexerService {
    * Uses (txHash, eventIndex) as the idempotency key — duplicate rows are
    * silently ignored via the unique constraint.
    */
-  private async upsertEvents(
-    events: rpc.Api.EventResponse[],
-  ): Promise<void> {
+  private async upsertEvents(events: rpc.Api.EventResponse[]): Promise<void> {
     if (events.length === 0) return;
 
     const rows: DeepPartial<SorobanEvent>[] = events.map((e) => {
@@ -210,7 +213,7 @@ export class SorobanEventIndexerService {
     });
 
     // upsert: on conflict (tx_hash, event_index) do nothing — fully idempotent
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     await this.eventRepo.upsert(rows as any[], {
       conflictPaths: ['txHash', 'eventIndex'],
       skipUpdateIfNoValuesChanged: true,

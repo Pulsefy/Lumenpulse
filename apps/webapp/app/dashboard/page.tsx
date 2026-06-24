@@ -6,6 +6,7 @@ import { Star } from "lucide-react";
 import StellarBalancesPanel from "@/components/stellar-balances-panel";
 import AssetDetail from "@/components/asset-detail";
 import WatchlistPanel from "@/components/watchlist-panel";
+import ContributionInsightsWidget from "@/components/contribution-insights-widget";
 import { WatchlistProvider } from "@/hooks/use-watchlist";
 import { useStellarAccount } from "@/hooks/useStellarAccount";
 import { useStellarWallet } from "@/app/providers";
@@ -240,6 +241,9 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+
+              {/* Contribution Insights Widget */}
+              <ContributionInsightsWidget publicKey={publicKey} />
 
               <div className="bg-gray-900/50 backdrop-blur-sm p-6 rounded-xl border border-white/10 shadow-xl">
                 <h2 className="text-xl font-semibold mb-4">Market Insights</h2>
