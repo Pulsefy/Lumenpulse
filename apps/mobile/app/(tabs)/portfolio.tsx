@@ -17,6 +17,7 @@ import { transactionApi } from '../../lib/transaction';
 import { Transaction, TransactionType } from '../../lib/types/transaction';
 import { useCachedData } from '../../hooks/useCachedData';
 import { CACHE_CONFIGS } from '../../lib/cache';
+import { useWalletAutoRefresh } from '../../hooks/useWalletAutoRefresh';
 
 function formatUsd(value: string | number): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -162,6 +163,18 @@ export default function PortfolioScreen() {
   const transactions = transactionData || [];
   const loading = summaryLoading && transactionsLoading;
   const [refreshing, setRefreshing] = useState(false);
+
+  // Background auto-refresh: aligned to TRANSACTIONS TTL (2 min, the shorter
+  // of the two) so both portfolio and transactions are refreshed before stale.
+  const handleAutoRefresh = useCallback(async () => {
+    await Promise.all([refreshSummary(), refreshTransactions()]);
+  }, [refreshSummary, refreshTransactions]);
+
+  useWalletAutoRefresh({
+    intervalMs: CACHE_CONFIGS.TRANSACTIONS.ttl,
+    onRefresh: handleAutoRefresh,
+    enabled: isAuthenticated,
+  });
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
