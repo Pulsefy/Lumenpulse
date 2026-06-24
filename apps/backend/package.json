@@ -21,7 +21,9 @@
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:generate": "npm run typeorm migration:generate src/database/migrations/migration -- -d src/database/data-source.ts",
     "migration:run": "npm run typeorm migration:run -- -d src/database/data-source.ts",
-    "migration:revert": "npm run typeorm migration:revert -- -d src/database/data-source.ts"
+    "migration:revert": "npm run typeorm migration:revert -- -d src/database/data-source.ts",
+    "drift:detect": "ts-node src/drift-detector/cli/run-detector.ts",
+    "drift:detect:json": "ts-node src/drift-detector/cli/run-detector.ts --json"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1019.0",
