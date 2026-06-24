@@ -115,6 +115,8 @@
     "amount_label": "贡献金额（XLM）",
     "estimated_fee": "预估网络费用：约 {{amount}} XLM",
     "disclaimer": "这是 Stellar 网络上的链上交易。除非项目被取消，否则贡献不可退款。",
+    "amount_hint": "请输入最多 {{decimals}} 位小数的金额。最低 {{min}} XLM。",
+    "clear_amount": "清除金额",
     "submit": "确认贡献",
     "submitting": "提交中...",
     "done": "完成",

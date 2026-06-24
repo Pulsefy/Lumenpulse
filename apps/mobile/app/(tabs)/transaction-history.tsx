@@ -8,6 +8,8 @@ import { transactionApi } from '../../lib/transaction';
 import { Transaction, TransactionType } from '../../lib/types/transaction';
 import StandardList from '@/components/StandardList';
 import { buildExplorerUrl } from '../../lib/stellar';
+import { CACHE_CONFIGS } from '../../lib/cache';
+import { useWalletAutoRefresh } from '../../hooks/useWalletAutoRefresh';
 
 function formatAmount(amount: string, assetCode: string): string {
   const num = parseFloat(amount);
@@ -192,6 +194,16 @@ export default function TransactionHistoryScreen() {
   useEffect(() => {
     if (isAuthenticated) fetchTransactions(true);
   }, [isAuthenticated, fetchTransactions]);
+
+  // Background auto-refresh: aligned to TRANSACTIONS TTL (2 min).
+  // fetchTransactions(true) is already error-safe and swallows network failures.
+  const handleAutoRefresh = useCallback(() => fetchTransactions(true), [fetchTransactions]);
+
+  useWalletAutoRefresh({
+    intervalMs: CACHE_CONFIGS.TRANSACTIONS.ttl,
+    onRefresh: handleAutoRefresh,
+    enabled: isAuthenticated,
+  });
 
   const handleLoadMore = () => {
     if (nextPage && !isLoading) fetchTransactions(false);
