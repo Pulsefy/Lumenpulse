@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -6,10 +6,14 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import AccountSwitcher from '../../components/AccountSwitcher';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTrackedWallet } from '../../contexts/TrackedWalletContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
 import { portfolioApi, AssetBalance, PortfolioSummary } from '../../lib/api';
@@ -61,7 +65,7 @@ function assetColor(code: string): string {
   return palette[Math.abs(hash) % palette.length];
 }
 
-function AssetRow({ asset, colors, t }: { asset: AssetBalance; colors: any; t: (key: string) => string }) {
+function AssetRow({ asset, colors }: { asset: AssetBalance; colors: any }) {
   const color = assetColor(asset.assetCode);
 
   return (
@@ -88,7 +92,7 @@ function AssetRow({ asset, colors, t }: { asset: AssetBalance; colors: any; t: (
   );
 }
 
-function RecentTransactionItem({ tx, colors, t }: { tx: Transaction; colors: any; t: (key: string) => string }) {
+function RecentTransactionItem({ tx, colors }: { tx: Transaction; colors: any }) {
   return (
     <View style={[styles.assetRow, { borderBottomColor: colors.border }]} accessible>
       <Ionicons
@@ -105,7 +109,15 @@ function RecentTransactionItem({ tx, colors, t }: { tx: Transaction; colors: any
   );
 }
 
-function Header({ summary, colors, t }: { summary: PortfolioSummary; colors: any; t: (key: string) => string }) {
+function Header({
+  summary,
+  colors,
+  t,
+}: {
+  summary: PortfolioSummary;
+  colors: any;
+  t: (key: string) => string;
+}) {
   return (
     <View style={[styles.header, { backgroundColor: colors.surface }]} accessible>
       <Text style={{ color: colors.textSecondary }} accessible>
@@ -122,15 +134,26 @@ export default function PortfolioScreen() {
   const { isAuthenticated } = useAuth();
   const { colors } = useTheme();
   const { t } = useLocalization();
+  const router = useRouter();
+  const {
+    linkedAccounts,
+    activeAccount,
+    activePublicKey,
+    isLoading: walletsLoading,
+    isSwitching,
+    switchAccount,
+    refreshAccounts,
+  } = useTrackedWallet();
+
+  const accountCacheKey = activePublicKey ?? 'none';
 
   const {
     data: summary,
     loading: summaryLoading,
     refresh: refreshSummary,
     isStale: summaryStale,
-    error: summaryError,
   } = useCachedData({
-    key: `portfolio_summary_default`,
+    key: `portfolio_summary_${accountCacheKey}`,
     fetcher: async () => {
       const response = await portfolioApi.getSummary();
       if (response.success && response.data) {
@@ -138,7 +161,7 @@ export default function PortfolioScreen() {
       }
       throw new Error(response.error?.message || t('errors.couldnt_load', { item: 'portfolio' }));
     },
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !!activePublicKey,
     ...CACHE_CONFIGS.PORTFOLIO,
   });
 
@@ -148,45 +171,68 @@ export default function PortfolioScreen() {
     refresh: refreshTransactions,
     isStale: transactionsStale,
   } = useCachedData({
-    key: `transactions_default_5`,
+    key: `transactions_${accountCacheKey}_5`,
     fetcher: async () => {
-      const response = await transactionApi.getHistory(5);
-      if (response.transactions) {
-        return response.transactions;
+      if (!activePublicKey) {
+        return [];
       }
-      throw new Error(t('errors.couldnt_load', { item: 'transactions' }));
+
+      const response = await transactionApi.getForAccount(activePublicKey, 5);
+      return response.transactions ?? [];
     },
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !!activePublicKey,
     ...CACHE_CONFIGS.TRANSACTIONS,
   });
 
   const transactions = transactionData || [];
-  const loading = summaryLoading && transactionsLoading;
+  const loading = walletsLoading || (summaryLoading && transactionsLoading);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (activePublicKey) {
+      void refreshSummary();
+      void refreshTransactions();
+    }
+  }, [activePublicKey, refreshSummary, refreshTransactions]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refreshSummary(), refreshTransactions()]);
+      if (activePublicKey) {
+        try {
+          await portfolioApi.createSnapshot();
+        } catch {
+          // Non-fatal: summary fetch below still returns the latest stored snapshot.
+        }
+      }
+      await Promise.all([refreshAccounts(), refreshSummary(), refreshTransactions()]);
     } finally {
       setRefreshing(false);
     }
-  }, [refreshSummary, refreshTransactions]);
+  }, [activePublicKey, refreshAccounts, refreshSummary, refreshTransactions]);
 
   const isStale = summaryStale || transactionsStale;
 
   if (!isAuthenticated) {
     return (
       <View style={styles.center} accessible accessibilityLabel={t('portfolio.login_required')}>
-        <Text style={{ color: colors.text }} accessible>{t('portfolio.login_required')}</Text>
+        <Text style={{ color: colors.text }} accessible>
+          {t('portfolio.login_required')}
+        </Text>
       </View>
     );
   }
 
+  const hasLinkedAccounts = linkedAccounts.length > 0;
+  const showPortfolioData = hasLinkedAccounts && !!activePublicKey;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      {isStale && (
-        <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]} accessible>
+      {isStale && showPortfolioData && (
+        <View
+          style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}
+          accessible
+        >
           <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
           <Text style={[styles.staleText, { color: colors.warning }]} accessible>
             {t('portfolio.showing_cached')}
@@ -195,43 +241,93 @@ export default function PortfolioScreen() {
       )}
 
       <FlatList
-        data={summary?.assets || []}
-        keyExtractor={(item) => item.assetCode}
+        data={showPortfolioData ? summary?.assets || [] : []}
+        keyExtractor={(item, index) => `${item.assetCode}-${index}`}
         ListHeaderComponent={
-          summary && (
-            <>
-              <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
-                {t('portfolio.title')}
-              </Text>
-              <Header summary={summary} colors={colors} t={t} />
+          <>
+            <Text
+              style={[styles.title, { color: colors.text }]}
+              accessible
+              accessibilityRole="header"
+            >
+              {t('portfolio.title')}
+            </Text>
 
-              <Text style={[styles.section, { color: colors.text }]} accessible accessibilityRole="header">
-                {t('portfolio.recent_transactions')}
-              </Text>
+            <AccountSwitcher
+              accounts={linkedAccounts}
+              activeAccount={activeAccount}
+              isLoading={walletsLoading}
+              isSwitching={isSwitching}
+              onSelectAccount={switchAccount}
+            />
 
-              {transactions.map((tx) => (
-                <RecentTransactionItem key={tx.id} tx={tx} colors={colors} t={t} />
-              ))}
-            </>
-          )
+            {!hasLinkedAccounts && !walletsLoading ? (
+              <View style={styles.centerSection} accessible>
+                <TouchableOpacity
+                  style={[styles.linkButton, { backgroundColor: colors.accent }]}
+                  onPress={() => router.push('/settings/manage-accounts')}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('portfolio.link_account')}
+                >
+                  <Ionicons name="link-outline" size={16} color="#ffffff" />
+                  <Text style={styles.linkButtonText}>{t('portfolio.link_account')}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            {showPortfolioData && summary ? (
+              <>
+                <Header summary={summary} colors={colors} t={t} />
+                <Text
+                  style={[styles.section, { color: colors.text }]}
+                  accessible
+                  accessibilityRole="header"
+                >
+                  {t('portfolio.recent_transactions')}
+                </Text>
+                {transactions.length === 0 && !transactionsLoading ? (
+                  <View style={styles.emptyActivity} accessible>
+                    <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
+                    <Text style={{ color: colors.textSecondary }} accessible>
+                      {t('portfolio.no_activity')}
+                    </Text>
+                  </View>
+                ) : (
+                  transactions.map((tx) => (
+                    <RecentTransactionItem key={tx.id} tx={tx} colors={colors} />
+                  ))
+                )}
+              </>
+            ) : null}
+          </>
         }
-        renderItem={({ item }) => <AssetRow asset={item} colors={colors} t={t} />}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} accessibilityLabel="Pull to refresh portfolio" />}
+        renderItem={({ item }) => <AssetRow asset={item} colors={colors} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            accessibilityLabel="Pull to refresh portfolio"
+          />
+        }
         ListEmptyComponent={
-          !loading ? (
-            <View style={styles.center} accessible accessibilityLabel="Portfolio empty">
-              <Text style={{ color: colors.text }} accessible>{t('portfolio.no_assets')}</Text>
+          showPortfolioData && !loading ? (
+            <View style={styles.centerSection} accessible accessibilityLabel="Portfolio empty">
+              <Ionicons name="wallet-outline" size={40} color={colors.textSecondary} />
+              <Text style={{ color: colors.text }} accessible>
+                {t('portfolio.no_assets')}
+              </Text>
+              <Text style={{ color: colors.textSecondary, textAlign: 'center' }} accessible>
+                {t('portfolio.no_assets_hint')}
+              </Text>
             </View>
           ) : null
         }
-        ListFooterComponent={loading ? <ActivityIndicator style={{ margin: 20 }} accessibilityLabel={t('common.loading')} /> : null}
-        onEndReached={() => {
-          if (!loading) console.log('pagination');
-        }}
-        onEndReachedThreshold={0.5}
-        initialNumToRender={10}
-        windowSize={5}
-        removeClippedSubviews
+        ListFooterComponent={
+          loading ? (
+            <ActivityIndicator style={{ margin: 20 }} accessibilityLabel={t('common.loading')} />
+          ) : null
+        }
         accessibilityLabel={t('portfolio.title')}
         accessibilityRole="list"
       />
@@ -241,7 +337,14 @@ export default function PortfolioScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 26, fontWeight: '700', margin: 20 },
+  centerSection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    gap: 8,
+  },
+  title: { fontSize: 26, fontWeight: '700', margin: 20, marginBottom: 8 },
   section: { margin: 20, fontWeight: '600' },
   header: {
     marginHorizontal: 16,
@@ -277,5 +380,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     marginLeft: 6,
+  },
+  emptyActivity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  linkButton: {
+    minHeight: 42,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  linkButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

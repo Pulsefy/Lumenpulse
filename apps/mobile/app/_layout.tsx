@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { View } from 'react-native';
 import { AuthProvider } from '../contexts/AuthContext';
+import { TrackedWalletProvider } from '../contexts/TrackedWalletContext';
 import { EnvironmentProvider } from '../contexts/EnvironmentContext';
 import { WalletProvider } from '../contexts/WalletContext';
 import { NotificationsProvider } from '../contexts/NotificationsContext';
@@ -14,23 +15,25 @@ export default function RootLayout() {
       <EnvironmentProvider>
         <BiometricLockGuard>
           <AuthProvider>
-            <WalletProvider>
-              <NotificationsProvider>
-                <View style={{ flex: 1 }}>
-                  <Stack
-                    screenOptions={{
-                      headerShown: false,
-                      // Accessibility improvements for screen readers
-                      animation: 'fade',
-                    }}
-                  >
-                    <Stack.Screen name="(tabs)" />
-                    <Stack.Screen name="auth" />
-                  </Stack>
-                  <NetworkBadge />
-                </View>
-              </NotificationsProvider>
-            </WalletProvider>
+            <TrackedWalletProvider>
+              <WalletProvider>
+                <NotificationsProvider>
+                  <View style={{ flex: 1 }}>
+                    <Stack
+                      screenOptions={{
+                        headerShown: false,
+                        // Accessibility improvements for screen readers
+                        animation: 'fade',
+                      }}
+                    >
+                      <Stack.Screen name="(tabs)" />
+                      <Stack.Screen name="auth" />
+                    </Stack>
+                    <NetworkBadge />
+                  </View>
+                </NotificationsProvider>
+              </WalletProvider>
+            </TrackedWalletProvider>
           </AuthProvider>
         </BiometricLockGuard>
       </EnvironmentProvider>

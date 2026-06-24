@@ -15,10 +15,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
 import { LinkedStellarAccount, usersApi } from '../../lib/api';
-import { storage } from '../../lib/storage';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
 import { useWallet } from '../../contexts/WalletContext';
+import { useTrackedWallet } from '../../contexts/TrackedWalletContext';
 
 const STELLAR_PUBLIC_KEY_REGEX = /\bG[A-Z2-7]{55}\b/;
 
@@ -52,6 +52,7 @@ export default function ManageAccountsScreen() {
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [scanLocked, setScanLocked] = useState(false);
   const { publicKey, status, connect, disconnect } = useWallet();
+  const { activeAccount, switchAccount, refreshAccounts } = useTrackedWallet();
 
   const sortedAccounts = useMemo(
     () =>
@@ -77,10 +78,10 @@ export default function ManageAccountsScreen() {
 
       const nextAccounts = response.data ?? [];
       setAccounts(nextAccounts);
-      await storage.storeLinkedAccountsMetadata(nextAccounts);
+      await refreshAccounts();
       return true;
     },
-    [t],
+    [t, refreshAccounts],
   );
 
   useEffect(() => {
@@ -88,12 +89,7 @@ export default function ManageAccountsScreen() {
       setLoading(true);
 
       try {
-        const cachedAccounts = await storage.getLinkedAccountsMetadata();
-        if (cachedAccounts.length > 0) {
-          setAccounts(cachedAccounts);
-        }
-
-        await loadAccounts(cachedAccounts.length === 0);
+        await loadAccounts(false);
       } finally {
         setLoading(false);
       }
@@ -157,7 +153,9 @@ export default function ManageAccountsScreen() {
 
     setNickname('');
     await loadAccounts();
-    await storage.setActiveWalletPublicKey(publicKey);
+    if (response.data?.id) {
+      await switchAccount(response.data.id);
+    }
     Alert.alert(
       t('settings.manage_accounts.account_linked'),
       `${truncateKey(publicKey)} ${t('settings.manage_accounts.account_linked_message')}`,
@@ -218,7 +216,11 @@ export default function ManageAccountsScreen() {
             <Ionicons name="arrow-back" size={20} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
-            <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+            <Text
+              style={[styles.title, { color: colors.text }]}
+              accessible
+              accessibilityRole="header"
+            >
               {t('settings.manage_accounts.title')}
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]} accessible>
@@ -299,14 +301,17 @@ export default function ManageAccountsScreen() {
           </View>
 
           <Text style={[styles.helperText, { color: colors.textSecondary }]} accessible>
-            Connect a mobile wallet to securely sign transactions via deep links or mock Testnet flows.
+            Connect a mobile wallet to securely sign transactions via deep links or mock Testnet
+            flows.
           </Text>
 
           {status === 'connected' && publicKey ? (
             <View style={[styles.accountRow, { paddingVertical: 10 }]}>
               <View style={styles.accountCopy}>
                 <Text style={[styles.accountLabel, { color: colors.success }]}>Connected</Text>
-                <Text style={[styles.accountKey, { color: colors.textSecondary }]}>{truncateKey(publicKey)}</Text>
+                <Text style={[styles.accountKey, { color: colors.textSecondary }]}>
+                  {truncateKey(publicKey)}
+                </Text>
               </View>
               <TouchableOpacity
                 style={[styles.removeButton, { borderColor: colors.danger }]}
@@ -357,7 +362,11 @@ export default function ManageAccountsScreen() {
               accessibilityHint="Refresh linked accounts"
             >
               {refreshing ? (
-                <ActivityIndicator size="small" color={colors.accent} accessibilityLabel={t('common.loading')} />
+                <ActivityIndicator
+                  size="small"
+                  color={colors.accent}
+                  accessibilityLabel={t('common.loading')}
+                />
               ) : (
                 <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
               )}
@@ -375,7 +384,11 @@ export default function ManageAccountsScreen() {
               accessibilityLabel="No linked accounts"
             >
               <Ionicons name="wallet-outline" size={22} color={colors.textSecondary} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+              <Text
+                style={[styles.emptyTitle, { color: colors.text }]}
+                accessible
+                accessibilityRole="header"
+              >
                 {t('settings.manage_accounts.no_linked_accounts')}
               </Text>
               <Text style={[styles.emptyDescription, { color: colors.textSecondary }]} accessible>
@@ -383,39 +396,67 @@ export default function ManageAccountsScreen() {
               </Text>
             </View>
           ) : (
-            sortedAccounts.map((account, index) => (
-              <View key={account.id}>
-                {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
-                <View
-                  style={styles.accountRow}
-                  accessible
-                  accessibilityLabel={`${account.label || 'Linked account'}: ${truncateKey(account.publicKey)}`}
-                >
-                  <View style={styles.accountCopy}>
-                    <Text style={[styles.accountLabel, { color: colors.text }]} accessible>
-                      {account.label?.trim() || 'Linked account'}
-                    </Text>
-                    <Text style={[styles.accountKey, { color: colors.textSecondary }]} accessible>
-                      {truncateKey(account.publicKey)}
-                    </Text>
+            sortedAccounts.map((account, index) => {
+              const isActive = account.id === activeAccount?.id;
+
+              return (
+                <View key={account.id}>
+                  {index > 0 && (
+                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                  )}
+                  <View style={styles.accountRow}>
+                    <TouchableOpacity
+                      style={styles.accountCopy}
+                      onPress={() => {
+                        if (!isActive) {
+                          void switchAccount(account.id);
+                        }
+                      }}
+                      activeOpacity={0.8}
+                      accessible
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isActive }}
+                      accessibilityLabel={`${account.label || 'Linked account'}: ${truncateKey(account.publicKey)}`}
+                    >
+                      <View style={styles.accountLabelRow}>
+                        <Text style={[styles.accountLabel, { color: colors.text }]} accessible>
+                          {account.label?.trim() || 'Linked account'}
+                        </Text>
+                        {isActive ? (
+                          <View
+                            style={[styles.activeBadge, { backgroundColor: `${colors.accent}22` }]}
+                          >
+                            <Text
+                              style={[styles.activeBadgeText, { color: colors.accent }]}
+                              accessible
+                            >
+                              {t('portfolio.active')}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={[styles.accountKey, { color: colors.textSecondary }]} accessible>
+                        {truncateKey(account.publicKey)}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.removeButton, { borderColor: colors.danger }]}
+                      onPress={() => handleRemove(account)}
+                      activeOpacity={0.8}
+                      disabled={submitting}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${t('settings.manage_accounts.remove')} ${account.label || truncateKey(account.publicKey)}`}
+                      accessibilityHint="Remove this linked account"
+                    >
+                      <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                      <Text style={[styles.removeButtonText, { color: colors.danger }]} accessible>
+                        {t('settings.manage_accounts.remove')}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    style={[styles.removeButton, { borderColor: colors.danger }]}
-                    onPress={() => handleRemove(account)}
-                    activeOpacity={0.8}
-                    disabled={submitting}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${t('settings.manage_accounts.remove')} ${account.label || truncateKey(account.publicKey)}`}
-                    accessibilityHint="Remove this linked account"
-                  >
-                    <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                    <Text style={[styles.removeButtonText, { color: colors.danger }]} accessible>
-                      {t('settings.manage_accounts.remove')}
-                    </Text>
-                  </TouchableOpacity>
                 </View>
-              </View>
-            ))
+              );
+            })
           )}
         </View>
 
@@ -443,7 +484,11 @@ export default function ManageAccountsScreen() {
             </View>
 
             {permissionGranted === false ? (
-              <View style={styles.permissionFallback} accessible accessibilityLabel="Camera permission required">
+              <View
+                style={styles.permissionFallback}
+                accessible
+                accessibilityLabel="Camera permission required"
+              >
                 <Text style={styles.permissionFallbackText} accessible>
                   {t('settings.manage_accounts.camera_permission_message')}
                 </Text>
@@ -586,6 +631,23 @@ const styles = StyleSheet.create({
   accountCopy: {
     flex: 1,
     gap: 4,
+  },
+  accountLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  activeBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  activeBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   accountLabel: {
     fontSize: 15,

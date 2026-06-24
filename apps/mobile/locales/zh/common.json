@@ -190,7 +190,18 @@
     "recent_transactions": "最近交易",
     "login_required": "需要登录",
     "showing_cached": "显示缓存数据 - 下拉刷新",
-    "no_assets": "暂无资产"
+    "no_assets": "暂无资产",
+    "no_assets_hint": "此钱包暂无已跟踪资产。",
+    "no_activity": "此钱包暂无最近活动。",
+    "no_linked_accounts": "暂无关联账户",
+    "no_linked_accounts_hint": "关联 Stellar 钱包以开始跟踪余额和活动。",
+    "link_account": "关联账户",
+    "active_wallet": "当前钱包",
+    "switch_wallet": "切换钱包",
+    "switch_wallet_hint": "选择其他已跟踪钱包",
+    "select_wallet": "选择钱包",
+    "linked_account": "关联账户",
+    "active": "当前"
   },
   "transactions": {
     "title": "交易",

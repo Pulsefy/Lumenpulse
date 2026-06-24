@@ -83,6 +83,7 @@ export interface LinkedStellarAccount {
   id: string;
   publicKey: string;
   label?: string | null;
+  isPrimary?: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -178,6 +179,10 @@ export const usersApi = {
 
   async removeLinkedAccount(accountId: string): Promise<ApiResponse<void>> {
     return apiClient.delete<void>(`/users/me/accounts/${accountId}`);
+  },
+
+  async setPrimaryAccount(accountId: string): Promise<ApiResponse<void>> {
+    return apiClient.post<void>(`/users/me/accounts/${accountId}/primary`);
   },
 };
 

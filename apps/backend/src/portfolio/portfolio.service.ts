@@ -58,7 +58,7 @@ export class PortfolioService {
       throw new NotFoundException(`User ${userId} not found`);
     }
 
-    // Fetch balances from Stellar network using user's public key (id)
+    // Fetch balances from Stellar network using the user's primary public key
     let assetBalances: Array<{
       assetCode: string;
       assetIssuer: string | null;
@@ -68,8 +68,12 @@ export class PortfolioService {
     let totalValueUsd = 0;
 
     try {
+      if (!user.stellarPublicKey) {
+        throw new Error(`User ${userId} has no primary Stellar account`);
+      }
+
       const stellarBalances =
-        await this.stellarBalanceService.getAccountBalances(user.id);
+        await this.stellarBalanceService.getAccountBalances(user.stellarPublicKey);
 
       // Calculate USD values for each asset
       assetBalances = await Promise.all(

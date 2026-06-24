@@ -194,7 +194,18 @@
     "recent_transactions": "Recent Transactions",
     "login_required": "Login required",
     "showing_cached": "Showing cached data - Pull to refresh",
-    "no_assets": "No assets"
+    "no_assets": "No assets",
+    "no_assets_hint": "This wallet has no tracked assets yet.",
+    "no_activity": "No recent activity for this wallet.",
+    "no_linked_accounts": "No linked accounts",
+    "no_linked_accounts_hint": "Link a Stellar wallet to start tracking balances and activity.",
+    "link_account": "Link an Account",
+    "active_wallet": "Active Wallet",
+    "switch_wallet": "Switch Wallet",
+    "switch_wallet_hint": "Choose a different tracked wallet",
+    "select_wallet": "Select wallet",
+    "linked_account": "Linked account",
+    "active": "Active"
   },
   "transactions": {
     "title": "Transactions",

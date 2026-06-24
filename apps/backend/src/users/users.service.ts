@@ -147,6 +147,8 @@ export class UsersService {
     if (!user.stellarPublicKey) {
       user.stellarPublicKey = dto.publicKey;
       await this.usersRepository.save(user);
+      savedAccount.isPrimary = true;
+      await this.stellarAccountRepository.save(savedAccount);
     }
 
     return this.mapToResponseDto(savedAccount);
@@ -226,6 +228,13 @@ export class UsersService {
 
     user.stellarPublicKey = account.publicKey;
     await this.usersRepository.save(user);
+
+    await this.stellarAccountRepository.update(
+      { userId, isActive: true },
+      { isPrimary: false },
+    );
+    account.isPrimary = true;
+    await this.stellarAccountRepository.save(account);
   }
 
   private mapToResponseDto(account: StellarAccount): StellarAccountResponseDto {
