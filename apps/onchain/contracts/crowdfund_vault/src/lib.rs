@@ -16,12 +16,14 @@ use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
 use storage::{
-    DataKey, MilestoneDispute, ProjectData, ProtocolStats, LEDGER_BUMP, LEDGER_THRESHOLD,
+    DataKey, MilestoneDecision, MilestoneDispute, ProjectData, ProtocolStats, LEDGER_BUMP,
+    LEDGER_THRESHOLD,
 };
 
 const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
 const DEFAULT_REFUND_WINDOW_SECONDS: u64 = 14 * 24 * 60 * 60;
+const MAX_MILESTONE_BATCH_SIZE: u32 = 50;
 
 #[contract]
 pub struct CrowdfundVaultContract;
@@ -787,10 +789,28 @@ impl CrowdfundVaultContract {
         project_id: u64,
         milestone_id: u32,
     ) -> Result<(), CrowdfundError> {
-        // Verify admin (single check with helper)
+        Self::process_milestone_batch(
+            env.clone(),
+            admin,
+            vec![
+                &env,
+                MilestoneDecision {
+                    project_id,
+                    milestone_id,
+                    approved: true,
+                },
+            ],
+        )
+    }
+
+    /// Process a bounded batch of milestone decisions in a deterministic order.
+    pub fn process_milestone_batch(
+        env: Env,
+        admin: Address,
+        decisions: Vec<MilestoneDecision>,
+    ) -> Result<(), CrowdfundError> {
         Self::verify_admin(&env, &admin)?;
 
-        // Check Emergency Pause State (single read)
         let is_paused: bool = env
             .storage()
             .instance()
@@ -800,29 +820,51 @@ impl CrowdfundVaultContract {
             return Err(CrowdfundError::ContractPaused);
         }
 
-        let mut project: ProjectData = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Project(project_id))
-            .ok_or(CrowdfundError::ProjectNotFound)?;
-        Self::fail_if_project_expired(&env, project_id, &mut project)?;
-
-        // Approve milestone
-        env.storage()
-            .persistent()
-            .set(&DataKey::MilestoneApproved(project_id, milestone_id), &true);
-        env.storage().persistent().set(
-            &DataKey::MilestoneDisputed(project_id, milestone_id),
-            &false,
-        );
-
-        // Emit milestone approval event
-        events::MilestoneApprovedEvent {
-            admin,
-            project_id,
-            milestone_id,
+        if decisions.len() == 0 {
+            return Err(CrowdfundError::InvalidBatch);
         }
-        .publish(&env);
+
+        if decisions.len() > MAX_MILESTONE_BATCH_SIZE as u32 {
+            return Err(CrowdfundError::BatchTooLarge);
+        }
+
+        for index in 0..decisions.len() {
+            let current = decisions.get(index).unwrap();
+            for other_index in (index + 1)..decisions.len() {
+                let other = decisions.get(other_index).unwrap();
+                if current.project_id == other.project_id
+                    && current.milestone_id == other.milestone_id
+                {
+                    return Err(CrowdfundError::InvalidBatch);
+                }
+            }
+        }
+
+        for index in 0..decisions.len() {
+            let decision = decisions.get(index).unwrap();
+            let mut project: ProjectData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Project(decision.project_id))
+                .ok_or(CrowdfundError::ProjectNotFound)?;
+            Self::fail_if_project_expired(&env, decision.project_id, &mut project)?;
+
+            env.storage().persistent().set(
+                &DataKey::MilestoneApproved(decision.project_id, decision.milestone_id),
+                &decision.approved,
+            );
+            env.storage().persistent().set(
+                &DataKey::MilestoneDisputed(decision.project_id, decision.milestone_id),
+                &false,
+            );
+
+            events::MilestoneApprovedEvent {
+                admin: admin.clone(),
+                project_id: decision.project_id,
+                milestone_id: decision.milestone_id,
+            }
+            .publish(&env);
+        }
 
         Ok(())
     }

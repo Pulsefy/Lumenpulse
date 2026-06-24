@@ -69,3 +69,11 @@ pub struct MilestoneDispute {
     pub opened_at: u64,
     pub reason: Symbol,
 }
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneDecision {
+    pub project_id: u64,
+    pub milestone_id: u32,
+    pub approved: bool,
+}
