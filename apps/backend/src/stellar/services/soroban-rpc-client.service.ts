@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   rpc,
   Account,
@@ -51,7 +51,7 @@ export class SorobanRpcClientService {
   private readonly rpcErrors: Counter;
   private readonly rpcRequests: Counter;
 
-  constructor(registry?: Registry) {
+  constructor(@Optional() registry?: Registry) {
     const rpcUrl =
       config.stellar.sorobanRpcUrl ??
       (config.stellar.network === 'mainnet'

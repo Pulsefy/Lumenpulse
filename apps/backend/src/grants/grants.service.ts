@@ -45,7 +45,111 @@ export class GrantsService {
   private rounds = new Map<number, RoundRecord>();
   private nextRoundId = 0;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly config: ConfigService) {
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      process.env.NODE_ENV !== 'test'
+    ) {
+      this.seedRounds();
+    }
+  }
+
+  private seedRounds() {
+    const now = Math.floor(Date.now() / 1000);
+
+    // Round 0: Active round
+    const activeRoundId = this.nextRoundId++;
+    const activeRound: RoundRecord = {
+      id: activeRoundId,
+      name: 'Stellar Community Fund - Round 14',
+      tokenAddress: 'CBFQX3K5PZ...TESTNET',
+      startTime: now - 3 * 24 * 3600, // 3 days ago
+      endTime: now + 7 * 24 * 3600, // 7 days from now
+      totalPool: 5000000000000n, // 500,000 XLM (7 decimals)
+      isFinalized: false,
+      isDistributed: false,
+      contributions: new Map([
+        [
+          1,
+          new Map([
+            [
+              'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+              15000000000n,
+            ], // 1,500 XLM
+            [
+              'GBK37RY6M2X4M74H5QZ3HY2A3EHL73LIV52AHP4R6Q3I4G4R4KZV2OTHER1',
+              5000000000n,
+            ], // 500 XLM
+          ]),
+        ],
+        [
+          2,
+          new Map([
+            [
+              'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+              8000000000n,
+            ], // 800 XLM
+            [
+              'GBK37RY6M2X4M74H5QZ3HY2A3EHL73LIV52AHP4R6Q3I4G4R4KZV2OTHER2',
+              12000000000n,
+            ], // 1,200 XLM
+          ]),
+        ],
+        [
+          3,
+          new Map([
+            [
+              'GBK37RY6M2X4M74H5QZ3HY2A3EHL73LIV52AHP4R6Q3I4G4R4KZV2OTHER3',
+              2000000000n,
+            ], // 200 XLM
+          ]),
+        ],
+      ]),
+      eligibleProjects: new Set([1, 2, 3]),
+    };
+    this.rounds.set(activeRoundId, activeRound);
+
+    // Round 1: Ended & Distributed round
+    const endedRoundId = this.nextRoundId++;
+    const endedRound: RoundRecord = {
+      id: endedRoundId,
+      name: 'Soroban Builders Grant - Round 2',
+      tokenAddress: 'CBFQX3K5PZ...TESTNET',
+      startTime: now - 20 * 24 * 3600, // 20 days ago
+      endTime: now - 10 * 24 * 3600, // 10 days ago
+      totalPool: 10000000000000n, // 1,000,000 XLM
+      isFinalized: true,
+      isDistributed: true,
+      contributions: new Map([
+        [
+          2,
+          new Map([
+            [
+              'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+              45000000000n,
+            ], // 4,500 XLM
+            [
+              'GBK37RY6M2X4M74H5QZ3HY2A3EHL73LIV52AHP4R6Q3I4G4R4KZV2OTHER1',
+              15000000000n,
+            ], // 1,500 XLM
+          ]),
+        ],
+        [
+          4,
+          new Map([
+            [
+              'GBK37RY6M2X4M74H5QZ3HY2A3EHL73LIV52AHP4R6Q3I4G4R4KZV2OTHER3',
+              30000000000n,
+            ], // 3,000 XLM
+          ]),
+        ],
+      ]),
+      eligibleProjects: new Set([2, 4]),
+    };
+    this.rounds.set(endedRoundId, endedRound);
+
+    this.logger.log('Seeded 2 mock grant rounds in development mode');
+  }
 
   // ── Round management ───────────────────────────────────────────────────────
 

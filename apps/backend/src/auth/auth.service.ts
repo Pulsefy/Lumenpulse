@@ -4,6 +4,8 @@ import {
   UnauthorizedException,
   BadRequestException,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
@@ -56,6 +58,7 @@ export class AuthService {
     private readonly resetTokenRepository: Repository<PasswordResetToken>,
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepository: Repository<RefreshToken>,
+    @Inject(forwardRef(() => UsersService))
     private usersService: UsersService,
     private jwtService: JwtService,
     private readonly configService: ConfigService,

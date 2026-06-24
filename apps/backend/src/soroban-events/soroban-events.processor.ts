@@ -55,7 +55,8 @@ export class SorobanEventsProcessor extends WorkerHost {
       contractId: contractId ?? null,
       eventType: eventType ?? null,
       rawPayload,
-      ledgerSequence: (job.data as { ledgerSequence?: number }).ledgerSequence ?? null,
+      ledgerSequence:
+        (job.data as { ledgerSequence?: number }).ledgerSequence ?? null,
       status: SorobanEventStatus.PENDING,
       processedAt: null,
       errorMessage: null,
