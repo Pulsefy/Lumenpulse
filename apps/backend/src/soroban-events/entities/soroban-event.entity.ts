@@ -43,6 +43,14 @@ export class SorobanEvent {
   @Column({ type: 'varchar', length: 128, nullable: true })
   eventType: string | null;
 
+  /** Canonical event type from unified taxonomy */
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  canonicalType: string | null;
+
+  /** High-level event category */
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  category: string | null;
+
   /** Full raw payload stored for audit/debug */
   @Column({ type: 'jsonb' })
   rawPayload: Record<string, unknown>;

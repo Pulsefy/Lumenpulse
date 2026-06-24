@@ -13,6 +13,7 @@ import {
   SOROBAN_EVENTS_QUEUE,
   PROCESS_EVENT_JOB,
 } from './soroban-events.service';
+import { mapSorobanEvent } from './soroban-event-mapper';
 
 @Processor(SOROBAN_EVENTS_QUEUE)
 @Injectable()
@@ -49,11 +50,15 @@ export class SorobanEventsProcessor extends WorkerHost {
       return;
     }
 
+    const mapping = mapSorobanEvent(eventType ?? null);
+
     const event = this.eventRepo.create({
       txHash,
       eventIndex,
       contractId: contractId ?? null,
       eventType: eventType ?? null,
+      canonicalType: mapping?.canonicalType ?? null,
+      category: mapping?.category ?? null,
       rawPayload,
       ledgerSequence:
         (job.data as { ledgerSequence?: number }).ledgerSequence ?? null,
