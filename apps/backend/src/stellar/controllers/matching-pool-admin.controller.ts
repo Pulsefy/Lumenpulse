@@ -23,6 +23,7 @@ import {
 import { RolesGuard } from '../../auth/roles.guard';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { Roles, UserRole } from '../../auth/decorators/auth.decorators';
+import { BlockchainAudit } from '../../audit/decorators/blockchain-audit.decorator';
 
 @ApiTags('Admin — Matching Pool')
 @ApiBearerAuth()
@@ -34,6 +35,12 @@ export class MatchingPoolAdminController {
 
   @Post('rounds')
   @HttpCode(HttpStatus.CREATED)
+  @BlockchainAudit({
+    targetContract: 'matching_pool',
+    functionName: 'create_round',
+    description: 'Create a new matching round with specified funds',
+    paramsToLog: ['name', 'matchingFunds'],
+  })
   @ApiOperation({ summary: 'Create a new matching round on-chain' })
   @ApiResponse({ status: 201, type: RoundResponseDto })
   createRound(
@@ -45,6 +52,12 @@ export class MatchingPoolAdminController {
 
   @Post('rounds/:roundId/approve-project')
   @HttpCode(HttpStatus.OK)
+  @BlockchainAudit({
+    targetContract: 'matching_pool',
+    functionName: 'approve_project',
+    description: 'Approve a project to participate in a matching round',
+    paramsToLog: ['projectAddress'],
+  })
   @ApiOperation({ summary: 'Approve a project for a matching round' })
   @ApiResponse({ status: 200, type: RoundResponseDto })
   approveProject(
@@ -55,3 +68,4 @@ export class MatchingPoolAdminController {
     return this.service.approveProject(roundId, dto, req.user.id);
   }
 }
+

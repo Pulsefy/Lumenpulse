@@ -25,6 +25,7 @@ import {
   StreamStateDto,
 } from './dto/stream-response.dto';
 import { TreasuryService } from './treasury.service';
+import { BlockchainAudit } from '../audit/decorators/blockchain-audit.decorator';
 
 @ApiTags('treasury')
 @Controller('treasury')
@@ -35,6 +36,12 @@ export class TreasuryController {
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @BlockchainAudit({
+    targetContract: 'treasury',
+    functionName: 'allocate_budget',
+    description: 'Allocate a treasury budget and start a vesting stream',
+    paramsToLog: ['beneficiary', 'amount', 'startTime', 'duration'],
+  })
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Allocate a treasury budget and start a stream (admin only)',
@@ -91,3 +98,4 @@ export class TreasuryController {
     return this.treasuryService.getStream(beneficiary);
   }
 }
+
