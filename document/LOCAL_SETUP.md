@@ -379,6 +379,15 @@ The deploy command prints a **contract ID**. Record it and add it to the canonic
 
 If you are using `scripts/.env`, keep the same contract ID there so the helper script, deployment outputs, and app environments stay aligned.
 
+The canonical testnet deployment manifest is `apps/onchain/testnet-manifest.json`. Each contract entry must include its contract ID, WASM hash, version, and `testnet` environment metadata. Validate it before publishing deployment notes:
+
+```bash
+cd apps/onchain
+node scripts/validate-manifest.js
+```
+
+After deploying `deployment_metadata_registry`, initialize it with the admin address and mirror the validated manifest on-chain with one `set_deployment` admin transaction per active contract. Clients can then call `get_active_deployments` to verify the current testnet deployment set.
+
 To deploy all contracts at once using the monorepo helper script:
 
 ```bash
