@@ -1,0 +1,76 @@
+﻿cargo :     Finished 
+`test` profile 
+[unoptimized + 
+debuginfo] target(s) 
+in 21.80s
+At line:1 char:1
++ cargo test > 
+tests_output.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (    Finish   
+ ed `t...et(s) in     
+21.80s:String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+     Running 
+unittests src\lib.rs (
+C:\Users\ADMIN\Desktop
+\lekan-drips\Lumenpuls
+e\apps\onchain\target\
+debug\deps\contributor
+_registry-a88dcf0fc9c4
+dab3.exe)
+
+running 43 tests
+test test::test_admin_managed_update_requires_multisig_approval ... ok
+test test::test_apply_penalty_requires_multisig ... ok
+test test::test_admin_managed_update_rejects_non_signer_executor ... ok
+test test::test_apply_penalty_stores_record ... ok
+test test::test_admin_managed_update_succeeds ... ok
+test test::test_admin_managed_update_rejects_wrong_action_proposal ... ok
+test test::test_apply_penalty_deducts_reputation ... ok
+test test::test_apply_penalty_floors_at_zero ... ok
+test test::test_double_initialize_fails ... ok
+test test::test_execute_below_threshold_fails ... ok
+test test::test_contributor_entry_accessible_after_ledger_advance ... ok
+test test::test_cancel_blocks_execution ... ok
+test test::test_bob_carol_together_cannot_reach_threshold ... ok
+test test::test_consume_approval_executes_after_threshold ... ok
+test test::test_double_sign_rejected ... ok
+test test::test_gasless_registration_replay_is_rejected ... ok
+test test::test_deregister_removes_all_keys ... ok
+test test::test_expire_after_ttl ... ok
+test test::test_full_proposal_flow ... ok
+test test::test_initialize_stores_config ... ok
+test test::test_grant_and_revoke_badge ... ok
+test test::test_expire_before_ttl_fails ... ok
+test test::test_register_contributor_with_sig_increments_nonce ... ok
+test test::test_get_registration_nonce_query ... ok
+test test::test_propose_by_non_signer_fails ... ok
+test test::test_get_penalty_record_returns_none_when_absent ... ok
+test test::test_self_service_update_rejects_empty_handle ... ok
+test test::test_propose_counts_proposer_weight ... ok
+test test::test_non_signer_cannot_sign ... ok
+test test::test_register_contributor_with_sig_rejects_empty_signature ... ok
+test test::test_self_service_update_rejects_taken_handle ... ok
+test test::test_single_signer_above_threshold_auto_approves ... ok
+test test::test_ttl_extended_after_read_write ... ok
+test test::test_threshold_above_total_weight_fails ... ok
+test test::test_update_reputation_requires_multisig ... ok
+test test::test_self_service_update_succeeds ... ok
+test test::test_wrong_action_type_rejected ... ok
+test test::test_sign_reaches_threshold ... ok
+test test::test_replay_blocked_after_execution ... ok
+test test::test_self_service_update_requires_own_auth ... ok
+test test::test_update_reputation_succeeds_with_approval ... ok
+test test::test_upgrade_approved_before_execution ... ok
+test test::test_tier_calculation ... ok
+
+test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.51s
+

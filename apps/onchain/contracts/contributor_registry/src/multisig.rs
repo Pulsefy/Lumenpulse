@@ -41,6 +41,7 @@ pub struct MultisigConfig {
 pub enum ProposalAction {
     Upgrade,
     SetAdmin,
+    UpdateContributor,
     UpdateReputation,
     GrantBadge,
     RevokeBadge,

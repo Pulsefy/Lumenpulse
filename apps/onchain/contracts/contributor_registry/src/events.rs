@@ -90,6 +90,15 @@ pub struct BadgeRevokedEvent {
 }
 
 #[contractevent]
+pub struct ContributorUpdatedEvent {
+    #[topic]
+    pub contributor: Address,
+    pub old_github_handle: String,
+    pub new_github_handle: String,
+    pub updated_by: Address,
+}
+
+#[contractevent]
 pub struct ReputationPenaltyAppliedEvent {
     #[topic]
     pub contributor: Address,
