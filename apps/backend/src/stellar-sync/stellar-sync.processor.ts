@@ -8,6 +8,7 @@ import { StellarProcessedEvent } from './entities/processed-event.entity';
 import { Horizon } from '@stellar/stellar-sdk';
 import stellarConfig from '../stellar/config/stellar.config';
 import type { StellarConfig } from '../stellar/config/stellar.config';
+import { ResilienceService } from '../stellar/services/resilience.service';
 
 export interface SyncLedgerPayload {
   limit?: number;
@@ -29,6 +30,7 @@ export class StellarSyncProcessor extends WorkerHost {
     private readonly processedEventRepo: Repository<StellarProcessedEvent>,
     @Inject(stellarConfig.KEY)
     private readonly config: StellarConfig,
+    private readonly resilienceService: ResilienceService,
   ) {
     super();
     this.server = new Horizon.Server(this.config.horizonUrl);
@@ -64,12 +66,20 @@ export class StellarSyncProcessor extends WorkerHost {
 
     try {
       this.logger.log(`Fetching ledgers from cursor: ${cursor}`);
-      const ledgers = await this.server
-        .ledgers()
-        .cursor(cursor)
-        .limit(limit)
-        .order('asc')
-        .call();
+      const ledgers = await this.resilienceService
+        .getPolicy('horizon')
+        .execute(
+          'sync-ledgers',
+          async () =>
+            this.server
+              .ledgers()
+              .cursor(cursor!)
+              .limit(limit)
+              .order('asc')
+              .call(),
+          (err) => this.isHorizonSystemFailure(err),
+        );
+
 
       let processedCount = 0;
       let lastCursor = cursor;
@@ -112,11 +122,40 @@ export class StellarSyncProcessor extends WorkerHost {
         nextCursor: lastCursor,
         totalFetched: ledgers.records.length,
       };
-    } catch (error) {
-      this.logger.error(
-        `Error syncing ledgers: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      throw error; // Will trigger BullMQ retry logic
+  }
+
+  private isHorizonSystemFailure(error: unknown): boolean {
+    const isNotFound =
+      error &&
+      typeof error === 'object' &&
+      'name' in error &&
+      error.name === 'NotFoundError';
+    if (isNotFound) {
+      return false;
     }
+
+    const isNetworkError =
+      error &&
+      typeof error === 'object' &&
+      'name' in error &&
+      error.name === 'NetworkError';
+    if (isNetworkError) {
+      return true;
+    }
+
+    interface ErrorWithResponse {
+      response?: { status?: number };
+    }
+
+    const errorObj = error as ErrorWithResponse;
+    const status = errorObj?.response?.status;
+    return (
+      status !== 404 &&
+      (status === undefined ||
+        status >= 500 ||
+        errorObj.response === undefined ||
+        (error instanceof Error && error.name === 'CircuitBreakerOpenException'))
+    );
   }
 }
+

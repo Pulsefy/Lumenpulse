@@ -21,6 +21,7 @@ import {
 import { validateStellarPublicKey } from './utils/stellar-validator';
 import { retryWithBackoff } from './utils/retry.util';
 import { CacheService } from '../cache/cache.service';
+import { ResilienceService } from './services/resilience.service';
 
 @Injectable()
 export class StellarService {
@@ -32,6 +33,7 @@ export class StellarService {
     @Inject(stellarConfig.KEY)
     config: ConfigType<typeof stellarConfig>,
     private readonly cacheService: CacheService,
+    private readonly resilienceService: ResilienceService,
   ) {
     this.config = config;
     this.server = new Horizon.Server(config.horizonUrl);
@@ -77,7 +79,9 @@ export class StellarService {
   async accountExists(publicKey: string): Promise<boolean> {
     try {
       this.validatePublicKeyOrThrow(publicKey);
-      await this.server.loadAccount(publicKey);
+      await this.executeWithResilience('loadAccount', () =>
+        this.server.loadAccount(publicKey),
+      );
       return true;
     } catch (error) {
       if (
@@ -121,27 +125,10 @@ export class StellarService {
     publicKey: string,
   ): Promise<AccountBalancesDto> {
     try {
-      // Retry logic for network failures
-      const account: Horizon.AccountResponse = await retryWithBackoff(
+      // Execute loadAccount call through Horizon resilience policy
+      const account: Horizon.AccountResponse = await this.executeWithResilience(
+        'loadAccount',
         () => this.server.loadAccount(publicKey),
-        this.config.retryAttempts,
-        this.config.retryDelay,
-        (error: unknown) => {
-          if (error instanceof NetworkError) {
-            return true;
-          }
-          if (error instanceof NotFoundError) {
-            return false;
-          }
-
-          interface ErrorWithResponse {
-            response?: { status?: number };
-          }
-
-          const errorObj = error as ErrorWithResponse;
-          const status = errorObj?.response?.status;
-          return status !== 404 && (status === undefined || status >= 500);
-        },
       );
 
       const balances = this.mapBalancesToDto(account.balances);
@@ -175,12 +162,16 @@ export class StellarService {
     validateStellarPublicKey(publicKey);
     this.logger.debug(`Fetching transactions for account: ${publicKey}`);
     try {
-      const operations = await this.server
-        .operations()
-        .forAccount(publicKey)
-        .order('desc')
-        .limit(limit)
-        .call();
+      const operations = await this.executeWithResilience(
+        'getAccountTransactions',
+        () =>
+          this.server
+            .operations()
+            .forAccount(publicKey)
+            .order('desc')
+            .limit(limit)
+            .call(),
+      );
 
       return operations.records;
     } catch (error: unknown) {
@@ -317,20 +308,10 @@ export class StellarService {
       // Apply limit
       assetsBuilder = assetsBuilder.limit(limit);
 
-      // Execute the query with retry logic
-      const assetsResponse = await retryWithBackoff(
+      // Execute discoverAssets call through Horizon resilience policy
+      const assetsResponse = await this.executeWithResilience(
+        'discoverAssets',
         () => assetsBuilder.call(),
-        this.config.retryAttempts,
-        this.config.retryDelay,
-        (error) => {
-          // Retry on network errors and server errors
-          if (error instanceof NetworkError) {
-            return true;
-          }
-          const errorObj = error as { response?: { status?: number } };
-          const status = errorObj?.response?.status;
-          return status === undefined || status >= 500;
-        },
       );
 
       // Map results to DTOs
@@ -511,5 +492,37 @@ export class StellarService {
     );
 
     throw new HorizonUnavailableException(this.config.horizonUrl, errorMessage);
+  }
+
+  private async executeWithResilience<T>(
+    method: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return this.resilienceService
+      .getPolicy('horizon')
+      .execute(method, operation, (err) => this.isHorizonSystemFailure(err));
+  }
+
+  private isHorizonSystemFailure(error: unknown): boolean {
+    if (error instanceof NotFoundError) {
+      return false;
+    }
+    if (error instanceof NetworkError) {
+      return true;
+    }
+
+    interface ErrorWithResponse {
+      response?: { status?: number };
+    }
+
+    const errorObj = error as ErrorWithResponse;
+    const status = errorObj?.response?.status;
+    return (
+      status !== 404 &&
+      (status === undefined ||
+        status >= 500 ||
+        errorObj.response === undefined ||
+        (error instanceof Error && error.name === 'CircuitBreakerOpenException'))
+    );
   }
 }

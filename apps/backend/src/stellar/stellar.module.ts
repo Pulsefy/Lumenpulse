@@ -11,6 +11,7 @@ import { AppConfigModule } from '../config/config.module';
 import { SorobanRpcClientService } from './services/soroban-rpc-client.service';
 import { MatchingPoolAdminController } from './controllers/matching-pool-admin.controller';
 import { AppCacheModule } from '../cache/cache.module';
+import { ResilienceService } from './services/resilience.service';
 
 @Module({
   imports: [
@@ -26,12 +27,15 @@ import { AppCacheModule } from '../cache/cache.module';
     SorobanRpcClientService,
     ContractRotationService,
     StellarContractRotationService,
+    ResilienceService,
   ],
   exports: [
     StellarService,
     SorobanRpcClientService,
     ContractRotationService,
     StellarContractRotationService,
+    ResilienceService,
   ],
 })
 export class StellarModule {}
+

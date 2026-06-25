@@ -6,6 +6,8 @@ import { of, throwError } from 'rxjs';
 import { CacheService } from '../cache/cache.service';
 import { StellarService } from '../stellar/stellar.service';
 import { HealthService } from './health.service';
+import { SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
+import { ResilienceService } from '../stellar/services/resilience.service';
 
 describe('HealthService', () => {
   let service: HealthService;
@@ -13,6 +15,7 @@ describe('HealthService', () => {
   let cacheService: { checkHealth: jest.Mock };
   let stellarService: { checkHealth: jest.Mock };
   let httpService: { get: jest.Mock };
+  let sorobanRpcService: { checkHealth: jest.Mock };
 
   const mockHealthIndicatorService = {
     check: jest.fn((key: string) => ({
@@ -25,15 +28,31 @@ describe('HealthService', () => {
     })),
   };
 
+  const mockResiliencePolicy = {
+    getStatus: jest.fn(() => ({
+      state: 'CLOSED',
+      consecutiveFailures: 0,
+      budgetTokens: 100,
+      lastStateTransition: new Date().toISOString(),
+    })),
+  };
+
+  const mockResilienceService = {
+    getPolicy: jest.fn(() => mockResiliencePolicy),
+  };
+
   beforeEach(async () => {
     dataSource = {
       query: jest.fn(),
     };
     cacheService = {
-      checkHealth: jest.fn(),
+      checkHealth: jest.fn().mockResolvedValue(true),
     };
     stellarService = {
-      checkHealth: jest.fn(),
+      checkHealth: jest.fn().mockResolvedValue(true),
+    };
+    sorobanRpcService = {
+      checkHealth: jest.fn().mockResolvedValue(true),
     };
     httpService = {
       get: jest.fn(),
@@ -59,6 +78,14 @@ describe('HealthService', () => {
           useValue: stellarService,
         },
         {
+          provide: SorobanRpcClientService,
+          useValue: sorobanRpcService,
+        },
+        {
+          provide: ResilienceService,
+          useValue: mockResilienceService,
+        },
+        {
           provide: HttpService,
           useValue: httpService,
         },
@@ -73,6 +100,7 @@ describe('HealthService', () => {
     dataSource.query.mockResolvedValue([{ '?column?': 1 }]);
     cacheService.checkHealth.mockResolvedValue(true);
     stellarService.checkHealth.mockResolvedValue(true);
+    sorobanRpcService.checkHealth.mockResolvedValue(true);
     httpService.get.mockReturnValue(of({ data: { ok: true } }));
 
     const report = await service.getHealthReport();
@@ -82,6 +110,7 @@ describe('HealthService', () => {
     expect(report.details.database.status).toBe('up');
     expect(report.details.redis.status).toBe('up');
     expect(report.details.horizon.status).toBe('up');
+    expect(report.details.sorobanRpc.status).toBe('up');
     expect(report.details.externalApis.status).toBe('up');
   });
 

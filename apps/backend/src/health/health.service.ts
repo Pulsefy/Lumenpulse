@@ -10,6 +10,8 @@ import { DataSource } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
 import { CacheService } from '../cache/cache.service';
 import { StellarService } from '../stellar/stellar.service';
+import { SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
+import { ResilienceService } from '../stellar/services/resilience.service';
 
 interface DependencyCheckResult {
   name: string;
@@ -40,6 +42,8 @@ export class HealthService {
     private readonly cacheService: CacheService,
     private readonly stellarService: StellarService,
     private readonly httpService: HttpService,
+    private readonly sorobanRpc: SorobanRpcClientService,
+    private readonly resilienceService: ResilienceService,
   ) {}
 
   async getHealthReport(): Promise<LumenpulseHealthReport> {
@@ -47,6 +51,7 @@ export class HealthService {
     const dependencyChecks = await Promise.all([
       this.checkRedis(),
       this.checkHorizon(),
+      this.checkSorobanRpc(),
       this.checkExternalApis(),
     ]);
 
@@ -123,15 +128,48 @@ export class HealthService {
   private async checkHorizon(): Promise<DependencyCheckResult> {
     const indicator = this.healthIndicatorService.check('horizon');
     const isHealthy = await this.stellarService.checkHealth();
+    const policyStatus = this.resilienceService.getPolicy('horizon').getStatus();
+
+    const details = {
+      message: isHealthy
+        ? 'Stellar Horizon is healthy'
+        : 'Stellar Horizon is unavailable',
+      circuitBreakerState: policyStatus.state,
+      budgetTokens: policyStatus.budgetTokens,
+      consecutiveFailures: policyStatus.consecutiveFailures,
+      lastStateTransition: policyStatus.lastStateTransition,
+    };
+
+    const isUp = isHealthy && policyStatus.state !== 'OPEN';
 
     return {
       name: 'horizon',
-      result: isHealthy
-        ? indicator.up()
-        : indicator.down({
-            message: 'Stellar Horizon is unavailable',
-          }),
-      isUp: isHealthy,
+      result: isUp ? indicator.up(details) : indicator.down(details),
+      isUp,
+    };
+  }
+
+  private async checkSorobanRpc(): Promise<DependencyCheckResult> {
+    const indicator = this.healthIndicatorService.check('sorobanRpc');
+    const isHealthy = await this.sorobanRpc.checkHealth();
+    const policyStatus = this.resilienceService.getPolicy('soroban').getStatus();
+
+    const details = {
+      message: isHealthy
+        ? 'Soroban RPC is healthy'
+        : 'Soroban RPC is unavailable',
+      circuitBreakerState: policyStatus.state,
+      budgetTokens: policyStatus.budgetTokens,
+      consecutiveFailures: policyStatus.consecutiveFailures,
+      lastStateTransition: policyStatus.lastStateTransition,
+    };
+
+    const isUp = isHealthy && policyStatus.state !== 'OPEN';
+
+    return {
+      name: 'sorobanRpc',
+      result: isUp ? indicator.up(details) : indicator.down(details),
+      isUp,
     };
   }
 

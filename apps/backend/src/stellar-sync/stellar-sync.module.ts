@@ -7,6 +7,7 @@ import { StellarSyncProcessor } from './stellar-sync.processor';
 import { StellarSyncService } from './stellar-sync.service';
 import { ConfigModule } from '@nestjs/config';
 import stellarConfig from '../stellar/config/stellar.config';
+import { StellarModule } from '../stellar/stellar.module';
 
 @Module({
   imports: [
@@ -15,8 +16,10 @@ import stellarConfig from '../stellar/config/stellar.config';
       name: 'stellar-sync',
     }),
     ConfigModule.forFeature(stellarConfig),
+    StellarModule,
   ],
   providers: [StellarSyncProcessor, StellarSyncService],
   exports: [StellarSyncService],
 })
 export class StellarSyncModule {}
+

@@ -5,9 +5,11 @@ import {
   TransactionBuilder,
   BASE_FEE,
   Contract,
+  xdr,
 } from '@stellar/stellar-sdk';
 import { Counter, Histogram, Registry } from 'prom-client';
 import { config } from '../../lib/config';
+import { ResilienceService } from './resilience.service';
 
 export enum SorobanErrorCode {
   TIMEOUT = 'SOROBAN_TIMEOUT',
@@ -51,7 +53,10 @@ export class SorobanRpcClientService {
   private readonly rpcErrors: Counter;
   private readonly rpcRequests: Counter;
 
-  constructor(@Optional() registry?: Registry) {
+  constructor(
+    private readonly resilienceService: ResilienceService,
+    @Optional() registry?: Registry,
+  ) {
     const rpcUrl =
       config.stellar.sorobanRpcUrl ??
       (config.stellar.network === 'mainnet'
@@ -93,7 +98,7 @@ export class SorobanRpcClientService {
     publicKey: string,
     opts?: SorobanClientOptions,
   ): Promise<Account> {
-    return this.withRetry('getAccount', opts, async () => {
+    return this.executeWithResilience('getAccount', async () => {
       const account = await this.server.getAccount(publicKey);
       return account;
     });
@@ -104,7 +109,7 @@ export class SorobanRpcClientService {
     tx: Parameters<rpc.Server['simulateTransaction']>[0],
     opts?: SorobanClientOptions,
   ): Promise<rpc.Api.SimulateTransactionResponse> {
-    return this.withRetry('simulateTransaction', opts, async () => {
+    return this.executeWithResilience('simulateTransaction', async () => {
       const result = await this.server.simulateTransaction(tx);
       if (rpc.Api.isSimulationError(result)) {
         throw new SorobanRpcError(
@@ -121,7 +126,7 @@ export class SorobanRpcClientService {
     tx: Parameters<rpc.Server['sendTransaction']>[0],
     opts?: SorobanClientOptions,
   ): Promise<rpc.Api.SendTransactionResponse> {
-    return this.withRetry('sendTransaction', opts, async () => {
+    return this.executeWithResilience('sendTransaction', async () => {
       const result = await this.server.sendTransaction(tx);
       if (result.status === 'ERROR') {
         throw new SorobanRpcError(
@@ -138,8 +143,17 @@ export class SorobanRpcClientService {
     hash: string,
     opts?: SorobanClientOptions,
   ): Promise<rpc.Api.GetTransactionResponse> {
-    return this.withRetry('getTransaction', opts, async () => {
+    return this.executeWithResilience('getTransaction', async () => {
       return this.server.getTransaction(hash);
+    });
+  }
+
+  /** Fetch ledger entries resiliently */
+  async getLedgerEntries(
+    ...keys: xdr.LedgerKey[]
+  ): Promise<rpc.Api.GetLedgerEntriesResponse> {
+    return this.executeWithResilience('getLedgerEntries', async () => {
+      return this.server.getLedgerEntries(...keys);
     });
   }
 
@@ -163,112 +177,70 @@ export class SorobanRpcClientService {
     return this.simulateTransaction(tx, opts);
   }
 
+  /** Check node health directly, bypassing circuit breaker */
+  async checkHealth(): Promise<boolean> {
+    try {
+      const health = await this.server.getHealth();
+      return health.status === 'healthy';
+    } catch (err) {
+      this.logger.warn(
+        `Soroban RPC health check failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return false;
+    }
+  }
+
   /** Expose the raw server for advanced usage */
   get rawServer(): rpc.Server {
     return this.server;
   }
 
-  private async withRetry<T>(
+  private async executeWithResilience<T>(
     method: string,
-    opts: SorobanClientOptions | undefined,
     fn: () => Promise<T>,
   ): Promise<T> {
-    const { maxRetries, initialBackoffMs, timeoutMs } = {
-      ...DEFAULT_OPTIONS,
-      ...opts,
-    };
-
     this.rpcRequests.inc({ method });
     const timer = this.rpcLatency.startTimer({ method });
-    let attempt = 0;
 
-    while (true) {
-      try {
-        const result = await this.withTimeout(fn(), timeoutMs);
-        timer({ status: 'success' });
-        return result;
-      } catch (err) {
-        attempt++;
-        const isRetryable = this.isRetryable(err);
-        const exhausted = attempt > maxRetries;
-
-        this.logger.warn(
-          {
-            method,
-            attempt,
-            maxRetries,
-            retrying: isRetryable && !exhausted,
-            error: err instanceof Error ? err.message : String(err),
-          },
-          'Soroban RPC call failed',
-        );
-
-        if (!isRetryable || exhausted) {
-          timer({ status: 'error' });
-          const code =
-            err instanceof SorobanRpcError
-              ? err.code
-              : SorobanErrorCode.NETWORK_ERROR;
-          this.rpcErrors.inc({ code });
-
-          if (exhausted && isRetryable) {
-            throw new SorobanRpcError(
-              SorobanErrorCode.MAX_RETRIES_EXCEEDED,
-              `Max retries (${maxRetries}) exceeded for ${method}`,
-              err,
-            );
-          }
-          throw err;
-        }
-
-        const backoff = initialBackoffMs * Math.pow(2, attempt - 1);
-        await this.sleep(backoff);
-      }
+    try {
+      const result = await this.resilienceService
+        .getPolicy('soroban')
+        .execute(method, fn, (err) => this.isSorobanSystemFailure(err));
+      timer({ status: 'success' });
+      return result;
+    } catch (err) {
+      timer({ status: 'error' });
+      const code = this.getErrorCode(err);
+      this.rpcErrors.inc({ code });
+      throw err;
     }
   }
 
-  private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      const id = setTimeout(
-        () =>
-          reject(
-            new SorobanRpcError(
-              SorobanErrorCode.TIMEOUT,
-              `Soroban RPC request timed out after ${ms}ms`,
-            ),
-          ),
-        ms,
-      );
-      promise.then(
-        (v) => {
-          clearTimeout(id);
-          resolve(v);
-        },
-        (e: unknown) => {
-          clearTimeout(id);
-          reject(new Error(e instanceof Error ? e.message : String(e)));
-        },
-      );
-    });
-  }
-
-  private isRetryable(err: unknown): boolean {
+  private isSorobanSystemFailure(err: unknown): boolean {
     if (err instanceof SorobanRpcError) {
       return [
         SorobanErrorCode.TIMEOUT,
         SorobanErrorCode.NETWORK_ERROR,
       ].includes(err.code);
     }
-    // Retry on network-level errors
     return (
       err instanceof Error &&
       (err.message.includes('ECONNRESET') ||
         err.message.includes('ETIMEDOUT') ||
-        err.message.includes('fetch failed'))
+        err.message.includes('fetch failed') ||
+        err.message.includes('request timed out') ||
+        err.name === 'CircuitBreakerOpenException')
     );
   }
 
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+  private getErrorCode(err: unknown): string {
+    if (err instanceof SorobanRpcError) {
+      return err.code;
+    }
+    if (err instanceof Error && err.name === 'CircuitBreakerOpenException') {
+      return 'CIRCUIT_BREAKER_OPEN';
+    }
+    return SorobanErrorCode.NETWORK_ERROR;
   }
 }
+
