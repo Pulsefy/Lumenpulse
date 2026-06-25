@@ -5,6 +5,7 @@ use soroban_sdk::{contracttype, Address};
 pub enum DataKey {
     Admin,
     AssetPrice(Address),
+    AssetPriceTimestamp(Address),
     AssetOracle(Address),
     AssetDecimals(Address), // Stores decimals if needed for normalization
 }

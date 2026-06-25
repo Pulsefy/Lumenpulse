@@ -43,6 +43,49 @@ fn test_set_and_get_price() {
 }
 
 #[test]
+fn test_price_timestamp_is_stored() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let asset = Address::generate(&env);
+
+    let contract_id = env.register(PricingAdapterContract, ());
+    let client = PricingAdapterContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin);
+
+    let price: i128 = 10_000_000; // $1.00 scaled by 10^7
+    let asset_decimals: u32 = 7;
+
+    client.set_price(&admin, &asset, &price, &asset_decimals);
+
+    let (retrieved_price, timestamp) = client.get_price_with_timestamp(&asset);
+    assert_eq!(retrieved_price, price);
+    assert_eq!(timestamp, env.ledger().timestamp());
+}
+
+#[test]
+fn test_set_price_rejects_invalid_price() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let asset = Address::generate(&env);
+
+    let contract_id = env.register(PricingAdapterContract, ());
+    let client = PricingAdapterContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin);
+
+    let invalid_price: i128 = 0;
+    let asset_decimals: u32 = 7;
+
+    let res = client.try_set_price(&admin, &asset, &invalid_price, &asset_decimals);
+    assert!(res.is_err() || res.unwrap().is_err());
+}
+
+#[test]
 fn test_normalize_amount_same_decimals() {
     let env = Env::default();
     env.mock_all_auths();
@@ -102,4 +145,35 @@ fn test_normalize_amount_different_decimals() {
     // $6000 scaled by 10^7 = 60_000 * 10^7 = 60_000_000_000
     let expected: i128 = 6000 * 10_000_000;
     assert_eq!(normalized, expected);
+}
+
+#[test]
+fn test_price_expiration() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let asset = Address::generate(&env);
+
+    let contract_id = env.register(PricingAdapterContract, ());
+    let client = PricingAdapterContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin);
+
+    let price: i128 = 10_000_000; // $1.00 scaled by 10^7
+    let asset_decimals: u32 = 7;
+
+    client.set_price(&admin, &asset, &price, &asset_decimals);
+
+    // Within TTL should succeed
+    let ttl: u64 = 3600;
+    let fresh = client.get_price_if_fresh(&asset, &ttl);
+    assert_eq!(fresh, price);
+
+    // Advance ledger past TTL
+    env.ledger().set_timestamp(env.ledger().timestamp() + ttl + 1);
+
+    // Expect stale error when requesting with same TTL
+    let res = client.try_get_price_if_fresh(&asset, &ttl);
+    assert!(res.is_err() || res.unwrap().is_err());
 }

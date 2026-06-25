@@ -45,6 +45,12 @@ impl PricingAdapterContract {
         env.storage()
             .persistent()
             .set(&DataKey::AssetPrice(asset.clone()), &price);
+        // Store the ledger timestamp when the price was set so consumers can
+        // deterministically reason about price freshness.
+        let ts: u64 = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .set(&DataKey::AssetPriceTimestamp(asset.clone()), &ts);
         env.storage()
             .persistent()
             .set(&DataKey::AssetDecimals(asset.clone()), &asset_decimals);
@@ -64,6 +70,42 @@ impl PricingAdapterContract {
             .persistent()
             .get(&DataKey::AssetPrice(asset))
             .ok_or(PricingAdapterError::PriceNotFound)
+    }
+
+    /// Get the current configured price and the timestamp when it was set.
+    pub fn get_price_with_timestamp(
+        env: Env,
+        asset: Address,
+    ) -> Result<(i128, u64), PricingAdapterError> {
+        let price: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AssetPrice(asset.clone()))
+            .ok_or(PricingAdapterError::PriceNotFound)?;
+
+        let ts: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AssetPriceTimestamp(asset))
+            .ok_or(PricingAdapterError::PriceNotFound)?;
+
+        Ok((price, ts))
+    }
+
+    /// Returns the price if it was updated within `max_age_seconds`, otherwise
+    /// returns `PricingAdapterError::PriceStale` so callers can deterministically
+    /// reject stale values.
+    pub fn get_price_if_fresh(
+        env: Env,
+        asset: Address,
+        max_age_seconds: u64,
+    ) -> Result<i128, PricingAdapterError> {
+        let (price, ts) = Self::get_price_with_timestamp(env.clone(), asset.clone())?;
+        let now: u64 = env.ledger().timestamp();
+        if now > ts.saturating_add(max_age_seconds) {
+            return Err(PricingAdapterError::PriceStale);
+        }
+        Ok(price)
     }
 
     /// Get the decimals configured for an asset (defaults to 7)
