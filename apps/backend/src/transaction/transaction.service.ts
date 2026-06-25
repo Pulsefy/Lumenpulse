@@ -6,6 +6,7 @@ import {
   TransactionStatus,
 } from './dto/transaction.dto';
 import { getMockTransactions } from './mocks/mock-transactions';
+import { CacheService } from '../cache/cache.service';
 
 interface HorizonOperation {
   id: string;
@@ -72,7 +73,10 @@ export class TransactionService {
   private readonly horizonUrl: string;
   private readonly useMockData: boolean;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private cacheService: CacheService,
+  ) {
     const network = this.configService.get('STELLAR_NETWORK', 'testnet');
     this.horizonUrl =
       network === 'testnet'
@@ -81,6 +85,18 @@ export class TransactionService {
 
     this.useMockData =
       this.configService.get('USE_MOCK_TRANSACTIONS', 'true') === 'true';
+
+    this.cacheService.setCacheConfig({
+      balanceCacheTTL: this.configService.get<number>(
+        'STELLAR_BALANCE_CACHE_TTL',
+        30_000,
+      ),
+      operationsCacheTTL: this.configService.get<number>(
+        'STELLAR_OPERATIONS_CACHE_TTL',
+        15_000,
+      ),
+    });
+
     if (this.useMockData) {
       this.logger.log('Using mock transaction data for testing');
     }
@@ -98,6 +114,19 @@ export class TransactionService {
       return getMockTransactions(limit, cursor);
     }
 
+    return this.cacheService.getAccountOperationsCached(
+      publicKey,
+      limit,
+      async () => this.fetchTransactionHistory(publicKey, limit, cursor),
+      cursor,
+    );
+  }
+
+  private async fetchTransactionHistory(
+    publicKey: string,
+    limit: number,
+    cursor?: string,
+  ): Promise<{ transactions: TransactionDto[]; nextPage?: string }> {
     try {
       let url = `${this.horizonUrl}/accounts/${publicKey}/transactions?order=desc&limit=${limit}`;
       if (cursor) {

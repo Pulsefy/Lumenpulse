@@ -9,13 +9,14 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, select, and_, desc, func
+from sqlalchemy import create_engine, select, and_, desc, func, delete
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
 from .models import (
     Base,
     Article,
+    ArticleOnchainEntityLink,
     SocialPost,
     AnalyticsRecord,
     ContractEvent,
@@ -26,6 +27,11 @@ from .models import (
     AssetTrend,
 )
 from src.analytics.ner_service import NERService
+from src.analytics.onchain_entity_linker import (
+    OnchainEntityCandidate,
+    OnchainEntityLink,
+    OnchainEntityLinker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +67,7 @@ class PostgresService:
                 bind=self.engine,
             )
             self.ner_service = NERService()
+            self.onchain_linker = OnchainEntityLinker()
             logger.info("PostgreSQL service initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize PostgreSQL service: {e}")
@@ -79,6 +86,102 @@ class PostgresService:
             content=normalized.get("content"),
         )
         return normalized
+
+    def _project_candidates_from_session(
+        self,
+        session: Session,
+    ) -> List[OnchainEntityCandidate]:
+        """Build project candidates from materialized on-chain project views."""
+        projects = session.execute(select(ProjectView)).scalars().all()
+        candidates: List[OnchainEntityCandidate] = []
+
+        for project in projects:
+            extra_data = project.extra_data or {}
+            aliases = {
+                str(project.project_id),
+                f"project {project.project_id}",
+            }
+
+            for key in ("name", "title", "slug", "symbol", "asset_code"):
+                value = extra_data.get(key)
+                if value:
+                    aliases.add(str(value))
+
+            for value in extra_data.get("aliases") or []:
+                if value:
+                    aliases.add(str(value))
+
+            display_name = (
+                extra_data.get("name")
+                or extra_data.get("title")
+                or f"Project {project.project_id}"
+            )
+            asset_code = extra_data.get("asset_code") or extra_data.get("symbol")
+
+            candidates.append(
+                OnchainEntityCandidate(
+                    stable_id=f"project:{project.project_id}",
+                    entity_type="project",
+                    display_name=str(display_name),
+                    aliases=tuple(sorted(aliases)),
+                    asset_code=str(asset_code) if asset_code else None,
+                    project_id=int(project.project_id),
+                    contract_id=project.contract_id,
+                )
+            )
+
+            if project.contract_id:
+                candidates.append(
+                    OnchainEntityCandidate(
+                        stable_id=f"contract:{project.contract_id}",
+                        entity_type="contract",
+                        display_name=str(display_name),
+                        aliases=(project.contract_id,),
+                        project_id=int(project.project_id),
+                        contract_id=project.contract_id,
+                    )
+                )
+
+        return candidates
+
+    def _link_article_onchain_entities(
+        self,
+        session: Session,
+        article_data: Dict[str, Any],
+    ) -> List[OnchainEntityLink]:
+        """Link article content to default assets and current project views."""
+        linker = OnchainEntityLinker(self._project_candidates_from_session(session))
+        return linker.link_article(article_data)
+
+    def _sync_article_onchain_links(
+        self,
+        session: Session,
+        article: Article,
+        links: List[OnchainEntityLink],
+    ) -> None:
+        """Replace normalized link rows for an article with the latest links."""
+        article.onchain_entity_links = [link.to_dict() for link in links]
+        session.execute(
+            delete(ArticleOnchainEntityLink).where(
+                ArticleOnchainEntityLink.article_id == article.article_id
+            )
+        )
+
+        for link in links:
+            session.add(
+                ArticleOnchainEntityLink(
+                    article_id=article.article_id,
+                    stable_entity_id=link.stable_id,
+                    entity_type=link.entity_type,
+                    display_name=link.display_name,
+                    matched_text=link.matched_text,
+                    confidence=link.confidence,
+                    source=link.source,
+                    asset_code=link.asset_code,
+                    project_id=link.project_id,
+                    contract_id=link.contract_id,
+                )
+            )
 
     @contextmanager
     def get_session(self):
@@ -185,6 +288,7 @@ class PostgresService:
                 ).scalar_one_or_none()
 
                 if existing:
+                    links = self._link_article_onchain_entities(session, article_data)
                     # Update existing article
                     existing.title = article_data.get("title", existing.title)
                     existing.content = article_data.get("content", existing.content)
@@ -192,10 +296,17 @@ class PostgresService:
                     existing.source = article_data.get("source", existing.source)
                     existing.url = article_data.get("url", existing.url)
                     existing.asset_codes = article_data.get("asset_codes", existing.asset_codes)
-                    existing.primary_asset = article_data.get("primary_asset", existing.primary_asset)
+                    existing.primary_asset = article_data.get(
+                        "primary_asset",
+                        existing.primary_asset,
+                    )
                     existing.categories = article_data.get("categories", existing.categories)
                     existing.keywords = article_data.get("keywords", existing.keywords)
-                    existing.detected_entities = article_data.get("detected_entities", existing.detected_entities)
+                    existing.detected_entities = article_data.get(
+                        "detected_entities",
+                        existing.detected_entities,
+                    )
+                    self._sync_article_onchain_links(session, existing, links)
                     existing.language = article_data.get("language", existing.language)
                     existing.published_at = article_data.get("published_at", existing.published_at)
                     existing.fetched_at = article_data.get("fetched_at", existing.fetched_at)
@@ -212,6 +323,7 @@ class PostgresService:
                     logger.debug(f"Updated article: {existing.article_id}")
                     return existing
                 else:
+                    links = self._link_article_onchain_entities(session, article_data)
                     # Create new article
                     article = Article(
                         article_id=article_data.get("id"),
@@ -225,6 +337,7 @@ class PostgresService:
                         categories=article_data.get("categories"),
                         keywords=article_data.get("keywords"),
                         detected_entities=article_data.get("detected_entities"),
+                        onchain_entity_links=[link.to_dict() for link in links],
                         language=article_data.get("language"),
                         published_at=article_data.get("published_at"),
                         fetched_at=article_data.get("fetched_at"),
@@ -240,6 +353,7 @@ class PostgresService:
 
                     session.add(article)
                     session.flush()
+                    self._sync_article_onchain_links(session, article, links)
                     logger.debug(f"Saved article: {article.article_id}")
                     return article
 
@@ -277,6 +391,7 @@ class PostgresService:
                     ).scalar_one_or_none()
 
                     if existing:
+                        links = self._link_article_onchain_entities(session, article_data)
                         # Update existing article
                         existing.title = article_data.get("title", existing.title)
                         existing.content = article_data.get("content", existing.content)
@@ -284,12 +399,22 @@ class PostgresService:
                         existing.source = article_data.get("source", existing.source)
                         existing.url = article_data.get("url", existing.url)
                         existing.asset_codes = article_data.get("asset_codes", existing.asset_codes)
-                        existing.primary_asset = article_data.get("primary_asset", existing.primary_asset)
+                        existing.primary_asset = article_data.get(
+                            "primary_asset",
+                            existing.primary_asset,
+                        )
                         existing.categories = article_data.get("categories", existing.categories)
                         existing.keywords = article_data.get("keywords", existing.keywords)
-                        existing.detected_entities = article_data.get("detected_entities", existing.detected_entities)
+                        existing.detected_entities = article_data.get(
+                            "detected_entities",
+                            existing.detected_entities,
+                        )
+                        self._sync_article_onchain_links(session, existing, links)
                         existing.language = article_data.get("language", existing.language)
-                        existing.published_at = article_data.get("published_at", existing.published_at)
+                        existing.published_at = article_data.get(
+                            "published_at",
+                            existing.published_at,
+                        )
                         existing.fetched_at = article_data.get("fetched_at", existing.fetched_at)
 
                         if sentiment_result:
@@ -300,6 +425,7 @@ class PostgresService:
                             existing.sentiment_label = sentiment_result.get("sentiment_label")
                             existing.analyzed_at = datetime.utcnow()
                     else:
+                        links = self._link_article_onchain_entities(session, article_data)
                         # Create new article
                         article = Article(
                             article_id=article_data.get("id"),
@@ -313,6 +439,7 @@ class PostgresService:
                             categories=article_data.get("categories"),
                             keywords=article_data.get("keywords"),
                             detected_entities=article_data.get("detected_entities"),
+                            onchain_entity_links=[link.to_dict() for link in links],
                             language=article_data.get("language"),
                             published_at=article_data.get("published_at"),
                             fetched_at=article_data.get("fetched_at"),
@@ -327,6 +454,8 @@ class PostgresService:
                             article.analyzed_at = datetime.utcnow()
 
                         session.add(article)
+                        session.flush()
+                        self._sync_article_onchain_links(session, article, links)
 
                     saved_count += 1
 
@@ -383,6 +512,30 @@ class PostgresService:
                 return results
         except SQLAlchemyError as e:
             logger.error(f"Failed to retrieve articles: {e}")
+            return []
+
+    def get_article_onchain_links(
+        self,
+        article_id: Optional[str] = None,
+        stable_entity_id: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        limit: int = 200,
+    ) -> List[ArticleOnchainEntityLink]:
+        """Return normalized article/entity links for backend consumers."""
+        try:
+            with self.get_session() as session:
+                stmt = select(ArticleOnchainEntityLink).limit(limit)
+                if article_id:
+                    stmt = stmt.where(ArticleOnchainEntityLink.article_id == article_id)
+                if stable_entity_id:
+                    stmt = stmt.where(
+                        ArticleOnchainEntityLink.stable_entity_id == stable_entity_id
+                    )
+                if entity_type:
+                    stmt = stmt.where(ArticleOnchainEntityLink.entity_type == entity_type)
+                return session.execute(stmt).scalars().all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve article on-chain links: {e}")
             return []
 
     # Social Post Methods

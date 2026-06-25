@@ -1,11 +1,21 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { CacheService, NEWS_CACHE_KEY } from './cache.service';
+import {
+  CacheService,
+  NEWS_CACHE_KEY,
+  STELLAR_ACCOUNT_BALANCE_PREFIX,
+  STELLAR_ACCOUNT_OPERATIONS_PREFIX,
+} from './cache.service';
 
 const mockCacheManager = {
   get: jest.fn(),
   set: jest.fn(),
   del: jest.fn(),
+  store: {
+    client: {
+      keys: jest.fn(),
+    },
+  },
 };
 
 describe('CacheService', () => {
@@ -21,6 +31,142 @@ describe('CacheService', () => {
 
     service = module.get<CacheService>(CacheService);
     jest.clearAllMocks();
+    service.setCacheConfig({
+      balanceCacheTTL: 30_000,
+      operationsCacheTTL: 15_000,
+    });
+  });
+
+  describe('setCacheConfig', () => {
+    it('sets cache configuration', () => {
+      const newConfig = { balanceCacheTTL: 60_000, operationsCacheTTL: 30_000 };
+      service.setCacheConfig(newConfig);
+      expect(service.cacheConfig).toEqual(newConfig);
+    });
+  });
+
+  describe('getAccountBalanceKey', () => {
+    it('generates correct cache key for account balances', () => {
+      const key = service.getAccountBalanceKey(
+        'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+      );
+      expect(key).toBe(
+        `${STELLAR_ACCOUNT_BALANCE_PREFIX}:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`,
+      );
+    });
+  });
+
+  describe('getAccountOperationsKey', () => {
+    it('generates correct cache key without cursor', () => {
+      const key = service.getAccountOperationsKey('GA5Z...', 10);
+      expect(key).toBe(`${STELLAR_ACCOUNT_OPERATIONS_PREFIX}:GA5Z...:10`);
+    });
+
+    it('generates correct cache key with cursor', () => {
+      const key = service.getAccountOperationsKey('GA5Z...', 10, 'cursor123');
+      expect(key).toBe(
+        `${STELLAR_ACCOUNT_OPERATIONS_PREFIX}:GA5Z...:10:cursor123`,
+      );
+    });
+  });
+
+  describe('getOrSet', () => {
+    it('returns cached value when key exists', async () => {
+      mockCacheManager.get.mockResolvedValue({ data: 'cached' });
+      const fetcher = jest.fn().mockResolvedValue({ data: 'fresh' });
+
+      const result = await service.getOrSet('some-key', fetcher, 5000);
+
+      expect(result).toEqual({ data: 'cached' });
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(mockCacheManager.set).not.toHaveBeenCalled();
+    });
+
+    it('fetches and caches value when key does not exist', async () => {
+      mockCacheManager.get.mockResolvedValue(undefined);
+      mockCacheManager.set.mockResolvedValue(undefined);
+      const fetcher = jest.fn().mockResolvedValue({ data: 'fresh' });
+
+      const result = await service.getOrSet('some-key', fetcher, 5000);
+
+      expect(result).toEqual({ data: 'fresh' });
+      expect(fetcher).toHaveBeenCalled();
+      expect(mockCacheManager.set).toHaveBeenCalledWith(
+        'some-key',
+        { data: 'fresh' },
+        5000,
+      );
+    });
+  });
+
+  describe('getAccountBalanceCached', () => {
+    it('uses correct key and TTL for account balance caching', async () => {
+      const publicKey =
+        'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
+      const cachedResult = { balances: [], publicKey };
+      mockCacheManager.get.mockResolvedValue(undefined);
+      mockCacheManager.set.mockResolvedValue(undefined);
+
+      const fetcher = jest.fn().mockResolvedValue(cachedResult);
+      const result = await service.getAccountBalanceCached(publicKey, fetcher);
+
+      expect(mockCacheManager.set).toHaveBeenCalledWith(
+        expect.stringContaining(publicKey),
+        cachedResult,
+        30_000,
+      );
+      expect(result).toEqual(cachedResult);
+    });
+  });
+
+  describe('getAccountOperationsCached', () => {
+    it('uses correct key and TTL for account operations caching', async () => {
+      const publicKey =
+        'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
+      const cachedResult = { transactions: [], nextPage: undefined };
+      mockCacheManager.get.mockResolvedValue(undefined);
+      mockCacheManager.set.mockResolvedValue(undefined);
+
+      const fetcher = jest.fn().mockResolvedValue(cachedResult);
+      const result = await service.getAccountOperationsCached(
+        publicKey,
+        10,
+        fetcher,
+        'cursor123',
+      );
+
+      expect(mockCacheManager.set).toHaveBeenCalledWith(
+        expect.stringContaining(publicKey),
+        cachedResult,
+        15_000,
+      );
+      expect(result).toEqual(cachedResult);
+    });
+  });
+
+  describe('invalidateAccountBalance', () => {
+    it('deletes the account balance cache key', async () => {
+      mockCacheManager.del.mockResolvedValue(undefined);
+      await service.invalidateAccountBalance('GA5Z...');
+      expect(mockCacheManager.del).toHaveBeenCalledWith(
+        `${STELLAR_ACCOUNT_BALANCE_PREFIX}:GA5Z...`,
+      );
+    });
+  });
+
+  describe('invalidateAccountOperations', () => {
+    it('deletes operations cache entries for an account', async () => {
+      const mockKeys = ['key1', 'key2'];
+      mockCacheManager.store.client.keys.mockResolvedValue(mockKeys);
+      mockCacheManager.del.mockResolvedValue(undefined);
+
+      await service.invalidateAccountOperations('GA5Z...');
+
+      expect(mockCacheManager.store.client.keys).toHaveBeenCalledWith(
+        expect.stringContaining('GA5Z...'),
+      );
+      expect(mockCacheManager.del).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('get', () => {

@@ -375,7 +375,9 @@ soroban contract deploy \
   --source <your-stellar-secret-key>
 ```
 
-The deploy command prints a **contract ID**. Record it and add it to `scripts/.env` or to the relevant env variable if the backend or mobile app needs to call that contract.
+The deploy command prints a **contract ID**. Record it and add it to the canonical backend environment variable `STELLAR_CONTRACT_LUMEN_TOKEN` in `apps/backend/.env.local` or to the environment where the backend is configured. The backend then exposes this contract ID through its Stellar config API, which the web and mobile apps can consume for testnet usage.
+
+If you are using `scripts/.env`, keep the same contract ID there so the helper script, deployment outputs, and app environments stay aligned.
 
 To deploy all contracts at once using the monorepo helper script:
 
@@ -392,6 +394,24 @@ npx ts-node deploy.ts
 ### Database seed
 
 The backend does not ship an automatic seed script yet. To populate basic data for local testing, run the backend with `USE_MOCK_TRANSACTIONS=true` (already set in the example `.env`). This flag makes the portfolio and transaction endpoints return synthetic Stellar data without requiring live on-chain calls.
+
+### Synthetic datasets for dashboards and APIs
+
+The data-processing service includes a synthetic dataset generator for local stress testing and API validation. Run it from `apps/data-processing`:
+
+```bash
+python scripts/generate_synthetic_data.py \
+  --seed 42 \
+  --project-count 10 \
+  --contributors-per-project 5 \
+  --articles 80 \
+  --social-posts 80 \
+  --analytics-records 50 \
+  --contract-events 40 \
+  --output-dir data/synthetic
+```
+
+The generated files are stored under `apps/data-processing/data/synthetic`, keeping test data distinct from real ingested news.
 
 ### Testnet XLM
 

@@ -1,0 +1,48 @@
+[
+  {
+    "contract_id": "CONTRACT_10001",
+    "event_id": "synthetic_event_00001",
+    "ledger": 200002,
+    "event_type": "reward_granted",
+    "project_id": 10001,
+    "contributor": "GPJF5BX5DIYZF3BWDS5CK77EGCYXNGRO6X767JHVB35VUQY3Y4ZAFOO2",
+    "amount": 643.62,
+    "milestone_id": 3,
+    "status": "completed",
+    "topics": [
+      "XLM",
+      "reward_granted"
+    ],
+    "raw_data": {
+      "summary": "Synthetic reward_granted event for pulse-project-1",
+      "details": {
+        "contribution_reason": "stress test data generation",
+        "metric": "growth"
+      }
+    },
+    "timestamp": "2026-06-23T08:36:07.654325+00:00"
+  },
+  {
+    "contract_id": "CONTRACT_10002",
+    "event_id": "synthetic_event_00002",
+    "ledger": 200004,
+    "event_type": "submission_minted",
+    "project_id": 10002,
+    "contributor": "G5VIMPS5XLECNLQZXXIF7PGQQHS2XQWKBNRHVMW2UD32WY6FD2U4TRO3",
+    "amount": 1500.8,
+    "milestone_id": 2,
+    "status": "completed",
+    "topics": [
+      "BTC",
+      "submission_minted"
+    ],
+    "raw_data": {
+      "summary": "Synthetic submission_minted event for pulse-project-2",
+      "details": {
+        "contribution_reason": "stress test data generation",
+        "metric": "growth"
+      }
+    },
+    "timestamp": "2026-06-22T05:36:07.654349+00:00"
+  }
+]

@@ -298,6 +298,15 @@ export class ContributionResponseDto {
   message?: string;
 }
 
+export class BootstrapDemoDataResponseDto {
+  @ApiProperty({
+    description: 'List of created demo project IDs',
+    example: [101, 102, 103],
+    type: [Number],
+  })
+  projectIds: number[];
+}
+
 export class ContributionRecordDto {
   @ApiProperty({ description: 'Project ID', example: 1 })
   projectId: number;

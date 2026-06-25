@@ -17,6 +17,7 @@ import { transactionApi } from '../../lib/transaction';
 import { Transaction, TransactionType } from '../../lib/types/transaction';
 import { useCachedData } from '../../hooks/useCachedData';
 import { CACHE_CONFIGS } from '../../lib/cache';
+import { useWalletAutoRefresh } from '../../hooks/useWalletAutoRefresh';
 
 function formatUsd(value: string | number): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -65,9 +66,9 @@ function AssetRow({ asset, colors, t }: { asset: AssetBalance; colors: any; t: (
   const color = assetColor(asset.assetCode);
 
   return (
-    <View style={[styles.assetRow, { borderBottomColor: colors.border }]} accessible>
-      <View style={[styles.assetIcon, { backgroundColor: `${color}22` }]} accessible>
-        <Text style={{ color }} accessible>
+    <View style={[styles.assetRow, { borderBottomColor: colors.border }]} accessible accessibilityRole="listitem">
+      <View style={[styles.assetIcon, { backgroundColor: `${color}22` }]} importantForAccessibility="no">
+        <Text style={{ color }} importantForAccessibility="no">
           {asset.assetCode[0]}
         </Text>
       </View>
@@ -90,13 +91,12 @@ function AssetRow({ asset, colors, t }: { asset: AssetBalance; colors: any; t: (
 
 function RecentTransactionItem({ tx, colors, t }: { tx: Transaction; colors: any; t: (key: string) => string }) {
   return (
-    <View style={[styles.assetRow, { borderBottomColor: colors.border }]} accessible>
+    <View style={[styles.assetRow, { borderBottomColor: colors.border }]} accessible accessibilityRole="listitem">
       <Ionicons
         name={getTransactionIcon(tx.type) as any}
         size={20}
         color={colors.accent}
-        accessible
-        accessibilityLabel={tx.type}
+        importantForAccessibility="no"
       />
       <Text style={{ marginLeft: 10, color: colors.text }} accessible>
         {tx.type} • {formatTransactionDate(tx.date)}
@@ -164,6 +164,18 @@ export default function PortfolioScreen() {
   const loading = summaryLoading && transactionsLoading;
   const [refreshing, setRefreshing] = useState(false);
 
+  // Background auto-refresh: aligned to TRANSACTIONS TTL (2 min, the shorter
+  // of the two) so both portfolio and transactions are refreshed before stale.
+  const handleAutoRefresh = useCallback(async () => {
+    await Promise.all([refreshSummary(), refreshTransactions()]);
+  }, [refreshSummary, refreshTransactions]);
+
+  useWalletAutoRefresh({
+    intervalMs: CACHE_CONFIGS.TRANSACTIONS.ttl,
+    onRefresh: handleAutoRefresh,
+    enabled: isAuthenticated,
+  });
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -186,9 +198,9 @@ export default function PortfolioScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       {isStale && (
-        <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]} accessible>
-          <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
-          <Text style={[styles.staleText, { color: colors.warning }]} accessible>
+        <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]} accessible accessibilityRole="alert" accessibilityLabel={t('portfolio.showing_cached')}>
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} importantForAccessibility="no" />
+          <Text style={[styles.staleText, { color: colors.warning }]} importantForAccessibility="no">
             {t('portfolio.showing_cached')}
           </Text>
         </View>
@@ -219,7 +231,7 @@ export default function PortfolioScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} accessibilityLabel="Pull to refresh portfolio" />}
         ListEmptyComponent={
           !loading ? (
-            <View style={styles.center} accessible accessibilityLabel="Portfolio empty">
+            <View style={styles.center} accessible accessibilityLabel={t('portfolio.no_assets')}>
               <Text style={{ color: colors.text }} accessible>{t('portfolio.no_assets')}</Text>
             </View>
           ) : null
@@ -234,6 +246,7 @@ export default function PortfolioScreen() {
         removeClippedSubviews
         accessibilityLabel={t('portfolio.title')}
         accessibilityRole="list"
+        accessibilityHint={t('portfolio.total_balance')}
       />
     </SafeAreaView>
   );

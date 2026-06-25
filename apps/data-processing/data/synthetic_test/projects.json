@@ -1,0 +1,42 @@
+[
+  {
+    "project_id": 10001,
+    "contract_id": "CONTRACT_10001",
+    "owner": "GL2DSURE6AJHS3MOYLJBP7UQ6LTVLDWKCBOIB6QSUG3O63O3LA2BK3S2",
+    "total_contributions": 11266.25,
+    "unique_contributors": 2,
+    "status": "funding",
+    "last_event_ledger": 200001,
+    "extra_data": {
+      "name": "PulseProject 1",
+      "slug": "pulse-project-1",
+      "symbol": "XLM",
+      "asset_code": "XLM",
+      "description": "Synthetic project supporting Stellar research and on-chain data.",
+      "aliases": [
+        "xlm",
+        "pulse-project-1"
+      ]
+    }
+  },
+  {
+    "project_id": 10002,
+    "contract_id": "CONTRACT_10002",
+    "owner": "GMDB5A6XVLTWL5X7AUZES7IA2ED22RJ3LEO7WBYFZ72GMZJ5MW6MACQ4",
+    "total_contributions": 8987.06,
+    "unique_contributors": 2,
+    "status": "active",
+    "last_event_ledger": 200002,
+    "extra_data": {
+      "name": "PulseProject 2",
+      "slug": "pulse-project-2",
+      "symbol": "BTC",
+      "asset_code": "BTC",
+      "description": "Synthetic project supporting Bitcoin research and on-chain data.",
+      "aliases": [
+        "btc",
+        "pulse-project-2"
+      ]
+    }
+  }
+]

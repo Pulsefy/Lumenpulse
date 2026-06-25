@@ -1,6 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddPreferredCurrencyToUserPreferences1709251000000 implements MigrationInterface {
+export class AddPreferredCurrencyToUserPreferences1779000000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Update existing users to have preferredCurrency in their preferences
     await queryRunner.query(`

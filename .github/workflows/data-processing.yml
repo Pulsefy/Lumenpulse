@@ -41,6 +41,7 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Test with pytest
+      if: env.SKIP_TESTS != 'true'
       # Checks if tests folder exists before running to prevent failure on empty repo
       run: |
         if [ -d "tests" ]; then

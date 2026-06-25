@@ -9,9 +9,11 @@ import {
 } from './entities/soroban-event.entity';
 import { IngestSorobanEventDto } from './dto/ingest-soroban-event.dto';
 import {
+  SorobanEventsService,
   SOROBAN_EVENTS_QUEUE,
   PROCESS_EVENT_JOB,
 } from './soroban-events.service';
+import { mapSorobanEvent } from './soroban-event-mapper';
 
 @Processor(SOROBAN_EVENTS_QUEUE)
 @Injectable()
@@ -21,6 +23,8 @@ export class SorobanEventsProcessor extends WorkerHost {
   constructor(
     @InjectRepository(SorobanEvent)
     private readonly eventRepo: Repository<SorobanEvent>,
+
+    private readonly sorobanEventsService: SorobanEventsService,
   ) {
     super();
   }
@@ -33,7 +37,6 @@ export class SorobanEventsProcessor extends WorkerHost {
 
     const { txHash, eventIndex, contractId, eventType, rawPayload } = job.data;
 
-    // Idempotency: skip if already stored (unique index on txHash + eventIndex)
     const existing = await this.eventRepo.findOne({
       where: { txHash, eventIndex },
       select: ['id', 'status'],
@@ -41,17 +44,24 @@ export class SorobanEventsProcessor extends WorkerHost {
 
     if (existing) {
       this.logger.debug(
-        `Soroban event ${txHash}:${eventIndex} already processed (${existing.status}), skipping`,
+        { txHash, eventIndex, status: existing.status },
+        'Soroban event already processed, skipping',
       );
       return;
     }
+
+    const mapping = mapSorobanEvent(eventType ?? null);
 
     const event = this.eventRepo.create({
       txHash,
       eventIndex,
       contractId: contractId ?? null,
       eventType: eventType ?? null,
+      canonicalType: mapping?.canonicalType ?? null,
+      category: mapping?.category ?? null,
       rawPayload,
+      ledgerSequence:
+        (job.data as { ledgerSequence?: number }).ledgerSequence ?? null,
       status: SorobanEventStatus.PENDING,
       processedAt: null,
       errorMessage: null,
@@ -60,7 +70,27 @@ export class SorobanEventsProcessor extends WorkerHost {
     await this.eventRepo.save(event);
 
     try {
-      // placeholder for downstream processing (e.g. trigger notifications, update state)
+      if (contractId === process.env.PROJECT_REGISTRY_CONTRACT_ID) {
+        // Cast rawPayload to any so we can access its nested properties safely
+        const payloadData = rawPayload as Record<string, any>;
+
+        const projectData = {
+          projectId: String(payloadData?.projectId || ''),
+          owner: String(payloadData?.owner || ''),
+          name: String(payloadData?.name || ''),
+          metadataCid: payloadData?.metadataCid
+            ? String(payloadData.metadataCid)
+            : undefined,
+          // If ledgerSeq isn't in job.data, it should be in rawPayload.
+          // Fallback to 0 if it's missing to satisfy the interface.
+          ledgerSeq: Number(payloadData?.ledgerSeq || 0),
+          txHash: String(txHash),
+        };
+
+        await this.sorobanEventsService.syncProjectRegistryEvent(projectData);
+        this.logger.log(`Project Registry sync successful for tx ${txHash}`);
+      }
+
       event.status = SorobanEventStatus.PROCESSED;
       event.processedAt = new Date();
     } catch (err) {
@@ -72,7 +102,8 @@ export class SorobanEventsProcessor extends WorkerHost {
 
     await this.eventRepo.save(event);
     this.logger.log(
-      `Processed soroban event ${txHash}:${eventIndex} (${eventType})`,
+      { txHash, eventIndex, eventType },
+      'Processed soroban event',
     );
   }
 }

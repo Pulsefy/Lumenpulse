@@ -17,6 +17,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../src/context';
 import {
   ESTIMATED_FEE_XLM,
+  MIN_CONTRIBUTION_AMOUNT,
   TransactionStatus,
   buildExplorerUrl,
   validateContributionAmount,
@@ -45,6 +46,48 @@ export default function ContributionModal({
   const [txHash, setTxHash] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
 
+  const sanitizeContributionAmount = (text: string) => {
+    const cleaned = text.replace(/[^0-9.\-]/g, '');
+    const isNegative = cleaned.startsWith('-');
+    const numeric = cleaned.replace(/-/g, '');
+    const parts = numeric.split('.');
+    const normalized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : numeric;
+    const formatted = normalized.startsWith('.') ? `0${normalized}` : normalized;
+
+    return isNegative ? `-${formatted}` : formatted;
+  };
+
+  const amountHint = t('contribution_modal.amount_hint', {
+    min: MIN_CONTRIBUTION_AMOUNT,
+    decimals: 7,
+  });
+
+  const handleAmountChange = (text: string) => {
+    const sanitized = sanitizeContributionAmount(text);
+    setAmount(sanitized);
+
+    if (!sanitized || sanitized.endsWith('.')) {
+      setValidationError(null);
+      return;
+    }
+
+    const error = validateContributionAmount(sanitized);
+    setValidationError(error);
+  };
+
+  const handleClearAmount = () => {
+    setAmount('');
+    setValidationError(null);
+    inputRef.current?.focus();
+  };
+
+  const trimmedAmount = amount.trim();
+  const isSubmitting = txStatus === 'submitting';
+  const isSubmitDisabled =
+    isSubmitting ||
+    !trimmedAmount ||
+    Boolean(validateContributionAmount(trimmedAmount));
+
   const handleShow = useCallback(() => {
     setAmount('');
     setValidationError(null);
@@ -53,12 +96,6 @@ export default function ContributionModal({
     setTxError(null);
     setTimeout(() => inputRef.current?.focus(), 300);
   }, []);
-
-  const handleAmountChange = (text: string) => {
-    const sanitized = text.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
-    setAmount(sanitized);
-    if (validationError) setValidationError(null);
-  };
 
   const handleConfirm = async () => {
     Keyboard.dismiss();
@@ -94,7 +131,6 @@ export default function ContributionModal({
     onClose();
   };
 
-  const isSubmitting = txStatus === 'submitting';
   const showResult = txStatus === 'confirmed' || txStatus === 'failed';
 
   if (showResult) {
@@ -226,11 +262,25 @@ export default function ContributionModal({
                     accessibilityHint={t('contribution_modal.amount_label')}
                     accessibilityRole="text"
                   />
+                  {amount.length > 0 && !isSubmitting && (
+                    <TouchableOpacity
+                      onPress={handleClearAmount}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('contribution_modal.clear_amount')}
+                    >
+                      <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  )}
                 </View>
 
-                {validationError && (
+                {validationError ? (
                   <Text style={[styles.errorText, { color: colors.danger }]} accessible>
                     {validationError}
+                  </Text>
+                ) : (
+                  <Text style={[styles.hintText, { color: colors.textSecondary }]} accessible>
+                    {amountHint}
                   </Text>
                 )}
 
@@ -253,13 +303,13 @@ export default function ContributionModal({
                 <TouchableOpacity
                   style={[
                     styles.primaryButton,
-                    { backgroundColor: isSubmitting ? colors.border : colors.accent },
+                    { backgroundColor: isSubmitDisabled ? colors.border : colors.accent },
                   ]}
                   onPress={handleConfirm}
-                  disabled={isSubmitting}
+                  disabled={isSubmitDisabled}
                   activeOpacity={0.8}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: isSubmitting }}
+                  accessibilityState={{ disabled: isSubmitDisabled }}
                   accessibilityLabel={isSubmitting ? t('contribution_modal.submitting') : t('contribution_modal.submit')}
                 >
                   {isSubmitting ? (
@@ -322,6 +372,23 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   currencyLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 10,
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '700',
+    paddingVertical: 0,
+  },
+  hintText: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 4,
+    marginLeft: 4,
+  },
+  errorText: {
     fontSize: 16,
     fontWeight: '600',
     marginRight: 10,

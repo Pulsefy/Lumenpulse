@@ -45,11 +45,13 @@ import { z } from 'zod';
  * - STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY
  * - STELLAR_CONTRACT_MATCHING_POOL
  * - STELLAR_CONTRACT_TREASURY
+ * - STELLAR_CONTRACT_VESTING_WALLET
  * - WEBHOOK_SECRET
  * - WEBHOOK_PROVIDERS
  * - TELEGRAM_BOT_TOKEN
  * - METRICS_ALLOWED_IPS
  * - USE_MOCK_TRANSACTIONS
+ * - BOOTSTRAP_DEMO_DATA_ENABLED
  * - LOGGING_ENABLED
  * - LOGGING_LEVEL
  * - LOGGING_INCLUDE_BODY
@@ -377,19 +379,11 @@ const envSchema = z
 
     RATE_LIMIT_NEWS_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_NEWS_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
-    RATE_LIMIT_NEWS_READ_BLOCK_MS: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .optional(),
+    RATE_LIMIT_NEWS_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
 
     RATE_LIMIT_PROJECT_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_PROJECT_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
-    RATE_LIMIT_PROJECT_READ_BLOCK_MS: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .optional(),
+    RATE_LIMIT_PROJECT_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
 
     RATE_LIMIT_CROWDFUND_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_CROWDFUND_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
@@ -401,19 +395,11 @@ const envSchema = z
 
     RATE_LIMIT_STELLAR_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_STELLAR_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
-    RATE_LIMIT_STELLAR_READ_BLOCK_MS: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .optional(),
+    RATE_LIMIT_STELLAR_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
 
     RATE_LIMIT_SEARCH_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_SEARCH_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
-    RATE_LIMIT_SEARCH_READ_BLOCK_MS: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .optional(),
+    RATE_LIMIT_SEARCH_READ_BLOCK_MS: z.coerce.number().int().min(1).optional(),
 
     RATE_LIMIT_ANALYTICS_READ_LIMIT: z.coerce.number().int().min(1).optional(),
     RATE_LIMIT_ANALYTICS_READ_TTL_MS: z.coerce.number().int().min(1).optional(),
@@ -433,6 +419,12 @@ const envSchema = z
     STELLAR_RETRY_ATTEMPTS: z.coerce.number().int().min(0).default(3),
     STELLAR_RETRY_DELAY: z.coerce.number().int().min(0).default(1_000),
     STELLAR_SERVER_SECRET: z.string().min(1), // SECRET — never log
+    STELLAR_BALANCE_CACHE_TTL: z.coerce.number().int().min(1).default(30_000),
+    STELLAR_OPERATIONS_CACHE_TTL: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(15_000),
 
     // Soroban contract addresses (optional — null when not yet deployed)
     STELLAR_CONTRACT_LUMEN_TOKEN: z.string().trim().optional(),
@@ -441,6 +433,7 @@ const envSchema = z
     STELLAR_CONTRACT_CONTRIBUTOR_REGISTRY: z.string().trim().optional(),
     STELLAR_CONTRACT_MATCHING_POOL: z.string().trim().optional(),
     STELLAR_CONTRACT_TREASURY: z.string().trim().optional(),
+    STELLAR_CONTRACT_VESTING_WALLET: z.string().trim().optional(),
 
     PYTHON_API_URL: z.string().trim().default('http://localhost:8000'),
     PYTHON_SERVICE_URL: z.string().trim().optional(),
@@ -455,11 +448,23 @@ const envSchema = z
     WEBHOOK_SECRET: z.string().trim().optional(),
     WEBHOOK_PROVIDERS: z.string().trim().optional(),
 
+    SOROBAN_INGEST_SECRET: z.string().trim().optional(),
+    SOROBAN_TIMESTAMP_TOLERANCE_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .optional(),
+    SOROBAN_INDEXER_START_LEDGER: z.coerce.number().int().min(0).default(0),
+
     TELEGRAM_BOT_TOKEN: z.string().trim().optional(),
     METRICS_ALLOWED_IPS: z.string().trim().optional(),
     USE_MOCK_TRANSACTIONS: z.preprocess(
       parseBoolean,
       z.boolean().default(true),
+    ),
+    BOOTSTRAP_DEMO_DATA_ENABLED: z.preprocess(
+      parseBoolean,
+      z.boolean().default(false),
     ),
 
     LOGGING_ENABLED: z.preprocess(parseBoolean, z.boolean().default(true)),
@@ -599,11 +604,9 @@ const resolvedRateLimit = {
   },
   newsRead: {
     limit:
-      parsedEnv.RATE_LIMIT_NEWS_READ_LIMIT ??
-      rateLimitDefaults.newsRead.limit,
+      parsedEnv.RATE_LIMIT_NEWS_READ_LIMIT ?? rateLimitDefaults.newsRead.limit,
     ttl:
-      parsedEnv.RATE_LIMIT_NEWS_READ_TTL_MS ??
-      rateLimitDefaults.newsRead.ttl,
+      parsedEnv.RATE_LIMIT_NEWS_READ_TTL_MS ?? rateLimitDefaults.newsRead.ttl,
     blockDuration:
       parsedEnv.RATE_LIMIT_NEWS_READ_BLOCK_MS ??
       rateLimitDefaults.newsRead.blockDuration,
@@ -752,14 +755,8 @@ const optionalSummary = [
     'RATE_LIMIT_WATCHLIST_WRITE_BLOCK_MS',
     String(resolvedRateLimit.watchlistWrite.blockDuration),
   ],
-  [
-    'RATE_LIMIT_NEWS_READ_LIMIT',
-    String(resolvedRateLimit.newsRead.limit),
-  ],
-  [
-    'RATE_LIMIT_NEWS_READ_TTL_MS',
-    String(resolvedRateLimit.newsRead.ttl),
-  ],
+  ['RATE_LIMIT_NEWS_READ_LIMIT', String(resolvedRateLimit.newsRead.limit)],
+  ['RATE_LIMIT_NEWS_READ_TTL_MS', String(resolvedRateLimit.newsRead.ttl)],
   [
     'RATE_LIMIT_NEWS_READ_BLOCK_MS',
     String(resolvedRateLimit.newsRead.blockDuration),
@@ -768,10 +765,7 @@ const optionalSummary = [
     'RATE_LIMIT_PROJECT_READ_LIMIT',
     String(resolvedRateLimit.projectRead.limit),
   ],
-  [
-    'RATE_LIMIT_PROJECT_READ_TTL_MS',
-    String(resolvedRateLimit.projectRead.ttl),
-  ],
+  ['RATE_LIMIT_PROJECT_READ_TTL_MS', String(resolvedRateLimit.projectRead.ttl)],
   [
     'RATE_LIMIT_PROJECT_READ_BLOCK_MS',
     String(resolvedRateLimit.projectRead.blockDuration),
@@ -792,22 +786,13 @@ const optionalSummary = [
     'RATE_LIMIT_STELLAR_READ_LIMIT',
     String(resolvedRateLimit.stellarRead.limit),
   ],
-  [
-    'RATE_LIMIT_STELLAR_READ_TTL_MS',
-    String(resolvedRateLimit.stellarRead.ttl),
-  ],
+  ['RATE_LIMIT_STELLAR_READ_TTL_MS', String(resolvedRateLimit.stellarRead.ttl)],
   [
     'RATE_LIMIT_STELLAR_READ_BLOCK_MS',
     String(resolvedRateLimit.stellarRead.blockDuration),
   ],
-  [
-    'RATE_LIMIT_SEARCH_READ_LIMIT',
-    String(resolvedRateLimit.searchRead.limit),
-  ],
-  [
-    'RATE_LIMIT_SEARCH_READ_TTL_MS',
-    String(resolvedRateLimit.searchRead.ttl),
-  ],
+  ['RATE_LIMIT_SEARCH_READ_LIMIT', String(resolvedRateLimit.searchRead.limit)],
+  ['RATE_LIMIT_SEARCH_READ_TTL_MS', String(resolvedRateLimit.searchRead.ttl)],
   [
     'RATE_LIMIT_SEARCH_READ_BLOCK_MS',
     String(resolvedRateLimit.searchRead.blockDuration),
@@ -856,6 +841,10 @@ const optionalSummary = [
     'STELLAR_CONTRACT_TREASURY',
     parsedEnv.STELLAR_CONTRACT_TREASURY ?? '(not set)',
   ],
+  [
+    'STELLAR_CONTRACT_VESTING_WALLET',
+    parsedEnv.STELLAR_CONTRACT_VESTING_WALLET ?? '(not set)',
+  ],
   ['PYTHON_API_URL', parsedEnv.PYTHON_API_URL],
   [
     'PYTHON_SERVICE_URL',
@@ -869,6 +858,18 @@ const optionalSummary = [
   [
     'WEBHOOK_PROVIDERS',
     parsedEnv.WEBHOOK_PROVIDERS ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'SOROBAN_INGEST_SECRET',
+    parsedEnv.SOROBAN_INGEST_SECRET ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'SOROBAN_TIMESTAMP_TOLERANCE_MS',
+    String(parsedEnv.SOROBAN_TIMESTAMP_TOLERANCE_MS ?? 300_000),
+  ],
+  [
+    'SOROBAN_INDEXER_START_LEDGER',
+    String(parsedEnv.SOROBAN_INDEXER_START_LEDGER),
   ],
   [
     'TELEGRAM_BOT_TOKEN',
@@ -1008,6 +1009,8 @@ export const config = Object.freeze({
     timeout: parsedEnv.STELLAR_TIMEOUT,
     retryAttempts: parsedEnv.STELLAR_RETRY_ATTEMPTS,
     retryDelay: parsedEnv.STELLAR_RETRY_DELAY,
+    balanceCacheTTL: parsedEnv.STELLAR_BALANCE_CACHE_TTL,
+    operationsCacheTTL: parsedEnv.STELLAR_OPERATIONS_CACHE_TTL,
     serverSecret: new SecretString(parsedEnv.STELLAR_SERVER_SECRET),
     contracts: Object.freeze({
       lumenToken: parsedEnv.STELLAR_CONTRACT_LUMEN_TOKEN ?? null,
@@ -1034,6 +1037,11 @@ export const config = Object.freeze({
     webhookSecret: parsedEnv.WEBHOOK_SECRET,
     webhookProviders: parsedEnv.WEBHOOK_PROVIDERS,
     telegramBotToken: parsedEnv.TELEGRAM_BOT_TOKEN,
+  }),
+  soroban: Object.freeze({
+    ingestSecret: parsedEnv.SOROBAN_INGEST_SECRET,
+    timestampToleranceMs: parsedEnv.SOROBAN_TIMESTAMP_TOLERANCE_MS ?? 300_000,
+    indexerStartLedger: parsedEnv.SOROBAN_INDEXER_START_LEDGER,
   }),
   metrics: Object.freeze({
     allowedIps: Object.freeze(splitCsv(parsedEnv.METRICS_ALLOWED_IPS)),
@@ -1062,6 +1070,7 @@ export const config = Object.freeze({
   }),
   featureFlags: Object.freeze({
     useMockTransactions: parsedEnv.USE_MOCK_TRANSACTIONS,
+    bootstrapDemoData: parsedEnv.BOOTSTRAP_DEMO_DATA_ENABLED,
   }),
   portfolioSnapshot: Object.freeze({
     concurrency: parsedEnv.PORTFOLIO_SNAPSHOT_CONCURRENCY,

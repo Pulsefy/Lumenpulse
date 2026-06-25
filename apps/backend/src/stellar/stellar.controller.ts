@@ -1,8 +1,10 @@
 import {
   Controller,
   Get,
+  Post,
   Param,
   Query,
+  Body,
   HttpCode,
   HttpStatus,
   BadRequestException,
@@ -10,7 +12,9 @@ import {
   UseGuards,
   ParseIntPipe,
   DefaultValuePipe,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { Throttle } from '@nestjs/throttler';
 import {
@@ -34,6 +38,17 @@ import stellarConfig from './config/stellar.config';
 import { TransactionService } from '../transaction/transaction.service';
 import { TransactionHistoryResponseDto } from '../transaction/dto/transaction.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles, GetUser } from '../auth/decorators/auth.decorators';
+import { UserRole, User } from '../users/entities/user.entity';
+import {
+  RotateTestnetContractIdsRequestDto,
+  RotateContractIdsResponseDto,
+  ValidateContractIdsRequestDto,
+  ValidateContractIdsResponseDto,
+} from './dto/rotate-contract-ids.dto';
+import { StellarContractRotationService } from './services/stellar-contract-rotation.service';
+import { ContractRotationService } from './services/contract-rotation.service';
 
 @ApiTags('stellar')
 @Controller('stellar')
@@ -42,6 +57,8 @@ export class StellarController {
   constructor(
     private readonly stellarService: StellarService,
     private readonly transactionService: TransactionService,
+    private readonly contractRotationService: StellarContractRotationService,
+    private readonly contractValidationService: ContractRotationService,
     @Inject(stellarConfig.KEY)
     private readonly config: ConfigType<typeof stellarConfig>,
   ) {}
@@ -237,5 +254,118 @@ export class StellarController {
   ): Promise<AssetDiscoveryResponseDto> {
     // Service handles all exceptions and throws appropriate HttpExceptions
     return this.stellarService.discoverAssets(query);
+  }
+
+  /**
+   * @summary Pre-flight validation of testnet contract IDs
+   * @description Validates contract IDs are reachable and callable without persisting changes.
+   * Useful for verifying new contract IDs before actually rotating them.
+   * @admin-only Requires ADMIN role
+   */
+  @Post('admin/validate-contract-ids')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Validate testnet contract IDs (admin only)',
+    description:
+      'Pre-flight validation of contract IDs. Checks that contracts are reachable and callable without making any changes. Useful for verifying new IDs before rotation.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Validation completed',
+    type: ValidateContractIdsResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid contract ID format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden (admin only)',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to connect to Soroban RPC',
+  })
+  async validateContractIds(
+    @Body() request: ValidateContractIdsRequestDto,
+  ): Promise<ValidateContractIdsResponseDto> {
+    const results = await this.contractValidationService.validateContractIds(
+      request.contracts,
+      'testnet',
+    );
+
+    const valid = results.every((r) => r.isValid);
+
+    return {
+      valid,
+      results,
+      error: valid ? undefined : 'Some contracts failed validation',
+    };
+  }
+
+  /**
+   * @summary Rotate testnet contract IDs with audit logging
+   * @description Updates contract IDs for testnet after validating they are reachable.
+   * All updates are atomic - either all succeed or all are rolled back.
+   * Logs all changes for audit compliance.
+   * @admin-only Requires ADMIN role
+   */
+  @Post('admin/rotate-contract-ids')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Rotate testnet contract IDs (admin only)',
+    description:
+      'Updates contract IDs for testnet after validating they are reachable and callable. ' +
+      'All updates are atomic - validation of all contracts must pass before any changes are made. ' +
+      'Creates an audit log entry recording who, when, and what was changed.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Contracts rotated successfully',
+    type: RotateContractIdsResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation failed or invalid request',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden (admin only)',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to connect to Soroban RPC or internal error',
+  })
+  async rotateContractIds(
+    @Body() request: RotateTestnetContractIdsRequestDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ): Promise<RotateContractIdsResponseDto> {
+    // Extract IP address from request
+    const ipAddress =
+      (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||
+      req.socket.remoteAddress ||
+      null;
+
+    return this.contractRotationService.rotateContractIds(
+      request.contracts,
+      user.id,
+      ipAddress,
+      request.reason,
+    );
   }
 }

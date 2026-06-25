@@ -18,12 +18,22 @@ export class RateLimitGuard extends ThrottlerGuard {
 
   private get allowlist(): string[] | null {
     const raw = config.ipAccess?.allowlist;
-    return raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : null;
+    return raw
+      ? raw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : null;
   }
 
   private get denylist(): string[] | null {
     const raw = config.ipAccess?.denylist;
-    return raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : null;
+    return raw
+      ? raw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : null;
   }
 
   override async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -32,10 +42,7 @@ export class RateLimitGuard extends ThrottlerGuard {
 
     const deny = this.denylist;
     if (deny && this.isIpMatched(clientIp, deny)) {
-      this.logger.warn(
-        { clientIp },
-        'Request denied by IP denylist',
-      );
+      this.logger.warn({ clientIp }, 'Request denied by IP denylist');
       throw new HttpException(
         {
           code: ErrorCode.SYS_FORBIDDEN,
@@ -48,10 +55,7 @@ export class RateLimitGuard extends ThrottlerGuard {
     const allow = this.allowlist;
     if (allow && allow.length > 0) {
       if (!this.isIpMatched(clientIp, allow)) {
-        this.logger.warn(
-          { clientIp },
-          'Request denied by IP allowlist',
-        );
+        this.logger.warn({ clientIp }, 'Request denied by IP allowlist');
         throw new HttpException(
           {
             code: ErrorCode.SYS_FORBIDDEN,

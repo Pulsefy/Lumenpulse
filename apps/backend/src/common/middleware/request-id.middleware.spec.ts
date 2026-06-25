@@ -32,6 +32,9 @@ describe('RequestIdMiddleware', () => {
 
     expect(typeof req.requestId).toBe('string');
     expect(req.requestId).not.toHaveLength(0);
-    expect(res.setHeader).toHaveBeenCalledWith(REQUEST_ID_HEADER, req.requestId);
+    expect(res.setHeader).toHaveBeenCalledWith(
+      REQUEST_ID_HEADER,
+      req.requestId,
+    );
   });
 });
