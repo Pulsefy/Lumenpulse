@@ -32,6 +32,7 @@ from src.analytics.onchain_entity_linker import (
     OnchainEntityLink,
     OnchainEntityLinker,
 )
+from src.analytics.contributor_activity_timeline import build_contributor_activity_timeline
 
 logger = logging.getLogger(__name__)
 
@@ -1207,6 +1208,29 @@ class PostgresService:
             logger.error(f"Failed to retrieve project contributors: {e}")
             return []
 
+    def get_contributor_activity_timeline(
+        self,
+        contributor: str,
+        project_id: Optional[int] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """Build a contributor-centric timeline from persisted contract events."""
+        try:
+            with self.get_session() as session:
+                stmt = select(ContractEvent).order_by(desc(ContractEvent.ledger))
+                if project_id is not None:
+                    stmt = stmt.where(ContractEvent.project_id == project_id)
+
+                events = session.execute(stmt).scalars().all()
+                return build_contributor_activity_timeline(
+                    events,
+                    contributor=contributor,
+                    limit=limit,
+                )
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve contributor activity timeline: {e}")
+            return []
+
     def save_project_milestone(
         self,
         project_id: int,
@@ -1613,3 +1637,53 @@ class PostgresService:
                 "news_insights": 0,
                 "asset_trends": 0,
             }
+
+    def get_contributor_activity_timeline(
+        self,
+        contributor: str,
+        project_id=None,
+        limit: int = 100,
+    ) -> list:
+        """Return a contributor-centric activity timeline backed by testnet event data."""
+        from src.analytics.contributor_activity_timeline import (
+            build_contributor_activity_timeline,
+            _clamp_limit,
+        )
+        from src.db.models import ContractEvent
+        from sqlalchemy import func as sa_func
+
+        limit = _clamp_limit(limit)
+
+        try:
+            with self.get_session() as session:
+                query = (
+                    session.query(ContractEvent)
+                    .filter(
+                        sa_func.lower(ContractEvent.contributor)
+                        == contributor.lower()
+                    )
+                )
+                if project_id is not None:
+                    query = query.filter(ContractEvent.project_id == project_id)
+
+                rows = (
+                    query.order_by(ContractEvent.timestamp.desc().nullslast())
+                    .limit(limit)
+                    .all()
+                )
+
+            return build_contributor_activity_timeline(
+                rows,
+                contributor=None,
+                limit=limit,
+                project_id=None,
+            )
+
+        except Exception as exc:
+            logger.error(
+                "get_contributor_activity_timeline failed | contributor=%s | error=%s",
+                contributor,
+                exc,
+                exc_info=True,
+            )
+            raise
