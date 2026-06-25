@@ -3,6 +3,7 @@ PostgreSQL service for persisting analytics data
 """
 
 import logging
+import math
 import os
 import time
 from typing import List, Dict, Any, Optional
@@ -1031,6 +1032,77 @@ class PostgresService:
                 "event_count": 0,
             }
 
+    def _compute_funding_momentum_score(
+        self, total_amount: float, unique_contributors: int
+    ) -> float:
+        """Compute a deterministic funding momentum score.
+
+        The score uses recent funding activity and contributor breadth.
+        It is explainable as the product of a log-scaled funding component
+        and a contributor breadth component.
+        """
+        if total_amount <= 0.0 or unique_contributors <= 0:
+            return 0.0
+
+        amount_component = math.log10(1.0 + total_amount)
+        contributor_component = math.log2(1.0 + unique_contributors)
+        return round(amount_component * contributor_component, 6)
+
+    def compute_project_funding_momentum_score(
+        self, project_id: int, lookback_hours: int = 24
+    ) -> float:
+        """Compute the funding momentum score for a project over a recent window."""
+        try:
+            with self.get_session() as session:
+                cutoff_time = datetime.utcnow() - timedelta(hours=lookback_hours)
+                stmt = select(ContractEvent).where(
+                    and_(
+                        ContractEvent.project_id == project_id,
+                        ContractEvent.timestamp >= cutoff_time,
+                    )
+                )
+                events = session.execute(stmt).scalars().all()
+
+                total_amount = 0.0
+                contributors = set()
+                for event in events:
+                    if event.amount is None:
+                        continue
+                    event_type = str(event.event_type).lower()
+                    if event_type in {
+                        "depositevent",
+                        "contributionrecordedevent",
+                    }:
+                        total_amount += float(event.amount)
+                    elif event_type in {
+                        "contributionrefundableevent",
+                        "contributionclawbackedevent",
+                    }:
+                        total_amount -= float(event.amount)
+                    if event.contributor:
+                        contributors.add(event.contributor)
+
+                return self._compute_funding_momentum_score(
+                    total_amount=total_amount,
+                    unique_contributors=len(contributors),
+                )
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to compute project funding momentum score: {e}")
+            return 0.0
+
+    def update_project_view_funding_momentum_score(
+        self, project_id: int, lookback_hours: int = 24
+    ) -> Optional[ProjectView]:
+        """Compute and persist the project funding momentum score."""
+        momentum_score = self.compute_project_funding_momentum_score(
+            project_id=project_id,
+            lookback_hours=lookback_hours,
+        )
+        return self.save_project_view(
+            project_id=project_id,
+            funding_momentum_score=momentum_score,
+        )
+
     def save_project_view(
         self,
         project_id: int,
@@ -1039,6 +1111,7 @@ class PostgresService:
         status: Optional[str] = None,
         add_total_contributions: Optional[float] = None,
         unique_contributors: Optional[int] = None,
+        funding_momentum_score: Optional[float] = None,
         last_event_ledger: Optional[int] = None,
         extra_data: Optional[Dict[str, Any]] = None,
     ) -> Optional[ProjectView]:
@@ -1064,6 +1137,8 @@ class PostgresService:
                         )
                     if unique_contributors is not None:
                         existing.unique_contributors = unique_contributors
+                    if funding_momentum_score is not None:
+                        existing.funding_momentum_score = funding_momentum_score
                     if last_event_ledger is not None:
                         existing.last_event_ledger = last_event_ledger
                     existing.extra_data = extra_data or existing.extra_data
@@ -1076,6 +1151,7 @@ class PostgresService:
                     owner=owner,
                     total_contributions=add_total_contributions or 0.0,
                     unique_contributors=unique_contributors or 0,
+                    funding_momentum_score=funding_momentum_score or 0.0,
                     status=status,
                     last_event_ledger=last_event_ledger,
                     extra_data=extra_data,
@@ -1113,10 +1189,28 @@ class PostgresService:
                 if status is not None:
                     stmt = stmt.where(ProjectView.status == status)
                 results = session.execute(stmt).scalars().all()
-                logger.debug(f"Retrieved {len(results)} project views")
+                logger.debug(f"Retrieved %d project views", len(results))
                 return results
         except SQLAlchemyError as e:
             logger.error(f"Failed to retrieve project views: {e}")
+            return []
+
+    def get_project_views_ranked_by_funding_momentum(
+        self,
+        status: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[ProjectView]:
+        """Retrieve project views ordered by funding momentum score."""
+        try:
+            with self.get_session() as session:
+                stmt = select(ProjectView).order_by(desc(ProjectView.funding_momentum_score)).limit(limit)
+                if status is not None:
+                    stmt = stmt.where(ProjectView.status == status)
+                results = session.execute(stmt).scalars().all()
+                logger.debug("Retrieved %d project views ranked by funding momentum", len(results))
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve ranked project views: {e}")
             return []
 
     def save_project_contributor(
