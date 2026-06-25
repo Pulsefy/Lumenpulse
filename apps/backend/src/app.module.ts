@@ -59,6 +59,7 @@ import { SorobanEventsModule } from './soroban-events/soroban-events.module';
 import { TreasuryModule } from './treasury/treasury.module';
 import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
 import { RelayerModule } from './relayer/relayer.module';
+import { ContributorRegistryModule } from './contributor-registry/contributor-registry.module';
 
 @Module({
   imports: [
@@ -128,6 +129,7 @@ import { RelayerModule } from './relayer/relayer.module';
     TreasuryModule,
     VestingWalletModule,
     RelayerModule,
+    ContributorRegistryModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
