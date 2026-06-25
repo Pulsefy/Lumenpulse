@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Wallet, Info } from "lucide-react";
+import { Wallet, Info, Bookmark } from "lucide-react";
 import { useStellarConfig } from "@/contexts/StellarConfigContext";
 import { useStellarWallet } from "@/app/providers";
+import { useWatchlist } from "@/contexts/WatchlistContext";
+import { TransactionReceiptModal } from "@/components/TransactionReceiptModal";
 import { signTransaction } from "@stellar/freighter-api";
 import { Address, Contract, TransactionBuilder, nativeToScVal, rpc } from "@stellar/stellar-sdk";
 import { getExplorerUrl } from "@/lib/utils";
@@ -76,28 +78,47 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function RoundCard({ round }: { round: GrantRound }) {
   const endDate = new Date(round.endTime * 1000).toLocaleDateString();
+  const { isProjectSaved, toggleSavedProject } = useWatchlist();
+  const isSaved = isProjectSaved(round.id);
+
   return (
-    <Link
-      href={`/grants/${round.id}`}
-      className="group flex flex-col gap-4 p-5 rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-all"
+    <div
+      className="group relative flex flex-col gap-4 p-5 rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-all cursor-pointer"
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="absolute top-4 right-4 z-10">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleSavedProject(round.id);
+          }}
+          className={`p-2 rounded-full transition-colors ${
+            isSaved ? "bg-primary/20 text-primary" : "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white"
+          }`}
+          aria-label={isSaved ? "Remove from watchlist" : "Add to watchlist"}
+        >
+          <Bookmark className="w-4 h-4" fill={isSaved ? "currentColor" : "none"} />
+        </button>
+      </div>
+
+      <Link href={`/grants/${round.id}`} className="absolute inset-0 z-0" aria-label={`View ${round.name}`} />
+
+      <div className="flex items-start justify-between gap-3 pointer-events-none relative z-10 mr-12">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-base truncate">{round.name}</p>
         </div>
         <StatusBadge status={round.status} />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 pointer-events-none relative z-10">
         <Wallet className="w-4 h-4 text-primary flex-shrink-0" />
         <span className="text-foreground/50 text-sm">Matching Pool</span>
         <span className="ml-auto font-bold text-sm">{formatAmount(round.totalPool)} XLM</span>
       </div>
 
-      <div className="flex items-center gap-2 text-foreground/40 text-xs">
+      <div className="flex items-center gap-2 text-foreground/40 text-xs pointer-events-none relative z-10">
         <span>Ends {endDate}</span>
       </div>
-    </Link>
+    </div>
   );
 }
 
@@ -131,6 +152,7 @@ export function ProjectAllocationRow({
   >("idle");
   const [txHash, setTxHash] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,6 +161,7 @@ export function ProjectAllocationRow({
     setTxState("building");
     setErrorMsg(null);
     setTxHash(null);
+    setShowReceiptModal(true);
 
     try {
       const parsedAmount = parseFloat(amount);
@@ -313,59 +336,68 @@ export function ProjectAllocationRow({
                   </div>
 
                   {txState === "error" && errorMsg && (
-                    <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg leading-relaxed">
+                    <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg leading-relaxed mt-2">
                       {errorMsg}
                     </div>
                   )}
                 </>
-              ) : txState === "success" ? (
-                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-lg space-y-2">
-                  <p className="font-bold flex items-center gap-1.5">✓ Contribution Successful!</p>
-                  <p>You have contributed {amount} XLM to Project #{item.projectId}.</p>
-                  {txHash && (
-                    <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-emerald-500/20 font-mono text-[10px]">
-                      <span>Hash: {txHash.substring(0, 12)}...{txHash.substring(52)}</span>
-                      <a
-                        href={getExplorerUrl("tx", txHash)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline font-bold"
-                      >
-                        View on Explorer ↗
-                      </a>
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTxState("idle");
-                      setAmount("");
-                    }}
-                    className="mt-2 text-foreground/50 hover:text-foreground text-[10px] underline"
-                  >
-                    Send another contribution
-                  </button>
-                </div>
               ) : (
                 <div className="p-4 bg-white/5 border border-white/10 rounded-lg space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                    <span className="text-xs text-white/80 font-medium">
-                      {txState === "building" && "Preparing transaction..."}
-                      {txState === "simulating" && "Simulating transaction..."}
-                      {txState === "signing" && "Awaiting wallet signature..."}
-                      {txState === "submitting" && "Submitting transaction..."}
-                      {txState === "polling" && "Waiting for confirmation..."}
-                    </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {txState === "success" ? null : (
+                        <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                      )}
+                      <span className="text-xs text-white/80 font-medium">
+                        {txState === "building" && "Preparing transaction..."}
+                        {txState === "simulating" && "Simulating transaction..."}
+                        {txState === "signing" && "Awaiting wallet signature..."}
+                        {txState === "submitting" && "Submitting transaction..."}
+                        {txState === "polling" && "Waiting for confirmation..."}
+                        {txState === "success" && "Contribution Confirmed!"}
+                      </span>
+                    </div>
+                    {txState === "success" && (
+                      <button
+                        type="button"
+                        onClick={() => setShowReceiptModal(true)}
+                        className="text-xs text-primary hover:underline font-bold"
+                      >
+                        View Receipt
+                      </button>
+                    )}
                   </div>
-                  {txHash && (
-                    <p className="text-[10px] text-foreground/40 font-mono">Tx Hash: {txHash}</p>
+                  {txState === "success" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTxState("idle");
+                        setAmount("");
+                      }}
+                      className="text-foreground/50 hover:text-foreground text-[10px] underline"
+                    >
+                      Send another contribution
+                    </button>
                   )}
                 </div>
               )}
             </form>
           )}
         </div>
+      )}
+
+      {showReceiptModal && (
+        <TransactionReceiptModal
+          isOpen={showReceiptModal}
+          onOpenChange={(open) => {
+            setShowReceiptModal(open);
+            if (!open && txState === "error") setTxState("idle");
+          }}
+          status={txState === "success" ? "confirmed" : txState === "error" ? "error" : "pending"}
+          txHash={txHash}
+          amount={amount}
+          projectId={item.projectId}
+        />
       )}
     </div>
   );
