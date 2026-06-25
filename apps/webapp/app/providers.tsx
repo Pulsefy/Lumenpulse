@@ -51,6 +51,7 @@ function ConfigGate({ children }: { children: ReactNode }) {
 
 import { OnboardingProvider } from "@/lib/onboarding";
 import { ThemeProvider } from "@/components/theme-provider";
+import { WatchlistProvider } from "@/contexts/WatchlistContext";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -59,9 +60,11 @@ export function Providers({ children }: { children: ReactNode }) {
         <StellarProvider>
           <ConfigGate>
             <ThemeProvider>
-              <OnboardingProvider>
-                {children}
-              </OnboardingProvider>
+              <WatchlistProvider>
+                <OnboardingProvider>
+                  {children}
+                </OnboardingProvider>
+              </WatchlistProvider>
             </ThemeProvider>
           </ConfigGate>
         </StellarProvider>
