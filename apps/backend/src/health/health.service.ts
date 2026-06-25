@@ -10,6 +10,9 @@ import { DataSource } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
 import { CacheService } from '../cache/cache.service';
 import { StellarService } from '../stellar/stellar.service';
+import { SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
+import { JobHistoryService } from '../scheduler/job-history.service';
+import { config } from '../lib/config';
 
 interface DependencyCheckResult {
   name: string;
@@ -40,7 +43,54 @@ export class HealthService {
     private readonly cacheService: CacheService,
     private readonly stellarService: StellarService,
     private readonly httpService: HttpService,
+    private readonly sorobanRpcClient: SorobanRpcClientService,
+    private readonly jobHistory: JobHistoryService,
   ) {}
+
+  async getStatusReport() {
+    const network = config.stellar.network === 'testnet' ? 'Stellar Testnet' : 'Stellar Public';
+
+    let apiStatus: 'online' | 'offline' | 'unknown' = 'unknown';
+    try {
+      const horizonHealthy = await this.stellarService.checkHealth();
+      apiStatus = horizonHealthy ? 'online' : 'offline';
+    } catch {
+      apiStatus = 'unknown';
+    }
+
+    let rpcStatus: 'online' | 'offline' | 'unknown' = 'unknown';
+    try {
+      const latest = await this.sorobanRpcClient.rawServer.getLatestLedger();
+      rpcStatus = latest && latest.sequence ? 'online' : 'offline';
+    } catch {
+      rpcStatus = 'unknown';
+    }
+
+    let indexerStatus: 'online' | 'offline' | 'unknown' = 'unknown';
+    try {
+      const lastRun = await this.jobHistory.getLastRun('soroban-event-indexer');
+      if (lastRun) {
+        if (lastRun.status === 'COMPLETED' || lastRun.status === 'RUNNING') {
+          indexerStatus = 'online';
+        } else if (lastRun.status === 'FAILED') {
+          indexerStatus = 'offline';
+        }
+      } else {
+        indexerStatus = 'unknown';
+      }
+    } catch {
+      indexerStatus = 'unknown';
+    }
+
+    return {
+      network,
+      dependencies: {
+        api: apiStatus,
+        rpc: rpcStatus,
+        indexer: indexerStatus,
+      },
+    };
+  }
 
   async getHealthReport(): Promise<LumenpulseHealthReport> {
     const database = await this.checkDatabase();

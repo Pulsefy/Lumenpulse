@@ -36,6 +36,15 @@ export class HealthController {
     return healthReport;
   }
 
+  @Get('health/status')
+  @ApiOperation({ summary: 'Returns status of the network and services' })
+  @ApiOkResponse({
+    description: 'Returns network name and dependency statuses.',
+  })
+  async getStatus() {
+    return this.healthService.getStatusReport();
+  }
+
   @Get('health/contracts')
   @ApiOperation({
     summary: 'Reports configured Stellar contract reachability and readiness',

@@ -14,6 +14,7 @@ import {
   rpc,
 } from "@stellar/stellar-sdk";
 import { getExplorerUrl } from "@/lib/utils";
+import { TestnetStatusBanner } from "@/components/testnet-status-banner";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -556,7 +557,8 @@ export default function GrantsPage() {
       </section>
 
       <section className="px-4 pb-20">
-        <div className="container mx-auto max-w-4xl">
+        <div className="container mx-auto max-w-4xl space-y-6">
+          <TestnetStatusBanner />
           {isLoading || detailLoading ? (
             <div className="flex justify-center py-20">
               <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />

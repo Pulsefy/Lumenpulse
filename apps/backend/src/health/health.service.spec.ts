@@ -6,6 +6,8 @@ import { of, throwError } from 'rxjs';
 import { CacheService } from '../cache/cache.service';
 import { StellarService } from '../stellar/stellar.service';
 import { HealthService } from './health.service';
+import { SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
+import { JobHistoryService } from '../scheduler/job-history.service';
 
 describe('HealthService', () => {
   let service: HealthService;
@@ -61,6 +63,20 @@ describe('HealthService', () => {
         {
           provide: HttpService,
           useValue: httpService,
+        },
+        {
+          provide: SorobanRpcClientService,
+          useValue: {
+            rawServer: {
+              getLatestLedger: jest.fn(),
+            },
+          },
+        },
+        {
+          provide: JobHistoryService,
+          useValue: {
+            getLastRun: jest.fn(),
+          },
         },
       ],
     }).compile();
