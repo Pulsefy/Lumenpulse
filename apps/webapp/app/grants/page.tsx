@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trophy } from "lucide-react";
+import { Trophy, Bookmark } from "lucide-react";
 import { GrantRound, RoundCard } from "./components";
+import { useWatchlist } from "@/contexts/WatchlistContext";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-
 export default function GrantsPage() {
   const [rounds, setRounds] = useState<GrantRound[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
+  const { isProjectSaved } = useWatchlist();
 
   useEffect(() => {
     fetch(`${API_BASE}/grants/rounds`)
@@ -29,9 +31,32 @@ export default function GrantsPage() {
       <section className="relative pt-32 pb-16 px-4">
         <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent pointer-events-none" />
         <div className="container mx-auto max-w-4xl relative z-10">
-          <div className="flex items-center gap-3 mb-6">
-            <Trophy className="w-7 h-7 text-primary" />
-            <h1 className="text-3xl font-bold tracking-tight">Grants</h1>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3">
+              <Trophy className="w-7 h-7 text-primary" />
+              <h1 className="text-3xl font-bold tracking-tight">Grants</h1>
+            </div>
+            {rounds.length > 0 && (
+              <div className="flex items-center bg-white/5 rounded-lg p-1 border border-white/10">
+                <button
+                  onClick={() => setShowSavedOnly(false)}
+                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    !showSavedOnly ? "bg-white/10 text-white shadow" : "text-foreground/50 hover:text-foreground"
+                  }`}
+                >
+                  All Rounds
+                </button>
+                <button
+                  onClick={() => setShowSavedOnly(true)}
+                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                    showSavedOnly ? "bg-white/10 text-white shadow" : "text-foreground/50 hover:text-foreground"
+                  }`}
+                >
+                  <Bookmark className="w-4 h-4" />
+                  Watchlist
+                </button>
+              </div>
+            )}
           </div>
           <p className="text-foreground/50 text-base max-w-xl leading-relaxed">
             Community-funded matching rounds using quadratic funding. More contributors means more
@@ -55,9 +80,17 @@ export default function GrantsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {rounds.map((round) => (
-                <RoundCard key={round.id} round={round} />
-              ))}
+              {rounds
+                .filter((r) => !showSavedOnly || isProjectSaved(r.id))
+                .map((round) => (
+                  <RoundCard key={round.id} round={round} />
+                ))}
+              {showSavedOnly && rounds.filter((r) => isProjectSaved(r.id)).length === 0 && (
+                <div className="col-span-1 sm:col-span-2 text-center py-20 border border-white/5 rounded-2xl bg-white/[0.02]">
+                  <Bookmark className="w-10 h-10 text-foreground/20 mx-auto mb-4" />
+                  <p className="text-foreground/40">Your watchlist is empty.</p>
+                </div>
+              )}
             </div>
           )}
         </div>

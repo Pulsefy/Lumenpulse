@@ -70,6 +70,16 @@ export enum WebhookEventType {
   PRICE_THRESHOLD = 'price_threshold',
   PORTFOLIO_UPDATE = 'portfolio_update',
   CUSTOM = 'custom',
+  PROJECT = 'project',
+  CONTRIBUTION = 'contribution',
+  MILESTONE = 'milestone',
+  GOVERNANCE = 'governance',
+  TOKEN = 'token',
+  POOL = 'pool',
+  PRICE = 'price',
+  MODULE = 'module',
+  ADMIN = 'admin',
+  REPUTATION = 'reputation',
 }
 
 /**
