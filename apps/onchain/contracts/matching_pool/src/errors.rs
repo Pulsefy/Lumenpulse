@@ -21,4 +21,11 @@ pub enum MatchingPoolError {
     InvalidRoundDates = 15,
     ContractPaused = 16,
     Reentrancy = 17,
+    /// Contribution would exceed the round-level total cap
+    RoundCapExceeded = 18,
+    /// Contribution would exceed the per-contributor (anti-whale) cap
+    ContributorCapExceeded = 19,
+    /// Cap value must be non-negative
+    InvalidCapValue = 20,
 }
+

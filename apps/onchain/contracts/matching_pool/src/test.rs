@@ -484,3 +484,400 @@ fn test_fund_pool_cei_state_written_before_token_balance_assertion() {
     assert_eq!(client.get_pool_balance(&round_id), 250_000);
     assert_eq!(token.balance(&client.address), 250_000);
 }
+
+// ── Contribution caps & anti-whale guardrails ────────────────────────────────
+
+#[test]
+fn test_configure_caps_defaults_to_unlimited() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    let caps = client.get_round_caps(&round_id);
+    assert_eq!(caps.round_total_cap, 0);
+    assert_eq!(caps.per_contributor_cap, 0);
+}
+
+#[test]
+fn test_configure_caps_roundtrip() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    client.configure_round_caps(&admin, &round_id, &500_000, &50_000);
+    let caps = client.get_round_caps(&round_id);
+    assert_eq!(caps.round_total_cap, 500_000);
+    assert_eq!(caps.per_contributor_cap, 50_000);
+}
+
+#[test]
+fn test_configure_caps_rejects_negative() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    assert_eq!(
+        client.try_configure_round_caps(&admin, &round_id, &-1, &0),
+        Err(Ok(MatchingPoolError::InvalidCapValue))
+    );
+    assert_eq!(
+        client.try_configure_round_caps(&admin, &round_id, &0, &-1),
+        Err(Ok(MatchingPoolError::InvalidCapValue))
+    );
+}
+
+#[test]
+fn test_per_contributor_cap_exact_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+    client.approve_project(&admin, &round_id, &1u64);
+    client.configure_round_caps(&admin, &round_id, &0, &100);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+
+    // Exact cap value should succeed
+    client.record_contribution(&round_id, &1u64, &contributor, &100);
+    assert_eq!(client.get_project_contributions(&round_id, &1u64), 100);
+    assert_eq!(
+        client.get_contributor_round_total(&round_id, &contributor),
+        100
+    );
+
+    // Any further contribution should be rejected
+    assert_eq!(
+        client.try_record_contribution(&round_id, &1u64, &contributor, &1),
+        Err(Ok(MatchingPoolError::ContributorCapExceeded))
+    );
+}
+
+#[test]
+fn test_per_contributor_cap_bounds_excess() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+    client.approve_project(&admin, &round_id, &1u64);
+    // Anti-whale: cap at 100 per contributor
+    client.configure_round_caps(&admin, &round_id, &0, &100);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+
+    // Contribute 60, then try 80 → only 40 should be accepted
+    client.record_contribution(&round_id, &1u64, &contributor, &60);
+    assert_eq!(client.get_project_contributions(&round_id, &1u64), 60);
+
+    client.record_contribution(&round_id, &1u64, &contributor, &80);
+    // Should be clamped to 100 total
+    assert_eq!(client.get_project_contributions(&round_id, &1u64), 100);
+    assert_eq!(
+        client.get_contributor_round_total(&round_id, &contributor),
+        100
+    );
+}
+
+#[test]
+fn test_per_contributor_cap_across_projects() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+    client.approve_project(&admin, &round_id, &1u64);
+    client.approve_project(&admin, &round_id, &2u64);
+    // Anti-whale: 150 across all projects
+    client.configure_round_caps(&admin, &round_id, &0, &150);
+
+    let whale = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+
+    client.record_contribution(&round_id, &1u64, &whale, &100);
+    // 50 headroom left, request 80 → only 50 accepted
+    client.record_contribution(&round_id, &2u64, &whale, &80);
+
+    assert_eq!(client.get_project_contributions(&round_id, &1u64), 100);
+    assert_eq!(client.get_project_contributions(&round_id, &2u64), 50);
+    assert_eq!(client.get_contributor_round_total(&round_id, &whale), 150);
+}
+
+#[test]
+fn test_round_total_cap_exact_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+    client.approve_project(&admin, &round_id, &1u64);
+    // Round cap: 500 total
+    client.configure_round_caps(&admin, &round_id, &500, &0);
+
+    let c1 = Address::generate(&env);
+    let c2 = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+
+    client.record_contribution(&round_id, &1u64, &c1, &300);
+    client.record_contribution(&round_id, &1u64, &c2, &200);
+    assert_eq!(client.get_project_contributions(&round_id, &1u64), 500);
+
+    // Cap reached — new contribution should be rejected
+    let c3 = Address::generate(&env);
+    assert_eq!(
+        client.try_record_contribution(&round_id, &1u64, &c3, &1),
+        Err(Ok(MatchingPoolError::RoundCapExceeded))
+    );
+}
+
+#[test]
+fn test_round_total_cap_bounds_excess() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+    client.approve_project(&admin, &round_id, &1u64);
+    client.configure_round_caps(&admin, &round_id, &500, &0);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+
+    // Request 800 against a 500 cap → only 500 accepted
+    client.record_contribution(&round_id, &1u64, &contributor, &800);
+    assert_eq!(client.get_project_contributions(&round_id, &1u64), 500);
+}
+
+#[test]
+fn test_combined_caps_contributor_tighter() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+    client.approve_project(&admin, &round_id, &1u64);
+    // Round cap 1000, contributor cap 200 (tighter)
+    client.configure_round_caps(&admin, &round_id, &1000, &200);
+
+    let whale = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+
+    client.record_contribution(&round_id, &1u64, &whale, &500);
+    // Contributor cap bounds it to 200
+    assert_eq!(client.get_project_contributions(&round_id, &1u64), 200);
+}
+
+#[test]
+fn test_combined_caps_round_tighter() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+    client.approve_project(&admin, &round_id, &1u64);
+    // Round cap 100 (tighter), contributor cap 500
+    client.configure_round_caps(&admin, &round_id, &100, &500);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+
+    client.record_contribution(&round_id, &1u64, &contributor, &300);
+    // Round cap bounds it to 100
+    assert_eq!(client.get_project_contributions(&round_id, &1u64), 100);
+}
+
+#[test]
+fn test_caps_do_not_affect_other_contributors() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+    client.approve_project(&admin, &round_id, &1u64);
+    client.configure_round_caps(&admin, &round_id, &0, &100);
+
+    let c1 = Address::generate(&env);
+    let c2 = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+
+    client.record_contribution(&round_id, &1u64, &c1, &100);
+    // c1 is at cap, but c2 should still be able to contribute
+    client.record_contribution(&round_id, &1u64, &c2, &100);
+    assert_eq!(client.get_project_contributions(&round_id, &1u64), 200);
+}
+
+#[test]
+fn test_no_caps_contribution_unchanged() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+    client.approve_project(&admin, &round_id, &1u64);
+    // No caps configured — unlimited
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+    client.record_contribution(&round_id, &1u64, &contributor, &999_999_999);
+    assert_eq!(
+        client.get_project_contributions(&round_id, &1u64),
+        999_999_999
+    );
+}
+
+#[test]
+fn test_caps_update_before_finalization() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    client.configure_round_caps(&admin, &round_id, &100, &50);
+    let caps = client.get_round_caps(&round_id);
+    assert_eq!(caps.round_total_cap, 100);
+    assert_eq!(caps.per_contributor_cap, 50);
+
+    // Update caps
+    client.configure_round_caps(&admin, &round_id, &200, &75);
+    let caps = client.get_round_caps(&round_id);
+    assert_eq!(caps.round_total_cap, 200);
+    assert_eq!(caps.per_contributor_cap, 75);
+}
+
+#[test]
+fn test_caps_rejected_on_finalized_round() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    env.ledger().set_timestamp(4000);
+    client.finalize_round(&admin, &round_id);
+
+    assert_eq!(
+        client.try_configure_round_caps(&admin, &round_id, &100, &50),
+        Err(Ok(MatchingPoolError::RoundAlreadyFinalized))
+    );
+}

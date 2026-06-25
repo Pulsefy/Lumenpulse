@@ -69,3 +69,27 @@ pub struct AllMatchesDistributedEvent {
     pub round_id: u64,
     pub total_distributed: i128,
 }
+
+/// Emitted when an admin configures or updates contribution caps for a round.
+#[contractevent]
+pub struct CapConfiguredEvent {
+    #[topic]
+    pub round_id: u64,
+    pub round_total_cap: i128,
+    pub per_contributor_cap: i128,
+}
+
+/// Emitted when a contribution is partially accepted because the full amount
+/// would have exceeded a cap. `original_amount` is what was requested,
+/// `accepted_amount` is what was actually recorded.
+#[contractevent]
+pub struct ContributionCappedEvent {
+    #[topic]
+    pub round_id: u64,
+    #[topic]
+    pub project_id: u64,
+    pub contributor: Address,
+    pub original_amount: i128,
+    pub accepted_amount: i128,
+}
+

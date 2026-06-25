@@ -10,7 +10,7 @@ use math::{sqrt_scaled, unscale};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
-use storage::{DataKey, RoundData};
+use storage::{CapConfig, DataKey, RoundData};
 
 #[contract]
 pub struct MatchingPoolContract;
@@ -276,6 +276,55 @@ impl MatchingPoolContract {
         {
             return Err(MatchingPoolError::ProjectNotEligible);
         }
+
+        // ── Cap enforcement ──────────────────────────────────────────────
+        let mut effective_amount = amount;
+        let cap_config: Option<CapConfig> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundCapConfig(round_id));
+
+        if let Some(ref caps) = cap_config {
+            // Per-contributor (anti-whale) cap
+            if caps.per_contributor_cap > 0 {
+                let contributor_total_key =
+                    DataKey::ContributorRoundTotal(round_id, contributor.clone());
+                let contributor_total: i128 = env
+                    .storage()
+                    .persistent()
+                    .get(&contributor_total_key)
+                    .unwrap_or(0);
+                let headroom = caps.per_contributor_cap - contributor_total;
+                if headroom <= 0 {
+                    return Err(MatchingPoolError::ContributorCapExceeded);
+                }
+                if effective_amount > headroom {
+                    effective_amount = headroom;
+                }
+            }
+
+            // Round-level total cap
+            if caps.round_total_cap > 0 {
+                // Compute the aggregate round contributions across all projects.
+                let round_total = Self::get_round_contributions_total(&env, round_id);
+                let headroom = caps.round_total_cap - round_total;
+                if headroom <= 0 {
+                    return Err(MatchingPoolError::RoundCapExceeded);
+                }
+                if effective_amount > headroom {
+                    effective_amount = headroom;
+                }
+            }
+        }
+
+        // If caps reduced amount to zero, reject
+        if effective_amount <= 0 {
+            return Err(MatchingPoolError::RoundCapExceeded);
+        }
+
+        let was_capped = effective_amount < amount;
+        // ── End cap enforcement ──────────────────────────────────────────
+
         let contrib_key = DataKey::ContributorAmount(round_id, project_id, contributor.clone());
         let prev: i128 = env.storage().persistent().get(&contrib_key).unwrap_or(0);
         if prev == 0 {
@@ -289,17 +338,44 @@ impl MatchingPoolContract {
         }
         env.storage()
             .persistent()
-            .set(&contrib_key, &(prev + amount));
+            .set(&contrib_key, &(prev + effective_amount));
         let total_key = DataKey::ProjectContributions(round_id, project_id);
         let total: i128 = env.storage().persistent().get(&total_key).unwrap_or(0);
         env.storage()
             .persistent()
-            .set(&total_key, &(total + amount));
+            .set(&total_key, &(total + effective_amount));
+
+        // Update contributor round total for anti-whale tracking
+        if cap_config.is_some() {
+            let contributor_total_key =
+                DataKey::ContributorRoundTotal(round_id, contributor.clone());
+            let contributor_total: i128 = env
+                .storage()
+                .persistent()
+                .get(&contributor_total_key)
+                .unwrap_or(0);
+            env.storage().persistent().set(
+                &contributor_total_key,
+                &(contributor_total + effective_amount),
+            );
+        }
+
+        if was_capped {
+            events::ContributionCappedEvent {
+                round_id,
+                project_id,
+                contributor: contributor.clone(),
+                original_amount: amount,
+                accepted_amount: effective_amount,
+            }
+            .publish(&env);
+        }
+
         events::ContributionRecordedEvent {
             round_id,
             project_id,
             contributor,
-            amount,
+            amount: effective_amount,
         }
         .publish(&env);
         Ok(())
@@ -681,6 +757,118 @@ impl MatchingPoolContract {
         Self::require_admin(&env, &caller)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
+    }
+
+    // ── Contribution cap management ──────────────────────────────────────
+
+    /// Configure contribution caps for a round. Admin-only.
+    ///
+    /// - `round_total_cap`: Maximum aggregate contributions across all projects
+    ///   in the round. Pass 0 to disable the round-level cap.
+    /// - `per_contributor_cap`: Maximum total a single address may contribute
+    ///   across all projects in the round (anti-whale). Pass 0 to disable.
+    ///
+    /// Caps can be updated at any time before the round is finalized.
+    pub fn configure_round_caps(
+        env: Env,
+        admin: Address,
+        round_id: u64,
+        round_total_cap: i128,
+        per_contributor_cap: i128,
+    ) -> Result<(), MatchingPoolError> {
+        Self::require_admin(&env, &admin)?;
+        if round_total_cap < 0 || per_contributor_cap < 0 {
+            return Err(MatchingPoolError::InvalidCapValue);
+        }
+        let round: RoundData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        if round.is_finalized {
+            return Err(MatchingPoolError::RoundAlreadyFinalized);
+        }
+        let config = CapConfig {
+            round_total_cap,
+            per_contributor_cap,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::RoundCapConfig(round_id), &config);
+        events::CapConfiguredEvent {
+            round_id,
+            round_total_cap,
+            per_contributor_cap,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Query the current cap configuration for a round.
+    /// Returns `CapConfig { round_total_cap: 0, per_contributor_cap: 0 }` if
+    /// no caps have been configured (i.e., unlimited).
+    pub fn get_round_caps(env: Env, round_id: u64) -> Result<CapConfig, MatchingPoolError> {
+        env.storage()
+            .persistent()
+            .get::<_, RoundData>(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundCapConfig(round_id))
+            .unwrap_or(CapConfig {
+                round_total_cap: 0,
+                per_contributor_cap: 0,
+            }))
+    }
+
+    /// Query a contributor's total contributions across all projects in a round.
+    pub fn get_contributor_round_total(
+        env: Env,
+        round_id: u64,
+        contributor: Address,
+    ) -> Result<i128, MatchingPoolError> {
+        env.storage()
+            .persistent()
+            .get::<_, RoundData>(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::ContributorRoundTotal(round_id, contributor))
+            .unwrap_or(0))
+    }
+
+    /// Internal helper: sum all project contributions for a round.
+    fn get_round_contributions_total(env: &Env, round_id: u64) -> i128 {
+        let count: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EligibleProjectCount(round_id))
+            .unwrap_or(0);
+        let mut total: i128 = 0;
+        for i in 0..count {
+            let pid: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::EligibleProjectAt(round_id, i))
+                .unwrap_or(u64::MAX);
+            if !env
+                .storage()
+                .persistent()
+                .get::<_, bool>(&DataKey::EligibleProject(round_id, pid))
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            let project_total: i128 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ProjectContributions(round_id, pid))
+                .unwrap_or(0);
+            total = total.saturating_add(project_total);
+        }
+        total
     }
 }
 
