@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 
 /**
- * Stores pre-aggregated daily sentiment and volume metrics.
+ * Stores pre-aggregated daily sentiment and volume metrics, plus on-chain KPIs.
  *
  * One row per (snapshot_date, asset_symbol) pair plus one global row
  * per day where asset_symbol IS NULL.
@@ -90,6 +90,34 @@ export class DailySnapshot {
     nullable: true,
   })
   volumeWeightedSentiment!: number | null;
+
+  /** Total Value Locked in the platform for this asset/day (or global). */
+  @Column({
+    type: 'numeric',
+    precision: 20,
+    scale: 4,
+    name: 'tvl',
+    nullable: true,
+  })
+  tvl!: number | null;
+
+  /** Number of active rounds on the platform for this day. */
+  @Column({ type: 'integer', name: 'active_rounds', nullable: true })
+  activeRounds!: number | null;
+
+  /** Total number of contributions made during this day. */
+  @Column({ type: 'integer', name: 'contribution_count', nullable: true })
+  contributionCount!: number | null;
+
+  /** Total amount contributed during this day. */
+  @Column({
+    type: 'numeric',
+    precision: 20,
+    scale: 4,
+    name: 'total_contribution_amount',
+    nullable: true,
+  })
+  totalContributionAmount!: number | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

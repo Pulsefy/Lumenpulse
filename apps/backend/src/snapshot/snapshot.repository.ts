@@ -25,41 +25,124 @@ export class SnapshotRepository {
 
     const raw: AssetAggregationRow[] = await this.dataSource.query(
       `
-      -- Per-asset aggregation
+      -- Calculate on-chain KPIs
+      WITH on_chain_kpis AS (
+        SELECT
+          -- Count active rounds: created but not yet finalized
+          (SELECT COUNT(*)
+           FROM soroban_events
+           WHERE event_type = 'RoundCreatedEvent'
+             AND DATE(created_at AT TIME ZONE 'UTC') <= $1)
+          -
+          (SELECT COUNT(*)
+           FROM soroban_events
+           WHERE event_type = 'RoundFinalizedEvent'
+             AND DATE(created_at AT TIME ZONE 'UTC') <= $1)
+          AS active_rounds,
+          -- Count contribution count for the day
+          (SELECT COUNT(*)
+           FROM soroban_events
+           WHERE event_type IN ('ContributionRecordedEvent', 'DepositEvent')
+             AND DATE(created_at AT TIME ZONE 'UTC') = $1)
+          AS contribution_count,
+          -- Total contribution amount for the day
+          (SELECT SUM(
+            COALESCE(
+              (raw_payload->>'amount')::numeric,
+              (raw_payload->>'value')::numeric,
+              0
+            )
+          )
+           FROM soroban_events
+           WHERE event_type IN ('ContributionRecordedEvent', 'DepositEvent')
+             AND DATE(created_at AT TIME ZONE 'UTC') = $1)
+          AS total_contribution_amount,
+          -- TVL: total deposits minus total withdrawals up to this date
+          (SELECT
+            COALESCE(SUM(
+              CASE
+                WHEN event_type IN ('ContributionRecordedEvent', 'DepositEvent', 'PoolFundedEvent')
+                THEN COALESCE((raw_payload->>'amount')::numeric, (raw_payload->>'value')::numeric, 0)
+                WHEN event_type IN ('WithdrawEvent', 'ContributionRefundedEvent', 'ContributionPaidOutEvent', 'ContributionClawedBackEvent', 'MatchDistributedEvent')
+                THEN -COALESCE((raw_payload->>'amount')::numeric, (raw_payload->>'value')::numeric, 0)
+                ELSE 0
+              END
+            ), 0)
+           FROM soroban_events
+           WHERE DATE(created_at AT TIME ZONE 'UTC') <= $1)
+          AS tvl
+      ),
+
+      -- Per-asset sentiment data
+      per_asset_sentiment AS (
+        SELECT
+          asset_symbol,
+          AVG(sentiment_score)::text AS avg_sentiment,
+          MIN(sentiment_score)::text AS min_sentiment,
+          MAX(sentiment_score)::text AS max_sentiment,
+          COUNT(*)::text AS signal_count,
+          SUM(volume)::text AS total_volume,
+          CASE
+            WHEN SUM(volume) > 0
+            THEN (SUM(sentiment_score * volume) / SUM(volume))::text
+            ELSE NULL
+          END AS volume_weighted_sentiment
+        FROM sentiment_signals
+        WHERE DATE(signal_timestamp AT TIME ZONE 'UTC') = $1
+          AND asset_symbol IS NOT NULL
+        GROUP BY asset_symbol
+      ),
+
+      -- Global sentiment data
+      global_sentiment AS (
+        SELECT
+          NULL AS asset_symbol,
+          AVG(sentiment_score)::text AS avg_sentiment,
+          MIN(sentiment_score)::text AS min_sentiment,
+          MAX(sentiment_score)::text AS max_sentiment,
+          COUNT(*)::text AS signal_count,
+          SUM(volume)::text AS total_volume,
+          CASE
+            WHEN SUM(volume) > 0
+            THEN (SUM(sentiment_score * volume) / SUM(volume))::text
+            ELSE NULL
+          END AS volume_weighted_sentiment
+        FROM sentiment_signals
+        WHERE DATE(signal_timestamp AT TIME ZONE 'UTC') = $1
+      )
+
+      -- Combine per-asset + on-chain
       SELECT
-        asset_symbol,
-        AVG(sentiment_score)::text                          AS avg_sentiment,
-        MIN(sentiment_score)::text                          AS min_sentiment,
-        MAX(sentiment_score)::text                          AS max_sentiment,
-        COUNT(*)::text                                      AS signal_count,
-        SUM(volume)::text                                   AS total_volume,
-        CASE
-          WHEN SUM(volume) > 0
-          THEN (SUM(sentiment_score * volume) / SUM(volume))::text
-          ELSE NULL
-        END                                                  AS volume_weighted_sentiment
-      FROM sentiment_signals
-      WHERE DATE(signal_timestamp AT TIME ZONE 'UTC') = $1
-        AND asset_symbol IS NOT NULL
-      GROUP BY asset_symbol
+        pas.asset_symbol,
+        pas.avg_sentiment,
+        pas.min_sentiment,
+        pas.max_sentiment,
+        pas.signal_count,
+        pas.total_volume,
+        pas.volume_weighted_sentiment,
+        ock.tvl::text AS tvl,
+        NULL::text AS active_rounds, -- active_rounds is only for global
+        NULL::text AS contribution_count,
+        NULL::text AS total_contribution_amount
+      FROM per_asset_sentiment pas, on_chain_kpis ock
 
       UNION ALL
 
-      -- Global (cross-asset) row — asset_symbol is NULL
+      -- Combine global + on-chain (always return a row even without sentiment data
       SELECT
-        NULL                                                AS asset_symbol,
-        AVG(sentiment_score)::text                          AS avg_sentiment,
-        MIN(sentiment_score)::text                          AS min_sentiment,
-        MAX(sentiment_score)::text                          AS max_sentiment,
-        COUNT(*)::text                                      AS signal_count,
-        SUM(volume)::text                                   AS total_volume,
-        CASE
-          WHEN SUM(volume) > 0
-          THEN (SUM(sentiment_score * volume) / SUM(volume))::text
-          ELSE NULL
-        END                                                  AS volume_weighted_sentiment
-      FROM sentiment_signals
-      WHERE DATE(signal_timestamp AT TIME ZONE 'UTC') = $1
+        NULL::text AS asset_symbol,
+        COALESCE(gs.avg_sentiment, '0') AS avg_sentiment,
+        COALESCE(gs.min_sentiment, NULL) AS min_sentiment,
+        COALESCE(gs.max_sentiment, NULL) AS max_sentiment,
+        COALESCE(gs.signal_count, '0') AS signal_count,
+        gs.total_volume,
+        gs.volume_weighted_sentiment,
+        ock.tvl::text AS tvl,
+        ock.active_rounds::text AS active_rounds,
+        ock.contribution_count::text AS contribution_count,
+        ock.total_contribution_amount::text AS total_contribution_amount
+      FROM on_chain_kpis ock
+      LEFT JOIN global_sentiment gs ON true
       `,
       [dateStr],
     );
@@ -87,6 +170,10 @@ export class SnapshotRepository {
       signalCount: agg.signalCount,
       totalVolume: agg.totalVolume,
       volumeWeightedSentiment: agg.volumeWeightedSentiment,
+      tvl: agg.tvl,
+      activeRounds: agg.activeRounds,
+      contributionCount: agg.contributionCount,
+      totalContributionAmount: agg.totalContributionAmount,
     }));
 
     await this.repo
@@ -102,6 +189,10 @@ export class SnapshotRepository {
           'signal_count',
           'total_volume',
           'volume_weighted_sentiment',
+          'tvl',
+          'active_rounds',
+          'contribution_count',
+          'total_contribution_amount',
           'updated_at',
         ],
         ['snapshot_date', 'asset_symbol'],
@@ -144,6 +235,9 @@ export class SnapshotRepository {
     const nullableFloat = (v: string | null) =>
       v === null || v === '' ? null : parseFloat(v);
 
+    const nullableInt = (v: string | null) =>
+      v === null || v === '' ? null : parseInt(v, 10);
+
     return {
       assetSymbol: row.asset_symbol ?? null,
       avgSentiment: parseFloat(row.avg_sentiment),
@@ -152,6 +246,10 @@ export class SnapshotRepository {
       signalCount: parseInt(row.signal_count, 10),
       totalVolume: nullableFloat(row.total_volume),
       volumeWeightedSentiment: nullableFloat(row.volume_weighted_sentiment),
+      tvl: nullableFloat(row.tvl),
+      activeRounds: nullableInt(row.active_rounds),
+      contributionCount: nullableInt(row.contribution_count),
+      totalContributionAmount: nullableFloat(row.total_contribution_amount),
     };
   }
 }

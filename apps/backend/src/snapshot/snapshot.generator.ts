@@ -24,18 +24,6 @@ export class SnapshotGenerator {
 
     const aggregations = await this.snapshotRepo.aggregateForDate(utcDate);
 
-    if (aggregations.length === 0) {
-      this.logger.warn(
-        `No signal data found for ${this.fmt(utcDate)} — skipping write`,
-      );
-      return {
-        date: utcDate,
-        assetRowsWritten: 0,
-        globalRowWritten: false,
-        durationMs: Date.now() - start,
-      };
-    }
-
     const globalRow = aggregations.find((a) => a.assetSymbol === null);
     const assetRows = aggregations.filter((a) => a.assetSymbol !== null);
 

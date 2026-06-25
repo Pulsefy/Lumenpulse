@@ -11,6 +11,10 @@ export interface AssetAggregationRow {
   signal_count: string;
   total_volume: string | null;
   volume_weighted_sentiment: string | null;
+  tvl: string | null;
+  active_rounds: string | null;
+  contribution_count: string | null;
+  total_contribution_amount: string | null;
 }
 
 /** Parsed, type-safe version used by SnapshotGenerator internally. */
@@ -22,6 +26,10 @@ export interface AssetAggregation {
   signalCount: number;
   totalVolume: number | null;
   volumeWeightedSentiment: number | null;
+  tvl: number | null;
+  activeRounds: number | null;
+  contributionCount: number | null;
+  totalContributionAmount: number | null;
 }
 
 /** Summary returned to callers after a generation run. */
