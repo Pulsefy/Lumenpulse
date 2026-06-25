@@ -58,3 +58,37 @@ def test_save_article_materializes_onchain_links() -> None:
     normalized = service.get_article_onchain_links(article_id="article-link-1")
     normalized_ids = {link.stable_entity_id for link in normalized}
     assert {"project:101", "asset:XLM"}.issubset(normalized_ids)
+
+
+def test_compute_project_funding_momentum_score_and_persisted_view() -> None:
+    service = build_sqlite_service()
+    project_id = 202
+
+    service.save_contract_event(
+        contract_id="contract-202",
+        event_id="evt-1",
+        ledger=100,
+        event_type="DepositEvent",
+        project_id=project_id,
+        contributor="contrib-A",
+        amount=150.0,
+        timestamp=datetime.utcnow(),
+    )
+    service.save_contract_event(
+        contract_id="contract-202",
+        event_id="evt-2",
+        ledger=101,
+        event_type="ContributionRecordedEvent",
+        project_id=project_id,
+        contributor="contrib-B",
+        amount=120.0,
+        timestamp=datetime.utcnow(),
+    )
+
+    momentum = service.compute_project_funding_momentum_score(project_id=project_id)
+    assert momentum > 0.0
+
+    view = service.update_project_view_funding_momentum_score(project_id=project_id)
+    assert view is not None
+    assert view.project_id == project_id
+    assert view.funding_momentum_score == momentum
