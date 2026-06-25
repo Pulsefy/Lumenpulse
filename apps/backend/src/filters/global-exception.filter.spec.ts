@@ -9,6 +9,10 @@ import {
 } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import { REQUEST_ID_HEADER } from '../common/constants/request.constants';
+import {
+  SorobanErrorCode,
+  SorobanRpcError,
+} from '../stellar/services/soroban-rpc-client.service';
 
 describe('GlobalExceptionFilter', () => {
   let filter: GlobalExceptionFilter;
@@ -110,6 +114,25 @@ describe('GlobalExceptionFilter', () => {
         code: ErrorCode.STEL_INSUFFICIENT_FUNDS,
       }),
     );
+  });
+
+  it('normalizes uncaught SorobanRpcError via the safety net', () => {
+    const exception = new SorobanRpcError(
+      SorobanErrorCode.TIMEOUT,
+      'Soroban RPC request timed out after 30000ms',
+    );
+
+    filter.catch(exception, mockArgumentsHost);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(
+      HttpStatus.GATEWAY_TIMEOUT,
+    );
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      code: ErrorCode.STEL_RPC_TIMEOUT,
+      message: exception.message,
+      details: { sorobanCode: SorobanErrorCode.TIMEOUT },
+      requestId: 'req-123',
+    });
   });
 
   it('hides internal error messages in production mode', () => {
