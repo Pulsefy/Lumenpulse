@@ -1,6 +1,12 @@
 """
 Data ingestion module for fetching external data.
 """
+from .payload_quarantine import (
+    QuarantineStore,
+    QuarantinedPayload,
+    quarantine_on_error,
+    process_with_quarantine,
+)
 
 from .news_fetcher import NewsFetcher, NewsArticle, fetch_news
 from .stellar_fetcher import (
@@ -39,4 +45,8 @@ __all__ = [
     "RateLimiter",
     "SocialPlatform",
     "fetch_social",
+    "QuarantineStore",
+    "QuarantinedPayload",
+    "quarantine_on_error",
+    "process_with_quarantine",
 ]

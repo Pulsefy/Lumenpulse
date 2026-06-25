@@ -9,7 +9,7 @@ import { useWatchlist } from "@/contexts/WatchlistContext";
 import { TransactionReceiptModal } from "@/components/TransactionReceiptModal";
 import { signTransaction } from "@stellar/freighter-api";
 import { Address, Contract, TransactionBuilder, nativeToScVal, rpc } from "@stellar/stellar-sdk";
-import { getExplorerUrl } from "@/lib/utils";
+import { useExplorerUrl } from "@/hooks/useExplorerUrl";
 
 export interface GrantRound {
   id: number;
@@ -144,6 +144,7 @@ export function ProjectAllocationRow({
 
   const { config } = useStellarConfig();
   const { publicKey, status: walletStatus, connect: connectWallet } = useStellarWallet();
+  const buildExplorerUrl = useExplorerUrl();
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [amount, setAmount] = useState("");
@@ -286,6 +287,17 @@ export function ProjectAllocationRow({
         <div className="mt-2 p-4 rounded-xl border border-white/10 bg-white/[0.01] backdrop-blur-md space-y-4 transition-all duration-300">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-white/80">Contribute to Project #{item.projectId}</h4>
+            {config?.contracts?.crowdfundVault && (
+              <a
+                href={buildExplorerUrl("contract", config.contracts.crowdfundVault)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] text-primary/60 hover:text-primary underline underline-offset-2 transition-colors"
+                title="View Crowdfund Vault contract on explorer"
+              >
+                Vault ↗
+              </a>
+            )}
           </div>
 
           {!publicKey ? (

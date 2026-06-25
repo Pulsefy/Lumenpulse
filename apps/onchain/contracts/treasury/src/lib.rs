@@ -158,6 +158,74 @@ impl TreasuryContract {
         })
     }
 
+    /// Rotate beneficiary for a stream, preserving accrued claim state
+    pub fn rotate_beneficiary(
+        env: Env,
+        admin: Address,
+        old_beneficiary: Address,
+        new_beneficiary: Address,
+    ) -> Result<(), TreasuryError> {
+        Self::with_reentrancy_guard(&env, || {
+            let stored_admin: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::Admin)
+                .ok_or(TreasuryError::NotInitialized)?;
+
+            if admin != stored_admin {
+                return Err(TreasuryError::Unauthorized);
+            }
+            admin.require_auth();
+
+            if old_beneficiary == new_beneficiary {
+                return Err(TreasuryError::SameBeneficiary);
+            }
+
+            let old_key = DataKey::Stream(old_beneficiary.clone());
+            let mut stream: StreamData = env
+                .storage()
+                .persistent()
+                .get(&old_key)
+                .ok_or(TreasuryError::StreamNotFound)?;
+
+            // Preserve the claimed amount and total amount, only change beneficiary
+            let claimed_amount = stream.claimed_amount;
+            let remaining_amount = stream.total_amount - claimed_amount;
+
+            if claimed_amount == 0 {
+                // No claims yet: preserve vesting schedule, just change beneficiary
+                stream.beneficiary = new_beneficiary.clone();
+            } else {
+                // Partial claims made: reset to immediate vesting of remaining amount
+                stream.claimed_amount = 0;
+                stream.total_amount = remaining_amount;
+                stream.start_time = env.ledger().timestamp();
+                stream.duration = 0;
+                stream.beneficiary = new_beneficiary.clone();
+            }
+
+            // Remove old stream entry
+            env.storage().persistent().remove(&old_key);
+
+            // Create new stream entry with updated beneficiary
+            let new_key = DataKey::Stream(new_beneficiary.clone());
+            env.storage().persistent().set(&new_key, &stream);
+            env.storage()
+                .persistent()
+                .extend_ttl(&new_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            events::publish_beneficiary_rotated(
+                &env,
+                old_beneficiary,
+                new_beneficiary,
+                claimed_amount,
+                remaining_amount,
+            );
+
+            Ok(())
+        })
+    }
+
     /// View currently unlocked amount
     pub fn get_unlocked(env: Env, beneficiary: Address) -> Result<i128, TreasuryError> {
         let key = DataKey::Stream(beneficiary);

@@ -24,6 +24,7 @@ import {
   AllocateBudgetResponseDto,
   StreamStateDto,
 } from './dto/stream-response.dto';
+import { RotateBeneficiaryDto } from './dto/rotate-beneficiary.dto';
 import { TreasuryService } from './treasury.service';
 
 @ApiTags('treasury')
@@ -89,5 +90,37 @@ export class TreasuryController {
     @Param('beneficiary') beneficiary: string,
   ): Promise<StreamStateDto> {
     return this.treasuryService.getStream(beneficiary);
+  }
+
+  @Post('streams/rotate')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Rotate beneficiary for a treasury stream (admin only)',
+    description:
+      'Builds, signs and submits a Soroban `rotate_beneficiary` transaction to ' +
+      'the treasury contract, rotating the beneficiary while preserving accrued ' +
+      'claim state.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Beneficiary rotated successfully',
+    type: AllocateBudgetResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request parameters' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Caller is not an admin' })
+  @ApiResponse({ status: 404, description: 'Stream not found for old beneficiary' })
+  @ApiResponse({ status: 502, description: 'Treasury transaction failed' })
+  @ApiResponse({
+    status: 503,
+    description: 'Treasury not configured / RPC down',
+  })
+  async rotateBeneficiary(
+    @Body() dto: RotateBeneficiaryDto,
+  ): Promise<AllocateBudgetResponseDto> {
+    return this.treasuryService.rotateBeneficiary(dto);
   }
 }
