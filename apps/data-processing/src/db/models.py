@@ -257,6 +257,7 @@ class ProjectView(Base):
     owner = Column(String(255), nullable=True, index=True)
     total_contributions = Column(Float, nullable=False, default=0.0)
     unique_contributors = Column(Integer, nullable=False, default=0)
+    funding_momentum_score = Column(Float, nullable=False, default=0.0)
     status = Column(String(50), nullable=True, index=True)
     last_event_ledger = Column(BigInteger, nullable=True, index=True)
     extra_data = Column(JSON, nullable=True)
@@ -270,12 +271,14 @@ class ProjectView(Base):
     __table_args__ = (
         Index("idx_project_views_status", "status"),
         Index("idx_project_views_contract_id", "contract_id"),
+        Index("idx_project_views_funding_momentum_score", "funding_momentum_score"),
     )
 
     def __repr__(self):
         return (
             f"<ProjectView(project_id={self.project_id}, total_contributions={self.total_contributions}, "
-            f"unique_contributors={self.unique_contributors}, status={self.status})>"
+            f"unique_contributors={self.unique_contributors}, "
+            f"funding_momentum_score={self.funding_momentum_score}, status={self.status})>"
         )
 
 

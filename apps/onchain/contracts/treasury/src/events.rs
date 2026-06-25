@@ -19,6 +19,17 @@ pub struct TokensClaimedEvent {
     pub remaining: i128,
 }
 
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BeneficiaryRotatedEvent {
+    #[topic]
+    pub old_beneficiary: Address,
+    #[topic]
+    pub new_beneficiary: Address,
+    pub claimed_amount: i128,
+    pub remaining_amount: i128,
+}
+
 pub fn publish_stream_created(
     env: &Env,
     beneficiary: Address,
@@ -45,6 +56,22 @@ pub fn publish_tokens_claimed(
         beneficiary,
         amount_claimed,
         remaining,
+    }
+    .publish(env);
+}
+
+pub fn publish_beneficiary_rotated(
+    env: &Env,
+    old_beneficiary: Address,
+    new_beneficiary: Address,
+    claimed_amount: i128,
+    remaining_amount: i128,
+) {
+    BeneficiaryRotatedEvent {
+        old_beneficiary,
+        new_beneficiary,
+        claimed_amount,
+        remaining_amount,
     }
     .publish(env);
 }
