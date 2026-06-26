@@ -45,6 +45,11 @@ pub enum ProposalAction {
     GrantBadge,
     RevokeBadge,
     ApplyPenalty,
+    /// Update an arbitrary contributor's profile metadata (github_handle) on
+    /// the contributor's behalf. Self-service updates go through
+    /// `update_contributor` without a proposal id; this action is reserved for
+    /// admin-managed corrections (e.g. typo fixes, handle migrations).
+    UpdateProfile,
 }
 
 #[contracttype]
