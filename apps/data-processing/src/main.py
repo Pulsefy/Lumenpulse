@@ -28,13 +28,13 @@ from scheduler import AnalyticsScheduler
 
 from src.utils.logger import setup_logger, CorrelationIdFilter
 from src.utils.metrics import API_FAILURES_TOTAL, start_metrics_server
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger import json
 
 # Configure logging
 logger = setup_logger(__name__)
 os.makedirs("./logs", exist_ok=True)
 file_handler = logging.FileHandler("./logs/data_processor.log")
-formatter = jsonlogger.JsonFormatter(
+formatter = json.JsonFormatter(
     "%(asctime)s %(levelname)s %(name)s %(correlation_id)s %(message)s",
     rename_fields={"levelname": "level"}
 )

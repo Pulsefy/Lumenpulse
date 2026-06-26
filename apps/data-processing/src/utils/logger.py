@@ -1,7 +1,7 @@
 import logging
 import contextvars
 import uuid
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger import json
 
 # Context variable for correlation ID
 correlation_id_ctx = contextvars.ContextVar("correlation_id", default="system")
@@ -29,7 +29,7 @@ def setup_logger(name: str = "lumenpulse", level: int = logging.INFO) -> logging
     handler = logging.StreamHandler()
 
     # Use python-json-logger for JSON formatting
-    formatter = jsonlogger.JsonFormatter(
+    formatter = json.JsonFormatter(
         "%(asctime)s %(levelname)s %(name)s %(correlation_id)s %(message)s",
         rename_fields={
             "levelname": "level"

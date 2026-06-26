@@ -157,8 +157,12 @@ def setup_security_middleware(app) -> None:
             "/openapi.json",
             "/sentiment/legend",
         ]
+        public_contributor_timeline = (
+            request.url.path.startswith("/contributors/")
+            and request.url.path.endswith("/timeline")
+        )
         
-        if request.url.path in excluded_paths:
+        if request.url.path in excluded_paths or public_contributor_timeline:
             return await call_next(request)
         
         # Validate API key

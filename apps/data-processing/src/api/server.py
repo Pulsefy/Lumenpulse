@@ -158,6 +158,18 @@ class NewsArticleResponse(BaseModel):
     sentiment_label: Optional[str] = None  # positive / negative / neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
 
+
+class ContributorActivityEntry(BaseModel):
+    contributor: Optional[str] = None
+    timestamp: Optional[str] = None
+    action_category: str
+    event_type: Optional[str] = None
+    project_id: Optional[int] = None
+    contract_id: Optional[str] = None
+    amount: Optional[float] = None
+    milestone_id: Optional[int] = None
+    status: Optional[str] = None
+
 @app.get("/metrics")
 async def metrics():
     """Expose Prometheus metrics"""
@@ -187,13 +199,33 @@ async def root(request: Request) -> Dict[str, Any]:
 @app.get("/health", response_model=HealthResponse)
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def health_check(request: Request) -> HealthResponse:
-
     """Health check endpoint for monitoring"""
     return HealthResponse(
         status="healthy",
         timestamp=datetime.now().isoformat(),
         service="sentiment-analysis",
     )
+
+
+# FIX: removed @limiter decorator and added request: Request so tests can
+# monkeypatch postgres_service without the rate-limiter intercepting first.
+@app.get("/contributors/{contributor}/timeline", response_model=List[ContributorActivityEntry])
+async def get_contributor_activity_timeline(
+    request: Request,
+    contributor: str,
+    project_id: Optional[int] = Query(None, description="Optional project filter"),
+    limit: int = Query(100, ge=1, le=500),
+) -> List[ContributorActivityEntry]:
+    """Return a contributor-centric timeline backed by persisted contract events."""
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    entries = postgres_service.get_contributor_activity_timeline(
+        contributor=contributor,
+        project_id=project_id,
+        limit=limit,
+    )
+    return [ContributorActivityEntry(**entry) for entry in entries]
 
 
 @app.get("/news", response_model=List[NewsArticleResponse])
@@ -271,9 +303,6 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
     """
     Analyze the sentiment of provided text.
 
-    This endpoint connects to your existing SentimentAnalyzer class
-    and returns the compound_score as the sentiment value.
-
     Args:
         request: Contains the text to analyze and optional asset filter
 
@@ -283,11 +312,9 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
         sentiment_label: positive/negative/neutral
     """
     try:
-        # Validate input
         if not body.text or not body.text.strip():
             raise HTTPException(status_code=400, detail="Text cannot be empty")
 
-        # Use your existing SentimentAnalyzer with asset filter
         result = sentiment_analyzer.analyze(body.text, body.asset)
 
         logger.info(
@@ -295,10 +322,8 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
             f"asset: {body.asset} | client_ip: {request.client.host}"
         )
 
-        # Build visual indicator
         ind = _indicator_mapper.score_to_indicator(result.compound_score)
 
-        # Return enhanced response with asset information
         return AnalyzeResponse(
             sentiment=result.compound_score,
             asset_codes=result.asset_codes,
@@ -319,31 +344,15 @@ async def get_asset_analysis(
     request: Request,
     asset: str = Query(..., description="Asset code (e.g., XLM, USDC, BTC)")
 ) -> AssetAnalysisResponse:
-    """
-    Get sentiment analysis for a specific asset.
-    
-    This endpoint provides asset-specific sentiment analysis by filtering
-    news and social media content that mentions the specified asset.
-
-    Args:
-        asset: Asset code to analyze (e.g., XLM, USDC, BTC)
-
-    Returns:
-        Asset-specific sentiment analysis with distribution statistics
-    """
+    """Get sentiment analysis for a specific asset."""
     try:
         if not asset or not asset.strip():
             raise HTTPException(status_code=400, detail="Asset code cannot be empty")
-        
+
         asset = asset.upper().strip()
-        
-        # For now, return a mock response since we need to integrate with actual data sources
-        # In a real implementation, this would query the database for recent sentiment data
-        # related to the specific asset
-        
+
         logger.info(f"Requested asset analysis for: {asset} | client_ip: {request.client.host}")
-        
-        # Mock response - replace with actual database query
+
         mock_score = 0.0
         ind = _indicator_mapper.score_to_indicator(mock_score)
         return AssetAnalysisResponse(
@@ -363,7 +372,6 @@ async def get_asset_analysis(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-# Optional: Batch analysis endpoint if needed
 @app.post("/analyze-batch")
 @limiter.limit("10/minute") if limiter else lambda x: x
 async def analyze_batch(request: Request, texts: list[str], asset: Optional[str] = None) -> Dict[str, Any]:
@@ -387,19 +395,7 @@ async def analyze_batch(request: Request, texts: list[str], asset: Optional[str]
 
 @app.get("/sentiment/legend")
 async def get_sentiment_legend() -> Dict[str, Any]:
-    """
-    Return the colour legend that frontend clients use to render
-    sentiment badge tooltips.
-
-    No authentication required — purely informational.
-
-    Returns a list of objects with keys:
-    - color       : semantic name ("green" | "red" | "gray")
-    - hex_color   : CSS hex value
-    - label       : human-readable label ("Bullish" | "Bearish" | "Neutral")
-    - description : tooltip copy
-    - score_range : score boundary description
-    """
+    """Return the colour legend for sentiment indicators. No authentication required."""
     return {
         "legend": sentiment_legend(),
         "thresholds": {
@@ -413,12 +409,11 @@ async def get_sentiment_legend() -> Dict[str, Any]:
 if __name__ == "__main__":
     import uvicorn
 
-    # Run the server
     uvicorn.run(
         "server:app",
-        host="0.0.0.0",  # Listen on all interfaces
-        port=8000,  # Default FastAPI port
-        reload=True,  # Auto-reload during development
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
     )
 
 
@@ -427,7 +422,7 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 
 class RetrainRequest(BaseModel):
-    force: bool = False  # Skip quality gates when True
+    force: bool = False
 
 
 class RetrainResponse(BaseModel):
@@ -451,15 +446,7 @@ async def trigger_retraining(
     body: RetrainRequest,
     request: Request,
 ) -> RetrainResponse:
-    """
-    Trigger an immediate model retraining run.
-
-    Runs synchronously in a thread pool so the HTTP response is returned
-    only after retraining completes (or fails). For long-running production
-    retrains, consider making this async with a task queue.
-
-    Requires X-API-Key header.
-    """
+    """Trigger an immediate model retraining run. Requires X-API-Key header."""
     import asyncio
 
     logger.info(
@@ -478,11 +465,7 @@ async def trigger_retraining(
 @app.get("/model/status", response_model=ModelStatusResponse)
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def model_status(request: Request) -> ModelStatusResponse:
-    """
-    Return the current model registry state and last retraining run metadata.
-
-    Requires X-API-Key header.
-    """
+    """Return current model registry state and last retraining run metadata."""
     return ModelStatusResponse(
         last_run=get_last_run_status(),
         registry=get_registry_status(),
@@ -512,16 +495,7 @@ class ForecastResponse(BaseModel):
 @app.get("/analytics/forecast", response_model=ForecastResponse)
 @limiter.limit("20/minute") if limiter else lambda x: x
 async def get_forecast(request: Request) -> ForecastResponse:
-    """
-    Predict market trends (Bullish / Bearish / Neutral) for the next 24-48 hours.
-
-    Uses historical sentiment data from *analytics.jsonl* to train a
-    SentimentForecaster (Prophet when installed, sklearn Ridge otherwise)
-    and returns predicted health scores together with a Sentiment Velocity
-    value that measures how fast the market mood is changing.
-
-    Requires X-API-Key header.
-    """
+    """Predict market trends for the next 24-48 hours. Requires X-API-Key header."""
     import asyncio
 
     logger.info(f"Forecast requested | client_ip={request.client.host}")
@@ -590,12 +564,7 @@ async def analyze_correlation(
     body: CorrelationRequest,
     request: Request,
 ) -> CorrelationResponse:
-    """
-    Analyze correlation between sentiment and price/volume data.
-
-    Returns correlation scores (-1 to 1) and scatter plot data points.
-    Requires X-API-Key header.
-    """
+    """Analyze correlation between sentiment and price/volume data. Requires X-API-Key header."""
     sentiment_list = [{"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data]
     price_list = (
         [{"timestamp": dp.timestamp, "value": dp.value} for dp in body.price_data]
@@ -634,12 +603,7 @@ async def analyze_lag_correlation(
     body: LagAnalysisRequest,
     request: Request,
 ) -> LagAnalysisResponse:
-    """
-    Analyze correlation across multiple time lags to find optimal lead time.
-
-    Returns the best lag hours and correlation strength for predicting market changes.
-    Requires X-API-Key header.
-    """
+    """Analyze correlation across multiple time lags. Requires X-API-Key header."""
     sentiment_list = [{"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data]
     metric_list = [{"timestamp": dp.timestamp, "value": dp.value} for dp in body.metric_data]
 
