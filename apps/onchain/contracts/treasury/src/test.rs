@@ -1,10 +1,6 @@
 use super::*;
 use soroban_sdk::testutils::{Address as _, Ledger};
-use soroban_sdk::{token, vec, Address, BytesN, Env};
-
-fn request_id(env: &Env) -> BytesN<32> {
-    BytesN::from_array(env, &[0; 32])
-}
+use soroban_sdk::{token, vec, Address, Env};
 
 // ── Test fixtures ────────────────────────────────────────────
 
@@ -68,7 +64,7 @@ impl<'a> MultisigFixture<'a> {
         // Pre-create a stream for beneficiary-rotation tests.
         stellar_client.mint(&admin, &1000);
         env.ledger().set_timestamp(1000);
-        client.allocate_budget(&admin, &beneficiary, &1000, &1000, &1000, &request_id(&env));
+        client.allocate_budget(&admin, &beneficiary, &1000, &1000, &1000);
 
         MultisigFixture {
             env,
