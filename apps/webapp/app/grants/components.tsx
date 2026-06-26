@@ -122,6 +122,79 @@ export function RoundCard({ round }: { round: GrantRound }) {
   );
 }
 
+export function RoundTable({ rounds }: { rounds: GrantRound[] }) {
+  const { isProjectSaved, toggleSavedProject } = useWatchlist();
+
+  return (
+    <div className="hidden md:block w-full overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
+      <table className="w-full text-left text-sm whitespace-nowrap min-w-[800px]">
+        <thead className="bg-white/[0.02] border-b border-white/5">
+          <tr>
+            <th className="px-6 py-4 font-medium text-foreground/50 w-12"></th>
+            <th className="px-6 py-4 font-medium text-foreground/50">Name</th>
+            <th className="px-6 py-4 font-medium text-foreground/50">Status</th>
+            <th className="px-6 py-4 font-medium text-foreground/50 text-right">Matching Pool</th>
+            <th className="px-6 py-4 font-medium text-foreground/50">Ends</th>
+            <th className="px-6 py-4 font-medium text-foreground/50 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-white/5">
+          {rounds.map((round) => {
+            const endDate = new Date(round.endTime * 1000).toLocaleDateString();
+            const isSaved = isProjectSaved(round.id);
+
+            return (
+              <tr key={round.id} className="group hover:bg-white/[0.05] transition-colors relative">
+                <td className="px-6 py-4 relative z-10">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      toggleSavedProject(round.id);
+                    }}
+                    className={`p-2 -ml-2 rounded-full transition-colors ${
+                      isSaved ? "bg-primary/20 text-primary" : "text-white/40 hover:bg-white/10 hover:text-white"
+                    }`}
+                    aria-label={isSaved ? "Remove from watchlist" : "Add to watchlist"}
+                  >
+                    <Bookmark className="w-4 h-4" fill={isSaved ? "currentColor" : "none"} />
+                  </button>
+                </td>
+                <td className="px-6 py-4 font-semibold relative">
+                  <Link href={`/grants/${round.id}`} className="absolute inset-0 z-0" aria-label={`View ${round.name}`} />
+                  <div className="flex items-center gap-2 max-w-[200px] lg:max-w-xs xl:max-w-md truncate pointer-events-none relative z-10">
+                    {round.name}
+                  </div>
+                </td>
+                <td className="px-6 py-4 pointer-events-none relative z-10">
+                  <StatusBadge status={round.status} />
+                </td>
+                <td className="px-6 py-4 text-right pointer-events-none relative z-10">
+                  <div className="flex items-center justify-end gap-2">
+                    <Wallet className="w-4 h-4 text-primary flex-shrink-0" />
+                    <span className="font-bold">{formatAmount(round.totalPool)} XLM</span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-foreground/60 text-xs pointer-events-none relative z-10">
+                  {endDate}
+                </td>
+                <td className="px-6 py-4 text-right relative z-20">
+                  <Link 
+                    href={`/grants/${round.id}`} 
+                    className="inline-flex items-center justify-center px-4 py-2 text-xs font-bold rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                  >
+                    View Details
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function QfBar({ share }: { share: number }) {
   return (
     <div className="h-2 rounded-full bg-white/5 overflow-hidden">
