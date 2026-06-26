@@ -1,4 +1,5 @@
 import { registerAs } from '@nestjs/config';
+import { config } from '../../lib/config';
 
 export interface StellarConfig {
   horizonUrl: string;
@@ -6,23 +7,18 @@ export interface StellarConfig {
   timeout: number;
   retryAttempts: number;
   retryDelay: number;
+  balanceCacheTTL: number;
+  operationsCacheTTL: number;
 }
 
 export default registerAs('stellar', (): StellarConfig => {
-  const network = (process.env.STELLAR_NETWORK || 'testnet') as
-    | 'testnet'
-    | 'mainnet';
-
-  const defaultHorizonUrls = {
-    testnet: 'https://horizon-testnet.stellar.org',
-    mainnet: 'https://horizon.stellar.org',
-  };
-
   return {
-    horizonUrl: process.env.STELLAR_HORIZON_URL || defaultHorizonUrls[network],
-    network,
-    timeout: parseInt(process.env.STELLAR_TIMEOUT || '30000', 10),
-    retryAttempts: parseInt(process.env.STELLAR_RETRY_ATTEMPTS || '3', 10),
-    retryDelay: parseInt(process.env.STELLAR_RETRY_DELAY || '1000', 10),
+    horizonUrl: config.stellar.horizonUrl,
+    network: config.stellar.network,
+    timeout: config.stellar.timeout,
+    retryAttempts: config.stellar.retryAttempts,
+    retryDelay: config.stellar.retryDelay,
+    balanceCacheTTL: config.stellar.balanceCacheTTL,
+    operationsCacheTTL: config.stellar.operationsCacheTTL,
   };
 });

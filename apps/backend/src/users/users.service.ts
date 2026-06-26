@@ -4,6 +4,8 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,6 +15,9 @@ import { StellarService } from '../stellar/stellar.service';
 import { LinkStellarAccountDto } from './dto/link-stellar-account.dto';
 import { StellarAccountResponseDto } from './dto/stellar-account-response.dto';
 import { UpdateStellarAccountLabelDto } from './dto/update-stellar-account-label.dto';
+import { UploadService } from '../upload/upload.service';
+import { AuthService } from '../auth/auth.service';
+import crypto from 'crypto';
 
 @Injectable()
 export class UsersService {
@@ -24,6 +29,9 @@ export class UsersService {
     @InjectRepository(StellarAccount)
     private stellarAccountRepository: Repository<StellarAccount>,
     private stellarService: StellarService,
+    private uploadService: UploadService,
+    @Inject(forwardRef(() => AuthService))
+    private authService: AuthService,
   ) {}
 
   // --- BASIC CRUD ---
@@ -57,12 +65,30 @@ export class UsersService {
     return updatedUser;
   }
 
+  async updateUserProfilePicture(file: Buffer, id: string) {
+    const fileName = `${crypto.randomUUID()}.webp`;
+    const url = await this.uploadService.uploadFile(file, fileName);
+    const updateResult = await this.usersRepository.update(id, {
+      avatarUrl: url,
+    });
+    if (updateResult.affected === 0) {
+      throw new NotFoundException('User not found');
+    }
+    return url;
+  }
+
   // --- STELLAR ACCOUNT MANAGEMENT ---
 
   async addStellarAccount(
     userId: string,
     dto: LinkStellarAccountDto,
   ): Promise<StellarAccountResponseDto> {
+    // Verify ownership via challenge-response signature first
+    await this.authService.verifyChallengeOnly(
+      dto.publicKey,
+      dto.signedChallenge,
+    );
+
     this.stellarService.validatePublicKeyOrThrow(dto.publicKey);
 
     const user = await this.usersRepository.findOne({ where: { id: userId } });
@@ -207,6 +233,7 @@ export class UsersService {
       id: account.id,
       publicKey: account.publicKey,
       label: account.label,
+      isPrimary: account.isPrimary,
       isActive: account.isActive,
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,

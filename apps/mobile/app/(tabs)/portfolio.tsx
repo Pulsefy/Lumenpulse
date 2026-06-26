@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -6,16 +6,18 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useLocalization } from '../../src/context';
 import { portfolioApi, AssetBalance, PortfolioSummary } from '../../lib/api';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+import { transactionApi } from '../../lib/transaction';
+import { Transaction, TransactionType } from '../../lib/types/transaction';
+import { useCachedData } from '../../hooks/useCachedData';
+import { CACHE_CONFIGS } from '../../lib/cache';
+import { useWalletAutoRefresh } from '../../hooks/useWalletAutoRefresh';
 
 function formatUsd(value: string | number): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -23,432 +25,270 @@ function formatUsd(value: string | number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
   }).format(num);
 }
 
 function formatAmount(amount: string): string {
   const num = parseFloat(amount);
   if (isNaN(num)) return '0';
-  // Show up to 6 decimal places but trim trailing zeros
   return num.toLocaleString('en-US', { maximumFractionDigits: 6 });
 }
 
-function formatRelativeTime(iso: string | null): string {
-  if (!iso) return '';
-  const date = new Date(iso);
-  const diffMs = Date.now() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHrs = Math.floor(diffMins / 60);
-  if (diffHrs < 24) return `${diffHrs}h ago`;
+function formatTransactionDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  if (diff < 7) return `${diff} days ago`;
   return date.toLocaleDateString();
 }
 
-// Returns a stable accent color for an asset code
+function getTransactionIcon(type: TransactionType): string {
+  switch (type) {
+    case TransactionType.PAYMENT:
+      return 'send-outline';
+    case TransactionType.SWAP:
+      return 'swap-horizontal-outline';
+    default:
+      return 'document-text-outline';
+  }
+}
+
 function assetColor(code: string): string {
-  const palette = ['#db74cf', '#7a85ff', '#4ecdc4', '#f7b731', '#ff6b6b', '#a29bfe'];
+  const palette = ['#db74cf', '#7a85ff', '#4ecdc4', '#f7b731', '#ff6b6b'];
   let hash = 0;
   for (let i = 0; i < code.length; i++) hash = code.charCodeAt(i) + ((hash << 5) - hash);
   return palette[Math.abs(hash) % palette.length];
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+function AssetRow({ asset, colors, t }: { asset: AssetBalance; colors: any; t: (key: string) => string }) {
+  const color = assetColor(asset.assetCode);
 
-function TotalBalanceHeader({
-  summary,
-  colors,
-}: {
-  summary: PortfolioSummary;
-  colors: ReturnType<typeof useTheme>['colors'];
-}) {
   return (
-    <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-      <Text style={[styles.headerLabel, { color: colors.textSecondary }]}>Total Balance</Text>
-      <Text style={[styles.headerBalance, { color: colors.text }]}>
+    <View style={[styles.assetRow, { borderBottomColor: colors.border }]} accessible accessibilityRole="listitem">
+      <View style={[styles.assetIcon, { backgroundColor: `${color}22` }]} importantForAccessibility="no">
+        <Text style={{ color }} importantForAccessibility="no">
+          {asset.assetCode[0]}
+        </Text>
+      </View>
+
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: colors.text }} accessible accessibilityRole="header">
+          {asset.assetCode}
+        </Text>
+        <Text style={{ color: colors.textSecondary }} accessible>
+          {formatAmount(asset.amount)}
+        </Text>
+      </View>
+
+      <Text style={{ color: colors.text }} accessible>
+        {formatUsd(asset.valueUsd)}
+      </Text>
+    </View>
+  );
+}
+
+function RecentTransactionItem({ tx, colors, t }: { tx: Transaction; colors: any; t: (key: string) => string }) {
+  return (
+    <View style={[styles.assetRow, { borderBottomColor: colors.border }]} accessible accessibilityRole="listitem">
+      <Ionicons
+        name={getTransactionIcon(tx.type) as any}
+        size={20}
+        color={colors.accent}
+        importantForAccessibility="no"
+      />
+      <Text style={{ marginLeft: 10, color: colors.text }} accessible>
+        {tx.type} • {formatTransactionDate(tx.date)}
+      </Text>
+    </View>
+  );
+}
+
+function Header({ summary, colors, t }: { summary: PortfolioSummary; colors: any; t: (key: string) => string }) {
+  return (
+    <View style={[styles.header, { backgroundColor: colors.surface }]} accessible>
+      <Text style={{ color: colors.textSecondary }} accessible>
+        {t('portfolio.total_balance')}
+      </Text>
+      <Text style={[styles.balance, { color: colors.text }]} accessible accessibilityRole="header">
         {formatUsd(summary.totalValueUsd)}
       </Text>
-      {summary.lastUpdated && (
-        <View style={styles.updatedRow}>
-          <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
-          <Text style={[styles.updatedText, { color: colors.textSecondary }]}>
-            {' '}Updated {formatRelativeTime(summary.lastUpdated)}
+    </View>
+  );
+}
+
+export default function PortfolioScreen() {
+  const { isAuthenticated } = useAuth();
+  const { colors } = useTheme();
+  const { t } = useLocalization();
+
+  const {
+    data: summary,
+    loading: summaryLoading,
+    refresh: refreshSummary,
+    isStale: summaryStale,
+    error: summaryError,
+  } = useCachedData({
+    key: `portfolio_summary_default`,
+    fetcher: async () => {
+      const response = await portfolioApi.getSummary();
+      if (response.success && response.data) {
+        return response.data;
+      }
+      throw new Error(response.error?.message || t('errors.couldnt_load', { item: 'portfolio' }));
+    },
+    enabled: isAuthenticated,
+    ...CACHE_CONFIGS.PORTFOLIO,
+  });
+
+  const {
+    data: transactionData,
+    loading: transactionsLoading,
+    refresh: refreshTransactions,
+    isStale: transactionsStale,
+  } = useCachedData({
+    key: `transactions_default_5`,
+    fetcher: async () => {
+      const response = await transactionApi.getHistory(5);
+      if (response.transactions) {
+        return response.transactions;
+      }
+      throw new Error(t('errors.couldnt_load', { item: 'transactions' }));
+    },
+    enabled: isAuthenticated,
+    ...CACHE_CONFIGS.TRANSACTIONS,
+  });
+
+  const transactions = transactionData || [];
+  const loading = summaryLoading && transactionsLoading;
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Background auto-refresh: aligned to TRANSACTIONS TTL (2 min, the shorter
+  // of the two) so both portfolio and transactions are refreshed before stale.
+  const handleAutoRefresh = useCallback(async () => {
+    await Promise.all([refreshSummary(), refreshTransactions()]);
+  }, [refreshSummary, refreshTransactions]);
+
+  useWalletAutoRefresh({
+    intervalMs: CACHE_CONFIGS.TRANSACTIONS.ttl,
+    onRefresh: handleAutoRefresh,
+    enabled: isAuthenticated,
+  });
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refreshSummary(), refreshTransactions()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshSummary, refreshTransactions]);
+
+  const isStale = summaryStale || transactionsStale;
+
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.center} accessible accessibilityLabel={t('portfolio.login_required')}>
+        <Text style={{ color: colors.text }} accessible>{t('portfolio.login_required')}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      {isStale && (
+        <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]} accessible accessibilityRole="alert" accessibilityLabel={t('portfolio.showing_cached')}>
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} importantForAccessibility="no" />
+          <Text style={[styles.staleText, { color: colors.warning }]} importantForAccessibility="no">
+            {t('portfolio.showing_cached')}
           </Text>
         </View>
       )}
-    </View>
-  );
-}
 
-function AssetRow({
-  asset,
-  colors,
-}: {
-  asset: AssetBalance;
-  colors: ReturnType<typeof useTheme>['colors'];
-}) {
-  const color = assetColor(asset.assetCode);
-  return (
-    <View style={[styles.assetRow, { borderBottomColor: colors.border }]}>
-      <View style={[styles.assetIcon, { backgroundColor: `${color}22` }]}>
-        <Text style={[styles.assetIconText, { color }]}>
-          {asset.assetCode.charAt(0)}
-        </Text>
-      </View>
-      <View style={styles.assetInfo}>
-        <Text style={[styles.assetCode, { color: colors.text }]}>{asset.assetCode}</Text>
-        <Text style={[styles.assetAmount, { color: colors.textSecondary }]}>
-          {formatAmount(asset.amount)} {asset.assetCode}
-        </Text>
-      </View>
-      <View style={styles.assetValue}>
-        <Text style={[styles.assetUsd, { color: colors.text }]}>
-          {formatUsd(asset.valueUsd)}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-
-export default function PortfolioScreen() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { colors } = useTheme();
-  const router = useRouter();
-
-  const [summary, setSummary] = useState<PortfolioSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchSummary = useCallback(async (triggeredByRefresh = false) => {
-    if (triggeredByRefresh) {
-      setIsRefreshing(true);
-      // Trigger a live Stellar snapshot first so we get fresh balances
-      try {
-        const { portfolioApi: pa } = await import('../../lib/api');
-        await pa.createSnapshot();
-      } catch {
-        // Non-fatal — summary fetch below will still return the latest stored snapshot
-      }
-    } else {
-      setIsLoading(true);
-    }
-    setError(null);
-
-    try {
-      const { portfolioApi: pa } = await import('../../lib/api');
-      const response = await pa.getSummary();
-      if (response.success && response.data) {
-        setSummary(response.data);
-      } else {
-        setError(response.error?.message ?? 'Failed to load portfolio.');
-      }
-    } catch {
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      void fetchSummary(false);
-    }
-  }, [isAuthenticated, fetchSummary]);
-
-  // ── Auth loading ────────────────────────────────────────────────────────────
-  if (authLoading) {
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.accent} size="large" />
-      </View>
-    );
-  }
-
-  // ── Not authenticated ───────────────────────────────────────────────────────
-  if (!isAuthenticated) {
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background, padding: 32 }]}>
-        <Ionicons name="lock-closed-outline" size={56} color={colors.accent} style={{ marginBottom: 20 }} />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>Sign in to view your portfolio</Text>
-        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-          Track your Stellar assets and total balance in one place.
-        </Text>
-        <TouchableOpacity
-          style={[styles.ctaButton, { backgroundColor: colors.accent }]}
-          onPress={() => router.push('/auth/login')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.ctaButtonText}>Log In</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // ── Data loading (first load) ───────────────────────────────────────────────
-  if (isLoading && !summary) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={[styles.screenTitle, { color: colors.text }]}>Portfolio</Text>
-        <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-          <View style={[styles.skeleton, { width: 120, height: 16, marginBottom: 12, backgroundColor: colors.border }]} />
-          <View style={[styles.skeleton, { width: 180, height: 36, marginBottom: 8, backgroundColor: colors.border }]} />
-          <View style={[styles.skeleton, { width: 100, height: 12, backgroundColor: colors.border }]} />
-        </View>
-        {[1, 2, 3].map((i) => (
-          <View
-            key={i}
-            style={[styles.assetRow, { borderBottomColor: colors.border }]}
-          >
-            <View style={[styles.skeleton, { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.border }]} />
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <View style={[styles.skeleton, { width: 60, height: 14, marginBottom: 6, backgroundColor: colors.border }]} />
-              <View style={[styles.skeleton, { width: 100, height: 12, backgroundColor: colors.border }]} />
-            </View>
-            <View style={[styles.skeleton, { width: 70, height: 18, backgroundColor: colors.border }]} />
-          </View>
-        ))}
-      </SafeAreaView>
-    );
-  }
-
-  // ── Error state ─────────────────────────────────────────────────────────────
-  if (error && !summary) {
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background, padding: 32 }]}>
-        <Ionicons name="cloud-offline-outline" size={56} color={colors.danger} style={{ marginBottom: 20 }} />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn't load portfolio</Text>
-        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{error}</Text>
-        <TouchableOpacity
-          style={[styles.ctaButton, { backgroundColor: colors.accent }]}
-          onPress={() => void fetchSummary(false)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.ctaButtonText}>Retry</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // ── No linked account ───────────────────────────────────────────────────────
-  if (summary && !summary.hasLinkedAccount) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={[styles.screenTitle, { color: colors.text }]}>Portfolio</Text>
-        <View style={[styles.center, { flex: 1, padding: 32 }]}>
-          <Ionicons name="briefcase-outline" size={56} color={colors.accent} style={{ marginBottom: 20 }} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>No linked accounts</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Link a Stellar account to start tracking your assets and balances in real time.
-          </Text>
-          <TouchableOpacity
-            style={[styles.ctaButton, { backgroundColor: colors.accent }]}
-            onPress={() => router.push('/settings')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="link-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-            <Text style={styles.ctaButtonText}>Link an Account</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // ── Populated portfolio ─────────────────────────────────────────────────────
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
-        data={summary?.assets ?? []}
-        keyExtractor={(item, index) => `${item.assetCode}-${index}`}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={() => void fetchSummary(true)}
-            tintColor={colors.accent}
-            colors={[colors.accent]}
-          />
-        }
+        data={summary?.assets || []}
+        keyExtractor={(item) => item.assetCode}
         ListHeaderComponent={
-          <>
-            <Text style={[styles.screenTitle, { color: colors.text }]}>Portfolio</Text>
-            {summary && <TotalBalanceHeader summary={summary} colors={colors} />}
-            {summary && summary.assets.length > 0 && (
-              <View style={[styles.assetsSectionHeader, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.assetsSectionLabel, { color: colors.textSecondary }]}>Assets</Text>
-                <Text style={[styles.assetsSectionLabel, { color: colors.textSecondary }]}>Value</Text>
-              </View>
-            )}
-          </>
-        }
-        ListEmptyComponent={
-          !isLoading ? (
-            <View style={[styles.center, { paddingVertical: 40 }]}>
-              <Ionicons name="wallet-outline" size={48} color={colors.textSecondary} style={{ marginBottom: 12 }} />
-              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                No assets found in this account.
+          summary && (
+            <>
+              <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+                {t('portfolio.title')}
               </Text>
+              <Header summary={summary} colors={colors} t={t} />
+
+              <Text style={[styles.section, { color: colors.text }]} accessible accessibilityRole="header">
+                {t('portfolio.recent_transactions')}
+              </Text>
+
+              {transactions.map((tx) => (
+                <RecentTransactionItem key={tx.id} tx={tx} colors={colors} t={t} />
+              ))}
+            </>
+          )
+        }
+        renderItem={({ item }) => <AssetRow asset={item} colors={colors} t={t} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} accessibilityLabel="Pull to refresh portfolio" />}
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.center} accessible accessibilityLabel={t('portfolio.no_assets')}>
+              <Text style={{ color: colors.text }} accessible>{t('portfolio.no_assets')}</Text>
             </View>
           ) : null
         }
-        renderItem={({ item }) => <AssetRow asset={item} colors={colors} />}
-        ItemSeparatorComponent={() => null}
+        ListFooterComponent={loading ? <ActivityIndicator style={{ margin: 20 }} accessibilityLabel={t('common.loading')} /> : null}
+        onEndReached={() => {
+          if (!loading) console.log('pagination');
+        }}
+        onEndReachedThreshold={0.5}
+        initialNumToRender={10}
+        windowSize={5}
+        removeClippedSubviews
+        accessibilityLabel={t('portfolio.title')}
+        accessibilityRole="list"
+        accessibilityHint={t('portfolio.total_balance')}
       />
     </SafeAreaView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listContent: {
-    paddingBottom: 40,
-  },
-  screenTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    marginHorizontal: 20,
-    marginTop: 20,
-    marginBottom: 16,
-  },
-
-  /* Total balance card */
-  headerCard: {
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  title: { fontSize: 26, fontWeight: '700', margin: 20 },
+  section: { margin: 20, fontWeight: '600' },
+  header: {
     marginHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 24,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    padding: 20,
+    borderRadius: 12,
   },
-  headerLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  headerBalance: {
-    fontSize: 38,
-    fontWeight: '800',
-    letterSpacing: -1,
-    marginBottom: 10,
-  },
-  updatedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  updatedText: {
-    fontSize: 12,
-  },
-
-  /* Asset list section header */
-  assetsSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  assetsSectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-
-  /* Asset row */
+  balance: { fontSize: 32, fontWeight: '800' },
   assetRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+    borderBottomWidth: 1,
   },
   assetIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 10,
   },
-  assetIconText: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  assetInfo: {
-    flex: 1,
-  },
-  assetCode: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  assetAmount: {
-    fontSize: 13,
-  },
-  assetValue: {
-    alignItems: 'flex-end',
-  },
-  assetUsd: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-
-  /* Empty / error states */
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 28,
-    paddingHorizontal: 12,
-  },
-  ctaButton: {
+  staleIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
   },
-  ctaButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
-  /* Loading skeleton */
-  skeleton: {
-    borderRadius: 6,
-    opacity: 0.4,
+  staleText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 6,
   },
 });

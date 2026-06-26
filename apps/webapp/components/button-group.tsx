@@ -17,7 +17,7 @@ export function ButtonGroup() {
           ${hoverJoin ? "text-[var(--text-button-gradient)]" : "bg-transparent text-white"}`}
         onMouseEnter={() => setHoverJoin(true)}
         onMouseLeave={() => setHoverJoin(false)}
-        onClick={() => router.push("/auth/login")}
+        onClick={() => router.push("/community")}
         style={{
           boxShadow: hoverJoin
             ? "0 0 15px rgba(219, 116, 207, 0.5), 0 0 30px rgba(219, 116, 207, 0.3)"

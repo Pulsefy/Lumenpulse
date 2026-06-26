@@ -1,11 +1,11 @@
-import config from './config';
+import { config, getEnvironmentConfig } from './config';
 
 /**
  * API Client Configuration
  * Reads from centralized config
  */
 const getApiBaseUrl = (): string => {
-  return config.api.baseUrl;
+  return getEnvironmentConfig().apiBaseUrl;
 };
 
 /**
@@ -109,15 +109,13 @@ class ApiClient {
     options: RequestInit = {},
     config: RequestConfig = {},
   ): Promise<ApiResponse<T>> {
+    this.baseUrl = getApiBaseUrl();
     const url = `${this.baseUrl}${endpoint}`;
     const headers = { ...this.defaultHeaders, ...config.headers };
 
     // Setup timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      config.timeout || this.defaultTimeout,
-    );
+    const timeoutId = setTimeout(() => controller.abort(), config.timeout || this.defaultTimeout);
 
     try {
       const response = await fetch(url, {
@@ -185,11 +183,7 @@ class ApiClient {
   /**
    * POST request
    */
-  async post<T>(
-    endpoint: string,
-    body?: unknown,
-    config?: RequestConfig,
-  ): Promise<ApiResponse<T>> {
+  async post<T>(endpoint: string, body?: unknown, config?: RequestConfig): Promise<ApiResponse<T>> {
     return this.request<T>(
       endpoint,
       {
@@ -203,11 +197,7 @@ class ApiClient {
   /**
    * PUT request
    */
-  async put<T>(
-    endpoint: string,
-    body?: unknown,
-    config?: RequestConfig,
-  ): Promise<ApiResponse<T>> {
+  async put<T>(endpoint: string, body?: unknown, config?: RequestConfig): Promise<ApiResponse<T>> {
     return this.request<T>(
       endpoint,
       {

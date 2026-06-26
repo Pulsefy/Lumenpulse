@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import { Server } from 'http';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { SentimentService } from '../src/sentiment/sentiment.service';
@@ -17,7 +16,7 @@ interface ErrorResponse {
 
 describe('SentimentController (e2e)', () => {
   let app: INestApplication;
-  let server: Server;
+  let server: any;
   let sentimentService: SentimentService;
 
   beforeAll(async () => {
@@ -28,7 +27,8 @@ describe('SentimentController (e2e)', () => {
     app = moduleFixture.createNestApplication();
     await app.init();
 
-    server = app.getHttpServer() as unknown as Server;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    server = app.getHttpServer();
     sentimentService = moduleFixture.get(SentimentService);
   });
 
@@ -44,6 +44,7 @@ describe('SentimentController (e2e)', () => {
         .spyOn(sentimentService, 'analyzeSentiment')
         .mockResolvedValue(mockResponse);
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       const res = await request(server)
         .post('/sentiment/analyze')
         .send({ text: 'This is amazing!' })
@@ -56,6 +57,7 @@ describe('SentimentController (e2e)', () => {
     });
 
     it('should return 400 for empty text', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       const res = await request(server)
         .post('/sentiment/analyze')
         .send({ text: '' })
@@ -72,6 +74,7 @@ describe('SentimentController (e2e)', () => {
     });
 
     it('should return 400 for whitespace-only text', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await request(server)
         .post('/sentiment/analyze')
         .send({ text: '   ' })
@@ -91,6 +94,7 @@ describe('SentimentController (e2e)', () => {
         .spyOn(sentimentService, 'checkHealth')
         .mockResolvedValue(mockResponse);
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       const res = await request(server).get('/sentiment/health').expect(200);
 
       const body = res.body as HealthResponse;

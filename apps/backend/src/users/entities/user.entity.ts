@@ -11,10 +11,24 @@ import { StellarAccount } from './stellar-account.entity';
 
 export enum UserRole {
   USER = 'user',
+  REVIEWER = 'reviewer',
   ADMIN = 'admin',
 }
 
+export interface NotificationPreferences {
+  priceAlerts: boolean;
+  newsAlerts: boolean;
+  securityAlerts: boolean;
+}
+
+export interface UserPreferences {
+  notifications: NotificationPreferences;
+  preferredCurrency?: 'USD' | 'EUR' | 'GBP' | 'NGN' | 'XLM';
+}
+
 @Entity('users')
+@Index(['role'])
+@Index(['createdAt'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -51,6 +65,25 @@ export class User {
     default: UserRole.USER,
   })
   role: UserRole;
+
+  @Column({
+    type: 'jsonb',
+    default: {
+      notifications: {
+        priceAlerts: true,
+        newsAlerts: true,
+        securityAlerts: true,
+      },
+      preferredCurrency: 'USD',
+    },
+  })
+  preferences: UserPreferences;
+
+  @Column({ type: 'boolean', default: false })
+  twoFactorEnabled: boolean;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  twoFactorSecret: string | null;
 
   @OneToMany(() => StellarAccount, (stellarAccount) => stellarAccount.user)
   stellarAccounts: StellarAccount[];

@@ -1,59 +1,19 @@
+import './lib/config';
 import { NestFactory } from '@nestjs/core';
+import { VersioningType } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { GlobalExceptionFilter } from './filters/global-exception.filter';
-import { CustomValidationPipe } from './common/pipes/validation.pipe';
-import { SanitizationPipe } from './common/pipes/sanitization.pipe';
-import helmet from 'helmet';
-
-function getCorsOrigin(): string | string[] {
-  const isProduction = process.env.NODE_ENV === 'production';
-  const origins = process.env.CORS_ORIGIN?.trim();
-
-  if (origins) {
-    return origins.includes(',')
-      ? origins.split(',').map((o) => o.trim())
-      : origins;
-  }
-
-  if (isProduction) {
-    throw new Error(
-      'CORS_ORIGIN must be set in production. Restrict CORS to your frontend URL(s).',
-    );
-  }
-
-  return ['http://localhost:3000', 'http://localhost:3001'];
-}
+import { setupApp } from './bootstrap/app.setup';
+import { config } from './lib/config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
+  setupApp(app);
 
-  // Register the global exception filter
-  app.useGlobalFilters(new GlobalExceptionFilter());
+  // URI versioning: /v1/config/stellar, /v2/... etc.
+  app.enableVersioning({ type: VersioningType.URI });
 
-  // Register global validation pipe with security defaults
-  // Runs before sanitization to validate structure first
-  app.useGlobalPipes(
-    new CustomValidationPipe(),
-    // Sanitization pipe should run after validation
-    new SanitizationPipe(),
-  );
-
-  // Swagger Configuration
-
-  app.use(
-    helmet({
-      crossOriginEmbedderPolicy: false,
-    }),
-  );
-
-  app.enableCors({
-    origin: getCorsOrigin(),
-  });
-
-  app.useGlobalFilters(new GlobalExceptionFilter());
-
-  const config = new DocumentBuilder()
+  const swaggerConfig = new DocumentBuilder()
     .setTitle('LumenPulse API')
     .setDescription(
       'Comprehensive API documentation for LumenPulse - A decentralized crypto news aggregator and portfolio management platform built on Stellar blockchain',
@@ -69,20 +29,25 @@ async function bootstrap() {
       'JWT-auth',
     )
     .addTag('auth', 'Authentication and authorization endpoints')
+    .addTag('config', 'Client-safe testnet/mainnet runtime configuration')
+    .addTag('transactions', 'Transaction history and Stellar ledger queries')
+    .addTag(
+      'soroban-events',
+      'Soroban smart contract event ingestion and tracking',
+    )
     .addTag('users', 'User profile and account management')
     .addTag('news', 'Crypto news aggregation and sentiment analysis')
     .addTag('portfolio', 'Portfolio tracking and performance metrics')
     .addTag('stellar', 'Stellar blockchain integration')
+    .addTag('search', 'Search and discovery endpoints')
     .addServer('http://localhost:3000', 'Development')
     .addServer('https://api.lumenpulse.io', 'Production')
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT ?? 3000;
-
-  // await app.listen(port);
+  const port = config.port;
   await app.listen(port);
 
   console.log(`Application is running on: http://localhost:${port}`);

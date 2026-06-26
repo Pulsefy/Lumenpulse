@@ -1,8 +1,17 @@
-import { Controller, Get, UseGuards, Res, Query, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  UseGuards,
+  Res,
+  Query,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { MetricsService } from './metrics.service';
 import { IpAllowlistGuard } from './ip-allowlist.guard';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ErrorCode } from '../common/enums/error-code.enum';
 
 /**
  * Controller for exposing application metrics
@@ -61,7 +70,10 @@ export class MetricsController {
       }
     } catch (error) {
       this.logger.error('Error getting metrics:', error);
-      response.status(500).json({ error: 'Failed to retrieve metrics' });
+      throw new InternalServerErrorException({
+        code: ErrorCode.SYS_INTERNAL_ERROR,
+        message: 'Failed to retrieve metrics',
+      });
     }
   }
 
@@ -94,7 +106,10 @@ export class MetricsController {
       response.json(metricsJson);
     } catch (error) {
       this.logger.error('Error getting metrics:', error);
-      response.status(500).json({ error: 'Failed to retrieve metrics' });
+      throw new InternalServerErrorException({
+        code: ErrorCode.SYS_INTERNAL_ERROR,
+        message: 'Failed to retrieve metrics',
+      });
     }
   }
 

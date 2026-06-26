@@ -10,6 +10,10 @@ Use this document for repo-wide workflow and standards. For area-specific comman
 - [Backend Guide](document/backend-contributing.md)
 - [Contracts Guide](document/contracts-contributing.md)
 
+## Platform Direction
+
+LumenPulse operates on Stellar/Soroban. All new work should align with Stellar-first principles. See [Stellar Migration Notes](document/STELLAR_MIGRATION_NOTES.md) for details on migration from prior chain assumptions and guidance for contributors.
+
 ## How to Contribute
 
 1. Find or open an issue

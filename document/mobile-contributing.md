@@ -1,6 +1,6 @@
 # Mobile Contribution Guide
 
-This guide covers app-specific standards for `apps/mobile`.
+This guide covers app-specific standards for `apps/mobile`. The mobile app integrates Stellar wallets. For migration context, see [Stellar Migration Notes](STELLAR_MIGRATION_NOTES.md).
 
 ## Setup
 

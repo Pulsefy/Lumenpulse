@@ -20,6 +20,7 @@ import {
 } from './exceptions/stellar.exceptions';
 import { validateStellarPublicKey } from './utils/stellar-validator';
 import { retryWithBackoff } from './utils/retry.util';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class StellarService {
@@ -30,9 +31,14 @@ export class StellarService {
   constructor(
     @Inject(stellarConfig.KEY)
     config: ConfigType<typeof stellarConfig>,
+    private readonly cacheService: CacheService,
   ) {
     this.config = config;
     this.server = new Horizon.Server(config.horizonUrl);
+    this.cacheService.setCacheConfig({
+      balanceCacheTTL: config.balanceCacheTTL,
+      operationsCacheTTL: config.operationsCacheTTL,
+    });
 
     this.logger.log(
       `StellarService initialized with ${config.network} Horizon API at ${config.horizonUrl}`,
@@ -106,6 +112,14 @@ export class StellarService {
 
     this.logger.debug(`Fetching balances for account: ${publicKey}`);
 
+    return this.cacheService.getAccountBalanceCached(publicKey, async () =>
+      this.fetchAccountBalances(publicKey),
+    );
+  }
+
+  private async fetchAccountBalances(
+    publicKey: string,
+  ): Promise<AccountBalancesDto> {
     try {
       // Retry logic for network failures
       const account: Horizon.AccountResponse = await retryWithBackoff(
@@ -145,6 +159,36 @@ export class StellarService {
       return result;
     } catch (error: unknown) {
       return this.handleError(error, publicKey);
+    }
+  }
+
+  /**
+   * Fetches recent transactions for a given Stellar public key
+   * @param publicKey - Stellar account public key
+   * @param limit - Number of transactions to fetch (default: 10)
+   * @returns Promise<any> - List of recent transactions
+   */
+  async getAccountTransactions(
+    publicKey: string,
+    limit: number = 10,
+  ): Promise<any> {
+    validateStellarPublicKey(publicKey);
+    this.logger.debug(`Fetching transactions for account: ${publicKey}`);
+    try {
+      const operations = await this.server
+        .operations()
+        .forAccount(publicKey)
+        .order('desc')
+        .limit(limit)
+        .call();
+
+      return operations.records;
+    } catch (error: unknown) {
+      this.logger.error(`Error fetching transactions for ${publicKey}:`, error);
+      throw new HorizonUnavailableException(
+        this.config.horizonUrl,
+        'Failed to fetch transactions',
+      );
     }
   }
 

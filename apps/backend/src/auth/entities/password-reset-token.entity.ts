@@ -10,6 +10,7 @@ import {
 import { User } from '../../users/entities/user.entity';
 
 @Entity('password_reset_tokens')
+@Index(['expiresAt'])
 export class PasswordResetToken {
   @PrimaryGeneratedColumn('uuid')
   id: string;

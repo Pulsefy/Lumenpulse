@@ -11,7 +11,9 @@ def main():
     """Start the FastAPI server"""
     print("Starting Sentiment Analysis API...")
     print("API will be available at: http://localhost:8000")
-    print("Endpoint: POST http://localhost:8000/analyze")
+    print("Endpoints: POST /analyze, GET /health, GET /metrics")
+    print("Security: API key required (X-API-Key header)")
+    print("Rate limiting: Enabled per API key")
     print("Press Ctrl+C to stop\n")
 
     subprocess.run(

@@ -1,118 +1,225 @@
 import {
-  ExceptionFilter,
-  Catch,
   ArgumentsHost,
+  Catch,
+  ExceptionFilter,
   HttpException,
+  HttpStatus,
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { REQUEST_ID_HEADER } from '../common/constants/request.constants';
+import { ErrorCode } from '../common/enums/error-code.enum';
 import { ErrorResponse } from '../interfaces/error-response.interface';
+import { resolveNodeEnv } from '../lib/config';
+import { mapSorobanRpcErrorToApi } from '../stellar/utils/soroban-error.mapper';
+import { SorobanRpcError } from '../stellar/services/soroban-rpc-client.service';
+
+type RequestWithRequestId = Request & { requestId?: string };
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
 
-  catch(exception: unknown, host: ArgumentsHost) {
+  catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
-    const timestamp = new Date().toISOString();
+    const request = ctx.getRequest<RequestWithRequestId>();
+    const status = this.getStatus(exception);
+    const requestId =
+      typeof request.requestId === 'string' ? request.requestId : 'unknown';
+    const errorResponse = this.buildErrorResponse(exception, status, requestId);
 
-    let errorResponse: ErrorResponse;
+    response.setHeader(REQUEST_ID_HEADER, requestId);
+
+    if (status >= 500) {
+      const stack = exception instanceof Error ? (exception.stack ?? '') : '';
+      this.logger.error(
+        JSON.stringify({
+          event: 'http_request_failed',
+          requestId,
+          method: request.method,
+          url: request.originalUrl ?? request.url,
+          statusCode: status,
+          errorCode: errorResponse.code,
+          message: errorResponse.message,
+          timestamp: new Date().toISOString(),
+        }),
+        stack,
+      );
+    } else {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'http_request_failed',
+          requestId,
+          method: request.method,
+          url: request.originalUrl ?? request.url,
+          statusCode: status,
+          errorCode: errorResponse.code,
+          message: errorResponse.message,
+          timestamp: new Date().toISOString(),
+        }),
+      );
+    }
+
+    response.status(status).json(errorResponse);
+  }
+
+  private buildErrorResponse(
+    exception: unknown,
+    status: number,
+    requestId: string,
+  ): ErrorResponse {
+    const isProduction = resolveNodeEnv() === 'production';
 
     if (exception instanceof HttpException) {
-      // Handle HTTP exceptions
-      const httpException = exception;
-      const status = httpException.getStatus();
-      const exceptionResponse = httpException.getResponse();
+      const exceptionResponse = exception.getResponse();
+      const responseBody =
+        typeof exceptionResponse === 'object' && exceptionResponse
+          ? (exceptionResponse as Record<string, unknown>)
+          : undefined;
 
-      // Handle BadRequestException with validation errors
-      if (
-        status === 400 &&
-        typeof exceptionResponse === 'object' &&
-        exceptionResponse
-      ) {
-        const response = exceptionResponse as Record<string, unknown>;
-
-        // Check if this is a validation error response from our CustomValidationPipe
-        if (response.error === 'Validation Failed') {
-          const message: string | string[] =
-            (response.message as string | string[]) || 'Validation failed';
-          errorResponse = {
-            statusCode: status,
-            message,
-            error: 'ValidationError',
-            timestamp,
-            path: request.url,
-          };
-        } else {
-          // Standard HTTP exception
-          const msg: string | string[] =
-            response['message']?.toString() ||
-            httpException.message ||
-            'Bad Request';
-          errorResponse = {
-            statusCode: status,
-            message: msg,
-            error: httpException.constructor.name || httpException.name,
-            timestamp,
-            path: request.url,
-          };
-        }
-      } else {
-        // Other HTTP exceptions
-        const message = httpException.message || 'An error occurred';
-        let msg: string | string[] = message;
-
-        if (Array.isArray(exceptionResponse) && exceptionResponse.length > 0) {
-          msg = exceptionResponse;
-        } else if (typeof exceptionResponse === 'object' && exceptionResponse) {
-          const msgFromResponse = (
-            exceptionResponse as Record<string, unknown>
-          )['message'] as string | undefined;
-          msg = msgFromResponse || message;
-        }
-
-        errorResponse = {
-          statusCode: status,
-          message: msg,
-          error: httpException.constructor.name || httpException.name,
-          timestamp,
-          path: request.url,
-        };
-      }
-    } else if (exception instanceof Error) {
-      // Handle general errors
-      this.logger.error(
-        `Unhandled exception: ${exception.message}`,
-        exception.stack,
-      );
-
-      errorResponse = {
-        statusCode: 500,
-        message: exception.message || 'Internal Server Error',
-        error: exception.constructor.name || 'Error',
-        timestamp,
-        path: request.url,
-      };
-    } else {
-      // Handle unknown errors
-      this.logger.error(`Unknown exception: ${JSON.stringify(exception)}`);
-
-      errorResponse = {
-        statusCode: 500,
-        message: 'Internal Server Error',
-        error: 'UnknownError',
-        timestamp,
-        path: request.url,
+      return {
+        code: this.getErrorCode(status, responseBody),
+        message: this.resolveHttpMessage(
+          exception,
+          responseBody,
+          status,
+          isProduction,
+        ),
+        details: this.getErrorDetails(responseBody, status),
+        requestId,
       };
     }
 
-    // Log the error for debugging
-    this.logger.error(
-      `Error caught by GlobalExceptionFilter: ${JSON.stringify(errorResponse)}`,
-    );
+    if (exception instanceof SorobanRpcError) {
+      const mapped = mapSorobanRpcErrorToApi(exception);
+      return {
+        code: mapped.code,
+        message: mapped.message,
+        details: mapped.details,
+        requestId,
+      };
+    }
 
-    response.status(errorResponse.statusCode).json(errorResponse);
+    if (exception instanceof Error) {
+      return {
+        code: ErrorCode.SYS_INTERNAL_ERROR,
+        message: isProduction
+          ? 'Internal server error'
+          : exception.message || 'Internal server error',
+        requestId,
+      };
+    }
+
+    return {
+      code: ErrorCode.SYS_INTERNAL_ERROR,
+      message: 'Internal server error',
+      requestId,
+    };
+  }
+
+  private getStatus(exception: unknown): number {
+    if (exception instanceof HttpException) {
+      return exception.getStatus();
+    }
+
+    if (exception instanceof SorobanRpcError) {
+      return mapSorobanRpcErrorToApi(exception).status;
+    }
+
+    return HttpStatus.INTERNAL_SERVER_ERROR;
+  }
+
+  private resolveHttpMessage(
+    exception: HttpException,
+    responseBody: Record<string, unknown> | undefined,
+    status: number,
+    isProduction: boolean,
+  ): string {
+    if (status >= 500 && isProduction) {
+      return 'Internal server error';
+    }
+
+    const explicitMessage = responseBody?.message;
+
+    if (
+      typeof explicitMessage === 'string' &&
+      explicitMessage.trim().length > 0
+    ) {
+      return explicitMessage;
+    }
+
+    if (Array.isArray(explicitMessage) && explicitMessage.length > 0) {
+      return 'Validation failed';
+    }
+
+    return exception.message || 'Request failed';
+  }
+
+  private getErrorDetails(
+    responseBody: Record<string, unknown> | undefined,
+    status: number,
+  ): ErrorResponse['details'] {
+    if (!responseBody) {
+      return undefined;
+    }
+
+    if ('details' in responseBody) {
+      return responseBody.details as ErrorResponse['details'];
+    }
+
+    if (status === 400 && Array.isArray(responseBody.message)) {
+      return (responseBody.message as string[]).map((message) => ({ message }));
+    }
+
+    return undefined;
+  }
+
+  private getErrorCode(
+    status: number,
+    exceptionResponse?: Record<string, unknown>,
+  ): string {
+    if (
+      exceptionResponse &&
+      typeof exceptionResponse.code === 'string' &&
+      exceptionResponse.code.length > 0
+    ) {
+      return exceptionResponse.code;
+    }
+
+    if (
+      exceptionResponse &&
+      typeof exceptionResponse.errorCode === 'string' &&
+      exceptionResponse.errorCode.length > 0
+    ) {
+      return exceptionResponse.errorCode;
+    }
+
+    switch (status) {
+      case 400:
+        return exceptionResponse?.details
+          ? ErrorCode.SYS_VALIDATION_FAILED
+          : ErrorCode.SYS_BAD_REQUEST;
+      case 401:
+        return ErrorCode.AUTH_UNAUTHORIZED;
+      case 403:
+        return ErrorCode.SYS_FORBIDDEN;
+      case 404:
+        return ErrorCode.SYS_NOT_FOUND;
+      case 409:
+        return ErrorCode.SYS_CONFLICT;
+      case 413:
+        return ErrorCode.SYS_PAYLOAD_TOO_LARGE;
+      case 415:
+        return ErrorCode.SYS_UNSUPPORTED_MEDIA_TYPE;
+      case 429:
+        return ErrorCode.SYS_RATE_LIMIT_EXCEEDED;
+      case 503:
+        return ErrorCode.SYS_SERVICE_UNAVAILABLE;
+      case 504:
+        return ErrorCode.SYS_EXTERNAL_SERVICE_TIMEOUT;
+      default:
+        return ErrorCode.SYS_INTERNAL_ERROR;
+    }
   }
 }

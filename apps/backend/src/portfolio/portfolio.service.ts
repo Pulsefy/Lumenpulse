@@ -6,13 +6,25 @@ import { PortfolioSnapshot } from './entities/portfolio-snapshot.entity';
 import { PortfolioAsset } from './portfolio-asset.entity';
 import { User } from '../users/entities/user.entity';
 import { StellarBalanceService } from './stellar-balance.service';
+import { StellarService } from '../stellar/stellar.service';
+import { PriceService } from '../price/price.service';
 import {
   PortfolioHistoryResponseDto,
   PortfolioSnapshotDto,
   PortfolioSummaryResponseDto,
 } from './dto/portfolio-snapshot.dto';
+import {
+  PortfolioSummaryWithCurrencyResponseDto,
+  AssetBalanceWithCurrencyDto,
+  CurrencyCode,
+} from './dto/portfolio-currency.dto';
 import { PortfolioPerformanceResponseDto } from './dto/portfolio-performance.dto';
 import { calculatePortfolioPerformance } from './utils/portfolio-performance.utils';
+import { PortfolioSnapshotQueueService } from './queue/portfolio-snapshot.queue.service';
+import { PortfolioSnapshotBatchStatus } from './queue/portfolio-snapshot.types';
+import { ExchangeRatesService } from '../exchange-rates/exchange-rates.service';
+import { MaterializedSnapshotService } from './materialized-snapshot.service';
+import { QueryProfilerService } from '../common/profiling/query-profiler.service';
 
 @Injectable()
 export class PortfolioService {
@@ -26,6 +38,12 @@ export class PortfolioService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly stellarBalanceService: StellarBalanceService,
+    private readonly exchangeRatesService: ExchangeRatesService,
+    private readonly stellarService: StellarService,
+    private readonly priceService: PriceService,
+    private readonly snapshotQueueService: PortfolioSnapshotQueueService,
+    private readonly materializedSnapshotService: MaterializedSnapshotService,
+    private readonly profiler: QueryProfilerService,
   ) {}
 
   /**
@@ -54,22 +72,23 @@ export class PortfolioService {
         await this.stellarBalanceService.getAccountBalances(user.id);
 
       // Calculate USD values for each asset
-      assetBalances = stellarBalances.map((balance) => {
-        const valueUsd = this.stellarBalanceService.getAssetValueUsd(
-          balance.assetCode,
-          balance.assetIssuer,
-          balance.balance,
-        );
+      assetBalances = await Promise.all(
+        stellarBalances.map(async (balance) => {
+          const price = await this.priceService.getCurrentPrice(
+            balance.assetCode,
+          );
+          const valueUsd = parseFloat(balance.balance) * price;
 
-        totalValueUsd += valueUsd;
+          totalValueUsd += valueUsd;
 
-        return {
-          assetCode: balance.assetCode,
-          assetIssuer: balance.assetIssuer,
-          amount: balance.balance,
-          valueUsd,
-        };
-      });
+          return {
+            assetCode: balance.assetCode,
+            assetIssuer: balance.assetIssuer,
+            amount: balance.balance,
+            valueUsd,
+          };
+        }),
+      );
     } catch {
       this.logger.warn(
         `Failed to fetch Stellar balances for user ${userId}, using portfolio assets as fallback`,
@@ -80,22 +99,23 @@ export class PortfolioService {
         where: { userId },
       });
 
-      assetBalances = portfolioAssets.map((asset) => {
-        const valueUsd = this.stellarBalanceService.getAssetValueUsd(
-          asset.assetCode,
-          asset.assetIssuer,
-          asset.amount,
-        );
+      assetBalances = await Promise.all(
+        portfolioAssets.map(async (asset) => {
+          const price = await this.priceService.getCurrentPrice(
+            asset.assetCode,
+          );
+          const valueUsd = parseFloat(asset.amount) * price;
 
-        totalValueUsd += valueUsd;
+          totalValueUsd += valueUsd;
 
-        return {
-          assetCode: asset.assetCode,
-          assetIssuer: asset.assetIssuer,
-          amount: asset.amount,
-          valueUsd,
-        };
-      });
+          return {
+            assetCode: asset.assetCode,
+            assetIssuer: asset.assetIssuer,
+            amount: asset.amount,
+            valueUsd,
+          };
+        }),
+      );
     }
 
     // Create and save snapshot
@@ -105,7 +125,37 @@ export class PortfolioService {
       totalValueUsd: totalValueUsd.toFixed(2),
     });
 
-    return await this.snapshotRepository.save(snapshot);
+    const savedSnapshot = await this.snapshotRepository.save(snapshot);
+
+    // Update materialized snapshot for fast reads
+    try {
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        relations: ['stellarAccounts'],
+      });
+      const hasLinkedAccount =
+        user?.stellarAccounts && user.stellarAccounts.length > 0;
+
+      const allocation =
+        this.materializedSnapshotService.computeAllocation(assetBalances);
+
+      await this.materializedSnapshotService.upsertForUser({
+        userId,
+        totalValueUsd: savedSnapshot.totalValueUsd,
+        assetBalances,
+        assetAllocation: allocation,
+        hasLinkedAccount: !!hasLinkedAccount,
+        sourceSnapshotId: savedSnapshot.id,
+      });
+    } catch (error: unknown) {
+      // Log but don't fail the snapshot creation if materialization fails
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(
+        `Failed to update materialized snapshot for user ${userId}: ${message}`,
+      );
+    }
+
+    return savedSnapshot;
   }
 
   /**
@@ -118,12 +168,16 @@ export class PortfolioService {
   ): Promise<PortfolioHistoryResponseDto> {
     const skip = (page - 1) * limit;
 
-    const [snapshots, total] = await this.snapshotRepository.findAndCount({
-      where: { userId },
-      order: { createdAt: 'DESC' },
-      skip,
-      take: limit,
-    });
+    const [snapshots, total] = await this.profiler.profile(
+      () =>
+        this.snapshotRepository.findAndCount({
+          where: { userId },
+          order: { createdAt: 'DESC' },
+          skip,
+          take: limit,
+        }),
+      { label: 'PortfolioService.getPortfolioHistory', thresholdMs: 150 },
+    );
 
     const snapshotDtos: PortfolioSnapshotDto[] = snapshots.map((snapshot) => ({
       id: snapshot.id,
@@ -143,14 +197,48 @@ export class PortfolioService {
   }
 
   /**
-   * Get portfolio summary (latest snapshot) for the mobile dashboard
-   * Returns total USD value and individual asset balances
+   * Get portfolio summary (latest snapshot) for the mobile dashboard.
+   * Uses the materialized snapshot for fast reads — falls back to
+   * querying portfolio_snapshots if no materialized row exists yet.
    */
   async getPortfolioSummary(
     userId: string,
   ): Promise<PortfolioSummaryResponseDto> {
     this.logger.log(`Fetching portfolio summary for user ${userId}`);
 
+    // Fast path: read from materialized snapshot (O(1) by userId index)
+    const materialized =
+      await this.materializedSnapshotService.getForUser(userId);
+
+    if (materialized) {
+      return {
+        totalValueUsd: materialized.totalValueUsd,
+        assets: materialized.assetBalances,
+        lastUpdated: materialized.updatedAt,
+        hasLinkedAccount: materialized.hasLinkedAccount,
+      };
+    }
+
+    // Fallback: compute from raw data (first-time access or migration in progress)
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['stellarAccounts'],
+    });
+
+    const hasLinkedAccount =
+      user?.stellarAccounts && user.stellarAccounts.length > 0;
+
+    if (!hasLinkedAccount) {
+      this.logger.log(`User ${userId} has no linked Stellar accounts`);
+      return {
+        totalValueUsd: '0.00',
+        assets: [],
+        lastUpdated: null,
+        hasLinkedAccount: false,
+      };
+    }
+
+    // User has linked accounts, try to get the latest snapshot
     const latestSnapshot = await this.snapshotRepository.findOne({
       where: { userId },
       order: { createdAt: 'DESC' },
@@ -161,8 +249,28 @@ export class PortfolioService {
         totalValueUsd: '0.00',
         assets: [],
         lastUpdated: null,
-        hasLinkedAccount: false,
+        hasLinkedAccount: true,
       };
+    }
+
+    // Populate materialized snapshot for future fast reads
+    try {
+      const allocation = this.materializedSnapshotService.computeAllocation(
+        latestSnapshot.assetBalances,
+      );
+      await this.materializedSnapshotService.upsertForUser({
+        userId,
+        totalValueUsd: latestSnapshot.totalValueUsd,
+        assetBalances: latestSnapshot.assetBalances,
+        assetAllocation: allocation,
+        hasLinkedAccount: true,
+        sourceSnapshotId: latestSnapshot.id,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(
+        `Failed to backfill materialized snapshot for user ${userId}: ${message}`,
+      );
     }
 
     return {
@@ -174,60 +282,174 @@ export class PortfolioService {
   }
 
   /**
+   * Get portfolio summary in a specific currency
+   */
+  async getPortfolioSummaryInCurrency(
+    userId: string,
+    currency: CurrencyCode = CurrencyCode.USD,
+  ): Promise<PortfolioSummaryWithCurrencyResponseDto> {
+    this.logger.log(
+      `Fetching portfolio summary for user ${userId} in currency ${currency}`,
+    );
+
+    // Get base USD summary
+    const usdSummary = await this.getPortfolioSummary(userId);
+
+    // If USD or no assets, return as is
+    if (currency === CurrencyCode.USD || usdSummary.assets.length === 0) {
+      return {
+        totalValue: usdSummary.totalValueUsd,
+        currency: CurrencyCode.USD,
+        totalValueUsd: usdSummary.totalValueUsd,
+        assets: usdSummary.assets.map((asset) => ({
+          assetCode: asset.assetCode,
+          assetIssuer: asset.assetIssuer,
+          amount: asset.amount,
+          value: asset.valueUsd,
+          valueUsd: asset.valueUsd,
+        })),
+        lastUpdated: usdSummary.lastUpdated,
+        hasLinkedAccount: usdSummary.hasLinkedAccount,
+        exchangeRate: 1,
+      };
+    }
+
+    // Convert to requested currency
+    const totalUsd = parseFloat(usdSummary.totalValueUsd);
+    const exchangeRate = await this.exchangeRatesService.getExchangeRate(
+      CurrencyCode.USD,
+      currency,
+    );
+
+    const convertedTotal = Math.round(totalUsd * exchangeRate * 100) / 100;
+
+    const convertedAssets: AssetBalanceWithCurrencyDto[] =
+      usdSummary.assets.map((asset) => ({
+        assetCode: asset.assetCode,
+        assetIssuer: asset.assetIssuer,
+        amount: asset.amount,
+        value: Math.round(asset.valueUsd * exchangeRate * 100) / 100,
+        valueUsd: asset.valueUsd,
+      }));
+
+    return {
+      totalValue: convertedTotal.toFixed(2),
+      currency,
+      totalValueUsd: usdSummary.totalValueUsd,
+      assets: convertedAssets,
+      lastUpdated: usdSummary.lastUpdated,
+      hasLinkedAccount: usdSummary.hasLinkedAccount,
+      exchangeRate,
+    };
+  }
+
+  // /**
+  //  * Get portfolio summary (latest snapshot) for the mobile dashboard
+  //  * Returns total USD value and individual asset balances
+  //  */
+  // async getPortfolioSummary(
+  //   userId: string,
+  // ): Promise<PortfolioSummaryResponseDto> {
+  //   this.logger.log(`Fetching portfolio summary for user ${userId}`);
+
+  //   const latestSnapshot = await this.snapshotRepository.findOne({
+  //     where: { userId },
+  //     order: { createdAt: 'DESC' },
+  //   });
+
+  //   if (!latestSnapshot) {
+  //     return {
+  //       totalValueUsd: '0.00',
+  //       assets: [],
+  //       lastUpdated: null,
+  //       hasLinkedAccount: false,
+  //     };
+  //   }
+
+  //   return {
+  //     totalValueUsd: latestSnapshot.totalValueUsd,
+  //     assets: latestSnapshot.assetBalances,
+  //     lastUpdated: latestSnapshot.createdAt,
+  //     hasLinkedAccount: true,
+  //   };
+  // }
+
+  /**
    * Scheduled job to create snapshots for all users
    * Runs daily at midnight
    */
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async createSnapshotsForAllUsers(): Promise<void> {
     this.logger.log('Starting scheduled snapshot creation for all users');
-
-    const users = await this.userRepository.find();
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const user of users) {
-      try {
-        await this.createSnapshot(user.id);
-        successCount++;
-      } catch (error: unknown) {
-        this.logger.error(
-          `Failed to create snapshot for user ${user.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
-        failCount++;
-      }
+    try {
+      const progress =
+        await this.snapshotQueueService.enqueueSnapshotBatch('cron');
+      this.logger.log(
+        `Snapshot batch queued (cron). BatchId=${progress.batchId}`,
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to queue snapshot batch job: ${message}`);
     }
+  }
 
-    this.logger.log(
-      `Snapshot creation completed. Success: ${successCount}, Failed: ${failCount}`,
-    );
+  /**
+   * Scheduled job to refresh materialized snapshots.
+   * Runs every 6 hours to catch any users whose materialized snapshot
+   * might be stale (e.g. if the materialized upsert failed during
+   * snapshot creation).
+   */
+  @Cron('0 */6 * * *', { name: 'materialized-snapshot-refresh' })
+  async refreshMaterializedSnapshots(): Promise<void> {
+    this.logger.log('Starting scheduled materialized snapshot refresh');
+    try {
+      // Refresh materialized snapshots for users that have snapshots
+      // but no materialized row (migration gap or upsert failure)
+      const staleUsers: { userId: string }[] = await this.snapshotRepository
+        .createQueryBuilder('ps')
+        .select('ps.userId', 'userId')
+        .groupBy('ps.userId')
+        .having(
+          'ps.userId NOT IN (SELECT "userId" FROM portfolio_materialized_snapshots)',
+        )
+        .getRawMany();
+
+      let refreshed = 0;
+      for (const { userId } of staleUsers) {
+        try {
+          const didRefresh =
+            await this.materializedSnapshotService.refreshForUser(userId);
+          if (didRefresh) refreshed++;
+        } catch (error: unknown) {
+          const message =
+            error instanceof Error ? error.message : 'Unknown error';
+          this.logger.warn(
+            `Failed to refresh materialized snapshot for user ${userId}: ${message}`,
+          );
+        }
+      }
+
+      this.logger.log(
+        `Materialized snapshot refresh complete. Refreshed ${refreshed} users.`,
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Materialized snapshot refresh failed: ${message}`);
+    }
   }
 
   /**
    * Manual trigger for creating snapshots (useful for testing)
    */
-  async triggerSnapshotCreation(): Promise<{
-    success: number;
-    failed: number;
-  }> {
+  async triggerSnapshotCreation(): Promise<PortfolioSnapshotBatchStatus> {
     this.logger.log('Manual snapshot creation triggered');
+    return this.snapshotQueueService.enqueueSnapshotBatch('manual');
+  }
 
-    const users = await this.userRepository.find();
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const user of users) {
-      try {
-        await this.createSnapshot(user.id);
-        successCount++;
-      } catch (error: unknown) {
-        this.logger.error(
-          `Failed to create snapshot for user ${user.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
-        failCount++;
-      }
-    }
-
-    return { success: successCount, failed: failCount };
+  async getSnapshotBatchStatus(
+    batchId: string,
+  ): Promise<PortfolioSnapshotBatchStatus> {
+    return this.snapshotQueueService.getBatchStatus(batchId);
   }
 
   /**
@@ -269,5 +491,126 @@ export class PortfolioService {
       currentValueUsd,
       historicalSnapshots,
     );
+  }
+
+  /**
+   * Get portfolio asset allocation breakdown.
+   *
+   * Uses the materialized snapshot for fast reads when available.
+   * Falls back to computing from Stellar network when no materialized
+   * row exists (first-time access or migration in progress).
+   */
+  async getAssetAllocation(userId: string): Promise<{
+    totalValueUsd: number;
+    allocation: Array<{
+      assetCode: string;
+      assetIssuer: string | null;
+      amount: string;
+      valueUsd: number;
+      percentage: number;
+    }>;
+  }> {
+    this.logger.log(`Fetching asset allocation for user ${userId}`);
+
+    // Fast path: read from materialized snapshot
+    const materialized =
+      await this.materializedSnapshotService.getForUser(userId);
+
+    if (materialized?.assetAllocation) {
+      return {
+        totalValueUsd: parseFloat(materialized.totalValueUsd),
+        allocation: materialized.assetAllocation,
+      };
+    }
+
+    // Fallback: compute from Stellar network (slow path)
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['stellarAccounts'],
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    if (!user.stellarAccounts || user.stellarAccounts.length === 0) {
+      this.logger.log(`User ${userId} has no linked Stellar accounts`);
+      return { totalValueUsd: 0, allocation: [] };
+    }
+
+    const aggregatedBalances: Map<
+      string,
+      { amount: number; assetCode: string; assetIssuer: string | null }
+    > = new Map();
+
+    // Fetch balances for all linked accounts concurrently
+    const balancePromises = user.stellarAccounts.map((account) =>
+      this.stellarBalanceService
+        .getAccountBalances(account.publicKey)
+        .catch((error) => {
+          this.logger.warn(
+            `Failed to fetch balances for account ${account.publicKey}: ${
+              error instanceof Error ? error.message : 'Unknown error'
+            }`,
+          );
+          return []; // Return empty array on failure to not break Promise.all
+        }),
+    );
+
+    const accountsBalances = await Promise.all(balancePromises);
+
+    // Aggregate balances from all accounts
+    for (const balances of accountsBalances) {
+      for (const balance of balances) {
+        const key = `${balance.assetCode}:${balance.assetIssuer || 'native'}`;
+        const existing = aggregatedBalances.get(key);
+        const currentAmount = parseFloat(balance.balance);
+
+        if (existing) {
+          existing.amount += currentAmount;
+        } else {
+          aggregatedBalances.set(key, {
+            amount: currentAmount,
+            assetCode: balance.assetCode,
+            assetIssuer: balance.assetIssuer,
+          });
+        }
+      }
+    }
+
+    // Calculate USD value for each aggregated asset concurrently
+    const allocationWithValue = await Promise.all(
+      Array.from(aggregatedBalances.values()).map(async (asset) => {
+        const valueUsd = await this.stellarBalanceService.getAssetValueUsd(
+          asset.assetCode,
+          asset.assetIssuer,
+          asset.amount.toString(),
+        );
+        return {
+          assetCode: asset.assetCode,
+          assetIssuer: asset.assetIssuer,
+          amount: asset.amount.toString(),
+          valueUsd,
+        };
+      }),
+    );
+
+    // Calculate total value from the results
+    const totalValueUsd = allocationWithValue.reduce(
+      (sum, asset) => sum + asset.valueUsd,
+      0,
+    );
+
+    // Calculate percentage for each asset, handling division by zero
+    const finalAllocation = allocationWithValue.map((asset) => ({
+      ...asset,
+      percentage:
+        totalValueUsd > 0 ? (asset.valueUsd / totalValueUsd) * 100 : 0,
+    }));
+
+    return {
+      totalValueUsd,
+      allocation: finalAllocation,
+    };
   }
 }

@@ -17,6 +17,14 @@ Designed for crypto enthusiasts, traders, and developers worldwide, LumenPulse s
 - **RESTful API**: Scalable backend for data queries and integrations.
 - **Intelligent Data Processing**: Automated analytics for market trends and portfolio optimization.
 
+## Local Development
+
+For a step-by-step guide to running the complete LumenPulse stack locally—including wallet setup, Soroban tooling, environment variables, seeded data, and service startup order—see **[document/LOCAL_SETUP.md](document/LOCAL_SETUP.md)**.
+
+## Migration Notes
+
+LumenPulse has migrated to Stellar/Soroban architecture. For details on changes from prior chain assumptions, completed migrations, and legacy cleanup, see [Stellar Migration Notes](document/STELLAR_MIGRATION_NOTES.md).
+
 ## Tech Stack
 ### Frontend
 - Next.js 15: App router, server components, and streaming.
@@ -150,7 +158,7 @@ For module-specific docs: [FRONTEND.md](FRONTEND.md), [BACKEND.md](BACKEND.md), 
    Tests require testnet; mocks for external APIs.
 
 ### Deployment
-- **Frontend**: Vercel—connect repo, add env vars.
+- **Frontend**: Vercel—connect repo, set `NEXT_PUBLIC_API_URL` and `BACKEND_API_URL` to the deployed backend, and ensure the backend is configured to return testnet Stellar config.
 - **Backend/Data**: Railway or AWS; containerize Python scripts.
 - **Soroban Contracts**: Deploy via CI/CD (GitHub Actions); verify on Stellar explorer.
 - Production: Set `STELLAR_NETWORK=mainnet`; audit contracts.

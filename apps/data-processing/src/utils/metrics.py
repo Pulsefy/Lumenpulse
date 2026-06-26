@@ -19,6 +19,19 @@ ANOMALIES_DETECTED_TOTAL = Counter(
     ["metric_name"]
 )
 
+MODEL_RETRAINING_TOTAL = Counter(
+    "model_retraining_total",
+    "Total number of model retraining runs",
+    ["model_type", "status"],  # status: success | failed | skipped
+)
+
+MODEL_RETRAINING_DURATION = Histogram(
+    "model_retraining_duration_seconds",
+    "Duration of model retraining runs in seconds",
+    ["model_type"],
+    buckets=[1, 5, 10, 30, 60, 120, 300, 600],
+)
+
 def start_metrics_server(port: int = 9090):
     """Start standalone prometheus metrics server (for background workers)"""
     try:

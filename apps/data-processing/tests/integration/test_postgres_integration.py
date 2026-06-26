@@ -66,6 +66,27 @@ class TestPostgresIntegration:
         assert len(insights) > 0
         assert any(i.article_id == "test-article-1" for i in insights)
 
+    def test_save_article_with_detected_entities_and_filter_by_entity(self, db_service):
+        """Test article NER tagging is persisted and queryable via entity filter."""
+        article_data = {
+            "id": "entity-article-1",
+            "title": "Soroban upgrades roll out on Stellar",
+            "content": "Developers are shipping features to improve XLM app performance.",
+            "summary": "Soroban ecosystem update",
+            "source": "test-source",
+            "url": "https://example.com/entity-test",
+            "published_at": datetime.utcnow(),
+        }
+
+        saved = db_service.save_article(article_data)
+        assert saved is not None
+        assert saved.detected_entities is not None
+        assert "Soroban" in saved.detected_entities
+        assert "Stellar" in saved.detected_entities
+
+        filtered = db_service.get_recent_articles(limit=10, hours=2, entity="Soroban")
+        assert any(article.article_id == "entity-article-1" for article in filtered)
+
     def test_save_news_insights_batch(self, db_service):
         """Test saving multiple news insights in a batch"""
         sentiment_results = [

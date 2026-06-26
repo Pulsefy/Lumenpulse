@@ -28,3 +28,29 @@ export {
   sanitizeObject,
   sanitizeObjectStringsOnly,
 } from './utils/sanitization.util';
+
+// Access Control exports
+export * from './interfaces/access-control.interface';
+export * from './services/access-control.service';
+export {
+  RequirePermission,
+  RequireUserRead,
+  RequireUserWrite,
+  RequirePortfolioRead,
+  RequirePortfolioWrite,
+  RequireWebhookVerification,
+  RequireIpAllowlist,
+  GetAccessContext,
+  GetResource,
+  GetPermissionResult,
+  ResourceTypeDecorator,
+  RequireTrustedCaller,
+  REQUIRED_PERMISSION_KEY,
+  RESOURCE_TYPE_KEY,
+  TRUSTED_CALLER_KEY,
+  type PermissionMetadata,
+  type TrustedCallerMetadata,
+} from './decorators/access-control.decorators';
+export * from './guards/access-control.guard';
+export * from './utils/access-control.utils';
+export * from './access-control.module';

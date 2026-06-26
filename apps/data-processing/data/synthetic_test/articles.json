@@ -1,0 +1,146 @@
+[
+  {
+    "article_id": "synthetic_article_00001",
+    "title": "PulseProject 1 Update: Community sentiment remains upbeat after the most recent protocol upgrade.",
+    "content": "Community sentiment remains upbeat after the most recent protocol upgrade. This synthetic article is designed for local development and stress testing.",
+    "summary": "Synthetic news item about XLM and community contributions.",
+    "source": "SyntheticDataGenerator",
+    "url": "https://synthetic.lumenpulse.dev/article/00001",
+    "asset_codes": [
+      "XLM"
+    ],
+    "primary_asset": "XLM",
+    "categories": [
+      "synthetic",
+      "news",
+      "crypto"
+    ],
+    "sentiment_score": -0.483,
+    "positive_score": 0.0,
+    "negative_score": 0.483,
+    "neutral_score": 0.517,
+    "sentiment_label": "negative",
+    "keywords": [
+      "XLM",
+      "synthetic",
+      "portfolio"
+    ],
+    "detected_entities": [
+      "XLM",
+      "PulseProject 1"
+    ],
+    "onchain_entity_links": [
+      {
+        "stable_entity_id": "project:10001",
+        "entity_type": "project",
+        "display_name": "PulseProject 1",
+        "matched_text": "PulseProject 1",
+        "confidence": 0.95,
+        "source": "SyntheticDataGenerator",
+        "asset_code": "XLM",
+        "project_id": 10001,
+        "contract_id": "CONTRACT_10001"
+      }
+    ],
+    "language": "en",
+    "published_at": "2026-06-14T08:36:07.653938+00:00",
+    "fetched_at": "2026-06-23T16:36:07.654002+00:00",
+    "analyzed_at": "2026-06-23T16:36:07.654010+00:00"
+  },
+  {
+    "article_id": "synthetic_article_00002",
+    "title": "PulseProject 1 Update: Developers are closely watching liquidity metrics and reward incentives.",
+    "content": "Developers are closely watching liquidity metrics and reward incentives. This synthetic article is designed for local development and stress testing.",
+    "summary": "Synthetic news item about XLM and community contributions.",
+    "source": "SyntheticDataGenerator",
+    "url": "https://synthetic.lumenpulse.dev/article/00002",
+    "asset_codes": [
+      "XLM"
+    ],
+    "primary_asset": "XLM",
+    "categories": [
+      "synthetic",
+      "news",
+      "crypto"
+    ],
+    "sentiment_score": 0.666,
+    "positive_score": 0.666,
+    "negative_score": 0.0,
+    "neutral_score": 0.334,
+    "sentiment_label": "positive",
+    "keywords": [
+      "XLM",
+      "synthetic",
+      "portfolio"
+    ],
+    "detected_entities": [
+      "XLM",
+      "PulseProject 1"
+    ],
+    "onchain_entity_links": [
+      {
+        "stable_entity_id": "project:10001",
+        "entity_type": "project",
+        "display_name": "PulseProject 1",
+        "matched_text": "PulseProject 1",
+        "confidence": 0.95,
+        "source": "SyntheticDataGenerator",
+        "asset_code": "XLM",
+        "project_id": 10001,
+        "contract_id": "CONTRACT_10001"
+      }
+    ],
+    "language": "en",
+    "published_at": "2026-06-18T23:36:07.654022+00:00",
+    "fetched_at": "2026-06-23T16:36:07.654067+00:00",
+    "analyzed_at": "2026-06-23T16:36:07.654075+00:00"
+  },
+  {
+    "article_id": "synthetic_article_00003",
+    "title": "PulseProject 2 Update: New wallet inflows signal investor interest ahead of the next governance vote.",
+    "content": "New wallet inflows signal investor interest ahead of the next governance vote. This synthetic article is designed for local development and stress testing.",
+    "summary": "Synthetic news item about BTC and community contributions.",
+    "source": "SyntheticDataGenerator",
+    "url": "https://synthetic.lumenpulse.dev/article/00003",
+    "asset_codes": [
+      "BTC"
+    ],
+    "primary_asset": "BTC",
+    "categories": [
+      "synthetic",
+      "news",
+      "crypto"
+    ],
+    "sentiment_score": 0.746,
+    "positive_score": 0.746,
+    "negative_score": 0.0,
+    "neutral_score": 0.254,
+    "sentiment_label": "positive",
+    "keywords": [
+      "BTC",
+      "synthetic",
+      "portfolio"
+    ],
+    "detected_entities": [
+      "BTC",
+      "PulseProject 2"
+    ],
+    "onchain_entity_links": [
+      {
+        "stable_entity_id": "project:10002",
+        "entity_type": "project",
+        "display_name": "PulseProject 2",
+        "matched_text": "PulseProject 2",
+        "confidence": 0.95,
+        "source": "SyntheticDataGenerator",
+        "asset_code": "BTC",
+        "project_id": 10002,
+        "contract_id": "CONTRACT_10002"
+      }
+    ],
+    "language": "en",
+    "published_at": "2026-06-08T22:36:07.654092+00:00",
+    "fetched_at": "2026-06-23T16:36:07.654130+00:00",
+    "analyzed_at": "2026-06-23T16:36:07.654135+00:00"
+  }
+]

@@ -1,6 +1,6 @@
 /**
  * API Client Manual Tests
- * 
+ *
  * Simple verification functions to test API client functionality
  * Run these manually in your app or add Jest/testing library later
  */
@@ -13,7 +13,7 @@ import { ApiClient } from '../api-client';
 export function testClientHasBaseUrl(): boolean {
   const client = new ApiClient();
   const baseUrl = client.getBaseUrl();
-  
+
   console.log('Base URL:', baseUrl);
   return typeof baseUrl === 'string' && baseUrl.length > 0;
 }
@@ -24,14 +24,14 @@ export function testClientHasBaseUrl(): boolean {
 export function testAuthToken(): boolean {
   const client = new ApiClient();
   const token = 'test-token-123';
-  
+
   try {
     client.setAuthToken(token);
     console.log('✓ Auth token set successfully');
-    
+
     client.setAuthToken(null);
     console.log('✓ Auth token cleared successfully');
-    
+
     return true;
   } catch (error) {
     console.error('✗ Auth token test failed:', error);
@@ -44,15 +44,15 @@ export function testAuthToken(): boolean {
  */
 export function testHttpMethods(): boolean {
   const client = new ApiClient();
-  
+
   const methods = ['get', 'post', 'put', 'patch', 'delete'];
-  const results = methods.map(method => {
+  const results = methods.map((method) => {
     const exists = typeof (client as any)[method] === 'function';
     console.log(`${exists ? '✓' : '✗'} ${method.toUpperCase()} method exists`);
     return exists;
   });
-  
-  return results.every(result => result === true);
+
+  return results.every((result) => result === true);
 }
 
 /**
@@ -80,28 +80,28 @@ export async function testErrorResponseShape(): Promise<boolean> {
  */
 export async function runAllTests(): Promise<void> {
   console.log('=== API Client Tests ===\n');
-  
+
   console.log('1. Testing base URL...');
   const test1 = testClientHasBaseUrl();
   console.log(test1 ? '✓ PASS\n' : '✗ FAIL\n');
-  
+
   console.log('2. Testing auth token...');
   const test2 = testAuthToken();
   console.log(test2 ? '✓ PASS\n' : '✗ FAIL\n');
-  
+
   console.log('3. Testing HTTP methods...');
   const test3 = testHttpMethods();
   console.log(test3 ? '✓ PASS\n' : '✗ FAIL\n');
-  
+
   console.log('4. Testing success response shape...');
   const test4 = await testSuccessResponseShape();
   console.log(test4 ? '✓ PASS\n' : '✗ FAIL\n');
-  
+
   console.log('5. Testing error response shape...');
   const test5 = await testErrorResponseShape();
   console.log(test5 ? '✓ PASS\n' : '✗ FAIL\n');
-  
-  const allPassed = [test1, test2, test3, test4, test5].every(t => t === true);
+
+  const allPassed = [test1, test2, test3, test4, test5].every((t) => t === true);
   console.log(allPassed ? '=== ALL TESTS PASSED ===' : '=== SOME TESTS FAILED ===');
 }
 

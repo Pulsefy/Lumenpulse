@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import { PriceService } from '../price/price.service';
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
 const StellarSdk = require('stellar-sdk');
 
@@ -21,7 +22,9 @@ export class StellarBalanceService {
 
   private readonly server: any;
 
-  constructor() {
+  constructor(
+    @Inject(PriceService) private readonly priceService: PriceService,
+  ) {
     // Use public Stellar Horizon server
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     this.server = new StellarSdk.Horizon.Server('https://horizon.stellar.org');
@@ -65,24 +68,23 @@ export class StellarBalanceService {
   }
 
   /**
-   * Get USD value for an asset (mock implementation)
-   * In production, this should call a price API like CoinGecko or similar
+   * Get USD value for an asset
+   * Fetches real-time price from PriceService
    */
-  getAssetValueUsd(
+  async getAssetValueUsd(
     assetCode: string,
     assetIssuer: string | null,
     amount: string,
-  ): number {
-    // Mock prices for demonstration
-    const mockPrices: Record<string, number> = {
-      XLM: 0.12, // $0.12 per XLM
-      USDC: 1.0, // $1.00 per USDC
-      BTC: 45000.0, // Mock BTC price
-    };
-
-    const price = mockPrices[assetCode] || 0;
+  ): Promise<number> {
+    let price = 0;
+    try {
+      price = await this.priceService.getCurrentPrice(assetCode);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to fetch price for ${assetCode}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
     const numAmount = parseFloat(amount);
-
     return numAmount * price;
   }
 }

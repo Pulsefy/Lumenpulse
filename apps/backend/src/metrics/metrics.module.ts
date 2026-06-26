@@ -1,22 +1,27 @@
-import { Module, Global } from '@nestjs/common';
-import { MetricsService } from './metrics.service';
-import { MetricsController } from './metrics.controller';
-import { MetricsInterceptor } from './metrics.interceptor';
+import { Global, Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
+import { MetricsController } from './metrics.controller';
+import { MetricsService } from './metrics.service';
+import { MetricsInterceptor } from './metrics.interceptor';
 
 /**
- * Metrics Module
+ * MetricsModule  (@Global)
  *
- * Provides application metrics collection and exposure for monitoring tools
- * Includes:
- * - HTTP request metrics (count, latency, errors)
- * - Job queue metrics
- * - Prometheus-formatted metrics endpoint
- * - Health check endpoint
+ * Provides:
+ *   - MetricsService          — unified Prometheus registry
+ *   - MetricsInterceptor      — automatic per-request HTTP metrics
+ *   - MetricsController       — /metrics scrape endpoint
  *
- * Environment Variables:
- * - METRICS_ALLOWED_IPS: Comma-separated list of allowed IPs (e.g., "127.0.0.1,192.168.1.0/24")
- *   If not set, falls back to JWT authentication
+ * Exports MetricsService so any module can inject it for custom
+ * pipeline instrumentation without re-importing MetricsModule.
+ *
+ * Register once in AppModule:
+ *   @Module({ imports: [MetricsModule] })
+ *   export class AppModule {}
+ *
+ * Environment variables:
+ *   METRICS_ALLOWED_IPS  Comma-separated IPs / CIDR blocks allowed to scrape.
+ *                        Falls back to Bearer JWT if unset.
  */
 @Global()
 @Module({

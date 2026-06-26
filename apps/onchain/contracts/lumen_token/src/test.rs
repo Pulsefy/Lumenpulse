@@ -2,7 +2,10 @@
 extern crate std;
 
 use crate::{LumenToken, LumenTokenClient};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Address, BytesN, Env, String,
+};
 
 #[test]
 fn test_token() {
@@ -115,4 +118,70 @@ fn test_only_admin_can_upgrade() {
 
     let dummy: BytesN<32> = BytesN::from_array(&env, &[0u8; 32]);
     client.upgrade(&non_admin, &dummy); // must panic
+}
+
+// ---------------------------------------------------------------------------
+// TTL / storage-rent tests
+// ---------------------------------------------------------------------------
+
+/// Verify that a balance entry remains accessible after a simulated ledger
+/// advance — the TTL bump on write keeps the entry alive.
+#[test]
+fn test_balance_entry_accessible_after_ledger_advance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let contract_id = env.register(LumenToken, ());
+    let client = LumenTokenClient::new(&env, &contract_id);
+
+    client.initialize(
+        &admin,
+        &7,
+        &String::from_str(&env, "LumenPulse"),
+        &String::from_str(&env, "LMN"),
+    );
+
+    client.mint(&user, &1_000);
+
+    // Advance the ledger sequence significantly.
+    env.ledger().set_sequence_number(200_000);
+
+    // Balance must still be readable — TTL bump on write keeps it alive.
+    assert_eq!(client.balance(&user), 1_000);
+}
+
+/// Verify that TTL is extended after a read (balance query) by confirming the
+/// entry survives a second large ledger jump.
+#[test]
+fn test_ttl_extended_after_read_write() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let contract_id = env.register(LumenToken, ());
+    let client = LumenTokenClient::new(&env, &contract_id);
+
+    client.initialize(
+        &admin,
+        &7,
+        &String::from_str(&env, "LumenPulse"),
+        &String::from_str(&env, "LMN"),
+    );
+
+    client.mint(&user, &500);
+
+    // First ledger advance.
+    env.ledger().set_sequence_number(100_001);
+
+    // Read triggers another TTL bump.
+    assert_eq!(client.balance(&user), 500);
+
+    // Second ledger advance — read-triggered bump should keep it alive.
+    env.ledger().set_sequence_number(200_002);
+    assert_eq!(client.balance(&user), 500);
 }

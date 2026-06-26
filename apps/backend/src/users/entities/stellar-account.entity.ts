@@ -12,6 +12,9 @@ import { User } from './user.entity';
 
 @Entity('stellar_accounts')
 @Index(['userId', 'publicKey'], { unique: true })
+@Index(['userId'])
+@Index(['isActive'])
+@Index(['isPrimary'])
 export class StellarAccount {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -31,6 +34,9 @@ export class StellarAccount {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   label: string | null;
+
+  @Column({ default: false })
+  isPrimary: boolean;
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;

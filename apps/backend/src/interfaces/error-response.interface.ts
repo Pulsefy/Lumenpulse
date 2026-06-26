@@ -1,7 +1,11 @@
+export interface ErrorDetail {
+  field?: string;
+  message: string;
+}
+
 export interface ErrorResponse {
-  statusCode: number;
-  message: string | string[];
-  error: string;
-  timestamp: string;
-  path: string;
+  code: string;
+  message: string;
+  details?: ErrorDetail[] | Record<string, unknown>;
+  requestId: string;
 }
