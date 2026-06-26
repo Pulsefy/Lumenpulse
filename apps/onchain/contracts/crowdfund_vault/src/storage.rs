@@ -38,6 +38,9 @@ pub enum DataKey {
     FeeBps,                      // -> u32
     Treasury,                    // -> Address
     Subscribers,
+    RefundReceipt(u64, u64),     // (project_id, receipt_id) -> RefundReceipt
+    RefundReceiptCount(u64),     // project_id -> u64
+    RefundClaimed(u64, Address), // (project_id, contributor) -> bool
 }
 
 #[contracttype]
@@ -68,4 +71,14 @@ pub struct MilestoneDispute {
     pub challenger: Address,
     pub opened_at: u64,
     pub reason: Symbol,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RefundReceipt {
+    pub project_id: u64,
+    pub contributor: Address,
+    pub amount: i128,
+    pub reason: Symbol,
+    pub timestamp: u64,
 }
