@@ -9,6 +9,7 @@ import {
   VestingWalletNotFoundException,
   VestingWalletTransactionFailedException,
   VestingWalletUnauthorizedException,
+  VestingWalletInsufficientBalanceException,
 } from './exceptions/vesting-wallet.exceptions';
 
 export enum VestingWalletContractError {
@@ -47,6 +48,10 @@ export function mapVestingWalletContractErrorCode(
       return new VestingWalletNothingToClaimException();
     case VestingWalletContractError.Reentrancy:
       return new VestingWalletReentrancyException();
+    case VestingWalletContractError.InsufficientBalance:
+      return new VestingWalletInsufficientBalanceException();
+    case VestingWalletContractError.DelegateNotAuthorized:
+      return new VestingWalletUnauthorizedException();
     default:
       return new VestingWalletTransactionFailedException(fallbackMessage, {
         contractErrorCode: code,
