@@ -24,15 +24,11 @@ import {
 } from './exceptions/treasury.exceptions';
 import { toTreasuryException } from './treasury-error.util';
 import { RawStreamData } from './treasury-stream.util';
+import { SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
 
 const NETWORK_PASSPHRASES = {
   testnet: Networks.TESTNET,
   mainnet: Networks.PUBLIC,
-} as const;
-
-const DEFAULT_SOROBAN_RPC_URLS = {
-  testnet: 'https://soroban-testnet.stellar.org',
-  mainnet: 'https://soroban.stellar.org',
 } as const;
 
 /** How long to poll for transaction confirmation before giving up. */
@@ -75,6 +71,10 @@ export interface SubmittedTransaction {
 export class TreasurySorobanClient {
   private readonly logger = new Logger(TreasurySorobanClient.name);
 
+  constructor(
+    private readonly sorobanRpc: SorobanRpcClientService,
+  ) {}
+
   /** Returns the configured treasury contract id, or throws if unusable. */
   private getContractId(): string {
     const contractId = config.stellar.contracts.treasury;
@@ -82,20 +82,6 @@ export class TreasurySorobanClient {
       throw new TreasuryNotConfiguredException();
     }
     return contractId;
-  }
-
-  private getRpcUrl(): string {
-    return (
-      config.stellar.sorobanRpcUrl ??
-      DEFAULT_SOROBAN_RPC_URLS[config.stellar.network]
-    );
-  }
-
-  private createServer(): rpc.Server {
-    return new rpc.Server(this.getRpcUrl(), {
-      timeout: config.stellar.timeout,
-      allowHttp: config.stellar.sorobanRpcUrl?.startsWith('http://') ?? false,
-    });
   }
 
   private getNetworkPassphrase(): string {
@@ -127,10 +113,9 @@ export class TreasurySorobanClient {
     this.validateAddressOrThrow(params.beneficiary, 'beneficiary');
 
     const keypair = this.getAdminKeypair();
-    const server = this.createServer();
 
     try {
-      const sourceAccount = await server.getAccount(keypair.publicKey());
+      const sourceAccount = await this.sorobanRpc.getAccount(keypair.publicKey());
 
       const contract = new Contract(contractId);
       const operation = contract.call(
@@ -150,7 +135,7 @@ export class TreasurySorobanClient {
         .setTimeout(30)
         .build();
 
-      const simulation = await server.simulateTransaction(tx);
+      const simulation = await this.sorobanRpc.simulateTransaction(tx);
       if (rpc.Api.isSimulationError(simulation)) {
         throw toTreasuryException(simulation.error, params.beneficiary);
       }
@@ -158,7 +143,7 @@ export class TreasurySorobanClient {
       const prepared = rpc.assembleTransaction(tx, simulation).build();
       prepared.sign(keypair);
 
-      return await this.submitAndConfirm(server, prepared);
+      return await this.submitAndConfirm(prepared);
     } catch (error) {
       throw this.normalizeError(error);
     }
@@ -214,10 +199,9 @@ export class TreasurySorobanClient {
 
   /** Sends a signed transaction and polls until it is confirmed or fails. */
   private async submitAndConfirm(
-    server: rpc.Server,
     transaction: ReturnType<TransactionBuilder['build']>,
   ): Promise<SubmittedTransaction> {
-    const sendResponse = await server.sendTransaction(transaction);
+    const sendResponse = await this.sorobanRpc.sendTransaction(transaction);
 
     if (sendResponse.status === 'ERROR') {
       throw new TreasuryTransactionFailedException(
@@ -228,14 +212,14 @@ export class TreasurySorobanClient {
 
     const hash = sendResponse.hash;
     const deadline = Date.now() + TX_CONFIRMATION_TIMEOUT_MS;
-    let getResponse = await server.getTransaction(hash);
+    let getResponse = await this.sorobanRpc.getTransaction(hash);
 
     while (
       getResponse.status === rpc.Api.GetTransactionStatus.NOT_FOUND &&
       Date.now() < deadline
     ) {
       await this.sleep(TX_POLL_INTERVAL_MS);
-      getResponse = await server.getTransaction(hash);
+      getResponse = await this.sorobanRpc.getTransaction(hash);
     }
 
     if (getResponse.status === rpc.Api.GetTransactionStatus.SUCCESS) {
@@ -263,8 +247,6 @@ export class TreasurySorobanClient {
     const contractId = this.getContractId();
     this.validateAddressOrThrow(beneficiary, 'beneficiary');
 
-    const server = this.createServer();
-
     try {
       const ledgerKey = xdr.LedgerKey.contractData(
         new xdr.LedgerKeyContractData({
@@ -278,7 +260,7 @@ export class TreasurySorobanClient {
         }),
       );
 
-      const response = await server.getLedgerEntries(ledgerKey);
+      const response = await this.sorobanRpc.getLedgerEntries(ledgerKey);
       if (response.entries.length === 0) {
         return null;
       }
@@ -348,3 +330,4 @@ export class TreasurySorobanClient {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
+

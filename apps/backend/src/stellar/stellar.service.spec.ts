@@ -5,6 +5,7 @@ import { StellarService } from './stellar.service';
 import { CacheService } from '../cache/cache.service';
 import { NotFoundError } from '@stellar/stellar-sdk';
 import { AccountNotFoundException } from './exceptions/stellar.exceptions';
+import { ResilienceService } from './services/resilience.service';
 
 const mockCache = {
   get: jest.fn(),
@@ -23,6 +24,20 @@ const mockServer = {
   operations: jest.fn(),
   assets: jest.fn(),
   root: jest.fn(),
+};
+
+const mockResiliencePolicy = {
+  execute: jest.fn((method, operation) => operation()),
+  getStatus: jest.fn(() => ({
+    state: 'CLOSED',
+    consecutiveFailures: 0,
+    budgetTokens: 100,
+    lastStateTransition: new Date().toISOString(),
+  })),
+};
+
+const mockResilienceService = {
+  getPolicy: jest.fn(() => mockResiliencePolicy),
 };
 
 jest.mock('@stellar/stellar-sdk', () => {
@@ -76,6 +91,10 @@ describe('StellarService', () => {
             getAccountOperationsCached: jest.fn(),
             setCacheConfig: jest.fn(),
           },
+        },
+        {
+          provide: ResilienceService,
+          useValue: mockResilienceService,
         },
       ],
     }).compile();
