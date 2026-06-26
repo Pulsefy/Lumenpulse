@@ -9,6 +9,7 @@ import time
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from contextlib import contextmanager
+from collections import defaultdict
 
 from sqlalchemy import create_engine, select, and_, desc, func, delete
 from sqlalchemy.orm import sessionmaker, Session
@@ -26,6 +27,7 @@ from .models import (
     ProjectMilestone,
     NewsInsight,
     AssetTrend,
+    RoundAnomalySignal,
 )
 from src.analytics.ner_service import NERService
 from src.analytics.onchain_entity_linker import (
@@ -1643,6 +1645,208 @@ class PostgresService:
                 }
         except SQLAlchemyError as e:
             logger.error(f"Failed to get sentiment summary: {e}")
+            return {}
+
+    # Round Anomaly Signal Methods
+
+    def save_round_anomaly_signal(
+        self, signal_data: Dict[str, Any]
+    ) -> Optional[RoundAnomalySignal]:
+        """
+        Save a round anomaly signal to the database.
+
+        Args:
+            signal_data: Dictionary containing signal data matching RoundAnomalySignal fields
+
+        Returns:
+            RoundAnomalySignal object if successful, None otherwise
+        """
+        try:
+            with self.get_session() as session:
+                signal = RoundAnomalySignal(
+                    round_id=signal_data.get("round_id"),
+                    project_id=signal_data.get("project_id"),
+                    anomaly_type=signal_data.get("anomaly_type"),
+                    severity_score=signal_data.get("severity_score"),
+                    detection_rationale=signal_data.get("detection_rationale"),
+                    metric_values=signal_data.get("metric_values"),
+                    threshold_used=signal_data.get("threshold_used"),
+                    reviewed=signal_data.get("reviewed", False),
+                    review_notes=signal_data.get("review_notes"),
+                    timestamp=signal_data.get("timestamp", datetime.utcnow()),
+                )
+                session.add(signal)
+                session.flush()
+                session.refresh(signal)
+                logger.info(f"Saved round anomaly signal: round_id={signal.round_id}, type={signal.anomaly_type}")
+                return signal
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save round anomaly signal: {e}")
+            return None
+
+    def save_round_anomaly_signals(
+        self, signals: List[Dict[str, Any]]
+    ) -> int:
+        """
+        Save multiple round anomaly signals in a batch.
+
+        Args:
+            signals: List of signal data dictionaries
+
+        Returns:
+            Number of signals saved successfully
+        """
+        saved_count = 0
+        for signal_data in signals:
+            if self.save_round_anomaly_signal(signal_data):
+                saved_count += 1
+        logger.info(f"Saved {saved_count}/{len(signals)} round anomaly signals")
+        return saved_count
+
+    def get_round_anomaly_signals(
+        self,
+        round_id: Optional[int] = None,
+        project_id: Optional[int] = None,
+        anomaly_type: Optional[str] = None,
+        reviewed: Optional[bool] = None,
+        min_severity: Optional[float] = None,
+        limit: int = 100,
+    ) -> List[RoundAnomalySignal]:
+        """
+        Retrieve round anomaly signals with optional filters.
+
+        Args:
+            round_id: Filter by round ID
+            project_id: Filter by project ID
+            anomaly_type: Filter by anomaly type
+            reviewed: Filter by review status
+            min_severity: Filter by minimum severity score
+            limit: Maximum number of results
+
+        Returns:
+            List of RoundAnomalySignal objects
+        """
+        try:
+            with self.get_session() as session:
+                query = select(RoundAnomalySignal)
+
+                if round_id is not None:
+                    query = query.where(RoundAnomalySignal.round_id == round_id)
+                if project_id is not None:
+                    query = query.where(RoundAnomalySignal.project_id == project_id)
+                if anomaly_type is not None:
+                    query = query.where(RoundAnomalySignal.anomaly_type == anomaly_type)
+                if reviewed is not None:
+                    query = query.where(RoundAnomalySignal.reviewed == reviewed)
+                if min_severity is not None:
+                    query = query.where(RoundAnomalySignal.severity_score >= min_severity)
+
+                query = query.order_by(desc(RoundAnomalySignal.timestamp)).limit(limit)
+
+                return session.execute(query).scalars().all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get round anomaly signals: {e}")
+            return []
+
+    def get_unreviewed_anomaly_signals(self, limit: int = 50) -> List[RoundAnomalySignal]:
+        """
+        Get unreviewed anomaly signals for maintainer review.
+
+        Args:
+            limit: Maximum number of results
+
+        Returns:
+            List of unreviewed RoundAnomalySignal objects
+        """
+        return self.get_round_anomaly_signals(reviewed=False, limit=limit)
+
+    def mark_anomaly_signal_reviewed(
+        self,
+        signal_id: int,
+        reviewed_by: str,
+        review_notes: Optional[str] = None,
+    ) -> bool:
+        """
+        Mark an anomaly signal as reviewed.
+
+        Args:
+            signal_id: ID of the signal to mark as reviewed
+            reviewed_by: Identifier of the reviewer
+            review_notes: Optional review notes
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self.get_session() as session:
+                signal = session.execute(
+                    select(RoundAnomalySignal).where(RoundAnomalySignal.id == signal_id)
+                ).scalar_one_or_none()
+
+                if not signal:
+                    logger.warning(f"Anomaly signal {signal_id} not found")
+                    return False
+
+                signal.reviewed = True
+                signal.reviewed_at = datetime.utcnow()
+                signal.reviewed_by = reviewed_by
+                signal.review_notes = review_notes
+
+                logger.info(f"Marked anomaly signal {signal_id} as reviewed by {reviewed_by}")
+                return True
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to mark anomaly signal as reviewed: {e}")
+            return False
+
+    def get_anomaly_statistics(
+        self, days: int = 30
+    ) -> Dict[str, Any]:
+        """
+        Get statistics about detected anomalies.
+
+        Args:
+            days: Time window in days
+
+        Returns:
+            Statistics dictionary
+        """
+        try:
+            with self.get_session() as session:
+                cutoff_time = datetime.utcnow() - timedelta(days=days)
+
+                signals = session.execute(
+                    select(RoundAnomalySignal).where(
+                        RoundAnomalySignal.timestamp >= cutoff_time
+                    )
+                ).scalars().all()
+
+                if not signals:
+                    return {
+                        "total_signals": 0,
+                        "by_type": {},
+                        "average_severity": 0.0,
+                        "unreviewed_count": 0,
+                        "reviewed_count": 0,
+                    }
+
+                total = len(signals)
+                by_type = defaultdict(int)
+                total_severity = 0.0
+                unreviewed = sum(1 for s in signals if not s.reviewed)
+
+                for signal in signals:
+                    by_type[signal.anomaly_type] += 1
+                    total_severity += signal.severity_score
+
+                return {
+                    "total_signals": total,
+                    "by_type": dict(by_type),
+                    "average_severity": round(total_severity / total, 3) if total > 0 else 0.0,
+                    "unreviewed_count": unreviewed,
+                    "reviewed_count": total - unreviewed,
+                }
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get anomaly statistics: {e}")
             return {}
 
     def cleanup_old_data(self, days: int = 30) -> Dict[str, int]:

@@ -4,7 +4,7 @@ Database models for analytics data persistence
 
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Text, Index, BigInteger
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Text, Index, BigInteger, Boolean
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
@@ -445,3 +445,57 @@ class AssetTrend(Base):
 
     def __repr__(self):
         return f"<AssetTrend(asset={self.asset}, metric={self.metric_name}, trend={self.trend_direction})>"
+
+
+class RoundAnomalySignal(Base):
+    """
+    Stores anomaly signals detected in quadratic funding rounds for maintainer review.
+    """
+
+    __tablename__ = "round_anomaly_signals"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    round_id = Column(BigInteger, nullable=False, index=True)
+    project_id = Column(BigInteger, nullable=True, index=True)
+    
+    # Anomaly details
+    anomaly_type = Column(String(50), nullable=False, index=True)  # concentration_risk, sybil_suspicion, etc.
+    severity_score = Column(Float, nullable=False)  # 0.0 - 1.0
+    detection_rationale = Column(Text, nullable=False)
+    
+    # Metric values and threshold used
+    metric_values = Column(JSON, nullable=True)
+    threshold_used = Column(Float, nullable=True)
+    
+    # Review status
+    reviewed = Column(Boolean, nullable=False, default=False)
+    review_notes = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_by = Column(String(255), nullable=True)
+    
+    # Timestamps
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    # Indexes for efficient querying
+    __table_args__ = (
+        Index("idx_round_anomaly_signals_round_id", "round_id"),
+        Index("idx_round_anomaly_signals_project_id", "project_id"),
+        Index("idx_round_anomaly_signals_anomaly_type", "anomaly_type"),
+        Index("idx_round_anomaly_signals_severity", "severity_score"),
+        Index("idx_round_anomaly_signals_reviewed", "reviewed"),
+        Index("idx_round_anomaly_signals_timestamp", "timestamp"),
+        Index("idx_round_anomaly_signals_round_type", "round_id", "anomaly_type"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<RoundAnomalySignal(id={self.id}, round_id={self.round_id}, "
+            f"type={self.anomaly_type}, severity={self.severity_score:.2f}, "
+            f"reviewed={self.reviewed})>"
+        )

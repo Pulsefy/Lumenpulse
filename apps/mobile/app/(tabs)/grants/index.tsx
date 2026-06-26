@@ -15,6 +15,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { useLocalization } from '../../../src/context';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import { grantsApi, GrantRound, roundStatusLabel } from '../../../lib/grants';
+import { CachedApi } from '../../../lib/cached-api';
 import { formatTokenAmount } from '../../../lib/stellar';
 
 function StatusBadge({
@@ -116,7 +117,7 @@ function GrantsListContent() {
     }
     setError(null);
     try {
-      const res = await grantsApi.listRounds();
+      const res = await CachedApi.getGrantRounds();
       if (res.success && res.data) {
         setRounds(res.data);
       } else {
