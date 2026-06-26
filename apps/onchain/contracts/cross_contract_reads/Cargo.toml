@@ -1,17 +1,16 @@
 [package]
-name = "matching_pool"
-version = "0.0.0"
+name = "cross_contract_reads"
+version = "0.1.0"
 edition = "2021"
 publish = false
+description = "Shared helpers for safe cross-contract view calls in the Lumenpulse onchain workspace."
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = ["lib"]
 doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-reentrancy-guard = { path = "../reentrancy-guard" }
-cross_contract_reads = { path = "../cross_contract_reads" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

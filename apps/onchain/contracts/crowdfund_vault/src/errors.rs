@@ -35,4 +35,7 @@ pub enum CrowdfundError {
     RefundWindowClosed = 29,
     RefundWindowNotOpen = 30,
     Reentrancy = 31,
+    /// A cross-contract view call made via `cross_contract_reads` helpers
+    /// failed (remote contract trapped, not deployed, or returned an error).
+    CrossContractFailed = 32,
 }

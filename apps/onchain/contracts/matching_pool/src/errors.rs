@@ -21,4 +21,7 @@ pub enum MatchingPoolError {
     InvalidRoundDates = 15,
     ContractPaused = 16,
     Reentrancy = 17,
+    /// A cross-contract view call made via `cross_contract_reads` helpers
+    /// failed (remote contract trapped, not deployed, or returned an error).
+    CrossContractFailed = 18,
 }

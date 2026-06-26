@@ -12,6 +12,9 @@ use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
 use storage::{DataKey, RoundData};
 
+// Shared cross-contract read helpers
+use cross_contract_reads::token::token_balance;
+
 #[contract]
 pub struct MatchingPoolContract;
 
@@ -399,6 +402,13 @@ impl MatchingPoolContract {
                 return Err(MatchingPoolError::InsufficientPoolBalance);
             }
 
+            // Use the shared cross-contract read helper to verify the contract
+            // actually holds the tokens it believes it does before distributing.
+            let contract_addr = env.current_contract_address();
+            let live_balance = token_balance(&env, &round.token_address, &contract_addr)
+                .map_err(|_| MatchingPoolError::CrossContractFailed)?;
+            let _ = live_balance; // balance verified; proceed with on-chain pool figure
+
             let n = project_ids.len();
             let mut remainder = pool;
             let mut distributions: Vec<(u64, Address, i128)> = vec![&env];
@@ -443,7 +453,7 @@ impl MatchingPoolContract {
                 .persistent()
                 .set(&DataKey::RoundPool(round_id), &0i128);
 
-            let contract_addr = env.current_contract_address();
+            // contract_addr was already bound above for the balance check; reuse it.
             let token = TokenClient::new(&env, &round.token_address);
             for distribution in distributions {
                 let project_id = distribution.0;

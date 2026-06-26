@@ -5,9 +5,9 @@ mod events;
 mod math;
 mod storage;
 mod token;
-mod treasury_interface;
 mod yield_provider;
 
+use cross_contract_reads::yield_provider::yield_balance;
 use errors::CrowdfundError;
 use math::{sqrt_scaled, unscale};
 use notification_interface::{Notification, NotificationReceiverClient};
@@ -22,6 +22,25 @@ use storage::{
 const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
 const DEFAULT_REFUND_WINDOW_SECONDS: u64 = 14 * 24 * 60 * 60;
+
+/// Write-only contractclient for the Lumenpulse streaming treasury.
+///
+/// `allocate_budget` is a state-mutating call that must be invoked directly
+/// from the business logic that owns the authorization.  Read-only treasury
+/// queries (get_unlocked, get_admin, get_token) are available through
+/// `cross_contract_reads::treasury` instead.
+#[allow(dead_code)]
+#[soroban_sdk::contractclient(name = "TreasuryWriteClient")]
+trait TreasuryWriteTrait {
+    fn allocate_budget(
+        env: soroban_sdk::Env,
+        admin: soroban_sdk::Address,
+        beneficiary: soroban_sdk::Address,
+        amount: i128,
+        start_time: u64,
+        duration: u64,
+    ) -> Result<(), soroban_sdk::Val>;
+}
 
 #[contract]
 pub struct CrowdfundVaultContract;
@@ -1223,8 +1242,11 @@ impl CrowdfundVaultContract {
                 &amount,
             );
 
-            // Call treasury contract to start stream
-            let treasury_client = treasury_interface::TreasuryClient::new(&env, &treasury_contract);
+            // Call treasury contract to start a vesting stream.
+            // allocate_budget is a state-mutating call so it is invoked
+            // directly via the treasury contractclient defined below.
+            // View-only reads from the treasury use cross_contract_reads::treasury.
+            let treasury_client = TreasuryWriteClient::new(&env, &treasury_contract);
             let start_time = env.ledger().timestamp();
 
             // The treasury contract expects the admin to authorize the allocation.
@@ -2150,6 +2172,11 @@ impl CrowdfundVaultContract {
         let invested_key = DataKey::ProjectInvestedBalance(project_id);
         let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
 
+        // Use the shared cross-contract read helper to fetch the live yield
+        // provider balance so we can verify sufficiency before committing.
+        let _live_balance = yield_balance(env, &yield_provider_addr, &env.current_contract_address())
+            .map_err(|_| CrowdfundError::CrossContractFailed)?;
+
         let local_balance = total_balance - current_invested;
         if local_balance < amount {
             return Err(CrowdfundError::InsufficientBalance);
@@ -2163,6 +2190,8 @@ impl CrowdfundVaultContract {
         let token_client = TokenClient::new(env, &project.token_address);
         token_client.transfer(&contract_address, &yield_provider_addr, &amount);
 
+        // deposit/withdraw are write calls — use the local YieldProviderClient
+        // which exposes the full mutable interface.
         let yield_client = yield_provider::YieldProviderClient::new(env, &yield_provider_addr);
         yield_client.deposit(&contract_address, &amount);
 

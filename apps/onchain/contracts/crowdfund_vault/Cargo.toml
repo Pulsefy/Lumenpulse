@@ -12,6 +12,7 @@ doctest = false
 soroban-sdk = { workspace = true }
 notification_interface = { path = "../notification_interface" }
 reentrancy-guard = { path = "../reentrancy-guard" }
+cross_contract_reads = { path = "../cross_contract_reads" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
