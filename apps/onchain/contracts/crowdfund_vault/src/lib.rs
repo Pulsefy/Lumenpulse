@@ -16,7 +16,8 @@ use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
 use storage::{
-    DataKey, MilestoneDispute, ProjectData, ProtocolStats, LEDGER_BUMP, LEDGER_THRESHOLD,
+    DataKey, MilestoneDispute, ProjectData, ProtocolStats, RefundReceipt, LEDGER_BUMP,
+    LEDGER_THRESHOLD,
 };
 
 const CURRENT_STORAGE_VERSION: u32 = 1;
@@ -452,6 +453,12 @@ impl CrowdfundVaultContract {
             let contract_address = env.current_contract_address();
             let token_client = TokenClient::new(&env, &project.token_address);
             let mut total_refunded = 0i128;
+            let mut receipt_count: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::RefundReceiptCount(project_id))
+                .unwrap_or(0);
+            let refund_reason = status.clone();
 
             for i in 0..count {
                 let contrib_key = DataKey::Contributor(project_id, i);
@@ -465,9 +472,46 @@ impl CrowdfundVaultContract {
                 let amount: i128 = env.storage().persistent().get(&amount_key).unwrap_or(0);
 
                 if amount > 0 {
+                    // Check if already claimed (double-claim protection)
+                    let claimed_key = DataKey::RefundClaimed(project_id, contributor.clone());
+                    if env
+                        .storage()
+                        .persistent()
+                        .get(&claimed_key)
+                        .unwrap_or(false)
+                    {
+                        continue;
+                    }
+
                     env.storage().persistent().remove(&amount_key);
                     total_refunded += amount;
                     token_client.transfer(&contract_address, &contributor, &amount);
+
+                    // Store refund receipt
+                    let receipt = RefundReceipt {
+                        project_id,
+                        contributor: contributor.clone(),
+                        amount,
+                        reason: refund_reason.clone(),
+                        timestamp: env.ledger().timestamp(),
+                    };
+                    let receipt_key = DataKey::RefundReceipt(project_id, receipt_count);
+                    env.storage().persistent().set(&receipt_key, &receipt);
+                    env.storage().persistent().extend_ttl(
+                        &receipt_key,
+                        LEDGER_THRESHOLD,
+                        LEDGER_BUMP,
+                    );
+
+                    // Mark as claimed
+                    env.storage().persistent().set(&claimed_key, &true);
+                    env.storage().persistent().extend_ttl(
+                        &claimed_key,
+                        LEDGER_THRESHOLD,
+                        LEDGER_BUMP,
+                    );
+
+                    receipt_count += 1;
 
                     events::ContributionRefundedEvent {
                         project_id,
@@ -477,6 +521,11 @@ impl CrowdfundVaultContract {
                     .publish(&env);
                 }
             }
+
+            // Update receipt count
+            env.storage()
+                .persistent()
+                .set(&DataKey::RefundReceiptCount(project_id), &receipt_count);
 
             env.storage().persistent().remove(&count_key);
             let balance_key = DataKey::ProjectBalance(project_id, project.token_address);
@@ -542,6 +591,17 @@ impl CrowdfundVaultContract {
                 return Err(CrowdfundError::InsufficientBalance);
             }
 
+            // Check if already claimed (double-claim protection)
+            let claimed_key = DataKey::RefundClaimed(project_id, contributor.clone());
+            if env
+                .storage()
+                .persistent()
+                .get(&claimed_key)
+                .unwrap_or(false)
+            {
+                return Err(CrowdfundError::RefundFailed);
+            }
+
             let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
             let total_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
             let invested_key = DataKey::ProjectInvestedBalance(project_id);
@@ -565,6 +625,37 @@ impl CrowdfundVaultContract {
                 &contract_address,
                 &contributor,
                 &amount,
+            );
+
+            // Store refund receipt
+            let receipt = RefundReceipt {
+                project_id,
+                contributor: contributor.clone(),
+                amount,
+                reason: status.clone(),
+                timestamp: env.ledger().timestamp(),
+            };
+            let receipt_count: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::RefundReceiptCount(project_id))
+                .unwrap_or(0);
+            let receipt_key = DataKey::RefundReceipt(project_id, receipt_count);
+            env.storage().persistent().set(&receipt_key, &receipt);
+            env.storage()
+                .persistent()
+                .extend_ttl(&receipt_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            // Mark as claimed
+            env.storage().persistent().set(&claimed_key, &true);
+            env.storage()
+                .persistent()
+                .extend_ttl(&claimed_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            // Update receipt count
+            env.storage().persistent().set(
+                &DataKey::RefundReceiptCount(project_id),
+                &(receipt_count + 1),
             );
 
             events::ContributionClawedBackEvent {
@@ -1553,6 +1644,64 @@ impl CrowdfundVaultContract {
             .persistent()
             .get(&DataKey::MilestoneDispute(project_id, milestone_id))
             .ok_or(CrowdfundError::MilestoneNotDisputed)
+    }
+
+    /// Get a specific refund receipt by project and receipt ID
+    pub fn get_refund_receipt(
+        env: Env,
+        project_id: u64,
+        receipt_id: u64,
+    ) -> Result<RefundReceipt, CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+        env.storage()
+            .persistent()
+            .get::<_, ProjectData>(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        let receipt_key = DataKey::RefundReceipt(project_id, receipt_id);
+        let receipt = env
+            .storage()
+            .persistent()
+            .get(&receipt_key)
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+        env.storage()
+            .persistent()
+            .extend_ttl(&receipt_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        Ok(receipt)
+    }
+
+    /// Get the total count of refund receipts for a project
+    pub fn get_refund_receipt_count(env: Env, project_id: u64) -> Result<u64, CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+        env.storage()
+            .persistent()
+            .get::<_, ProjectData>(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::RefundReceiptCount(project_id))
+            .unwrap_or(0))
+    }
+
+    /// Check if a contributor has already claimed a refund for a project
+    pub fn has_refund_claimed(
+        env: Env,
+        project_id: u64,
+        contributor: Address,
+    ) -> Result<bool, CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+        env.storage()
+            .persistent()
+            .get::<_, ProjectData>(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::RefundClaimed(project_id, contributor))
+            .unwrap_or(false))
     }
 
     /// Get admin address
