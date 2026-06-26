@@ -23,6 +23,7 @@ from src.analytics.project_verification_trend import (
     VerificationRecord,
 )
 from src.ingestion.rpc_benchmark import RPCProviderBenchmark
+from src.round_analyzer import _round_analyzer_job
 
 
 logger = setup_logger(__name__)
@@ -288,6 +289,15 @@ class AnalyticsScheduler:
                 trigger=IntervalTrigger(minutes=30),
                 id="rpc_provider_benchmark",
                 name="RPC Provider Benchmark",
+                replace_existing=True,
+            )
+
+            # ── Round Anomaly Detection: every 6 hours (#874) ───────────
+            self.scheduler.add_job(
+                func=_round_analyzer_job,
+                trigger=IntervalTrigger(hours=6),
+                id="round_anomaly_detection",
+                name="Round Anomaly Detection",
                 replace_existing=True,
             )
 
