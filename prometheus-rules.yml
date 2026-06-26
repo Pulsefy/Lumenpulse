@@ -100,6 +100,30 @@ groups:
           description: '{{ .Labels.queue_name }} has > 10% job failures (current: {{ $value | humanize }}/sec)'
 
       # ====================
+      # Ingestion Lag Alerts
+      # ====================
+
+      - alert: IngestionLagWarning
+        expr: lumenpulse_ingestion_lag_ledgers > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: data-processing
+        annotations:
+          summary: 'Ingestion lag warning'
+          description: 'Domain {{ $labels.domain }} is {{ $value }} ledgers behind'
+
+      - alert: IngestionLagCritical
+        expr: lumenpulse_ingestion_lag_ledgers > 1000
+        for: 2m
+        labels:
+          severity: critical
+          service: data-processing
+        annotations:
+          summary: 'Critical ingestion lag'
+          description: 'Domain {{ $labels.domain }} is {{ $value }} ledgers behind (critical)'
+
+      # ====================
       # Request Rate Alerts
       # ====================
 

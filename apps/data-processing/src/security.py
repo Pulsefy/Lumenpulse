@@ -151,6 +151,7 @@ def setup_security_middleware(app) -> None:
         excluded_paths = [
             "/health",
             "/metrics",
+            "/ingestion/lag",
             "/",
             "/docs",
             "/redoc",

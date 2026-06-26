@@ -255,3 +255,22 @@ class AssetTrend(Base):
 
     def __repr__(self):
         return f"<AssetTrend(asset={self.asset}, metric={self.metric_name}, trend={self.trend_direction})>"
+
+
+class StellarSyncCheckpoint(Base):
+    """
+    Stores sync checkpoints for various domains
+    """
+
+    __tablename__ = "stellar_sync_checkpoints"
+
+    id = Column(String(36), primary_key=True)
+    type = Column(String(255), unique=True, nullable=False)
+    cursor = Column(String(255), nullable=False)
+    updatedAt = Column(
+        DateTime(timezone=True), name="updatedAt", nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    def __repr__(self):
+        return f"<StellarSyncCheckpoint(type={self.type}, cursor={self.cursor}, updatedAt={self.updatedAt})>"
+

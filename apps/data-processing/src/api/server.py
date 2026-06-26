@@ -18,7 +18,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from sentiment import SentimentAnalyzer
 from src.utils.logger import setup_logger, correlation_id_ctx, generate_correlation_id
-from src.utils.metrics import API_FAILURES_TOTAL, generate_latest, CONTENT_TYPE_LATEST
+from src.utils.metrics import API_FAILURES_TOTAL, generate_latest, CONTENT_TYPE_LATEST, update_ingestion_lag_metrics
 from src.security import (
     security_config,
     setup_security_middleware,
@@ -28,7 +28,7 @@ from src.security import (
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
 from src.ml.model_registry import get_registry_status
 from src.analytics.correlation_engine import CorrelationEngine
-from src.db import PostgresService
+from src.db import PostgresService, StellarSyncCheckpoint
 from src.analytics.sentiment_indicators import SentimentIndicatorMapper, get_legend as sentiment_legend
 
 _indicator_mapper = SentimentIndicatorMapper()
@@ -150,10 +150,86 @@ class NewsArticleResponse(BaseModel):
     sentiment_label: Optional[str] = None  # positive / negative / neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
 
+class IngestionLagDomainDetail(BaseModel):
+    cursor: str
+    updated_at: str
+    lag_ledgers: int
+    lag_seconds: float
+
+
+class IngestionLagResponse(BaseModel):
+    latest_ledger: int
+    lags: Dict[str, IngestionLagDomainDetail]
+
+
 @app.get("/metrics")
 async def metrics():
     """Expose Prometheus metrics"""
+    update_ingestion_lag_metrics(postgres_service)
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/ingestion/lag", response_model=IngestionLagResponse)
+async def get_ingestion_lag(request: Request) -> IngestionLagResponse:
+    """Get current ingestion lag for all contract domains"""
+    if not postgres_service:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    from datetime import timezone
+    from src.utils.metrics import get_latest_ledger_sequence
+    update_ingestion_lag_metrics(postgres_service)
+    latest_ledger = get_latest_ledger_sequence()
+
+    domains = ["registry", "vault", "matching_pool", "treasury", "vesting"]
+    lag_details = {}
+
+    try:
+        with postgres_service.get_session() as session:
+            # Fallback if latest_ledger is 0
+            if latest_ledger == 0:
+                ledger_checkpoint = session.query(StellarSyncCheckpoint).filter_by(type="ledger").first()
+                if ledger_checkpoint:
+                    try:
+                        latest_ledger = int(ledger_checkpoint.cursor)
+                    except ValueError:
+                        pass
+                if latest_ledger == 0:
+                    latest_ledger = 1000000
+
+            for domain in domains:
+                checkpoint = session.query(StellarSyncCheckpoint).filter_by(type=domain).first()
+                if checkpoint:
+                    try:
+                        checkpoint_cursor = int(checkpoint.cursor)
+                        lag_ledgers = max(0, latest_ledger - checkpoint_cursor)
+                    except ValueError:
+                        lag_ledgers = 0
+
+                    if checkpoint.updatedAt:
+                        updated_at = checkpoint.updatedAt
+                        if updated_at.tzinfo is None:
+                            updated_at = updated_at.replace(tzinfo=timezone.utc)
+                        now = datetime.now(timezone.utc)
+                        lag_seconds = max(0.0, (now - updated_at).total_seconds())
+                        updated_at_str = updated_at.isoformat()
+                    else:
+                        lag_seconds = 0.0
+                        updated_at_str = ""
+
+                    lag_details[domain] = IngestionLagDomainDetail(
+                        cursor=checkpoint.cursor,
+                        updated_at=updated_at_str,
+                        lag_ledgers=lag_ledgers,
+                        lag_seconds=lag_seconds
+                    )
+    except Exception as e:
+        logger.error(f"Error querying ingestion lag: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal database error: {str(e)}")
+
+    return IngestionLagResponse(
+        latest_ledger=latest_ledger,
+        lags=lag_details
+    )
 
 @app.get("/")
 @limiter.limit("20/minute") if limiter else lambda x: x
