@@ -4,6 +4,7 @@ import {
   AllocateBudgetResponseDto,
   StreamStateDto,
 } from './dto/stream-response.dto';
+import { RotateBeneficiaryDto } from './dto/rotate-beneficiary.dto';
 import { TreasuryStreamNotFoundException } from './exceptions/treasury.exceptions';
 import { TreasurySorobanClient } from './treasury-soroban.client';
 import { calculateUnlocked, RawStreamData } from './treasury-stream.util';
@@ -61,6 +62,36 @@ export class TreasuryService {
       throw new TreasuryStreamNotFoundException(beneficiary);
     }
     return this.toStreamStateDto(stream);
+  }
+
+  /**
+   * Admin flow: rotate beneficiary for a treasury stream, preserving accrued
+   * claim state.
+   */
+  async rotateBeneficiary(
+    dto: RotateBeneficiaryDto,
+  ): Promise<AllocateBudgetResponseDto> {
+    this.logger.log(
+      `Rotating beneficiary from ${dto.oldBeneficiary} to ${dto.newBeneficiary}`,
+    );
+
+    const submitted = await this.sorobanClient.rotateBeneficiary({
+      oldBeneficiary: dto.oldBeneficiary,
+      newBeneficiary: dto.newBeneficiary,
+    });
+
+    // Read the new stream state for the new beneficiary
+    const stream = await this.sorobanClient.getStream(dto.newBeneficiary);
+    if (!stream) {
+      throw new TreasuryStreamNotFoundException(dto.newBeneficiary);
+    }
+
+    return {
+      transactionHash: submitted.hash,
+      status: submitted.status,
+      ledger: submitted.ledger,
+      stream: this.toStreamStateDto(stream),
+    };
   }
 
   /** Maps raw on-chain stream data into the API DTO, computing derived amounts. */
