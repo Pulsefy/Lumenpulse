@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Trophy, Bookmark } from "lucide-react";
-import { GrantRound, RoundCard } from "./components";
+import { GrantRound, RoundCard, RoundTable } from "./components";
 import { useWatchlist } from "@/contexts/WatchlistContext";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -79,14 +79,21 @@ export default function GrantsPage() {
               <p className="text-foreground/40">No grant rounds available yet.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {rounds
-                .filter((r) => !showSavedOnly || isProjectSaved(r.id))
-                .map((round) => (
-                  <RoundCard key={round.id} round={round} />
-                ))}
+            <div className="flex flex-col gap-4">
+              <div className="md:hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {rounds
+                  .filter((r) => !showSavedOnly || isProjectSaved(r.id))
+                  .map((round) => (
+                    <RoundCard key={round.id} round={round} />
+                  ))}
+              </div>
+              
+              <div className="hidden md:block">
+                <RoundTable rounds={rounds.filter((r) => !showSavedOnly || isProjectSaved(r.id))} />
+              </div>
+
               {showSavedOnly && rounds.filter((r) => isProjectSaved(r.id)).length === 0 && (
-                <div className="col-span-1 sm:col-span-2 text-center py-20 border border-white/5 rounded-2xl bg-white/[0.02]">
+                <div className="w-full text-center py-20 border border-white/5 rounded-2xl bg-white/[0.02]">
                   <Bookmark className="w-10 h-10 text-foreground/20 mx-auto mb-4" />
                   <p className="text-foreground/40">Your watchlist is empty.</p>
                 </div>
