@@ -92,3 +92,40 @@ def test_compute_project_funding_momentum_score_and_persisted_view() -> None:
     assert view is not None
     assert view.project_id == project_id
     assert view.funding_momentum_score == momentum
+
+
+def test_build_and_retrieve_contributor_reputation_snapshots() -> None:
+    service = build_sqlite_service()
+    project_id = 303
+
+    contributors = [
+        ("contrib-A", 100.0),
+        ("contrib-B", 200.0),
+        ("contrib-C", 50.0),
+    ]
+
+    for idx, (contributor, amount) in enumerate(contributors, start=1):
+        service.save_project_contributor(
+            project_id=project_id,
+            contributor=contributor,
+            amount=amount,
+            ledger=100 + idx,
+        )
+
+    snapshots = service.build_project_contributor_reputation_snapshot(
+        project_id=project_id,
+        top_n=2,
+        is_testnet=True,
+    )
+
+    assert len(snapshots) == 2
+    assert snapshots[0].contributor == "contrib-B"
+    assert snapshots[0].rank == 1
+    assert snapshots[1].contributor == "contrib-A"
+    assert snapshots[1].rank == 2
+    assert snapshots[0].reputation_score >= snapshots[1].reputation_score
+
+    top_snapshots = service.get_top_contributor_reputation_snapshots(limit=2)
+    assert len(top_snapshots) == 2
+    assert top_snapshots[0].reputation_score >= top_snapshots[1].reputation_score
+    assert {s.project_id for s in top_snapshots} == {project_id}

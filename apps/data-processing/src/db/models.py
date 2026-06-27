@@ -319,6 +319,46 @@ class ProjectContributor(Base):
         )
 
 
+class ProjectContributorReputationSnapshot(Base):
+    """
+    Stores the latest computed contributor reputation snapshot per project.
+    """
+
+    __tablename__ = "project_contributor_reputation_snapshots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(BigInteger, nullable=False, index=True)
+    contributor = Column(String(255), nullable=False, index=True)
+    total_contributed = Column(Float, nullable=False, default=0.0)
+    reputation_score = Column(Float, nullable=False, default=0.0)
+    rank = Column(Integer, nullable=False, default=0)
+    snapshot_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    extra_data = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_project_contributor_reputation_snapshot_project_contributor",
+            "project_id",
+            "contributor",
+            unique=True,
+        ),
+        Index("idx_project_contributor_reputation_snapshot_score", "reputation_score"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ProjectContributorReputationSnapshot(project_id={self.project_id}, "
+            f"contributor={self.contributor}, rank={self.rank}, "
+            f"reputation_score={self.reputation_score})>"
+        )
+
+
 class ProjectMilestone(Base):
     """
     Stores the latest milestone state for each project milestone.

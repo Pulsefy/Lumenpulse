@@ -24,6 +24,7 @@ from .models import (
     ContractEvent,
     ProjectView,
     ProjectContributor,
+    ProjectContributorReputationSnapshot,
     ProjectMilestone,
     NewsInsight,
     AssetTrend,
@@ -1301,6 +1302,161 @@ class PostgresService:
                 return results
         except SQLAlchemyError as e:
             logger.error(f"Failed to retrieve project contributors: {e}")
+            return []
+
+    def _compute_contributor_reputation_score(
+        self, total_contributed: float, is_testnet: bool = False
+    ) -> float:
+        """Compute a reputation score for a contributor based on contribution totals."""
+        if total_contributed <= 0.0:
+            return 0.0
+
+        amount_component = math.log10(1.0 + float(total_contributed))
+        scale = 1.0 if is_testnet else 1.2
+        return round(amount_component * scale * 10.0, 6)
+
+    def build_project_contributor_reputation_snapshot(
+        self,
+        project_id: int,
+        top_n: int = 100,
+        snapshot_at: Optional[datetime] = None,
+        is_testnet: Optional[bool] = None,
+    ) -> List[ProjectContributorReputationSnapshot]:
+        """Build and persist a reputation snapshot for contributors in a single project."""
+        if snapshot_at is None:
+            snapshot_at = datetime.utcnow()
+        if is_testnet is None:
+            is_testnet = os.getenv("NETWORK", "mainnet").lower() == "testnet"
+
+        def _save():
+            with self.get_session() as session:
+                contributors = session.execute(
+                    select(ProjectContributor)
+                    .where(ProjectContributor.project_id == project_id)
+                    .order_by(desc(ProjectContributor.total_contributed))
+                    .limit(top_n)
+                ).scalars().all()
+
+                session.execute(
+                    delete(ProjectContributorReputationSnapshot).where(
+                        ProjectContributorReputationSnapshot.project_id == project_id
+                    )
+                )
+
+                snapshots: List[ProjectContributorReputationSnapshot] = []
+                for rank, contributor in enumerate(contributors, start=1):
+                    reputation_score = self._compute_contributor_reputation_score(
+                        total_contributed=contributor.total_contributed,
+                        is_testnet=is_testnet,
+                    )
+                    snapshot = ProjectContributorReputationSnapshot(
+                        project_id=project_id,
+                        contributor=contributor.contributor,
+                        total_contributed=contributor.total_contributed,
+                        reputation_score=reputation_score,
+                        rank=rank,
+                        snapshot_at=snapshot_at,
+                        extra_data=contributor.extra_data,
+                    )
+                    session.add(snapshot)
+                    snapshots.append(snapshot)
+
+                session.flush()
+                logger.debug(
+                    "Saved %d reputation snapshots for project %s",
+                    len(snapshots),
+                    project_id,
+                )
+                return snapshots
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to build project contributor reputation snapshot: {e}")
+            return []
+
+    def build_all_project_contributor_reputation_snapshots(
+        self,
+        top_n: int = 100,
+        is_testnet: Optional[bool] = None,
+    ) -> int:
+        """Build reputation snapshots for all projects with contributor data."""
+        if is_testnet is None:
+            is_testnet = os.getenv("NETWORK", "mainnet").lower() == "testnet"
+
+        try:
+            with self.get_session() as session:
+                project_ids = [
+                    row[0]
+                    for row in session.execute(
+                        select(ProjectContributor.project_id).distinct()
+                    ).all()
+                ]
+
+            total_saved = 0
+            for project_id in project_ids:
+                snapshots = self.build_project_contributor_reputation_snapshot(
+                    project_id=project_id,
+                    top_n=top_n,
+                    is_testnet=is_testnet,
+                )
+                total_saved += len(snapshots)
+
+            logger.info(
+                "Built contributor reputation snapshots for %d projects, %d contributors",
+                len(project_ids),
+                total_saved,
+            )
+            return total_saved
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to build all contributor reputation snapshots: {e}")
+            return 0
+
+    def get_project_contributor_reputation_snapshots(
+        self,
+        project_id: int,
+        limit: int = 100,
+    ) -> List[ProjectContributorReputationSnapshot]:
+        """Retrieve the most recent reputation snapshots for a single project."""
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(ProjectContributorReputationSnapshot)
+                    .where(ProjectContributorReputationSnapshot.project_id == project_id)
+                    .order_by(ProjectContributorReputationSnapshot.rank)
+                    .limit(limit)
+                )
+                results = session.execute(stmt).scalars().all()
+                logger.debug(
+                    "Retrieved %d reputation snapshots for project %s",
+                    len(results),
+                    project_id,
+                )
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve project reputation snapshots: {e}")
+            return []
+
+    def get_top_contributor_reputation_snapshots(
+        self,
+        limit: int = 100,
+    ) -> List[ProjectContributorReputationSnapshot]:
+        """Retrieve the top contributor reputation snapshots across all projects."""
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(ProjectContributorReputationSnapshot)
+                    .order_by(desc(ProjectContributorReputationSnapshot.reputation_score))
+                    .limit(limit)
+                )
+                results = session.execute(stmt).scalars().all()
+                logger.debug(
+                    "Retrieved %d top contributor reputation snapshots",
+                    len(results),
+                )
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve top contributor reputation snapshots: {e}")
             return []
 
     def save_project_milestone(
