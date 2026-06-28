@@ -9,6 +9,10 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from src.ingestion.stellar_ingestion_checks import run_all_checks
+from src.ingestion.ingestion_alerting import (
+    get_last_alerting_status,
+    run_ingestion_alerting_cycle,
+)
 
 
 router = APIRouter()
@@ -56,4 +60,26 @@ async def run_ingestion_quality(req: IngestionQualityRunRequest) -> IngestionQua
     )
 
     return IngestionQualityRunResponse(**result)
+
+
+class IngestionAlertingStatusResponse(BaseModel):
+    checked_at: Optional[str] = None
+    metrics: list[Dict[str, Any]] = []
+    lag_alerts: list[Dict[str, Any]] = []
+    recent_source_failures: list[Dict[str, Any]] = []
+    healthy: bool = True
+
+
+@router.get("/ingestion/alerting/status", response_model=IngestionAlertingStatusResponse)
+async def get_ingestion_alerting_status() -> IngestionAlertingStatusResponse:
+    status = get_last_alerting_status()
+    if not status:
+        return IngestionAlertingStatusResponse()
+    return IngestionAlertingStatusResponse(**status)
+
+
+@router.post("/ingestion/alerting/run", response_model=IngestionAlertingStatusResponse)
+async def run_ingestion_alerting() -> IngestionAlertingStatusResponse:
+    result = run_ingestion_alerting_cycle()
+    return IngestionAlertingStatusResponse(**result)
 

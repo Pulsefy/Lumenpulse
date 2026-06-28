@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Query,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -14,7 +15,9 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { GrantsService } from './grants.service';
+import { getProjectReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
 import {
   ApproveProjectDto,
   CreateRoundDto,
@@ -24,6 +27,8 @@ import {
   RoundDto,
   RoundSummaryDto,
   RoundExportDto,
+  LeaderboardQueryDto,
+  LeaderboardResponseDto,
 } from './dto/grants.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -32,6 +37,7 @@ import { UserRole } from '../users/entities/user.entity';
 
 @ApiTags('grants')
 @Controller('grants')
+@Throttle(getProjectReadThrottleOverride())
 export class GrantsController {
   constructor(private readonly grantsService: GrantsService) {}
 
@@ -247,5 +253,22 @@ export class GrantsController {
   @ApiResponse({ status: 404, description: 'Round not found' })
   distribute(@Body() dto: DistributeDto) {
     return this.grantsService.distribute(dto);
+  }
+  @Get('leaderboard')
+  @ApiOperation({
+    summary: 'Get leaderboard for a matching round',
+    description:
+      'Returns ranked projects for a round with contribution and match figures. ' +
+      'Supports top-N (e.g. ?roundId=1&topN=5) or paginated responses ' +
+      '(e.g. ?roundId=1&page=2&limit=10). Projects are ranked by QF score descending.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Leaderboard retrieved successfully',
+    type: LeaderboardResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Round not found' })
+  getLeaderboard(@Query() query: LeaderboardQueryDto): LeaderboardResponseDto {
+    return this.grantsService.getLeaderboard(query);
   }
 }

@@ -37,4 +37,5 @@ pub enum CrowdfundError {
     Reentrancy = 31,
     BatchTooLarge = 32,
     EmptyBatch = 33,
+    AlreadyExecuted = 32,
 }

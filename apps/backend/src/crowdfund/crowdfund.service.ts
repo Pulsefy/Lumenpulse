@@ -139,6 +139,79 @@ export class CrowdfundService {
     };
   }
 
+  bootstrapDemoData(): { projectIds: number[] } {
+    const demoProjects: CreateProjectDto[] = [
+      {
+        owner: 'GB5PY6YQF3OZ2IRPII7G3XVG6UJZYE5MVYC2EQNHW4KSYSSFYH7Y7QK3',
+        name: 'Testnet Accelerator Grant',
+        description:
+          'A sample project to demonstrate grant funding workflows on testnet.',
+        targetAmount: '20000',
+        tokenAddress:
+          'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+        contractAddress:
+          'CA6FLKVQZFWURX3P2G7W4D6A4WKE2N4ACWXL6DL5S5Z2JHVV7K72DT2J',
+        roadmap: [
+          {
+            title: 'Launch grant portal',
+            description: 'Open the testnet portal for grant submissions.',
+            targetDate: '2026-07-01',
+          },
+          {
+            title: 'Review proposals',
+            description: 'Evaluate first round of grant applications.',
+            targetDate: '2026-08-01',
+          },
+        ],
+      },
+      {
+        owner: 'GC3RZOB25UVDYLK6B2ZHG2ZGFA25ZV3XCYKZMIKQWRIHJCBBHTC4J6AM',
+        name: 'Stellar UX Workshop',
+        description:
+          'An event-focused project to build onboarding flows for developer communities.',
+        targetAmount: '15000',
+        tokenAddress:
+          'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+        contractAddress:
+          'CCBM7YWZL3AG7F4S4TA7Q3X6UET7HJE26F2EQNOYGSZTVCDBZODHTVCD',
+        roadmap: [
+          {
+            title: 'Finalize workshop curriculum',
+            description:
+              'Create learner-friendly content for Stellar onboarding.',
+            targetDate: '2026-07-15',
+          },
+          {
+            title: 'Host live demo sessions',
+            description: 'Run workshops for testnet users and contributors.',
+            targetDate: '2026-08-15',
+          },
+        ],
+      },
+      {
+        owner: 'GDQJUTQYK2MQX2VGDR2FYWLIYAQIEGXTQVTFEMGH3PRXC7XMGZ3TQKQ',
+        name: 'Mobile App Onboarding',
+        description:
+          'A proof-of-concept mobile onboarding experience for testnet contributors.',
+        targetAmount: '12000',
+        tokenAddress:
+          'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+        contractAddress:
+          'CDRP4QZJFJDUGBMN35GGRQBIZSGD3CQZIJFM4CLHZLGQDGZQ3JKWFPQ',
+      },
+    ];
+
+    const projectIds = demoProjects.map(
+      (project) => this.createProject(project).id,
+    );
+
+    this.logger.log(
+      `Bootstrapped ${projectIds.length} demo projects: ${projectIds.join(', ')}`,
+    );
+
+    return { projectIds };
+  }
+
   getContributors(projectId: number): ContributorDto[] {
     const project = this.findOrThrow(projectId);
 

@@ -18,6 +18,7 @@ import { LinkedStellarAccount, usersApi } from '../../lib/api';
 import { storage } from '../../lib/storage';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
+import { useWallet } from '../../contexts/WalletContext';
 
 const STELLAR_PUBLIC_KEY_REGEX = /\bG[A-Z2-7]{55}\b/;
 
@@ -50,6 +51,7 @@ export default function ManageAccountsScreen() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [scanLocked, setScanLocked] = useState(false);
+  const { publicKey, status, connect, disconnect } = useWallet();
 
   const sortedAccounts = useMemo(
     () =>
@@ -282,6 +284,55 @@ export default function ManageAccountsScreen() {
           <Text style={[styles.noteText, { color: colors.textSecondary }]} accessible>
             {t('settings.manage_accounts.scan_to_attach')}
           </Text>
+        </View>
+
+        <View
+          style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessible
+          accessibilityLabel="App Wallet Settings"
+        >
+          <View style={styles.cardHeader}>
+            <Ionicons name="link-outline" size={20} color={colors.accent} />
+            <Text style={[styles.cardTitle, { color: colors.text }]} accessible>
+              App Wallet Connection
+            </Text>
+          </View>
+
+          <Text style={[styles.helperText, { color: colors.textSecondary }]} accessible>
+            Connect a mobile wallet to securely sign transactions via deep links or mock Testnet flows.
+          </Text>
+
+          {status === 'connected' && publicKey ? (
+            <View style={[styles.accountRow, { paddingVertical: 10 }]}>
+              <View style={styles.accountCopy}>
+                <Text style={[styles.accountLabel, { color: colors.success }]}>Connected</Text>
+                <Text style={[styles.accountKey, { color: colors.textSecondary }]}>{truncateKey(publicKey)}</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.removeButton, { borderColor: colors.danger }]}
+                onPress={disconnect}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.removeButtonText, { color: colors.danger }]}>Disconnect</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: colors.success }]}
+              onPress={connect}
+              activeOpacity={0.85}
+              disabled={status === 'connecting'}
+            >
+              {status === 'connecting' ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <>
+                  <Ionicons name="wallet-outline" size={18} color="#ffffff" />
+                  <Text style={styles.primaryButtonText}>Connect Wallet</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         <View

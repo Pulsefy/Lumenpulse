@@ -3,18 +3,39 @@ PostgreSQL service for persisting analytics data
 """
 
 import logging
+import math
 import os
 import time
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from contextlib import contextmanager
+from collections import defaultdict
 
-from sqlalchemy import create_engine, select, and_, desc
+from sqlalchemy import create_engine, select, and_, desc, func, delete
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
-from .models import Base, Article, SocialPost, AnalyticsRecord, NewsInsight, AssetTrend
+from .models import (
+    Base,
+    Article,
+    ArticleOnchainEntityLink,
+    SocialPost,
+    AnalyticsRecord,
+    ContractEvent,
+    ProjectView,
+    ProjectContributor,
+    ProjectContributorReputationSnapshot,
+    ProjectMilestone,
+    NewsInsight,
+    AssetTrend,
+    RoundAnomalySignal,
+)
 from src.analytics.ner_service import NERService
+from src.analytics.onchain_entity_linker import (
+    OnchainEntityCandidate,
+    OnchainEntityLink,
+    OnchainEntityLinker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +71,7 @@ class PostgresService:
                 bind=self.engine,
             )
             self.ner_service = NERService()
+            self.onchain_linker = OnchainEntityLinker()
             logger.info("PostgreSQL service initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize PostgreSQL service: {e}")
@@ -68,6 +90,102 @@ class PostgresService:
             content=normalized.get("content"),
         )
         return normalized
+
+    def _project_candidates_from_session(
+        self,
+        session: Session,
+    ) -> List[OnchainEntityCandidate]:
+        """Build project candidates from materialized on-chain project views."""
+        projects = session.execute(select(ProjectView)).scalars().all()
+        candidates: List[OnchainEntityCandidate] = []
+
+        for project in projects:
+            extra_data = project.extra_data or {}
+            aliases = {
+                str(project.project_id),
+                f"project {project.project_id}",
+            }
+
+            for key in ("name", "title", "slug", "symbol", "asset_code"):
+                value = extra_data.get(key)
+                if value:
+                    aliases.add(str(value))
+
+            for value in extra_data.get("aliases") or []:
+                if value:
+                    aliases.add(str(value))
+
+            display_name = (
+                extra_data.get("name")
+                or extra_data.get("title")
+                or f"Project {project.project_id}"
+            )
+            asset_code = extra_data.get("asset_code") or extra_data.get("symbol")
+
+            candidates.append(
+                OnchainEntityCandidate(
+                    stable_id=f"project:{project.project_id}",
+                    entity_type="project",
+                    display_name=str(display_name),
+                    aliases=tuple(sorted(aliases)),
+                    asset_code=str(asset_code) if asset_code else None,
+                    project_id=int(project.project_id),
+                    contract_id=project.contract_id,
+                )
+            )
+
+            if project.contract_id:
+                candidates.append(
+                    OnchainEntityCandidate(
+                        stable_id=f"contract:{project.contract_id}",
+                        entity_type="contract",
+                        display_name=str(display_name),
+                        aliases=(project.contract_id,),
+                        project_id=int(project.project_id),
+                        contract_id=project.contract_id,
+                    )
+                )
+
+        return candidates
+
+    def _link_article_onchain_entities(
+        self,
+        session: Session,
+        article_data: Dict[str, Any],
+    ) -> List[OnchainEntityLink]:
+        """Link article content to default assets and current project views."""
+        linker = OnchainEntityLinker(self._project_candidates_from_session(session))
+        return linker.link_article(article_data)
+
+    def _sync_article_onchain_links(
+        self,
+        session: Session,
+        article: Article,
+        links: List[OnchainEntityLink],
+    ) -> None:
+        """Replace normalized link rows for an article with the latest links."""
+        article.onchain_entity_links = [link.to_dict() for link in links]
+        session.execute(
+            delete(ArticleOnchainEntityLink).where(
+                ArticleOnchainEntityLink.article_id == article.article_id
+            )
+        )
+
+        for link in links:
+            session.add(
+                ArticleOnchainEntityLink(
+                    article_id=article.article_id,
+                    stable_entity_id=link.stable_id,
+                    entity_type=link.entity_type,
+                    display_name=link.display_name,
+                    matched_text=link.matched_text,
+                    confidence=link.confidence,
+                    source=link.source,
+                    asset_code=link.asset_code,
+                    project_id=link.project_id,
+                    contract_id=link.contract_id,
+                )
+            )
 
     @contextmanager
     def get_session(self):
@@ -174,6 +292,7 @@ class PostgresService:
                 ).scalar_one_or_none()
 
                 if existing:
+                    links = self._link_article_onchain_entities(session, article_data)
                     # Update existing article
                     existing.title = article_data.get("title", existing.title)
                     existing.content = article_data.get("content", existing.content)
@@ -181,10 +300,17 @@ class PostgresService:
                     existing.source = article_data.get("source", existing.source)
                     existing.url = article_data.get("url", existing.url)
                     existing.asset_codes = article_data.get("asset_codes", existing.asset_codes)
-                    existing.primary_asset = article_data.get("primary_asset", existing.primary_asset)
+                    existing.primary_asset = article_data.get(
+                        "primary_asset",
+                        existing.primary_asset,
+                    )
                     existing.categories = article_data.get("categories", existing.categories)
                     existing.keywords = article_data.get("keywords", existing.keywords)
-                    existing.detected_entities = article_data.get("detected_entities", existing.detected_entities)
+                    existing.detected_entities = article_data.get(
+                        "detected_entities",
+                        existing.detected_entities,
+                    )
+                    self._sync_article_onchain_links(session, existing, links)
                     existing.language = article_data.get("language", existing.language)
                     existing.published_at = article_data.get("published_at", existing.published_at)
                     existing.fetched_at = article_data.get("fetched_at", existing.fetched_at)
@@ -201,6 +327,7 @@ class PostgresService:
                     logger.debug(f"Updated article: {existing.article_id}")
                     return existing
                 else:
+                    links = self._link_article_onchain_entities(session, article_data)
                     # Create new article
                     article = Article(
                         article_id=article_data.get("id"),
@@ -214,6 +341,7 @@ class PostgresService:
                         categories=article_data.get("categories"),
                         keywords=article_data.get("keywords"),
                         detected_entities=article_data.get("detected_entities"),
+                        onchain_entity_links=[link.to_dict() for link in links],
                         language=article_data.get("language"),
                         published_at=article_data.get("published_at"),
                         fetched_at=article_data.get("fetched_at"),
@@ -229,6 +357,7 @@ class PostgresService:
 
                     session.add(article)
                     session.flush()
+                    self._sync_article_onchain_links(session, article, links)
                     logger.debug(f"Saved article: {article.article_id}")
                     return article
 
@@ -266,6 +395,7 @@ class PostgresService:
                     ).scalar_one_or_none()
 
                     if existing:
+                        links = self._link_article_onchain_entities(session, article_data)
                         # Update existing article
                         existing.title = article_data.get("title", existing.title)
                         existing.content = article_data.get("content", existing.content)
@@ -273,12 +403,22 @@ class PostgresService:
                         existing.source = article_data.get("source", existing.source)
                         existing.url = article_data.get("url", existing.url)
                         existing.asset_codes = article_data.get("asset_codes", existing.asset_codes)
-                        existing.primary_asset = article_data.get("primary_asset", existing.primary_asset)
+                        existing.primary_asset = article_data.get(
+                            "primary_asset",
+                            existing.primary_asset,
+                        )
                         existing.categories = article_data.get("categories", existing.categories)
                         existing.keywords = article_data.get("keywords", existing.keywords)
-                        existing.detected_entities = article_data.get("detected_entities", existing.detected_entities)
+                        existing.detected_entities = article_data.get(
+                            "detected_entities",
+                            existing.detected_entities,
+                        )
+                        self._sync_article_onchain_links(session, existing, links)
                         existing.language = article_data.get("language", existing.language)
-                        existing.published_at = article_data.get("published_at", existing.published_at)
+                        existing.published_at = article_data.get(
+                            "published_at",
+                            existing.published_at,
+                        )
                         existing.fetched_at = article_data.get("fetched_at", existing.fetched_at)
 
                         if sentiment_result:
@@ -289,6 +429,7 @@ class PostgresService:
                             existing.sentiment_label = sentiment_result.get("sentiment_label")
                             existing.analyzed_at = datetime.utcnow()
                     else:
+                        links = self._link_article_onchain_entities(session, article_data)
                         # Create new article
                         article = Article(
                             article_id=article_data.get("id"),
@@ -302,6 +443,7 @@ class PostgresService:
                             categories=article_data.get("categories"),
                             keywords=article_data.get("keywords"),
                             detected_entities=article_data.get("detected_entities"),
+                            onchain_entity_links=[link.to_dict() for link in links],
                             language=article_data.get("language"),
                             published_at=article_data.get("published_at"),
                             fetched_at=article_data.get("fetched_at"),
@@ -316,6 +458,8 @@ class PostgresService:
                             article.analyzed_at = datetime.utcnow()
 
                         session.add(article)
+                        session.flush()
+                        self._sync_article_onchain_links(session, article, links)
 
                     saved_count += 1
 
@@ -372,6 +516,30 @@ class PostgresService:
                 return results
         except SQLAlchemyError as e:
             logger.error(f"Failed to retrieve articles: {e}")
+            return []
+
+    def get_article_onchain_links(
+        self,
+        article_id: Optional[str] = None,
+        stable_entity_id: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        limit: int = 200,
+    ) -> List[ArticleOnchainEntityLink]:
+        """Return normalized article/entity links for backend consumers."""
+        try:
+            with self.get_session() as session:
+                stmt = select(ArticleOnchainEntityLink).limit(limit)
+                if article_id:
+                    stmt = stmt.where(ArticleOnchainEntityLink.article_id == article_id)
+                if stable_entity_id:
+                    stmt = stmt.where(
+                        ArticleOnchainEntityLink.stable_entity_id == stable_entity_id
+                    )
+                if entity_type:
+                    stmt = stmt.where(ArticleOnchainEntityLink.entity_type == entity_type)
+                return session.execute(stmt).scalars().all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve article on-chain links: {e}")
             return []
 
     # Social Post Methods
@@ -729,6 +897,639 @@ class PostgresService:
             logger.error(f"Failed to retrieve analytics records: {e}")
             return []
 
+    # Contract Event & Project View Methods
+
+    def save_contract_event(
+        self,
+        contract_id: str,
+        event_id: str,
+        ledger: int,
+        event_type: str,
+        project_id: Optional[int] = None,
+        contributor: Optional[str] = None,
+        amount: Optional[float] = None,
+        milestone_id: Optional[int] = None,
+        status: Optional[str] = None,
+        topics: Optional[Dict[str, Any]] = None,
+        raw_data: Optional[Dict[str, Any]] = None,
+        timestamp: Optional[datetime] = None,
+    ) -> Optional[ContractEvent]:
+        """
+        Save a raw contract event and honor idempotency by contract_id/event_id.
+        """
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(ContractEvent)
+                    .where(
+                        and_(
+                            ContractEvent.contract_id == contract_id,
+                            ContractEvent.event_id == event_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if existing:
+                    logger.debug(
+                        "Contract event already exists: %s/%s",
+                        contract_id,
+                        event_id,
+                    )
+                    return existing
+
+                event = ContractEvent(
+                    contract_id=contract_id,
+                    event_id=event_id,
+                    ledger=ledger,
+                    event_type=event_type,
+                    project_id=project_id,
+                    contributor=contributor,
+                    amount=amount,
+                    milestone_id=milestone_id,
+                    status=status,
+                    topics=topics,
+                    raw_data=raw_data,
+                    timestamp=timestamp or datetime.utcnow(),
+                )
+
+                session.add(event)
+                session.flush()
+                logger.debug("Saved contract event: %s/%s", contract_id, event_id)
+                return event
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save contract event: {e}")
+            return None
+
+    def get_contract_events(
+        self,
+        project_id: Optional[int] = None,
+        contract_id: Optional[str] = None,
+        event_type: Optional[str] = None,
+        limit: int = 200,
+    ) -> List[ContractEvent]:
+        """
+        Retrieve raw contract events, optionally filtered by project, contract, or event type.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = select(ContractEvent).order_by(desc(ContractEvent.ledger)).limit(limit)
+                if project_id is not None:
+                    stmt = stmt.where(ContractEvent.project_id == project_id)
+                if contract_id is not None:
+                    stmt = stmt.where(ContractEvent.contract_id == contract_id)
+                if event_type is not None:
+                    stmt = stmt.where(ContractEvent.event_type == event_type)
+
+                results = session.execute(stmt).scalars().all()
+                logger.debug(f"Retrieved {len(results)} contract events")
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve contract events: {e}")
+            return []
+
+    def get_contract_event_stats(self, project_id: int) -> Dict[str, Any]:
+        """
+        Aggregate raw contract events for a project.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = select(ContractEvent).where(ContractEvent.project_id == project_id)
+                events = session.execute(stmt).scalars().all()
+
+                total_amount = 0.0
+                contributors = set()
+                for event in events:
+                    if event.amount is None:
+                        continue
+                    amount = float(event.amount)
+                    if str(event.event_type).lower() in {
+                        "contributionrefundableevent",
+                        "contributionclawbackedevent",
+                    }:
+                        amount = -amount
+
+                    if str(event.event_type).lower() in {
+                        "depositevent",
+                        "contributionrecordedevent",
+                        "contributionrefundableevent",
+                        "contributionclawbackedevent",
+                    }:
+                        total_amount += amount
+                    if event.contributor:
+                        contributors.add(event.contributor)
+
+                return {
+                    "project_id": project_id,
+                    "total_amount": total_amount,
+                    "unique_contributors": len(contributors),
+                    "event_count": len(events),
+                }
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to compute contract event stats: {e}")
+            return {
+                "project_id": project_id,
+                "total_amount": 0.0,
+                "unique_contributors": 0,
+                "event_count": 0,
+            }
+
+    def _compute_funding_momentum_score(
+        self, total_amount: float, unique_contributors: int
+    ) -> float:
+        """Compute a deterministic funding momentum score.
+
+        The score uses recent funding activity and contributor breadth.
+        It is explainable as the product of a log-scaled funding component
+        and a contributor breadth component.
+        """
+        if total_amount <= 0.0 or unique_contributors <= 0:
+            return 0.0
+
+        amount_component = math.log10(1.0 + total_amount)
+        contributor_component = math.log2(1.0 + unique_contributors)
+        return round(amount_component * contributor_component, 6)
+
+    def compute_project_funding_momentum_score(
+        self, project_id: int, lookback_hours: int = 24
+    ) -> float:
+        """Compute the funding momentum score for a project over a recent window."""
+        try:
+            with self.get_session() as session:
+                cutoff_time = datetime.utcnow() - timedelta(hours=lookback_hours)
+                stmt = select(ContractEvent).where(
+                    and_(
+                        ContractEvent.project_id == project_id,
+                        ContractEvent.timestamp >= cutoff_time,
+                    )
+                )
+                events = session.execute(stmt).scalars().all()
+
+                total_amount = 0.0
+                contributors = set()
+                for event in events:
+                    if event.amount is None:
+                        continue
+                    event_type = str(event.event_type).lower()
+                    if event_type in {
+                        "depositevent",
+                        "contributionrecordedevent",
+                    }:
+                        total_amount += float(event.amount)
+                    elif event_type in {
+                        "contributionrefundableevent",
+                        "contributionclawbackedevent",
+                    }:
+                        total_amount -= float(event.amount)
+                    if event.contributor:
+                        contributors.add(event.contributor)
+
+                return self._compute_funding_momentum_score(
+                    total_amount=total_amount,
+                    unique_contributors=len(contributors),
+                )
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to compute project funding momentum score: {e}")
+            return 0.0
+
+    def update_project_view_funding_momentum_score(
+        self, project_id: int, lookback_hours: int = 24
+    ) -> Optional[ProjectView]:
+        """Compute and persist the project funding momentum score."""
+        momentum_score = self.compute_project_funding_momentum_score(
+            project_id=project_id,
+            lookback_hours=lookback_hours,
+        )
+        return self.save_project_view(
+            project_id=project_id,
+            funding_momentum_score=momentum_score,
+        )
+
+    def save_project_view(
+        self,
+        project_id: int,
+        contract_id: Optional[str] = None,
+        owner: Optional[str] = None,
+        status: Optional[str] = None,
+        add_total_contributions: Optional[float] = None,
+        unique_contributors: Optional[int] = None,
+        funding_momentum_score: Optional[float] = None,
+        last_event_ledger: Optional[int] = None,
+        extra_data: Optional[Dict[str, Any]] = None,
+    ) -> Optional[ProjectView]:
+        """
+        Save or update a materialized project summary row.
+        """
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(ProjectView).where(ProjectView.project_id == project_id)
+                ).scalar_one_or_none()
+
+                if existing:
+                    if contract_id is not None:
+                        existing.contract_id = contract_id
+                    if owner is not None:
+                        existing.owner = owner
+                    if status is not None:
+                        existing.status = status
+                    if add_total_contributions is not None:
+                        existing.total_contributions = (
+                            (existing.total_contributions or 0.0) + add_total_contributions
+                        )
+                    if unique_contributors is not None:
+                        existing.unique_contributors = unique_contributors
+                    if funding_momentum_score is not None:
+                        existing.funding_momentum_score = funding_momentum_score
+                    if last_event_ledger is not None:
+                        existing.last_event_ledger = last_event_ledger
+                    existing.extra_data = extra_data or existing.extra_data
+                    session.flush()
+                    return existing
+
+                view = ProjectView(
+                    project_id=project_id,
+                    contract_id=contract_id,
+                    owner=owner,
+                    total_contributions=add_total_contributions or 0.0,
+                    unique_contributors=unique_contributors or 0,
+                    funding_momentum_score=funding_momentum_score or 0.0,
+                    status=status,
+                    last_event_ledger=last_event_ledger,
+                    extra_data=extra_data,
+                )
+                session.add(view)
+                session.flush()
+                return view
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save project view: {e}")
+            return None
+
+    def get_project_view(self, project_id: int) -> Optional[ProjectView]:
+        """Retrieve a single project view by project_id."""
+        try:
+            with self.get_session() as session:
+                return session.execute(
+                    select(ProjectView).where(ProjectView.project_id == project_id)
+                ).scalar_one_or_none()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve project view: {e}")
+            return None
+
+    def get_project_views(
+        self,
+        status: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[ProjectView]:
+        """Retrieve materialized project views."""
+        try:
+            with self.get_session() as session:
+                stmt = select(ProjectView).order_by(desc(ProjectView.last_event_ledger)).limit(limit)
+                if status is not None:
+                    stmt = stmt.where(ProjectView.status == status)
+                results = session.execute(stmt).scalars().all()
+                logger.debug(f"Retrieved %d project views", len(results))
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve project views: {e}")
+            return []
+
+    def get_project_views_ranked_by_funding_momentum(
+        self,
+        status: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[ProjectView]:
+        """Retrieve project views ordered by funding momentum score."""
+        try:
+            with self.get_session() as session:
+                stmt = select(ProjectView).order_by(desc(ProjectView.funding_momentum_score)).limit(limit)
+                if status is not None:
+                    stmt = stmt.where(ProjectView.status == status)
+                results = session.execute(stmt).scalars().all()
+                logger.debug("Retrieved %d project views ranked by funding momentum", len(results))
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve ranked project views: {e}")
+            return []
+
+    def save_project_contributor(
+        self,
+        project_id: int,
+        contributor: str,
+        amount: float,
+        ledger: Optional[int] = None,
+        extra_data: Optional[Dict[str, Any]] = None,
+    ) -> Optional[ProjectContributor]:
+        """Save or update a contributor record for a project."""
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(ProjectContributor)
+                    .where(
+                        and_(
+                            ProjectContributor.project_id == project_id,
+                            ProjectContributor.contributor == contributor,
+                        )
+                    )
+                ).scalar_one_or_none()
+
+                if existing:
+                    existing.total_contributed = (
+                        (existing.total_contributed or 0.0) + amount
+                    )
+                    if ledger is not None:
+                        existing.last_contribution_ledger = ledger
+                        existing.first_contribution_ledger = (
+                            existing.first_contribution_ledger
+                            or ledger
+                        )
+                    existing.extra_data = extra_data or existing.extra_data
+                    session.flush()
+                    return existing
+
+                contributor_row = ProjectContributor(
+                    project_id=project_id,
+                    contributor=contributor,
+                    total_contributed=amount,
+                    first_contribution_ledger=ledger,
+                    last_contribution_ledger=ledger,
+                    extra_data=extra_data,
+                )
+                session.add(contributor_row)
+                session.flush()
+                return contributor_row
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save project contributor: {e}")
+            return None
+
+    def get_project_contributor_count(self, project_id: int) -> int:
+        """Return the current number of unique contributors for a project."""
+        try:
+            with self.get_session() as session:
+                count = session.execute(
+                    select(func.count())
+                    .select_from(ProjectContributor)
+                    .where(ProjectContributor.project_id == project_id)
+                ).scalar_one()
+                return int(count or 0)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to count project contributors: {e}")
+            return 0
+
+    def get_project_contributors(
+        self,
+        project_id: int,
+        limit: int = 100,
+    ) -> List[ProjectContributor]:
+        """Retrieve contributor summaries for a project."""
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(ProjectContributor)
+                    .where(ProjectContributor.project_id == project_id)
+                    .order_by(desc(ProjectContributor.total_contributed))
+                    .limit(limit)
+                )
+                results = session.execute(stmt).scalars().all()
+                logger.debug(f"Retrieved {len(results)} contributors for project %s", project_id)
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve project contributors: {e}")
+            return []
+
+    def _compute_contributor_reputation_score(
+        self, total_contributed: float, is_testnet: bool = False
+    ) -> float:
+        """Compute a reputation score for a contributor based on contribution totals."""
+        if total_contributed <= 0.0:
+            return 0.0
+
+        amount_component = math.log10(1.0 + float(total_contributed))
+        scale = 1.0 if is_testnet else 1.2
+        return round(amount_component * scale * 10.0, 6)
+
+    def build_project_contributor_reputation_snapshot(
+        self,
+        project_id: int,
+        top_n: int = 100,
+        snapshot_at: Optional[datetime] = None,
+        is_testnet: Optional[bool] = None,
+    ) -> List[ProjectContributorReputationSnapshot]:
+        """Build and persist a reputation snapshot for contributors in a single project."""
+        if snapshot_at is None:
+            snapshot_at = datetime.utcnow()
+        if is_testnet is None:
+            is_testnet = os.getenv("NETWORK", "mainnet").lower() == "testnet"
+
+        def _save():
+            with self.get_session() as session:
+                contributors = session.execute(
+                    select(ProjectContributor)
+                    .where(ProjectContributor.project_id == project_id)
+                    .order_by(desc(ProjectContributor.total_contributed))
+                    .limit(top_n)
+                ).scalars().all()
+
+                session.execute(
+                    delete(ProjectContributorReputationSnapshot).where(
+                        ProjectContributorReputationSnapshot.project_id == project_id
+                    )
+                )
+
+                snapshots: List[ProjectContributorReputationSnapshot] = []
+                for rank, contributor in enumerate(contributors, start=1):
+                    reputation_score = self._compute_contributor_reputation_score(
+                        total_contributed=contributor.total_contributed,
+                        is_testnet=is_testnet,
+                    )
+                    snapshot = ProjectContributorReputationSnapshot(
+                        project_id=project_id,
+                        contributor=contributor.contributor,
+                        total_contributed=contributor.total_contributed,
+                        reputation_score=reputation_score,
+                        rank=rank,
+                        snapshot_at=snapshot_at,
+                        extra_data=contributor.extra_data,
+                    )
+                    session.add(snapshot)
+                    snapshots.append(snapshot)
+
+                session.flush()
+                logger.debug(
+                    "Saved %d reputation snapshots for project %s",
+                    len(snapshots),
+                    project_id,
+                )
+                return snapshots
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to build project contributor reputation snapshot: {e}")
+            return []
+
+    def build_all_project_contributor_reputation_snapshots(
+        self,
+        top_n: int = 100,
+        is_testnet: Optional[bool] = None,
+    ) -> int:
+        """Build reputation snapshots for all projects with contributor data."""
+        if is_testnet is None:
+            is_testnet = os.getenv("NETWORK", "mainnet").lower() == "testnet"
+
+        try:
+            with self.get_session() as session:
+                project_ids = [
+                    row[0]
+                    for row in session.execute(
+                        select(ProjectContributor.project_id).distinct()
+                    ).all()
+                ]
+
+            total_saved = 0
+            for project_id in project_ids:
+                snapshots = self.build_project_contributor_reputation_snapshot(
+                    project_id=project_id,
+                    top_n=top_n,
+                    is_testnet=is_testnet,
+                )
+                total_saved += len(snapshots)
+
+            logger.info(
+                "Built contributor reputation snapshots for %d projects, %d contributors",
+                len(project_ids),
+                total_saved,
+            )
+            return total_saved
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to build all contributor reputation snapshots: {e}")
+            return 0
+
+    def get_project_contributor_reputation_snapshots(
+        self,
+        project_id: int,
+        limit: int = 100,
+    ) -> List[ProjectContributorReputationSnapshot]:
+        """Retrieve the most recent reputation snapshots for a single project."""
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(ProjectContributorReputationSnapshot)
+                    .where(ProjectContributorReputationSnapshot.project_id == project_id)
+                    .order_by(ProjectContributorReputationSnapshot.rank)
+                    .limit(limit)
+                )
+                results = session.execute(stmt).scalars().all()
+                logger.debug(
+                    "Retrieved %d reputation snapshots for project %s",
+                    len(results),
+                    project_id,
+                )
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve project reputation snapshots: {e}")
+            return []
+
+    def get_top_contributor_reputation_snapshots(
+        self,
+        limit: int = 100,
+    ) -> List[ProjectContributorReputationSnapshot]:
+        """Retrieve the top contributor reputation snapshots across all projects."""
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(ProjectContributorReputationSnapshot)
+                    .order_by(desc(ProjectContributorReputationSnapshot.reputation_score))
+                    .limit(limit)
+                )
+                results = session.execute(stmt).scalars().all()
+                logger.debug(
+                    "Retrieved %d top contributor reputation snapshots",
+                    len(results),
+                )
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve top contributor reputation snapshots: {e}")
+            return []
+
+    def save_project_milestone(
+        self,
+        project_id: int,
+        milestone_id: int,
+        status: str,
+        approved_at: Optional[datetime] = None,
+        last_event_ledger: Optional[int] = None,
+        extra_data: Optional[Dict[str, Any]] = None,
+    ) -> Optional[ProjectMilestone]:
+        """Save or update the current state of a project milestone."""
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(ProjectMilestone)
+                    .where(
+                        and_(
+                            ProjectMilestone.project_id == project_id,
+                            ProjectMilestone.milestone_id == milestone_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+
+                if existing:
+                    existing.status = status
+                    if approved_at is not None:
+                        existing.approved_at = approved_at
+                    if last_event_ledger is not None:
+                        existing.last_event_ledger = last_event_ledger
+                    existing.extra_data = extra_data or existing.extra_data
+                    session.flush()
+                    return existing
+
+                milestone = ProjectMilestone(
+                    project_id=project_id,
+                    milestone_id=milestone_id,
+                    status=status,
+                    approved_at=approved_at,
+                    last_event_ledger=last_event_ledger,
+                    extra_data=extra_data,
+                )
+                session.add(milestone)
+                session.flush()
+                return milestone
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save project milestone: {e}")
+            return None
+
+    def get_project_milestones(
+        self,
+        project_id: int,
+        limit: int = 100,
+    ) -> List[ProjectMilestone]:
+        """Retrieve milestone state records for a project."""
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(ProjectMilestone)
+                    .where(ProjectMilestone.project_id == project_id)
+                    .order_by(ProjectMilestone.milestone_id)
+                    .limit(limit)
+                )
+                results = session.execute(stmt).scalars().all()
+                logger.debug(f"Retrieved {len(results)} milestones for project %s", project_id)
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve project milestones: {e}")
+            return []
+
     # Legacy News Insights Methods (kept for backward compatibility)
 
     def save_news_insight(
@@ -1000,6 +1801,208 @@ class PostgresService:
                 }
         except SQLAlchemyError as e:
             logger.error(f"Failed to get sentiment summary: {e}")
+            return {}
+
+    # Round Anomaly Signal Methods
+
+    def save_round_anomaly_signal(
+        self, signal_data: Dict[str, Any]
+    ) -> Optional[RoundAnomalySignal]:
+        """
+        Save a round anomaly signal to the database.
+
+        Args:
+            signal_data: Dictionary containing signal data matching RoundAnomalySignal fields
+
+        Returns:
+            RoundAnomalySignal object if successful, None otherwise
+        """
+        try:
+            with self.get_session() as session:
+                signal = RoundAnomalySignal(
+                    round_id=signal_data.get("round_id"),
+                    project_id=signal_data.get("project_id"),
+                    anomaly_type=signal_data.get("anomaly_type"),
+                    severity_score=signal_data.get("severity_score"),
+                    detection_rationale=signal_data.get("detection_rationale"),
+                    metric_values=signal_data.get("metric_values"),
+                    threshold_used=signal_data.get("threshold_used"),
+                    reviewed=signal_data.get("reviewed", False),
+                    review_notes=signal_data.get("review_notes"),
+                    timestamp=signal_data.get("timestamp", datetime.utcnow()),
+                )
+                session.add(signal)
+                session.flush()
+                session.refresh(signal)
+                logger.info(f"Saved round anomaly signal: round_id={signal.round_id}, type={signal.anomaly_type}")
+                return signal
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save round anomaly signal: {e}")
+            return None
+
+    def save_round_anomaly_signals(
+        self, signals: List[Dict[str, Any]]
+    ) -> int:
+        """
+        Save multiple round anomaly signals in a batch.
+
+        Args:
+            signals: List of signal data dictionaries
+
+        Returns:
+            Number of signals saved successfully
+        """
+        saved_count = 0
+        for signal_data in signals:
+            if self.save_round_anomaly_signal(signal_data):
+                saved_count += 1
+        logger.info(f"Saved {saved_count}/{len(signals)} round anomaly signals")
+        return saved_count
+
+    def get_round_anomaly_signals(
+        self,
+        round_id: Optional[int] = None,
+        project_id: Optional[int] = None,
+        anomaly_type: Optional[str] = None,
+        reviewed: Optional[bool] = None,
+        min_severity: Optional[float] = None,
+        limit: int = 100,
+    ) -> List[RoundAnomalySignal]:
+        """
+        Retrieve round anomaly signals with optional filters.
+
+        Args:
+            round_id: Filter by round ID
+            project_id: Filter by project ID
+            anomaly_type: Filter by anomaly type
+            reviewed: Filter by review status
+            min_severity: Filter by minimum severity score
+            limit: Maximum number of results
+
+        Returns:
+            List of RoundAnomalySignal objects
+        """
+        try:
+            with self.get_session() as session:
+                query = select(RoundAnomalySignal)
+
+                if round_id is not None:
+                    query = query.where(RoundAnomalySignal.round_id == round_id)
+                if project_id is not None:
+                    query = query.where(RoundAnomalySignal.project_id == project_id)
+                if anomaly_type is not None:
+                    query = query.where(RoundAnomalySignal.anomaly_type == anomaly_type)
+                if reviewed is not None:
+                    query = query.where(RoundAnomalySignal.reviewed == reviewed)
+                if min_severity is not None:
+                    query = query.where(RoundAnomalySignal.severity_score >= min_severity)
+
+                query = query.order_by(desc(RoundAnomalySignal.timestamp)).limit(limit)
+
+                return session.execute(query).scalars().all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get round anomaly signals: {e}")
+            return []
+
+    def get_unreviewed_anomaly_signals(self, limit: int = 50) -> List[RoundAnomalySignal]:
+        """
+        Get unreviewed anomaly signals for maintainer review.
+
+        Args:
+            limit: Maximum number of results
+
+        Returns:
+            List of unreviewed RoundAnomalySignal objects
+        """
+        return self.get_round_anomaly_signals(reviewed=False, limit=limit)
+
+    def mark_anomaly_signal_reviewed(
+        self,
+        signal_id: int,
+        reviewed_by: str,
+        review_notes: Optional[str] = None,
+    ) -> bool:
+        """
+        Mark an anomaly signal as reviewed.
+
+        Args:
+            signal_id: ID of the signal to mark as reviewed
+            reviewed_by: Identifier of the reviewer
+            review_notes: Optional review notes
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self.get_session() as session:
+                signal = session.execute(
+                    select(RoundAnomalySignal).where(RoundAnomalySignal.id == signal_id)
+                ).scalar_one_or_none()
+
+                if not signal:
+                    logger.warning(f"Anomaly signal {signal_id} not found")
+                    return False
+
+                signal.reviewed = True
+                signal.reviewed_at = datetime.utcnow()
+                signal.reviewed_by = reviewed_by
+                signal.review_notes = review_notes
+
+                logger.info(f"Marked anomaly signal {signal_id} as reviewed by {reviewed_by}")
+                return True
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to mark anomaly signal as reviewed: {e}")
+            return False
+
+    def get_anomaly_statistics(
+        self, days: int = 30
+    ) -> Dict[str, Any]:
+        """
+        Get statistics about detected anomalies.
+
+        Args:
+            days: Time window in days
+
+        Returns:
+            Statistics dictionary
+        """
+        try:
+            with self.get_session() as session:
+                cutoff_time = datetime.utcnow() - timedelta(days=days)
+
+                signals = session.execute(
+                    select(RoundAnomalySignal).where(
+                        RoundAnomalySignal.timestamp >= cutoff_time
+                    )
+                ).scalars().all()
+
+                if not signals:
+                    return {
+                        "total_signals": 0,
+                        "by_type": {},
+                        "average_severity": 0.0,
+                        "unreviewed_count": 0,
+                        "reviewed_count": 0,
+                    }
+
+                total = len(signals)
+                by_type = defaultdict(int)
+                total_severity = 0.0
+                unreviewed = sum(1 for s in signals if not s.reviewed)
+
+                for signal in signals:
+                    by_type[signal.anomaly_type] += 1
+                    total_severity += signal.severity_score
+
+                return {
+                    "total_signals": total,
+                    "by_type": dict(by_type),
+                    "average_severity": round(total_severity / total, 3) if total > 0 else 0.0,
+                    "unreviewed_count": unreviewed,
+                    "reviewed_count": total - unreviewed,
+                }
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get anomaly statistics: {e}")
             return {}
 
     def cleanup_old_data(self, days: int = 30) -> Dict[str, int]:

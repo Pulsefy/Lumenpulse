@@ -51,10 +51,14 @@ import { DeprecationInterceptor } from './common/interceptors/deprecation.interc
 import { SearchModule } from './search/search.module';
 import { ExportModule } from './export/export.module';
 import { SignalsModule } from './signals/signals.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AppConfigModule } from './config/config.module';
 import { CrowdfundModule } from './crowdfund/crowdfund.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
+import { SorobanEventsModule } from './soroban-events/soroban-events.module';
+import { TreasuryModule } from './treasury/treasury.module';
+import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
 
 @Module({
   imports: [
@@ -86,13 +90,6 @@ import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor'
       useFactory: (storageService: RateLimitStorageService) =>
         createThrottlerOptions(getRateLimitSettings(), storageService),
     }),
-
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
     MulterModule.register({
       storage: memoryStorage(),
       limits: {
@@ -120,6 +117,7 @@ import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor'
     OutboxModule,
     ExportModule,
     SignalsModule,
+    AnalyticsModule,
     TelegramBotModule,
     ModerationModule,
     SearchModule,
@@ -127,6 +125,9 @@ import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor'
     CrowdfundModule,
     AppConfigModule,
     AuditModule,
+    SorobanEventsModule,
+    TreasuryModule,
+    VestingWalletModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

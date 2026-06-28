@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
@@ -14,8 +15,11 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { CrowdfundService } from './crowdfund.service';
+import { getCrowdfundReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
 import {
+  BootstrapDemoDataResponseDto,
   ContributeDto,
   CreateProjectDto,
   CrowdfundProjectDto,
@@ -23,9 +27,13 @@ import {
   ContributionResponseDto,
 } from './dto/crowdfund.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles, UserRole } from '../auth/decorators/auth.decorators';
+import { config } from '../lib/config';
 
 @ApiTags('crowdfund')
 @Controller('crowdfund')
+@Throttle(getCrowdfundReadThrottleOverride())
 export class CrowdfundController {
   constructor(private readonly svc: CrowdfundService) {}
 
@@ -92,6 +100,35 @@ export class CrowdfundController {
   })
   contribute(@Body() dto: ContributeDto) {
     return this.svc.contribute(dto);
+  }
+
+  @Post('admin/bootstrap-demo-data')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Bootstrap demo crowdfund data',
+    description:
+      'Creates a small set of demo projects to help reviewers test the MVP in non-production environments.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Demo data created successfully',
+    type: BootstrapDemoDataResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden or disabled in this environment',
+  })
+  bootstrapDemoData() {
+    if (!config.featureFlags.bootstrapDemoData) {
+      throw new ForbiddenException(
+        'Demo bootstrap is disabled. Set BOOTSTRAP_DEMO_DATA_ENABLED=true to enable it.',
+      );
+    }
+
+    return this.svc.bootstrapDemoData();
   }
 
   @Get('projects/:id/contributors')

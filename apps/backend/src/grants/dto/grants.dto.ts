@@ -283,6 +283,125 @@ export class RoundSummaryDto {
   projects: ProjectAllocationDto[];
 }
 
+
+export class LeaderboardQueryDto {
+  @ApiProperty({
+    description: 'ID of the grant round',
+    example: 1,
+    required: true,
+  })
+  @IsNumber()
+  @IsInt()
+  @Min(0)
+  roundId: number;
+
+  @ApiProperty({
+    description: 'Maximum number of projects to return (top-N). Defaults to 10, max 100.',
+    example: 10,
+    required: false,
+    default: 10,
+  })
+  @IsNumber()
+  @IsInt()
+  @Min(1)
+  topN?: number = 10;
+
+  @ApiProperty({
+    description: 'Page number for pagination (1-indexed). Ignored when topN is set.',
+    example: 1,
+    required: false,
+    default: 1,
+  })
+  @IsNumber()
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiProperty({
+    description: 'Number of results per page. Defaults to 10, max 100.',
+    example: 10,
+    required: false,
+    default: 10,
+  })
+  @IsNumber()
+  @IsInt()
+  @Min(1)
+  limit?: number = 10;
+}
+
+export class LeaderboardEntryDto {
+  @ApiProperty({ description: 'Leaderboard rank (1-indexed)', example: 1 })
+  rank: number;
+
+  @ApiProperty({ description: 'Project ID', example: 42 })
+  projectId: number;
+
+  @ApiProperty({
+    description: 'Total contribution amount received (stroops)',
+    example: '150000000',
+  })
+  totalContributions: string;
+
+  @ApiProperty({
+    description: 'Number of unique contributors',
+    example: 25,
+  })
+  contributorCount: number;
+
+  @ApiProperty({
+    description: 'Quadratic Funding score',
+    example: '144.50',
+  })
+  qfScore: string;
+
+  @ApiProperty({
+    description: 'Estimated match amount from pool (stroops)',
+    example: '350000000',
+  })
+  estimatedMatch: string;
+
+  @ApiProperty({
+    description: 'Percentage share of the matching pool',
+    example: '18.4',
+  })
+  matchPercentage: string;
+}
+
+export class LeaderboardResponseDto {
+  @ApiProperty({ description: 'Grant round details', type: RoundDto })
+  round: RoundDto;
+
+  @ApiProperty({
+    description: 'Ranked list of projects for this round',
+    type: [LeaderboardEntryDto],
+  })
+  entries: LeaderboardEntryDto[];
+
+  @ApiProperty({
+    description: 'Total number of eligible projects in the round',
+    example: 42,
+  })
+  totalProjects: number;
+
+  @ApiProperty({
+    description: 'Total pool balance available for matching (stroops)',
+    example: '5000000000000',
+  })
+  poolBalance: string;
+
+  @ApiProperty({
+    description: 'Page number returned (1-indexed)',
+    example: 1,
+  })
+  page: number;
+
+  @ApiProperty({
+    description: 'Number of entries per page',
+    example: 10,
+  })
+  limit: number;
+}
+
 export class RoundExportDto extends RoundSummaryDto {
   @ApiProperty({
     description: 'List of all individual contributions in the round',

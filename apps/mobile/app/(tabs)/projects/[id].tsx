@@ -21,6 +21,7 @@ import VerificationPanel from '../../../components/VerificationPanel';
 import { usersApi } from '../../../lib/api';
 import { storage } from '../../../lib/storage';
 import { moderationApi, ReportType, ReportReason } from '../../../lib/moderation';
+import { useWallet } from '../../../contexts/WalletContext';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -28,11 +29,11 @@ const ON_CHAIN_STATUS_META: Record<
   OnChainStatus,
   { label: string; description: string; icon: React.ComponentProps<typeof Ionicons>['name']; colorKey: 'success' | 'warning' | 'danger' | 'accent' | 'textSecondary' }
 > = {
-  ACTIVE:    { label: 'Active',    description: 'Accepting contributions on-chain',          icon: 'radio-button-on-outline',  colorKey: 'success' },
-  PAUSED:    { label: 'Paused',    description: 'Contributions temporarily paused',          icon: 'pause-circle-outline',     colorKey: 'warning' },
-  COMPLETED: { label: 'Completed', description: 'Funding goal reached — vault closed',       icon: 'checkmark-circle-outline', colorKey: 'accent' },
-  CANCELLED: { label: 'Cancelled', description: 'Project cancelled — funds returned',        icon: 'close-circle-outline',     colorKey: 'danger' },
-  PENDING:   { label: 'Pending',   description: 'Contract deployment in progress',           icon: 'time-outline',             colorKey: 'textSecondary' },
+  ACTIVE: { label: 'Active', description: 'Accepting contributions on-chain', icon: 'radio-button-on-outline', colorKey: 'success' },
+  PAUSED: { label: 'Paused', description: 'Contributions temporarily paused', icon: 'pause-circle-outline', colorKey: 'warning' },
+  COMPLETED: { label: 'Completed', description: 'Funding goal reached — vault closed', icon: 'checkmark-circle-outline', colorKey: 'accent' },
+  CANCELLED: { label: 'Cancelled', description: 'Project cancelled — funds returned', icon: 'close-circle-outline', colorKey: 'danger' },
+  PENDING: { label: 'Pending', description: 'Contract deployment in progress', icon: 'time-outline', colorKey: 'textSecondary' },
 };
 
 function OnChainStatusChip({
@@ -168,7 +169,7 @@ export default function ProjectDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showContributeModal, setShowContributeModal] = useState(false);
-  const [stellarPublicKey, setStellarPublicKey] = useState<string | null>(null);
+  const { publicKey: stellarPublicKey, signAndSubmitXdr } = useWallet();
   const [isReporting, setIsReporting] = useState(false);
 
   const projectId = parseInt(id ?? '0', 10);
@@ -202,30 +203,10 @@ export default function ProjectDetailScreen() {
     }
   }, [projectId]);
 
-  const fetchUserPublicKey = useCallback(async () => {
-    const cachedPublicKey = await storage.getActiveWalletPublicKey();
-    if (cachedPublicKey) {
-      setStellarPublicKey(cachedPublicKey);
-    }
-
-    try {
-      const response = await usersApi.getProfile();
-      if (response.success && response.data?.stellarPublicKey) {
-        setStellarPublicKey(response.data.stellarPublicKey);
-        await storage.setActiveWalletPublicKey(response.data.stellarPublicKey);
-      }
-    } catch {
-      // Non-critical — the user may not have a linked account yet
-    }
-  }, []);
-
   useEffect(() => {
     void fetchProject();
     void fetchContributors();
-    if (isAuthenticated) {
-      void fetchUserPublicKey();
-    }
-  }, [fetchProject, fetchContributors, fetchUserPublicKey, isAuthenticated]);
+  }, [fetchProject, fetchContributors, isAuthenticated]);
 
   const handleContribute = async (
     amount: string,
@@ -242,13 +223,25 @@ export default function ProjectDetailScreen() {
       });
 
       if (response.success && response.data) {
+        let finalTxHash = response.data.transactionHash;
+
+        // Use wallet signing if backend requests client signature (or mock for Testnet app flow)
+        if (response.data.unsignedXdr || !finalTxHash) {
+          const xdrToSign = response.data.unsignedXdr || "AAAA_MOCK_XDR_FOR_TESTNET_DEMO";
+          const signResult = await signAndSubmitXdr(xdrToSign);
+
+          if (signResult.status === 'rejected') {
+            return { errorMessage: 'Transaction signature rejected by the wallet.' };
+          }
+          if (signResult.status === 'failed' || !signResult.txHash) {
+            return { errorMessage: 'Wallet signing failed.' };
+          }
+          finalTxHash = signResult.txHash;
+        }
+
         // Refresh project data so the progress bar updates
         void fetchProject();
-
-        if (response.data.status === 'SUCCESS') {
-          return { transactionHash: response.data.transactionHash };
-        }
-        return { errorMessage: response.data.message || 'Transaction did not confirm.' };
+        return { transactionHash: finalTxHash };
       }
 
       return { errorMessage: response.error?.message || 'Contribution failed.' };
