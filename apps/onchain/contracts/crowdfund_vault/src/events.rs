@@ -212,3 +212,21 @@ pub struct StorageMigratedEvent {
     pub admin: Address,
     pub storage_version: u32,
 }
+
+/// Input type for a single milestone approval decision within a batch.
+#[soroban_sdk::contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BatchMilestoneDecision {
+    pub project_id: u64,
+    pub milestone_id: u32,
+}
+
+/// Emitted once per batch after all decisions have been applied.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BatchMilestoneProcessedEvent {
+    #[topic]
+    pub admin: Address,
+    /// Number of milestones successfully approved in this batch.
+    pub approved_count: u32,
+}
