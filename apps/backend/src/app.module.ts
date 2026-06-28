@@ -47,6 +47,7 @@ import { VerificationModule } from './verification/verification.module';
 import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 import { ExportModule } from './export/export.module';
+import { PrecomputeModule } from './precompute/precompute.module';
 
 @Module({
   imports: [
@@ -113,6 +114,7 @@ import { ExportModule } from './export/export.module';
     ExportModule,
     TelegramBotModule,
     ModerationModule,
+    PrecomputeModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

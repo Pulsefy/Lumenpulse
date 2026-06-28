@@ -33,6 +33,12 @@ export class MetricsService implements OnModuleInit {
   private readonly anomaliesDetectedCounter: Counter<string>;
   private readonly fetchErrorsCounter: Counter<string>;
 
+  // Precompute //
+  private readonly precomputeTaskCounter: Counter<string>;
+  private readonly precomputeTaskDuration: Histogram<string>;
+  private readonly precomputeBatchCounter: Counter<string>;
+  private readonly precomputeBatchDuration: Histogram<string>;
+
   // Running totals for the rolling-average sentiment gauge
   private sentimentSum = 0;
   private sentimentCount = 0;
@@ -123,6 +129,37 @@ export class MetricsService implements OnModuleInit {
       name: 'lumenpulse_fetch_errors_total',
       help: 'Errors encountered while fetching news from external sources',
       labelNames: ['source', 'error_code'] as const,
+      registers: [this.registry],
+    });
+
+    // Precompute //
+    this.precomputeTaskCounter = new Counter({
+      name: 'lumenpulse_precompute_tasks_total',
+      help: 'Total number of precompute tasks executed',
+      labelNames: ['task_name', 'status', 'skipped'] as const,
+      registers: [this.registry],
+    });
+
+    this.precomputeTaskDuration = new Histogram({
+      name: 'lumenpulse_precompute_task_duration_seconds',
+      help: 'Duration of individual precompute tasks',
+      labelNames: ['task_name', 'status'] as const,
+      buckets: [0.1, 0.5, 1, 2, 5, 10, 30],
+      registers: [this.registry],
+    });
+
+    this.precomputeBatchCounter = new Counter({
+      name: 'lumenpulse_precompute_batches_total',
+      help: 'Total number of precompute batch executions',
+      labelNames: ['status'] as const,
+      registers: [this.registry],
+    });
+
+    this.precomputeBatchDuration = new Histogram({
+      name: 'lumenpulse_precompute_batch_duration_seconds',
+      help: 'Duration of precompute batch executions',
+      labelNames: ['status'] as const,
+      buckets: [1, 5, 10, 30, 60, 120],
       registers: [this.registry],
     });
   }
@@ -262,6 +299,37 @@ export class MetricsService implements OnModuleInit {
    */
   recordFetchError(source: string, errorCode = 'UNKNOWN'): void {
     this.fetchErrorsCounter.inc({ source, error_code: errorCode });
+  }
+
+  /**
+   * Record a precompute task execution.
+   *
+   * @param taskName  Name of the precompute task
+   * @param success   Whether the task succeeded
+   * @param durationMs Duration in milliseconds
+   * @param skipped   Whether the task was skipped due to unhealthy dependencies
+   */
+  recordPrecomputeTask(
+    taskName: string,
+    success: boolean,
+    durationMs: number,
+    skipped = false,
+  ): void {
+    const status = success ? 'success' : 'failure';
+    this.precomputeTaskCounter.inc({ task_name: taskName, status, skipped: String(skipped) });
+    this.precomputeTaskDuration.observe({ task_name: taskName, status }, durationMs / 1000);
+  }
+
+  /**
+   * Record a precompute batch execution.
+   *
+   * @param taskCount Number of tasks in the batch
+   * @param durationMs Duration in milliseconds
+   */
+  recordPrecomputeBatch(taskCount: number, durationMs: number): void {
+    const status = 'success';
+    this.precomputeBatchCounter.inc({ status });
+    this.precomputeBatchDuration.observe({ status }, durationMs / 1000);
   }
 
   //Dynamic metric helpers (legacy API)
