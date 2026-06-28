@@ -41,6 +41,13 @@ scrape_configs:
       - source_labels: [__scheme__]
         target_label: scheme
 
+  - job_name: 'lumenpulse-data-processing'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['data-processing:9090']
+
   # Prometheus self-monitoring
   - job_name: 'prometheus'
     static_configs:

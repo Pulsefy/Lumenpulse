@@ -201,6 +201,22 @@ def _ingestion_quality_checks_job() -> None:
         logger.error(f"Ingestion quality checks failed: {e}", exc_info=True)
 
 
+def _ingestion_alerting_job() -> None:
+    """Evaluate indexer lag metrics and emit log-based alerts (#745)."""
+    try:
+        from src.ingestion.ingestion_alerting import run_ingestion_alerting_cycle
+
+        result = run_ingestion_alerting_cycle()
+        logger.info(
+            "Ingestion alerting cycle complete | healthy=%s | metrics=%d | lag_alerts=%d",
+            result.get("healthy"),
+            len(result.get("metrics", [])),
+            len(result.get("lag_alerts", [])),
+        )
+    except Exception as exc:
+        logger.error("Ingestion alerting job failed: %s", exc, exc_info=True)
+
+
 def _project_verification_trend_job() -> None:
     """Scheduled wrapper for ProjectVerificationTrendAnalyzer (#885).
 
@@ -284,6 +300,16 @@ class AnalyticsScheduler:
                 trigger=IntervalTrigger(hours=1),
                 id="stellar_ingestion_quality_checks_hourly",
                 name="Stellar Ingestion Quality Checks - Hourly",
+                replace_existing=True,
+            )
+
+            # ── Indexer lag + source failure alerting: every 5 minutes (#745) ──
+            alerting_interval = int(os.getenv("INGESTION_ALERT_INTERVAL_MINUTES", "5"))
+            self.scheduler.add_job(
+                func=_ingestion_alerting_job,
+                trigger=IntervalTrigger(minutes=alerting_interval),
+                id="ingestion_lag_alerting",
+                name="Indexer Lag and Source Failure Alerting",
                 replace_existing=True,
             )
 

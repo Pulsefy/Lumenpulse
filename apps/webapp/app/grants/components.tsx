@@ -7,6 +7,8 @@ import { useStellarConfig } from "@/contexts/StellarConfigContext";
 import { useStellarWallet } from "@/app/providers";
 import { useWatchlist } from "@/contexts/WatchlistContext";
 import { TransactionReceiptModal } from "@/components/TransactionReceiptModal";
+import { WalletReadinessBanner } from "@/components/WalletReadinessBanner";
+import { useWalletReadiness } from "@/hooks/useWalletReadiness";
 import { signTransaction } from "@stellar/freighter-api";
 import { Address, Contract, TransactionBuilder, nativeToScVal, rpc } from "@stellar/stellar-sdk";
 import { useExplorerUrl } from "@/hooks/useExplorerUrl";
@@ -228,8 +230,23 @@ export function ProjectAllocationRow({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
 
+  // Single source of truth for whether the contribution can start. The
+  // submit handler short-circuits when `blocker` is set, and the banner
+  // surfaces `issues[0]` inline so the user knows what to fix.
+  const readiness = useWalletReadiness({ amount });
+  const isWalletReady = readiness.ready;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Early bailout: refuse to start building a transaction if any
+    // prerequisite is missing. Surface the first issue inline rather than
+    // bouncing through the RPC only to fail mid-flow.
+    if (readiness.blocker) {
+      setErrorMsg(readiness.blocker.guidance);
+      setTxState("error");
+      setShowReceiptModal(true);
+      return;
+    }
     if (!publicKey || !config) return;
 
     setTxState("building");
@@ -373,6 +390,12 @@ export function ProjectAllocationRow({
             )}
           </div>
 
+          {/* Readiness precheck: surface any missing prerequisite before the
+              user wastes time typing an amount or firing RPC calls. The
+              banner is non-blocking (a soft info / amber alert) so it can
+              coexist with the connect-wallet CTA below. */}
+          <WalletReadinessBanner issues={readiness.issues} />
+
           {!publicKey ? (
             <div className="flex flex-col items-center gap-2 py-4 text-center">
               <p className="text-xs text-foreground/50">Connect your Stellar wallet to make a contribution on testnet.</p>
@@ -401,7 +424,14 @@ export function ProjectAllocationRow({
                     />
                     <button
                       type="submit"
-                      className="px-5 py-2 bg-primary hover:bg-primary/95 text-black text-sm font-bold rounded-lg transition-all"
+                      disabled={!isWalletReady}
+                      aria-disabled={!isWalletReady}
+                      title={
+                        readiness.blocker
+                          ? readiness.blocker.guidance
+                          : undefined
+                      }
+                      className="px-5 py-2 bg-primary hover:bg-primary/95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary text-black text-sm font-bold rounded-lg transition-all"
                     >
                       Send
                     </button>
