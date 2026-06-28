@@ -6,6 +6,7 @@ import { StellarModule } from '../stellar/stellar.module';
 import { ContractHealthService } from './contract-health.service';
 import { HealthController } from './health.controller';
 import { HealthService } from './health.service';
+import { SmokeEndpointService } from './smoke-endpoint.service';
 
 @Module({
   imports: [
@@ -18,6 +19,6 @@ import { HealthService } from './health.service';
     StellarModule,
   ],
   controllers: [HealthController],
-  providers: [HealthService, ContractHealthService],
+  providers: [HealthService, ContractHealthService, SmokeEndpointService],
 })
 export class HealthModule {}
