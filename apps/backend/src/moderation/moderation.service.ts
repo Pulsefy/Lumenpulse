@@ -10,6 +10,8 @@ import { ContentReport, ReportStatus } from './entities/content-report.entity';
 import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 import { QueryReportsDto } from './dto/query-reports.dto';
+import { UsersService } from '../users/users.service';
+import { User, UserRole } from '../users/entities/user.entity';
 
 @Injectable()
 export class ModerationService {
@@ -18,7 +20,24 @@ export class ModerationService {
   constructor(
     @InjectRepository(ContentReport)
     private reportsRepository: Repository<ContentReport>,
+    private usersService: UsersService,
   ) {}
+
+  /**
+   * Get or create system moderation detector user
+   */
+  async getOrCreateSystemUser(): Promise<User> {
+    const email = 'system-detector@lumenpulse.com';
+    let user = await this.usersService.findByEmail(email);
+    if (!user) {
+      user = await this.usersService.create({
+        email,
+        displayName: 'System Contribution Detector',
+        role: UserRole.ADMIN,
+      });
+    }
+    return user;
+  }
 
   /**
    * Create a new content report

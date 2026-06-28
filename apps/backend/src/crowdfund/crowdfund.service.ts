@@ -4,6 +4,8 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import {
   ContributeDto,
   ContributionRecordDto,
@@ -49,7 +51,10 @@ export class CrowdfundService {
   private projects = new Map<number, ProjectRecord>();
   private nextId = 1;
 
-  constructor() {
+  constructor(
+    @InjectQueue('contribution-moderation')
+    private readonly moderationQueue: Queue,
+  ) {
     this.seedSampleProjects();
   }
 
@@ -131,6 +136,21 @@ export class CrowdfundService {
     this.logger.log(
       `Contribution: project=${dto.projectId} from=${dto.senderPublicKey} amount=${dto.amount}`,
     );
+
+    // Queue asynchronous moderation checks
+    this.moderationQueue
+      .add('analyze-contribution', {
+        projectId: project.id,
+        senderPublicKey: dto.senderPublicKey,
+        amount: dto.amount,
+        timestamp: entry.timestamp.toISOString(),
+        transactionHash: txHash,
+      })
+      .catch((err) => {
+        this.logger.error(
+          `Failed to queue moderation check for tx ${txHash}: ${err.message}`,
+        );
+      });
 
     return {
       transactionHash: txHash,
@@ -247,6 +267,32 @@ export class CrowdfundService {
       timestamp: e.timestamp.toISOString(),
       transactionHash: e.transactionHash,
     }));
+  }
+
+  getAllContributions(projectId: number): {
+    publicKey: string;
+    amount: string;
+    timestamp: Date;
+    transactionHash: string;
+  }[] {
+    const project = this.findOrThrow(projectId);
+    const list: {
+      publicKey: string;
+      amount: string;
+      timestamp: Date;
+      transactionHash: string;
+    }[] = [];
+    for (const [publicKey, entries] of project.contributions.entries()) {
+      for (const entry of entries) {
+        list.push({
+          publicKey,
+          amount: this.fromStroops(entry.amount),
+          timestamp: entry.timestamp,
+          transactionHash: entry.transactionHash,
+        });
+      }
+    }
+    return list.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
