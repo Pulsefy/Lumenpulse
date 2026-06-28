@@ -15,12 +15,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
 import { LinkedStellarAccount, usersApi } from '../../lib/api';
+import { storage } from '../../lib/storage';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
+import { useWallet } from '../../contexts/WalletContext';
 
 const STELLAR_PUBLIC_KEY_REGEX = /\bG[A-Z2-7]{55}\b/;
 
-const truncateKey = (value: string) => `${value.slice(0, 6)}…${value.slice(-6)}`;
+const truncateKey = (value: string) => `${value.slice(0, 6)}...${value.slice(-6)}`;
 
 const extractPublicKey = (payload: string): string | null => {
   const directMatch = payload.match(STELLAR_PUBLIC_KEY_REGEX);
@@ -49,6 +51,7 @@ export default function ManageAccountsScreen() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [scanLocked, setScanLocked] = useState(false);
+  const { publicKey, status, connect, disconnect } = useWallet();
 
   const sortedAccounts = useMemo(
     () =>
@@ -58,28 +61,45 @@ export default function ManageAccountsScreen() {
     [accounts],
   );
 
-  const loadAccounts = useCallback(async () => {
-    const response = await usersApi.getLinkedAccounts();
+  const loadAccounts = useCallback(
+    async (showError = true) => {
+      const response = await usersApi.getLinkedAccounts();
 
-    if (!response.success) {
-      Alert.alert(
-        t('errors.error'),
-        response.error?.message ?? t('errors.couldnt_load', { item: 'accounts' }),
-      );
-      return;
-    }
+      if (!response.success) {
+        if (showError) {
+          Alert.alert(
+            t('errors.error'),
+            response.error?.message ?? t('errors.couldnt_load', { item: 'accounts' }),
+          );
+        }
+        return false;
+      }
 
-    setAccounts(response.data ?? []);
-  }, [t]);
+      const nextAccounts = response.data ?? [];
+      setAccounts(nextAccounts);
+      await storage.storeLinkedAccountsMetadata(nextAccounts);
+      return true;
+    },
+    [t],
+  );
 
   useEffect(() => {
     const bootstrap = async () => {
       setLoading(true);
-      await loadAccounts();
-      setLoading(false);
+
+      try {
+        const cachedAccounts = await storage.getLinkedAccountsMetadata();
+        if (cachedAccounts.length > 0) {
+          setAccounts(cachedAccounts);
+        }
+
+        await loadAccounts(cachedAccounts.length === 0);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    bootstrap();
+    void bootstrap();
   }, [loadAccounts]);
 
   const openScanner = async () => {
@@ -137,6 +157,7 @@ export default function ManageAccountsScreen() {
 
     setNickname('');
     await loadAccounts();
+    await storage.setActiveWalletPublicKey(publicKey);
     Alert.alert(
       t('settings.manage_accounts.account_linked'),
       `${truncateKey(publicKey)} ${t('settings.manage_accounts.account_linked_message')}`,
@@ -268,6 +289,55 @@ export default function ManageAccountsScreen() {
         <View
           style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
           accessible
+          accessibilityLabel="App Wallet Settings"
+        >
+          <View style={styles.cardHeader}>
+            <Ionicons name="link-outline" size={20} color={colors.accent} />
+            <Text style={[styles.cardTitle, { color: colors.text }]} accessible>
+              App Wallet Connection
+            </Text>
+          </View>
+
+          <Text style={[styles.helperText, { color: colors.textSecondary }]} accessible>
+            Connect a mobile wallet to securely sign transactions via deep links or mock Testnet flows.
+          </Text>
+
+          {status === 'connected' && publicKey ? (
+            <View style={[styles.accountRow, { paddingVertical: 10 }]}>
+              <View style={styles.accountCopy}>
+                <Text style={[styles.accountLabel, { color: colors.success }]}>Connected</Text>
+                <Text style={[styles.accountKey, { color: colors.textSecondary }]}>{truncateKey(publicKey)}</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.removeButton, { borderColor: colors.danger }]}
+                onPress={disconnect}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.removeButtonText, { color: colors.danger }]}>Disconnect</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: colors.success }]}
+              onPress={connect}
+              activeOpacity={0.85}
+              disabled={status === 'connecting'}
+            >
+              {status === 'connecting' ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <>
+                  <Ionicons name="wallet-outline" size={18} color="#ffffff" />
+                  <Text style={styles.primaryButtonText}>Connect Wallet</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View
+          style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessible
           accessibilityLabel={t('settings.manage_accounts.linked_accounts')}
         >
           <View style={styles.sectionRow}>
@@ -299,7 +369,11 @@ export default function ManageAccountsScreen() {
               <ActivityIndicator color={colors.accent} accessibilityLabel={t('common.loading')} />
             </View>
           ) : sortedAccounts.length === 0 ? (
-            <View style={[styles.emptyState, { backgroundColor: colors.card }]} accessible accessibilityLabel="No linked accounts">
+            <View
+              style={[styles.emptyState, { backgroundColor: colors.card }]}
+              accessible
+              accessibilityLabel="No linked accounts"
+            >
               <Ionicons name="wallet-outline" size={22} color={colors.textSecondary} />
               <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
                 {t('settings.manage_accounts.no_linked_accounts')}
@@ -312,7 +386,11 @@ export default function ManageAccountsScreen() {
             sortedAccounts.map((account, index) => (
               <View key={account.id}>
                 {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
-                <View style={styles.accountRow} accessible accessibilityLabel={`${account.label || 'Linked account'}: ${truncateKey(account.publicKey)}`}>
+                <View
+                  style={styles.accountRow}
+                  accessible
+                  accessibilityLabel={`${account.label || 'Linked account'}: ${truncateKey(account.publicKey)}`}
+                >
                   <View style={styles.accountCopy}>
                     <Text style={[styles.accountLabel, { color: colors.text }]} accessible>
                       {account.label?.trim() || 'Linked account'}

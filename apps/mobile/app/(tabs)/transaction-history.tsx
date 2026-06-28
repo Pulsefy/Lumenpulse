@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View, Modal } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
 import { transactionApi } from '../../lib/transaction';
-import { Transaction, TransactionType } from '../../lib/types/transaction';
+import { Transaction, TransactionType, TransactionStatus } from '../../lib/types/transaction';
 import StandardList from '@/components/StandardList';
+import { CACHE_CONFIGS } from '../../lib/cache';
+import { useWalletAutoRefresh } from '../../hooks/useWalletAutoRefresh';
 
 function formatAmount(amount: string, assetCode: string): string {
   const num = parseFloat(amount);
@@ -30,6 +33,14 @@ function getTransactionIcon(type: TransactionType): string {
       return 'send-outline';
     case TransactionType.SWAP:
       return 'swap-horizontal-outline';
+    case TransactionType.TRUSTLINE:
+      return 'link-outline';
+    case TransactionType.CREATE_ACCOUNT:
+      return 'person-add-outline';
+    case TransactionType.ACCOUNT_MERGE:
+      return 'git-merge-outline';
+    case TransactionType.INFLATION:
+      return 'cash-outline';
     default:
       return 'document-text-outline';
   }
@@ -78,74 +89,16 @@ function TransactionItem({
   );
 }
 
-function TransactionDetailModal({ transaction, visible, onClose, colors, t }: any) {
-  if (!transaction) return null;
-
-  return (
-    <Modal visible={visible} animationType="slide" accessibilityViewIsModal={true}>
-      <View style={[styles.modal, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text, fontSize: 18 }} accessible accessibilityRole="header">
-          {t('transactions.details')}
-        </Text>
-
-        <Text style={{ color: colors.textSecondary, marginTop: 16 }} accessible>
-          {t('transactions.hash')}
-        </Text>
-        <Text
-          style={{ color: colors.text, fontSize: 12, marginTop: 4 }}
-          selectable
-          accessible
-          accessibilityLabel={transaction.transactionHash}
-        >
-          {transaction.transactionHash}
-        </Text>
-
-        <Text style={{ color: colors.textSecondary, marginTop: 16 }} accessible>
-          {t('transactions.type')}
-        </Text>
-        <Text style={{ color: colors.text, marginTop: 4 }} accessible>
-          {transaction.type}
-        </Text>
-
-        <Text style={{ color: colors.textSecondary, marginTop: 16 }} accessible>
-          {t('transactions.amount')}
-        </Text>
-        <Text style={{ color: colors.text, marginTop: 4 }} accessible>
-          {formatAmount(transaction.amount, transaction.assetCode)}
-        </Text>
-
-        <Text style={{ color: colors.textSecondary, marginTop: 16 }} accessible>
-          {t('transactions.date')}
-        </Text>
-        <Text style={{ color: colors.text, marginTop: 4 }} accessible>
-          {new Date(transaction.date).toLocaleString()}
-        </Text>
-
-        <TouchableOpacity
-          onPress={onClose}
-          style={[styles.modalButton, { backgroundColor: colors.accent }]}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.close')}
-        >
-          <Text style={styles.modalButtonText} accessible>{t('common.close')}</Text>
-        </TouchableOpacity>
-      </View>
-    </Modal>
-  );
-}
-
 export default function TransactionHistoryScreen() {
   const { isAuthenticated } = useAuth();
   const { colors } = useTheme();
   const { t } = useLocalization();
+  const router = useRouter();
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
   const [nextPage, setNextPage] = useState<string | undefined>();
 
   const fetchTransactions = useCallback(
@@ -181,13 +134,33 @@ export default function TransactionHistoryScreen() {
     if (isAuthenticated) fetchTransactions(true);
   }, [isAuthenticated, fetchTransactions]);
 
+  // Background auto-refresh: aligned to TRANSACTIONS TTL (2 min).
+  // fetchTransactions(true) is already error-safe and swallows network failures.
+  const handleAutoRefresh = useCallback(() => fetchTransactions(true), [fetchTransactions]);
+
+  useWalletAutoRefresh({
+    intervalMs: CACHE_CONFIGS.TRANSACTIONS.ttl,
+    onRefresh: handleAutoRefresh,
+    enabled: isAuthenticated,
+  });
+
   const handleLoadMore = () => {
     if (nextPage && !isLoading) fetchTransactions(false);
   };
 
   const handlePress = (tx: Transaction) => {
-    setSelectedTransaction(tx);
-    setModalVisible(true);
+    router.push({
+      pathname: '/transaction-receipt',
+      params: {
+        txHash: tx.transactionHash,
+        status: tx.status === TransactionStatus.SUCCESS ? 'success'
+          : tx.status === TransactionStatus.FAILED ? 'failed'
+          : 'pending',
+        timestamp: tx.date,
+        amount: formatAmount(tx.amount, tx.assetCode),
+        txType: tx.type,
+      },
+    });
   };
 
   if (!isAuthenticated) {
@@ -214,14 +187,11 @@ export default function TransactionHistoryScreen() {
         onEndReached={handleLoadMore}
         error={error}
         onRetry={() => fetchTransactions(true)}
-      />
-
-      <TransactionDetailModal
-        transaction={selectedTransaction}
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        colors={colors}
-        t={t}
+        ListEmptyComponent={
+          <View style={{ padding: 16, alignItems: 'center' }}>
+            <Text style={{ color: colors.textSecondary }}>{t('transactions.empty') || 'No recent transactions.'}</Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );
@@ -238,23 +208,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-  },
-  modal: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalButton: {
-    marginTop: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  modalButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '600',
   },
 });

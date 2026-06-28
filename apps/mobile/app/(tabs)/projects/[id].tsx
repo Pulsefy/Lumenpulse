@@ -14,19 +14,57 @@ import { useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { crowdfundApi, CrowdfundProject, Contributor, RoadmapItem } from '../../../lib/crowdfund';
+import { crowdfundApi, CrowdfundProject, Contributor, RoadmapItem, OnChainStatus } from '../../../lib/crowdfund';
 import { computeFundingProgress, formatTokenAmount } from '../../../lib/stellar';
 import ContributionModal from '../../../components/ContributionModal';
 import VerificationPanel from '../../../components/VerificationPanel';
 import { usersApi } from '../../../lib/api';
+import { storage } from '../../../lib/storage';
 import { moderationApi, ReportType, ReportReason } from '../../../lib/moderation';
+import { useWallet } from '../../../contexts/WalletContext';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+const ON_CHAIN_STATUS_META: Record<
+  OnChainStatus,
+  { label: string; description: string; icon: React.ComponentProps<typeof Ionicons>['name']; colorKey: 'success' | 'warning' | 'danger' | 'accent' | 'textSecondary' }
+> = {
+  ACTIVE: { label: 'Active', description: 'Accepting contributions on-chain', icon: 'radio-button-on-outline', colorKey: 'success' },
+  PAUSED: { label: 'Paused', description: 'Contributions temporarily paused', icon: 'pause-circle-outline', colorKey: 'warning' },
+  COMPLETED: { label: 'Completed', description: 'Funding goal reached — vault closed', icon: 'checkmark-circle-outline', colorKey: 'accent' },
+  CANCELLED: { label: 'Cancelled', description: 'Project cancelled — funds returned', icon: 'close-circle-outline', colorKey: 'danger' },
+  PENDING: { label: 'Pending', description: 'Contract deployment in progress', icon: 'time-outline', colorKey: 'textSecondary' },
+};
+
+function OnChainStatusChip({
+  status,
+  colors,
+}: {
+  status: OnChainStatus;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  const meta = ON_CHAIN_STATUS_META[status] ?? ON_CHAIN_STATUS_META.PENDING;
+  const color = colors[meta.colorKey] as string;
+
+  return (
+    <View
+      style={[styles.statusChip, { backgroundColor: color + '18', borderColor: color + '55' }]}
+      accessible
+      accessibilityLabel={`On-chain status: ${meta.label}. ${meta.description}`}
+    >
+      <Ionicons name={meta.icon} size={16} color={color} />
+      <View>
+        <Text style={[styles.statusChipLabel, { color }]}>{meta.label}</Text>
+        <Text style={[styles.statusChipDesc, { color: colors.textSecondary }]}>{meta.description}</Text>
+      </View>
+    </View>
+  );
+}
 
 function ProgressBar({ progress, color }: { progress: number; color: string }) {
   return (
     <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: color }]} />
+      <View style={[styles.progressFill, { width: `${Math.min(progress, 100)}%`, backgroundColor: color }]} />
     </View>
   );
 }
@@ -131,7 +169,7 @@ export default function ProjectDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showContributeModal, setShowContributeModal] = useState(false);
-  const [stellarPublicKey, setStellarPublicKey] = useState<string | null>(null);
+  const { publicKey: stellarPublicKey, signAndSubmitXdr } = useWallet();
   const [isReporting, setIsReporting] = useState(false);
 
   const projectId = parseInt(id ?? '0', 10);
@@ -165,24 +203,10 @@ export default function ProjectDetailScreen() {
     }
   }, [projectId]);
 
-  const fetchUserPublicKey = useCallback(async () => {
-    try {
-      const response = await usersApi.getProfile();
-      if (response.success && response.data?.stellarPublicKey) {
-        setStellarPublicKey(response.data.stellarPublicKey);
-      }
-    } catch {
-      // Non-critical — the user may not have a linked account yet
-    }
-  }, []);
-
   useEffect(() => {
     void fetchProject();
     void fetchContributors();
-    if (isAuthenticated) {
-      void fetchUserPublicKey();
-    }
-  }, [fetchProject, fetchContributors, fetchUserPublicKey, isAuthenticated]);
+  }, [fetchProject, fetchContributors, isAuthenticated]);
 
   const handleContribute = async (
     amount: string,
@@ -199,13 +223,25 @@ export default function ProjectDetailScreen() {
       });
 
       if (response.success && response.data) {
+        let finalTxHash = response.data.transactionHash;
+
+        // Use wallet signing if backend requests client signature (or mock for Testnet app flow)
+        if (response.data.unsignedXdr || !finalTxHash) {
+          const xdrToSign = response.data.unsignedXdr || "AAAA_MOCK_XDR_FOR_TESTNET_DEMO";
+          const signResult = await signAndSubmitXdr(xdrToSign);
+
+          if (signResult.status === 'rejected') {
+            return { errorMessage: 'Transaction signature rejected by the wallet.' };
+          }
+          if (signResult.status === 'failed' || !signResult.txHash) {
+            return { errorMessage: 'Wallet signing failed.' };
+          }
+          finalTxHash = signResult.txHash;
+        }
+
         // Refresh project data so the progress bar updates
         void fetchProject();
-
-        if (response.data.status === 'SUCCESS') {
-          return { transactionHash: response.data.transactionHash };
-        }
-        return { errorMessage: response.data.message || 'Transaction did not confirm.' };
+        return { transactionHash: finalTxHash };
       }
 
       return { errorMessage: response.error?.message || 'Contribution failed.' };
@@ -298,14 +334,11 @@ export default function ProjectDetailScreen() {
         {/* Project header */}
         <Text style={[styles.title, { color: colors.text }]}>{project.name}</Text>
 
-        {!project.isActive && (
-          <View style={[styles.closedBanner, { backgroundColor: colors.danger + '18' }]}>
-            <Ionicons name="lock-closed" size={16} color={colors.danger} />
-            <Text style={[styles.closedText, { color: colors.danger }]}>
-              This project is no longer accepting contributions.
-            </Text>
-          </View>
-        )}
+        {/* On-chain status — always visible so users understand vault state */}
+        <OnChainStatusChip
+          status={project.onChainStatus ?? (project.isActive ? 'ACTIVE' : 'COMPLETED')}
+          colors={colors}
+        />
 
         {/* Description */}
         {project.description && (
@@ -391,6 +424,34 @@ export default function ProjectDetailScreen() {
             {project.owner}
           </Text>
         </View>
+
+        {/* Contract address */}
+        {project.contractAddress && (
+          <View style={[styles.infoRow, { borderColor: colors.border }]}>
+            <Ionicons name="cube-outline" size={16} color={colors.textSecondary} />
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Contract</Text>
+            <Text
+              style={[styles.infoValue, { color: colors.text }]}
+              numberOfLines={1}
+              ellipsizeMode="middle"
+              accessible
+              accessibilityLabel={`Contract address: ${project.contractAddress}`}
+            >
+              {project.contractAddress}
+            </Text>
+          </View>
+        )}
+
+        {/* Last synced */}
+        {project.lastSyncedAt && (
+          <View style={[styles.infoRow, { borderColor: colors.border }]}>
+            <Ionicons name="sync-outline" size={16} color={colors.textSecondary} />
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Synced</Text>
+            <Text style={[styles.infoValue, { color: colors.text }]}>
+              {new Date(project.lastSyncedAt).toLocaleString()}
+            </Text>
+          </View>
+        )}
 
         {/* Report button */}
         <TouchableOpacity
@@ -496,20 +557,26 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '800',
     letterSpacing: -0.5,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  closedBanner: {
+
+  // On-chain status chip
+  statusChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
     padding: 12,
-    borderRadius: 10,
-    marginBottom: 16,
-    gap: 8,
+    marginBottom: 20,
   },
-  closedText: {
-    fontSize: 13,
-    fontWeight: '600',
-    flex: 1,
+  statusChipLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  statusChipDesc: {
+    fontSize: 12,
+    marginTop: 1,
   },
 
   // Section

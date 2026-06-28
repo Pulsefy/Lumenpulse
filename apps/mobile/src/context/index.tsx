@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import i18n from '../i18n';
 import { useColorScheme } from 'react-native';
-import { lightTheme, darkTheme, Theme, ThemeColors } from '../theme/colors';
+import { lightColors, darkColors, ThemeColors } from '../../theme/colors';
 
 // Theme mode type
 export type ThemeMode = 'system' | 'light' | 'dark';
@@ -53,7 +53,7 @@ export const LocalizationProvider: React.FC<LocalizationProviderProps> = ({ chil
     ? (colorScheme === 'dark' ? 'dark' : 'light')
     : themeMode;
 
-  const colors = resolvedMode === 'dark' ? darkTheme : lightTheme;
+  const colors = resolvedMode === 'dark' ? darkColors : lightColors;
 
   const t = (key: string, params?: Record<string, any>): string => {
     return i18n.t(key, params);

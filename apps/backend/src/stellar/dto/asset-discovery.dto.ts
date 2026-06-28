@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class AssetDto {
   @ApiProperty({
@@ -50,6 +51,8 @@ export class AssetDiscoveryQueryDto {
     example: 'USDC',
     required: false,
   })
+  @IsOptional()
+  @IsString()
   assetCode?: string;
 
   @ApiProperty({
@@ -57,6 +60,8 @@ export class AssetDiscoveryQueryDto {
     example: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
     required: false,
   })
+  @IsOptional()
+  @IsString()
   issuer?: string;
 
   @ApiProperty({
@@ -64,6 +69,8 @@ export class AssetDiscoveryQueryDto {
     example: 'USD',
     required: false,
   })
+  @IsOptional()
+  @IsString()
   q?: string;
 
   @ApiProperty({
@@ -74,6 +81,10 @@ export class AssetDiscoveryQueryDto {
     default: 10,
     required: false,
   })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
   limit?: number;
 
   @ApiProperty({
@@ -81,6 +92,8 @@ export class AssetDiscoveryQueryDto {
     example: '123456789',
     required: false,
   })
+  @IsOptional()
+  @IsString()
   cursor?: string;
 }
 

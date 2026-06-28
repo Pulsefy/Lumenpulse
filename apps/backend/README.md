@@ -24,6 +24,28 @@ npm run test
 npm run test:e2e
 ```
 
+## Demo bootstrap endpoint
+
+The backend exposes an admin-only demo bootstrap endpoint that can populate a small set of sample crowdfund projects for reviewer/testnet validation.
+
+To enable it locally or in a non-production test environment, set:
+
+```bash
+BOOTSTRAP_DEMO_DATA_ENABLED=true
+```
+
+Then call the endpoint with an admin JWT:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <ADMIN_JWT>" \
+  http://localhost:3000/v1/crowdfund/admin/bootstrap-demo-data
+```
+
+The endpoint returns the created demo project IDs for verification.
+
+> This endpoint is disabled by default and should not be enabled in production unless explicitly required.
+
 ## Security defaults
 
 The backend includes:

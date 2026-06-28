@@ -2,6 +2,7 @@
 Job scheduler module - schedules and manages background jobs
 """
 
+import os
 from src.utils.logger import setup_logger
 from src.utils.metrics import JOBS_RUN_TOTAL
 from datetime import datetime
@@ -17,6 +18,15 @@ from database import DatabaseService, AnalyticsRecord
 from anomaly_detector import AnomalyDetector, AnomalyResult
 from alertbot import AlertBot
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
+from src.ingestion.run_ingestion_quality_checks import main as run_ingestion_quality_checks
+from src.analytics.project_verification_trend import (
+    ProjectVerificationTrendAnalyzer,
+    VerificationRecord,
+)
+from src.db.postgres_service import PostgresService
+from src.ingestion.rpc_benchmark import RPCProviderBenchmark
+from src.round_analyzer import _round_analyzer_job
+
 
 logger = setup_logger(__name__)
 
@@ -177,7 +187,91 @@ def _retraining_job() -> None:
         logger.error(f"Scheduled retraining job raised an exception: {exc}", exc_info=True)
 
 
+def _ingestion_quality_checks_job() -> None:
+    """Run Stellar testnet ingestion quality checks.
+
+    Scheduled wrapper. Errors are caught so the scheduler keeps running.
+    """
+    try:
+        run_ingestion_quality_checks(argv=None)
+    except SystemExit:
+        # CLI may call sys.exit; ignore to keep scheduler alive.
+        pass
+    except Exception as e:
+        logger.error(f"Ingestion quality checks failed: {e}", exc_info=True)
+
+
+def _ingestion_alerting_job() -> None:
+    """Evaluate indexer lag metrics and emit log-based alerts (#745)."""
+    try:
+        from src.ingestion.ingestion_alerting import run_ingestion_alerting_cycle
+
+        result = run_ingestion_alerting_cycle()
+        logger.info(
+            "Ingestion alerting cycle complete | healthy=%s | metrics=%d | lag_alerts=%d",
+            result.get("healthy"),
+            len(result.get("metrics", [])),
+            len(result.get("lag_alerts", [])),
+        )
+    except Exception as exc:
+        logger.error("Ingestion alerting job failed: %s", exc, exc_info=True)
+
+
+def _project_verification_trend_job() -> None:
+    """Scheduled wrapper for ProjectVerificationTrendAnalyzer (#885).
+
+    Runs analysis over any buffered verification records and logs the result.
+    Errors are caught so the scheduler keeps running.
+    """
+    try:
+        analyzer = ProjectVerificationTrendAnalyzer()
+        result = analyzer.analyze()
+        logger.info(
+            "Project verification trend: direction=%s approval=%.1f%% total=%d",
+            result.trend_direction,
+            result.approval_rate * 100,
+            result.total,
+        )
+    except Exception as exc:
+        logger.error("Project verification trend job failed: %s", exc, exc_info=True)
+
+
+def _rpc_provider_benchmark_job() -> None:
+    """Scheduled wrapper for RPCProviderBenchmark (#884).
+
+    Probes all configured Stellar RPC/Horizon providers and logs the winner.
+    Errors are caught so the scheduler keeps running.
+    """
+    try:
+        bench = RPCProviderBenchmark()
+        report = bench.run()
+        logger.info("RPC benchmark best provider: %s", report.best_provider)
+    except Exception as exc:
+        logger.error("RPC provider benchmark job failed: %s", exc, exc_info=True)
+
+def _contributor_reputation_snapshot_job() -> None:
+    """Scheduled wrapper for building contributor reputation snapshots.
+
+    Builds top-N contributor snapshots for all known projects and persists
+    them for downstream leaderboards and reputation queries.
+    """
+    try:
+        service = PostgresService()
+        saved_count = service.build_all_project_contributor_reputation_snapshots(
+            top_n=int(os.getenv("REPUTATION_SNAPSHOT_TOP_N", "100")),
+        )
+        logger.info(
+            "Contributor reputation snapshot job completed: %d snapshots persisted",
+            saved_count,
+        )
+    except Exception as exc:
+        logger.error(
+            f"Contributor reputation snapshot job failed: {exc}",
+            exc_info=True,
+        )
+
 class AnalyticsScheduler:
+
     """Manages the APScheduler scheduler for analytics jobs"""
 
     def __init__(self, pipeline_fn=None):
@@ -199,12 +293,68 @@ class AnalyticsScheduler:
                 replace_existing=True,
             )
 
+            # ── Stellar ingestion quality checks: every hour ──────────
+            # Low-noise: only fails CI/process when ingestion lag is critical.
+            quality_job = self.scheduler.add_job(
+                func=self._ingestion_quality_checks_job,
+                trigger=IntervalTrigger(hours=1),
+                id="stellar_ingestion_quality_checks_hourly",
+                name="Stellar Ingestion Quality Checks - Hourly",
+                replace_existing=True,
+            )
+
+            # ── Indexer lag + source failure alerting: every 5 minutes (#745) ──
+            alerting_interval = int(os.getenv("INGESTION_ALERT_INTERVAL_MINUTES", "5"))
+            self.scheduler.add_job(
+                func=_ingestion_alerting_job,
+                trigger=IntervalTrigger(minutes=alerting_interval),
+                id="ingestion_lag_alerting",
+                name="Indexer Lag and Source Failure Alerting",
+                replace_existing=True,
+            )
+
             # ── Model Retraining: daily at 02:00 UTC ─────────────────────
             retrain_job = self.scheduler.add_job(
                 func=_retraining_job,
                 trigger=CronTrigger(hour=2, minute=0, timezone="UTC"),
                 id="model_retraining_daily",
                 name="Automated Model Retraining - Daily",
+                replace_existing=True,
+            )
+
+            # ── Project Verification Trend: every 6 hours (#885) ─────────
+            self.scheduler.add_job(
+                func=_project_verification_trend_job,
+                trigger=IntervalTrigger(hours=6),
+                id="project_verification_trend",
+                name="Project Verification Trend Analyzer",
+                replace_existing=True,
+            )
+
+            # ── RPC Provider Benchmark: every 30 minutes (#884) ──────────
+            self.scheduler.add_job(
+                func=_rpc_provider_benchmark_job,
+                trigger=IntervalTrigger(minutes=30),
+                id="rpc_provider_benchmark",
+                name="RPC Provider Benchmark",
+                replace_existing=True,
+            )
+
+            # ── Round Anomaly Detection: every 6 hours (#874) ───────────
+            self.scheduler.add_job(
+                func=_round_analyzer_job,
+                trigger=IntervalTrigger(hours=6),
+                id="round_anomaly_detection",
+                name="Round Anomaly Detection",
+                replace_existing=True,
+            )
+
+            # ── Contributor Reputation Snapshot: daily at 03:30 UTC ─────────
+            self.scheduler.add_job(
+                func=_contributor_reputation_snapshot_job,
+                trigger=CronTrigger(hour=3, minute=30, timezone="UTC"),
+                id="contributor_reputation_snapshot_daily",
+                name="Contributor Reputation Snapshot Builder",
                 replace_existing=True,
             )
 

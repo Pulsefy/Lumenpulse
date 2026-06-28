@@ -1,11 +1,11 @@
-import { config } from './config';
+import { config, getEnvironmentConfig } from './config';
 
 /**
  * API Client Configuration
  * Reads from centralized config
  */
 const getApiBaseUrl = (): string => {
-  return config.api.baseUrl;
+  return getEnvironmentConfig().apiBaseUrl;
 };
 
 /**
@@ -109,6 +109,7 @@ class ApiClient {
     options: RequestInit = {},
     config: RequestConfig = {},
   ): Promise<ApiResponse<T>> {
+    this.baseUrl = getApiBaseUrl();
     const url = `${this.baseUrl}${endpoint}`;
     const headers = { ...this.defaultHeaders, ...config.headers };
 

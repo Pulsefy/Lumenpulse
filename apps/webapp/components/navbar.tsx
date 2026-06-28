@@ -7,12 +7,15 @@ import { Menu, X, Layers, Users, LayoutDashboard, Trophy, ShieldCheck } from "lu
 import { WalletButton } from "./wallet-button";
 import { ThemeSelector } from "./theme-selector";
 import { WalletSwitcher } from "@/components/wallet-switcher";
-
-// inside the navbar JSX, next to existing nav items:
-<WalletSwitcher />
+import { useStellarConfig } from "@/contexts/StellarConfigContext";
+import { useExplorerUrl } from "@/hooks/useExplorerUrl";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { config } = useStellarConfig();
+  const buildExplorerUrl = useExplorerUrl();
+  const isTestnet = config?.network === "testnet";
+  const vaultContractId = config?.contracts?.crowdfundVault;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-xl border-b border-primary/20">
@@ -101,8 +104,28 @@ export function Navbar() {
             <ThemeSelector variant="segmented" />
           </div>
 
-          {/* Wallet Button */}
-          <div className="hidden md:block">
+          {/* Testnet badge + Contract link + Wallet Button */}
+          <div className="hidden md:flex items-center gap-2">
+            {isTestnet && (
+              <span
+                id="testnet-badge-desktop"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                Testnet
+              </span>
+            )}
+            {vaultContractId && (
+              <a
+                href={buildExplorerUrl("contract", vaultContractId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-primary/10 text-primary/70 border border-primary/20 hover:bg-primary/20 hover:text-primary transition-colors"
+                title="View Crowdfund Vault contract on explorer"
+              >
+                Vault ↗
+              </a>
+            )}
             <WalletButton />
           </div>
 
@@ -177,9 +200,28 @@ export function Navbar() {
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
 
-            {/* Wallet connect in mobile menu */}
-            <div className="w-full mt-2">
-              <WalletButton className="w-full justify-center" />
+            {/* Testnet badge + Contract link + Wallet connect in mobile menu */}
+            <div className="w-full mt-2 flex flex-col items-center gap-2">
+              {isTestnet && (
+                <span
+                  id="testnet-badge-mobile"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  Testnet
+                </span>
+              )}
+              {vaultContractId && (
+              <a
+                href={buildExplorerUrl("contract", vaultContractId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-primary/10 text-primary/70 border border-primary/20 hover:bg-primary/20 hover:text-primary transition-colors"
+              >
+                View Vault Contract ↗
+              </a>
+            )}
+            <WalletButton className="w-full justify-center" />
             </div>
 
             {/* Theme Selector in mobile menu */}

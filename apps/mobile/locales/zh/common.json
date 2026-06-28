@@ -115,6 +115,8 @@
     "amount_label": "贡献金额（XLM）",
     "estimated_fee": "预估网络费用：约 {{amount}} XLM",
     "disclaimer": "这是 Stellar 网络上的链上交易。除非项目被取消，否则贡献不可退款。",
+    "amount_hint": "请输入最多 {{decimals}} 位小数的金额。最低 {{min}} XLM。",
+    "clear_amount": "清除金额",
     "submit": "确认贡献",
     "submitting": "提交中...",
     "done": "完成",
@@ -267,6 +269,15 @@
       "confirm_biometric": "确认生物识别锁",
       "update_failed": "更新失败",
       "update_failed_message": "无法更新生物识别锁偏好设置。请重试。"
+    },
+    "network": {
+      "title": "网络",
+      "active": "当前网络",
+      "testnet": "测试网",
+      "mainnet": "主网",
+      "endpoint_not_configured": "端点未配置",
+      "mainnet_unavailable": "主网不可用",
+      "mainnet_unavailable_message": "请先配置主网 API 和 Soroban RPC 端点再切换。"
     },
     "version": "版本",
     "environment": "环境",

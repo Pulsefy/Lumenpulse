@@ -1,5 +1,6 @@
 import './lib/config';
 import { NestFactory } from '@nestjs/core';
+import { VersioningType } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { setupApp } from './bootstrap/app.setup';
@@ -8,6 +9,9 @@ import { config } from './lib/config';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   setupApp(app);
+
+  // URI versioning: /v1/config/stellar, /v2/... etc.
+  app.enableVersioning({ type: VersioningType.URI });
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('LumenPulse API')
@@ -25,10 +29,17 @@ async function bootstrap() {
       'JWT-auth',
     )
     .addTag('auth', 'Authentication and authorization endpoints')
+    .addTag('config', 'Client-safe testnet/mainnet runtime configuration')
+    .addTag('transactions', 'Transaction history and Stellar ledger queries')
+    .addTag(
+      'soroban-events',
+      'Soroban smart contract event ingestion and tracking',
+    )
     .addTag('users', 'User profile and account management')
     .addTag('news', 'Crypto news aggregation and sentiment analysis')
     .addTag('portfolio', 'Portfolio tracking and performance metrics')
     .addTag('stellar', 'Stellar blockchain integration')
+    .addTag('search', 'Search and discovery endpoints')
     .addServer('http://localhost:3000', 'Development')
     .addServer('https://api.lumenpulse.io', 'Production')
     .build();

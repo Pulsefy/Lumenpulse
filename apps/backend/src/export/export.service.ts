@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import {
   ExportJob,
   ExportStatus,
@@ -19,6 +19,7 @@ export class ExportService {
     @InjectRepository(PortfolioSnapshot)
     private readonly snapshotRepo: Repository<PortfolioSnapshot>,
     private readonly transactionService: TransactionService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async createExportJob(userId: string, type: ExportType): Promise<ExportJob> {
@@ -57,10 +58,16 @@ export class ExportService {
     await this.exportJobRepo.update(jobId, { status: ExportStatus.PROCESSING });
 
     try {
-      const csv =
-        type === ExportType.PORTFOLIO_HISTORY
-          ? await this.buildPortfolioHistoryCsv(userId)
-          : await this.buildTaxTransactionsCsv(userId);
+      let csv: string;
+      if (type === ExportType.PORTFOLIO_HISTORY) {
+        csv = await this.buildPortfolioHistoryCsv(userId);
+      } else if (type === ExportType.TAX_TRANSACTIONS) {
+        csv = await this.buildTaxTransactionsCsv(userId);
+      } else if (type === ExportType.ONCHAIN_ANALYTICS) {
+        csv = await this.buildOnchainAnalyticsCsv();
+      } else {
+        csv = await this.buildRoundAnalyticsCsv();
+      }
 
       await this.exportJobRepo.update(jobId, {
         status: ExportStatus.COMPLETED,
@@ -136,6 +143,72 @@ export class ExportService {
     }
 
     return rows.join('\n');
+  }
+
+  private async buildOnchainAnalyticsCsv(): Promise<string> {
+    interface OnchainRow {
+      bucket: Date;
+      sentiment: number;
+      count: number;
+    }
+
+    const rows: OnchainRow[] = await this.dataSource.query(`
+      SELECT
+        date_trunc('day', analyzed_at) AS bucket,
+        AVG(sentiment_score)::float     AS sentiment,
+        COUNT(*)::int                   AS count
+      FROM news_insights
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `);
+
+    const lines = ['date,avg_sentiment,record_count'];
+    for (const row of rows) {
+      lines.push(
+        [
+          row.bucket instanceof Date
+            ? row.bucket.toISOString().split('T')[0]
+            : String(row.bucket),
+          row.sentiment,
+          row.count,
+        ].join(','),
+      );
+    }
+    return lines.join('\n');
+  }
+
+  private async buildRoundAnalyticsCsv(): Promise<string> {
+    interface RoundRow {
+      snapshot_date: Date;
+      asset_symbol: string | null;
+      avg_sentiment: number;
+      signal_count: number;
+    }
+
+    const rows: RoundRow[] = await this.dataSource.query(`
+      SELECT
+        snapshot_date,
+        asset_symbol,
+        avg_sentiment::float AS avg_sentiment,
+        signal_count::int    AS signal_count
+      FROM daily_snapshots
+      ORDER BY snapshot_date ASC, asset_symbol ASC NULLS LAST
+    `);
+
+    const lines = ['snapshot_date,asset_symbol,avg_sentiment,signal_count'];
+    for (const row of rows) {
+      lines.push(
+        [
+          row.snapshot_date instanceof Date
+            ? row.snapshot_date.toISOString().split('T')[0]
+            : String(row.snapshot_date),
+          this.escapeCsv(row.asset_symbol ?? ''),
+          row.avg_sentiment,
+          row.signal_count,
+        ].join(','),
+      );
+    }
+    return lines.join('\n');
   }
 
   private escapeCsv(value: string): string {

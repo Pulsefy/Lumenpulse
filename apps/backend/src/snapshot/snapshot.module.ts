@@ -4,6 +4,7 @@ import { SnapshotRepository } from './snapshot.repository';
 import { DailySnapshot } from './entities/daily-snapshot.entity';
 import { SnapshotScheduler } from './snapshot.scheduler';
 import { SnapshotGenerator } from './snapshot.generator';
+import { SchedulerModule } from '../scheduler/scheduler.module';
 
 /**
  * Self-contained module for daily snapshot generation.
@@ -20,7 +21,7 @@ import { SnapshotGenerator } from './snapshot.generator';
  * ```
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([DailySnapshot])],
+  imports: [TypeOrmModule.forFeature([DailySnapshot]), SchedulerModule],
   providers: [SnapshotRepository, SnapshotGenerator, SnapshotScheduler],
   exports: [SnapshotGenerator],
 })

@@ -87,7 +87,7 @@ const themeOptions: ThemeOption[] = [
  * Requirements: 8.1, 8.2, 8.3, 7.5
  */
 export function ThemeSelector({
-  variant = 'dropdown',
+  variant = 'segmented',
   showLabels = false,
   className,
 }: ThemeSelectorProps) {

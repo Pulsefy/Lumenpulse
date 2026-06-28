@@ -1,6 +1,12 @@
 """
 Data ingestion module for fetching external data.
 """
+from .payload_quarantine import (
+    QuarantineStore,
+    QuarantinedPayload,
+    quarantine_on_error,
+    process_with_quarantine,
+)
 
 from .news_fetcher import NewsFetcher, NewsArticle, fetch_news
 from .stellar_fetcher import (
@@ -10,6 +16,7 @@ from .stellar_fetcher import (
     get_asset_volume,
     get_network_overview,
 )
+from .price_fetcher import PriceFetcher
 from .social_fetcher import (
     SocialFetcher,
     SocialPost,
@@ -29,6 +36,7 @@ __all__ = [
     "TransactionRecord",
     "get_asset_volume",
     "get_network_overview",
+    "PriceFetcher",
     # Social media fetchers
     "SocialFetcher",
     "SocialPost",
@@ -37,4 +45,8 @@ __all__ = [
     "RateLimiter",
     "SocialPlatform",
     "fetch_social",
+    "QuarantineStore",
+    "QuarantinedPayload",
+    "quarantine_on_error",
+    "process_with_quarantine",
 ]

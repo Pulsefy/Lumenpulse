@@ -14,4 +14,5 @@ pub enum VestingError {
     NothingToClaim = 8,
     InsufficientBalance = 9,
     Reentrancy = 10,
+    DelegateNotAuthorized = 11,
 }

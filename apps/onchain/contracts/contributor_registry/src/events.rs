@@ -1,7 +1,7 @@
 use soroban_sdk::{contractevent, Address, BytesN, String};
 
 use crate::multisig::{ProposalAction, ProposalStatus};
-use crate::storage::Badge;
+use crate::storage::{Badge, PenaltySeverity};
 
 #[contractevent]
 pub struct UpgradedEvent {
@@ -87,4 +87,34 @@ pub struct BadgeRevokedEvent {
     pub contributor: Address,
     pub badge: Badge,
     pub executor: Address,
+}
+
+#[contractevent]
+pub struct ReputationPenaltyAppliedEvent {
+    #[topic]
+    pub contributor: Address,
+    pub dispute_id: u64,
+    pub severity: PenaltySeverity,
+    pub points_deducted: u64,
+    pub reason: String,
+    pub executor: Address,
+}
+
+/// Emitted whenever a contributor's profile (currently `github_handle`) is
+/// mutated. Both self-service updates and admin-managed (multisig) updates
+/// emit this event so indexers can reconstruct the audit trail.
+///
+/// `proposal_id == 0` indicates a self-service update; a non-zero value
+/// indicates an admin-managed update via the multisig of that proposal.
+#[contractevent]
+pub struct ContributorProfileChangedEvt {
+    #[topic]
+    pub contributor: Address,
+    /// Address that submitted the transaction. For admin updates this is the
+    /// multisig executor; for self updates this equals `contributor`.
+    pub actor: Address,
+    /// New handle after the mutation.
+    pub new_github_handle: String,
+    /// Proposal id when the change was admin-managed; 0 for self-service.
+    pub proposal_id: u64,
 }

@@ -11,8 +11,11 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
+import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { useLocalization } from '../../src/context';
+import { config, AppEnvironment } from '../../lib/config';
 import {
   authenticateBiometricPrompt,
   getBiometricLockEnabled,
@@ -31,13 +34,14 @@ export default function SettingsScreen() {
   const { logout, isAuthenticated } = useAuth();
   const { colors, setThemeMode, resolvedMode } = useLocalization();
   const { t } = useLocalization();
+  const { environment, environmentConfig, setEnvironment, isMainnetConfigured } = useEnvironment();
   const router = useRouter();
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(true);
   const [biometricSaving, setBiometricSaving] = useState(false);
 
-  const appVersion = '1.0.0';
-  const appEnv = 'development';
+  const appVersion = config.app.version;
+  const appEnv = config.app.variant;
 
   useEffect(() => {
     const loadBiometricPreference = async () => {
@@ -102,6 +106,20 @@ export default function SettingsScreen() {
 
   const handleThemeChange = (value: 'system' | 'light' | 'dark') => {
     setThemeMode(value);
+  };
+
+  const handleEnvironmentChange = async (value: AppEnvironment) => {
+    if (value === environment) return;
+
+    if (value === 'mainnet' && !isMainnetConfigured) {
+      Alert.alert(
+        t('settings.network.mainnet_unavailable'),
+        t('settings.network.mainnet_unavailable_message'),
+      );
+      return;
+    }
+
+    await setEnvironment(value);
   };
 
   return (
@@ -203,6 +221,86 @@ export default function SettingsScreen() {
               />
             )}
           </View>
+        </View>
+
+        <View
+          style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessible
+          accessibilityLabel={t('settings.network.title')}
+        >
+          <View style={styles.sectionHeader}>
+            <Ionicons name="git-network-outline" size={20} color={colors.accent} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]} accessible>
+              {t('settings.network.title')}
+            </Text>
+          </View>
+
+          <View style={styles.environmentRow}>
+            {(['testnet', 'mainnet'] as AppEnvironment[]).map((option) => {
+              const isActive = environment === option;
+              const disabled = option === 'mainnet' && !isMainnetConfigured;
+              return (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    styles.environmentOption,
+                    {
+                      backgroundColor: isActive ? colors.accent : colors.card,
+                      borderColor: isActive ? colors.accent : colors.cardBorder,
+                      opacity: disabled ? 0.5 : 1,
+                    },
+                  ]}
+                  onPress={() => handleEnvironmentChange(option)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive, disabled }}
+                  accessibilityLabel={
+                    option === 'testnet'
+                      ? t('settings.network.testnet')
+                      : t('settings.network.mainnet')
+                  }
+                >
+                  <Ionicons
+                    name={option === 'testnet' ? 'flask-outline' : 'planet-outline'}
+                    size={18}
+                    color={isActive ? '#ffffff' : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.environmentLabel,
+                      { color: isActive ? '#ffffff' : colors.text },
+                    ]}
+                    accessible
+                  >
+                    {option === 'testnet'
+                      ? t('settings.network.testnet')
+                      : t('settings.network.mainnet')}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]} accessible>
+              {t('settings.network.active')}
+            </Text>
+            <View
+              style={[styles.envBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+              accessible
+              accessibilityLabel={`${t('settings.network.active')}: ${environmentConfig.label}`}
+            >
+              <Text style={[styles.envBadgeText, { color: colors.accent }]}>
+                {environmentConfig.label}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={[styles.endpointText, { color: colors.textSecondary }]} numberOfLines={1}>
+            {environmentConfig.apiBaseUrl || t('settings.network.endpoint_not_configured')}
+          </Text>
         </View>
 
         <View
@@ -393,6 +491,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
   },
+  environmentRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  environmentOption: {
+    flex: 1,
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 6,
+  },
+  environmentLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   themeOption: {
     flex: 1,
     alignItems: 'center',
@@ -418,6 +535,10 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 15,
     fontWeight: '500',
+  },
+  endpointText: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   divider: {
     height: StyleSheet.hairlineWidth,

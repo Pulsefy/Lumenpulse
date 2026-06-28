@@ -22,6 +22,10 @@ pub enum DataKey {
 
     // ── Badge keys ────────────────────────────────────────────
     Badges(Address),
+
+    // ── Penalty keys ──────────────────────────────────────────
+    /// Latest penalty record for a contributor (keyed by contributor address).
+    ReputationPenalty(Address),
 }
 
 #[contracttype]
@@ -51,4 +55,26 @@ pub enum Badge {
     BugHunter = 2,
     TopContributor = 3,
     SecurityAuditor = 4,
+}
+
+/// How severe the dispute outcome was.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum PenaltySeverity {
+    Minor = 1,
+    Moderate = 2,
+    Severe = 3,
+}
+
+/// Metadata stored on-chain for each applied penalty.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PenaltyRecord {
+    /// The dispute that triggered this penalty.
+    pub dispute_id: u64,
+    pub severity: PenaltySeverity,
+    pub points_deducted: u64,
+    pub reason: String,
+    pub applied_at: u64,
 }

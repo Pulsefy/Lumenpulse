@@ -1,6 +1,6 @@
 # Backend Contribution Guide
 
-This guide covers app-specific standards for `apps/backend`.
+This guide covers app-specific standards for `apps/backend`. The backend integrates with Stellar/Soroban. For migration details, see [Stellar Migration Notes](STELLAR_MIGRATION_NOTES.md).
 
 ## Setup
 

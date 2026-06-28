@@ -90,7 +90,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       const { apiClient } = await import('../lib/api');
-      await storage.removeTokens();
+      await storage.clearAuthState();
       apiClient.setAuthToken(null);
       setIsAuthenticated(false);
     } catch (error) {

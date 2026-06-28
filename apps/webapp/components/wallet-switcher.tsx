@@ -4,10 +4,10 @@ import { useState, useRef, useEffect } from "react";
 import { useWallet, type Wallet } from "@/contexts/WalletContext";
 
 const CHAIN_STYLES: Record<string, string> = {
-  ETH: "bg-purple-100 text-purple-700",
-  SOL:  "bg-amber-100 text-amber-700",
-  BNB:  "bg-yellow-100 text-yellow-700",
-  MATIC:"bg-indigo-100 text-indigo-700",
+  XLM:  "bg-blue-100 text-blue-700",
+  USDC: "bg-teal-100 text-teal-700",
+  EURC: "bg-indigo-100 text-indigo-700",
+  AQUA: "bg-cyan-100 text-cyan-700",
 };
 
 function initials(label: string) {

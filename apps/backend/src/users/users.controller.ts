@@ -42,6 +42,7 @@ import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from './entities/user.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SharpPipe } from '../common/pipes/sharp.pipe';
+import { AuditLogAction } from '../audit/decorators/audit-log.decorator';
 
 // Unified Authenticated Request Interface
 interface RequestWithUser extends Request {
@@ -180,6 +181,7 @@ export class UsersController {
   // --- STELLAR ACCOUNT MANAGEMENT (From Feature Branch) ---
 
   @Post('me/accounts')
+  @AuditLogAction('account_linking')
   @ApiOperation({ summary: 'Link a new Stellar account to user profile' })
   @ApiResponse({ status: 201, type: StellarAccountResponseDto })
   async addStellarAccount(

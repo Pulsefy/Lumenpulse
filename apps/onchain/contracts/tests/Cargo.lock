@@ -291,6 +291,7 @@ name = "crowdfund_vault"
 version = "0.0.0"
 dependencies = [
  "notification_interface",
+ "reentrancy-guard",
  "soroban-sdk",
 ]
 
@@ -1052,6 +1053,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "getrandom",
+]
+
+[[package]]
+name = "reentrancy-guard"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]

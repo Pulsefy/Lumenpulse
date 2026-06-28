@@ -7,6 +7,8 @@ export interface StellarConfig {
   timeout: number;
   retryAttempts: number;
   retryDelay: number;
+  balanceCacheTTL: number;
+  operationsCacheTTL: number;
 }
 
 export default registerAs('stellar', (): StellarConfig => {
@@ -16,5 +18,7 @@ export default registerAs('stellar', (): StellarConfig => {
     timeout: config.stellar.timeout,
     retryAttempts: config.stellar.retryAttempts,
     retryDelay: config.stellar.retryDelay,
+    balanceCacheTTL: config.stellar.balanceCacheTTL,
+    operationsCacheTTL: config.stellar.operationsCacheTTL,
   };
 });
