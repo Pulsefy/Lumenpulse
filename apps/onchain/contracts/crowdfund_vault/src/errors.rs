@@ -35,4 +35,6 @@ pub enum CrowdfundError {
     RefundWindowClosed = 29,
     RefundWindowNotOpen = 30,
     Reentrancy = 31,
+    BatchTooLarge = 32,
+    EmptyBatch = 33,
 }

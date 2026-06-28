@@ -827,6 +827,99 @@ impl CrowdfundVaultContract {
         Ok(())
     }
 
+    /// Approve up to MAX_BATCH_SIZE milestones in one transaction (admin only).
+    ///
+    /// Each item is processed independently: already-approved or expired-project
+    /// entries are skipped (not counted). Only the successful approvals are
+    /// counted in the summary event.
+    pub fn batch_approve_milestones(
+        env: Env,
+        admin: Address,
+        decisions: Vec<events::BatchMilestoneDecision>,
+    ) -> Result<u32, CrowdfundError> {
+        const MAX_BATCH_SIZE: u32 = 10;
+
+        // Validate + auth before any storage mutations
+        Self::verify_admin(&env, &admin)?;
+
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            return Err(CrowdfundError::ContractPaused);
+        }
+
+        if decisions.len() == 0 {
+            return Err(CrowdfundError::EmptyBatch);
+        }
+        if decisions.len() > MAX_BATCH_SIZE {
+            return Err(CrowdfundError::BatchTooLarge);
+        }
+
+        let mut approved_count: u32 = 0;
+
+        for decision in decisions.iter() {
+            let project_id = decision.project_id;
+            let milestone_id = decision.milestone_id;
+
+            // Load project; skip if not found
+            let mut project: ProjectData = match env
+                .storage()
+                .persistent()
+                .get(&DataKey::Project(project_id))
+            {
+                Some(p) => p,
+                None => continue,
+            };
+
+            // Skip expired projects (and trigger expiry side-effects)
+            if Self::fail_if_project_expired(&env, project_id, &mut project).is_err() {
+                continue;
+            }
+
+            // Skip already-approved milestones
+            let already: bool = env
+                .storage()
+                .persistent()
+                .get(&DataKey::MilestoneApproved(project_id, milestone_id))
+                .unwrap_or(false);
+            if already {
+                continue;
+            }
+
+            // Apply approval
+            env.storage().persistent().set(
+                &DataKey::MilestoneApproved(project_id, milestone_id),
+                &true,
+            );
+            env.storage().persistent().set(
+                &DataKey::MilestoneDisputed(project_id, milestone_id),
+                &false,
+            );
+
+            // Per-item event (reuses existing MilestoneApprovedEvent)
+            events::MilestoneApprovedEvent {
+                admin: admin.clone(),
+                project_id,
+                milestone_id,
+            }
+            .publish(&env);
+
+            approved_count += 1;
+        }
+
+        // Summary event
+        events::BatchMilestoneProcessedEvent {
+            admin,
+            approved_count,
+        }
+        .publish(&env);
+
+        Ok(approved_count)
+    }
+
     /// Start a vote for a milestone approval
     pub fn start_milestone_vote(
         env: Env,

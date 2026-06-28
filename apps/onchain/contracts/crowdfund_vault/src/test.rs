@@ -2527,3 +2527,144 @@ fn test_withdraw_cei_state_written_before_balance_assertion() {
     assert_eq!(client.get_balance(&project_id), 300_000);
     assert_eq!(token_client.balance(&owner), 200_000);
 }
+
+// ──────────────────────────────────────────────
+// batch_approve_milestones tests
+// ──────────────────────────────────────────────
+
+#[test]
+fn test_batch_approve_milestones_approves_all() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let pid0 = client.create_project(&owner, &symbol_short!("P0"), &1_000_000, &token_client.address);
+    let pid1 = client.create_project(&owner, &symbol_short!("P1"), &1_000_000, &token_client.address);
+
+    use crate::events::BatchMilestoneDecision;
+    let decisions = vec![
+        &env,
+        BatchMilestoneDecision { project_id: pid0, milestone_id: 0 },
+        BatchMilestoneDecision { project_id: pid1, milestone_id: 0 },
+    ];
+
+    let count = client.batch_approve_milestones(&admin, &decisions);
+    assert_eq!(count, 2);
+    assert!(client.is_milestone_approved(&pid0, &0));
+    assert!(client.is_milestone_approved(&pid1, &0));
+}
+
+#[test]
+fn test_batch_approve_milestones_skips_missing_project() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let pid = client.create_project(&owner, &symbol_short!("P0"), &1_000_000, &token_client.address);
+
+    use crate::events::BatchMilestoneDecision;
+    let decisions = vec![
+        &env,
+        BatchMilestoneDecision { project_id: pid,  milestone_id: 0 },
+        BatchMilestoneDecision { project_id: 9999, milestone_id: 0 }, // non-existent
+    ];
+
+    let count = client.batch_approve_milestones(&admin, &decisions);
+    assert_eq!(count, 1);
+    assert!(client.is_milestone_approved(&pid, &0));
+}
+
+#[test]
+fn test_batch_approve_milestones_skips_already_approved() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let pid = client.create_project(&owner, &symbol_short!("P0"), &1_000_000, &token_client.address);
+    client.approve_milestone(&admin, &pid, &0);
+
+    use crate::events::BatchMilestoneDecision;
+    let decisions = vec![&env, BatchMilestoneDecision { project_id: pid, milestone_id: 0 }];
+
+    // already approved → skipped, count = 0
+    let count = client.batch_approve_milestones(&admin, &decisions);
+    assert_eq!(count, 0);
+}
+
+#[test]
+fn test_batch_approve_milestones_empty_batch_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, _) = setup_test(&env);
+    client.initialize(&admin);
+
+    use crate::events::BatchMilestoneDecision;
+    let empty: soroban_sdk::Vec<BatchMilestoneDecision> = vec![&env];
+    let result = client.try_batch_approve_milestones(&admin, &empty);
+    assert_eq!(result, Err(Ok(CrowdfundError::EmptyBatch)));
+}
+
+#[test]
+fn test_batch_approve_milestones_oversized_batch_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    use crate::events::BatchMilestoneDecision;
+    let mut decisions = soroban_sdk::Vec::new(&env);
+    for i in 0..11u64 {
+        // create enough projects so IDs are valid (though they'll be skipped if missing)
+        decisions.push_back(BatchMilestoneDecision { project_id: i, milestone_id: 0 });
+    }
+    // suppress unused warning
+    let _ = owner;
+    let _ = token_client;
+
+    let result = client.try_batch_approve_milestones(&admin, &decisions);
+    assert_eq!(result, Err(Ok(CrowdfundError::BatchTooLarge)));
+}
+
+#[test]
+fn test_batch_approve_milestones_non_admin_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let pid = client.create_project(&owner, &symbol_short!("P0"), &1_000_000, &token_client.address);
+
+    use crate::events::BatchMilestoneDecision;
+    let decisions = vec![&env, BatchMilestoneDecision { project_id: pid, milestone_id: 0 }];
+    let non_admin = Address::generate(&env);
+
+    let result = client.try_batch_approve_milestones(&non_admin, &decisions);
+    assert_eq!(result, Err(Ok(CrowdfundError::Unauthorized)));
+}
+
+#[test]
+fn test_batch_approve_milestones_paused_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let pid = client.create_project(&owner, &symbol_short!("P0"), &1_000_000, &token_client.address);
+    client.pause(&admin);
+
+    use crate::events::BatchMilestoneDecision;
+    let decisions = vec![&env, BatchMilestoneDecision { project_id: pid, milestone_id: 0 }];
+
+    let result = client.try_batch_approve_milestones(&admin, &decisions);
+    assert_eq!(result, Err(Ok(CrowdfundError::ContractPaused)));
+}
