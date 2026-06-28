@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import {
@@ -20,8 +21,15 @@ import {
 } from '@nestjs/swagger';
 import { ExportService } from './export.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles, UserRole } from '../auth/decorators/auth.decorators';
 import { CreateExportJobDto, ExportJobResponseDto } from './dto/export-job.dto';
-import { ExportStatus } from './entities/export-job.entity';
+import { ExportStatus, ExportType } from './entities/export-job.entity';
+
+const ANALYTICS_TYPES = new Set<ExportType>([
+  ExportType.ONCHAIN_ANALYTICS,
+  ExportType.ROUND_ANALYTICS,
+]);
 
 @ApiTags('exports')
 @ApiBearerAuth('JWT-auth')
@@ -34,10 +42,48 @@ export class ExportController {
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Create an async export job' })
   @ApiResponse({ status: 202, type: ExportJobResponseDto })
+  @ApiResponse({
+    status: 403,
+    description: 'Admin role required for analytics exports',
+  })
   async createJob(
+    @Body() dto: CreateExportJobDto,
+    @Request() req: { user: { id: string; role: UserRole } },
+  ): Promise<ExportJobResponseDto> {
+    if (ANALYTICS_TYPES.has(dto.type) && req.user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException(
+        'Admin role required to export analytics data',
+      );
+    }
+
+    const job = await this.exportService.createExportJob(req.user.id, dto.type);
+    return {
+      id: job.id,
+      type: job.type,
+      status: job.status,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+    };
+  }
+
+  @Post('admin/analytics')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Create an on-chain analytics CSV export (admin only)',
+  })
+  @ApiResponse({ status: 202, type: ExportJobResponseDto })
+  @ApiResponse({ status: 403, description: 'Forbidden – admin only' })
+  async createAnalyticsJob(
     @Body() dto: CreateExportJobDto,
     @Request() req: { user: { id: string } },
   ): Promise<ExportJobResponseDto> {
+    if (!ANALYTICS_TYPES.has(dto.type)) {
+      throw new ForbiddenException(
+        `This endpoint only accepts analytics export types: ${[...ANALYTICS_TYPES].join(', ')}`,
+      );
+    }
     const job = await this.exportService.createExportJob(req.user.id, dto.type);
     return {
       id: job.id,

@@ -7,8 +7,9 @@ mod storage;
 
 use errors::ContributorError;
 use events::{
-    AdminChangedEvent, BadgeGrantedEvent, BadgeRevokedEvent, GaslessRegistrationEvent,
-    MultisigConfiguredEvent, ReputationPenaltyAppliedEvent, UpgradedEvent,
+    AdminChangedEvent, BadgeGrantedEvent, BadgeRevokedEvent, ContributorProfileChangedEvt,
+    GaslessRegistrationEvent, MultisigConfiguredEvent, ReputationPenaltyAppliedEvent,
+    UpgradedEvent,
 };
 use multisig::{
     cancel, consume_approval, expire, get_config, get_proposal, propose, sign, validate_config,
@@ -304,22 +305,37 @@ impl ContributorRegistryContract {
         Ok(())
     }
 
+    /// Update a contributor's profile (currently `github_handle`).
+    ///
+    /// Authorization:
+    /// * `proposal_id = None` — self-service update. The caller (`actor`) MUST
+    ///   be the contributor themselves (`actor == address`) and MUST
+    ///   authenticate via `require_auth()`.
+    /// * `proposal_id = Some(id)` — admin-managed update. The caller (`actor`)
+    ///   MUST be a multisig signer who consumes an `UpdateProfile` proposal
+    ///   via `consume_approval`. This path is used for handle corrections,
+    ///   migrations, or recovery actions initiated by the multisig.
+    ///
+    /// Either path emits `ContributorProfileChangedEvt` so the mutation is
+    /// fully auditable. Self-service updates carry `proposal_id = None` so
+    /// the event consumer can distinguish the two paths.
+    ///
+    /// Empty handles are rejected; existing contributors are required; handle
+    /// uniqueness is enforced via the existing index.
     pub fn update_contributor(
         env: Env,
+        actor: Address,
         address: Address,
         github_handle: String,
+        proposal_id: Option<u64>,
     ) -> Result<(), ContributorError> {
-        if !env.storage().instance().has(&DataKey::MultisigConfig) {
-            return Err(ContributorError::NotInitialized);
-        }
-        env.storage()
-            .instance()
-            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
-        address.require_auth();
+        Self::ensure_initialized(&env)?;
+
         if github_handle.is_empty() {
             return Err(ContributorError::InvalidGitHubHandle);
         }
-        let mut contributor: ContributorData = env
+
+        let contributor: ContributorData = env
             .storage()
             .persistent()
             .get(&DataKey::Contributor(address.clone()))
@@ -331,28 +347,63 @@ impl ContributorRegistryContract {
         );
 
         Self::ensure_github_handle_available(&env, &github_handle, &address)?;
-        if contributor.github_handle != github_handle {
+
+        // Decide authorization path.
+        match proposal_id {
+            None => {
+                // Self-service: caller must authenticate as the contributor
+                // and the addresses must match (a third party cannot pass
+                // proposal_id = None to update someone else).
+                actor.require_auth();
+                if actor != address {
+                    return Err(ContributorError::Unauthorized);
+                }
+            }
+            Some(pid) => {
+                // Admin-managed: caller must be a multisig signer consuming
+                // an already-approved UpdateProfile proposal. consume_approval
+                // verifies the proposal exists, is Approved, matches the
+                // action, and has not been executed or expired.
+                consume_approval(&env, &actor, pid, &ProposalAction::UpdateProfile)?;
+            }
+        }
+
+        let old_handle = contributor.github_handle.clone();
+
+        // Only write if the handle actually changes (no-op short-circuit
+        // avoids emitting duplicate audit events and bumping TTL needlessly).
+        if old_handle != github_handle {
+            let mut contributor = contributor;
+            contributor.github_handle = github_handle.clone();
             env.storage()
                 .persistent()
-                .remove(&DataKey::GitHubIndex(contributor.github_handle.clone()));
+                .remove(&DataKey::GitHubIndex(old_handle.clone()));
+            env.storage()
+                .persistent()
+                .set(&DataKey::Contributor(address.clone()), &contributor);
+            env.storage().persistent().extend_ttl(
+                &DataKey::Contributor(address.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
+            env.storage()
+                .persistent()
+                .set(&DataKey::GitHubIndex(github_handle.clone()), &address);
+            env.storage().persistent().extend_ttl(
+                &DataKey::GitHubIndex(github_handle.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
         }
-        contributor.github_handle = github_handle.clone();
-        env.storage()
-            .persistent()
-            .set(&DataKey::Contributor(address.clone()), &contributor);
-        env.storage().persistent().extend_ttl(
-            &DataKey::Contributor(address.clone()),
-            LEDGER_THRESHOLD,
-            LEDGER_BUMP,
-        );
-        env.storage()
-            .persistent()
-            .set(&DataKey::GitHubIndex(github_handle.clone()), &address);
-        env.storage().persistent().extend_ttl(
-            &DataKey::GitHubIndex(github_handle),
-            LEDGER_THRESHOLD,
-            LEDGER_BUMP,
-        );
+
+        ContributorProfileChangedEvt {
+            contributor: address,
+            actor,
+            new_github_handle: github_handle,
+            proposal_id: proposal_id.unwrap_or(0),
+        }
+        .publish(&env);
+
         Ok(())
     }
 
@@ -1451,5 +1502,242 @@ mod test {
         client.register_contributor(&contributor, &handle);
 
         assert!(client.get_penalty_record(&contributor).is_none());
+    }
+
+    // ── Contributor profile update authorization (issue #861) ─
+
+    /// Self-service path: the contributor updates their own handle.
+    /// `proposal_id == 0` selects self-service and the contributor's
+    /// own auth is sufficient.
+    #[test]
+    fn test_update_contributor_self_service_succeeds() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "old_handle");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "new_handle");
+        client.register_contributor(&contributor, &old_handle);
+
+        // Self-service path: actor == contributor, proposal_id == None
+        client.update_contributor(&contributor, &contributor, &new_handle, &None);
+
+        let updated = client.get_contributor(&contributor);
+        assert_eq!(updated.github_handle, new_handle);
+    }
+
+    /// Self-service path rejects an empty handle even when the caller is
+    /// authorized as the contributor.
+    #[test]
+    fn test_update_contributor_self_service_rejects_empty_handle() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "valid_handle");
+        client.register_contributor(&contributor, &old_handle);
+
+        let empty = soroban_sdk::String::from_str(&s.env, "");
+        assert_eq!(
+            client.try_update_contributor(&contributor, &contributor, &empty, &None),
+            Err(Ok(ContributorError::InvalidGitHubHandle))
+        );
+    }
+
+    /// Self-service path: a third party with `proposal_id == 0` cannot
+    /// mutate someone else's profile even with their auth.
+    #[test]
+    fn test_update_contributor_self_service_rejects_third_party() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "valid_handle");
+        client.register_contributor(&contributor, &old_handle);
+
+        let third_party = Address::generate(&s.env);
+        let new_handle = soroban_sdk::String::from_str(&s.env, "hijacked");
+        assert_eq!(
+            client.try_update_contributor(&third_party, &contributor, &new_handle, &None),
+            Err(Ok(ContributorError::Unauthorized))
+        );
+
+        // Contributor data unchanged
+        let after = client.get_contributor(&contributor);
+        assert_eq!(after.github_handle, old_handle);
+    }
+
+    /// Admin-managed path: a multisig signer proposes an UpdateProfile
+    /// proposal, threshold is reached, then the signer consumes the
+    /// approval to update someone else's handle.
+    #[test]
+    fn test_update_contributor_admin_managed_via_multisig() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "typo_handle");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "fixed_handle");
+        client.register_contributor(&contributor, &old_handle);
+
+        // 1) Multisig signer proposes UpdateProfile
+        let pid = client.propose(&s.alice, &ProposalAction::UpdateProfile);
+        // 2) Second signer reaches threshold
+        client.sign(&s.bob, &pid);
+        assert_eq!(client.get_proposal(&pid).status, ProposalStatus::Approved);
+
+        // 3) Admin consumes approval — proposal is now Executed
+        //    actor = alice (multisig signer), address = contributor
+        client.update_contributor(&s.alice, &contributor, &new_handle, &Some(pid));
+
+        let updated = client.get_contributor(&contributor);
+        assert_eq!(updated.github_handle, new_handle);
+        assert_eq!(client.get_proposal(&pid).status, ProposalStatus::Executed);
+
+        // 4) Replay is rejected
+        let again = soroban_sdk::String::from_str(&s.env, "replay");
+        assert!(client
+            .try_update_contributor(&s.alice, &contributor, &again, &Some(pid))
+            .is_err());
+    }
+
+    /// Admin-managed path without an approved proposal fails. The multisig
+    /// is bypassed if the caller just hands in a stale or never-existed id.
+    #[test]
+    fn test_update_contributor_admin_managed_requires_approval() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "h0");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "h1");
+        client.register_contributor(&contributor, &old_handle);
+
+        // Try with a bogus proposal id
+        assert!(client
+            .try_update_contributor(&s.alice, &contributor, &new_handle, &Some(999u64))
+            .is_err());
+
+        // Propose but do not reach threshold — still must fail
+        let pid = client.propose(&s.bob, &ProposalAction::UpdateProfile);
+        assert_eq!(client.get_proposal(&pid).status, ProposalStatus::Pending);
+        assert!(client
+            .try_update_contributor(&s.alice, &contributor, &new_handle, &Some(pid))
+            .is_err());
+
+        // Contributor data must not have been mutated by failed attempts
+        let after = client.get_contributor(&contributor);
+        assert_eq!(after.github_handle, old_handle);
+    }
+
+    /// Admin-managed update from a non-signer must fail even when the
+    /// proposal is properly approved.
+    #[test]
+    fn test_update_contributor_admin_managed_rejects_non_signer() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "h0");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "h1");
+        client.register_contributor(&contributor, &old_handle);
+
+        // Approve a proposal
+        let pid = client.propose(&s.alice, &ProposalAction::UpdateProfile);
+        client.sign(&s.bob, &pid);
+        assert_eq!(client.get_proposal(&pid).status, ProposalStatus::Approved);
+
+        // An outsider tries to consume the approval
+        let outsider = Address::generate(&s.env);
+        assert_eq!(
+            client.try_update_contributor(&outsider, &contributor, &new_handle, &Some(pid)),
+            Err(Ok(ContributorError::Unauthorized))
+        );
+
+        // Proposal must NOT be consumed on a failed call
+        let proposal = client.get_proposal(&pid);
+        assert_eq!(proposal.status, ProposalStatus::Approved);
+
+        // Contributor data is unchanged
+        let after = client.get_contributor(&contributor);
+        assert_eq!(after.github_handle, old_handle);
+    }
+
+    /// The wrong action type cannot be replayed as an UpdateProfile:
+    /// trying to consume an `Upgrade` proposal to update a contributor
+    /// must fail.
+    #[test]
+    fn test_update_contributor_rejects_wrong_action_proposal() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "h0");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "h1");
+        client.register_contributor(&contributor, &old_handle);
+
+        // Approve an `Upgrade` proposal
+        let pid = client.propose(&s.alice, &ProposalAction::Upgrade);
+        client.sign(&s.bob, &pid);
+
+        // Attempting to use it for an UpdateProfile must fail
+        assert!(client
+            .try_update_contributor(&s.alice, &contributor, &new_handle, &Some(pid))
+            .is_err());
+
+        // Proposal is still Approved — it was not consumed
+        assert_eq!(client.get_proposal(&pid).status, ProposalStatus::Approved);
+    }
+
+    /// Cancelled proposals cannot be used to update a contributor's profile.
+    #[test]
+    fn test_update_contributor_rejects_cancelled_proposal() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "h0");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "h1");
+        client.register_contributor(&contributor, &old_handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::UpdateProfile);
+        client.sign(&s.bob, &pid);
+        client.cancel_proposal(&s.alice, &pid);
+
+        assert!(client
+            .try_update_contributor(&s.alice, &contributor, &new_handle, &Some(pid))
+            .is_err());
+
+        let after = client.get_contributor(&contributor);
+        assert_eq!(after.github_handle, old_handle);
+    }
+
+    /// Expired proposals cannot be used to update a contributor's profile.
+    #[test]
+    fn test_update_contributor_rejects_expired_proposal() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "h0");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "h1");
+        client.register_contributor(&contributor, &old_handle);
+
+        s.env.ledger().set_timestamp(1_000_000);
+        let pid = client.propose(&s.alice, &ProposalAction::UpdateProfile);
+        client.sign(&s.bob, &pid);
+
+        // Advance past the proposal TTL
+        s.env
+            .ledger()
+            .set_timestamp(1_000_000 + multisig::PROPOSAL_TTL_SECS + 1);
+        client.expire_proposal(&pid);
+
+        assert!(client
+            .try_update_contributor(&s.alice, &contributor, &new_handle, &Some(pid))
+            .is_err());
+
+        let after = client.get_contributor(&contributor);
+        assert_eq!(after.github_handle, old_handle);
     }
 }

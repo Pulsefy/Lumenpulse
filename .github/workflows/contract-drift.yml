@@ -1,0 +1,40 @@
+name: Contract Drift
+
+on:
+  pull_request:
+    paths:
+      - apps/onchain/testnet-manifest.json
+      - apps/backend/.env.example
+      - apps/webapp/.env.local.example
+      - apps/mobile/.env.example
+      - apps/backend/src/config/contract-drift.detector.ts
+      - apps/backend/scripts/check-contract-drift.ts
+      - apps/backend/CONTRACT_DRIFT_DETECTOR.md
+      - .github/workflows/contract-drift.yml
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Check contract IDs
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Detect contract drift
+        run: npm run contract:drift

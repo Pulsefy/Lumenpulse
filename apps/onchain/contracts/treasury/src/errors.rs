@@ -14,4 +14,13 @@ pub enum TreasuryError {
     NothingToClaim = 8,
     Reentrancy = 9,
     SameBeneficiary = 10,
+    // ── Multisig proposal errors ──────────────────────────────
+    ProposalNotFound = 11,
+    ProposalNotApproved = 12,
+    ProposalAlreadySigned = 13,
+    ProposalExpired = 14,
+    ProposalNotActive = 15,
+    WrongProposalAction = 16,
+    InvalidMultisigConfig = 17,
+    TooManySigners = 18,
 }

@@ -20,6 +20,8 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   priceAlerts: true,
   newsAlerts: true,
   securityAlerts: true,
+  grantAlerts: true,
+  contributionAlerts: true,
 };
 
 interface NotificationRow {
@@ -55,6 +57,18 @@ export default function NotificationSettingsScreen() {
       title: t('settings.notification_settings.security_alerts'),
       description: t('settings.notification_settings.security_alerts_desc'),
       icon: 'shield-checkmark-outline',
+    },
+    {
+      key: 'grantAlerts',
+      title: t('settings.notification_settings.grant_alerts'),
+      description: t('settings.notification_settings.grant_alerts_desc'),
+      icon: 'gift-outline',
+    },
+    {
+      key: 'contributionAlerts',
+      title: t('settings.notification_settings.contribution_alerts'),
+      description: t('settings.notification_settings.contribution_alerts_desc'),
+      icon: 'card-outline',
     },
   ];
 

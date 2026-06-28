@@ -18,6 +18,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from src.ingestion.news_fetcher import fetch_news
 from src.ingestion.price_fetcher import PriceFetcher
 from src.ingestion.stellar_fetcher import get_asset_volume, get_network_overview
+from src.ingestion.ingestion_alerting import (
+    record_source_failure,
+    record_source_success,
+    run_ingestion_alerting_cycle,
+)
 from src.validators import validate_news_article, validate_onchain_metric
 from src.analytics.market_analyzer import MarketAnalyzer, MarketData
 from src.analytics.market_analyzer import get_explanation
@@ -63,6 +68,17 @@ def setup_signal_handlers():
     signal.signal(signal.SIGTERM, signal_handler)
 
 
+def _fetch_with_source_tracking(source: str, fn, *args, **kwargs):
+    """Run an external fetch and record source health for alerting."""
+    try:
+        result = fn(*args, **kwargs)
+        record_source_success(source)
+        return result
+    except Exception as exc:
+        record_source_failure(source, type(exc).__name__, str(exc))
+        raise
+
+
 def run_data_pipeline():
     """Run a single execution of the complete data processing pipeline."""
     print("=" * 60)
@@ -80,11 +96,24 @@ def run_data_pipeline():
 
         price_fetcher = PriceFetcher()
         with ThreadPoolExecutor(max_workers=5) as io_pool:
-            news_future = io_pool.submit(fetch_news, limit=5)
-            vol_24h_future = io_pool.submit(get_asset_volume, "XLM", hours=24)
-            vol_48h_future = io_pool.submit(get_asset_volume, "XLM", hours=48)
-            network_future = io_pool.submit(get_network_overview)
-            price_future = io_pool.submit(price_fetcher.fetch_all_prices, ["XLM", "USDC"])
+            news_future = io_pool.submit(
+                _fetch_with_source_tracking, "news", fetch_news, limit=5
+            )
+            vol_24h_future = io_pool.submit(
+                _fetch_with_source_tracking, "stellar_horizon", get_asset_volume, "XLM", 24
+            )
+            vol_48h_future = io_pool.submit(
+                _fetch_with_source_tracking, "stellar_horizon", get_asset_volume, "XLM", 48
+            )
+            network_future = io_pool.submit(
+                _fetch_with_source_tracking, "stellar_horizon", get_network_overview
+            )
+            price_future = io_pool.submit(
+                _fetch_with_source_tracking,
+                "price_feed",
+                price_fetcher.fetch_all_prices,
+                ["XLM", "USDC"],
+            )
 
             raw_news_articles = news_future.result()
             raw_volume_24h = vol_24h_future.result()
@@ -279,6 +308,13 @@ def run_data_pipeline():
         }
 
         logger.info(f"Pipeline completed successfully: {result}")
+
+        try:
+            alerting_status = run_ingestion_alerting_cycle()
+            result["ingestion_alerting"] = alerting_status
+        except Exception as alerting_exc:
+            logger.warning("Post-pipeline ingestion alerting cycle failed: %s", alerting_exc)
+
         return result
 
     except Exception as e:

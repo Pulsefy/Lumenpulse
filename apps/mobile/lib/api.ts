@@ -59,6 +59,8 @@ export interface NotificationPreferences {
   priceAlerts: boolean;
   newsAlerts: boolean;
   securityAlerts: boolean;
+  grantAlerts: boolean;
+  contributionAlerts: boolean;
 }
 
 export interface UserPreferences {

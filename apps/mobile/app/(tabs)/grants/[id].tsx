@@ -20,6 +20,7 @@ import {
   matchShare,
   roundStatusLabel,
 } from '../../../lib/grants';
+import { CachedApi } from '../../../lib/cached-api';
 import { formatTokenAmount } from '../../../lib/stellar';
 
 function InfoRow({
@@ -150,7 +151,7 @@ function GrantRoundDetailContent() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await grantsApi.getRoundSummary(roundId);
+      const res = await CachedApi.getGrantRoundSummary(roundId);
       if (res.success && res.data) {
         setSummary(res.data);
       } else {
