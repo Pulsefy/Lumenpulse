@@ -102,9 +102,7 @@ impl FeatureFlagsContract {
     }
 
     pub fn get_flag(env: Env, key: Symbol) -> Option<FlagEntry> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Flag(key))
+        env.storage().persistent().get(&DataKey::Flag(key))
     }
 
     pub fn list_flags(env: Env) -> Vec<FlagEntry> {
