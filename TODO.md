@@ -1,4 +1,4 @@
-- [ ] Implement incremental ledger checkpoint recovery for interrupted contract event backfills
-- [ ] Ensure resume avoids duplicate processing
-- [ ] Add operational logs showing recovery state
-- [ ] Run a quick smoke test / lint (as available)
+- [x] Implement incremental ledger checkpoint recovery for interrupted contract event backfills
+- [x] Ensure resume avoids duplicate processing
+- [x] Add operational logs showing recovery state
+- [x] Run a quick smoke test / lint (as available)

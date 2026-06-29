@@ -51,8 +51,19 @@ export class SorobanEventIndexerService {
    * Call this to re-index historical data from any point.
    */
   async backfill(fromLedger: number): Promise<{ indexed: number }> {
-    this.logger.log(`Starting backfill from ledger ${fromLedger}`);
-    return this.sync('backfill', fromLedger);
+    this.logger.log(
+      { fromLedger, type: 'backfill' },
+      'Starting backfill operation',
+    );
+    
+    const result = await this.sync('backfill', fromLedger);
+    
+    this.logger.log(
+      { fromLedger, indexed: result.indexed, type: 'backfill' },
+      'Backfill operation completed',
+    );
+    
+    return result;
   }
 
   // ---------------------------------------------------------------------------
@@ -92,7 +103,14 @@ export class SorobanEventIndexerService {
       );
 
       this.logger.log(
-        `Indexing ledgers ${startLedger}–${endLedger} (latest=${latestLedger})`,
+        { 
+          triggeredBy, 
+          startLedger, 
+          endLedger, 
+          latestLedger, 
+          cursorPosition: cursor.lastLedgerSequence 
+        },
+        `Starting ledger sync: ${startLedger}–${endLedger}`,
       );
 
       const indexed = await this.indexLedgerRange(startLedger, endLedger);
@@ -106,13 +124,26 @@ export class SorobanEventIndexerService {
       await this.jobHistory.complete(run, { indexed, startLedger, endLedger });
 
       this.logger.log(
-        `Indexed ${indexed} events for ledgers ${startLedger}–${endLedger}`,
+        { 
+          indexed, 
+          startLedger, 
+          endLedger, 
+          newCursorPosition: endLedger 
+        },
+        `Successfully indexed ${indexed} events`,
       );
 
       return { indexed };
     } catch (err) {
       await this.jobHistory.fail(run, err);
-      this.logger.error('Soroban event indexer failed', err);
+      this.logger.error(
+        { 
+          triggeredBy, 
+          error: err instanceof Error ? err.message : String(err) 
+        },
+        'Soroban event indexer failed',
+        err,
+      );
       return { indexed: 0 };
     }
   }
@@ -133,42 +164,112 @@ export class SorobanEventIndexerService {
     const server = this.rpcClient.rawServer;
     let indexed = 0;
     let pageCursor: string | undefined;
+    let lastProcessedLedger = startLedger - 1;
+    let checkpointLedger = startLedger - 1;
+
+    this.logger.log(
+      { startLedger, endLedger, pageSize: PAGE_LIMIT },
+      'Starting event fetch',
+    );
 
     let hasMore = true;
     while (hasMore) {
-      // Build the correct discriminated union variant
-      const request: rpc.Api.GetEventsRequest = pageCursor
-        ? { filters: [], cursor: pageCursor, limit: PAGE_LIMIT }
-        : { filters: [], startLedger, endLedger, limit: PAGE_LIMIT };
+      try {
+        // Build the correct discriminated union variant
+        const request: rpc.Api.GetEventsRequest = pageCursor
+          ? { filters: [], cursor: pageCursor, limit: PAGE_LIMIT }
+          : { filters: [], startLedger, endLedger, limit: PAGE_LIMIT };
 
-      const response = await server.getEvents(request);
+        const response = await server.getEvents(request);
 
-      if (!response.events || response.events.length === 0) {
-        break;
-      }
+        if (!response.events || response.events.length === 0) {
+          this.logger.debug('No events returned from RPC');
+          break;
+        }
 
-      // Filter to events strictly within our target ledger range
-      const eventsInRange = response.events.filter(
-        (e) => e.ledger >= startLedger && e.ledger <= endLedger,
-      );
+        // Filter to events strictly within our target ledger range
+        const eventsInRange = response.events.filter(
+          (e) => e.ledger >= startLedger && e.ledger <= endLedger,
+        );
 
-      await this.upsertEvents(eventsInRange);
-      indexed += eventsInRange.length;
+        const newLastLedger =
+          eventsInRange.length > 0
+            ? eventsInRange[eventsInRange.length - 1].ledger
+            : lastProcessedLedger;
 
-      // The SDK returns a string cursor on the response object for pagination
-      pageCursor = response.cursor || undefined;
+        this.logger.debug(
+          { 
+            fetched: response.events.length, 
+            inRange: eventsInRange.length, 
+            currentLedger: newLastLedger,
+            cursor: pageCursor 
+          },
+          'Processing page',
+        );
 
-      // Stop if we've passed the end ledger or exhausted pages
-      const lastLedger =
-        response.events[response.events.length - 1]?.ledger ?? 0;
-      if (
-        lastLedger >= endLedger ||
-        response.events.length < PAGE_LIMIT ||
-        !pageCursor
-      ) {
-        hasMore = false;
+        await this.upsertEvents(eventsInRange);
+        indexed += eventsInRange.length;
+        lastProcessedLedger = newLastLedger;
+
+        // Checkpoint: Save progress every 100 ledgers for recovery
+        if (lastProcessedLedger - checkpointLedger >= 100) {
+          await this.cursorRepo.save({
+            cursorKey: GLOBAL_CURSOR_KEY,
+            lastLedgerSequence: lastProcessedLedger,
+          });
+          checkpointLedger = lastProcessedLedger;
+          this.logger.log(
+            { checkpointLedger, totalIndexed: indexed },
+            'Checkpoint saved during backfill',
+          );
+        }
+
+        // The SDK returns a string cursor on the response object for pagination
+        pageCursor = response.cursor || undefined;
+
+        // Stop if we've passed the end ledger or exhausted pages
+        const lastLedger =
+          response.events[response.events.length - 1]?.ledger ?? 0;
+        if (
+          lastLedger >= endLedger ||
+          response.events.length < PAGE_LIMIT ||
+          !pageCursor
+        ) {
+          hasMore = false;
+        }
+      } catch (err) {
+        this.logger.error(
+          { 
+            lastProcessedLedger, 
+            checkpointLedger, 
+            error: err instanceof Error ? err.message : String(err) 
+          },
+          'Error during event fetch - will resume from last checkpoint',
+        );
+        // Save checkpoint before failing
+        if (lastProcessedLedger >= startLedger) {
+          await this.cursorRepo.save({
+            cursorKey: GLOBAL_CURSOR_KEY,
+            lastLedgerSequence: lastProcessedLedger,
+          });
+          this.logger.log(
+            { recoveryLedger: lastProcessedLedger },
+            'Recovery checkpoint saved',
+          );
+        }
+        throw err;
       }
     }
+
+    this.logger.log(
+      { 
+        startLedger, 
+        endLedger, 
+        lastProcessedLedger, 
+        totalIndexed: indexed 
+      },
+      'Completed ledger range',
+    );
 
     return indexed;
   }

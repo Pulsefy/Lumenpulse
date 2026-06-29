@@ -4,6 +4,8 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import {
   ContributeDto,
   ContributionRecordDto,
@@ -14,73 +16,57 @@ import {
   OnChainStatus,
   RoadmapItemDto,
 } from './dto/crowdfund.dto';
+import { CrowdfundProjectEntity } from './entities/crowdfund-project.entity';
+import { CrowdfundContributionEntity } from './entities/crowdfund-contribution.entity';
 import { randomUUID } from 'crypto';
-
-interface ProjectRecord {
-  id: number;
-  owner: string;
-  name: string;
-  description?: string;
-  bannerUrl?: string;
-  targetAmount: bigint;
-  tokenAddress: string;
-  contractAddress?: string;
-  totalDeposited: bigint;
-  totalWithdrawn: bigint;
-  onChainStatus: OnChainStatus;
-  lastSyncedAt: Date;
-  createdAt: Date;
-  roadmap: RoadmapItemDto[];
-  // publicKey -> ContributionEntry[]
-  contributions: Map<string, ContributionEntry[]>;
-}
-
-interface ContributionEntry {
-  amount: bigint;
-  timestamp: Date;
-  transactionHash: string;
-}
 
 const STROOP = 10_000_000n; // 1 XLM in stroops
 
 @Injectable()
 export class CrowdfundService {
   private readonly logger = new Logger(CrowdfundService.name);
-  private projects = new Map<number, ProjectRecord>();
-  private nextId = 1;
 
-  constructor() {
-    this.seedSampleProjects();
-  }
+  constructor(
+    @InjectRepository(CrowdfundProjectEntity)
+    private readonly projectRepo: Repository<CrowdfundProjectEntity>,
+    @InjectRepository(CrowdfundContributionEntity)
+    private readonly contributionRepo: Repository<CrowdfundContributionEntity>,
+  ) {}
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  listProjects(): CrowdfundProjectDto[] {
-    return [...this.projects.values()].map((p) => this.toDto(p));
+  async listProjects(): Promise<CrowdfundProjectDto[]> {
+    const projects = await this.projectRepo.find();
+    return Promise.all(projects.map((p) => this.toDto(p)));
   }
 
-  getProject(id: number): CrowdfundProjectDto {
-    return this.toDto(this.findOrThrow(id));
+  async getProject(id: number): Promise<CrowdfundProjectDto> {
+    // For backward compatibility, find by id as string
+    const project = await this.projectRepo.findOneBy({ id: String(id) });
+    if (!project) {
+      throw new NotFoundException(`Project ${id} not found`);
+    }
+    return this.toDto(project);
   }
 
-  createProject(dto: CreateProjectDto): CrowdfundProjectDto {
-    const id = this.nextId++;
-    const record: ProjectRecord = {
-      id,
+  async createProject(dto: CreateProjectDto): Promise<CrowdfundProjectDto> {
+    const projectId = randomUUID();
+    const project = this.projectRepo.create({
+      projectId,
       owner: dto.owner,
       name: dto.name,
-      description: dto.description,
-      bannerUrl: dto.bannerUrl,
+      description: dto.description ?? null,
+      bannerUrl: dto.bannerUrl ?? null,
       targetAmount: BigInt(
         Math.round(parseFloat(dto.targetAmount) * Number(STROOP)),
       ),
       tokenAddress: dto.tokenAddress,
-      contractAddress: dto.contractAddress,
+      contractAddress: dto.contractAddress ?? null,
       totalDeposited: 0n,
       totalWithdrawn: 0n,
       onChainStatus: OnChainStatus.ACTIVE,
-      lastSyncedAt: new Date(),
-      createdAt: new Date(),
+      lastLedgerSeq: 0,
+      lastTxHash: null,
       roadmap: (dto.roadmap ?? []).map((item, idx) => ({
         id: String(idx + 1),
         title: item.title,
@@ -88,15 +74,17 @@ export class CrowdfundService {
         targetDate: item.targetDate,
         isCompleted: false,
       })),
-      contributions: new Map(),
-    };
-    this.projects.set(id, record);
-    this.logger.log(`Project ${id} created: ${dto.name}`);
-    return this.toDto(record);
+    });
+    const saved = await this.projectRepo.save(project);
+    this.logger.log(`Project ${saved.id} created: ${dto.name}`);
+    return this.toDto(saved);
   }
 
-  contribute(dto: ContributeDto): ContributionResponseDto {
-    const project = this.findOrThrow(dto.projectId);
+  async contribute(dto: ContributeDto): Promise<ContributionResponseDto> {
+    const project = await this.projectRepo.findOneBy({ id: String(dto.projectId) });
+    if (!project) {
+      throw new NotFoundException(`Project ${dto.projectId} not found`);
+    }
 
     if (project.onChainStatus !== OnChainStatus.ACTIVE) {
       throw new BadRequestException(
@@ -108,21 +96,25 @@ export class CrowdfundService {
     if (amount <= 0n) throw new BadRequestException('Amount must be positive');
 
     const txHash = `0x${randomUUID().replace(/-/g, '')}`;
-    const entry: ContributionEntry = {
+    const contribution = this.contributionRepo.create({
+      projectId: project.projectId,
+      contributor: dto.senderPublicKey,
       amount,
-      timestamp: new Date(),
-      transactionHash: txHash,
-    };
+      txHash,
+      ledgerSequence: Math.floor(Math.random() * 1_000_000) + 50_000_000,
+      ledgerTimestamp: new Date(),
+    });
 
-    const existing = project.contributions.get(dto.senderPublicKey) ?? [];
-    existing.push(entry);
-    project.contributions.set(dto.senderPublicKey, existing);
+    await this.contributionRepo.save(contribution);
     project.totalDeposited += amount;
-    project.lastSyncedAt = new Date();
+    project.lastTxHash = txHash;
+    project.lastLedgerSeq = contribution.ledgerSequence;
+    await this.projectRepo.save(project);
 
     // Auto-complete if target reached
     if (project.totalDeposited >= project.targetAmount) {
       project.onChainStatus = OnChainStatus.COMPLETED;
+      await this.projectRepo.save(project);
       this.logger.log(
         `Project ${project.id} reached funding goal — marked COMPLETED`,
       );
@@ -135,11 +127,11 @@ export class CrowdfundService {
     return {
       transactionHash: txHash,
       status: 'SUCCESS',
-      ledger: Math.floor(Math.random() * 1_000_000) + 50_000_000,
+      ledger: contribution.ledgerSequence,
     };
   }
 
-  bootstrapDemoData(): { projectIds: number[] } {
+  async bootstrapDemoData(): Promise<{ projectIds: number[] }> {
     const demoProjects: CreateProjectDto[] = [
       {
         owner: 'GB5PY6YQF3OZ2IRPII7G3XVG6UJZYE5MVYC2EQNHW4KSYSSFYH7Y7QK3',
@@ -150,7 +142,7 @@ export class CrowdfundService {
         tokenAddress:
           'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
         contractAddress:
-          'CA6FLKVQZFWURX3P2G7W4D6A4WKE2N4ACWXL6DL5S5Z2JHVV7K72DT2J',
+          'CC6FLKVQZFWURX3P2G7W4D6A4WKE2N4ACWXL6DL5S5Z2JHVV7K72DT2J',
         roadmap: [
           {
             title: 'Launch grant portal',
@@ -201,9 +193,11 @@ export class CrowdfundService {
       },
     ];
 
-    const projectIds = demoProjects.map(
-      (project) => this.createProject(project).id,
+    const createdProjects = await Promise.all(
+      demoProjects.map((p) => this.createProject(p)),
     );
+
+    const projectIds = createdProjects.map((p) => parseInt(p.id));
 
     this.logger.log(
       `Bootstrapped ${projectIds.length} demo projects: ${projectIds.join(', ')}`,
@@ -212,190 +206,100 @@ export class CrowdfundService {
     return { projectIds };
   }
 
-  getContributors(projectId: number): ContributorDto[] {
-    const project = this.findOrThrow(projectId);
+  async getContributors(projectId: number): Promise<ContributorDto[]> {
+    const project = await this.projectRepo.findOneBy({ id: String(projectId) });
+    if (!project) {
+      throw new NotFoundException(`Project ${projectId} not found`);
+    }
 
-    return [...project.contributions.entries()].map(([publicKey, entries]) => {
+    const contributions = await this.contributionRepo.findBy({
+      projectId: project.projectId,
+    });
+
+    // Group contributions by contributor
+    const grouped = new Map<string, CrowdfundContributionEntity[]>();
+    contributions.forEach((c) => {
+      const list = grouped.get(c.contributor) ?? [];
+      list.push(c);
+      grouped.set(c.contributor, list);
+    });
+
+    return [...grouped.entries()].map(([publicKey, entries]) => {
       const total = entries.reduce((acc, e) => acc + e.amount, 0n);
-      const last = entries[entries.length - 1];
+      const last = entries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
       return {
         publicKey,
         totalContributed: this.fromStroops(total),
         contributionCount: entries.length,
-        lastContributionAt: last.timestamp.toISOString(),
+        lastContributionAt: last.createdAt.toISOString(),
       };
     });
   }
 
-  getProjectBalance(projectId: number): { balance: string } {
-    const project = this.findOrThrow(projectId);
+  async getProjectBalance(projectId: number): Promise<{ balance: string }> {
+    const project = await this.projectRepo.findOneBy({ id: String(projectId) });
+    if (!project) {
+      throw new NotFoundException(`Project ${projectId} not found`);
+    }
     const balance = project.totalDeposited - project.totalWithdrawn;
     return { balance: this.fromStroops(balance) };
   }
 
-  getMyContributions(
+  async getMyContributions(
     projectId: number,
     publicKey: string,
-  ): ContributionRecordDto[] {
-    const project = this.findOrThrow(projectId);
-    const entries = project.contributions.get(publicKey) ?? [];
+  ): Promise<ContributionRecordDto[]> {
+    const project = await this.projectRepo.findOneBy({ id: String(projectId) });
+    if (!project) {
+      throw new NotFoundException(`Project ${projectId} not found`);
+    }
 
-    return entries.map((e) => ({
+    const contributions = await this.contributionRepo.findBy({
+      projectId: project.projectId,
+      contributor: publicKey,
+    });
+
+    return contributions.map((c) => ({
       projectId,
       contributor: publicKey,
-      amount: this.fromStroops(e.amount),
-      timestamp: e.timestamp.toISOString(),
-      transactionHash: e.transactionHash,
+      amount: this.fromStroops(c.amount),
+      timestamp: (c.ledgerTimestamp ?? c.createdAt).toISOString(),
+      transactionHash: c.txHash,
     }));
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  private findOrThrow(id: number): ProjectRecord {
-    const record = this.projects.get(id);
-    if (!record) throw new NotFoundException(`Project ${id} not found`);
-    return record;
-  }
-
   private fromStroops(stroops: bigint): string {
     return (Number(stroops) / Number(STROOP)).toFixed(7);
   }
 
-  private toDto(p: ProjectRecord): CrowdfundProjectDto {
-    const totalContribs = [...p.contributions.values()].reduce(
-      (acc, entries) => acc + entries.length,
-      0,
-    );
+  private async toDto(p: CrowdfundProjectEntity): Promise<CrowdfundProjectDto> {
+    // Calculate contributor count
+    const contributorCount = await this.contributionRepo
+      .createQueryBuilder('c')
+      .where('c.projectId = :projectId', { projectId: p.projectId })
+      .select('COUNT(DISTINCT c.contributor)', 'count')
+      .getRawOne()
+      .then((r) => parseInt(r.count, 10) || 0);
 
     return {
-      id: p.id,
+      id: parseInt(p.id), // Map UUID to numeric for backward compatibility
       owner: p.owner,
       name: p.name,
-      description: p.description,
-      bannerUrl: p.bannerUrl,
+      description: p.description ?? undefined,
+      bannerUrl: p.bannerUrl ?? undefined,
       targetAmount: this.fromStroops(p.targetAmount),
       tokenAddress: p.tokenAddress,
-      contractAddress: p.contractAddress,
+      contractAddress: p.contractAddress ?? undefined,
       totalDeposited: this.fromStroops(p.totalDeposited),
       totalWithdrawn: this.fromStroops(p.totalWithdrawn),
       isActive: p.onChainStatus === OnChainStatus.ACTIVE,
       onChainStatus: p.onChainStatus,
-      lastSyncedAt: p.lastSyncedAt.toISOString(),
-      contributorCount: totalContribs,
-      roadmap: p.roadmap,
+      lastSyncedAt: p.updatedAt.toISOString(),
+      contributorCount,
+      roadmap: p.roadmap as RoadmapItemDto[],
       createdAt: p.createdAt.toISOString(),
     };
-  }
-
-  // ── Seed data ──────────────────────────────────────────────────────────────
-
-  private seedSampleProjects() {
-    const samples: CreateProjectDto[] = [
-      {
-        owner: 'GBYD6MQZFKGTX4XFNXMZPTBOHSXMCURJJR7JTXRLDTZBQ7IJQFZUWEJ',
-        name: 'Lumenpulse Community Fund',
-        description:
-          'A community-governed fund to support open-source Stellar ecosystem tooling and developer education.',
-        targetAmount: '50000',
-        tokenAddress:
-          'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
-        contractAddress:
-          'CABL2E2NKLCQIRSF6BXVB4NLSDBNJ2QBFVGXNLGBMZFDWRQKQ7MWDKD',
-        roadmap: [
-          {
-            title: 'Launch fundraiser',
-            description: 'Deploy vault contract and open contributions.',
-            targetDate: '2026-03-01',
-          },
-          {
-            title: 'Distribute first tranche',
-            description:
-              'Allocate 50% of funds to approved grant applications.',
-            targetDate: '2026-06-01',
-          },
-        ],
-      },
-      {
-        owner: 'GCEZWKCA5VLDNRLN3RPRJMRZOX3Z6G5CHCGERWIH7IHSORJOT7LQQFKH',
-        name: 'StellarBridge DEX Integration',
-        description:
-          'Building a cross-chain bridge between Stellar and EVM networks with a mobile-first UX.',
-        targetAmount: '25000',
-        tokenAddress:
-          'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
-        contractAddress:
-          'CBSXTJCDVNR4QSUVVNRPUOMXZUWUBEYZQQKDXIYWF2FNXLBOPSTXGAGK',
-        roadmap: [
-          {
-            title: 'Testnet prototype',
-            description:
-              'Working bridge on Testnet with basic swap functionality.',
-            targetDate: '2026-04-15',
-          },
-          {
-            title: 'Security audit',
-            description: 'Third-party audit of the Soroban bridge contracts.',
-            targetDate: '2026-05-30',
-          },
-          {
-            title: 'Mainnet launch',
-            description: 'Public release of the bridge with full UI.',
-            targetDate: '2026-07-01',
-          },
-        ],
-      },
-      {
-        owner: 'GDQJUTQYK2MQX2VGDR2FYWLIYAQIEGXTQVTFEMGH3PRXC7XMGZ3TQKQ',
-        name: 'Micro-Grants for African Devs',
-        description:
-          'Providing micro-grants up to $500 to African developers building on Stellar.',
-        targetAmount: '10000',
-        tokenAddress:
-          'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
-        contractAddress:
-          'CDRP4QZJFJDUGBMN35GGRQBIZSGD3CQZIJFM4CLHZLGQDGZQ3JKWFPQ',
-      },
-    ];
-
-    // Seed with some pre-existing contributions so the list looks populated
-    for (const s of samples) {
-      const dto = this.createProject(s);
-      const record = this.projects.get(dto.id)!;
-
-      // Add a few synthetic contributions
-      const synthetic = [
-        {
-          pk: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
-          amt: '500',
-        },
-        {
-          pk: 'GBYD6MQZFKGTX4XFNXMZPTBOHSXMCURJJR7JTXRLDTZBQ7IJQFZUWEJ',
-          amt: '1200',
-        },
-      ];
-
-      for (const c of synthetic) {
-        const amount = BigInt(Math.round(parseFloat(c.amt) * Number(STROOP)));
-        const entries = record.contributions.get(c.pk) ?? [];
-        entries.push({
-          amount,
-          timestamp: new Date(
-            Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000,
-          ),
-          transactionHash: `0x${randomUUID().replace(/-/g, '')}`,
-        });
-        record.contributions.set(c.pk, entries);
-        record.totalDeposited += amount;
-      }
-
-      record.lastSyncedAt = new Date();
-    }
-
-    // Mark third project as COMPLETED for variety
-    const third = this.projects.get(3);
-    if (third) {
-      third.onChainStatus = OnChainStatus.COMPLETED;
-      third.totalDeposited = third.targetAmount;
-    }
   }
 }
