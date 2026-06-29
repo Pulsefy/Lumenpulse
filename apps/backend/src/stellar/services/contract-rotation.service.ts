@@ -3,15 +3,11 @@ import { StrKey, Keypair, rpc } from '@stellar/stellar-sdk';
 import { config } from '../../lib/config';
 import { ContractValidationResultDto } from '../dto/rotate-contract-ids.dto';
 import { SorobanRpcClientService } from './soroban-rpc-client.service';
+import { SimulationTraceLogger } from './simulation-trace-logger.service';
 
 const NETWORK_PASSPHRASES = {
   testnet: 'Test SDF Network ; September 2015',
   mainnet: 'Public Global Stellar Network ; September 2015',
-} as const;
-
-const DEFAULT_SOROBAN_RPC_URLS = {
-  testnet: 'https://soroban-testnet.stellar.org',
-  mainnet: 'https://soroban.stellar.org',
 } as const;
 
 /**
@@ -38,7 +34,10 @@ interface SimulationContext {
 
 @Injectable()
 export class ContractRotationService {
-  constructor(private readonly sorobanRpc: SorobanRpcClientService) {}
+  constructor(
+    private readonly sorobanRpc: SorobanRpcClientService,
+    private readonly simulationTraceLogger: SimulationTraceLogger,
+  ) {}
 
   /**
    * Validates that new contract IDs are reachable and callable on the network.
@@ -195,27 +194,22 @@ export class ContractRotationService {
     contractId: string,
     method: string,
   ): Promise<void> {
+    const requestId = this.simulationTraceLogger.generateRequestId();
     await this.sorobanRpc.simulateContractRead(
       context.sourceAccountId,
       context.sourceSequence,
       contractId,
       method,
       context.networkPassphrase,
+      {
+        simulationContext: {
+          requestId,
+          contractId,
+          contractMethod: method,
+          network: context.networkPassphrase.includes('Test') ? 'testnet' : 'mainnet',
+        },
+      },
     );
   }
 
-  /**
-   * Gets the Soroban RPC URL for the specified network.
-   * Uses configured URL if available, otherwise uses default.
-   *
-   * @param network - Network ('testnet' or 'mainnet')
-   * @returns Soroban RPC URL
-   */
-  private getSorobanRpcUrl(network: 'testnet' | 'mainnet'): string {
-    // Only use custom RPC URL for the current configured network
-    if (network === config.stellar.network && config.stellar.sorobanRpcUrl) {
-      return config.stellar.sorobanRpcUrl;
-    }
-    return DEFAULT_SOROBAN_RPC_URLS[network];
-  }
 }

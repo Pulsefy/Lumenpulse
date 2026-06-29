@@ -10,7 +10,11 @@ import { AuditModule } from '../audit/audit.module';
 import { AppConfigModule } from '../config/config.module';
 import { SorobanRpcClientService } from './services/soroban-rpc-client.service';
 import { MatchingPoolAdminController } from './controllers/matching-pool-admin.controller';
+<<<<<<< Updated upstream
 import { AppCacheModule } from '../cache/cache.module';
+=======
+import { SimulationTraceLogger } from './services/simulation-trace-logger.service';
+>>>>>>> Stashed changes
 
 @Module({
   imports: [
@@ -26,12 +30,14 @@ import { AppCacheModule } from '../cache/cache.module';
     SorobanRpcClientService,
     ContractRotationService,
     StellarContractRotationService,
+    SimulationTraceLogger,
   ],
   exports: [
     StellarService,
     SorobanRpcClientService,
     ContractRotationService,
     StellarContractRotationService,
+    SimulationTraceLogger,
   ],
 })
 export class StellarModule {}

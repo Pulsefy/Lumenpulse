@@ -1,6 +1,6 @@
-import { existsSync } from 'node:fs';
-import { inspect } from 'node:util';
-import * as path from 'node:path';
+import { existsSync } from 'fs';
+import { inspect } from 'util';
+import * as path from 'path';
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
@@ -483,6 +483,11 @@ const envSchema = z
       z.boolean().default(true),
     ),
     LOGGING_EXCLUDE_ROUTES: z.string().trim().optional(),
+    SOROBAN_SIMULATION_TRACE_LOGGING: z.preprocess(
+      parseBoolean,
+      z.boolean().default(true),
+    ),
+    SOROBAN_SIMULATION_TRACE_LEVEL: z.enum(['basic', 'detailed']).default('basic'),
 
     AWS_BUCKET_NAME: z.string().trim().optional(),
     AWS_REGION: z.string().trim().optional(),
@@ -1041,7 +1046,12 @@ export const config = Object.freeze({
   soroban: Object.freeze({
     ingestSecret: parsedEnv.SOROBAN_INGEST_SECRET,
     timestampToleranceMs: parsedEnv.SOROBAN_TIMESTAMP_TOLERANCE_MS ?? 300_000,
+<<<<<<< Updated upstream
     indexerStartLedger: parsedEnv.SOROBAN_INDEXER_START_LEDGER,
+=======
+    simulationTraceLogging: parsedEnv.SOROBAN_SIMULATION_TRACE_LOGGING,
+    simulationTraceLevel: parsedEnv.SOROBAN_SIMULATION_TRACE_LEVEL,
+>>>>>>> Stashed changes
   }),
   metrics: Object.freeze({
     allowedIps: Object.freeze(splitCsv(parsedEnv.METRICS_ALLOWED_IPS)),
