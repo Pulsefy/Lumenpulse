@@ -136,8 +136,14 @@ impl TreasuryContract {
         amount: i128,
         start_time: u64,
         duration: u64,
+        request_id: soroban_sdk::BytesN<32>,
     ) -> Result<(), TreasuryError> {
         Self::with_reentrancy_guard(&env, || {
+            // Idempotency check
+            if idempotency_guard::claim_request(&env, &request_id).is_err() {
+                return Err(TreasuryError::AlreadyExecuted);
+            }
+
             let stored_admin: Address = env
                 .storage()
                 .instance()

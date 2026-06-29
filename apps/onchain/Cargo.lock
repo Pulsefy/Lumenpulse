@@ -317,6 +317,7 @@ dependencies = [
 name = "crowdfund_vault"
 version = "0.0.0"
 dependencies = [
+ "idempotency-guard",
  "notification_interface",
  "proptest",
  "reentrancy-guard",
@@ -843,6 +844,13 @@ name = "id-arena"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954"
+
+[[package]]
+name = "idempotency-guard"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
 
 [[package]]
 name = "ident_case"
@@ -1874,6 +1882,7 @@ dependencies = [
 name = "treasury"
 version = "0.1.0"
 dependencies = [
+ "idempotency-guard",
  "reentrancy-guard",
  "soroban-sdk",
 ]
@@ -2244,6 +2253,14 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser 0.244.0",
+]
+
+[[package]]
+name = "yield-vault"
+version = "0.1.0"
+dependencies = [
+ "idempotency-guard",
+ "soroban-sdk",
 ]
 
 [[package]]

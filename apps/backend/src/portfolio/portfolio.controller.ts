@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Param,
   Post,
   Query,
   UseGuards,
@@ -13,6 +14,7 @@ import {
   ApiTags,
   ApiBearerAuth,
   ApiOperation,
+  ApiParam,
   ApiResponse,
   ApiQuery,
 } from '@nestjs/swagger';
@@ -71,6 +73,36 @@ export class PortfolioController {
     return this.portfolioService.getPortfolioSummaryInCurrency(
       userId,
       currency,
+    );
+  }
+
+  @Get('accounts/:publicKey/summary')
+  @Throttle(getPortfolioReadThrottleOverride())
+  @ApiOperation({
+    summary: 'Get portfolio summary for a linked Stellar account',
+    description:
+      'Returns live balances and valuation for one Stellar account linked to the authenticated user',
+  })
+  @ApiParam({
+    name: 'publicKey',
+    description: 'Linked Stellar account public key',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Account portfolio summary retrieved successfully',
+    type: PortfolioSummaryWithCurrencyResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Linked Stellar account not found' })
+  async getPortfolioSummaryForAccount(
+    @Request() req: any,
+    @Param('publicKey') publicKey: string,
+  ): Promise<PortfolioSummaryWithCurrencyResponseDto> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const userId = req.user.sub as string;
+    return this.portfolioService.getPortfolioSummaryForAccount(
+      userId,
+      publicKey,
     );
   }
 
