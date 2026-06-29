@@ -14,7 +14,9 @@ import {
 describe('extractVestingWalletContractErrorCode', () => {
   it('extracts the code from a HostError diagnostic', () => {
     expect(
-      extractVestingWalletContractErrorCode('HostError: Error(Contract, #3) ...'),
+      extractVestingWalletContractErrorCode(
+        'HostError: Error(Contract, #3) ...',
+      ),
     ).toBe(3);
   });
 
@@ -42,8 +44,9 @@ describe('mapVestingWalletContractErrorCode', () => {
   it('maps VestingNotFound (4) with the beneficiary in details', () => {
     const ex = mapVestingWalletContractErrorCode(4, undefined, 'GABC');
     expect(ex).toBeInstanceOf(VestingWalletNotFoundException);
-    expect((ex.getResponse() as { details: { beneficiary: string } }).details)
-      .toEqual({ beneficiary: 'GABC' });
+    expect(
+      (ex.getResponse() as { details: { beneficiary: string } }).details,
+    ).toEqual({ beneficiary: 'GABC' });
   });
 
   it('maps InsufficientBalance (9) to the insufficient funds exception', () => {

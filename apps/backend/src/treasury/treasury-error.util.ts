@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 import {
   TreasuryException,
   TreasuryInvalidAmountException,
@@ -38,7 +39,7 @@ export function mapContractErrorCode(
   fallbackMessage?: string,
   beneficiary?: string,
 ): TreasuryException {
-  switch (code as TreasuryContractError) {
+  switch (code) {
     case TreasuryContractError.NotInitialized:
       return new TreasuryNotInitializedException();
     case TreasuryContractError.Unauthorized:

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 import {
   VestingWalletException,
   VestingWalletInvalidAmountException,
@@ -31,7 +32,7 @@ export function mapVestingWalletContractErrorCode(
   fallbackMessage?: string,
   beneficiary?: string,
 ): VestingWalletException {
-  switch (code as VestingWalletContractError) {
+  switch (code) {
     case VestingWalletContractError.NotInitialized:
       return new VestingWalletNotInitializedException();
     case VestingWalletContractError.Unauthorized:
