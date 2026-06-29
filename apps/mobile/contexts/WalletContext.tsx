@@ -107,6 +107,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const disconnect = useCallback(() => {
         setPublicKey(null);
         setStatus('disconnected');
+        // Clear persisted wallet metadata from secure storage
+        import('../lib/storage').then(({ storage }) => {
+            storage.clearWalletMetadata();
+        });
     }, []);
 
     const signAndSubmitXdr = useCallback(async (xdr: string): Promise<{ status: 'success' | 'rejected' | 'failed'; txHash?: string }> => {
