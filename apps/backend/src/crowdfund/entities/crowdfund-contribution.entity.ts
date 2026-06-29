@@ -24,7 +24,7 @@ export class CrowdfundContributionEntity {
 
   /** Amount in stroops */
   @Column({ type: 'bigint' })
-  amount: bigint;
+  amount: number;
 
   /** Transaction hash */
   @Column({ type: 'varchar', length: 128 })

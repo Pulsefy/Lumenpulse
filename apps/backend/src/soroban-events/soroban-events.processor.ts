@@ -1,6 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { Job } from 'bullmq';
 import {
@@ -25,17 +26,23 @@ export class SorobanEventsProcessor extends WorkerHost {
     private readonly eventRepo: Repository<SorobanEvent>,
 
     private readonly sorobanEventsService: SorobanEventsService,
+    private readonly configService: ConfigService,
   ) {
     super();
   }
 
   async process(job: Job<IngestSorobanEventDto>): Promise<void> {
     if (job.name !== PROCESS_EVENT_JOB) {
-      this.logger.warn(`Unknown job name: ${job.name}`);
+      this.logger.warn({ jobName: job.name }, 'Unknown job name');
       return;
     }
 
     const { txHash, eventIndex, contractId, eventType, rawPayload } = job.data;
+
+    this.logger.debug(
+      { txHash, eventIndex, contractId, eventType },
+      'Starting to process soroban event',
+    );
 
     const existing = await this.eventRepo.findOne({
       where: { txHash, eventIndex },
@@ -45,7 +52,7 @@ export class SorobanEventsProcessor extends WorkerHost {
     if (existing) {
       this.logger.debug(
         { txHash, eventIndex, status: existing.status },
-        'Soroban event already processed, skipping',
+        'Soroban event already processed, skipping (idempotent processing',
       );
       return;
     }
@@ -70,7 +77,14 @@ export class SorobanEventsProcessor extends WorkerHost {
     await this.eventRepo.save(event);
 
     try {
-      if (contractId === process.env.PROJECT_REGISTRY_CONTRACT_ID) {
+      const projectRegistryContractId = this.configService.get<string>(
+        'PROJECT_REGISTRY_CONTRACT_ID',
+      );
+      if (contractId === projectRegistryContractId) {
+        this.logger.debug(
+          { txHash, eventIndex, contractId },
+          'Processing Project Registry event',
+        );
         // Cast rawPayload to any so we can access its nested properties safely
         const payloadData = rawPayload as Record<string, any>;
 
@@ -88,7 +102,10 @@ export class SorobanEventsProcessor extends WorkerHost {
         };
 
         await this.sorobanEventsService.syncProjectRegistryEvent(projectData);
-        this.logger.log(`Project Registry sync successful for tx ${txHash}`);
+        this.logger.log(
+          { txHash, projectId: projectData.projectId },
+          'Project Registry sync successful',
+        );
       }
 
       event.status = SorobanEventStatus.PROCESSED;
@@ -97,13 +114,18 @@ export class SorobanEventsProcessor extends WorkerHost {
       event.status = SorobanEventStatus.FAILED;
       event.errorMessage = err instanceof Error ? err.message : String(err);
       await this.eventRepo.save(event);
+      this.logger.error(
+        { txHash, eventIndex, error: event.errorMessage },
+        'Failed to process soroban event',
+        err,
+      );
       throw err; // let BullMQ retry
     }
 
     await this.eventRepo.save(event);
     this.logger.log(
-      { txHash, eventIndex, eventType },
-      'Processed soroban event',
+      { txHash, eventIndex, eventType, status: event.status },
+      'Processed soroban event successfully',
     );
   }
 }

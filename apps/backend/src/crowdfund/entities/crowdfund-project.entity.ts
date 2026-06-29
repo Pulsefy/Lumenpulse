@@ -36,7 +36,7 @@ export class CrowdfundProjectEntity {
 
   /** Target amount in stroops */
   @Column({ type: 'bigint' })
-  targetAmount: bigint;
+  targetAmount: number;
 
   /** Token address (Stellar asset code or contract ID) */
   @Column({ type: 'varchar', length: 128 })
@@ -48,14 +48,18 @@ export class CrowdfundProjectEntity {
 
   /** Total deposited (stroops) */
   @Column({ type: 'bigint', default: 0 })
-  totalDeposited: bigint;
+  totalDeposited: number;
 
   /** Total withdrawn (stroops) */
   @Column({ type: 'bigint', default: 0 })
-  totalWithdrawn: bigint;
+  totalWithdrawn: number;
 
   /** On-chain status */
-  @Column({ type: 'varchar', length: 32, default: OnChainStatus.ACTIVE })
+  @Column({
+    type: 'enum',
+    enum: OnChainStatus,
+    default: OnChainStatus.ACTIVE,
+  })
   onChainStatus: OnChainStatus;
 
   /** Last ledger sequence when this project was updated on-chain */
