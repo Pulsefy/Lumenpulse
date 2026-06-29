@@ -8,6 +8,7 @@ import {
 } from '@stellar/stellar-sdk';
 import { Counter, Histogram, Registry } from 'prom-client';
 import { config } from '../../lib/config';
+import { SimulationTraceLogger, SimulationTraceContext } from './simulation-trace-logger.service';
 
 export enum SorobanErrorCode {
   TIMEOUT = 'SOROBAN_TIMEOUT',
@@ -23,6 +24,7 @@ export class SorobanRpcError extends Error {
     public readonly code: SorobanErrorCode,
     message: string,
     public readonly cause?: unknown,
+    public readonly simulationResponse?: rpc.Api.SimulateTransactionResponse,
   ) {
     super(message);
     this.name = 'SorobanRpcError';
@@ -33,9 +35,10 @@ export interface SorobanClientOptions {
   timeoutMs?: number;
   maxRetries?: number;
   initialBackoffMs?: number;
+  simulationContext?: SimulationTraceContext;
 }
 
-const DEFAULT_OPTIONS: Required<SorobanClientOptions> = {
+const DEFAULT_OPTIONS: Required<Omit<SorobanClientOptions, 'simulationContext'>> = {
   timeoutMs: config.stellar.timeout ?? 30_000,
   maxRetries: 3,
   initialBackoffMs: 500,
@@ -51,7 +54,14 @@ export class SorobanRpcClientService {
   private readonly rpcErrors: Counter;
   private readonly rpcRequests: Counter;
 
+<<<<<<< Updated upstream
   constructor(@Optional() registry?: Registry) {
+=======
+  constructor(
+    private readonly simulationTraceLogger: SimulationTraceLogger,
+    registry?: Registry,
+  ) {
+>>>>>>> Stashed changes
     const rpcUrl =
       config.stellar.sorobanRpcUrl ??
       (config.stellar.network === 'mainnet'
@@ -104,14 +114,30 @@ export class SorobanRpcClientService {
     tx: Parameters<rpc.Server['simulateTransaction']>[0],
     opts?: SorobanClientOptions,
   ): Promise<rpc.Api.SimulateTransactionResponse> {
+    let requestId: string | undefined;
+    if (opts?.simulationContext) {
+      requestId = this.simulationTraceLogger.logSimulationStart(opts.simulationContext);
+    }
+
     return this.withRetry('simulateTransaction', opts, async () => {
       const result = await this.server.simulateTransaction(tx);
+      
       if (rpc.Api.isSimulationError(result)) {
+        if (opts?.simulationContext) {
+          this.simulationTraceLogger.logFailedSimulation(result, {
+            ...opts.simulationContext,
+            requestId,
+          });
+        }
+        
         throw new SorobanRpcError(
           SorobanErrorCode.SIMULATION_FAILED,
           `Simulation failed: ${result.error ?? 'Unknown error'}`,
+          undefined,
+          result,
         );
       }
+      
       return result;
     });
   }
@@ -160,7 +186,16 @@ export class SorobanRpcClientService {
       .setTimeout(30)
       .build();
 
-    return this.simulateTransaction(tx, opts);
+    const enhancedOpts = {
+      ...opts,
+      simulationContext: {
+        ...opts?.simulationContext,
+        contractId,
+        contractMethod: method,
+      },
+    };
+
+    return this.simulateTransaction(tx, enhancedOpts);
   }
 
   /** Expose the raw server for advanced usage */
