@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import axios from "@/lib/api";
+import { useEffect, useState } from 'react';
+import axios from '@/lib/api';
 
 export interface Notification {
   id: string;
@@ -15,7 +15,7 @@ export const useNotifications = () => {
 
   const fetchNotifications = async () => {
     try {
-      const res = await axios.get("/notifications");
+      const res = await axios.get('/notifications');
       setData(res.data);
     } catch (err) {
       console.error(err);
@@ -27,9 +27,7 @@ export const useNotifications = () => {
   const markAsRead = async (id: string) => {
     try {
       await axios.patch(`/notifications/${id}/read`);
-      setData((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-      );
+      setData((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
     } catch (err) {
       console.error(err);
     }

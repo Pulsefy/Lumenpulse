@@ -62,6 +62,19 @@ export interface HorizonErrorResponse {
   status?: number;
 }
 
+function getErrorStatus(error: unknown): string | undefined {
+  if (
+    error instanceof Error &&
+    'status' in error &&
+    (typeof (error as { status: unknown }).status === 'number' ||
+      typeof (error as { status: unknown }).status === 'string')
+  ) {
+    const status = (error as { status: number | string }).status;
+    return String(status);
+  }
+  return undefined;
+}
+
 /**
  * HorizonClientService
  *
@@ -83,13 +96,18 @@ export class HorizonClientService {
     private readonly metricsService: MetricsService,
     private readonly requestContextService: RequestContextService,
   ) {
-    const network = this.configService.get('STELLAR_NETWORK', 'testnet');
+    const network = this.configService.get<string>(
+      'STELLAR_NETWORK',
+      'testnet',
+    );
     this.horizonUrl =
       network === 'testnet'
         ? 'https://horizon-testnet.stellar.org'
         : 'https://horizon.stellar.org';
 
-    this.logger.log(`HorizonClientService initialized with URL: ${this.horizonUrl}`);
+    this.logger.log(
+      `HorizonClientService initialized with URL: ${this.horizonUrl}`,
+    );
   }
 
   /**
@@ -117,8 +135,7 @@ export class HorizonClientService {
     try {
       const response = await this.instrumentedFetch(url, method);
       const data = (await response.json()) as
-        | HorizonTransactionsResponse
-        | HorizonErrorResponse;
+        HorizonTransactionsResponse | HorizonErrorResponse;
 
       if (!response.ok) {
         const errorDetail = (data as HorizonErrorResponse).detail;
@@ -160,9 +177,7 @@ export class HorizonClientService {
 
       this.metricsService.recordHorizonError(
         method,
-        error instanceof Error && 'status' in error
-          ? String((error as any).status)
-          : 'NETWORK_ERROR',
+        getErrorStatus(error) ?? 'NETWORK_ERROR',
       );
 
       this.logger.error(
@@ -180,9 +195,7 @@ export class HorizonClientService {
   /**
    * Fetch operations for a specific transaction
    */
-  async getOperations(
-    transactionId: string,
-  ): Promise<HorizonOperation[]> {
+  async getOperations(transactionId: string): Promise<HorizonOperation[]> {
     const method = 'getOperations';
     const requestId = this.requestContextService.getRequestId();
     const url = `${this.horizonUrl}/transactions/${transactionId}/operations`;
@@ -227,9 +240,7 @@ export class HorizonClientService {
 
       this.metricsService.recordHorizonError(
         method,
-        error instanceof Error && 'status' in error
-          ? String((error as any).status)
-          : 'NETWORK_ERROR',
+        getErrorStatus(error) ?? 'NETWORK_ERROR',
       );
 
       this.logger.error(

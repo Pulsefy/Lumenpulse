@@ -15,7 +15,10 @@ import {
   DeadLetterEventDto,
   DeadLetterStatsDto,
 } from './dto/dead-letter.dto';
-import { SOROBAN_EVENTS_QUEUE, PROCESS_EVENT_JOB } from './soroban-events.service';
+import {
+  SOROBAN_EVENTS_QUEUE,
+  PROCESS_EVENT_JOB,
+} from './soroban-events.service';
 
 /**
  * Dead Letter Queue Service for Soroban Events
@@ -29,9 +32,7 @@ import { SOROBAN_EVENTS_QUEUE, PROCESS_EVENT_JOB } from './soroban-events.servic
  */
 @Injectable()
 export class SorobanEventsDeadLetterService {
-  private readonly logger = new Logger(
-    SorobanEventsDeadLetterService.name,
-  );
+  private readonly logger = new Logger(SorobanEventsDeadLetterService.name);
 
   constructor(
     @InjectRepository(SorobanEventDeadLetter)
@@ -163,11 +164,9 @@ export class SorobanEventsDeadLetterService {
 
     // Validate sortBy to prevent SQL injection
     const validSortFields = ['createdAt', 'failureCount', 'lastAttemptAt'];
-    const sortField = validSortFields.includes(sortBy)
-      ? sortBy
-      : 'createdAt';
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
 
-    qb.orderBy(`dlq.${sortField}`, sortOrder as 'ASC' | 'DESC');
+    qb.orderBy(`dlq.${sortField}`, sortOrder);
 
     const [data, total] = await qb
       .skip(page * limit)

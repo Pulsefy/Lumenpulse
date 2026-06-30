@@ -88,7 +88,7 @@ describe('RequestContextService', () => {
 
   describe('AsyncLocalStorage isolation', () => {
     it('should isolate contexts between concurrent requests', async () => {
-      const promise1 = new Promise<string>(resolve => {
+      const promise1 = new Promise<string>((resolve) => {
         service.run({ requestId: 'request-1' }, () => {
           setTimeout(() => {
             resolve(service.getRequestId());
@@ -96,7 +96,7 @@ describe('RequestContextService', () => {
         });
       });
 
-      const promise2 = new Promise<string>(resolve => {
+      const promise2 = new Promise<string>((resolve) => {
         service.run({ requestId: 'request-2' }, () => {
           setTimeout(() => {
             resolve(service.getRequestId());

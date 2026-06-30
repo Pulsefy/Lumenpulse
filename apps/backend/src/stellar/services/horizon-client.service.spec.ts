@@ -10,8 +10,6 @@ global.fetch = mockFetch;
 
 describe('HorizonClientService', () => {
   let service: HorizonClientService;
-  let metricsService: MetricsService;
-  let requestContextService: RequestContextService;
 
   const mockMetricsService = {
     recordHorizonRequest: jest.fn(),
@@ -40,10 +38,6 @@ describe('HorizonClientService', () => {
     }).compile();
 
     service = module.get<HorizonClientService>(HorizonClientService);
-    metricsService = module.get<MetricsService>(MetricsService);
-    requestContextService = module.get<RequestContextService>(
-      RequestContextService,
-    );
 
     mockFetch.mockReset();
   });
@@ -90,9 +84,9 @@ describe('HorizonClientService', () => {
 
       mockFetch.mockResolvedValue(mockResponse);
 
-      await expect(
-        service.getTransactions('GABC123', 10),
-      ).rejects.toThrow('Internal server error');
+      await expect(service.getTransactions('GABC123', 10)).rejects.toThrow(
+        'Internal server error',
+      );
 
       expect(mockMetricsService.recordHorizonError).toHaveBeenCalledWith(
         'getTransactions',
@@ -176,7 +170,7 @@ describe('HorizonClientService', () => {
 
     it('should return empty array on error', async () => {
       mockFetch.mockReset();
-      
+
       const mockResponse = {
         ok: false,
         status: 404,
@@ -200,9 +194,9 @@ describe('HorizonClientService', () => {
       mockFetch.mockReset();
       mockFetch.mockRejectedValue(new Error('ECONNRESET'));
 
-      await expect(
-        service.getTransactions('GABC123', 10),
-      ).rejects.toThrow('ECONNRESET');
+      await expect(service.getTransactions('GABC123', 10)).rejects.toThrow(
+        'ECONNRESET',
+      );
 
       expect(mockMetricsService.recordHorizonError).toHaveBeenCalledWith(
         'getTransactions',

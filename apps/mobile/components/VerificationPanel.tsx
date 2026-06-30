@@ -1,11 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import {
@@ -21,13 +15,7 @@ interface Props {
   voterPublicKey: string | null;
 }
 
-function QuorumBar({
-  progress,
-  color,
-}: {
-  progress: number;
-  color: string;
-}) {
+function QuorumBar({ progress, color }: { progress: number; color: string }) {
   return (
     <View style={styles.barTrack}>
       <View style={[styles.barFill, { width: `${progress}%`, backgroundColor: color }]} />
@@ -55,7 +43,9 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
     }
   }, [projectId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const vote = async (support: boolean) => {
     if (!voterPublicKey || !data) return;
@@ -100,15 +90,25 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
   const canVote = isPending && !!voterPublicKey && !hasVoted;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+    <View
+      style={[styles.container, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+    >
       {/* Status header */}
       <View style={styles.header}>
         <Ionicons
-          name={data.status === 'VERIFIED' ? 'shield-checkmark' : data.status === 'REJECTED' ? 'shield-outline' : 'time-outline'}
+          name={
+            data.status === 'VERIFIED'
+              ? 'shield-checkmark'
+              : data.status === 'REJECTED'
+                ? 'shield-outline'
+                : 'time-outline'
+          }
           size={20}
           color={color}
         />
-        <Text style={[styles.statusText, { color }]}>{statusLabel(data.status as VerificationStatus)}</Text>
+        <Text style={[styles.statusText, { color }]}>
+          {statusLabel(data.status as VerificationStatus)}
+        </Text>
       </View>
 
       {/* Quorum progress */}
@@ -119,12 +119,8 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
         </View>
         <QuorumBar progress={data.quorumProgress} color={color} />
         <View style={styles.voteRow}>
-          <Text style={[styles.voteCount, { color: '#10b981' }]}>
-            {data.votesFor} for
-          </Text>
-          <Text style={[styles.voteCount, { color: '#ef4444' }]}>
-            {data.votesAgainst} against
-          </Text>
+          <Text style={[styles.voteCount, { color: '#10b981' }]}>{data.votesFor} for</Text>
+          <Text style={[styles.voteCount, { color: '#ef4444' }]}>{data.votesAgainst} against</Text>
         </View>
       </View>
 
@@ -176,9 +172,7 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
         </Text>
       )}
 
-      {voteError && (
-        <Text style={[styles.errorText, { color: colors.danger }]}>{voteError}</Text>
-      )}
+      {voteError && <Text style={[styles.errorText, { color: colors.danger }]}>{voteError}</Text>}
     </View>
   );
 }

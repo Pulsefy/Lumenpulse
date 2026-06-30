@@ -96,7 +96,8 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     const updateResolvedMode = () => {
       if (mode === 'system') {
-        const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const isDark =
+          window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         setResolvedMode(isDark ? 'dark' : 'light');
       } else {
         setResolvedMode(mode);

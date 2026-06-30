@@ -4,7 +4,9 @@ import { REQUEST_ID_HEADER } from '../constants/request.constants';
 
 describe('RequestIdMiddleware', () => {
   const mockRequestContextService = {
-    run: jest.fn((context, fn) => fn()),
+    run: jest.fn((_context: unknown, fn: () => void): void => {
+      fn();
+    }),
   };
 
   const middleware = new RequestIdMiddleware(

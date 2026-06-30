@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddChangedByToFeatureFlags1790000000002
-  implements MigrationInterface
-{
+export class AddChangedByToFeatureFlags1790000000002 implements MigrationInterface {
   name = 'AddChangedByToFeatureFlags1790000000002';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

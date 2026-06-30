@@ -112,7 +112,10 @@ export class TreasuryController {
   @ApiResponse({ status: 400, description: 'Invalid request parameters' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Caller is not an admin' })
-  @ApiResponse({ status: 404, description: 'Stream not found for old beneficiary' })
+  @ApiResponse({
+    status: 404,
+    description: 'Stream not found for old beneficiary',
+  })
   @ApiResponse({ status: 502, description: 'Treasury transaction failed' })
   @ApiResponse({
     status: 503,

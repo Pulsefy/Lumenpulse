@@ -23,8 +23,6 @@ export class TransactionService {
     private cacheService: CacheService,
     private horizonClient: HorizonClientService,
   ) {
-    const network = this.configService.get('STELLAR_NETWORK', 'testnet');
-
     this.useMockData =
       this.configService.get('USE_MOCK_TRANSACTIONS', 'true') === 'true';
 
@@ -79,7 +77,7 @@ export class TransactionService {
       );
 
       return { transactions, nextPage };
-    } catch (error) {
+    } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to fetch transactions: ${errorMessage}`);
