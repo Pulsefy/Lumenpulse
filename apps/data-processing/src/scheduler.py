@@ -27,6 +27,7 @@ from src.db.postgres_service import PostgresService
 from src.ingestion.rpc_benchmark import RPCProviderBenchmark
 from src.round_analyzer import _round_analyzer_job
 from src.snapshots.onchain_kpi_snapshot import run_onchain_kpi_snapshot_job
+from src.metadata_drift_detector import MetadataDriftDetector
 
 
 logger = setup_logger(__name__)
@@ -279,6 +280,29 @@ def _contributor_reputation_snapshot_job() -> None:
             exc_info=True,
         )
 
+
+def _metadata_drift_detector_job() -> None:
+    """Scheduled wrapper for MetadataDriftDetector (#882).
+
+    Recomputes chain-derived project/milestone state from the ContractEvent
+    log and diffs it against ProjectView/ProjectMilestone. Read-only with
+    respect to source data — findings are persisted separately for review.
+    Errors are caught so the scheduler keeps running.
+    """
+    try:
+        detector = MetadataDriftDetector()
+        report = detector.run_and_persist(
+            limit=int(os.getenv("METADATA_DRIFT_PROJECT_LIMIT", "500"))
+        )
+        logger.info(
+            "Metadata drift detection: projects_checked=%d projects_with_drift=%d findings=%d",
+            report.projects_checked,
+            report.projects_with_drift,
+            len(report.findings),
+        )
+    except Exception as exc:
+        logger.error(f"Metadata drift detector job failed: {exc}", exc_info=True)
+
 class AnalyticsScheduler:
 
     """Manages the APScheduler scheduler for analytics jobs"""
@@ -373,6 +397,12 @@ class AnalyticsScheduler:
                 trigger=CronTrigger(hour=0, minute=5, timezone="UTC"),
                 id="onchain_kpi_snapshot_daily",
                 name="On-chain KPI Daily Snapshot",
+            # ── Metadata Drift Detection: every 6 hours (#882) ───────────
+            self.scheduler.add_job(
+                func=_metadata_drift_detector_job,
+                trigger=IntervalTrigger(hours=6),
+                id="metadata_drift_detection",
+                name="Metadata Drift Detector (backend vs on-chain)",
                 replace_existing=True,
             )
 
