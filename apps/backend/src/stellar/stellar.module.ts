@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import stellarConfig from './config/stellar.config';
 import { StellarController } from './stellar.controller';
@@ -15,7 +15,7 @@ import { AppCacheModule } from '../cache/cache.module';
 @Module({
   imports: [
     ConfigModule.forFeature(stellarConfig),
-    TransactionModule,
+    forwardRef(() => TransactionModule),
     AuditModule,
     AppConfigModule,
     AppCacheModule,

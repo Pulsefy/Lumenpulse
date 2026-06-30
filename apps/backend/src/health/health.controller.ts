@@ -56,4 +56,32 @@ export class HealthController {
 
     return healthReport;
   }
+
+  @Get('health/latency')
+  @ApiOperation({
+    summary:
+      'Returns latency budget health signals for Horizon and Soroban RPC',
+    description:
+      'Probes each testnet dependency and classifies response time against ' +
+      'configurable thresholds. Returns HTTP 200 for ok/degraded and HTTP 503 ' +
+      'when any dependency exceeds its hard-down threshold. ' +
+      'Thresholds are set via HEALTH_HORIZON_LATENCY_* and ' +
+      'HEALTH_SOROBAN_RPC_LATENCY_* environment variables.',
+  })
+  @ApiOkResponse({
+    description:
+      'All dependencies are within their latency budgets, or only degraded.',
+  })
+  @ApiServiceUnavailableResponse({
+    description:
+      'At least one dependency has exceeded its hard-down latency threshold.',
+  })
+  async getLatencyHealth(@Res({ passthrough: true }) response: Response) {
+    const report = await this.healthService.getHealthReport();
+    const latencyReport = report.latencyBudget;
+
+    response.status(latencyReport.overallState === 'hard_down' ? 503 : 200);
+
+    return latencyReport;
+  }
 }

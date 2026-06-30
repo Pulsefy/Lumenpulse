@@ -48,16 +48,30 @@ export class FeatureFlagsService implements OnModuleInit {
     key: string,
     enabled: boolean,
     conditions?: Record<string, unknown>,
+    changedBy?: string,
   ) {
+    const prev = await this.getFlag(key);
     let f = await this.repo.findOne({ where: { key } });
     if (!f) {
-      f = this.repo.create({ key, enabled, conditions: conditions ?? null });
+      f = this.repo.create({
+        key,
+        enabled,
+        conditions: conditions ?? null,
+        changedBy: changedBy ?? null,
+      });
     } else {
       f.enabled = enabled;
       f.conditions = conditions ?? null;
+      f.changedBy = changedBy ?? null;
     }
     const saved = await this.repo.save(f);
     this.cache.set(saved.key, saved);
+
+    this.logger.log(
+      `Flag "${key}" changed: ${prev?.enabled ?? 'N/A'} -> ${enabled}` +
+        (changedBy ? ` by ${changedBy}` : ''),
+    );
+
     return saved;
   }
 

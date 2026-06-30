@@ -487,6 +487,56 @@ class AssetTrend(Base):
         return f"<AssetTrend(asset={self.asset}, metric={self.metric_name}, trend={self.trend_direction})>"
 
 
+class MetadataDriftFinding(Base):
+    """
+    Stores individual drift findings produced by the metadata drift detector
+    (backend ProjectView/ProjectMilestone records vs. chain-derived state
+    recomputed from the immutable ContractEvent log).
+    """
+
+    __tablename__ = "metadata_drift_findings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String(64), nullable=False, index=True)
+    project_id = Column(BigInteger, nullable=False, index=True)
+    scope = Column(String(20), nullable=False, index=True)  # "project" or "milestone"
+    milestone_id = Column(Integer, nullable=True, index=True)
+    field = Column(String(100), nullable=False, index=True)
+    backend_value = Column(Text, nullable=True)
+    chain_derived_value = Column(Text, nullable=True)
+    severity = Column(String(20), nullable=False, default="warning", index=True)
+    detected_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Review status (consistent with RoundAnomalySignal review workflow)
+    reviewed = Column(Boolean, nullable=False, default=False)
+    review_notes = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_by = Column(String(255), nullable=True)
+
+    __table_args__ = (
+        Index("idx_metadata_drift_findings_run_id", "run_id"),
+        Index("idx_metadata_drift_findings_project_id", "project_id"),
+        Index("idx_metadata_drift_findings_scope", "scope"),
+        Index("idx_metadata_drift_findings_field", "field"),
+        Index("idx_metadata_drift_findings_severity", "severity"),
+        Index("idx_metadata_drift_findings_reviewed", "reviewed"),
+        Index(
+            "idx_metadata_drift_findings_project_field",
+            "project_id",
+            "field",
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<MetadataDriftFinding(project_id={self.project_id}, scope={self.scope}, "
+            f"field={self.field}, severity={self.severity}, reviewed={self.reviewed})>"
+        )
+
+
 class RoundAnomalySignal(Base):
     """
     Stores anomaly signals detected in quadratic funding rounds for maintainer review.

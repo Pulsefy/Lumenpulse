@@ -1,4 +1,4 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,6 +13,7 @@ import {
   SOROBAN_EVENTS_QUEUE,
   PROCESS_EVENT_JOB,
 } from './soroban-events.service';
+import { SorobanEventsDeadLetterService } from './soroban-events-dead-letter.service';
 import { mapSorobanEvent } from './soroban-event-mapper';
 
 @Processor(SOROBAN_EVENTS_QUEUE)
@@ -25,6 +26,7 @@ export class SorobanEventsProcessor extends WorkerHost {
     private readonly eventRepo: Repository<SorobanEvent>,
 
     private readonly sorobanEventsService: SorobanEventsService,
+    private readonly dlqService: SorobanEventsDeadLetterService,
   ) {
     super();
   }
@@ -93,6 +95,9 @@ export class SorobanEventsProcessor extends WorkerHost {
 
       event.status = SorobanEventStatus.PROCESSED;
       event.processedAt = new Date();
+
+      // If this event was replayed from dead letter queue, mark it as successful
+      await this.dlqService.markReplayed(txHash, eventIndex);
     } catch (err) {
       event.status = SorobanEventStatus.FAILED;
       event.errorMessage = err instanceof Error ? err.message : String(err);
@@ -105,5 +110,75 @@ export class SorobanEventsProcessor extends WorkerHost {
       { txHash, eventIndex, eventType },
       'Processed soroban event',
     );
+  }
+
+  /**
+   * Handle job failures
+   * When a job fails after exhausting all retries, move to dead letter queue
+   * This ensures failed events are captured for manual inspection and replay
+   */
+  @OnWorkerEvent('failed')
+  async onJobFailed(job: Job<IngestSorobanEventDto>, err: Error): Promise<void> {
+    if (job.name !== PROCESS_EVENT_JOB) {
+      return;
+    }
+
+    const { txHash, eventIndex } = job.data;
+
+    this.logger.warn(
+      {
+        txHash,
+        eventIndex,
+        attempts: job.attemptsMade,
+        error: err.message,
+      },
+      'Soroban event processing failed, moving to dead letter queue',
+    );
+
+    try {
+      // Get or create the event record
+      let event = await this.eventRepo.findOne({
+        where: { txHash, eventIndex },
+      });
+
+      if (!event) {
+        // Event record might not exist if failure occurred very early
+        this.logger.debug(
+          { txHash, eventIndex },
+          'Event record not found, creating minimal record for DLQ',
+        );
+
+        const mapping = mapSorobanEvent(job.data.eventType ?? null);
+        event = this.eventRepo.create({
+          txHash,
+          eventIndex,
+          contractId: job.data.contractId ?? null,
+          eventType: job.data.eventType ?? null,
+          canonicalType: mapping?.canonicalType ?? null,
+          category: mapping?.category ?? null,
+          rawPayload: job.data.rawPayload,
+          ledgerSequence: job.data.ledgerSequence ?? null,
+          status: SorobanEventStatus.FAILED,
+          errorMessage: err.message,
+        });
+
+        await this.eventRepo.save(event);
+      }
+
+      // Move to dead letter queue for inspection and manual replay
+      await this.dlqService.moveToDeadLetter(event, err);
+    } catch (dlqErr) {
+      this.logger.error(
+        {
+          txHash,
+          eventIndex,
+          dlqError:
+            dlqErr instanceof Error
+              ? dlqErr.message
+              : String(dlqErr),
+        },
+        'Failed to move event to dead letter queue',
+      );
+    }
   }
 }

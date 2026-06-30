@@ -26,7 +26,12 @@ export function useStellarAccount(publicKey: string | null) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!publicKey) return;
+    if (!publicKey) {
+      setBalances([]);
+      setTransactions([]);
+      setError(null);
+      return;
+    }
 
     const fetchData = async () => {
       setIsLoading(true);

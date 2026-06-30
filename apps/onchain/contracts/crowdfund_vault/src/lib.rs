@@ -1259,6 +1259,7 @@ impl CrowdfundVaultContract {
 
     /// Allocate approved milestone funds to a streaming treasury for gradual unlocking.
     /// This allows projects to have their budget streamed over time instead of receiving it all at once.
+    #[allow(clippy::too_many_arguments)]
     pub fn allocate_to_streaming_treasury(
         env: Env,
         admin: Address,
@@ -1267,8 +1268,14 @@ impl CrowdfundVaultContract {
         treasury_contract: Address,
         amount: i128,
         duration: u64,
+        request_id: soroban_sdk::BytesN<32>,
     ) -> Result<(), CrowdfundError> {
         Self::with_reentrancy_guard(&env, || {
+            // Idempotency check
+            if idempotency_guard::claim_request(&env, &request_id).is_err() {
+                return Err(CrowdfundError::AlreadyExecuted);
+            }
+
             Self::verify_admin(&env, &admin)?;
 
             let mut project: ProjectData = env
@@ -1326,6 +1333,7 @@ impl CrowdfundVaultContract {
                 &amount,
                 &start_time,
                 &duration,
+                &request_id,
             );
 
             Ok(())
@@ -1940,8 +1948,14 @@ impl CrowdfundVaultContract {
         admin: Address,
         token_address: Address,
         recipients: Vec<(Address, i128)>,
+        request_id: soroban_sdk::BytesN<32>,
     ) -> Result<(), CrowdfundError> {
         Self::with_reentrancy_guard(&env, || {
+            // Idempotency check
+            if idempotency_guard::claim_request(&env, &request_id).is_err() {
+                return Err(CrowdfundError::AlreadyExecuted);
+            }
+
             Self::verify_admin(&env, &admin)?;
 
             let is_paused: bool = env

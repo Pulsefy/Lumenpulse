@@ -5,8 +5,12 @@ use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Events, Ledger},
     token::{StellarAssetClient, TokenClient},
-    vec, Address, Env,
+    vec, Address, BytesN, Env,
 };
+
+fn request_id(env: &Env) -> BytesN<32> {
+    BytesN::from_array(env, &[0; 32])
+}
 fn create_token_contract<'a>(
     env: &Env,
     admin: &Address,
@@ -1397,7 +1401,12 @@ fn test_batch_payout() {
     ];
 
     // Execute batch payout
-    client.batch_payout(&admin, &token_client.address, &recipients);
+    client.batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
 
     // Verify reward pool decreased
     assert_eq!(
@@ -1426,7 +1435,12 @@ fn test_batch_payout_empty_recipients() {
 
     // Empty recipients list should fail
     let empty_recipients = vec![&env];
-    let result = client.try_batch_payout(&admin, &token_client.address, &empty_recipients);
+    let result = client.try_batch_payout(
+        &admin,
+        &token_client.address,
+        &empty_recipients,
+        &request_id(&env),
+    );
     assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
 }
 
@@ -1447,7 +1461,12 @@ fn test_batch_payout_invalid_amount() {
     // Recipient with zero amount should fail
     let recipient = Address::generate(&env);
     let recipients = vec![&env, (recipient, 0i128)];
-    let result = client.try_batch_payout(&admin, &token_client.address, &recipients);
+    let result = client.try_batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
     assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
 }
 
@@ -1468,7 +1487,12 @@ fn test_batch_payout_insufficient_balance() {
     // Request payout larger than pool balance
     let recipient = Address::generate(&env);
     let recipients = vec![&env, (recipient, 20_000i128)];
-    let result = client.try_batch_payout(&admin, &token_client.address, &recipients);
+    let result = client.try_batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
     assert_eq!(result, Err(Ok(CrowdfundError::InsufficientBalance)));
 }
 
@@ -1490,7 +1514,12 @@ fn test_batch_payout_unauthorized() {
     // Non-admin tries to execute batch payout
     let recipient = Address::generate(&env);
     let recipients = vec![&env, (recipient, 10_000i128)];
-    let result = client.try_batch_payout(&owner, &token_client.address, &recipients);
+    let result = client.try_batch_payout(
+        &owner,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
     assert_eq!(result, Err(Ok(CrowdfundError::Unauthorized)));
 }
 
@@ -1515,7 +1544,12 @@ fn test_batch_payout_contract_paused() {
     // Batch payout should fail when paused
     let recipient = Address::generate(&env);
     let recipients = vec![&env, (recipient, 10_000i128)];
-    client.batch_payout(&admin, &token_client.address, &recipients);
+    client.batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
 }
 
 #[test]
@@ -1535,8 +1569,49 @@ fn test_batch_payout_contract_address_recipient() {
 
     // Using contract address as recipient should fail
     let recipients = vec![&env, (contract_address, 10_000i128)];
-    let result = client.try_batch_payout(&admin, &token_client.address, &recipients);
+    let result = client.try_batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
     assert_eq!(result, Err(Ok(CrowdfundError::InvalidRecipient)));
+}
+
+#[test]
+fn test_batch_payout_duplicate_request_id() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, token_client, token_admin_client, _) = setup_test_with_admin(&env);
+
+    client.initialize(&admin);
+
+    // Fund reward pool
+    let pool_amount: i128 = 100_000;
+    token_admin_client.mint(&admin, &pool_amount);
+    client.fund_reward_pool(&admin, &token_client.address, &pool_amount);
+
+    // Create recipients
+    let recipient = Address::generate(&env);
+    let recipients = vec![&env, (recipient, 10_000i128)];
+
+    // First execution should succeed
+    client.batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
+
+    // Second execution with same request_id should fail
+    let result = client.try_batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
+    assert_eq!(result, Err(Ok(CrowdfundError::AlreadyExecuted)));
 }
 
 #[test]

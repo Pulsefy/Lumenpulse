@@ -29,6 +29,26 @@ export class WebhookService {
   }
 
   /**
+   * Sign a payload using the webhook secret for outgoing notifications
+   */
+  signPayload(payload: any): string {
+    if (!this.webhookSecret) {
+      this.logger.warn(
+        'WEBHOOK_SECRET is not set — cannot sign outgoing webhook',
+      );
+      return '';
+    }
+
+    const body = JSON.stringify(payload);
+    const hash = crypto
+      .createHmac('sha256', this.webhookSecret)
+      .update(body)
+      .digest('hex');
+
+    return `sha256=${hash}`;
+  }
+
+  /**
    * Legacy signature verification (kept for backward compatibility)
    * New implementations should use WebhookVerificationGuard
    */

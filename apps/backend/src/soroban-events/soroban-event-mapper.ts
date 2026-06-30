@@ -1,4 +1,8 @@
-import { CanonicalEventType, getCategory, EventCategory } from '../common/event-catalog';
+import {
+  CanonicalEventType,
+  getCategory,
+  EventCategory,
+} from '../common/event-catalog';
 
 const RAW_EVENT_MAP: Record<string, CanonicalEventType> = {
   InitializedEvent: CanonicalEventType.ADMIN_STORAGE_MIGRATED,
