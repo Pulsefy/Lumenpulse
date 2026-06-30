@@ -29,6 +29,7 @@ from .models import (
     NewsInsight,
     AssetTrend,
     RoundAnomalySignal,
+    MetadataDriftFinding,
 )
 from src.analytics.ner_service import NERService
 from src.analytics.onchain_entity_linker import (
@@ -2067,3 +2068,127 @@ class PostgresService:
                 "news_insights": 0,
                 "asset_trends": 0,
             }
+
+    # Metadata Drift Finding Methods (#882)
+
+    def save_metadata_drift_finding(
+        self, finding_data: Dict[str, Any]
+    ) -> Optional[MetadataDriftFinding]:
+        """
+        Persist a single metadata drift finding produced by the drift detector.
+
+        Args:
+            finding_data: Dictionary matching MetadataDriftFinding fields
+                (run_id, project_id, scope, milestone_id, field,
+                backend_value, chain_derived_value, severity, detected_at)
+
+        Returns:
+            MetadataDriftFinding object if successful, None otherwise
+        """
+        def _save():
+            with self.get_session() as session:
+                finding = MetadataDriftFinding(
+                    run_id=finding_data["run_id"],
+                    project_id=finding_data["project_id"],
+                    scope=finding_data["scope"],
+                    milestone_id=finding_data.get("milestone_id"),
+                    field=finding_data["field"],
+                    backend_value=finding_data.get("backend_value"),
+                    chain_derived_value=finding_data.get("chain_derived_value"),
+                    severity=finding_data.get("severity", "warning"),
+                    detected_at=finding_data.get("detected_at", datetime.utcnow()),
+                )
+                session.add(finding)
+                session.flush()
+                session.refresh(finding)
+                return finding
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save metadata drift finding: {e}")
+            return None
+
+    def save_metadata_drift_findings(
+        self, findings: List[Dict[str, Any]]
+    ) -> int:
+        """
+        Persist multiple metadata drift findings in a batch.
+
+        Args:
+            findings: List of finding data dictionaries
+
+        Returns:
+            Number of findings saved successfully
+        """
+        saved_count = 0
+        for finding_data in findings:
+            if self.save_metadata_drift_finding(finding_data):
+                saved_count += 1
+        logger.info(f"Saved {saved_count}/{len(findings)} metadata drift findings")
+        return saved_count
+
+    def get_metadata_drift_findings(
+        self,
+        run_id: Optional[str] = None,
+        project_id: Optional[int] = None,
+        scope: Optional[str] = None,
+        severity: Optional[str] = None,
+        reviewed: Optional[bool] = None,
+        limit: int = 200,
+    ) -> List[MetadataDriftFinding]:
+        """
+        Retrieve metadata drift findings with optional filters.
+        """
+        try:
+            with self.get_session() as session:
+                query = select(MetadataDriftFinding)
+
+                if run_id is not None:
+                    query = query.where(MetadataDriftFinding.run_id == run_id)
+                if project_id is not None:
+                    query = query.where(MetadataDriftFinding.project_id == project_id)
+                if scope is not None:
+                    query = query.where(MetadataDriftFinding.scope == scope)
+                if severity is not None:
+                    query = query.where(MetadataDriftFinding.severity == severity)
+                if reviewed is not None:
+                    query = query.where(MetadataDriftFinding.reviewed == reviewed)
+
+                query = query.order_by(desc(MetadataDriftFinding.detected_at)).limit(limit)
+                return session.execute(query).scalars().all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get metadata drift findings: {e}")
+            return []
+
+    def mark_metadata_drift_finding_reviewed(
+        self,
+        finding_id: int,
+        reviewed_by: str,
+        review_notes: Optional[str] = None,
+    ) -> bool:
+        """
+        Mark a metadata drift finding as reviewed.
+        """
+        try:
+            with self.get_session() as session:
+                finding = session.execute(
+                    select(MetadataDriftFinding).where(MetadataDriftFinding.id == finding_id)
+                ).scalar_one_or_none()
+
+                if not finding:
+                    logger.warning(f"Metadata drift finding {finding_id} not found")
+                    return False
+
+                finding.reviewed = True
+                finding.reviewed_at = datetime.utcnow()
+                finding.reviewed_by = reviewed_by
+                finding.review_notes = review_notes
+
+                logger.info(
+                    f"Marked metadata drift finding {finding_id} as reviewed by {reviewed_by}"
+                )
+                return True
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to mark metadata drift finding as reviewed: {e}")
+            return False

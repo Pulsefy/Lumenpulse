@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Trophy, Bookmark, ChevronDown, Check } from "lucide-react";
 import { GrantRound, RoundCard, RoundTable } from "./components";
+import { DependencyStatusBanner } from "@/components/DependencyStatusBanner";
 import { useWatchlist } from "@/contexts/WatchlistContext";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -135,6 +136,13 @@ export default function GrantsPage() {
             Community-funded matching rounds using quadratic funding. More contributors means more
             matching — not just bigger donations.
           </p>
+
+          {/* Network + dependency status banner: non-intrusive, gracefully
+              degrades when the health endpoint is unreachable, and never
+              uses EVM-specific terminology. */}
+          <div className="mt-6">
+            <DependencyStatusBanner />
+          </div>
         </div>
       </section>
 
