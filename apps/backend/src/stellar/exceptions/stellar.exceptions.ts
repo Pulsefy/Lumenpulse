@@ -50,3 +50,37 @@ export class HorizonUnavailableException extends HttpException {
     );
   }
 }
+
+/**
+ * Exception thrown when Friendbot is unavailable
+ */
+export class FriendbotUnavailableException extends HttpException {
+  constructor(friendbotUrl: string, cause?: string) {
+    super(
+      {
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+        message: `Friendbot is unavailable at ${friendbotUrl}${cause ? `: ${cause}` : ''}`,
+        error: 'Friendbot Unavailable',
+        friendbotUrl,
+      },
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
+  }
+}
+
+/**
+ * Exception thrown when Friendbot bootstrap fails
+ */
+export class FriendbotBootstrapFailedException extends HttpException {
+  constructor(publicKey: string, cause?: string) {
+    super(
+      {
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: `Failed to bootstrap account ${publicKey}${cause ? `: ${cause}` : ''}`,
+        error: 'Friendbot Bootstrap Failed',
+        publicKey,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+}

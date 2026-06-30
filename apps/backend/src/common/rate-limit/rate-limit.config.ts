@@ -22,6 +22,7 @@ export interface RateLimitSettings {
   stellarRead: RateLimitProfile;
   searchRead: RateLimitProfile;
   analyticsRead: RateLimitProfile;
+  friendbotBootstrap: RateLimitProfile;
   tracker: {
     useIp: boolean;
     useApiKey: boolean;
@@ -45,6 +46,7 @@ const DEFAULTS = {
     stellarRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    friendbotBootstrap: { limit: 5, ttl: 3600_000, blockDuration: 3600_000 },
   },
   staging: {
     global: { limit: 180, ttl: 60_000, blockDuration: 60_000 },
@@ -59,6 +61,7 @@ const DEFAULTS = {
     stellarRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    friendbotBootstrap: { limit: 3, ttl: 3600_000, blockDuration: 3600_000 },
   },
   production: {
     global: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
@@ -73,6 +76,7 @@ const DEFAULTS = {
     stellarRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
+    friendbotBootstrap: { limit: 2, ttl: 3600_000, blockDuration: 3600_000 },
   },
 } as const;
 
@@ -121,7 +125,8 @@ function resolveProfile(
     | 'crowdfundRead'
     | 'stellarRead'
     | 'searchRead'
-    | 'analyticsRead',
+    | 'analyticsRead'
+    | 'friendbotBootstrap',
 ): RateLimitProfile {
   const profileDefaults = DEFAULTS[getEnvironmentName(env.NODE_ENV)][key];
   const envKeyPrefix = key
@@ -161,6 +166,7 @@ export function getRateLimitSettings(
       stellarRead: config.rateLimit.stellarRead,
       searchRead: config.rateLimit.searchRead,
       analyticsRead: config.rateLimit.analyticsRead,
+      friendbotBootstrap: config.rateLimit.friendbotBootstrap,
       tracker: config.rateLimit.tracker,
       redisUrl: config.rateLimit.redisUrl,
       redisNamespace: config.rateLimit.redisNamespace,
@@ -180,6 +186,7 @@ export function getRateLimitSettings(
     stellarRead: resolveProfile(env, 'stellarRead'),
     searchRead: resolveProfile(env, 'searchRead'),
     analyticsRead: resolveProfile(env, 'analyticsRead'),
+    friendbotBootstrap: resolveProfile(env, 'friendbotBootstrap'),
     tracker: {
       useIp: parseBoolean(env.RATE_LIMIT_TRACK_BY_IP, true),
       useApiKey: parseBoolean(env.RATE_LIMIT_TRACK_BY_API_KEY, false),
@@ -307,5 +314,11 @@ export function getSearchReadThrottleOverride() {
 export function getAnalyticsReadThrottleOverride() {
   return {
     default: getRateLimitSettings().analyticsRead,
+  };
+}
+
+export function getFriendbotBootstrapThrottleOverride() {
+  return {
+    default: getRateLimitSettings().friendbotBootstrap,
   };
 }

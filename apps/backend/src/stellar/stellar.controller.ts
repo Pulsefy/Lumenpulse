@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  ForbiddenException,
   UseInterceptors,
   UseGuards,
   ParseIntPipe,
@@ -26,7 +27,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { StellarService } from './stellar.service';
-import { getStellarReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import { getStellarReadThrottleOverride, getFriendbotBootstrapThrottleOverride } from '../common/rate-limit/rate-limit.config';
 import { AccountBalancesDto } from './dto/balance.dto';
 import {
   AssetDiscoveryQueryDto,
@@ -49,6 +50,8 @@ import {
 } from './dto/rotate-contract-ids.dto';
 import { StellarContractRotationService } from './services/stellar-contract-rotation.service';
 import { ContractRotationService } from './services/contract-rotation.service';
+import { FriendbotService } from './services/friendbot.service';
+import { BootstrapAccountRequestDto, BootstrapAccountResponseDto } from './dto/friendbot.dto';
 
 @ApiTags('stellar')
 @Controller('stellar')
@@ -59,6 +62,7 @@ export class StellarController {
     private readonly transactionService: TransactionService,
     private readonly contractRotationService: StellarContractRotationService,
     private readonly contractValidationService: ContractRotationService,
+    private readonly friendbotService: FriendbotService,
     @Inject(stellarConfig.KEY)
     private readonly config: ConfigType<typeof stellarConfig>,
   ) {}
@@ -367,5 +371,69 @@ export class StellarController {
       ipAddress,
       request.reason,
     );
+  }
+
+  /**
+   * @summary Bootstrap a testnet account using Friendbot
+   * @description Funds a testnet account with XLM using Stellar Friendbot.
+   * Only available when STELLAR_NETWORK=testnet and FRIENDBOT_BOOTSTRAP_ENABLED=true.
+   * Requires a valid JWT. Rate-limited to prevent abuse.
+   */
+  @Post('bootstrap')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Throttle(getFriendbotBootstrapThrottleOverride())
+  @ApiOperation({
+    summary: 'Bootstrap a testnet account (Friendbot)',
+    description:
+      'Funds a fresh testnet account with XLM using Stellar Friendbot. ' +
+      'Only available on testnet with FRIENDBOT_BOOTSTRAP_ENABLED=true. Requires authentication.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Account funded successfully',
+    type: BootstrapAccountResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid public key format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized — valid JWT required',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Friendbot bootstrap is disabled or network is not testnet',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Rate limit exceeded',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'Friendbot is unavailable',
+  })
+  async bootstrapAccount(
+    @Body() request: BootstrapAccountRequestDto,
+  ): Promise<BootstrapAccountResponseDto> {
+    if (this.config.network !== 'testnet') {
+      throw new ForbiddenException(
+        'Friendbot bootstrap is only available on testnet',
+      );
+    }
+
+    if (!this.friendbotService.isEnabled()) {
+      throw new ForbiddenException('Friendbot bootstrap is not enabled');
+    }
+
+    await this.friendbotService.fundAccount(request.publicKey);
+
+    return {
+      success: true,
+      message: 'Account funded successfully',
+      publicKey: request.publicKey,
+    };
   }
 }
