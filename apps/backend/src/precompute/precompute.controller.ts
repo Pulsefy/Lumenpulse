@@ -120,7 +120,7 @@ export class PrecomputeController {
       },
     },
   })
-  async listTasks() {
+  listTasks() {
     return {
       tasks: this.precomputeService.getAvailableTasks(),
     };
@@ -141,7 +141,7 @@ export class PrecomputeController {
       },
     },
   })
-  async getStatus() {
+  getStatus() {
     return {
       isPrecomputing: this.precomputeService.isPrecomputingActive(),
       availableTasks: this.precomputeService.getAvailableTasks(),
