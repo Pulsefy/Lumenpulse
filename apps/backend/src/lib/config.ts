@@ -155,6 +155,7 @@ const RATE_LIMIT_DEFAULTS = {
     stellarRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    friendbotBootstrap: { limit: 5, ttl: 3600_000, blockDuration: 3600_000 },
   },
   staging: {
     global: { limit: 180, ttl: 60_000, blockDuration: 60_000 },
@@ -169,6 +170,7 @@ const RATE_LIMIT_DEFAULTS = {
     stellarRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    friendbotBootstrap: { limit: 3, ttl: 3600_000, blockDuration: 3600_000 },
   },
   production: {
     global: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
@@ -183,6 +185,7 @@ const RATE_LIMIT_DEFAULTS = {
     stellarRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
+    friendbotBootstrap: { limit: 2, ttl: 3600_000, blockDuration: 3600_000 },
   },
 } as const;
 
@@ -301,6 +304,11 @@ const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'staging', 'production']),
     ENVIRONMENT: z.string().min(1).default(runtime.environment),
+    FRIENDBOT_BOOTSTRAP_ENABLED: z.preprocess(
+      parseBoolean,
+      z.boolean().default(false),
+    ),
+    FRIENDBOT_URL: z.string().url().optional(),
 
     PORT: z.coerce.number().int().min(1).max(65535),
 
@@ -665,6 +673,17 @@ const resolvedRateLimit = {
     blockDuration:
       parsedEnv.RATE_LIMIT_ANALYTICS_READ_BLOCK_MS ??
       rateLimitDefaults.analyticsRead.blockDuration,
+  },
+  friendbotBootstrap: {
+    limit:
+      parsedEnv.RATE_LIMIT_FRIENDBOT_BOOTSTRAP_LIMIT ??
+      rateLimitDefaults.friendbotBootstrap.limit,
+    ttl:
+      parsedEnv.RATE_LIMIT_FRIENDBOT_BOOTSTRAP_TTL_MS ??
+      rateLimitDefaults.friendbotBootstrap.ttl,
+    blockDuration:
+      parsedEnv.RATE_LIMIT_FRIENDBOT_BOOTSTRAP_BLOCK_MS ??
+      rateLimitDefaults.friendbotBootstrap.blockDuration,
   },
 };
 
@@ -1147,6 +1166,15 @@ export const config = Object.freeze({
       ttl: resolvedRateLimit.analyticsRead.ttl,
       blockDuration: resolvedRateLimit.analyticsRead.blockDuration,
     }),
+    friendbotBootstrap: Object.freeze({
+      limit: resolvedRateLimit.friendbotBootstrap.limit,
+      ttl: resolvedRateLimit.friendbotBootstrap.ttl,
+      blockDuration: resolvedRateLimit.friendbotBootstrap.blockDuration,
+    }),
+  }),
+  friendbot: Object.freeze({
+    enabled: parsedEnv.FRIENDBOT_BOOTSTRAP_ENABLED,
+    url: parsedEnv.FRIENDBOT_URL ?? 'https://friendbot.stellar.org',
   }),
   ipAccess: Object.freeze({
     allowlist: parsedEnv.IP_ALLOWLIST ?? null,
