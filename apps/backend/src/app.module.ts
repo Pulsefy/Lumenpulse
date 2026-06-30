@@ -50,6 +50,7 @@ import { IdempotencyInterceptor } from './common/interceptors/idempotency.interc
 import { DeprecationInterceptor } from './common/interceptors/deprecation.interceptor';
 import { SearchModule } from './search/search.module';
 import { ExportModule } from './export/export.module';
+import { PrecomputeModule } from './precompute/precompute.module';
 import { SignalsModule } from './signals/signals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppConfigModule } from './config/config.module';
@@ -120,6 +121,7 @@ import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
     AnalyticsModule,
     TelegramBotModule,
     ModerationModule,
+    PrecomputeModule,
     SearchModule,
     FeatureFlagsModule,
     CrowdfundModule,
