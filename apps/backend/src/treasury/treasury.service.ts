@@ -4,6 +4,7 @@ import {
   AllocateBudgetResponseDto,
   StreamStateDto,
 } from './dto/stream-response.dto';
+import { StreamPreviewDto, StreamPreviewResponseDto } from './dto/stream-preview.dto';
 import { RotateBeneficiaryDto } from './dto/rotate-beneficiary.dto';
 import { TreasuryStreamNotFoundException } from './exceptions/treasury.exceptions';
 import { TreasurySorobanClient } from './treasury-soroban.client';
@@ -62,6 +63,49 @@ export class TreasuryService {
       throw new TreasuryStreamNotFoundException(beneficiary);
     }
     return this.toStreamStateDto(stream);
+  }
+
+  /**
+   * Read-only preview: compute unlocked, claimed, and remaining amounts for a
+   * beneficiary at a given time without submitting any transaction.
+   *
+   * Uses the same linear-vesting formula as the on-chain contract so the result
+   * matches what a claim call would see at `atTime`.
+   *
+   * @throws TreasuryStreamNotFoundException when no stream exists for the beneficiary.
+   */
+  async previewStream(dto: StreamPreviewDto): Promise<StreamPreviewResponseDto> {
+    const { beneficiary, atTime } = dto;
+    const previewAt = atTime ?? Math.floor(Date.now() / 1000);
+
+    this.logger.log(
+      `Previewing stream for ${beneficiary} at t=${previewAt}`,
+    );
+
+    const stream = await this.sorobanClient.getStream(beneficiary);
+    if (!stream) {
+      throw new TreasuryStreamNotFoundException(beneficiary);
+    }
+
+    const now = BigInt(previewAt);
+    const unlockedAmount = calculateUnlocked(now, stream);
+    const remainingAmount = stream.totalAmount - stream.claimedAmount;
+
+    const streamStart = Number(stream.startTime);
+    const streamEnd = streamStart + Number(stream.duration);
+    const isActive = previewAt >= streamStart && previewAt < streamEnd;
+
+    return {
+      beneficiary: stream.beneficiary,
+      totalAmount: stream.totalAmount.toString(),
+      claimedAmount: stream.claimedAmount.toString(),
+      unlockedAmount: unlockedAmount.toString(),
+      remainingAmount: remainingAmount.toString(),
+      startTime: streamStart,
+      duration: Number(stream.duration),
+      previewAt,
+      isActive,
+    };
   }
 
   /**

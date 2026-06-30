@@ -14,9 +14,7 @@ import {
 import { config } from '../lib/config';
 import { BadRequestException } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
-import {
-  SorobanRpcError,
-} from '../stellar/services/soroban-rpc-client.service';
+import { SorobanRpcError } from '../stellar/services/soroban-rpc-client.service';
 import {
   TreasuryNotConfiguredException,
   TreasuryRpcUnavailableException,
@@ -327,7 +325,7 @@ export class TreasurySorobanClient {
       error &&
       typeof error === 'object' &&
       'getStatus' in error &&
-      typeof (error as { getStatus: unknown }).getStatus === 'function'
+      typeof error.getStatus === 'function'
     ) {
       return error as unknown as Error;
     }
