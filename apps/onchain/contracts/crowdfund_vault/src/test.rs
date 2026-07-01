@@ -2763,3 +2763,89 @@ fn test_withdraw_cei_state_written_before_balance_assertion() {
     assert_eq!(client.get_balance(&project_id), 300_000);
     assert_eq!(token_client.balance(&owner), 200_000);
 }
+
+#[test]
+fn test_get_project_storage_summary_nonexistent_project_returns_false() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, _) = setup_test(&env);
+    client.initialize(&admin);
+
+    // Query a project that was never created
+    let summary = client.get_project_storage_summary(&999);
+
+    assert_eq!(summary.project_id, 999);
+    assert!(!summary.project_exists);
+    assert_eq!(summary.contributor_count, 0);
+    assert_eq!(summary.refund_receipt_count, 0);
+    assert_eq!(summary.total_projects, 0);
+}
+
+#[test]
+fn test_get_project_storage_summary_existing_project_returns_correct_counts() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    // Create a project
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestPrj"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Deposit to add a contributor
+    client.deposit(&user, &project_id, &500_000);
+
+    // Query the storage summary
+    let summary = client.get_project_storage_summary(&project_id);
+
+    assert_eq!(summary.project_id, project_id);
+    assert!(summary.project_exists);
+    assert_eq!(summary.contributor_count, 1);
+    assert_eq!(summary.refund_receipt_count, 0);
+    assert!(summary.total_projects > 0);
+}
+
+#[test]
+fn test_get_project_storage_summary_total_projects_reflects_next_project_id() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    // Create multiple projects
+    let project_id_1 = client.create_project(
+        &owner,
+        &symbol_short!("Prj1"),
+        &1_000_000,
+        &token_client.address,
+    );
+    let project_id_2 = client.create_project(
+        &owner,
+        &symbol_short!("Prj2"),
+        &2_000_000,
+        &token_client.address,
+    );
+    let project_id_3 = client.create_project(
+        &owner,
+        &symbol_short!("Prj3"),
+        &3_000_000,
+        &token_client.address,
+    );
+
+    // Query storage summary for each project
+    let summary_1 = client.get_project_storage_summary(&project_id_1);
+    let summary_2 = client.get_project_storage_summary(&project_id_2);
+    let summary_3 = client.get_project_storage_summary(&project_id_3);
+
+    // All should report the same total_projects count
+    assert_eq!(summary_1.total_projects, 3);
+    assert_eq!(summary_2.total_projects, 3);
+    assert_eq!(summary_3.total_projects, 3);
+}
