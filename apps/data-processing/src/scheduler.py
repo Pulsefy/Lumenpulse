@@ -258,6 +258,14 @@ def _onchain_kpi_snapshot_job() -> None:
         logger.error("On-chain KPI snapshot job failed: %s", exc, exc_info=True)
 
 
+def _metadata_drift_detector_job() -> None:
+    """Scheduled wrapper for metadata drift detection (#882)."""
+    try:
+        logger.info("Metadata drift detector job placeholder executed")
+    except Exception as exc:
+        logger.error("Metadata drift detector job failed: %s", exc, exc_info=True)
+
+
 def _contributor_reputation_snapshot_job() -> None:
     """Scheduled wrapper for building contributor reputation snapshots.
 
@@ -373,6 +381,15 @@ class AnalyticsScheduler:
                 trigger=CronTrigger(hour=0, minute=5, timezone="UTC"),
                 id="onchain_kpi_snapshot_daily",
                 name="On-chain KPI Daily Snapshot",
+                replace_existing=True,
+            )
+
+            # ── Metadata Drift Detection: every 6 hours (#882) ───────────
+            self.scheduler.add_job(
+                func=_metadata_drift_detector_job,
+                trigger=IntervalTrigger(hours=6),
+                id="metadata_drift_detection",
+                name="Metadata Drift Detector (backend vs on-chain)",
                 replace_existing=True,
             )
 
