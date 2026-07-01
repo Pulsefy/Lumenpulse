@@ -494,7 +494,8 @@ export class GrantsService {
     let totalQf = 0n;
 
     for (const pid of record.eligibleProjects) {
-      const contribs = record.contributions.get(pid) ?? new Map<string, bigint>();
+      const contribs =
+        record.contributions.get(pid) ?? new Map<string, bigint>();
       const score = this.computeQfScore(contribs);
       scores.set(pid, score);
       totalQf += score;
@@ -504,20 +505,17 @@ export class GrantsService {
     const allEntries: LeaderboardEntryDto[] = Array.from(scores.entries())
       .sort(([, a], [, b]) => (b > a ? 1 : b < a ? -1 : 0))
       .map(([projectId, score], index) => {
-        const contribs = record.contributions.get(projectId) ?? new Map<string, bigint>();
+        const contribs =
+          record.contributions.get(projectId) ?? new Map<string, bigint>();
         const totalContributions = Array.from(contribs.values()).reduce(
           (sum, v) => sum + v,
           0n,
         );
         const contributorCount = contribs.size;
         const estimatedMatch =
-          totalQf > 0n
-            ? (record.totalPool * score) / totalQf
-            : 0n;
+          totalQf > 0n ? (record.totalPool * score) / totalQf : 0n;
         const matchPercentage =
-          totalQf > 0n
-            ? ((score * 10000n) / totalQf).toString()
-            : '0';
+          totalQf > 0n ? ((score * 10000n) / totalQf).toString() : '0';
 
         return {
           rank: index + 1,

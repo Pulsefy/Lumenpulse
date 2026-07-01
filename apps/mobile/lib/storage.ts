@@ -27,9 +27,7 @@ const createEmptyWalletMetadata = (): WalletMetadata => ({
   updatedAt: new Date().toISOString(),
 });
 
-const sanitizeWalletAccounts = (
-  accounts: WalletAccountMetadata[],
-): WalletAccountMetadata[] =>
+const sanitizeWalletAccounts = (accounts: WalletAccountMetadata[]): WalletAccountMetadata[] =>
   accounts.map((account) => ({
     id: account.id,
     publicKey: account.publicKey,
@@ -60,11 +58,8 @@ const parseWalletMetadata = (rawValue: string | null): WalletMetadata => {
           : activePublicKey &&
               linkedAccounts.some((account) => account.publicKey === activePublicKey)
             ? activePublicKey
-            : linkedAccounts[0]?.publicKey ?? null,
-      updatedAt:
-        typeof parsed.updatedAt === 'string'
-          ? parsed.updatedAt
-          : new Date().toISOString(),
+            : (linkedAccounts[0]?.publicKey ?? null),
+      updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date().toISOString(),
     };
   } catch (error) {
     console.error('Error parsing wallet metadata:', error);
@@ -84,11 +79,7 @@ const migrateLegacyTokens = async (): Promise<{
   accessToken: string | null;
   refreshToken: string | null;
 }> => {
-  const legacyEntries = await AsyncStorage.multiGet([
-    ACCESS_TOKEN_KEY,
-    REFRESH_TOKEN_KEY,
-    'token',
-  ]);
+  const legacyEntries = await AsyncStorage.multiGet([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, 'token']);
 
   const legacyMap = Object.fromEntries(legacyEntries);
   const accessToken = legacyMap[ACCESS_TOKEN_KEY] ?? legacyMap.token ?? null;
@@ -178,11 +169,11 @@ export const storage = {
       const linkedAccounts = sanitizeWalletAccounts(metadata.linkedAccounts);
       const activePublicKey =
         linkedAccounts.length === 0
-          ? metadata.activePublicKey ?? null
+          ? (metadata.activePublicKey ?? null)
           : metadata.activePublicKey &&
               linkedAccounts.some((account) => account.publicKey === metadata.activePublicKey)
             ? metadata.activePublicKey
-            : linkedAccounts[0]?.publicKey ?? null;
+            : (linkedAccounts[0]?.publicKey ?? null);
 
       await persistWalletMetadata({
         linkedAccounts,
@@ -202,7 +193,7 @@ export const storage = {
       (account) => account.publicKey === existingMetadata.activePublicKey,
     )
       ? existingMetadata.activePublicKey
-      : linkedAccounts[0]?.publicKey ?? null;
+      : (linkedAccounts[0]?.publicKey ?? null);
 
     await this.storeWalletMetadata({
       linkedAccounts,

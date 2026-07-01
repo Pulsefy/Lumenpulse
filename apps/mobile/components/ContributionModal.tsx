@@ -83,9 +83,7 @@ export default function ContributionModal({
   const trimmedAmount = amount.trim();
   const isSubmitting = txStatus === 'submitting';
   const isSubmitDisabled =
-    isSubmitting ||
-    !trimmedAmount ||
-    Boolean(validateContributionAmount(trimmedAmount));
+    isSubmitting || !trimmedAmount || Boolean(validateContributionAmount(trimmedAmount));
 
   const handleShow = useCallback(() => {
     setAmount('');
@@ -174,7 +172,11 @@ export default function ContributionModal({
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
               <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
                 <View style={styles.sheetHeader}>
-                  <Text style={[styles.sheetTitle, { color: colors.text }]} accessible accessibilityRole="header">
+                  <Text
+                    style={[styles.sheetTitle, { color: colors.text }]}
+                    accessible
+                    accessibilityRole="header"
+                  >
                     {t('contribution_modal.title')}
                   </Text>
                   <TouchableOpacity
@@ -249,7 +251,9 @@ export default function ContributionModal({
                     name="information-circle-outline"
                     size={16}
                     color={colors.textSecondary}
-                    accessibilityLabel={t('contribution_modal.estimated_fee', { amount: ESTIMATED_FEE_XLM })}
+                    accessibilityLabel={t('contribution_modal.estimated_fee', {
+                      amount: ESTIMATED_FEE_XLM,
+                    })}
                   />
                   <Text style={[styles.feeText, { color: colors.textSecondary }]} accessible>
                     {t('contribution_modal.estimated_fee', { amount: ESTIMATED_FEE_XLM })}
@@ -270,17 +274,28 @@ export default function ContributionModal({
                   activeOpacity={0.8}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: isSubmitDisabled }}
-                  accessibilityLabel={isSubmitting ? t('contribution_modal.submitting') : t('contribution_modal.submit')}
+                  accessibilityLabel={
+                    isSubmitting
+                      ? t('contribution_modal.submitting')
+                      : t('contribution_modal.submit')
+                  }
                 >
                   {isSubmitting ? (
                     <View style={styles.loadingRow}>
-                      <ActivityIndicator color="#ffffff" size="small" accessible accessibilityLabel={t('common.loading')} />
+                      <ActivityIndicator
+                        color="#ffffff"
+                        size="small"
+                        accessible
+                        accessibilityLabel={t('common.loading')}
+                      />
                       <Text style={[styles.primaryButtonText, { marginLeft: 8 }]} accessible>
                         {t('contribution_modal.submitting')}
                       </Text>
                     </View>
                   ) : (
-                    <Text style={styles.primaryButtonText} accessible>{t('contribution_modal.submit')}</Text>
+                    <Text style={styles.primaryButtonText} accessible>
+                      {t('contribution_modal.submit')}
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -347,17 +362,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 4,
     marginLeft: 4,
-  },
-  errorText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginRight: 10,
-  },
-  amountInput: {
-    flex: 1,
-    fontSize: 24,
-    fontWeight: '700',
-    paddingVertical: 0,
   },
   errorText: {
     fontSize: 13,

@@ -143,7 +143,11 @@ export default function NotificationSettingsScreen() {
             <Ionicons name="arrow-back" size={20} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
-            <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+            <Text
+              style={[styles.title, { color: colors.text }]}
+              accessible
+              accessibilityRole="header"
+            >
               {t('settings.notification_settings.title')}
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]} accessible>
@@ -165,7 +169,10 @@ export default function NotificationSettingsScreen() {
             NOTIFICATION_ROWS.map((row, index) => (
               <View key={row.key}>
                 {index > 0 && (
-                  <View style={[styles.divider, { backgroundColor: colors.border }]} accessible={false} />
+                  <View
+                    style={[styles.divider, { backgroundColor: colors.border }]}
+                    accessible={false}
+                  />
                 )}
                 <View style={styles.preferenceRow}>
                   <View style={styles.preferenceCopy}>
@@ -176,7 +183,10 @@ export default function NotificationSettingsScreen() {
                       <Text style={[styles.preferenceTitle, { color: colors.text }]} accessible>
                         {row.title}
                       </Text>
-                      <Text style={[styles.preferenceDescription, { color: colors.textSecondary }]} accessible>
+                      <Text
+                        style={[styles.preferenceDescription, { color: colors.textSecondary }]}
+                        accessible
+                      >
                         {row.description}
                       </Text>
                     </View>

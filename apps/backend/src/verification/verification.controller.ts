@@ -8,6 +8,7 @@ import {
   Put,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -32,6 +33,11 @@ import {
   SubmissionActionDto,
 } from './dto/verification.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/decorators/auth.decorators';
+import { UserRole } from '../users/entities/user.entity';
+import { AuditBlockchainAction } from '../admin-audit/decorators/audit-blockchain-action.decorator';
+import { AdminAuditInterceptor } from '../admin-audit/interceptors/admin-audit.interceptor';
 
 @ApiTags('verification')
 @Controller('verification')
@@ -54,8 +60,11 @@ export class VerificationController {
   }
 
   @Put('config')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
+  @Roles(UserRole.ADMIN)
+  @UseInterceptors(AdminAuditInterceptor)
+  @AuditBlockchainAction({})
   @ApiOperation({
     summary: 'Update verification registry config',
     description:
@@ -124,8 +133,11 @@ export class VerificationController {
   }
 
   @Post('projects')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
+  @Roles(UserRole.ADMIN)
+  @UseInterceptors(AdminAuditInterceptor)
+  @AuditBlockchainAction({ contractField: 'ownerPublicKey' })
   @ApiOperation({
     summary: 'Register a project for verification',
     description:
@@ -160,8 +172,11 @@ export class VerificationController {
   }
 
   @Post('override')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
+  @Roles(UserRole.ADMIN)
+  @UseInterceptors(AdminAuditInterceptor)
+  @AuditBlockchainAction({ contractField: 'projectId' })
   @ApiOperation({
     summary: 'Override project verification status',
     description:

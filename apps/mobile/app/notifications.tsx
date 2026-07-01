@@ -42,9 +42,7 @@ export default function NotificationsScreen() {
           {item.title}
         </Text>
 
-        <Text style={[styles.itemMessage, { color: colors.text }]}>
-          {item.message}
-        </Text>
+        <Text style={[styles.itemMessage, { color: colors.text }]}>{item.message}</Text>
 
         <Text style={[styles.itemStatus, { color: colors.text }]}>
           {item.read ? '✓ Read' : '● Unread'}
@@ -57,10 +55,8 @@ export default function NotificationsScreen() {
   return (
     <ProtectedRoute>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        
         {/* HEADER */}
         <View style={styles.headerRow}>
-          
           {/* Back button */}
           <TouchableOpacity
             onPress={() => router.back()}
@@ -79,9 +75,7 @@ export default function NotificationsScreen() {
 
             {unreadCount > 0 && (
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </Text>
+                <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
               </View>
             )}
           </View>

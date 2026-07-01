@@ -87,7 +87,9 @@ export default function SettingsScreen() {
           return;
         }
 
-        const result = await authenticateBiometricPrompt(t('settings.biometric_lock.confirm_biometric'));
+        const result = await authenticateBiometricPrompt(
+          t('settings.biometric_lock.confirm_biometric'),
+        );
         if (!result.success) return;
       }
 
@@ -266,10 +268,7 @@ export default function SettingsScreen() {
                     color={isActive ? '#ffffff' : colors.textSecondary}
                   />
                   <Text
-                    style={[
-                      styles.environmentLabel,
-                      { color: isActive ? '#ffffff' : colors.text },
-                    ]}
+                    style={[styles.environmentLabel, { color: isActive ? '#ffffff' : colors.text }]}
                     accessible
                   >
                     {option === 'testnet'
@@ -288,7 +287,10 @@ export default function SettingsScreen() {
               {t('settings.network.active')}
             </Text>
             <View
-              style={[styles.envBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+              style={[
+                styles.envBadge,
+                { backgroundColor: colors.card, borderColor: colors.cardBorder },
+              ]}
               accessible
               accessibilityLabel={`${t('settings.network.active')}: ${environmentConfig.label}`}
             >
@@ -339,7 +341,10 @@ export default function SettingsScreen() {
                     size={20}
                     color={isActive ? '#ffffff' : colors.textSecondary}
                   />
-                  <Text style={[styles.themeLabel, { color: isActive ? '#ffffff' : colors.text }]} accessible>
+                  <Text
+                    style={[styles.themeLabel, { color: isActive ? '#ffffff' : colors.text }]}
+                    accessible
+                  >
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
@@ -376,11 +381,16 @@ export default function SettingsScreen() {
               {t('settings.environment')}
             </Text>
             <View
-              style={[styles.envBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+              style={[
+                styles.envBadge,
+                { backgroundColor: colors.card, borderColor: colors.cardBorder },
+              ]}
               accessible
             >
               <Text style={[styles.envBadgeText, { color: colors.accent }]}>
-                {appEnv === 'production' ? t('settings.environment_production') : t('settings.environment_contributor')}
+                {appEnv === 'production'
+                  ? t('settings.environment_production')
+                  : t('settings.environment_contributor')}
               </Text>
             </View>
           </View>
@@ -407,7 +417,9 @@ export default function SettingsScreen() {
             accessibilityHint="Sign out of your account"
           >
             <Ionicons name="log-out-outline" size={20} color="#ffffff" style={{ marginRight: 8 }} />
-            <Text style={styles.logoutButtonText} accessible>{t('settings.logout')}</Text>
+            <Text style={styles.logoutButtonText} accessible>
+              {t('settings.logout')}
+            </Text>
           </TouchableOpacity>
         )}
       </ScrollView>

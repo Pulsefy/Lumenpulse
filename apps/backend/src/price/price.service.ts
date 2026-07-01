@@ -1,6 +1,7 @@
 import {
   Injectable,
   OnModuleInit,
+  OnModuleDestroy,
   Inject,
   forwardRef,
   Logger,
@@ -9,8 +10,9 @@ import { PriceGateway } from './price.gateway';
 import { StellarService } from '../stellar/stellar.service';
 
 @Injectable()
-export class PriceService implements OnModuleInit {
+export class PriceService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PriceService.name);
+  private priceListenerInterval?: NodeJS.Timeout;
 
   constructor(
     @Inject(forwardRef(() => PriceGateway))
@@ -30,7 +32,11 @@ export class PriceService implements OnModuleInit {
   startPriceListener(): void {
     this.logger.log('Starting price update stream...');
 
-    setInterval(() => {
+    if (this.priceListenerInterval) {
+      clearInterval(this.priceListenerInterval);
+    }
+
+    this.priceListenerInterval = setInterval(() => {
       try {
         const price = (Math.random() * 0.2 + 0.1).toFixed(4);
 
@@ -47,6 +53,14 @@ export class PriceService implements OnModuleInit {
         this.logger.error('Price update error', err);
       }
     }, 3000);
+    this.priceListenerInterval.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.priceListenerInterval) {
+      clearInterval(this.priceListenerInterval);
+      this.priceListenerInterval = undefined;
+    }
   }
 
   /**
