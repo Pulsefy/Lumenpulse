@@ -4,7 +4,7 @@ Database models for analytics data persistence
 
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Text, Index, BigInteger
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Text, Index, BigInteger, Boolean
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
@@ -257,6 +257,7 @@ class ProjectView(Base):
     owner = Column(String(255), nullable=True, index=True)
     total_contributions = Column(Float, nullable=False, default=0.0)
     unique_contributors = Column(Integer, nullable=False, default=0)
+    funding_momentum_score = Column(Float, nullable=False, default=0.0)
     status = Column(String(50), nullable=True, index=True)
     last_event_ledger = Column(BigInteger, nullable=True, index=True)
     extra_data = Column(JSON, nullable=True)
@@ -270,12 +271,14 @@ class ProjectView(Base):
     __table_args__ = (
         Index("idx_project_views_status", "status"),
         Index("idx_project_views_contract_id", "contract_id"),
+        Index("idx_project_views_funding_momentum_score", "funding_momentum_score"),
     )
 
     def __repr__(self):
         return (
             f"<ProjectView(project_id={self.project_id}, total_contributions={self.total_contributions}, "
-            f"unique_contributors={self.unique_contributors}, status={self.status})>"
+            f"unique_contributors={self.unique_contributors}, "
+            f"funding_momentum_score={self.funding_momentum_score}, status={self.status})>"
         )
 
 
@@ -313,6 +316,46 @@ class ProjectContributor(Base):
         return (
             f"<ProjectContributor(project_id={self.project_id}, contributor={self.contributor}, "
             f"total_contributed={self.total_contributed})>"
+        )
+
+
+class ProjectContributorReputationSnapshot(Base):
+    """
+    Stores the latest computed contributor reputation snapshot per project.
+    """
+
+    __tablename__ = "project_contributor_reputation_snapshots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(BigInteger, nullable=False, index=True)
+    contributor = Column(String(255), nullable=False, index=True)
+    total_contributed = Column(Float, nullable=False, default=0.0)
+    reputation_score = Column(Float, nullable=False, default=0.0)
+    rank = Column(Integer, nullable=False, default=0)
+    snapshot_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    extra_data = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_project_contributor_reputation_snapshot_project_contributor",
+            "project_id",
+            "contributor",
+            unique=True,
+        ),
+        Index("idx_project_contributor_reputation_snapshot_score", "reputation_score"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ProjectContributorReputationSnapshot(project_id={self.project_id}, "
+            f"contributor={self.contributor}, rank={self.rank}, "
+            f"reputation_score={self.reputation_score})>"
         )
 
 
@@ -442,3 +485,107 @@ class AssetTrend(Base):
 
     def __repr__(self):
         return f"<AssetTrend(asset={self.asset}, metric={self.metric_name}, trend={self.trend_direction})>"
+
+
+class MetadataDriftFinding(Base):
+    """
+    Stores individual drift findings produced by the metadata drift detector
+    (backend ProjectView/ProjectMilestone records vs. chain-derived state
+    recomputed from the immutable ContractEvent log).
+    """
+
+    __tablename__ = "metadata_drift_findings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String(64), nullable=False, index=True)
+    project_id = Column(BigInteger, nullable=False, index=True)
+    scope = Column(String(20), nullable=False, index=True)  # "project" or "milestone"
+    milestone_id = Column(Integer, nullable=True, index=True)
+    field = Column(String(100), nullable=False, index=True)
+    backend_value = Column(Text, nullable=True)
+    chain_derived_value = Column(Text, nullable=True)
+    severity = Column(String(20), nullable=False, default="warning", index=True)
+    detected_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Review status (consistent with RoundAnomalySignal review workflow)
+    reviewed = Column(Boolean, nullable=False, default=False)
+    review_notes = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_by = Column(String(255), nullable=True)
+
+    __table_args__ = (
+        Index("idx_metadata_drift_findings_run_id", "run_id"),
+        Index("idx_metadata_drift_findings_project_id", "project_id"),
+        Index("idx_metadata_drift_findings_scope", "scope"),
+        Index("idx_metadata_drift_findings_field", "field"),
+        Index("idx_metadata_drift_findings_severity", "severity"),
+        Index("idx_metadata_drift_findings_reviewed", "reviewed"),
+        Index(
+            "idx_metadata_drift_findings_project_field",
+            "project_id",
+            "field",
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<MetadataDriftFinding(project_id={self.project_id}, scope={self.scope}, "
+            f"field={self.field}, severity={self.severity}, reviewed={self.reviewed})>"
+        )
+
+
+class RoundAnomalySignal(Base):
+    """
+    Stores anomaly signals detected in quadratic funding rounds for maintainer review.
+    """
+
+    __tablename__ = "round_anomaly_signals"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    round_id = Column(BigInteger, nullable=False, index=True)
+    project_id = Column(BigInteger, nullable=True, index=True)
+    
+    # Anomaly details
+    anomaly_type = Column(String(50), nullable=False, index=True)  # concentration_risk, sybil_suspicion, etc.
+    severity_score = Column(Float, nullable=False)  # 0.0 - 1.0
+    detection_rationale = Column(Text, nullable=False)
+    
+    # Metric values and threshold used
+    metric_values = Column(JSON, nullable=True)
+    threshold_used = Column(Float, nullable=True)
+    
+    # Review status
+    reviewed = Column(Boolean, nullable=False, default=False)
+    review_notes = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_by = Column(String(255), nullable=True)
+    
+    # Timestamps
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    # Indexes for efficient querying
+    __table_args__ = (
+        Index("idx_round_anomaly_signals_round_id", "round_id"),
+        Index("idx_round_anomaly_signals_project_id", "project_id"),
+        Index("idx_round_anomaly_signals_anomaly_type", "anomaly_type"),
+        Index("idx_round_anomaly_signals_severity", "severity_score"),
+        Index("idx_round_anomaly_signals_reviewed", "reviewed"),
+        Index("idx_round_anomaly_signals_timestamp", "timestamp"),
+        Index("idx_round_anomaly_signals_round_type", "round_id", "anomaly_type"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<RoundAnomalySignal(id={self.id}, round_id={self.round_id}, "
+            f"type={self.anomaly_type}, severity={self.severity_score:.2f}, "
+            f"reviewed={self.reviewed})>"
+        )

@@ -22,6 +22,9 @@ export class FeatureFlag {
   @Column({ type: 'jsonb', nullable: true })
   conditions: Record<string, unknown> | null;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  changedBy: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

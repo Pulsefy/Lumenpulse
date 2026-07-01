@@ -18,6 +18,9 @@ import {
   ApproveProjectDto,
   RecordContributionDto,
   DistributeDto,
+  LeaderboardQueryDto,
+  LeaderboardResponseDto,
+  LeaderboardEntryDto,
 } from './dto/grants.dto';
 
 /**
@@ -471,6 +474,88 @@ export class GrantsService {
       poolBalance: record.totalPool.toString(),
       participationMetrics,
       projects,
+    };
+  }
+
+  /**
+   * Return a ranked leaderboard of projects for a round.
+   *
+   * Projects are sorted by QF score descending (higher match = higher rank).
+   * Supports top-N and paginated responses. Returns an empty entries list
+   * when the round exists but has no eligible projects.
+   *
+   * @throws NotFoundException when the round does not exist.
+   */
+  getLeaderboard(query: LeaderboardQueryDto): LeaderboardResponseDto {
+    const { roundId, topN, page = 1, limit = 10 } = query;
+    const record = this.getRecord(roundId);
+
+    const scores = new Map<number, bigint>();
+    let totalQf = 0n;
+
+    for (const pid of record.eligibleProjects) {
+      const contribs = record.contributions.get(pid) ?? new Map<string, bigint>();
+      const score = this.computeQfScore(contribs);
+      scores.set(pid, score);
+      totalQf += score;
+    }
+
+    // Build ranked entries sorted by QF score descending
+    const allEntries: LeaderboardEntryDto[] = Array.from(scores.entries())
+      .sort(([, a], [, b]) => (b > a ? 1 : b < a ? -1 : 0))
+      .map(([projectId, score], index) => {
+        const contribs = record.contributions.get(projectId) ?? new Map<string, bigint>();
+        const totalContributions = Array.from(contribs.values()).reduce(
+          (sum, v) => sum + v,
+          0n,
+        );
+        const contributorCount = contribs.size;
+        const estimatedMatch =
+          totalQf > 0n
+            ? (record.totalPool * score) / totalQf
+            : 0n;
+        const matchPercentage =
+          totalQf > 0n
+            ? ((score * 10000n) / totalQf).toString()
+            : '0';
+
+        return {
+          rank: index + 1,
+          projectId,
+          totalContributions: totalContributions.toString(),
+          contributorCount,
+          qfScore: score.toString(),
+          estimatedMatch: estimatedMatch.toString(),
+          matchPercentage: (Number(matchPercentage) / 100).toFixed(2),
+        };
+      });
+
+    const totalProjects = allEntries.length;
+
+    // Apply top-N or pagination
+    let entries: LeaderboardEntryDto[];
+    let effectivePage: number;
+    let effectiveLimit: number;
+
+    if (topN !== undefined) {
+      const cap = Math.min(topN, 100);
+      entries = allEntries.slice(0, cap);
+      effectivePage = 1;
+      effectiveLimit = cap;
+    } else {
+      effectiveLimit = Math.min(limit, 100);
+      effectivePage = page;
+      const start = (effectivePage - 1) * effectiveLimit;
+      entries = allEntries.slice(start, start + effectiveLimit);
+    }
+
+    return {
+      round: this.toRoundDto(record),
+      entries,
+      totalProjects,
+      poolBalance: record.totalPool.toString(),
+      page: effectivePage,
+      limit: effectiveLimit,
     };
   }
 

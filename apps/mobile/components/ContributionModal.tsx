@@ -13,13 +13,13 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../src/context';
 import {
   ESTIMATED_FEE_XLM,
   MIN_CONTRIBUTION_AMOUNT,
   TransactionStatus,
-  buildExplorerUrl,
   validateContributionAmount,
 } from '../lib/stellar';
 
@@ -38,13 +38,12 @@ export default function ContributionModal({
 }: ContributionModalProps) {
   const { colors } = useTheme();
   const { t } = useLocalization();
+  const router = useRouter();
   const inputRef = useRef<TextInput>(null);
 
   const [amount, setAmount] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<TransactionStatus>('idle');
-  const [txHash, setTxHash] = useState<string | null>(null);
-  const [txError, setTxError] = useState<string | null>(null);
 
   const sanitizeContributionAmount = (text: string) => {
     const cleaned = text.replace(/[^0-9.\-]/g, '');
@@ -92,8 +91,6 @@ export default function ContributionModal({
     setAmount('');
     setValidationError(null);
     setTxStatus('idle');
-    setTxHash(null);
-    setTxError(null);
     setTimeout(() => inputRef.current?.focus(), 300);
   }, []);
 
@@ -111,18 +108,46 @@ export default function ContributionModal({
       setTxError(null);
 
       const result = await onSubmit(amount.trim());
+      const timestamp = new Date().toISOString();
+
+      onClose();
 
       if (result.transactionHash) {
-        setTxHash(result.transactionHash);
-        setTxStatus('confirmed');
+        router.push({
+          pathname: '/transaction-receipt',
+          params: {
+            txHash: result.transactionHash,
+            status: 'success',
+            timestamp,
+            amount: `${amount.trim()} XLM`,
+            txType: 'Payment',
+          },
+        });
       } else {
-        setTxError(result.errorMessage || t('errors.transaction_failed'));
-        setTxStatus('failed');
+        router.push({
+          pathname: '/transaction-receipt',
+          params: {
+            status: 'failed',
+            timestamp,
+            amount: `${amount.trim()} XLM`,
+            txType: 'Payment',
+            errorDetail: result.errorMessage || t('errors.transaction_failed'),
+          },
+        });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : t('errors.something_went_wrong');
-      setTxError(message);
-      setTxStatus('failed');
+      onClose();
+      router.push({
+        pathname: '/transaction-receipt',
+        params: {
+          status: 'failed',
+          timestamp: new Date().toISOString(),
+          amount: `${amount.trim()} XLM`,
+          txType: 'Payment',
+          errorDetail: message,
+        },
+      });
     }
   };
 
@@ -130,71 +155,6 @@ export default function ContributionModal({
     if (txStatus === 'submitting') return;
     onClose();
   };
-
-  const showResult = txStatus === 'confirmed' || txStatus === 'failed';
-
-  if (showResult) {
-    const isSuccess = txStatus === 'confirmed';
-    return (
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={handleDismiss}>
-        <TouchableWithoutFeedback onPress={handleDismiss}>
-          <View style={styles.overlay} accessible accessibilityLabel={t('contribution_modal.title')}>
-            <TouchableWithoutFeedback>
-              <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
-                <View style={styles.resultContainer}>
-                  <Ionicons
-                    name={isSuccess ? 'checkmark-circle' : 'close-circle'}
-                    size={64}
-                    color={isSuccess ? '#4ecdc4' : colors.danger}
-                    accessibilityLabel={
-                      isSuccess
-                        ? t('contribution_modal.success')
-                        : t('contribution_modal.failed')
-                    }
-                  />
-                  <Text style={[styles.resultTitle, { color: colors.text }]} accessible accessibilityRole="header">
-                    {isSuccess
-                      ? t('contribution_modal.success')
-                      : t('contribution_modal.failed')}
-                  </Text>
-                  <Text style={[styles.resultMessage, { color: colors.textSecondary }]} accessible>
-                    {isSuccess
-                      ? t('contribution_modal.success_message', {
-                          amount,
-                          project: projectName,
-                        })
-                      : txError || t('errors.something_went_wrong')}
-                  </Text>
-
-                  {isSuccess && txHash && (
-                    <Text
-                      style={[styles.explorerLink, { color: colors.accent }]}
-                      selectable
-                      numberOfLines={1}
-                      accessible
-                      accessibilityLabel={t('contribution_modal.transaction_hash')}
-                    >
-                      {buildExplorerUrl(txHash)}
-                    </Text>
-                  )}
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.primaryButton, { backgroundColor: colors.accent }]}
-                  onPress={handleDismiss}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('common.done')}
-                >
-                  <Text style={styles.primaryButtonText} accessible>{t('common.done')}</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-    );
-  }
 
   return (
     <Modal
@@ -433,28 +393,5 @@ const styles = StyleSheet.create({
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  resultContainer: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  resultTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  resultMessage: {
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 12,
-    paddingHorizontal: 8,
-  },
-  explorerLink: {
-    fontSize: 12,
-    textDecorationLine: 'underline',
-    marginTop: 4,
   },
 });

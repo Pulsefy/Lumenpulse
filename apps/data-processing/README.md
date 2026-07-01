@@ -53,6 +53,13 @@ Create a `.env` file in the root of `apps/data-processing` and add any necessary
 python src/main.py
 ```
 
+### Scheduled Jobs
+
+The data processing service runs background jobs when started in `serve` mode.
+- `python src/main.py serve` starts the APScheduler-managed service.
+- The scheduler now includes a daily contributor reputation snapshot job that builds top-N contributor snapshots for each project and persists them for leaderboard / reputation queries.
+- Control the snapshot size with `REPUTATION_SNAPSHOT_TOP_N` in `.env` (default: `100`).
+
 ## 6. Synthetic Data Generator
 
 A synthetic dataset generator is available for local development, dashboard stress testing, and API validation. It writes clearly separated JSON fixtures under `data/synthetic` and can optionally persist data to PostgreSQL.

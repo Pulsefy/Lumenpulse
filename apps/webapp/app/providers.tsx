@@ -51,6 +51,7 @@ function ConfigGate({ children }: { children: ReactNode }) {
 
 import { OnboardingProvider } from "@/lib/onboarding";
 import { ThemeProvider } from "@/components/theme-provider";
+import { WatchlistProvider } from "@/contexts/WatchlistContext";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -59,9 +60,11 @@ export function Providers({ children }: { children: ReactNode }) {
         <StellarProvider>
           <ConfigGate>
             <ThemeProvider>
-              <OnboardingProvider>
-                {children}
-              </OnboardingProvider>
+              <WatchlistProvider>
+                <OnboardingProvider>
+                  {children}
+                </OnboardingProvider>
+              </WatchlistProvider>
             </ThemeProvider>
           </ConfigGate>
         </StellarProvider>
@@ -224,6 +227,11 @@ export function StellarProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const disconnect = useCallback(() => {
+    // Clean up wallet-scoped localStorage entries before clearing state
+    if (publicKey) {
+      localStorage.removeItem(`lumenpulse_watchlist_${publicKey}`);
+    }
+    localStorage.removeItem("activeWalletId");
     setPublicKey(null);
     setLastAddress(null);
     setStatus("disconnected");
@@ -231,7 +239,7 @@ export function StellarProvider({ children }: { children: ReactNode }) {
     setErrorType(null);
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(STORAGE_ADDRESS_KEY);
-  }, []);
+  }, [publicKey]);
 
   const resetError = useCallback(() => {
     setError(null);

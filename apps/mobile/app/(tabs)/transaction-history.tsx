@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View, Modal, Linking } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
 import { transactionApi } from '../../lib/transaction';
-import { Transaction, TransactionType } from '../../lib/types/transaction';
+import { Transaction, TransactionType, TransactionStatus } from '../../lib/types/transaction';
 import StandardList from '@/components/StandardList';
-import { buildExplorerUrl } from '../../lib/stellar';
 import { CACHE_CONFIGS } from '../../lib/cache';
 import { useWalletAutoRefresh } from '../../hooks/useWalletAutoRefresh';
 
@@ -89,77 +89,16 @@ function TransactionItem({
   );
 }
 
-function TransactionDetailModal({ transaction, visible, onClose, colors, t }: any) {
-  if (!transaction) return null;
-
-  return (
-    <Modal visible={visible} animationType="slide" accessibilityViewIsModal={true}>
-      <View style={[styles.modal, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text, fontSize: 18 }} accessible accessibilityRole="header">
-          {t('transactions.details')}
-        </Text>
-
-        <Text style={{ color: colors.textSecondary, marginTop: 16 }} accessible>
-          {t('transactions.hash')}
-        </Text>
-        <TouchableOpacity onPress={() => Linking.openURL(buildExplorerUrl(transaction.transactionHash)).catch(err => console.error("Couldn't open link", err))}>
-          <Text
-            style={{ color: colors.accent, fontSize: 12, marginTop: 4, textDecorationLine: 'underline' }}
-            selectable
-            accessible
-            accessibilityLabel={transaction.transactionHash}
-            accessibilityRole="link"
-          >
-            {transaction.transactionHash}
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={{ color: colors.textSecondary, marginTop: 16 }} accessible>
-          {t('transactions.type')}
-        </Text>
-        <Text style={{ color: colors.text, marginTop: 4 }} accessible>
-          {transaction.type}
-        </Text>
-
-        <Text style={{ color: colors.textSecondary, marginTop: 16 }} accessible>
-          {t('transactions.amount')}
-        </Text>
-        <Text style={{ color: colors.text, marginTop: 4 }} accessible>
-          {formatAmount(transaction.amount, transaction.assetCode)}
-        </Text>
-
-        <Text style={{ color: colors.textSecondary, marginTop: 16 }} accessible>
-          {t('transactions.date')}
-        </Text>
-        <Text style={{ color: colors.text, marginTop: 4 }} accessible>
-          {new Date(transaction.date).toLocaleString()}
-        </Text>
-
-        <TouchableOpacity
-          onPress={onClose}
-          style={[styles.modalButton, { backgroundColor: colors.accent }]}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.close')}
-        >
-          <Text style={styles.modalButtonText} accessible>{t('common.close')}</Text>
-        </TouchableOpacity>
-      </View>
-    </Modal>
-  );
-}
-
 export default function TransactionHistoryScreen() {
   const { isAuthenticated } = useAuth();
   const { colors } = useTheme();
   const { t } = useLocalization();
+  const router = useRouter();
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
   const [nextPage, setNextPage] = useState<string | undefined>();
 
   const fetchTransactions = useCallback(
@@ -210,8 +149,18 @@ export default function TransactionHistoryScreen() {
   };
 
   const handlePress = (tx: Transaction) => {
-    setSelectedTransaction(tx);
-    setModalVisible(true);
+    router.push({
+      pathname: '/transaction-receipt',
+      params: {
+        txHash: tx.transactionHash,
+        status: tx.status === TransactionStatus.SUCCESS ? 'success'
+          : tx.status === TransactionStatus.FAILED ? 'failed'
+          : 'pending',
+        timestamp: tx.date,
+        amount: formatAmount(tx.amount, tx.assetCode),
+        txType: tx.type,
+      },
+    });
   };
 
   if (!isAuthenticated) {
@@ -244,14 +193,6 @@ export default function TransactionHistoryScreen() {
           </View>
         }
       />
-
-      <TransactionDetailModal
-        transaction={selectedTransaction}
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        colors={colors}
-        t={t}
-      />
     </SafeAreaView>
   );
 }
@@ -267,23 +208,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-  },
-  modal: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalButton: {
-    marginTop: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  modalButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '600',
   },
 });

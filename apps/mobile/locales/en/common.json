@@ -256,7 +256,11 @@
       "news_alerts": "News Alerts",
       "news_alerts_desc": "Breaking ecosystem and market headlines relevant to your portfolio.",
       "security_alerts": "Security Alerts",
-      "security_alerts_desc": "Critical account, phishing, and suspicious-activity notices."
+      "security_alerts_desc": "Critical account, phishing, and suspicious-activity notices.",
+      "grant_alerts": "Grant Alerts",
+      "grant_alerts_desc": "Notifications about new grant rounds, round starts, and deadline reminders.",
+      "contribution_alerts": "Contribution Alerts",
+      "contribution_alerts_desc": "Updates on your contributions, matching status, and contribution confirmations."
     },
     "theme": {
       "system": "System",
@@ -289,6 +293,26 @@
     "environment_contributor": "Contributor Build",
     "platform": "Platform",
     "logout": "Log Out"
+  },
+  "transaction_receipt": {
+    "title": "Transaction Receipt",
+    "status_success": "Transaction Confirmed",
+    "status_failed": "Transaction Failed",
+    "status_pending": "Transaction Pending",
+    "hash": "Transaction Hash",
+    "status": "Status",
+    "timestamp": "Timestamp",
+    "type": "Type",
+    "amount": "Amount",
+    "network": "Network",
+    "testnet": "Stellar Testnet",
+    "view_explorer": "View on Stellar Explorer",
+    "copy_hash": "Copy Hash",
+    "hash_copied": "Hash copied",
+    "done": "Done",
+    "back": "Back",
+    "error_detail": "Error Details",
+    "no_hash": "Hash not available"
   },
   "errors": {
     "something_went_wrong": "Something went wrong. Please try again.",

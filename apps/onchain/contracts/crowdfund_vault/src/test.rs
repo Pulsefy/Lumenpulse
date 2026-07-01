@@ -5,8 +5,12 @@ use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Events, Ledger},
     token::{StellarAssetClient, TokenClient},
-    vec, Address, Env,
+    vec, Address, BytesN, Env,
 };
+
+fn request_id(env: &Env) -> BytesN<32> {
+    BytesN::from_array(env, &[0; 32])
+}
 fn create_token_contract<'a>(
     env: &Env,
     admin: &Address,
@@ -1397,7 +1401,12 @@ fn test_batch_payout() {
     ];
 
     // Execute batch payout
-    client.batch_payout(&admin, &token_client.address, &recipients);
+    client.batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
 
     // Verify reward pool decreased
     assert_eq!(
@@ -1426,7 +1435,12 @@ fn test_batch_payout_empty_recipients() {
 
     // Empty recipients list should fail
     let empty_recipients = vec![&env];
-    let result = client.try_batch_payout(&admin, &token_client.address, &empty_recipients);
+    let result = client.try_batch_payout(
+        &admin,
+        &token_client.address,
+        &empty_recipients,
+        &request_id(&env),
+    );
     assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
 }
 
@@ -1447,7 +1461,12 @@ fn test_batch_payout_invalid_amount() {
     // Recipient with zero amount should fail
     let recipient = Address::generate(&env);
     let recipients = vec![&env, (recipient, 0i128)];
-    let result = client.try_batch_payout(&admin, &token_client.address, &recipients);
+    let result = client.try_batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
     assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
 }
 
@@ -1468,7 +1487,12 @@ fn test_batch_payout_insufficient_balance() {
     // Request payout larger than pool balance
     let recipient = Address::generate(&env);
     let recipients = vec![&env, (recipient, 20_000i128)];
-    let result = client.try_batch_payout(&admin, &token_client.address, &recipients);
+    let result = client.try_batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
     assert_eq!(result, Err(Ok(CrowdfundError::InsufficientBalance)));
 }
 
@@ -1490,7 +1514,12 @@ fn test_batch_payout_unauthorized() {
     // Non-admin tries to execute batch payout
     let recipient = Address::generate(&env);
     let recipients = vec![&env, (recipient, 10_000i128)];
-    let result = client.try_batch_payout(&owner, &token_client.address, &recipients);
+    let result = client.try_batch_payout(
+        &owner,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
     assert_eq!(result, Err(Ok(CrowdfundError::Unauthorized)));
 }
 
@@ -1515,7 +1544,12 @@ fn test_batch_payout_contract_paused() {
     // Batch payout should fail when paused
     let recipient = Address::generate(&env);
     let recipients = vec![&env, (recipient, 10_000i128)];
-    client.batch_payout(&admin, &token_client.address, &recipients);
+    client.batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
 }
 
 #[test]
@@ -1535,8 +1569,49 @@ fn test_batch_payout_contract_address_recipient() {
 
     // Using contract address as recipient should fail
     let recipients = vec![&env, (contract_address, 10_000i128)];
-    let result = client.try_batch_payout(&admin, &token_client.address, &recipients);
+    let result = client.try_batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
     assert_eq!(result, Err(Ok(CrowdfundError::InvalidRecipient)));
+}
+
+#[test]
+fn test_batch_payout_duplicate_request_id() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, token_client, token_admin_client, _) = setup_test_with_admin(&env);
+
+    client.initialize(&admin);
+
+    // Fund reward pool
+    let pool_amount: i128 = 100_000;
+    token_admin_client.mint(&admin, &pool_amount);
+    client.fund_reward_pool(&admin, &token_client.address, &pool_amount);
+
+    // Create recipients
+    let recipient = Address::generate(&env);
+    let recipients = vec![&env, (recipient, 10_000i128)];
+
+    // First execution should succeed
+    client.batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
+
+    // Second execution with same request_id should fail
+    let result = client.try_batch_payout(
+        &admin,
+        &token_client.address,
+        &recipients,
+        &request_id(&env),
+    );
+    assert_eq!(result, Err(Ok(CrowdfundError::AlreadyExecuted)));
 }
 
 #[test]
@@ -2501,6 +2576,167 @@ fn test_reentrancy_guard_resets_for_sequential_withdraw_and_deposit() {
             .unwrap_or(false)
     });
     assert!(!lock_state);
+}
+
+#[test]
+fn test_double_claim_protection_clawback() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+    client.deposit(&user, &project_id, &400_000);
+
+    // Expire the project
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + crate::DEFAULT_MILESTONE_EXPIRY_SECONDS + 1);
+
+    // First clawback should succeed
+    let refunded = client.clawback_contribution(&project_id, &user);
+    assert_eq!(refunded, 400_000);
+
+    // Second clawback should fail (contribution already removed)
+    let result = client.try_clawback_contribution(&project_id, &user);
+    assert_eq!(result, Err(Ok(CrowdfundError::InsufficientBalance)));
+}
+
+#[test]
+fn test_refund_receipt_persistence_clawback() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+    client.deposit(&user, &project_id, &400_000);
+
+    // Expire the project
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + crate::DEFAULT_MILESTONE_EXPIRY_SECONDS + 1);
+
+    // Clawback contribution
+    client.clawback_contribution(&project_id, &user);
+
+    // Verify receipt was stored
+    let receipt_count = client.get_refund_receipt_count(&project_id);
+    assert_eq!(receipt_count, 1);
+
+    // Verify receipt details
+    let receipt = client.get_refund_receipt(&project_id, &0);
+    assert_eq!(receipt.project_id, project_id);
+    assert_eq!(receipt.contributor, user);
+    assert_eq!(receipt.amount, 400_000);
+    assert_eq!(receipt.reason, soroban_sdk::symbol_short!("EXPIRED"));
+
+    // Verify contributor is marked as claimed
+    assert!(client.has_refund_claimed(&project_id, &user));
+}
+
+#[test]
+fn test_refund_receipt_persistence_bulk_refund() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _user, token_client, token_admin_client, _) =
+        setup_test_with_admin(&env);
+    client.initialize(&admin);
+
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    token_admin_client.mint(&user1, &10_000_000);
+    token_admin_client.mint(&user2, &10_000_000);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+    client.deposit(&user1, &project_id, &300_000);
+    client.deposit(&user2, &project_id, &200_000);
+
+    // Cancel project
+    client.cancel_project(&admin, &project_id);
+
+    // Refund all contributors
+    client.refund_contributors(&project_id, &admin);
+
+    // Verify receipts were stored
+    let receipt_count = client.get_refund_receipt_count(&project_id);
+    assert_eq!(receipt_count, 2);
+
+    // Verify receipt details for first contributor
+    let receipt1 = client.get_refund_receipt(&project_id, &0);
+    assert_eq!(receipt1.project_id, project_id);
+    assert_eq!(receipt1.amount, 300_000);
+    assert_eq!(receipt1.reason, soroban_sdk::symbol_short!("CANCELED"));
+
+    // Verify receipt details for second contributor
+    let receipt2 = client.get_refund_receipt(&project_id, &1);
+    assert_eq!(receipt2.project_id, project_id);
+    assert_eq!(receipt2.amount, 200_000);
+    assert_eq!(receipt2.reason, soroban_sdk::symbol_short!("CANCELED"));
+
+    // Verify both contributors are marked as claimed
+    assert!(client.has_refund_claimed(&project_id, &user1));
+    assert!(client.has_refund_claimed(&project_id, &user2));
+}
+
+#[test]
+fn test_double_claim_protection_bulk_refund() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _user, token_client, token_admin_client, _) =
+        setup_test_with_admin(&env);
+    client.initialize(&admin);
+
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    token_admin_client.mint(&user1, &10_000_000);
+    token_admin_client.mint(&user2, &10_000_000);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("TestProj"),
+        &1_000_000,
+        &token_client.address,
+    );
+    client.deposit(&user1, &project_id, &300_000);
+    client.deposit(&user2, &project_id, &200_000);
+
+    // Cancel project
+    client.cancel_project(&admin, &project_id);
+
+    // User1 claims via clawback first (individual refund)
+    client.clawback_contribution(&project_id, &user1);
+
+    // Verify user1 is marked as claimed
+    assert!(client.has_refund_claimed(&project_id, &user1));
+
+    // Now bulk refund - should skip user1 (already claimed) and refund user2
+    client.refund_contributors(&project_id, &admin);
+
+    // Receipt count should be 2 (one from clawback, one from bulk refund)
+    let receipt_count = client.get_refund_receipt_count(&project_id);
+    assert_eq!(receipt_count, 2);
+
+    // Verify both contributors are marked as claimed
+    assert!(client.has_refund_claimed(&project_id, &user1));
+    assert!(client.has_refund_claimed(&project_id, &user2));
 }
 
 #[test]

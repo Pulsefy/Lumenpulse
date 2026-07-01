@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { ExportService } from './export.service';
 import {
   ExportJob,
@@ -55,6 +56,10 @@ describe('ExportService', () => {
     getTransactionHistory: jest.fn(),
   };
 
+  const mockDataSource = {
+    query: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -67,6 +72,7 @@ describe('ExportService', () => {
           useValue: mockSnapshotRepo,
         },
         { provide: TransactionService, useValue: mockTransactionService },
+        { provide: DataSource, useValue: mockDataSource },
       ],
     }).compile();
 
@@ -223,6 +229,81 @@ describe('ExportService', () => {
       );
       expect(failedUpdate).toBeDefined();
       expect(failedUpdate?.errorMessage).toBe('DB error');
+    });
+
+    it('builds onchain analytics CSV with correct headers', async () => {
+      const job: Partial<ExportJob> = {
+        id: 'job-4',
+        userId: 'user-1',
+        type: ExportType.ONCHAIN_ANALYTICS,
+        status: ExportStatus.PENDING,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      mockExportJobRepo.create.mockReturnValue(job);
+      mockExportJobRepo.save.mockResolvedValue(job);
+      mockDataSource.query.mockResolvedValue([
+        { bucket: new Date('2024-01-15'), sentiment: 0.75, count: 10 },
+      ]);
+
+      let capturedCsv = '';
+      mockExportJobRepo.update.mockImplementation(
+        (_id: string, data: Partial<ExportJob>) => {
+          if (data.csvData) capturedCsv = data.csvData;
+          return Promise.resolve(undefined);
+        },
+      );
+
+      await service.createExportJob('user-1', ExportType.ONCHAIN_ANALYTICS);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(capturedCsv).toContain('date,avg_sentiment,record_count');
+      expect(capturedCsv).toContain('2024-01-15');
+      expect(capturedCsv).toContain('0.75');
+    });
+
+    it('builds round analytics CSV with correct headers', async () => {
+      const job: Partial<ExportJob> = {
+        id: 'job-5',
+        userId: 'user-1',
+        type: ExportType.ROUND_ANALYTICS,
+        status: ExportStatus.PENDING,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      mockExportJobRepo.create.mockReturnValue(job);
+      mockExportJobRepo.save.mockResolvedValue(job);
+      mockDataSource.query.mockResolvedValue([
+        {
+          snapshot_date: new Date('2024-01-15'),
+          asset_symbol: 'XLM',
+          avg_sentiment: 0.5,
+          signal_count: 20,
+        },
+        {
+          snapshot_date: new Date('2024-01-15'),
+          asset_symbol: null,
+          avg_sentiment: 0.6,
+          signal_count: 50,
+        },
+      ]);
+
+      let capturedCsv = '';
+      mockExportJobRepo.update.mockImplementation(
+        (_id: string, data: Partial<ExportJob>) => {
+          if (data.csvData) capturedCsv = data.csvData;
+          return Promise.resolve(undefined);
+        },
+      );
+
+      await service.createExportJob('user-1', ExportType.ROUND_ANALYTICS);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(capturedCsv).toContain(
+        'snapshot_date,asset_symbol,avg_sentiment,signal_count',
+      );
+      expect(capturedCsv).toContain('XLM');
+      expect(capturedCsv).toContain('2024-01-15');
     });
   });
 });

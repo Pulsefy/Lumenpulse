@@ -51,6 +51,7 @@ import { DeprecationInterceptor } from './common/interceptors/deprecation.interc
 import { SearchModule } from './search/search.module';
 import { ExportModule } from './export/export.module';
 import { SignalsModule } from './signals/signals.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AppConfigModule } from './config/config.module';
 import { CrowdfundModule } from './crowdfund/crowdfund.module';
 import { AuditModule } from './audit/audit.module';
@@ -58,6 +59,7 @@ import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor'
 import { SorobanEventsModule } from './soroban-events/soroban-events.module';
 import { TreasuryModule } from './treasury/treasury.module';
 import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
+import { AdminAuditModule } from './admin-audit/admin-audit.module';
 
 @Module({
   imports: [
@@ -116,6 +118,7 @@ import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
     OutboxModule,
     ExportModule,
     SignalsModule,
+    AnalyticsModule,
     TelegramBotModule,
     ModerationModule,
     SearchModule,
@@ -126,6 +129,7 @@ import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
     SorobanEventsModule,
     TreasuryModule,
     VestingWalletModule,
+    AdminAuditModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
