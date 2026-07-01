@@ -1,0 +1,12 @@
+[package]
+name = "cross_contract_view_helpers"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["lib"]
+
+documentation = "../README.md"
+
+[dependencies]
+soroban-sdk = { workspace = true }
