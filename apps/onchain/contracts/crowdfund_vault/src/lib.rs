@@ -2048,21 +2048,6 @@ impl CrowdfundVaultContract {
             .unwrap_or(0))
     }
 
-    /// Get refund receipt count for a project
-    /// Note: This contract does not track individual refund receipts, so this returns 0
-    pub fn get_refund_receipt_count(env: Env, project_id: u64) -> Result<u64, CrowdfundError> {
-        Self::require_current_storage_version(&env)?;
-
-        // Check if project exists
-        env.storage()
-            .persistent()
-            .get::<_, ProjectData>(&DataKey::Project(project_id))
-            .ok_or(CrowdfundError::ProjectNotFound)?;
-
-        // This contract does not track refund receipts, return 0
-        Ok(0)
-    }
-
     /// Get project storage summary
     pub fn get_project_storage_summary(
         env: Env,
