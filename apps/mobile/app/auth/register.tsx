@@ -83,7 +83,11 @@ const RegisterScreen = () => {
     >
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
         <View style={styles.content}>
-          <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+          <Text
+            style={[styles.title, { color: colors.text }]}
+            accessible
+            accessibilityRole="header"
+          >
             {t('auth.register.title')}
           </Text>
           <Text style={[styles.subtitle, { color: colors.accent }]} accessible>
@@ -159,9 +163,15 @@ const RegisterScreen = () => {
               accessibilityHint={t('auth.register.create_account_button')}
             >
               {loading ? (
-                <ActivityIndicator color="#ffffff" accessible accessibilityLabel={t('common.loading')} />
+                <ActivityIndicator
+                  color="#ffffff"
+                  accessible
+                  accessibilityLabel={t('common.loading')}
+                />
               ) : (
-                <Text style={styles.buttonText} accessible>{t('auth.register.create_account_button')}</Text>
+                <Text style={styles.buttonText} accessible>
+                  {t('auth.register.create_account_button')}
+                </Text>
               )}
             </TouchableOpacity>
 

@@ -2,7 +2,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Queue } from 'bullmq';
+import { Queue, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { PortfolioAsset } from './portfolio-asset.entity';
 import { PortfolioSnapshot } from './entities/portfolio-snapshot.entity';
@@ -65,7 +65,8 @@ import { ProfilingModule } from '../common/profiling/profiling.module';
       provide: PORTFOLIO_SNAPSHOT_QUEUE,
       useFactory: (connection: Redis) =>
         new Queue(PORTFOLIO_SNAPSHOT_QUEUE_NAME, {
-          connection,
+          // BullMQ's ConnectionOptions can resolve to a different bundled ioredis type.
+          connection: connection as unknown as ConnectionOptions,
           defaultJobOptions: {
             removeOnComplete: true,
             removeOnFail: false,

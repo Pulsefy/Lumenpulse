@@ -57,7 +57,13 @@ export default function SavedNewsScreen() {
       <Stack.Screen options={{ title: t('news.saved') }} />
       {articles.length === 0 ? (
         <View style={styles.emptyContainer} accessible accessibilityLabel="No saved news">
-          <Ionicons name="bookmark-outline" size={64} color={colors.text} style={{ opacity: 0.2 }} accessible />
+          <Ionicons
+            name="bookmark-outline"
+            size={64}
+            color={colors.text}
+            style={{ opacity: 0.2 }}
+            accessible
+          />
           <Text style={[styles.emptyText, { color: colors.text }]} accessible>
             {t('news.no_news')}
           </Text>

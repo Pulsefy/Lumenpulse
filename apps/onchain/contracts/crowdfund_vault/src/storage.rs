@@ -52,6 +52,16 @@ pub struct ProtocolStats {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectStorageSummary {
+    pub project_id: u64,
+    pub project_exists: bool,
+    pub contributor_count: u32,
+    pub refund_receipt_count: u64,
+    pub total_projects: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectData {
     pub id: u64,
     pub owner: Address,

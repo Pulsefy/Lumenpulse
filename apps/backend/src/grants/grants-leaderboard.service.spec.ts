@@ -30,16 +30,46 @@ describe('GrantsService.getLeaderboard', () => {
     service.approveProject({ roundId: round.id, projectId: 3 });
 
     // Project 1: 3 contributors
-    service.recordContribution({ roundId: round.id, projectId: 1, contributor: 'GA1', amount: '100' });
-    service.recordContribution({ roundId: round.id, projectId: 1, contributor: 'GB1', amount: '100' });
-    service.recordContribution({ roundId: round.id, projectId: 1, contributor: 'GC1', amount: '100' });
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 1,
+      contributor: 'GA1',
+      amount: '100',
+    });
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 1,
+      contributor: 'GB1',
+      amount: '100',
+    });
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 1,
+      contributor: 'GC1',
+      amount: '100',
+    });
 
     // Project 2: 1 contributor (lower QF score)
-    service.recordContribution({ roundId: round.id, projectId: 2, contributor: 'GA2', amount: '300' });
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 2,
+      contributor: 'GA2',
+      amount: '300',
+    });
 
     // Project 3: 2 contributors
-    service.recordContribution({ roundId: round.id, projectId: 3, contributor: 'GA3', amount: '100' });
-    service.recordContribution({ roundId: round.id, projectId: 3, contributor: 'GB3', amount: '100' });
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 3,
+      contributor: 'GA3',
+      amount: '100',
+    });
+    service.recordContribution({
+      roundId: round.id,
+      projectId: 3,
+      contributor: 'GB3',
+      amount: '100',
+    });
   });
 
   it('returns ranked entries with rank, contributions, and match figures', () => {
@@ -104,16 +134,19 @@ describe('GrantsService.getLeaderboard', () => {
       endTime: Math.floor(Date.now() / 1000) + 3600,
     });
 
-    const result = service.getLeaderboard({ roundId: emptyRound.id, limit: 10 });
+    const result = service.getLeaderboard({
+      roundId: emptyRound.id,
+      limit: 10,
+    });
 
     expect(result.entries).toEqual([]);
     expect(result.totalProjects).toBe(0);
   });
 
   it('throws NotFoundException for unknown roundId', () => {
-    expect(() =>
-      service.getLeaderboard({ roundId: 99999, limit: 10 }),
-    ).toThrow(NotFoundException);
+    expect(() => service.getLeaderboard({ roundId: 99999, limit: 10 })).toThrow(
+      NotFoundException,
+    );
   });
 
   it('returns correct totalProjects count', () => {
