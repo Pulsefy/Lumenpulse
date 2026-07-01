@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 import {
   VestingWalletException,
   VestingWalletInvalidAmountException,
@@ -33,25 +32,25 @@ export function mapVestingWalletContractErrorCode(
   beneficiary?: string,
 ): VestingWalletException {
   switch (code) {
-    case VestingWalletContractError.NotInitialized:
+    case 1: // VestingWalletContractError.NotInitialized
       return new VestingWalletNotInitializedException();
-    case VestingWalletContractError.Unauthorized:
+    case 3: // VestingWalletContractError.Unauthorized
       return new VestingWalletUnauthorizedException();
-    case VestingWalletContractError.InvalidAmount:
+    case 5: // VestingWalletContractError.InvalidAmount
       return new VestingWalletInvalidAmountException();
-    case VestingWalletContractError.InvalidDuration:
+    case 6: // VestingWalletContractError.InvalidDuration
       return new VestingWalletInvalidDurationException();
-    case VestingWalletContractError.InvalidStartTime:
+    case 7: // VestingWalletContractError.InvalidStartTime
       return new VestingWalletInvalidStartTimeException();
-    case VestingWalletContractError.VestingNotFound:
+    case 4: // VestingWalletContractError.VestingNotFound
       return new VestingWalletNotFoundException(beneficiary ?? 'unknown');
-    case VestingWalletContractError.NothingToClaim:
+    case 8: // VestingWalletContractError.NothingToClaim
       return new VestingWalletNothingToClaimException();
-    case VestingWalletContractError.Reentrancy:
+    case 10: // VestingWalletContractError.Reentrancy
       return new VestingWalletReentrancyException();
-    case VestingWalletContractError.InsufficientBalance:
+    case 9: // VestingWalletContractError.InsufficientBalance
       return new VestingWalletInsufficientBalanceException();
-    case VestingWalletContractError.DelegateNotAuthorized:
+    case 11: // VestingWalletContractError.DelegateNotAuthorized
       return new VestingWalletUnauthorizedException();
     default:
       return new VestingWalletTransactionFailedException(fallbackMessage, {

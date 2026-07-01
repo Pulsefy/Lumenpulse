@@ -153,9 +153,12 @@ export default function TransactionHistoryScreen() {
       pathname: '/transaction-receipt',
       params: {
         txHash: tx.transactionHash,
-        status: tx.status === TransactionStatus.SUCCESS ? 'success'
-          : tx.status === TransactionStatus.FAILED ? 'failed'
-          : 'pending',
+        status:
+          tx.status === TransactionStatus.SUCCESS
+            ? 'success'
+            : tx.status === TransactionStatus.FAILED
+              ? 'failed'
+              : 'pending',
         timestamp: tx.date,
         amount: formatAmount(tx.amount, tx.assetCode),
         txType: tx.type,
@@ -166,7 +169,11 @@ export default function TransactionHistoryScreen() {
   if (!isAuthenticated) {
     return (
       <View style={styles.center}>
-        <Text style={{ color: colors.text }} accessible accessibilityLabel={t('transactions.login_required')}>
+        <Text
+          style={{ color: colors.text }}
+          accessible
+          accessibilityLabel={t('transactions.login_required')}
+        >
           {t('transactions.login_required')}
         </Text>
       </View>
@@ -179,7 +186,12 @@ export default function TransactionHistoryScreen() {
         data={transactions}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <TransactionItem transaction={item} onPress={() => handlePress(item)} colors={colors} t={t} />
+          <TransactionItem
+            transaction={item}
+            onPress={() => handlePress(item)}
+            colors={colors}
+            t={t}
+          />
         )}
         refreshing={isRefreshing}
         onRefresh={() => fetchTransactions(true)}
@@ -189,7 +201,9 @@ export default function TransactionHistoryScreen() {
         onRetry={() => fetchTransactions(true)}
         ListEmptyComponent={
           <View style={{ padding: 16, alignItems: 'center' }}>
-            <Text style={{ color: colors.textSecondary }}>{t('transactions.empty') || 'No recent transactions.'}</Text>
+            <Text style={{ color: colors.textSecondary }}>
+              {t('transactions.empty') || 'No recent transactions.'}
+            </Text>
           </View>
         }
       />

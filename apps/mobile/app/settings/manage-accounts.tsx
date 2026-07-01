@@ -218,7 +218,11 @@ export default function ManageAccountsScreen() {
             <Ionicons name="arrow-back" size={20} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
-            <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+            <Text
+              style={[styles.title, { color: colors.text }]}
+              accessible
+              accessibilityRole="header"
+            >
               {t('settings.manage_accounts.title')}
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]} accessible>
@@ -299,14 +303,17 @@ export default function ManageAccountsScreen() {
           </View>
 
           <Text style={[styles.helperText, { color: colors.textSecondary }]} accessible>
-            Connect a mobile wallet to securely sign transactions via deep links or mock Testnet flows.
+            Connect a mobile wallet to securely sign transactions via deep links or mock Testnet
+            flows.
           </Text>
 
           {status === 'connected' && publicKey ? (
             <View style={[styles.accountRow, { paddingVertical: 10 }]}>
               <View style={styles.accountCopy}>
                 <Text style={[styles.accountLabel, { color: colors.success }]}>Connected</Text>
-                <Text style={[styles.accountKey, { color: colors.textSecondary }]}>{truncateKey(publicKey)}</Text>
+                <Text style={[styles.accountKey, { color: colors.textSecondary }]}>
+                  {truncateKey(publicKey)}
+                </Text>
               </View>
               <TouchableOpacity
                 style={[styles.removeButton, { borderColor: colors.danger }]}
@@ -357,7 +364,11 @@ export default function ManageAccountsScreen() {
               accessibilityHint="Refresh linked accounts"
             >
               {refreshing ? (
-                <ActivityIndicator size="small" color={colors.accent} accessibilityLabel={t('common.loading')} />
+                <ActivityIndicator
+                  size="small"
+                  color={colors.accent}
+                  accessibilityLabel={t('common.loading')}
+                />
               ) : (
                 <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
               )}
@@ -375,7 +386,11 @@ export default function ManageAccountsScreen() {
               accessibilityLabel="No linked accounts"
             >
               <Ionicons name="wallet-outline" size={22} color={colors.textSecondary} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+              <Text
+                style={[styles.emptyTitle, { color: colors.text }]}
+                accessible
+                accessibilityRole="header"
+              >
                 {t('settings.manage_accounts.no_linked_accounts')}
               </Text>
               <Text style={[styles.emptyDescription, { color: colors.textSecondary }]} accessible>
@@ -443,7 +458,11 @@ export default function ManageAccountsScreen() {
             </View>
 
             {permissionGranted === false ? (
-              <View style={styles.permissionFallback} accessible accessibilityLabel="Camera permission required">
+              <View
+                style={styles.permissionFallback}
+                accessible
+                accessibilityLabel="Camera permission required"
+              >
                 <Text style={styles.permissionFallbackText} accessible>
                   {t('settings.manage_accounts.camera_permission_message')}
                 </Text>

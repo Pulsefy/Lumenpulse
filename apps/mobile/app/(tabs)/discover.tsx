@@ -105,7 +105,15 @@ function assetColor(code: string): string {
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
-function AssetItem({ asset, colors, t }: { asset: StellarAsset; colors: ThemeColors; t: (key: string) => string }) {
+function AssetItem({
+  asset,
+  colors,
+  t,
+}: {
+  asset: StellarAsset;
+  colors: ThemeColors;
+  t: (key: string) => string;
+}) {
   const color = assetColor(asset.code);
   const isPositive = asset.change24h >= 0;
   const changeColor = isPositive ? '#27ae60' : '#e74c3c';
@@ -127,7 +135,11 @@ function AssetItem({ asset, colors, t }: { asset: StellarAsset; colors: ThemeCol
         <Text style={[styles.assetCode, { color: colors.text }]} numberOfLines={1} accessible>
           {asset.code}
         </Text>
-        <Text style={[styles.assetName, { color: colors.textSecondary }]} numberOfLines={1} accessible>
+        <Text
+          style={[styles.assetName, { color: colors.textSecondary }]}
+          numberOfLines={1}
+          accessible
+        >
           {asset.name}
         </Text>
       </View>
@@ -204,7 +216,11 @@ export default function AssetDiscoveryScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={[styles.screenTitle, { color: colors.text }]} accessible accessibilityRole="header">
+        <Text
+          style={[styles.screenTitle, { color: colors.text }]}
+          accessible
+          accessibilityRole="header"
+        >
           {t('discover.title')}
         </Text>
         <View style={[styles.center, { flex: 1 }]}>
@@ -222,7 +238,11 @@ export default function AssetDiscoveryScreen() {
   if (error) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={[styles.screenTitle, { color: colors.text }]} accessible accessibilityRole="header">
+        <Text
+          style={[styles.screenTitle, { color: colors.text }]}
+          accessible
+          accessibilityRole="header"
+        >
           {t('discover.title')}
         </Text>
         <View style={[styles.center, { flex: 1, padding: 32 }]}>
@@ -234,7 +254,11 @@ export default function AssetDiscoveryScreen() {
             accessible
             accessibilityLabel={t('errors.couldnt_load', { item: 'assets' })}
           />
-          <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+          <Text
+            style={[styles.emptyTitle, { color: colors.text }]}
+            accessible
+            accessibilityRole="header"
+          >
             {t('errors.couldnt_load', { item: 'assets' })}
           </Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} accessible>
@@ -247,7 +271,9 @@ export default function AssetDiscoveryScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('common.retry')}
           >
-            <Text style={styles.retryText} accessible>{t('common.retry')}</Text>
+            <Text style={styles.retryText} accessible>
+              {t('common.retry')}
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -270,7 +296,11 @@ export default function AssetDiscoveryScreen() {
         }
         ListHeaderComponent={
           <>
-            <Text style={[styles.screenTitle, { color: colors.text }]} accessible accessibilityRole="header">
+            <Text
+              style={[styles.screenTitle, { color: colors.text }]}
+              accessible
+              accessibilityRole="header"
+            >
               {t('discover.title')}
             </Text>
 
@@ -337,7 +367,11 @@ export default function AssetDiscoveryScreen() {
           </>
         }
         ListEmptyComponent={
-          <View style={[styles.center, { paddingVertical: 60 }]} accessible accessibilityLabel="No results">
+          <View
+            style={[styles.center, { paddingVertical: 60 }]}
+            accessible
+            accessibilityLabel="No results"
+          >
             <Ionicons
               name="search-outline"
               size={48}
@@ -346,7 +380,11 @@ export default function AssetDiscoveryScreen() {
               accessible
               accessibilityLabel={t('discover.title')}
             />
-            <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+            <Text
+              style={[styles.emptyTitle, { color: colors.text }]}
+              accessible
+              accessibilityRole="header"
+            >
               {t('discover.no_results')}
             </Text>
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} accessible>

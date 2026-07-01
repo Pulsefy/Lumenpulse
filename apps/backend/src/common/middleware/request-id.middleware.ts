@@ -5,11 +5,14 @@ import {
   REQUEST_ID_HEADER,
   REQUEST_ID_HEADER_LOWER,
 } from '../constants/request.constants';
+import { RequestContextService } from '../services/request-context.service';
 
 type RequestWithRequestId = Request & { requestId?: string };
 
 @Injectable()
 export class RequestIdMiddleware implements NestMiddleware {
+  constructor(private readonly requestContextService: RequestContextService) {}
+
   use(req: Request, res: Response, next: NextFunction): void {
     const request = req as RequestWithRequestId;
     const incomingRequestId = request.header(REQUEST_ID_HEADER_LOWER)?.trim();
@@ -18,6 +21,9 @@ export class RequestIdMiddleware implements NestMiddleware {
     request.requestId = requestId;
     res.setHeader(REQUEST_ID_HEADER, requestId);
 
-    next();
+    // Store in AsyncLocalStorage for access throughout the request lifecycle
+    this.requestContextService.run({ requestId }, () => {
+      next();
+    });
   }
 }

@@ -44,41 +44,28 @@ export default function TransactionReceiptScreen() {
     errorDetail?: string;
   }>();
 
-  const {
-    txHash,
-    status = 'pending',
-    timestamp,
-    amount,
-    txType,
-    errorDetail,
-  } = params;
+  const { txHash, status = 'pending', timestamp, amount, txType, errorDetail } = params;
 
   const [hashCopied, setHashCopied] = useState(false);
 
   const isSuccess = status === 'success';
   const isFailed = status === 'failed';
 
-  const statusColor = isSuccess
-    ? colors.success
-    : isFailed
-    ? colors.danger
-    : colors.warning;
+  const statusColor = isSuccess ? colors.success : isFailed ? colors.danger : colors.warning;
 
   const statusIcon: React.ComponentProps<typeof Ionicons>['name'] = isSuccess
     ? 'checkmark-circle'
     : isFailed
-    ? 'close-circle'
-    : 'time';
+      ? 'close-circle'
+      : 'time';
 
   const statusLabel = isSuccess
     ? t('transaction_receipt.status_success')
     : isFailed
-    ? t('transaction_receipt.status_failed')
-    : t('transaction_receipt.status_pending');
+      ? t('transaction_receipt.status_failed')
+      : t('transaction_receipt.status_pending');
 
-  const formattedTimestamp = timestamp
-    ? new Date(timestamp).toLocaleString()
-    : null;
+  const formattedTimestamp = timestamp ? new Date(timestamp).toLocaleString() : null;
 
   const handleCopyHash = () => {
     if (!txHash) return;
@@ -122,7 +109,10 @@ export default function TransactionReceiptScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Status Hero */}
         <View
-          style={[styles.hero, { backgroundColor: statusColor + '15', borderColor: statusColor + '40' }]}
+          style={[
+            styles.hero,
+            { backgroundColor: statusColor + '15', borderColor: statusColor + '40' },
+          ]}
           accessible
           accessibilityLabel={statusLabel}
         >
@@ -131,13 +121,23 @@ export default function TransactionReceiptScreen() {
         </View>
 
         {/* Detail rows */}
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+        <View
+          style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+        >
           {/* Network */}
-          <Row label={t('transaction_receipt.network')} value={t('transaction_receipt.testnet')} colors={colors} />
+          <Row
+            label={t('transaction_receipt.network')}
+            value={t('transaction_receipt.testnet')}
+            colors={colors}
+          />
 
           {/* Timestamp */}
           {formattedTimestamp && (
-            <Row label={t('transaction_receipt.timestamp')} value={formattedTimestamp} colors={colors} />
+            <Row
+              label={t('transaction_receipt.timestamp')}
+              value={formattedTimestamp}
+              colors={colors}
+            />
           )}
 
           {/* Type */}
@@ -152,7 +152,12 @@ export default function TransactionReceiptScreen() {
 
           {/* Error detail for failed tx */}
           {isFailed && errorDetail ? (
-            <Row label={t('transaction_receipt.error_detail')} value={errorDetail} colors={colors} danger />
+            <Row
+              label={t('transaction_receipt.error_detail')}
+              value={errorDetail}
+              colors={colors}
+              danger
+            />
           ) : null}
 
           {/* TX Hash */}
@@ -204,7 +209,12 @@ export default function TransactionReceiptScreen() {
             <Text style={[styles.explorerText, { color: colors.accent }]}>
               {t('transaction_receipt.view_explorer')}
             </Text>
-            <Ionicons name="open-outline" size={16} color={colors.accent} style={{ marginLeft: 6 }} />
+            <Ionicons
+              name="open-outline"
+              size={16}
+              color={colors.accent}
+              style={{ marginLeft: 6 }}
+            />
           </TouchableOpacity>
         )}
 

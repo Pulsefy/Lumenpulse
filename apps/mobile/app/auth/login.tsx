@@ -79,7 +79,11 @@ const LoginScreen = () => {
       <StatusBar barStyle={resolvedMode === 'dark' ? 'light-content' : 'dark-content'} />
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
         <View style={styles.content}>
-          <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+          <Text
+            style={[styles.title, { color: colors.text }]}
+            accessible
+            accessibilityRole="header"
+          >
             {t('auth.login.title')}
           </Text>
           <Text style={[styles.subtitle, { color: colors.accent }]} accessible>
@@ -156,9 +160,15 @@ const LoginScreen = () => {
               accessibilityHint={t('auth.login.sign_in_button')}
             >
               {loading ? (
-                <ActivityIndicator color="#ffffff" accessible accessibilityLabel={t('common.loading')} />
+                <ActivityIndicator
+                  color="#ffffff"
+                  accessible
+                  accessibilityLabel={t('common.loading')}
+                />
               ) : (
-                <Text style={styles.buttonText} accessible>{t('auth.login.sign_in_button')}</Text>
+                <Text style={styles.buttonText} accessible>
+                  {t('auth.login.sign_in_button')}
+                </Text>
               )}
             </TouchableOpacity>
 
@@ -179,7 +189,10 @@ const LoginScreen = () => {
               accessibilityRole="button"
               accessibilityLabel={t('auth.login.bypass_login')}
             >
-              <Text style={[styles.linkText, { color: colors.textSecondary, fontSize: 14 }]} accessible>
+              <Text
+                style={[styles.linkText, { color: colors.textSecondary, fontSize: 14 }]}
+                accessible
+              >
                 (Debug){' '}
                 <Text style={{ color: colors.accent, fontWeight: 'bold' }}>
                   {t('auth.login.bypass_login')}
@@ -192,7 +205,6 @@ const LoginScreen = () => {
     </KeyboardAvoidingView>
   );
 };
-
 
 const styles = StyleSheet.create({
   container: {

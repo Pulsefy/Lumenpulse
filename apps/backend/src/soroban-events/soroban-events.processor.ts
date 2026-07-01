@@ -118,7 +118,10 @@ export class SorobanEventsProcessor extends WorkerHost {
    * This ensures failed events are captured for manual inspection and replay
    */
   @OnWorkerEvent('failed')
-  async onJobFailed(job: Job<IngestSorobanEventDto>, err: Error): Promise<void> {
+  async onJobFailed(
+    job: Job<IngestSorobanEventDto>,
+    err: Error,
+  ): Promise<void> {
     if (job.name !== PROCESS_EVENT_JOB) {
       return;
     }
@@ -172,10 +175,7 @@ export class SorobanEventsProcessor extends WorkerHost {
         {
           txHash,
           eventIndex,
-          dlqError:
-            dlqErr instanceof Error
-              ? dlqErr.message
-              : String(dlqErr),
+          dlqError: dlqErr instanceof Error ? dlqErr.message : String(dlqErr),
         },
         'Failed to move event to dead letter queue',
       );
