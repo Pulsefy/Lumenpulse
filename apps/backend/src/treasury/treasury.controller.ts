@@ -26,7 +26,10 @@ import {
   StreamStateDto,
 } from './dto/stream-response.dto';
 import { RotateBeneficiaryDto } from './dto/rotate-beneficiary.dto';
-import { StreamPreviewDto, StreamPreviewResponseDto } from './dto/stream-preview.dto';
+import {
+  StreamPreviewDto,
+  StreamPreviewResponseDto,
+} from './dto/stream-preview.dto';
 import { TreasuryService } from './treasury.service';
 
 @ApiTags('treasury')
@@ -144,7 +147,10 @@ export class TreasuryController {
     description: 'Stream preview calculated successfully',
     type: StreamPreviewResponseDto,
   })
-  @ApiResponse({ status: 400, description: 'Invalid beneficiary address or atTime' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid beneficiary address or atTime',
+  })
   @ApiResponse({ status: 404, description: 'No stream found for beneficiary' })
   @ApiResponse({
     status: 503,

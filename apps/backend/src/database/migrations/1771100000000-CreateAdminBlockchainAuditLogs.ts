@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateAdminBlockchainAuditLogs1771100000000
-  implements MigrationInterface
-{
+export class CreateAdminBlockchainAuditLogs1771100000000 implements MigrationInterface {
   name = 'CreateAdminBlockchainAuditLogs1771100000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -33,15 +31,9 @@ export class CreateAdminBlockchainAuditLogs1771100000000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_audit_createdAt"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_audit_endpoint"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_audit_actorId"`,
-    );
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_audit_createdAt"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_audit_endpoint"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_audit_actorId"`);
     await queryRunner.query(`DROP TABLE "admin_blockchain_audit_logs"`);
   }
 }
