@@ -441,16 +441,16 @@ pub fn cancel_stream(
     beneficiary: Address,
 ) -> Result<(i128, i128), Error> {
     admin.require_auth();
-    
+
     let token_address: Address = env
         .storage()
         .instance()
         .get(&DataKey::Token)
         .ok_or(Error::TokenNotConfigured)?;
-    
+
     let token_client = token::Client::new(&env, &token_address);
     let contract_address = env.current_contract_address();
-    
+
     // Get stream data
     let stream_key = DataKey::Stream(beneficiary.clone());
     let stream: StreamData = env
@@ -458,7 +458,7 @@ pub fn cancel_stream(
         .instance()
         .get(&stream_key)
         .ok_or(Error::StreamNotFound)?;
-    
+
     // Calculate unlocked amount
     let current_time = env.ledger().timestamp();
     let unlocked = if current_time >= stream.end_time {
@@ -470,23 +470,23 @@ pub fn cancel_stream(
         let duration = stream.end_time - stream.start_time;
         (stream.amount * elapsed as i128) / duration as i128
     };
-    
+
     let refundable = stream.amount - unlocked;
-    
+
     // Transfer refund if > 0
     if refundable > 0 {
         token_client.transfer(&contract_address, &beneficiary, &refundable);
     }
-    
+
     // Emit event
     env.events().publish(
         (String::from_str(&env, "stream_cancelled"),),
         (&beneficiary, unlocked, refundable, current_time),
     );
-    
+
     // Delete stream
     env.storage().instance().remove(&stream_key);
-    
+
     Ok((unlocked, refundable))
 }
 
@@ -499,36 +499,35 @@ pub fn emergency_stop(
     reason: String,
 ) -> Result<i128, Error> {
     admin.require_auth();
-    
+
     let token_address: Address = env
         .storage()
         .instance()
         .get(&DataKey::Token)
         .ok_or(Error::TokenNotConfigured)?;
-    
+
     let token_client = token::Client::new(&env, &token_address);
     let contract_address = env.current_contract_address();
-    
+
     let stream_key = DataKey::Stream(beneficiary.clone());
     let stream: StreamData = env
         .storage()
         .instance()
         .get(&stream_key)
         .ok_or(Error::StreamNotFound)?;
-    
+
     let full_refund = stream.amount;
-    
+
     if full_refund > 0 {
         token_client.transfer(&contract_address, &beneficiary, &full_refund);
     }
-    
+
     env.events().publish(
         (String::from_str(&env, "emergency_stop"),),
         (&beneficiary, reason, full_refund),
     );
-    
+
     env.storage().instance().remove(&stream_key);
-    
+
     Ok(full_refund)
 }
-
