@@ -33,19 +33,19 @@ describe('GrantsService.getLeaderboard', () => {
     service.recordContribution({
       roundId: round.id,
       projectId: 1,
-      contributor: 'GA1',
+      contributorPublicKey: 'GA1',
       amount: '100',
     });
     service.recordContribution({
       roundId: round.id,
       projectId: 1,
-      contributor: 'GB1',
+      contributorPublicKey: 'GB1',
       amount: '100',
     });
     service.recordContribution({
       roundId: round.id,
       projectId: 1,
-      contributor: 'GC1',
+      contributorPublicKey: 'GC1',
       amount: '100',
     });
 
@@ -53,7 +53,7 @@ describe('GrantsService.getLeaderboard', () => {
     service.recordContribution({
       roundId: round.id,
       projectId: 2,
-      contributor: 'GA2',
+      contributorPublicKey: 'GA2',
       amount: '300',
     });
 
@@ -61,13 +61,13 @@ describe('GrantsService.getLeaderboard', () => {
     service.recordContribution({
       roundId: round.id,
       projectId: 3,
-      contributor: 'GA3',
+      contributorPublicKey: 'GA3',
       amount: '100',
     });
     service.recordContribution({
       roundId: round.id,
       projectId: 3,
-      contributor: 'GB3',
+      contributorPublicKey: 'GB3',
       amount: '100',
     });
   });

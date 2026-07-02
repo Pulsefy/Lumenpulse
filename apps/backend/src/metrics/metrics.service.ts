@@ -45,6 +45,8 @@ export class MetricsService implements OnModuleInit {
   // Escape-hatch maps for callers of the legacy getOrCreate* API
   private readonly customGauges = new Map<string, Gauge<string>>();
   private readonly customCounters = new Map<string, Counter<string>>();
+  private readonly customHistograms = new Map<string, Histogram<string>>();
+  private readonly counterTotals = new Map<string, number>();
 
   constructor() {
     collectDefaultMetrics({ register: this.registry });
@@ -179,6 +181,7 @@ export class MetricsService implements OnModuleInit {
     this.registry.resetMetrics();
     this.sentimentSum = 0;
     this.sentimentCount = 0;
+    this.counterTotals.clear();
     this.logger.warn('All metrics reset');
   }
 
@@ -348,5 +351,63 @@ export class MetricsService implements OnModuleInit {
       );
     }
     return this.customCounters.get(name)!;
+  }
+
+  getOrCreateHistogram(
+    name: string,
+    help: string,
+    labelNames: string[] = [],
+    buckets?: number[],
+  ): Histogram<string> {
+    if (!this.customHistograms.has(name)) {
+      this.customHistograms.set(
+        name,
+        new Histogram({
+          name,
+          help,
+          labelNames,
+          buckets,
+          registers: [this.registry],
+        }),
+      );
+    }
+    return this.customHistograms.get(name)!;
+  }
+
+  incrementCounter(name: string, labels?: Record<string, string>): void {
+    const labelNames = labels ? Object.keys(labels) : [];
+    const counter = this.getOrCreateCounter(
+      name,
+      `${name} counter`,
+      labelNames,
+    );
+    if (labels) {
+      counter.inc(labels);
+    } else {
+      counter.inc();
+    }
+    this.counterTotals.set(name, (this.counterTotals.get(name) ?? 0) + 1);
+  }
+
+  recordHistogram(
+    name: string,
+    value: number,
+    labels?: Record<string, string>,
+  ): void {
+    const labelNames = labels ? Object.keys(labels) : [];
+    const histogram = this.getOrCreateHistogram(
+      name,
+      `${name} histogram`,
+      labelNames,
+    );
+    if (labels) {
+      histogram.observe(labels, value);
+    } else {
+      histogram.observe(value);
+    }
+  }
+
+  getCounterValue(name: string): number {
+    return this.counterTotals.get(name) ?? 0;
   }
 }

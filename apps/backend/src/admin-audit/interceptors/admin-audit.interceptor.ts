@@ -38,10 +38,9 @@ export class AdminAuditInterceptor implements NestInterceptor {
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const meta = this.reflector.getAllAndOverride<AuditBlockchainMeta | undefined>(
-      AUDIT_BLOCKCHAIN_KEY,
-      [context.getHandler(), context.getClass()],
-    );
+    const meta = this.reflector.getAllAndOverride<
+      AuditBlockchainMeta | undefined
+    >(AUDIT_BLOCKCHAIN_KEY, [context.getHandler(), context.getClass()]);
 
     // Only audit routes decorated with @AuditBlockchainAction
     if (!meta) {
@@ -63,7 +62,9 @@ export class AdminAuditInterceptor implements NestInterceptor {
     };
 
     const contractField = meta.contractField;
-    const targetContract = contractField ? pick(rawParams, contractField) : null;
+    const targetContract = contractField
+      ? pick(rawParams, contractField)
+      : null;
 
     return next.handle().pipe(
       tap({
