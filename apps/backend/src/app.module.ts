@@ -30,6 +30,7 @@ import databaseConfig from './database/database.config';
 import stellarConfig from './stellar/config/stellar.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { RequestContextService } from './common/services/request-context.service';
 import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
 import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { RateLimitStorageService } from './common/rate-limit/rate-limit.storage';
@@ -51,6 +52,7 @@ import { DeprecationInterceptor } from './common/interceptors/deprecation.interc
 import { SearchModule } from './search/search.module';
 import { ExportModule } from './export/export.module';
 import { SignalsModule } from './signals/signals.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AppConfigModule } from './config/config.module';
 import { CrowdfundModule } from './crowdfund/crowdfund.module';
 import { AuditModule } from './audit/audit.module';
@@ -58,6 +60,7 @@ import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor'
 import { SorobanEventsModule } from './soroban-events/soroban-events.module';
 import { TreasuryModule } from './treasury/treasury.module';
 import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
+import { AdminAuditModule } from './admin-audit/admin-audit.module';
 
 @Module({
   imports: [
@@ -116,6 +119,7 @@ import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
     OutboxModule,
     ExportModule,
     SignalsModule,
+    AnalyticsModule,
     TelegramBotModule,
     ModerationModule,
     SearchModule,
@@ -126,10 +130,12 @@ import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
     SorobanEventsModule,
     TreasuryModule,
     VestingWalletModule,
+    AdminAuditModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
     AppService,
+    RequestContextService,
     {
       provide: APP_GUARD,
       useClass: RateLimitGuard,

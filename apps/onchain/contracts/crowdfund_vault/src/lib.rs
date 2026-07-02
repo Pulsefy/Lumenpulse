@@ -16,8 +16,8 @@ use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
 use storage::{
-    DataKey, MilestoneDispute, ProjectData, ProtocolStats, RefundReceipt, LEDGER_BUMP,
-    LEDGER_THRESHOLD,
+    DataKey, MilestoneDispute, ProjectData, ProjectStorageSummary, ProtocolStats, RefundReceipt,
+    LEDGER_BUMP, LEDGER_THRESHOLD,
 };
 
 const CURRENT_STORAGE_VERSION: u32 = 1;
@@ -1259,6 +1259,7 @@ impl CrowdfundVaultContract {
 
     /// Allocate approved milestone funds to a streaming treasury for gradual unlocking.
     /// This allows projects to have their budget streamed over time instead of receiving it all at once.
+    #[allow(clippy::too_many_arguments)]
     pub fn allocate_to_streaming_treasury(
         env: Env,
         admin: Address,
@@ -1267,8 +1268,14 @@ impl CrowdfundVaultContract {
         treasury_contract: Address,
         amount: i128,
         duration: u64,
+        request_id: soroban_sdk::BytesN<32>,
     ) -> Result<(), CrowdfundError> {
         Self::with_reentrancy_guard(&env, || {
+            // Idempotency check
+            if idempotency_guard::claim_request(&env, &request_id).is_err() {
+                return Err(CrowdfundError::AlreadyExecuted);
+            }
+
             Self::verify_admin(&env, &admin)?;
 
             let mut project: ProjectData = env
@@ -1326,6 +1333,7 @@ impl CrowdfundVaultContract {
                 &amount,
                 &start_time,
                 &duration,
+                &request_id,
             );
 
             Ok(())
@@ -1940,8 +1948,14 @@ impl CrowdfundVaultContract {
         admin: Address,
         token_address: Address,
         recipients: Vec<(Address, i128)>,
+        request_id: soroban_sdk::BytesN<32>,
     ) -> Result<(), CrowdfundError> {
         Self::with_reentrancy_guard(&env, || {
+            // Idempotency check
+            if idempotency_guard::claim_request(&env, &request_id).is_err() {
+                return Err(CrowdfundError::AlreadyExecuted);
+            }
+
             Self::verify_admin(&env, &admin)?;
 
             let is_paused: bool = env
@@ -2032,6 +2046,36 @@ impl CrowdfundVaultContract {
             .persistent()
             .get(&contributor_count_key)
             .unwrap_or(0))
+    }
+
+    /// Get project storage summary
+    pub fn get_project_storage_summary(
+        env: Env,
+        project_id: u64,
+    ) -> Result<ProjectStorageSummary, CrowdfundError> {
+        let project_exists = Self::get_project(env.clone(), project_id).is_ok();
+        let contributor_count = if project_exists {
+            Self::get_contributor_count(env.clone(), project_id).unwrap_or(0)
+        } else {
+            0
+        };
+        let refund_receipt_count = if project_exists {
+            Self::get_refund_receipt_count(env.clone(), project_id).unwrap_or(0)
+        } else {
+            0
+        };
+        let total_projects: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextProjectId)
+            .unwrap_or(0u64);
+        Ok(ProjectStorageSummary {
+            project_id,
+            project_exists,
+            contributor_count,
+            refund_receipt_count,
+            total_projects,
+        })
     }
 
     pub fn pause(env: Env, admin: Address) -> Result<bool, CrowdfundError> {

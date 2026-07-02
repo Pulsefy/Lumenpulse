@@ -256,7 +256,11 @@
       "news_alerts": "News Alerts",
       "news_alerts_desc": "Breaking ecosystem and market headlines relevant to your portfolio.",
       "security_alerts": "Security Alerts",
-      "security_alerts_desc": "Critical account, phishing, and suspicious-activity notices."
+      "security_alerts_desc": "Critical account, phishing, and suspicious-activity notices.",
+      "grant_alerts": "Grant Alerts",
+      "grant_alerts_desc": "Notifications about new grant rounds, round starts, and deadline reminders.",
+      "contribution_alerts": "Contribution Alerts",
+      "contribution_alerts_desc": "Updates on your contributions, matching status, and contribution confirmations."
     },
     "theme": {
       "system": "System",

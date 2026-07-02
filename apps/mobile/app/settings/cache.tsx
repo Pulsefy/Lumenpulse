@@ -23,28 +23,24 @@ export default function CacheSettingsScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleClearCache = () => {
-    Alert.alert(
-      t('settings.cache.clear_cache'),
-      t('settings.cache.clear_cache_message'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('common.confirm'),
-          style: 'destructive',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              await clearCache();
-              Alert.alert(t('success'), t('settings.cache.cleared_successfully'));
-            } catch {
-              Alert.alert(t('errors.error'), t('settings.cache.clear_failed'));
-            } finally {
-              setLoading(false);
-            }
-          },
+    Alert.alert(t('settings.cache.clear_cache'), t('settings.cache.clear_cache_message'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.confirm'),
+        style: 'destructive',
+        onPress: async () => {
+          setLoading(true);
+          try {
+            await clearCache();
+            Alert.alert(t('success'), t('settings.cache.cleared_successfully'));
+          } catch {
+            Alert.alert(t('errors.error'), t('settings.cache.clear_failed'));
+          } finally {
+            setLoading(false);
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const handlePreloadData = async () => {
@@ -109,7 +105,11 @@ export default function CacheSettingsScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]} accessible accessibilityRole="header">
+        <Text
+          style={[styles.headerTitle, { color: colors.text }]}
+          accessible
+          accessibilityRole="header"
+        >
           {t('settings.cache.title')}
         </Text>
         <View style={{ width: 24 }} />
@@ -117,7 +117,11 @@ export default function CacheSettingsScreen() {
 
       <ScrollView style={styles.content}>
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]} accessible accessibilityRole="header">
+          <Text
+            style={[styles.sectionTitle, { color: colors.text }]}
+            accessible
+            accessibilityRole="header"
+          >
             {t('settings.cache.data_management')}
           </Text>
           <Text style={[styles.sectionDescription, { color: colors.textSecondary }]} accessible>
@@ -141,7 +145,11 @@ export default function CacheSettingsScreen() {
         />
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]} accessible accessibilityRole="header">
+          <Text
+            style={[styles.sectionTitle, { color: colors.text }]}
+            accessible
+            accessibilityRole="header"
+          >
             {t('settings.cache.how_caching_works')}
           </Text>
           <View style={[styles.infoBox, { backgroundColor: colors.surface }]} accessible>
@@ -152,7 +160,11 @@ export default function CacheSettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]} accessible accessibilityRole="header">
+          <Text
+            style={[styles.sectionTitle, { color: colors.text }]}
+            accessible
+            accessibilityRole="header"
+          >
             {t('settings.cache.cache_status')}
           </Text>
           <View style={[styles.statusBox, { backgroundColor: colors.surface }]} accessible>

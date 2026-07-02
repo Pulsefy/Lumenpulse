@@ -40,6 +40,8 @@ export interface AssetBalance {
 }
 
 export interface PortfolioSummary {
+  totalValue?: string;
+  currency?: string;
   totalValueUsd: string;
   assets: AssetBalance[];
   lastUpdated: string | null;
@@ -59,6 +61,8 @@ export interface NotificationPreferences {
   priceAlerts: boolean;
   newsAlerts: boolean;
   securityAlerts: boolean;
+  grantAlerts: boolean;
+  contributionAlerts: boolean;
 }
 
 export interface UserPreferences {
@@ -83,6 +87,7 @@ export interface LinkedStellarAccount {
   id: string;
   publicKey: string;
   label?: string | null;
+  isPrimary?: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -143,6 +148,12 @@ export const portfolioApi = {
    */
   async getSummary(): Promise<ApiResponse<PortfolioSummary>> {
     return apiClient.get<PortfolioSummary>('/portfolio/summary');
+  },
+
+  async getAccountSummary(publicKey: string): Promise<ApiResponse<PortfolioSummary>> {
+    return apiClient.get<PortfolioSummary>(
+      `/portfolio/accounts/${encodeURIComponent(publicKey)}/summary`,
+    );
   },
 
   /**

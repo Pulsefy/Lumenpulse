@@ -28,7 +28,9 @@ export default function HomeScreen() {
     if (response.success && response.data) {
       setHealthStatus(`${t('home.connected_to')} ${environmentConfig.apiBaseUrl}`);
     } else {
-      setHealthStatus(`${t('home.failed')}: ${response.error?.message || t('errors.something_went_wrong')}`);
+      setHealthStatus(
+        `${t('home.failed')}: ${response.error?.message || t('errors.something_went_wrong')}`,
+      );
     }
     setIsLoading(false);
   };
@@ -39,7 +41,11 @@ export default function HomeScreen() {
         <ExpoStatusBar style={colors.statusBarStyle} />
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+            <Text
+              style={[styles.title, { color: colors.text }]}
+              accessible
+              accessibilityRole="header"
+            >
               Lumenpulse Mobile
             </Text>
             <Text style={[styles.subtitle, { color: colors.accent }]} accessible>
@@ -83,7 +89,11 @@ export default function HomeScreen() {
                 {t('home.api_status')}
               </Text>
               {isLoading ? (
-                <ActivityIndicator color="#7a85ff" style={styles.loader} accessibilityLabel={t('common.loading')} />
+                <ActivityIndicator
+                  color="#7a85ff"
+                  style={styles.loader}
+                  accessibilityLabel={t('common.loading')}
+                />
               ) : (
                 <Text style={styles.statusText} accessible>
                   {healthStatus}
@@ -97,7 +107,9 @@ export default function HomeScreen() {
                 accessibilityLabel={t('common.retry')}
                 accessibilityHint={t('home.test_connection')}
               >
-                <Text style={styles.retryButtonText} accessible>{t('home.test_connection')}</Text>
+                <Text style={styles.retryButtonText} accessible>
+                  {t('home.test_connection')}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -111,7 +123,9 @@ export default function HomeScreen() {
             accessibilityLabel={t('home.get_started')}
             accessibilityHint="Navigate to main features"
           >
-            <Text style={styles.buttonText} accessible>{t('home.get_started')}</Text>
+            <Text style={styles.buttonText} accessible>
+              {t('home.get_started')}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

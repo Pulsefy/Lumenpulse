@@ -158,7 +158,7 @@ fn test_update_contributor_github_handle_updates_index() {
     let new_handle = String::from_str(&env, "new_handle");
 
     client.register_contributor(&contributor, &old_handle);
-    client.update_contributor(&contributor, &new_handle);
+    client.update_contributor(&contributor, &contributor, &new_handle, &None);
 
     let old_lookup = client.try_get_contributor_by_github(&old_handle);
     assert_eq!(old_lookup, Err(Ok(ContributorError::ContributorNotFound)));
@@ -181,7 +181,7 @@ fn test_update_contributor_clears_stale_github_index_entry() {
     let old_handle = String::from_str(&env, "old_handle");
     let new_handle = String::from_str(&env, "new_handle");
     client.register_contributor(&contributor1, &old_handle);
-    client.update_contributor(&contributor1, &new_handle);
+    client.update_contributor(&contributor1, &contributor1, &new_handle, &None);
 
     // If the old index entry were stale, this registration would fail.
     client.register_contributor(&contributor2, &old_handle);

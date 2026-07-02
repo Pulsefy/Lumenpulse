@@ -2,12 +2,25 @@
 
 mod errors;
 mod events;
+mod multisig;
 mod storage;
 
 use errors::TreasuryError;
+use multisig::{
+    cancel as multisig_cancel, configure as multisig_configure, consume_approval,
+    expire as multisig_expire, get_config as multisig_get_config, get_proposal,
+    propose as multisig_propose, replace_config as multisig_replace_config, sign as multisig_sign,
+};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
-use soroban_sdk::{contract, contractimpl, token, Address, Env};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
 use storage::{DataKey, StreamData, LEDGER_BUMP, LEDGER_THRESHOLD};
+
+// Re-exports so tests (and external clients) can construct / inspect the
+// multisig types without depending on the internal module layout.
+pub use storage::{
+    MultisigConfig, Proposal, ProposalAction, ProposalStatus, Signer, MAX_SIGNERS,
+    PROPOSAL_TTL_SECS,
+};
 
 #[contract]
 pub struct TreasuryContract;
@@ -51,6 +64,70 @@ impl TreasuryContract {
         Ok(())
     }
 
+    /// Configure the multisig signer set. The first signer is the bootstrapper
+    /// and must authenticate the call. Call once after `initialize`.
+    pub fn configure_multisig(
+        env: Env,
+        signers: Vec<Signer>,
+        threshold: u32,
+    ) -> Result<(), TreasuryError> {
+        multisig_configure(&env, signers.clone(), threshold)?;
+        let signer_count = signers.len();
+        let bootstrapper = signers.get(0).ok_or(TreasuryError::InvalidMultisigConfig)?;
+        events::publish_multisig_configured(
+            &env,
+            bootstrapper.address.clone(),
+            threshold,
+            signer_count,
+        );
+        Ok(())
+    }
+
+    // ── Multisig proposal lifecycle ──────────────────────────
+
+    pub fn propose(
+        env: Env,
+        proposer: Address,
+        action: ProposalAction,
+    ) -> Result<u64, TreasuryError> {
+        multisig_propose(&env, proposer, action)
+    }
+
+    pub fn sign_proposal(env: Env, signer: Address, proposal_id: u64) -> Result<(), TreasuryError> {
+        let _ = multisig_sign(&env, signer, proposal_id)?;
+        Ok(())
+    }
+
+    pub fn cancel_proposal(
+        env: Env,
+        signer: Address,
+        proposal_id: u64,
+    ) -> Result<(), TreasuryError> {
+        multisig_cancel(&env, signer, proposal_id)
+    }
+
+    pub fn expire_proposal(env: Env, proposal_id: u64) -> Result<(), TreasuryError> {
+        multisig_expire(&env, proposal_id)
+    }
+
+    pub fn get_multisig_config(env: Env) -> Result<MultisigConfig, TreasuryError> {
+        multisig_get_config(&env)
+    }
+
+    pub fn get_proposal(env: Env, proposal_id: u64) -> Result<Proposal, TreasuryError> {
+        get_proposal(&env, proposal_id)
+    }
+
+    pub fn get_next_proposal_id(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .instance()
+            .get(&DataKey::NextProposalId)
+            .unwrap_or(0)
+    }
+
     /// Allocate a budget and start a stream
     pub fn allocate_budget(
         env: Env,
@@ -59,8 +136,14 @@ impl TreasuryContract {
         amount: i128,
         start_time: u64,
         duration: u64,
+        request_id: soroban_sdk::BytesN<32>,
     ) -> Result<(), TreasuryError> {
         Self::with_reentrancy_guard(&env, || {
+            // Idempotency check
+            if idempotency_guard::claim_request(&env, &request_id).is_err() {
+                return Err(TreasuryError::AlreadyExecuted);
+            }
+
             let stored_admin: Address = env
                 .storage()
                 .instance()
@@ -224,6 +307,96 @@ impl TreasuryContract {
 
             Ok(())
         })
+    }
+
+    /// Multisig-gated admin rotation. The executor must be a signer consuming
+    /// an approved `SetAdmin` proposal. The proposal is marked Executed and
+    /// cannot be replayed. Unauthorized callers cannot bypass the multisig.
+    pub fn set_admin_via_multisig(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        new_admin: Address,
+    ) -> Result<(), TreasuryError> {
+        consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        Ok(())
+    }
+
+    /// Multisig-gated beneficiary rotation. The executor must be a signer
+    /// consuming an approved `RotateBeneficiary` proposal. Preserves all the
+    /// existing claim/vesting logic of `rotate_beneficiary`.
+    pub fn rotate_beneficiary_via_multisig(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        old_beneficiary: Address,
+        new_beneficiary: Address,
+    ) -> Result<(), TreasuryError> {
+        Self::with_reentrancy_guard(&env, || {
+            consume_approval(
+                &env,
+                &executor,
+                proposal_id,
+                &ProposalAction::RotateBeneficiary,
+            )?;
+
+            if old_beneficiary == new_beneficiary {
+                return Err(TreasuryError::SameBeneficiary);
+            }
+
+            let old_key = DataKey::Stream(old_beneficiary.clone());
+            let mut stream: StreamData = env
+                .storage()
+                .persistent()
+                .get(&old_key)
+                .ok_or(TreasuryError::StreamNotFound)?;
+
+            let claimed_amount = stream.claimed_amount;
+            let remaining_amount = stream.total_amount - claimed_amount;
+
+            if claimed_amount == 0 {
+                stream.beneficiary = new_beneficiary.clone();
+            } else {
+                stream.claimed_amount = 0;
+                stream.total_amount = remaining_amount;
+                stream.start_time = env.ledger().timestamp();
+                stream.duration = 0;
+                stream.beneficiary = new_beneficiary.clone();
+            }
+
+            env.storage().persistent().remove(&old_key);
+
+            let new_key = DataKey::Stream(new_beneficiary.clone());
+            env.storage().persistent().set(&new_key, &stream);
+            env.storage()
+                .persistent()
+                .extend_ttl(&new_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            events::publish_beneficiary_rotated(
+                &env,
+                old_beneficiary,
+                new_beneficiary,
+                claimed_amount,
+                remaining_amount,
+            );
+
+            Ok(())
+        })
+    }
+
+    /// Replace the multisig config (signers + threshold). Bootstrap-only:
+    /// gated to an approved `SetAdmin` proposal whose side-effect is the
+    /// signer-set swap. This lets the multisig rotate itself.
+    pub fn set_multisig_config(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        signers: Vec<Signer>,
+        threshold: u32,
+    ) -> Result<(), TreasuryError> {
+        consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
+        multisig_replace_config(&env, signers, threshold)
     }
 
     /// View currently unlocked amount

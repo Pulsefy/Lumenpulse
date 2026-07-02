@@ -46,8 +46,9 @@ describe('mapContractErrorCode', () => {
   it('maps StreamNotFound (7) with the beneficiary in details', () => {
     const ex = mapContractErrorCode(7, undefined, 'GABC');
     expect(ex).toBeInstanceOf(TreasuryStreamNotFoundException);
-    expect((ex.getResponse() as { details: { beneficiary: string } }).details)
-      .toEqual({ beneficiary: 'GABC' });
+    expect(
+      (ex.getResponse() as { details: { beneficiary: string } }).details,
+    ).toEqual({ beneficiary: 'GABC' });
   });
 
   it('falls back to a generic failure for unknown codes', () => {

@@ -20,6 +20,7 @@ import {
   matchShare,
   roundStatusLabel,
 } from '../../../lib/grants';
+import { CachedApi } from '../../../lib/cached-api';
 import { formatTokenAmount } from '../../../lib/stellar';
 
 function InfoRow({
@@ -150,7 +151,7 @@ function GrantRoundDetailContent() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await grantsApi.getRoundSummary(roundId);
+      const res = await CachedApi.getGrantRoundSummary(roundId);
       if (res.success && res.data) {
         setSummary(res.data);
       } else {
@@ -280,8 +281,16 @@ function GrantRoundDetailContent() {
           accessible
           accessibilityLabel={t('grants.qf_explanation')}
         >
-          <Ionicons name="information-circle-outline" size={18} color={colors.accent} importantForAccessibility="no" />
-          <Text style={[styles.infoBoxText, { color: colors.textSecondary }]} importantForAccessibility="no">
+          <Ionicons
+            name="information-circle-outline"
+            size={18}
+            color={colors.accent}
+            importantForAccessibility="no"
+          />
+          <Text
+            style={[styles.infoBoxText, { color: colors.textSecondary }]}
+            importantForAccessibility="no"
+          >
             {t('grants.qf_explanation')}
           </Text>
         </View>

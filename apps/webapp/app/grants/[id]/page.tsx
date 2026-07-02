@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Clock, Users } from "lucide-react";
 import { RoundDetail, RoundSummary } from "../components";
+import { DependencyStatusBanner } from "@/components/DependencyStatusBanner";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -53,6 +54,13 @@ export default function GrantRoundDetailPage({ params }: GrantRoundDetailPagePro
                 View pool balance, allocation ranking, and project-level context for the selected round.
               </p>
             </div>
+          </div>
+
+          {/* Network + dependency status banner: re-uses the same component
+              as the list view so the experience stays consistent between
+              browsing and drilling into a single round. */}
+          <div className="mt-2">
+            <DependencyStatusBanner />
           </div>
         </div>
       </section>
