@@ -1,6 +1,4 @@
-import {
-  CanonicalEventType,
-} from './event-catalog';
+import { CanonicalEventType } from './event-catalog';
 import { NotificationType } from '../notification/notification.entity';
 import { WebhookEventType } from '../webhook/webhook.types';
 
@@ -23,11 +21,15 @@ const CANONICAL_TO_NOTIFICATION: Record<string, NotificationType> = {
   [CanonicalEventType.MILESTONE_VOTE_STARTED]: NotificationType.MILESTONE,
   [CanonicalEventType.MILESTONE_VOTE_CAST]: NotificationType.MILESTONE,
   [CanonicalEventType.GOVERNANCE_PROPOSAL_CREATED]: NotificationType.GOVERNANCE,
-  [CanonicalEventType.GOVERNANCE_PROPOSAL_EXECUTED]: NotificationType.GOVERNANCE,
-  [CanonicalEventType.GOVERNANCE_PROPOSAL_CANCELLED]: NotificationType.GOVERNANCE,
+  [CanonicalEventType.GOVERNANCE_PROPOSAL_EXECUTED]:
+    NotificationType.GOVERNANCE,
+  [CanonicalEventType.GOVERNANCE_PROPOSAL_CANCELLED]:
+    NotificationType.GOVERNANCE,
   [CanonicalEventType.GOVERNANCE_PROPOSAL_EXPIRED]: NotificationType.GOVERNANCE,
-  [CanonicalEventType.GOVERNANCE_SIGNATURE_COLLECTED]: NotificationType.GOVERNANCE,
-  [CanonicalEventType.GOVERNANCE_MULTISIG_CONFIGURED]: NotificationType.GOVERNANCE,
+  [CanonicalEventType.GOVERNANCE_SIGNATURE_COLLECTED]:
+    NotificationType.GOVERNANCE,
+  [CanonicalEventType.GOVERNANCE_MULTISIG_CONFIGURED]:
+    NotificationType.GOVERNANCE,
   [CanonicalEventType.TOKEN_BURNED]: NotificationType.TOKEN,
   [CanonicalEventType.TOKEN_VESTING_CREATED]: NotificationType.TOKEN,
   [CanonicalEventType.TOKEN_CLAIMED]: NotificationType.TOKEN,

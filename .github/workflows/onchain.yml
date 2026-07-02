@@ -1,5 +1,12 @@
 name: Onchain CI
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ "main" ]
@@ -27,6 +34,7 @@ jobs:
       with:
         toolchain: stable
         targets: wasm32-unknown-unknown
+        components: rustfmt, clippy
 
     - name: Cache dependencies
       uses: Swatinem/rust-cache@v2

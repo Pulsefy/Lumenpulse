@@ -5,8 +5,7 @@ const mockConfig = {
     timeout: 3000,
     serverSecret: {
       reveal: jest.fn(
-        () =>
-          'SB6RIPM3GJQ7RP3Q6R5F3QIBYZHP4N27SGGCQ3R4LWA2ZKXZWQ3NU3G4',
+        () => 'SB6RIPM3GJQ7RP3Q6R5F3QIBYZHP4N27SGGCQ3R4LWA2ZKXZWQ3NU3G4',
       ),
     },
     contracts: {
@@ -60,8 +59,9 @@ describe('MatchingPoolAdminService', () => {
     },
   ) => {
     try {
-      (service as unknown as { handleError: (e: unknown, m: string) => never })
-        .handleError(err, 'createRound');
+      (
+        service as unknown as { handleError: (e: unknown, m: string) => never }
+      ).handleError(err, 'createRound');
       fail('Expected handleError to throw');
     } catch (thrown) {
       expect(thrown).toBeInstanceOf(HttpException);
