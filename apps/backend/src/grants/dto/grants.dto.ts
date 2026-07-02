@@ -283,7 +283,6 @@ export class RoundSummaryDto {
   projects: ProjectAllocationDto[];
 }
 
-
 export class LeaderboardQueryDto {
   @ApiProperty({
     description: 'ID of the grant round',
@@ -296,7 +295,8 @@ export class LeaderboardQueryDto {
   roundId: number;
 
   @ApiProperty({
-    description: 'Maximum number of projects to return (top-N). Defaults to 10, max 100.',
+    description:
+      'Maximum number of projects to return (top-N). Defaults to 10, max 100.',
     example: 10,
     required: false,
     default: 10,
@@ -307,7 +307,8 @@ export class LeaderboardQueryDto {
   topN?: number = 10;
 
   @ApiProperty({
-    description: 'Page number for pagination (1-indexed). Ignored when topN is set.',
+    description:
+      'Page number for pagination (1-indexed). Ignored when topN is set.',
     example: 1,
     required: false,
     default: 1,

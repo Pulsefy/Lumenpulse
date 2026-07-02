@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateSorobanEventDeadLetter1801000000000
-  implements MigrationInterface
-{
+export class CreateSorobanEventDeadLetter1801000000000 implements MigrationInterface {
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE TYPE soroban_event_dead_letter_status AS ENUM ('pending', 'resolved', 'replayed');

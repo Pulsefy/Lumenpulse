@@ -33,6 +33,11 @@ export class MetricsService implements OnModuleInit {
   private readonly anomaliesDetectedCounter: Counter<string>;
   private readonly fetchErrorsCounter: Counter<string>;
 
+  // Outbound calls (Soroban RPC + Horizon) //
+  private readonly horizonLatency: Histogram<string>;
+  private readonly horizonErrors: Counter<string>;
+  private readonly horizonRequests: Counter<string>;
+
   // Running totals for the rolling-average sentiment gauge
   private sentimentSum = 0;
   private sentimentCount = 0;
@@ -40,6 +45,8 @@ export class MetricsService implements OnModuleInit {
   // Escape-hatch maps for callers of the legacy getOrCreate* API
   private readonly customGauges = new Map<string, Gauge<string>>();
   private readonly customCounters = new Map<string, Counter<string>>();
+  private readonly customHistograms = new Map<string, Histogram<string>>();
+  private readonly counterTotals = new Map<string, number>();
 
   constructor() {
     collectDefaultMetrics({ register: this.registry });
@@ -125,6 +132,29 @@ export class MetricsService implements OnModuleInit {
       labelNames: ['source', 'error_code'] as const,
       registers: [this.registry],
     });
+
+    // Outbound calls (Horizon API) //
+    this.horizonLatency = new Histogram({
+      name: 'horizon_http_latency_ms',
+      help: 'Horizon API call latency in milliseconds',
+      labelNames: ['method', 'status'] as const,
+      buckets: [50, 100, 250, 500, 1000, 2500, 5000],
+      registers: [this.registry],
+    });
+
+    this.horizonErrors = new Counter({
+      name: 'horizon_http_errors_total',
+      help: 'Total Horizon API errors by method and status code',
+      labelNames: ['method', 'status_code'] as const,
+      registers: [this.registry],
+    });
+
+    this.horizonRequests = new Counter({
+      name: 'horizon_http_requests_total',
+      help: 'Total Horizon API requests by method',
+      labelNames: ['method'] as const,
+      registers: [this.registry],
+    });
   }
 
   onModuleInit(): void {
@@ -151,6 +181,7 @@ export class MetricsService implements OnModuleInit {
     this.registry.resetMetrics();
     this.sentimentSum = 0;
     this.sentimentCount = 0;
+    this.counterTotals.clear();
     this.logger.warn('All metrics reset');
   }
 
@@ -264,6 +295,34 @@ export class MetricsService implements OnModuleInit {
     this.fetchErrorsCounter.inc({ source, error_code: errorCode });
   }
 
+  // Outbound Horizon API instrumentation //
+
+  /**
+   * Record a completed Horizon API request.
+   *
+   * @param method      API method name, e.g. "getTransactions", "getOperations"
+   * @param statusCode  HTTP status code or 'success'/'error'
+   * @param latencyMs   Request duration in milliseconds
+   */
+  recordHorizonRequest(
+    method: string,
+    status: string,
+    latencyMs: number,
+  ): void {
+    this.horizonRequests.inc({ method });
+    this.horizonLatency.labels({ method, status }).observe(latencyMs);
+  }
+
+  /**
+   * Record a Horizon API error.
+   *
+   * @param method      API method name
+   * @param statusCode  HTTP status code or error identifier
+   */
+  recordHorizonError(method: string, statusCode: string): void {
+    this.horizonErrors.inc({ method, status_code: statusCode });
+  }
+
   //Dynamic metric helpers (legacy API)
 
   getOrCreateGauge(
@@ -292,5 +351,63 @@ export class MetricsService implements OnModuleInit {
       );
     }
     return this.customCounters.get(name)!;
+  }
+
+  getOrCreateHistogram(
+    name: string,
+    help: string,
+    labelNames: string[] = [],
+    buckets?: number[],
+  ): Histogram<string> {
+    if (!this.customHistograms.has(name)) {
+      this.customHistograms.set(
+        name,
+        new Histogram({
+          name,
+          help,
+          labelNames,
+          buckets,
+          registers: [this.registry],
+        }),
+      );
+    }
+    return this.customHistograms.get(name)!;
+  }
+
+  incrementCounter(name: string, labels?: Record<string, string>): void {
+    const labelNames = labels ? Object.keys(labels) : [];
+    const counter = this.getOrCreateCounter(
+      name,
+      `${name} counter`,
+      labelNames,
+    );
+    if (labels) {
+      counter.inc(labels);
+    } else {
+      counter.inc();
+    }
+    this.counterTotals.set(name, (this.counterTotals.get(name) ?? 0) + 1);
+  }
+
+  recordHistogram(
+    name: string,
+    value: number,
+    labels?: Record<string, string>,
+  ): void {
+    const labelNames = labels ? Object.keys(labels) : [];
+    const histogram = this.getOrCreateHistogram(
+      name,
+      `${name} histogram`,
+      labelNames,
+    );
+    if (labels) {
+      histogram.observe(labels, value);
+    } else {
+      histogram.observe(value);
+    }
+  }
+
+  getCounterValue(name: string): number {
+    return this.counterTotals.get(name) ?? 0;
   }
 }

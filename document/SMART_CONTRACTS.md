@@ -521,6 +521,37 @@ Adjust a contributor's reputation score.
 
 ---
 
+### Storage Usage Introspection
+
+#### `get_project_storage_summary`
+```rust
+pub fn get_project_storage_summary(env: Env, project_id: u64) -> Result<ProjectStorageSummary, CrowdfundError>
+```
+Contract: crowdfund_vault
+Type: Read-only query (no storage writes, no rent cost added)
+
+Returns a ProjectStorageSummary for the given project_id containing:
+- project_id: the queried project
+- project_exists: false if the project was never created
+- contributor_count: number of contributors to this project (hot key signal)
+- refund_receipt_count: number of refund receipts for this project
+- total_projects: total projects ever created (growth indicator)
+
+When to use:
+- Testnet operators checking rent pressure on large projects
+- Identifying which project_ids have the most contributor entries
+- Monitoring overall protocol growth via total_projects
+
+Example (Soroban CLI):
+```bash
+soroban contract invoke \
+  --id <CONTRACT_ID> \
+  --fn get_project_storage_summary \
+  -- --project_id 1
+```
+
+---
+
 ### 2.2 Events
 
 | Event | Topics | Data | Emitted By |

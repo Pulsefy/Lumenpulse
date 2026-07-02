@@ -281,8 +281,16 @@ function GrantRoundDetailContent() {
           accessible
           accessibilityLabel={t('grants.qf_explanation')}
         >
-          <Ionicons name="information-circle-outline" size={18} color={colors.accent} importantForAccessibility="no" />
-          <Text style={[styles.infoBoxText, { color: colors.textSecondary }]} importantForAccessibility="no">
+          <Ionicons
+            name="information-circle-outline"
+            size={18}
+            color={colors.accent}
+            importantForAccessibility="no"
+          />
+          <Text
+            style={[styles.infoBoxText, { color: colors.textSecondary }]}
+            importantForAccessibility="no"
+          >
             {t('grants.qf_explanation')}
           </Text>
         </View>

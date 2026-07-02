@@ -48,13 +48,9 @@ import { SorobanEventIngestionGuard } from './guards/soroban-event-ingestion.gua
 @UseGuards(SorobanEventIngestionGuard)
 @ApiBearerAuth('x-ingest-secret')
 export class SorobanEventsDeadLetterController {
-  private readonly logger = new Logger(
-    SorobanEventsDeadLetterController.name,
-  );
+  private readonly logger = new Logger(SorobanEventsDeadLetterController.name);
 
-  constructor(
-    private readonly dlqService: SorobanEventsDeadLetterService,
-  ) {}
+  constructor(private readonly dlqService: SorobanEventsDeadLetterService) {}
 
   /**
    * List all dead letter queue events with filtering and pagination
@@ -153,7 +149,9 @@ export class SorobanEventsDeadLetterController {
     status: 401,
     description: 'Unauthorized',
   })
-  async inspectFailure(@Param('id') dlqId: string): Promise<DeadLetterEventDto> {
+  async inspectFailure(
+    @Param('id') dlqId: string,
+  ): Promise<DeadLetterEventDto> {
     this.logger.debug({ dlqId }, 'Inspecting dead letter event');
     return this.dlqService.inspectFailure(dlqId);
   }
@@ -211,7 +209,7 @@ export class SorobanEventsDeadLetterController {
     );
 
     const result = await this.dlqService.replayEvent(dlqId, dto.reason);
-    return result as ReplayDeadLetterResponseDto;
+    return result;
   }
 
   /**
@@ -272,6 +270,6 @@ export class SorobanEventsDeadLetterController {
       eventId: result.eventId,
       status: result.status,
       resolvedAt: result.resolvedAt,
-    } as ResolveDeadLetterResponseDto;
+    };
   }
 }

@@ -73,12 +73,27 @@ function assetColor(code: string): string {
   return palette[Math.abs(hash) % palette.length];
 }
 
-function AssetRow({ asset, colors, t }: { asset: AssetBalance; colors: any; t: (key: string) => string }) {
+function AssetRow({
+  asset,
+  colors,
+  t,
+}: {
+  asset: AssetBalance;
+  colors: any;
+  t: (key: string) => string;
+}) {
   const color = assetColor(asset.assetCode);
 
   return (
-    <View style={[styles.assetRow, { borderBottomColor: colors.border }]} accessible accessibilityRole="listitem">
-      <View style={[styles.assetIcon, { backgroundColor: `${color}22` }]} importantForAccessibility="no">
+    <View
+      style={[styles.assetRow, { borderBottomColor: colors.border }]}
+      accessible
+      accessibilityRole="listitem"
+    >
+      <View
+        style={[styles.assetIcon, { backgroundColor: `${color}22` }]}
+        importantForAccessibility="no"
+      >
         <Text style={{ color }} importantForAccessibility="no">
           {asset.assetCode[0]}
         </Text>
@@ -100,9 +115,21 @@ function AssetRow({ asset, colors, t }: { asset: AssetBalance; colors: any; t: (
   );
 }
 
-function RecentTransactionItem({ tx, colors, t }: { tx: Transaction; colors: any; t: (key: string) => string }) {
+function RecentTransactionItem({
+  tx,
+  colors,
+  t,
+}: {
+  tx: Transaction;
+  colors: any;
+  t: (key: string) => string;
+}) {
   return (
-    <View style={[styles.assetRow, { borderBottomColor: colors.border }]} accessible accessibilityRole="listitem">
+    <View
+      style={[styles.assetRow, { borderBottomColor: colors.border }]}
+      accessible
+      accessibilityRole="listitem"
+    >
       <Ionicons
         name={getTransactionIcon(tx.type) as any}
         size={20}
@@ -141,7 +168,8 @@ function AccountSwitcher({
         contentContainerStyle={styles.switcherContent}
         renderItem={({ item }) => {
           const active = item.publicKey === activePublicKey;
-          const label = item.label?.trim() || (item.isPrimary ? 'Primary account' : 'Tracked account');
+          const label =
+            item.label?.trim() || (item.isPrimary ? 'Primary account' : 'Tracked account');
 
           return (
             <TouchableOpacity
@@ -165,10 +193,17 @@ function AccountSwitcher({
                 importantForAccessibility="no"
               />
               <View style={styles.accountChipCopy}>
-                <Text style={[styles.accountChipLabel, { color: active ? '#ffffff' : colors.text }]}>
+                <Text
+                  style={[styles.accountChipLabel, { color: active ? '#ffffff' : colors.text }]}
+                >
                   {label}
                 </Text>
-                <Text style={[styles.accountChipKey, { color: active ? '#ffffffcc' : colors.textSecondary }]}>
+                <Text
+                  style={[
+                    styles.accountChipKey,
+                    { color: active ? '#ffffffcc' : colors.textSecondary },
+                  ]}
+                >
                   {truncateKey(item.publicKey)}
                 </Text>
               </View>
@@ -241,7 +276,7 @@ export default function PortfolioScreen() {
       }
 
       const response = await usersApi.getLinkedAccounts();
-      const nextAccounts = response.success ? response.data ?? [] : cachedAccounts;
+      const nextAccounts = response.success ? (response.data ?? []) : cachedAccounts;
 
       if (!response.success && cachedAccounts.length === 0) {
         setAccountsError(response.error?.message ?? t('errors.couldnt_load', { item: 'accounts' }));
@@ -360,7 +395,9 @@ export default function PortfolioScreen() {
   if (!isAuthenticated) {
     return (
       <View style={styles.center} accessible accessibilityLabel={t('portfolio.login_required')}>
-        <Text style={{ color: colors.text }} accessible>{t('portfolio.login_required')}</Text>
+        <Text style={{ color: colors.text }} accessible>
+          {t('portfolio.login_required')}
+        </Text>
       </View>
     );
   }
@@ -368,9 +405,22 @@ export default function PortfolioScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       {isStale && (
-        <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]} accessible accessibilityRole="alert" accessibilityLabel={t('portfolio.showing_cached')}>
-          <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} importantForAccessibility="no" />
-          <Text style={[styles.staleText, { color: colors.warning }]} importantForAccessibility="no">
+        <View
+          style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}
+          accessible
+          accessibilityRole="alert"
+          accessibilityLabel={t('portfolio.showing_cached')}
+        >
+          <Ionicons
+            name="cloud-offline-outline"
+            size={16}
+            color={colors.warning}
+            importantForAccessibility="no"
+          />
+          <Text
+            style={[styles.staleText, { color: colors.warning }]}
+            importantForAccessibility="no"
+          >
             {t('portfolio.showing_cached')}
           </Text>
         </View>
@@ -382,7 +432,11 @@ export default function PortfolioScreen() {
         ListHeaderComponent={
           sortedAccounts.length > 0 || summary || loading ? (
             <>
-              <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+              <Text
+                style={[styles.title, { color: colors.text }]}
+                accessible
+                accessibilityRole="header"
+              >
                 {t('portfolio.title')}
               </Text>
               <AccountSwitcher
@@ -392,16 +446,25 @@ export default function PortfolioScreen() {
                 onSelect={handleSelectAccount}
               />
               {summary ? (
-              <Header summary={summary} activeAccount={activeAccount} colors={colors} />
+                <Header summary={summary} activeAccount={activeAccount} colors={colors} />
               ) : sortedAccounts.length > 0 ? (
-                <View style={[styles.header, styles.headerLoading, { backgroundColor: colors.surface }]}>
-                  <ActivityIndicator color={colors.accent} accessibilityLabel={t('common.loading')} />
+                <View
+                  style={[styles.header, styles.headerLoading, { backgroundColor: colors.surface }]}
+                >
+                  <ActivityIndicator
+                    color={colors.accent}
+                    accessibilityLabel={t('common.loading')}
+                  />
                 </View>
               ) : null}
 
               {summary && (
                 <>
-                  <Text style={[styles.section, { color: colors.text }]} accessible accessibilityRole="header">
+                  <Text
+                    style={[styles.section, { color: colors.text }]}
+                    accessible
+                    accessibilityRole="header"
+                  >
                     {t('portfolio.recent_transactions')}
                   </Text>
 
@@ -420,7 +483,13 @@ export default function PortfolioScreen() {
           ) : null
         }
         renderItem={({ item }) => <AssetRow asset={item} colors={colors} t={t} />}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} accessibilityLabel="Pull to refresh portfolio" />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            accessibilityLabel="Pull to refresh portfolio"
+          />
+        }
         ListEmptyComponent={
           !loading ? (
             <View style={styles.center} accessible accessibilityLabel={t('portfolio.no_assets')}>
@@ -443,7 +512,11 @@ export default function PortfolioScreen() {
             </View>
           ) : null
         }
-        ListFooterComponent={loading ? <ActivityIndicator style={{ margin: 20 }} accessibilityLabel={t('common.loading')} /> : null}
+        ListFooterComponent={
+          loading ? (
+            <ActivityIndicator style={{ margin: 20 }} accessibilityLabel={t('common.loading')} />
+          ) : null
+        }
         onEndReached={() => {
           if (!loading) console.log('pagination');
         }}

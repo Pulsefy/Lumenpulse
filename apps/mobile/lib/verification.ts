@@ -64,16 +64,22 @@ export const verificationApi = {
 
 export function statusColor(status: VerificationStatus): string {
   switch (status) {
-    case 'VERIFIED': return '#10b981';
-    case 'REJECTED': return '#ef4444';
-    default: return '#f59e0b';
+    case 'VERIFIED':
+      return '#10b981';
+    case 'REJECTED':
+      return '#ef4444';
+    default:
+      return '#f59e0b';
   }
 }
 
 export function statusLabel(status: VerificationStatus): string {
   switch (status) {
-    case 'VERIFIED': return 'Lumenpulse Verified';
-    case 'REJECTED': return 'Not Verified';
-    default: return 'Pending Review';
+    case 'VERIFIED':
+      return 'Lumenpulse Verified';
+    case 'REJECTED':
+      return 'Not Verified';
+    default:
+      return 'Pending Review';
   }
 }

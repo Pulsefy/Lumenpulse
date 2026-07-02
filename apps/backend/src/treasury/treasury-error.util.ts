@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 import {
   TreasuryException,
   TreasuryInvalidAmountException,
@@ -40,21 +39,21 @@ export function mapContractErrorCode(
   beneficiary?: string,
 ): TreasuryException {
   switch (code) {
-    case TreasuryContractError.NotInitialized:
+    case 1: // TreasuryContractError.NotInitialized
       return new TreasuryNotInitializedException();
-    case TreasuryContractError.Unauthorized:
+    case 3: // TreasuryContractError.Unauthorized
       return new TreasuryUnauthorizedException();
-    case TreasuryContractError.InvalidAmount:
+    case 4: // TreasuryContractError.InvalidAmount
       return new TreasuryInvalidAmountException();
-    case TreasuryContractError.InvalidDuration:
+    case 5: // TreasuryContractError.InvalidDuration
       return new TreasuryInvalidDurationException();
-    case TreasuryContractError.InvalidStartTime:
+    case 6: // TreasuryContractError.InvalidStartTime
       return new TreasuryInvalidStartTimeException();
-    case TreasuryContractError.StreamNotFound:
+    case 7: // TreasuryContractError.StreamNotFound
       return new TreasuryStreamNotFoundException(beneficiary ?? 'unknown');
-    case TreasuryContractError.NothingToClaim:
+    case 8: // TreasuryContractError.NothingToClaim
       return new TreasuryNothingToClaimException();
-    case TreasuryContractError.Reentrancy:
+    case 9: // TreasuryContractError.Reentrancy
       return new TreasuryReentrancyException();
     default:
       return new TreasuryTransactionFailedException(fallbackMessage, {

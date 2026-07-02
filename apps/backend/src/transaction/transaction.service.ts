@@ -7,82 +7,22 @@ import {
 } from './dto/transaction.dto';
 import { getMockTransactions } from './mocks/mock-transactions';
 import { CacheService } from '../cache/cache.service';
-
-interface HorizonOperation {
-  id: string;
-  type: string;
-  created_at: string;
-  transaction_hash: string;
-  source_account: string;
-  from?: string;
-  to?: string;
-  into?: string;
-  amount?: string;
-  amount_charged?: string;
-  asset_type?: string;
-  asset_code?: string;
-  asset_issuer?: string;
-  starting_balance?: string;
-  funder?: string;
-  account?: string;
-  trustor?: string;
-  trustee?: string;
-  limit?: string;
-  offer_id?: string;
-  buying_asset_code?: string;
-  selling_asset_code?: string;
-  buying_asset_type?: string;
-  selling_asset_type?: string;
-  [key: string]: unknown;
-}
-
-interface HorizonResponse {
-  _embedded: {
-    records: HorizonTransaction[];
-  };
-  _links: {
-    next?: {
-      href: string;
-    };
-  };
-}
-
-interface HorizonErrorResponse {
-  detail?: string;
-  title?: string;
-  status?: number;
-}
-
-interface HorizonTransaction {
-  id: string;
-  created_at: string;
-  successful: boolean;
-  memo?: string;
-  fee_charged?: string;
-}
-
-interface OperationsResponse {
-  _embedded?: {
-    records: HorizonOperation[];
-  };
-}
+import {
+  HorizonClientService,
+  HorizonOperation,
+  HorizonTransaction,
+} from '../stellar/services/horizon-client.service';
 
 @Injectable()
 export class TransactionService {
   private readonly logger = new Logger(TransactionService.name);
-  private readonly horizonUrl: string;
   private readonly useMockData: boolean;
 
   constructor(
     private configService: ConfigService,
     private cacheService: CacheService,
+    private horizonClient: HorizonClientService,
   ) {
-    const network = this.configService.get('STELLAR_NETWORK', 'testnet');
-    this.horizonUrl =
-      network === 'testnet'
-        ? 'https://horizon-testnet.stellar.org'
-        : 'https://horizon.stellar.org';
-
     this.useMockData =
       this.configService.get('USE_MOCK_TRANSACTIONS', 'true') === 'true';
 
@@ -95,6 +35,7 @@ export class TransactionService {
         'STELLAR_OPERATIONS_CACHE_TTL',
         15_000,
       ),
+      contractReadTTL: 60_000,
     });
 
     if (this.useMockData) {
@@ -128,35 +69,16 @@ export class TransactionService {
     cursor?: string,
   ): Promise<{ transactions: TransactionDto[]; nextPage?: string }> {
     try {
-      let url = `${this.horizonUrl}/accounts/${publicKey}/transactions?order=desc&limit=${limit}`;
-      if (cursor) {
-        url += `&cursor=${cursor}`;
-      }
+      const { transactions: horizonTransactions, nextPage } =
+        await this.horizonClient.getTransactions(publicKey, limit, cursor);
 
-      const response = await fetch(url);
-      const data = (await response.json()) as
-        HorizonResponse | HorizonErrorResponse;
-
-      if (!response.ok) {
-        const errorDetail = (data as HorizonErrorResponse).detail;
-        const errorMessage = errorDetail || 'Failed to fetch transactions';
-        throw new Error(errorMessage);
-      }
-
-      const horizonData = data as HorizonResponse;
       const transactions = await this.processTransactions(
-        horizonData._embedded.records,
+        horizonTransactions,
         publicKey,
       );
-      let nextPage: string | undefined;
-
-      if (horizonData._links?.next?.href) {
-        const nextUrl = new URL(horizonData._links.next.href);
-        nextPage = nextUrl.searchParams.get('cursor') || undefined;
-      }
 
       return { transactions, nextPage };
-    } catch (error) {
+    } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to fetch transactions: ${errorMessage}`);
@@ -191,19 +113,7 @@ export class TransactionService {
   private async getTransactionOperations(
     transactionId: string,
   ): Promise<HorizonOperation[]> {
-    try {
-      const url = `${this.horizonUrl}/transactions/${transactionId}/operations`;
-      const response = await fetch(url);
-      const data = (await response.json()) as OperationsResponse;
-      return data._embedded?.records || [];
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(
-        `Failed to fetch operations for ${transactionId}: ${errorMessage}`,
-      );
-      return [];
-    }
+    return this.horizonClient.getOperations(transactionId);
   }
 
   private mapToTransactionDto(
