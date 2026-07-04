@@ -4,7 +4,10 @@ import {
   AllocateBudgetResponseDto,
   StreamStateDto,
 } from './dto/stream-response.dto';
-import { StreamPreviewDto, StreamPreviewResponseDto } from './dto/stream-preview.dto';
+import {
+  StreamPreviewDto,
+  StreamPreviewResponseDto,
+} from './dto/stream-preview.dto';
 import { RotateBeneficiaryDto } from './dto/rotate-beneficiary.dto';
 import { TreasuryStreamNotFoundException } from './exceptions/treasury.exceptions';
 import { TreasurySorobanClient } from './treasury-soroban.client';
@@ -74,13 +77,13 @@ export class TreasuryService {
    *
    * @throws TreasuryStreamNotFoundException when no stream exists for the beneficiary.
    */
-  async previewStream(dto: StreamPreviewDto): Promise<StreamPreviewResponseDto> {
+  async previewStream(
+    dto: StreamPreviewDto,
+  ): Promise<StreamPreviewResponseDto> {
     const { beneficiary, atTime } = dto;
     const previewAt = atTime ?? Math.floor(Date.now() / 1000);
 
-    this.logger.log(
-      `Previewing stream for ${beneficiary} at t=${previewAt}`,
-    );
+    this.logger.log(`Previewing stream for ${beneficiary} at t=${previewAt}`);
 
     const stream = await this.sorobanClient.getStream(beneficiary);
     if (!stream) {

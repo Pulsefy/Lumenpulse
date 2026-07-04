@@ -8,6 +8,7 @@ import {
 } from '@stellar/stellar-sdk';
 import { Counter, Histogram, Registry } from 'prom-client';
 import { config } from '../../lib/config';
+import { RequestContextService } from '../../common/services/request-context.service';
 
 export enum SorobanErrorCode {
   TIMEOUT = 'SOROBAN_TIMEOUT',
@@ -51,7 +52,10 @@ export class SorobanRpcClientService {
   private readonly rpcErrors: Counter;
   private readonly rpcRequests: Counter;
 
-  constructor(@Optional() registry?: Registry) {
+  constructor(
+    private readonly requestContextService: RequestContextService,
+    @Optional() private readonly registry?: Registry,
+  ) {
     const rpcUrl =
       config.stellar.sorobanRpcUrl ??
       (config.stellar.network === 'mainnet'
@@ -63,7 +67,7 @@ export class SorobanRpcClientService {
       allowHttp: rpcUrl.startsWith('http://'),
     });
 
-    const reg = registry ?? new Registry();
+    const reg = this.registry ?? new Registry();
 
     this.rpcLatency = new Histogram({
       name: 'soroban_rpc_latency_ms',
@@ -192,8 +196,10 @@ export class SorobanRpcClientService {
         const isRetryable = this.isRetryable(err);
         const exhausted = attempt > maxRetries;
 
+        const requestId = this.requestContextService.getRequestId();
         this.logger.warn(
           {
+            requestId,
             method,
             attempt,
             maxRetries,

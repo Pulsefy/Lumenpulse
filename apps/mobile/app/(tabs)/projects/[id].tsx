@@ -14,7 +14,13 @@ import { useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { crowdfundApi, CrowdfundProject, Contributor, RoadmapItem, OnChainStatus } from '../../../lib/crowdfund';
+import {
+  crowdfundApi,
+  CrowdfundProject,
+  Contributor,
+  RoadmapItem,
+  OnChainStatus,
+} from '../../../lib/crowdfund';
 import { computeFundingProgress, formatTokenAmount } from '../../../lib/stellar';
 import ContributionModal from '../../../components/ContributionModal';
 import VerificationPanel from '../../../components/VerificationPanel';
@@ -27,13 +33,43 @@ import { useWallet } from '../../../contexts/WalletContext';
 
 const ON_CHAIN_STATUS_META: Record<
   OnChainStatus,
-  { label: string; description: string; icon: React.ComponentProps<typeof Ionicons>['name']; colorKey: 'success' | 'warning' | 'danger' | 'accent' | 'textSecondary' }
+  {
+    label: string;
+    description: string;
+    icon: React.ComponentProps<typeof Ionicons>['name'];
+    colorKey: 'success' | 'warning' | 'danger' | 'accent' | 'textSecondary';
+  }
 > = {
-  ACTIVE: { label: 'Active', description: 'Accepting contributions on-chain', icon: 'radio-button-on-outline', colorKey: 'success' },
-  PAUSED: { label: 'Paused', description: 'Contributions temporarily paused', icon: 'pause-circle-outline', colorKey: 'warning' },
-  COMPLETED: { label: 'Completed', description: 'Funding goal reached — vault closed', icon: 'checkmark-circle-outline', colorKey: 'accent' },
-  CANCELLED: { label: 'Cancelled', description: 'Project cancelled — funds returned', icon: 'close-circle-outline', colorKey: 'danger' },
-  PENDING: { label: 'Pending', description: 'Contract deployment in progress', icon: 'time-outline', colorKey: 'textSecondary' },
+  ACTIVE: {
+    label: 'Active',
+    description: 'Accepting contributions on-chain',
+    icon: 'radio-button-on-outline',
+    colorKey: 'success',
+  },
+  PAUSED: {
+    label: 'Paused',
+    description: 'Contributions temporarily paused',
+    icon: 'pause-circle-outline',
+    colorKey: 'warning',
+  },
+  COMPLETED: {
+    label: 'Completed',
+    description: 'Funding goal reached — vault closed',
+    icon: 'checkmark-circle-outline',
+    colorKey: 'accent',
+  },
+  CANCELLED: {
+    label: 'Cancelled',
+    description: 'Project cancelled — funds returned',
+    icon: 'close-circle-outline',
+    colorKey: 'danger',
+  },
+  PENDING: {
+    label: 'Pending',
+    description: 'Contract deployment in progress',
+    icon: 'time-outline',
+    colorKey: 'textSecondary',
+  },
 };
 
 function OnChainStatusChip({
@@ -55,7 +91,9 @@ function OnChainStatusChip({
       <Ionicons name={meta.icon} size={16} color={color} />
       <View>
         <Text style={[styles.statusChipLabel, { color }]}>{meta.label}</Text>
-        <Text style={[styles.statusChipDesc, { color: colors.textSecondary }]}>{meta.description}</Text>
+        <Text style={[styles.statusChipDesc, { color: colors.textSecondary }]}>
+          {meta.description}
+        </Text>
       </View>
     </View>
   );
@@ -64,7 +102,12 @@ function OnChainStatusChip({
 function ProgressBar({ progress, color }: { progress: number; color: string }) {
   return (
     <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width: `${Math.min(progress, 100)}%`, backgroundColor: color }]} />
+      <View
+        style={[
+          styles.progressFill,
+          { width: `${Math.min(progress, 100)}%`, backgroundColor: color },
+        ]}
+      />
     </View>
   );
 }
@@ -227,7 +270,7 @@ export default function ProjectDetailScreen() {
 
         // Use wallet signing if backend requests client signature (or mock for Testnet app flow)
         if (response.data.unsignedXdr || !finalTxHash) {
-          const xdrToSign = response.data.unsignedXdr || "AAAA_MOCK_XDR_FOR_TESTNET_DEMO";
+          const xdrToSign = response.data.unsignedXdr || 'AAAA_MOCK_XDR_FOR_TESTNET_DEMO';
           const signResult = await signAndSubmitXdr(xdrToSign);
 
           if (signResult.status === 'rejected') {

@@ -6,6 +6,7 @@ import {
   NotFoundException,
   Inject,
   forwardRef,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
@@ -38,12 +39,13 @@ interface ChallengeData {
 }
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleDestroy {
   private readonly logger = new Logger(AuthService.name);
   private readonly challengeStore = new Map<string, ChallengeData>();
   private readonly CHALLENGE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
   private readonly serverKeypair: Keypair;
   private readonly stellarNetwork: string;
+  private cleanupInterval?: NodeJS.Timeout;
 
   private static readonly RESET_TOKEN_BYTES = 32;
   private static readonly RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
@@ -80,9 +82,20 @@ export class AuthService {
     );
 
     // Start cleanup interval
-    setInterval(() => this.cleanupExpiredChallenges(), 60000);
+    this.cleanupInterval = setInterval(
+      () => this.cleanupExpiredChallenges(),
+      60000,
+    );
+    this.cleanupInterval.unref?.();
 
     this.logger.log('AuthService initialized');
+  }
+
+  onModuleDestroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = undefined;
+    }
   }
 
   async validateUser(

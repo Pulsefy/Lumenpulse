@@ -9,6 +9,7 @@ import { StellarContractRotationService } from './services/stellar-contract-rota
 import { AuditModule } from '../audit/audit.module';
 import { AppConfigModule } from '../config/config.module';
 import { SorobanRpcClientService } from './services/soroban-rpc-client.service';
+import { HorizonClientService } from './services/horizon-client.service';
 import { MatchingPoolAdminController } from './controllers/matching-pool-admin.controller';
 import { AppCacheModule } from '../cache/cache.module';
 
@@ -24,12 +25,14 @@ import { AppCacheModule } from '../cache/cache.module';
   providers: [
     StellarService,
     SorobanRpcClientService,
+    HorizonClientService,
     ContractRotationService,
     StellarContractRotationService,
   ],
   exports: [
     StellarService,
     SorobanRpcClientService,
+    HorizonClientService,
     ContractRotationService,
     StellarContractRotationService,
   ],

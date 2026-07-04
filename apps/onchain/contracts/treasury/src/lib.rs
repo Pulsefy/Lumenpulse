@@ -12,11 +12,9 @@ use multisig::{
     propose as multisig_propose, replace_config as multisig_replace_config, sign as multisig_sign,
 };
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, String, Vec};
 use storage::{DataKey, StreamData, LEDGER_BUMP, LEDGER_THRESHOLD};
 
-// Re-exports so tests (and external clients) can construct / inspect the
-// multisig types without depending on the internal module layout.
 pub use storage::{
     MultisigConfig, Proposal, ProposalAction, ProposalStatus, Signer, MAX_SIGNERS,
     PROPOSAL_TTL_SECS,
@@ -139,7 +137,6 @@ impl TreasuryContract {
         request_id: soroban_sdk::BytesN<32>,
     ) -> Result<(), TreasuryError> {
         Self::with_reentrancy_guard(&env, || {
-            // Idempotency check
             if idempotency_guard::claim_request(&env, &request_id).is_err() {
                 return Err(TreasuryError::AlreadyExecuted);
             }
@@ -185,7 +182,6 @@ impl TreasuryContract {
                 LEDGER_BUMP,
             );
 
-            // Transfer tokens from admin to treasury
             let token_client = token::TokenClient::new(&env, &token_addr);
             token_client.transfer(&admin, env.current_contract_address(), &amount);
 
@@ -271,15 +267,12 @@ impl TreasuryContract {
                 .get(&old_key)
                 .ok_or(TreasuryError::StreamNotFound)?;
 
-            // Preserve the claimed amount and total amount, only change beneficiary
             let claimed_amount = stream.claimed_amount;
             let remaining_amount = stream.total_amount - claimed_amount;
 
             if claimed_amount == 0 {
-                // No claims yet: preserve vesting schedule, just change beneficiary
                 stream.beneficiary = new_beneficiary.clone();
             } else {
-                // Partial claims made: reset to immediate vesting of remaining amount
                 stream.claimed_amount = 0;
                 stream.total_amount = remaining_amount;
                 stream.start_time = env.ledger().timestamp();
@@ -287,10 +280,8 @@ impl TreasuryContract {
                 stream.beneficiary = new_beneficiary.clone();
             }
 
-            // Remove old stream entry
             env.storage().persistent().remove(&old_key);
 
-            // Create new stream entry with updated beneficiary
             let new_key = DataKey::Stream(new_beneficiary.clone());
             env.storage().persistent().set(&new_key, &stream);
             env.storage()
@@ -309,9 +300,7 @@ impl TreasuryContract {
         })
     }
 
-    /// Multisig-gated admin rotation. The executor must be a signer consuming
-    /// an approved `SetAdmin` proposal. The proposal is marked Executed and
-    /// cannot be replayed. Unauthorized callers cannot bypass the multisig.
+    /// Multisig-gated admin rotation.
     pub fn set_admin_via_multisig(
         env: Env,
         executor: Address,
@@ -323,9 +312,7 @@ impl TreasuryContract {
         Ok(())
     }
 
-    /// Multisig-gated beneficiary rotation. The executor must be a signer
-    /// consuming an approved `RotateBeneficiary` proposal. Preserves all the
-    /// existing claim/vesting logic of `rotate_beneficiary`.
+    /// Multisig-gated beneficiary rotation.
     pub fn rotate_beneficiary_via_multisig(
         env: Env,
         executor: Address,
@@ -385,9 +372,7 @@ impl TreasuryContract {
         })
     }
 
-    /// Replace the multisig config (signers + threshold). Bootstrap-only:
-    /// gated to an approved `SetAdmin` proposal whose side-effect is the
-    /// signer-set swap. This lets the multisig rotate itself.
+    /// Replace the multisig config (signers + threshold).
     pub fn set_multisig_config(
         env: Env,
         executor: Address,
@@ -423,6 +408,119 @@ impl TreasuryContract {
             .instance()
             .get(&DataKey::Token)
             .ok_or(TreasuryError::NotInitialized)
+    }
+
+    // ============================================
+    // CANCELLATION & RECOVERY FUNCTIONS
+    // ============================================
+
+    /// Cancel an active stream and return (total unlocked, refundable) amounts.
+    /// `total_unlocked` includes any amount already claimed prior to cancellation.
+    pub fn cancel_stream(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+    ) -> Result<(i128, i128), TreasuryError> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(TreasuryError::NotInitialized)?;
+
+        if admin != stored_admin {
+            return Err(TreasuryError::Unauthorized);
+        }
+        admin.require_auth();
+
+        let token_address: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Token)
+            .ok_or(TreasuryError::NotInitialized)?;
+
+        let token_client = token::TokenClient::new(&env, &token_address);
+        let contract_address = env.current_contract_address();
+
+        let stream_key = DataKey::Stream(beneficiary.clone());
+        let stream: StreamData = env
+            .storage()
+            .persistent()
+            .get(&stream_key)
+            .ok_or(TreasuryError::StreamNotFound)?;
+
+        let current_time = env.ledger().timestamp();
+        // `calculate_unlocked` returns the amount unlocked *since the last claim*
+        // (it subtracts claimed_amount internally). To report the total unlocked
+        // to date, add back what's already been claimed.
+        let newly_unlocked = Self::calculate_unlocked(current_time, &stream);
+        let remaining = stream.total_amount - stream.claimed_amount;
+        let refundable = remaining - newly_unlocked;
+        let total_unlocked = stream.claimed_amount + newly_unlocked;
+
+        if refundable > 0 {
+            token_client.transfer(&contract_address, &beneficiary, &refundable);
+        }
+
+        #[allow(deprecated)]
+        env.events().publish(
+            (String::from_str(&env, "stream_cancelled"),),
+            (&beneficiary, total_unlocked, refundable, current_time),
+        );
+
+        env.storage().persistent().remove(&stream_key);
+
+        Ok((total_unlocked, refundable))
+    }
+
+    /// Emergency stop - refund full remaining amount regardless of vesting
+    pub fn emergency_stop(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+        reason: String,
+    ) -> Result<i128, TreasuryError> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(TreasuryError::NotInitialized)?;
+
+        if admin != stored_admin {
+            return Err(TreasuryError::Unauthorized);
+        }
+        admin.require_auth();
+
+        let token_address: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Token)
+            .ok_or(TreasuryError::NotInitialized)?;
+
+        let token_client = token::TokenClient::new(&env, &token_address);
+        let contract_address = env.current_contract_address();
+
+        let stream_key = DataKey::Stream(beneficiary.clone());
+        let stream: StreamData = env
+            .storage()
+            .persistent()
+            .get(&stream_key)
+            .ok_or(TreasuryError::StreamNotFound)?;
+
+        let full_refund = stream.total_amount - stream.claimed_amount;
+
+        if full_refund > 0 {
+            token_client.transfer(&contract_address, &beneficiary, &full_refund);
+        }
+
+        #[allow(deprecated)]
+        env.events().publish(
+            (String::from_str(&env, "emergency_stop"),),
+            (&beneficiary, reason, full_refund),
+        );
+
+        env.storage().persistent().remove(&stream_key);
+
+        Ok(full_refund)
     }
 }
 

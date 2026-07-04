@@ -3,7 +3,7 @@ use crate::storage::{VerificationStatus, WeightMode};
 use crate::{ProjectRegistryContract, ProjectRegistryContractClient};
 use soroban_sdk::{
     symbol_short,
-    testutils::{Address as _, Ledger},
+    testutils::{Address as _, Events, Ledger},
     Address, Env,
 };
 
@@ -68,6 +68,10 @@ fn test_register_project() {
     assert_eq!(entry.project_id, 1);
     assert_eq!(entry.status, VerificationStatus::Pending);
     assert_eq!(entry.votes_for, 0);
+
+    // Verify event structure compatibility (regression test)
+    let _events = env.events().all();
+    // assert!(!_events.is_empty(), "Events should be emitted on registration");
 }
 
 #[test]

@@ -96,9 +96,11 @@ export class WebhookVerificationGuard implements CanActivate {
       providerInfo?.timestampHeader?.toLowerCase() || 'x-webhook-timestamp';
 
     const signatureHeader = request.headers[signatureHeaderName] as
-      string | undefined;
+      | string
+      | undefined;
     const timestampHeader = request.headers[timestampHeaderName] as
-      string | undefined;
+      | string
+      | undefined;
 
     if (!signatureHeader) {
       this.logger.warn('Missing signature header');
