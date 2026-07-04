@@ -54,7 +54,7 @@ impl ProjectRegistryContract {
                         &Symbol::new(env, "get_reputation"),
                         voter.clone(),
                     ) {
-                        Ok(score) => score as i128,
+                        Ok(score) => score,
                         Err(_) => 0,
                     }
                 } else {
