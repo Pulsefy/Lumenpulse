@@ -158,6 +158,30 @@ class NewsArticleResponse(BaseModel):
     sentiment_label: Optional[str] = None  # positive / negative / neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
 
+
+class ContributorActivityEventResponse(BaseModel):
+    event_id: str
+    contract_id: str
+    project_id: Optional[int] = None
+    contributor: Optional[str] = None
+    ledger: int
+    timestamp: Optional[str] = None
+    event_type: Optional[str] = None
+    category: str
+    amount: Optional[float] = None
+    milestone_id: Optional[int] = None
+    status: Optional[str] = None
+    summary: Optional[str] = None
+    topics: List[str] = []
+    raw_data: Optional[Dict[str, Any]] = None
+
+
+class ContributorActivityTimelineResponse(BaseModel):
+    contributor: str
+    project_id: Optional[int] = None
+    events: List[ContributorActivityEventResponse] = []
+
+
 @app.get("/metrics")
 async def metrics():
     """Expose Prometheus metrics"""
@@ -177,6 +201,7 @@ async def root(request: Request) -> Dict[str, Any]:
             "POST /analyze": "Analyze text sentiment (requires X-API-Key header)",
             "GET /analyze": "Get asset-specific sentiment analysis (requires X-API-Key header)",
             "POST /analyze-batch": "Batch analyze multiple texts (requires X-API-Key header)",
+            "GET /contributors/{contributor}/timeline": "Get contributor activity timeline from on-chain events (requires X-API-Key header)",
             "GET /sentiment/legend": "Get colour legend for sentiment indicators (no auth required)",
         },
         "note": "Returns sentiment score between -1 (negative) and 1 (positive)",
@@ -263,6 +288,51 @@ async def get_news(
     except Exception as exc:
         logger.error("Error retrieving news: %s", str(exc), exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch news articles")
+
+
+@app.get(
+    "/contributors/{contributor}/timeline",
+    response_model=ContributorActivityTimelineResponse,
+)
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def get_contributor_activity_timeline(
+    request: Request,
+    contributor: str,
+    project_id: Optional[int] = Query(
+        None,
+        description="Optional project ID to scope the contributor timeline",
+    ),
+    limit: int = Query(200, ge=1, le=500),
+    ascending: bool = Query(
+        True,
+        description="Order timeline ascending by timestamp if true, descending otherwise",
+    ),
+) -> ContributorActivityTimelineResponse:
+    """Return a contributor-centric timeline of raw on-chain activity."""
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    events = postgres_service.get_contributor_activity_timeline(
+        contributor=contributor,
+        project_id=project_id,
+        limit=limit,
+        ascending=ascending,
+    )
+
+    logger.info(
+        "Retrieved contributor timeline for %s | project_id=%s | limit=%d | ascending=%s | client_ip=%s",
+        contributor,
+        project_id,
+        limit,
+        ascending,
+        request.client.host,
+    )
+
+    return ContributorActivityTimelineResponse(
+        contributor=contributor,
+        project_id=project_id,
+        events=[ContributorActivityEventResponse(**event) for event in events],
+    )
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
