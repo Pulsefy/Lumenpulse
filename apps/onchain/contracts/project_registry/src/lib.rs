@@ -4,10 +4,10 @@ mod errors;
 mod events;
 mod storage;
 
-use cross_contract_view_helpers::{invoke_view0, invoke_view1};
+use cross_contract_view_helpers::{invoke_view1};
 use errors::RegistryError;
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal, Symbol};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
 use storage::{DataKey, ProjectEntry, RegistryConfig, VerificationStatus, WeightMode};
 
 #[contract]
@@ -48,7 +48,12 @@ impl ProjectRegistryContract {
         let weight = match config.weight_mode {
             WeightMode::Reputation => {
                 if let Some(ref registry) = config.contributor_registry {
-                    match invoke_view1(env, registry, &Symbol::new(env, "get_reputation"), voter.clone()) {
+                    match invoke_view1::<Address, i128>(
+                        env,
+                        registry,
+                        &Symbol::new(env, "get_reputation"),
+                        voter.clone(),
+                    ) {
                         Ok(score) => score as i128,
                         Err(_) => 0,
                     }
@@ -68,7 +73,12 @@ impl ProjectRegistryContract {
                 // We check registration via contributor_registry if configured,
                 // otherwise grant weight 1 to any caller.
                 if let Some(ref registry) = config.contributor_registry {
-                    match invoke_view1(env, registry, &Symbol::new(env, "is_registered"), voter.clone()) {
+                    match invoke_view1::<Address, bool>(
+                        env,
+                        registry,
+                        &Symbol::new(env, "is_registered"),
+                        voter.clone(),
+                    ) {
                         Ok(exists) => {
                             if exists {
                                 1

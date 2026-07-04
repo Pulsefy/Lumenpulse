@@ -20,7 +20,7 @@ pub fn invoke_view<T>(
 where
     T: TryFromVal<Env, Val>,
 {
-    if contract.as_ref().is_empty() {
+    if contract.to_string().is_empty() {
         return Err(ViewCallError::ContractNotSet);
     }
 
@@ -51,8 +51,10 @@ pub fn invoke_view1<A, T>(
     arg: A,
 ) -> Result<T, ViewCallError>
 where
-    A: IntoVal<Env>,
+    A: IntoVal<Env, Val>,
     T: TryFromVal<Env, Val>,
 {
-    invoke_view(env, contract, fn_name, vec![env, arg.into_val(env)])
+    let mut args = Vec::new(env);
+    args.push_back(arg.into_val(env));
+    invoke_view(env, contract, fn_name, args)
 }

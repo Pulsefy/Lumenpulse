@@ -314,6 +314,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "cross_contract_view_helpers"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "crowdfund_vault"
 version = "0.0.0"
 dependencies = [
@@ -981,6 +988,7 @@ dependencies = [
 name = "lumenpulse-community-curation"
 version = "0.1.0"
 dependencies = [
+ "cross_contract_view_helpers",
  "soroban-sdk",
 ]
 
@@ -1149,6 +1157,7 @@ dependencies = [
 name = "project_registry"
 version = "0.0.0"
 dependencies = [
+ "cross_contract_view_helpers",
  "soroban-sdk",
 ]
 
