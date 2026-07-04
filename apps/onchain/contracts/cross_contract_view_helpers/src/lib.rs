@@ -32,11 +32,7 @@ where
 }
 
 /// Convenience helper for zero-argument view calls.
-pub fn invoke_view0<T>(
-    env: &Env,
-    contract: &Address,
-    fn_name: &Symbol,
-) -> Result<T, ViewCallError>
+pub fn invoke_view0<T>(env: &Env, contract: &Address, fn_name: &Symbol) -> Result<T, ViewCallError>
 where
     T: TryFromVal<Env, Val>,
 {

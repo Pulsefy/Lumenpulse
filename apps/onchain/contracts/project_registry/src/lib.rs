@@ -4,7 +4,7 @@ mod errors;
 mod events;
 mod storage;
 
-use cross_contract_view_helpers::{invoke_view1};
+use cross_contract_view_helpers::invoke_view1;
 use errors::RegistryError;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};

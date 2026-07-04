@@ -271,7 +271,12 @@ impl CommunityCurationContract {
     /// Cross-contract call into contributor-registry to read a voter's reputation.
     fn get_reputation(env: &Env, voter: &Address) -> u64 {
         let registry = get_contributor_registry(env);
-        match invoke_view1(env, &registry, &soroban_sdk::Symbol::new(env, "get_reputation"), voter.clone()) {
+        match invoke_view1(
+            env,
+            &registry,
+            &soroban_sdk::Symbol::new(env, "get_reputation"),
+            voter.clone(),
+        ) {
             Ok(score) => score,
             Err(_) => 0,
         }
@@ -280,7 +285,11 @@ impl CommunityCurationContract {
     /// Cross-contract call to read the sum of all reputations (total supply proxy).
     fn get_total_reputation(env: &Env) -> u64 {
         let registry = get_contributor_registry(env);
-        match invoke_view0(env, &registry, &soroban_sdk::Symbol::new(env, "total_reputation")) {
+        match invoke_view0(
+            env,
+            &registry,
+            &soroban_sdk::Symbol::new(env, "total_reputation"),
+        ) {
             Ok(total) => total,
             Err(_) => 0,
         }
