@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /home/feyishola/Desktop/mydev/opensource/starkpulse-frontend/apps/backend/src/contributor-registry/dto)",
+      "Bash(npm ls *)",
+      "Bash(npx eslint *)"
+    ],
+    "additionalDirectories": [
+      "/home/feyishola/Desktop/mydev/opensource/starkpulse-frontend/apps/backend/src/contributor-registry"
+    ]
+  }
+}

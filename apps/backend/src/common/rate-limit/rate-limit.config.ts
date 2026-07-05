@@ -309,3 +309,15 @@ export function getAnalyticsReadThrottleOverride() {
     default: getRateLimitSettings().analyticsRead,
   };
 }
+
+export function getRegistryReadThrottleOverride() {
+  return {
+    default: getRateLimitSettings().crowdfundRead,
+  };
+}
+
+export function getRegistryWriteThrottleOverride() {
+  return {
+    default: getRateLimitSettings().portfolioWrite,
+  };
+}
