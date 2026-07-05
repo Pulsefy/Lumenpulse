@@ -21,4 +21,6 @@ pub enum MatchingPoolError {
     InvalidRoundDates = 15,
     ContractPaused = 16,
     Reentrancy = 17,
+    ContributorCapExceeded = 18,
+    RoundCapExceeded = 19,
 }

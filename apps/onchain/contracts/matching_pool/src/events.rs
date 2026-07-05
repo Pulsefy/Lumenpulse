@@ -69,3 +69,11 @@ pub struct AllMatchesDistributedEvent {
     pub round_id: u64,
     pub total_distributed: i128,
 }
+
+#[contractevent]
+pub struct RoundCapsSetEvent {
+    #[topic]
+    pub round_id: u64,
+    pub per_contributor_cap: i128,
+    pub round_contribution_cap: i128,
+}

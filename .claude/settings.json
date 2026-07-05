@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(cairo|rs\\)$\")",
+      "Bash(cargo test *)",
+      "Read(//home/feyishola/.cargo/bin/**)",
+      "Read(//home/feyishola/**)",
+      "Read(//usr/local/bin/**)",
+      "Read(//opt/**)",
+      "Read(//home/feyishola/.rustup/**)"
+    ]
+  }
+}

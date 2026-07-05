@@ -18,6 +18,9 @@ pub enum DataKey {
     ContributorAmount(u64, u64, Address), // (round_id, project_id, contributor) -> i128
     MatchDistributed(u64),                // round_id -> bool
     RoundStatus(u64),                     // round_id -> Symbol ("ACTIVE"|"FINALIZED"|"DISTRIBUTED")
+    RoundContributorCap(u64), // round_id -> i128 (0=no cap; per-contributor per-project)
+    RoundContributionCap(u64), // round_id -> i128 (0=no cap; total across all projects)
+    RoundTotalContributions(u64), // round_id -> i128 (running sum of all contributions)
 }
 
 /// Core data for a funding round
@@ -32,4 +35,13 @@ pub struct RoundData {
     pub total_pool: i128,
     pub is_finalized: bool,
     pub is_distributed: bool,
+}
+
+/// Cap configuration and live state for a round (returned by get_round_caps)
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CapData {
+    pub per_contributor_cap: i128,    // 0 = uncapped
+    pub round_contribution_cap: i128, // 0 = uncapped
+    pub total_contributions: i128,    // running sum of all recorded contributions
 }

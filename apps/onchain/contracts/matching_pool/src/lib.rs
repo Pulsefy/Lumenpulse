@@ -10,7 +10,7 @@ use math::{sqrt_scaled, unscale};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
-use storage::{DataKey, RoundData};
+use storage::{CapData, DataKey, RoundData};
 
 #[contract]
 pub struct MatchingPoolContract;
@@ -112,6 +112,15 @@ impl MatchingPoolContract {
         env.storage()
             .instance()
             .set(&DataKey::NextRoundId, &(round_id + 1));
+        env.storage()
+            .persistent()
+            .set(&DataKey::RoundContributorCap(round_id), &0i128);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RoundContributionCap(round_id), &0i128);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RoundTotalContributions(round_id), &0i128);
         events::RoundCreatedEvent {
             admin,
             round_id,
@@ -278,6 +287,30 @@ impl MatchingPoolContract {
         }
         let contrib_key = DataKey::ContributorAmount(round_id, project_id, contributor.clone());
         let prev: i128 = env.storage().persistent().get(&contrib_key).unwrap_or(0);
+
+        let contributor_cap: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundContributorCap(round_id))
+            .unwrap_or(0);
+        if contributor_cap > 0 && prev.saturating_add(amount) > contributor_cap {
+            return Err(MatchingPoolError::ContributorCapExceeded);
+        }
+
+        let round_cap: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundContributionCap(round_id))
+            .unwrap_or(0);
+        let current_round_total: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundTotalContributions(round_id))
+            .unwrap_or(0);
+        if round_cap > 0 && current_round_total.saturating_add(amount) > round_cap {
+            return Err(MatchingPoolError::RoundCapExceeded);
+        }
+
         if prev == 0 {
             let cnt_key = DataKey::ProjectContributorCount(round_id, project_id);
             let cnt: u32 = env.storage().persistent().get(&cnt_key).unwrap_or(0);
@@ -295,6 +328,10 @@ impl MatchingPoolContract {
         env.storage()
             .persistent()
             .set(&total_key, &(total + amount));
+        env.storage().persistent().set(
+            &DataKey::RoundTotalContributions(round_id),
+            &(current_round_total + amount),
+        );
         events::ContributionRecordedEvent {
             round_id,
             project_id,
@@ -501,6 +538,69 @@ impl MatchingPoolContract {
         }
         let squared = sum_sqrt.checked_mul(sum_sqrt).unwrap_or(i128::MAX);
         unscale(unscale(squared))
+    }
+
+    pub fn set_round_caps(
+        env: Env,
+        admin: Address,
+        round_id: u64,
+        per_contributor_cap: i128,
+        round_contribution_cap: i128,
+    ) -> Result<(), MatchingPoolError> {
+        Self::require_admin(&env, &admin)?;
+        if per_contributor_cap < 0 || round_contribution_cap < 0 {
+            return Err(MatchingPoolError::InvalidAmount);
+        }
+        let round: RoundData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        if round.is_finalized {
+            return Err(MatchingPoolError::RoundAlreadyFinalized);
+        }
+        env.storage().persistent().set(
+            &DataKey::RoundContributorCap(round_id),
+            &per_contributor_cap,
+        );
+        env.storage().persistent().set(
+            &DataKey::RoundContributionCap(round_id),
+            &round_contribution_cap,
+        );
+        events::RoundCapsSetEvent {
+            round_id,
+            per_contributor_cap,
+            round_contribution_cap,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    pub fn get_round_caps(env: Env, round_id: u64) -> Result<CapData, MatchingPoolError> {
+        env.storage()
+            .persistent()
+            .get::<_, RoundData>(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        let per_contributor_cap: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundContributorCap(round_id))
+            .unwrap_or(0);
+        let round_contribution_cap: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundContributionCap(round_id))
+            .unwrap_or(0);
+        let total_contributions: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundTotalContributions(round_id))
+            .unwrap_or(0);
+        Ok(CapData {
+            per_contributor_cap,
+            round_contribution_cap,
+            total_contributions,
+        })
     }
 
     pub fn get_round(env: Env, round_id: u64) -> Result<RoundData, MatchingPoolError> {
