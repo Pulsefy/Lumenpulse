@@ -67,14 +67,23 @@ function RoundCard({
       accessibilityHint={t('grants.round_hint')}
     >
       <View style={styles.cardHeader}>
-        <Text style={[styles.cardTitle, { color: colors.text }]} accessible accessibilityRole="header">
+        <Text
+          style={[styles.cardTitle, { color: colors.text }]}
+          accessible
+          accessibilityRole="header"
+        >
           {round.name}
         </Text>
         <StatusBadge status={round.status} colors={colors} t={t} />
       </View>
 
       <View style={styles.poolRow}>
-        <Ionicons name="wallet-outline" size={16} color={colors.accent} importantForAccessibility="no" />
+        <Ionicons
+          name="wallet-outline"
+          size={16}
+          color={colors.accent}
+          importantForAccessibility="no"
+        />
         <Text style={[styles.poolLabel, { color: colors.textSecondary }]} accessible>
           {t('grants.matching_pool')}
         </Text>
@@ -84,7 +93,12 @@ function RoundCard({
       </View>
 
       <View style={styles.cardFooter}>
-        <Ionicons name="calendar-outline" size={13} color={colors.textSecondary} importantForAccessibility="no" />
+        <Ionicons
+          name="calendar-outline"
+          size={13}
+          color={colors.textSecondary}
+          importantForAccessibility="no"
+        />
         <Text style={[styles.footerText, { color: colors.textSecondary }]} accessible>
           {t('grants.ends')} {endDate}
         </Text>
@@ -109,27 +123,30 @@ function GrantsListContent() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchRounds = useCallback(async (refresh = false) => {
-    if (refresh) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-    setError(null);
-    try {
-      const res = await CachedApi.getGrantRounds();
-      if (res.success && res.data) {
-        setRounds(res.data);
+  const fetchRounds = useCallback(
+    async (refresh = false) => {
+      if (refresh) {
+        setIsRefreshing(true);
       } else {
-        setError(res.error?.message ?? t('errors.couldnt_load', { item: 'rounds' }));
+        setIsLoading(true);
       }
-    } catch {
-      setError(t('errors.something_went_wrong'));
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [t]);
+      setError(null);
+      try {
+        const res = await CachedApi.getGrantRounds();
+        if (res.success && res.data) {
+          setRounds(res.data);
+        } else {
+          setError(res.error?.message ?? t('errors.couldnt_load', { item: 'rounds' }));
+        }
+      } catch {
+        setError(t('errors.something_went_wrong'));
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
     void fetchRounds();
@@ -158,7 +175,11 @@ function GrantsListContent() {
           style={{ marginBottom: 16 }}
           importantForAccessibility="no"
         />
-        <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+        <Text
+          style={[styles.emptyTitle, { color: colors.text }]}
+          accessible
+          accessibilityRole="header"
+        >
           {t('errors.couldnt_load', { item: 'rounds' })}
         </Text>
         <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} accessible>
@@ -172,7 +193,9 @@ function GrantsListContent() {
           accessibilityLabel={t('common.retry')}
           accessibilityHint="Retry loading grant rounds"
         >
-          <Text style={styles.retryBtnText} accessible>{t('common.retry')}</Text>
+          <Text style={styles.retryBtnText} accessible>
+            {t('common.retry')}
+          </Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -195,7 +218,11 @@ function GrantsListContent() {
         }
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={[styles.heading, { color: colors.text }]} accessible accessibilityRole="header">
+            <Text
+              style={[styles.heading, { color: colors.text }]}
+              accessible
+              accessibilityRole="header"
+            >
               {t('grants.title')}
             </Text>
             <Text style={[styles.subheading, { color: colors.textSecondary }]} accessible>
@@ -204,7 +231,11 @@ function GrantsListContent() {
           </View>
         }
         ListEmptyComponent={
-          <View style={[styles.center, { paddingVertical: 60 }]} accessible accessibilityLabel={t('grants.no_rounds')}>
+          <View
+            style={[styles.center, { paddingVertical: 60 }]}
+            accessible
+            accessibilityLabel={t('grants.no_rounds')}
+          >
             <Ionicons
               name="trophy-outline"
               size={48}
@@ -212,13 +243,21 @@ function GrantsListContent() {
               style={{ marginBottom: 12 }}
               importantForAccessibility="no"
             />
-            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} importantForAccessibility="no">
+            <Text
+              style={[styles.emptySubtitle, { color: colors.textSecondary }]}
+              importantForAccessibility="no"
+            >
               {t('grants.no_rounds')}
             </Text>
           </View>
         }
         renderItem={({ item }) => (
-          <RoundCard round={item} colors={colors} onPress={() => router.push(`/grants/${item.id}`)} t={t} />
+          <RoundCard
+            round={item}
+            colors={colors}
+            onPress={() => router.push(`/grants/${item.id}`)}
+            t={t}
+          />
         )}
         accessibilityLabel={t('grants.title')}
         accessibilityRole="list"

@@ -29,6 +29,7 @@ from .models import (
     NewsInsight,
     AssetTrend,
     RoundAnomalySignal,
+    MetadataDriftFinding,
 )
 from src.analytics.ner_service import NERService
 from src.analytics.onchain_entity_linker import (
@@ -1304,6 +1305,119 @@ class PostgresService:
             logger.error(f"Failed to retrieve project contributors: {e}")
             return []
 
+    def _contributor_activity_category(self, event_type: Optional[str]) -> str:
+        """Map raw contract event types into contributor activity categories."""
+        if not event_type:
+            return "other"
+
+        mapping = {
+            "depositevent": "contribution",
+            "contributionrecordedevent": "contribution",
+            "contributionrefundableevent": "contribution_reversal",
+            "contributionclawbackedevent": "contribution_reversal",
+            "reward_granted": "reward",
+            "submission_minted": "reward",
+            "milestoneapprovedevent": "milestone",
+            "contributorregisteredevent": "registry",
+            "projectregisteredevent": "registry",
+            "moduleregisteredevent": "registry",
+            "providerregisteredevent": "registry",
+        }
+        normalized = str(event_type).replace(" ", "").lower()
+        return mapping.get(normalized, "other")
+
+    def _serialize_contributor_activity_event(
+        self, event: ContractEvent
+    ) -> Dict[str, Any]:
+        raw_summary = None
+        if isinstance(event.raw_data, dict):
+            raw_summary = event.raw_data.get("summary")
+
+        return {
+            "event_id": event.event_id,
+            "contract_id": event.contract_id,
+            "project_id": event.project_id,
+            "contributor": event.contributor,
+            "ledger": event.ledger,
+            "timestamp": event.timestamp.isoformat() if event.timestamp else None,
+            "event_type": event.event_type,
+            "category": self._contributor_activity_category(event.event_type),
+            "amount": event.amount,
+            "milestone_id": event.milestone_id,
+            "status": event.status,
+            "summary": raw_summary,
+            "topics": event.topics or [],
+            "raw_data": event.raw_data,
+        }
+
+    def get_contributor_activity_timeline(
+        self,
+        contributor: str,
+        project_id: Optional[int] = None,
+        limit: int = 200,
+        ascending: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Retrieve a contributor-centric activity timeline from raw contract events."""
+        try:
+            with self.get_session() as session:
+                stmt = select(ContractEvent).where(
+                    ContractEvent.contributor == contributor
+                )
+                if project_id is not None:
+                    stmt = stmt.where(ContractEvent.project_id == project_id)
+
+                order_clause = (
+                    ContractEvent.timestamp.asc().nulls_last()
+                    if ascending
+                    else ContractEvent.timestamp.desc().nulls_first()
+                )
+                stmt = stmt.order_by(order_clause, ContractEvent.ledger.asc()).limit(limit)
+
+                events = session.execute(stmt).scalars().all()
+                logger.debug(
+                    "Retrieved %d timeline events for contributor %s",
+                    len(events),
+                    contributor,
+                )
+                return [
+                    self._serialize_contributor_activity_event(event)
+                    for event in events
+                ]
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve contributor activity timeline: {e}")
+            return []
+
+    def get_contributor_activity_timelines(
+        self,
+        contributors: Optional[List[str]] = None,
+        project_id: Optional[int] = None,
+        limit_per_contributor: int = 200,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Return activity timelines for multiple contributors, grouped by contributor."""
+        try:
+            with self.get_session() as session:
+                if contributors is None:
+                    contributors = [
+                        row[0]
+                        for row in session.execute(
+                            select(ContractEvent.contributor)
+                            .where(ContractEvent.contributor.isnot(None))
+                            .distinct()
+                        ).all()
+                    ]
+
+            timelines: Dict[str, List[Dict[str, Any]]] = {}
+            for contributor in contributors:
+                timelines[contributor] = self.get_contributor_activity_timeline(
+                    contributor=contributor,
+                    project_id=project_id,
+                    limit=limit_per_contributor,
+                )
+            return timelines
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve contributor activity timelines: {e}")
+            return []
+
     def _compute_contributor_reputation_score(
         self, total_contributed: float, is_testnet: bool = False
     ) -> float:
@@ -2067,3 +2181,127 @@ class PostgresService:
                 "news_insights": 0,
                 "asset_trends": 0,
             }
+
+    # Metadata Drift Finding Methods (#882)
+
+    def save_metadata_drift_finding(
+        self, finding_data: Dict[str, Any]
+    ) -> Optional[MetadataDriftFinding]:
+        """
+        Persist a single metadata drift finding produced by the drift detector.
+
+        Args:
+            finding_data: Dictionary matching MetadataDriftFinding fields
+                (run_id, project_id, scope, milestone_id, field,
+                backend_value, chain_derived_value, severity, detected_at)
+
+        Returns:
+            MetadataDriftFinding object if successful, None otherwise
+        """
+        def _save():
+            with self.get_session() as session:
+                finding = MetadataDriftFinding(
+                    run_id=finding_data["run_id"],
+                    project_id=finding_data["project_id"],
+                    scope=finding_data["scope"],
+                    milestone_id=finding_data.get("milestone_id"),
+                    field=finding_data["field"],
+                    backend_value=finding_data.get("backend_value"),
+                    chain_derived_value=finding_data.get("chain_derived_value"),
+                    severity=finding_data.get("severity", "warning"),
+                    detected_at=finding_data.get("detected_at", datetime.utcnow()),
+                )
+                session.add(finding)
+                session.flush()
+                session.refresh(finding)
+                return finding
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save metadata drift finding: {e}")
+            return None
+
+    def save_metadata_drift_findings(
+        self, findings: List[Dict[str, Any]]
+    ) -> int:
+        """
+        Persist multiple metadata drift findings in a batch.
+
+        Args:
+            findings: List of finding data dictionaries
+
+        Returns:
+            Number of findings saved successfully
+        """
+        saved_count = 0
+        for finding_data in findings:
+            if self.save_metadata_drift_finding(finding_data):
+                saved_count += 1
+        logger.info(f"Saved {saved_count}/{len(findings)} metadata drift findings")
+        return saved_count
+
+    def get_metadata_drift_findings(
+        self,
+        run_id: Optional[str] = None,
+        project_id: Optional[int] = None,
+        scope: Optional[str] = None,
+        severity: Optional[str] = None,
+        reviewed: Optional[bool] = None,
+        limit: int = 200,
+    ) -> List[MetadataDriftFinding]:
+        """
+        Retrieve metadata drift findings with optional filters.
+        """
+        try:
+            with self.get_session() as session:
+                query = select(MetadataDriftFinding)
+
+                if run_id is not None:
+                    query = query.where(MetadataDriftFinding.run_id == run_id)
+                if project_id is not None:
+                    query = query.where(MetadataDriftFinding.project_id == project_id)
+                if scope is not None:
+                    query = query.where(MetadataDriftFinding.scope == scope)
+                if severity is not None:
+                    query = query.where(MetadataDriftFinding.severity == severity)
+                if reviewed is not None:
+                    query = query.where(MetadataDriftFinding.reviewed == reviewed)
+
+                query = query.order_by(desc(MetadataDriftFinding.detected_at)).limit(limit)
+                return session.execute(query).scalars().all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get metadata drift findings: {e}")
+            return []
+
+    def mark_metadata_drift_finding_reviewed(
+        self,
+        finding_id: int,
+        reviewed_by: str,
+        review_notes: Optional[str] = None,
+    ) -> bool:
+        """
+        Mark a metadata drift finding as reviewed.
+        """
+        try:
+            with self.get_session() as session:
+                finding = session.execute(
+                    select(MetadataDriftFinding).where(MetadataDriftFinding.id == finding_id)
+                ).scalar_one_or_none()
+
+                if not finding:
+                    logger.warning(f"Metadata drift finding {finding_id} not found")
+                    return False
+
+                finding.reviewed = True
+                finding.reviewed_at = datetime.utcnow()
+                finding.reviewed_by = reviewed_by
+                finding.review_notes = review_notes
+
+                logger.info(
+                    f"Marked metadata drift finding {finding_id} as reviewed by {reviewed_by}"
+                )
+                return True
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to mark metadata drift finding as reviewed: {e}")
+            return False
