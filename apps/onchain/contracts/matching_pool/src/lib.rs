@@ -559,12 +559,14 @@ impl MatchingPoolContract {
         if round.is_finalized {
             return Err(MatchingPoolError::RoundAlreadyFinalized);
         }
-        env.storage()
-            .persistent()
-            .set(&DataKey::RoundContributorCap(round_id), &per_contributor_cap);
-        env.storage()
-            .persistent()
-            .set(&DataKey::RoundContributionCap(round_id), &round_contribution_cap);
+        env.storage().persistent().set(
+            &DataKey::RoundContributorCap(round_id),
+            &per_contributor_cap,
+        );
+        env.storage().persistent().set(
+            &DataKey::RoundContributionCap(round_id),
+            &round_contribution_cap,
+        );
         events::RoundCapsSetEvent {
             round_id,
             per_contributor_cap,

@@ -7,8 +7,8 @@ pub enum DataKey {
     AssetPrice(Address),
     AssetOracle(Address),
     AssetDecimals(Address),
-    PriceTimestamp(Address),   // asset -> u64 (ledger timestamp of last set_price call)
-    StalenessWindow(Address),  // asset -> u64 (max age in seconds; 0 = no staleness check)
+    PriceTimestamp(Address), // asset -> u64 (ledger timestamp of last set_price call)
+    StalenessWindow(Address), // asset -> u64 (max age in seconds; 0 = no staleness check)
     PriceInvalidated(Address), // asset -> bool (explicit admin invalidation flag)
 }
 

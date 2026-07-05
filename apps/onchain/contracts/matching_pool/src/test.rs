@@ -403,13 +403,8 @@ fn setup_capped_round<'a>(
     admin: &Address,
     token_addr: &Address,
 ) -> u64 {
-    let round_id = client.create_round(
-        admin,
-        &symbol_short!("CAP"),
-        token_addr,
-        &1000u64,
-        &3000u64,
-    );
+    let round_id =
+        client.create_round(admin, &symbol_short!("CAP"), token_addr, &1000u64, &3000u64);
     client.approve_project(admin, &round_id, &1u64);
     round_id
 }

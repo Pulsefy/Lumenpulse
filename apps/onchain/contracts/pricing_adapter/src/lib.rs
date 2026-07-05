@@ -144,11 +144,7 @@ impl PricingAdapterContract {
             .get(&DataKey::PriceInvalidated(asset.clone()))
             .unwrap_or(false);
         let is_stale = staleness_window > 0
-            && env
-                .ledger()
-                .timestamp()
-                .saturating_sub(timestamp)
-                > staleness_window;
+            && env.ledger().timestamp().saturating_sub(timestamp) > staleness_window;
         Ok(PriceData {
             price,
             timestamp,
