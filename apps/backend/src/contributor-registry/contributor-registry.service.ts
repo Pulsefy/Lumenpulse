@@ -75,7 +75,9 @@ export class ContributorRegistryService {
   }
 
   private get networkPassphrase(): string {
-    return config.stellar.network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
+    return config.stellar.network === 'mainnet'
+      ? Networks.PUBLIC
+      : Networks.TESTNET;
   }
 
   private tierFromScore(score: number): string {
@@ -108,7 +110,9 @@ export class ContributorRegistryService {
    * Real mode: builds an unsigned Soroban transaction and returns the XDR for
    * the contributor to sign with their Stellar wallet before submitting.
    */
-  async buildRegistrationXdr(dto: RegisterContributorDto): Promise<RegistrationXdrResponseDto> {
+  async buildRegistrationXdr(
+    dto: RegisterContributorDto,
+  ): Promise<RegistrationXdrResponseDto> {
     if (this.useMock) {
       return this.mockRegister(dto);
     }
@@ -149,14 +153,18 @@ export class ContributorRegistryService {
    *
    * Mock mode: stores the contributor immediately and returns a mock receipt.
    */
-  async registerWithSignature(dto: RegisterWithSigDto): Promise<SubmitResponseDto> {
+  async registerWithSignature(
+    dto: RegisterWithSigDto,
+  ): Promise<SubmitResponseDto> {
     if (this.useMock) {
       return this.mockRegisterWithSig(dto);
     }
 
     const contractId = this.requireContractId();
     const relayer = this.relayerKeypair();
-    const relayerAccount = await this.sorobanRpcClient.getAccount(relayer.publicKey());
+    const relayerAccount = await this.sorobanRpcClient.getAccount(
+      relayer.publicKey(),
+    );
     const contract = new Contract(contractId);
 
     // The `signature` parameter is arbitrary bytes attached for auditability;
@@ -216,7 +224,9 @@ export class ContributorRegistryService {
 
   // ── Lookups ───────────────────────────────────────────────────────────────────
 
-  async getContributorByAddress(address: string): Promise<ContributorResponseDto> {
+  async getContributorByAddress(
+    address: string,
+  ): Promise<ContributorResponseDto> {
     return this.cacheService.getOrSet(
       `${CACHE_PREFIX_ADDRESS}:${address}`,
       () => this.fetchContributorByAddress(address),
@@ -224,7 +234,9 @@ export class ContributorRegistryService {
     );
   }
 
-  async getContributorByGithub(githubHandle: string): Promise<ContributorResponseDto> {
+  async getContributorByGithub(
+    githubHandle: string,
+  ): Promise<ContributorResponseDto> {
     return this.cacheService.getOrSet(
       `${CACHE_PREFIX_GITHUB}:${githubHandle.toLowerCase()}`,
       () => this.fetchContributorByGithub(githubHandle),
@@ -255,12 +267,18 @@ export class ContributorRegistryService {
 
   // ── Private mock implementations ──────────────────────────────────────────────
 
-  private mockRegister(dto: RegisterContributorDto): RegistrationXdrResponseDto {
+  private mockRegister(
+    dto: RegisterContributorDto,
+  ): RegistrationXdrResponseDto {
     if (this.mockContributors.has(dto.address)) {
-      throw new ConflictException(`Contributor ${dto.address} is already registered`);
+      throw new ConflictException(
+        `Contributor ${dto.address} is already registered`,
+      );
     }
     if (this.mockGithubIndex.has(dto.githubHandle.toLowerCase())) {
-      throw new ConflictException(`GitHub handle '${dto.githubHandle}' is already taken`);
+      throw new ConflictException(
+        `GitHub handle '${dto.githubHandle}' is already taken`,
+      );
     }
 
     this.mockContributors.set(dto.address, {
@@ -271,7 +289,9 @@ export class ContributorRegistryService {
     });
     this.mockGithubIndex.set(dto.githubHandle.toLowerCase(), dto.address);
 
-    this.logger.log(`[mock] Registered contributor address=${dto.address} handle=${dto.githubHandle}`);
+    this.logger.log(
+      `[mock] Registered contributor address=${dto.address} handle=${dto.githubHandle}`,
+    );
 
     return {
       unsignedXdr: 'MOCK_UNSIGNED_XDR',
@@ -281,10 +301,14 @@ export class ContributorRegistryService {
 
   private mockRegisterWithSig(dto: RegisterWithSigDto): SubmitResponseDto {
     if (this.mockContributors.has(dto.address)) {
-      throw new ConflictException(`Contributor ${dto.address} is already registered`);
+      throw new ConflictException(
+        `Contributor ${dto.address} is already registered`,
+      );
     }
     if (this.mockGithubIndex.has(dto.githubHandle.toLowerCase())) {
-      throw new ConflictException(`GitHub handle '${dto.githubHandle}' is already taken`);
+      throw new ConflictException(
+        `GitHub handle '${dto.githubHandle}' is already taken`,
+      );
     }
 
     const nonce = this.mockNonces.get(dto.address) ?? 0;
@@ -310,13 +334,20 @@ export class ContributorRegistryService {
 
   // ── Private real-chain fetchers ────────────────────────────────────────────────
 
-  private async fetchContributorByAddress(address: string): Promise<ContributorResponseDto> {
+  private async fetchContributorByAddress(
+    address: string,
+  ): Promise<ContributorResponseDto> {
     if (this.useMock) {
       const contributor = this.mockContributors.get(address);
       if (!contributor) {
-        throw new NotFoundException(`Contributor with address ${address} not found`);
+        throw new NotFoundException(
+          `Contributor with address ${address} not found`,
+        );
       }
-      return { ...contributor, tier: this.tierFromScore(contributor.reputationScore) };
+      return {
+        ...contributor,
+        tier: this.tierFromScore(contributor.reputationScore),
+      };
     }
 
     const contractId = this.requireContractId();
@@ -328,7 +359,9 @@ export class ContributorRegistryService {
       fee: BASE_FEE,
       networkPassphrase: this.networkPassphrase,
     })
-      .addOperation(contract.call('get_contributor', new Address(address).toScVal()))
+      .addOperation(
+        contract.call('get_contributor', new Address(address).toScVal()),
+      )
       .setTimeout(30)
       .build();
 
@@ -336,24 +369,35 @@ export class ContributorRegistryService {
     try {
       simulation = await this.sorobanRpcClient.simulateTransaction(tx);
     } catch (err) {
-      if (err instanceof SorobanRpcError && err.code === SorobanErrorCode.SIMULATION_FAILED) {
-        throw new NotFoundException(`Contributor with address ${address} not found`);
+      if (
+        err instanceof SorobanRpcError &&
+        err.code === SorobanErrorCode.SIMULATION_FAILED
+      ) {
+        throw new NotFoundException(
+          `Contributor with address ${address} not found`,
+        );
       }
       throw err;
     }
 
-    if (!simulation.result) {
-      throw new NotFoundException(`Contributor with address ${address} not found`);
+    if (!rpc.Api.isSimulationSuccess(simulation) || !simulation.result) {
+      throw new NotFoundException(
+        `Contributor with address ${address} not found`,
+      );
     }
 
     return this.parseContributorData(simulation.result.retval);
   }
 
-  private async fetchContributorByGithub(githubHandle: string): Promise<ContributorResponseDto> {
+  private async fetchContributorByGithub(
+    githubHandle: string,
+  ): Promise<ContributorResponseDto> {
     if (this.useMock) {
       const address = this.mockGithubIndex.get(githubHandle.toLowerCase());
       if (!address) {
-        throw new NotFoundException(`Contributor with GitHub handle '${githubHandle}' not found`);
+        throw new NotFoundException(
+          `Contributor with GitHub handle '${githubHandle}' not found`,
+        );
       }
       // Re-use the address fetcher (no extra network call in mock mode)
       return this.fetchContributorByAddress(address);
@@ -381,24 +425,35 @@ export class ContributorRegistryService {
     try {
       simulation = await this.sorobanRpcClient.simulateTransaction(tx);
     } catch (err) {
-      if (err instanceof SorobanRpcError && err.code === SorobanErrorCode.SIMULATION_FAILED) {
-        throw new NotFoundException(`Contributor with GitHub handle '${githubHandle}' not found`);
+      if (
+        err instanceof SorobanRpcError &&
+        err.code === SorobanErrorCode.SIMULATION_FAILED
+      ) {
+        throw new NotFoundException(
+          `Contributor with GitHub handle '${githubHandle}' not found`,
+        );
       }
       throw err;
     }
 
-    if (!simulation.result) {
-      throw new NotFoundException(`Contributor with GitHub handle '${githubHandle}' not found`);
+    if (!rpc.Api.isSimulationSuccess(simulation) || !simulation.result) {
+      throw new NotFoundException(
+        `Contributor with GitHub handle '${githubHandle}' not found`,
+      );
     }
 
     return this.parseContributorData(simulation.result.retval);
   }
 
-  private async fetchReputation(address: string): Promise<ReputationResponseDto> {
+  private async fetchReputation(
+    address: string,
+  ): Promise<ReputationResponseDto> {
     if (this.useMock) {
       const contributor = this.mockContributors.get(address);
       if (!contributor) {
-        throw new NotFoundException(`Contributor with address ${address} not found`);
+        throw new NotFoundException(
+          `Contributor with address ${address} not found`,
+        );
       }
       return {
         address,
@@ -416,7 +471,9 @@ export class ContributorRegistryService {
       fee: BASE_FEE,
       networkPassphrase: this.networkPassphrase,
     })
-      .addOperation(contract.call('get_reputation', new Address(address).toScVal()))
+      .addOperation(
+        contract.call('get_reputation', new Address(address).toScVal()),
+      )
       .setTimeout(30)
       .build();
 
@@ -424,14 +481,21 @@ export class ContributorRegistryService {
     try {
       simulation = await this.sorobanRpcClient.simulateTransaction(tx);
     } catch (err) {
-      if (err instanceof SorobanRpcError && err.code === SorobanErrorCode.SIMULATION_FAILED) {
-        throw new NotFoundException(`Contributor with address ${address} not found`);
+      if (
+        err instanceof SorobanRpcError &&
+        err.code === SorobanErrorCode.SIMULATION_FAILED
+      ) {
+        throw new NotFoundException(
+          `Contributor with address ${address} not found`,
+        );
       }
       throw err;
     }
 
-    if (!simulation.result) {
-      throw new NotFoundException(`Contributor with address ${address} not found`);
+    if (!rpc.Api.isSimulationSuccess(simulation) || !simulation.result) {
+      throw new NotFoundException(
+        `Contributor with address ${address} not found`,
+      );
     }
 
     const score = Number(scValToNative(simulation.result.retval) as bigint);
@@ -457,7 +521,9 @@ export class ContributorRegistryService {
       fee: BASE_FEE,
       networkPassphrase: this.networkPassphrase,
     })
-      .addOperation(contract.call('get_registration_nonce', new Address(address).toScVal()))
+      .addOperation(
+        contract.call('get_registration_nonce', new Address(address).toScVal()),
+      )
       .setTimeout(30)
       .build();
 
@@ -493,7 +559,9 @@ export class ContributorRegistryService {
       reputationScore: score,
       tier: this.tierFromScore(score),
       // Soroban timestamps are Unix seconds; convert to ISO string
-      registeredAt: new Date(Number(data.registered_timestamp) * 1000).toISOString(),
+      registeredAt: new Date(
+        Number(data.registered_timestamp) * 1000,
+      ).toISOString(),
     };
   }
 }
