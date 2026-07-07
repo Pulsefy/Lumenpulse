@@ -1305,6 +1305,119 @@ class PostgresService:
             logger.error(f"Failed to retrieve project contributors: {e}")
             return []
 
+    def _contributor_activity_category(self, event_type: Optional[str]) -> str:
+        """Map raw contract event types into contributor activity categories."""
+        if not event_type:
+            return "other"
+
+        mapping = {
+            "depositevent": "contribution",
+            "contributionrecordedevent": "contribution",
+            "contributionrefundableevent": "contribution_reversal",
+            "contributionclawbackedevent": "contribution_reversal",
+            "reward_granted": "reward",
+            "submission_minted": "reward",
+            "milestoneapprovedevent": "milestone",
+            "contributorregisteredevent": "registry",
+            "projectregisteredevent": "registry",
+            "moduleregisteredevent": "registry",
+            "providerregisteredevent": "registry",
+        }
+        normalized = str(event_type).replace(" ", "").lower()
+        return mapping.get(normalized, "other")
+
+    def _serialize_contributor_activity_event(
+        self, event: ContractEvent
+    ) -> Dict[str, Any]:
+        raw_summary = None
+        if isinstance(event.raw_data, dict):
+            raw_summary = event.raw_data.get("summary")
+
+        return {
+            "event_id": event.event_id,
+            "contract_id": event.contract_id,
+            "project_id": event.project_id,
+            "contributor": event.contributor,
+            "ledger": event.ledger,
+            "timestamp": event.timestamp.isoformat() if event.timestamp else None,
+            "event_type": event.event_type,
+            "category": self._contributor_activity_category(event.event_type),
+            "amount": event.amount,
+            "milestone_id": event.milestone_id,
+            "status": event.status,
+            "summary": raw_summary,
+            "topics": event.topics or [],
+            "raw_data": event.raw_data,
+        }
+
+    def get_contributor_activity_timeline(
+        self,
+        contributor: str,
+        project_id: Optional[int] = None,
+        limit: int = 200,
+        ascending: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Retrieve a contributor-centric activity timeline from raw contract events."""
+        try:
+            with self.get_session() as session:
+                stmt = select(ContractEvent).where(
+                    ContractEvent.contributor == contributor
+                )
+                if project_id is not None:
+                    stmt = stmt.where(ContractEvent.project_id == project_id)
+
+                order_clause = (
+                    ContractEvent.timestamp.asc().nulls_last()
+                    if ascending
+                    else ContractEvent.timestamp.desc().nulls_first()
+                )
+                stmt = stmt.order_by(order_clause, ContractEvent.ledger.asc()).limit(limit)
+
+                events = session.execute(stmt).scalars().all()
+                logger.debug(
+                    "Retrieved %d timeline events for contributor %s",
+                    len(events),
+                    contributor,
+                )
+                return [
+                    self._serialize_contributor_activity_event(event)
+                    for event in events
+                ]
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve contributor activity timeline: {e}")
+            return []
+
+    def get_contributor_activity_timelines(
+        self,
+        contributors: Optional[List[str]] = None,
+        project_id: Optional[int] = None,
+        limit_per_contributor: int = 200,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Return activity timelines for multiple contributors, grouped by contributor."""
+        try:
+            with self.get_session() as session:
+                if contributors is None:
+                    contributors = [
+                        row[0]
+                        for row in session.execute(
+                            select(ContractEvent.contributor)
+                            .where(ContractEvent.contributor.isnot(None))
+                            .distinct()
+                        ).all()
+                    ]
+
+            timelines: Dict[str, List[Dict[str, Any]]] = {}
+            for contributor in contributors:
+                timelines[contributor] = self.get_contributor_activity_timeline(
+                    contributor=contributor,
+                    project_id=project_id,
+                    limit=limit_per_contributor,
+                )
+            return timelines
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve contributor activity timelines: {e}")
+            return []
+
     def _compute_contributor_reputation_score(
         self, total_contributed: float, is_testnet: bool = False
     ) -> float:

@@ -55,12 +55,13 @@ import { SignalsModule } from './signals/signals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppConfigModule } from './config/config.module';
 import { CrowdfundModule } from './crowdfund/crowdfund.module';
+import { ContributorRegistryModule } from './contributor-registry/contributor-registry.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
 import { SorobanEventsModule } from './soroban-events/soroban-events.module';
 import { TreasuryModule } from './treasury/treasury.module';
 import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
-import { AdminAuditModule } from './admin-audit/admin-audit.module';
+import { ContractsModule } from './contracts/contracts.module';
 
 @Module({
   imports: [
@@ -125,12 +126,13 @@ import { AdminAuditModule } from './admin-audit/admin-audit.module';
     SearchModule,
     FeatureFlagsModule,
     CrowdfundModule,
+    ContributorRegistryModule,
     AppConfigModule,
     AuditModule,
     SorobanEventsModule,
     TreasuryModule,
     VestingWalletModule,
-    AdminAuditModule,
+    ContractsModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
