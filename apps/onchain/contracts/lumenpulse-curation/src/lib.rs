@@ -8,6 +8,7 @@ mod types;
 pub use errors::CurationError;
 pub use types::{ProjectMetadata, ProjectStatus, ProposalState, VoteRecord};
 
+use cross_contract_view_helpers::{invoke_view0, invoke_view1};
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
 use events::*;
@@ -269,23 +270,29 @@ impl CommunityCurationContract {
 
     /// Cross-contract call into contributor-registry to read a voter's reputation.
     fn get_reputation(env: &Env, voter: &Address) -> u64 {
-        // contributor-registry exposes: get_reputation(address) -> u64
         let registry = get_contributor_registry(env);
-        env.invoke_contract(
+        match invoke_view1(
+            env,
             &registry,
             &soroban_sdk::Symbol::new(env, "get_reputation"),
-            soroban_sdk::vec![env, voter.to_val()],
-        )
+            voter.clone(),
+        ) {
+            Ok(score) => score,
+            Err(_) => 0,
+        }
     }
 
     /// Cross-contract call to read the sum of all reputations (total supply proxy).
     fn get_total_reputation(env: &Env) -> u64 {
         let registry = get_contributor_registry(env);
-        env.invoke_contract(
+        match invoke_view0(
+            env,
             &registry,
             &soroban_sdk::Symbol::new(env, "total_reputation"),
-            soroban_sdk::vec![env],
-        )
+        ) {
+            Ok(total) => total,
+            Err(_) => 0,
+        }
     }
 
     /// Check whether YES votes cross the threshold; update status in place.

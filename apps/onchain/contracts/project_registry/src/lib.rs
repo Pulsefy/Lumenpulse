@@ -4,9 +4,10 @@ mod errors;
 mod events;
 mod storage;
 
+use cross_contract_view_helpers::invoke_view1;
 use errors::RegistryError;
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal, Symbol};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
 use storage::{DataKey, ProjectEntry, RegistryConfig, VerificationStatus, WeightMode};
 
 #[contract]
@@ -46,16 +47,16 @@ impl ProjectRegistryContract {
     fn resolve_weight(env: &Env, config: &RegistryConfig, voter: &Address) -> i128 {
         let weight = match config.weight_mode {
             WeightMode::Reputation => {
-                // Read reputation_score from contributor_registry via cross-contract call.
-                // The contributor_registry exposes get_reputation(contributor) -> u64.
-                // We call it generically via invoke_contract.
                 if let Some(ref registry) = config.contributor_registry {
-                    let score: u64 = env.invoke_contract(
+                    match invoke_view1::<Address, i128>(
+                        env,
                         registry,
                         &Symbol::new(env, "get_reputation"),
-                        soroban_sdk::vec![env, voter.into_val(env)],
-                    );
-                    score as i128
+                        voter.clone(),
+                    ) {
+                        Ok(score) => score,
+                        Err(_) => 0,
+                    }
                 } else {
                     0
                 }
@@ -72,15 +73,20 @@ impl ProjectRegistryContract {
                 // We check registration via contributor_registry if configured,
                 // otherwise grant weight 1 to any caller.
                 if let Some(ref registry) = config.contributor_registry {
-                    let exists: bool = env.invoke_contract(
+                    match invoke_view1::<Address, bool>(
+                        env,
                         registry,
                         &Symbol::new(env, "is_registered"),
-                        soroban_sdk::vec![env, voter.into_val(env)],
-                    );
-                    if exists {
-                        1
-                    } else {
-                        0
+                        voter.clone(),
+                    ) {
+                        Ok(exists) => {
+                            if exists {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        Err(_) => 0,
                     }
                 } else {
                     1
