@@ -25,6 +25,7 @@ from src.analytics.project_verification_trend import (
 )
 from src.db.postgres_service import PostgresService
 from src.ingestion.rpc_benchmark import RPCProviderBenchmark
+from src.ingestion.contract_lag_tracker import run_contract_lag_cycle
 from src.round_analyzer import _round_analyzer_job
 from src.metadata_drift_detector import MetadataDriftDetector
 
@@ -218,6 +219,22 @@ def _ingestion_alerting_job() -> None:
         logger.error("Ingestion alerting job failed: %s", exc, exc_info=True)
 
 
+def _contract_lag_tracking_job() -> None:
+    """Measure and track ingestion lag for all contract domains (#878).
+
+    Measures lag per contract (registry, vault, matching pool, treasury, vesting)
+    and emits Prometheus metrics. Errors are caught so the scheduler keeps running.
+    """
+    try:
+        import asyncio
+        
+        db_service = PostgresService()
+        asyncio.run(run_contract_lag_cycle(db_service))
+        logger.debug("Contract lag tracking cycle completed")
+    except Exception as exc:
+        logger.error("Contract lag tracking job failed: %s", exc, exc_info=True)
+
+
 def _project_verification_trend_job() -> None:
     """Scheduled wrapper for ProjectVerificationTrendAnalyzer (#885).
 
@@ -334,6 +351,16 @@ class AnalyticsScheduler:
                 trigger=IntervalTrigger(minutes=alerting_interval),
                 id="ingestion_lag_alerting",
                 name="Indexer Lag and Source Failure Alerting",
+                replace_existing=True,
+            )
+
+            # ── Contract-specific ingestion lag tracking: every 5 minutes (#878) ──
+            contract_lag_interval = int(os.getenv("CONTRACT_LAG_INTERVAL_MINUTES", "5"))
+            self.scheduler.add_job(
+                func=_contract_lag_tracking_job,
+                trigger=IntervalTrigger(minutes=contract_lag_interval),
+                id="contract_lag_tracking",
+                name="Contract-Specific Ingestion Lag Tracking",
                 replace_existing=True,
             )
 

@@ -140,6 +140,29 @@ class HealthResponse(BaseModel):
     service: str
 
 
+class ContractLagResponse(BaseModel):
+    """Contract-specific ingestion lag metrics response."""
+    contract_domain: str
+    lag_seconds: float
+    severity: str  # healthy | warning | critical
+    last_processed_ledger: int
+    last_processed_timestamp: Optional[str] = None
+    event_count: int
+    warning_threshold_seconds: float
+    critical_threshold_seconds: float
+
+
+class ContractLagStatusResponse(BaseModel):
+    """Overall contract ingestion lag status."""
+    timestamp: str
+    total_domains: int
+    healthy_domains: int
+    warning_domains: int
+    critical_domains: int
+    contracts: Dict[str, ContractLagResponse]
+    domain_config: Dict[str, Dict[str, Any]]  # Configuration for each domain
+
+
 class NewsArticleResponse(BaseModel):
     article_id: str
     title: str
@@ -187,6 +210,87 @@ async def metrics():
     """Expose Prometheus metrics"""
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
+
+@app.get("/contract-lag", response_model=ContractLagStatusResponse)
+@limiter.limit("30/minute") if limiter else lambda x: x
+async def get_contract_lag_status(request: Request) -> ContractLagStatusResponse:
+    """Get contract-specific ingestion lag metrics for all domains.
+    
+    Returns lag metrics for registry, vault, matching_pool, treasury, and vesting
+    contracts. Each domain shows current lag in seconds and severity level.
+    Useful for dashboards and alerting systems.
+    
+    Response includes:
+    - Current lag per contract domain
+    - Alert severity (healthy/warning/critical)
+    - Last processed ledger and timestamp
+    - Configured thresholds
+    - Domain configuration (for understanding setup)
+    """
+    try:
+        from src.ingestion.contract_lag_tracker import (
+            measure_all_contract_lags,
+            get_contract_domain_config,
+            AlertSeverity,
+        )
+        
+        if postgres_service is None:
+            raise HTTPException(status_code=503, detail="Database service unavailable")
+        
+        # Measure lag for all domains
+        results = await measure_all_contract_lags(postgres_service)
+        
+        # Build response
+        contracts = {}
+        severity_counts = {"healthy": 0, "warning": 0, "critical": 0}
+        
+        for domain, snapshot in results.items():
+            if snapshot:
+                contract_data = ContractLagResponse(
+                    contract_domain=domain,
+                    lag_seconds=snapshot.lag_seconds,
+                    severity=snapshot.severity.value,
+                    last_processed_ledger=snapshot.last_processed_ledger,
+                    last_processed_timestamp=(
+                        snapshot.last_processed_timestamp.isoformat()
+                        if snapshot.last_processed_timestamp else None
+                    ),
+                    event_count=snapshot.event_count,
+                    warning_threshold_seconds=snapshot.warning_threshold_seconds,
+                    critical_threshold_seconds=snapshot.critical_threshold_seconds,
+                )
+                contracts[domain] = contract_data
+                severity_counts[snapshot.severity.value] += 1
+        
+        # Get domain configuration
+        domain_config = get_contract_domain_config()
+        
+        logger.info(
+            "Contract lag status requested | domains_queried=%d | "
+            "healthy=%d | warning=%d | critical=%d | client_ip=%s",
+            len(results),
+            severity_counts["healthy"],
+            severity_counts["warning"],
+            severity_counts["critical"],
+            request.client.host,
+        )
+        
+        return ContractLagStatusResponse(
+            timestamp=datetime.now().isoformat(),
+            total_domains=len(results),
+            healthy_domains=severity_counts["healthy"],
+            warning_domains=severity_counts["warning"],
+            critical_domains=severity_counts["critical"],
+            contracts=contracts,
+            domain_config=domain_config,
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Error retrieving contract lag status: %s", str(exc), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch contract lag metrics")
+
 @app.get("/")
 @limiter.limit("20/minute") if limiter else lambda x: x
 async def root(request: Request) -> Dict[str, Any]:
@@ -197,6 +301,7 @@ async def root(request: Request) -> Dict[str, Any]:
         "endpoints": {
             "GET /health": "Health check (no auth required)",
             "GET /metrics": "Prometheus metrics (no auth required)",
+            "GET /contract-lag": "Contract-specific ingestion lag metrics (no auth required)",
             "GET /news": "Get recent news with optional ?entity=... filter (requires X-API-Key header)",
             "POST /analyze": "Analyze text sentiment (requires X-API-Key header)",
             "GET /analyze": "Get asset-specific sentiment analysis (requires X-API-Key header)",
@@ -205,7 +310,7 @@ async def root(request: Request) -> Dict[str, Any]:
             "GET /sentiment/legend": "Get colour legend for sentiment indicators (no auth required)",
         },
         "note": "Returns sentiment score between -1 (negative) and 1 (positive)",
-        "security": "All endpoints except /health and /metrics require X-API-Key header",
+        "security": "All endpoints except /health, /metrics, and /contract-lag require X-API-Key header",
     }
 
 
