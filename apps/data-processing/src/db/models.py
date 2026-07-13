@@ -525,33 +525,6 @@ class OnchainKpiSnapshot(Base):
         )
 
 
-class MetadataDriftFinding(Base):
-    """Stores metadata drift findings between backend metadata and on-chain data."""
-
-    __tablename__ = "metadata_drift_findings"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    project_id = Column(BigInteger, nullable=False, index=True)
-    scope = Column(String(50), nullable=False, index=True)
-    field = Column(String(100), nullable=False, index=True)
-    severity = Column(String(20), nullable=False, index=True)
-    expected_value = Column(Text, nullable=True)
-    observed_value = Column(Text, nullable=True)
-    created_at = Column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    reviewed = Column(Boolean, nullable=False, default=False)
-    review_notes = Column(Text, nullable=True)
-    reviewed_at = Column(DateTime(timezone=True), nullable=True)
-    reviewed_by = Column(String(255), nullable=True)
-
-    def __repr__(self):
-        return (
-            f"<MetadataDriftFinding(project_id={self.project_id}, scope={self.scope}, "
-            f"field={self.field}, severity={self.severity}, reviewed={self.reviewed})>"
-        )
-
-
 class RoundAnomalySignal(Base):
     """
     Stores anomaly signals detected in quadratic funding rounds for maintainer review.
