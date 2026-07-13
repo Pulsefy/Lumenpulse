@@ -1,0 +1,85 @@
+diff --git a/apps/data-processing/src/scheduler.py b/apps/data-processing/src/scheduler.py
+--- a/apps/data-processing/src/scheduler.py
++++ b/apps/data-processing/src/scheduler.py
+@@
+ def _onchain_kpi_snapshot_job() -> None:
+     """Scheduled wrapper for daily on-chain KPI snapshots (#877)."""
+     try:
+         run_onchain_kpi_snapshot_job()
+     except Exception as exc:
+         logger.error("On-chain KPI snapshot job failed: %s", exc, exc_info=True)
+ 
++
++def _metadata_drift_detector_job() -> None:
++    """Scheduled wrapper for metadata drift detection (#882)."""
++    try:
++        logger.info("Metadata drift detector job placeholder executed")
++    except Exception as exc:
++        logger.error("Metadata drift detector job failed: %s", exc, exc_info=True)
++
+ 
+ def _contributor_reputation_snapshot_job() -> None:
+@@
+             # ── On-chain KPI Snapshot: daily at 00:05 UTC (#877) ─────────────
+             self.scheduler.add_job(
+                 func=_onchain_kpi_snapshot_job,
+                 trigger=CronTrigger(hour=0, minute=5, timezone="UTC"),
+                 id="onchain_kpi_snapshot_daily",
+                 name="On-chain KPI Daily Snapshot",
+                 replace_existing=True,
+             )
++
++            # ── Metadata Drift Detection: every 6 hours (#882) ───────────
++            self.scheduler.add_job(
++                func=_metadata_drift_detector_job,
++                trigger=IntervalTrigger(hours=6),
++                id="metadata_drift_detection",
++                name="Metadata Drift Detector (backend vs on-chain)",
++                replace_existing=True,
++            )
+ 
+             self.scheduler.start()
+diff --git a/apps/data-processing/src/db/models.py b/apps/data-processing/src/db/models.py
+--- a/apps/data-processing/src/db/models.py
++++ b/apps/data-processing/src/db/models.py
+@@
+ class OnchainKpiSnapshot(Base):
+@@
+     def __repr__(self):
+         return (
+             f"<OnchainKpiSnapshot(period={self.period_date}, "
+             f"tvl={self.tvl_xlm:.2f}, volume={self.volume_xlm:.2f}, "
+             f"rounds={self.active_rounds}, contributions={self.contribution_count})>"
+         )
++
++
++class MetadataDriftFinding(Base):
++    """
++    Stores metadata drift findings between backend metadata and on-chain data.
++    """
++
++    __tablename__ = "metadata_drift_findings"
++
++    id = Column(Integer, primary_key=True, autoincrement=True)
++    project_id = Column(BigInteger, nullable=False, index=True)
++    scope = Column(String(50), nullable=False, index=True)
++    field = Column(String(100), nullable=False, index=True)
++    severity = Column(String(20), nullable=False, index=True)
++    expected_value = Column(Text, nullable=True)
++    observed_value = Column(Text, nullable=True)
++    created_at = Column(
++        DateTime(timezone=True), server_default=func.now(), nullable=False
++    )
++    reviewed = Column(Boolean, nullable=False, default=False)
++    review_notes = Column(Text, nullable=True)
++    reviewed_at = Column(DateTime(timezone=True), nullable=True)
++    reviewed_by = Column(String(255), nullable=True)
++
++    def __repr__(self):
++        return (
++            f"<MetadataDriftFinding(project_id={self.project_id}, scope={self.scope}, "
++            f"field={self.field}, severity={self.severity}, reviewed={self.reviewed})>"
++        )
+ 
+ 
+ class RoundAnomalySignal(Base):

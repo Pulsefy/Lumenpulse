@@ -487,6 +487,44 @@ class AssetTrend(Base):
         return f"<AssetTrend(asset={self.asset}, metric={self.metric_name}, trend={self.trend_direction})>"
 
 
+class OnchainKpiSnapshot(Base):
+    """
+    Daily snapshot of core on-chain KPIs for trend analysis.
+
+    Schema
+    ------
+    period_date   DATE (UTC)    – calendar day the snapshot covers (unique key)
+    tvl_xlm       FLOAT         – total value locked across monitored contracts (XLM)
+    volume_xlm    FLOAT         – 24-h payment/trade volume (XLM)
+    active_rounds INT           – quadratic-funding rounds with status 'active'
+    contribution_count INT      – total Contribute events ingested for the period
+    extra_data    JSON          – reserved for future KPIs without a schema change
+    captured_at   DATETIME      – wall-clock time the snapshot was written
+    created_at    DATETIME      – row insertion time (server default)
+    """
+
+    __tablename__ = "onchain_kpi_snapshots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    period_date = Column(String(10), nullable=False, unique=True, index=True)  # YYYY-MM-DD
+    tvl_xlm = Column(Float, nullable=False, default=0.0)
+    volume_xlm = Column(Float, nullable=False, default=0.0)
+    active_rounds = Column(Integer, nullable=False, default=0)
+    contribution_count = Column(Integer, nullable=False, default=0)
+    extra_data = Column(JSON, nullable=True)
+    captured_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __repr__(self):
+        return (
+            f"<OnchainKpiSnapshot(period={self.period_date}, "
+            f"tvl={self.tvl_xlm:.2f}, volume={self.volume_xlm:.2f}, "
+            f"rounds={self.active_rounds}, contributions={self.contribution_count})>"
+        )
+
+
 class MetadataDriftFinding(Base):
     """
     Stores individual drift findings produced by the metadata drift detector

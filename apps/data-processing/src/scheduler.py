@@ -26,6 +26,7 @@ from src.analytics.project_verification_trend import (
 from src.db.postgres_service import PostgresService
 from src.ingestion.rpc_benchmark import RPCProviderBenchmark
 from src.round_analyzer import _round_analyzer_job
+from src.snapshots.onchain_kpi_snapshot import run_onchain_kpi_snapshot_job
 from src.metadata_drift_detector import MetadataDriftDetector
 
 
@@ -250,6 +251,22 @@ def _rpc_provider_benchmark_job() -> None:
     except Exception as exc:
         logger.error("RPC provider benchmark job failed: %s", exc, exc_info=True)
 
+def _onchain_kpi_snapshot_job() -> None:
+    """Scheduled wrapper for daily on-chain KPI snapshots (#877)."""
+    try:
+        run_onchain_kpi_snapshot_job()
+    except Exception as exc:
+        logger.error("On-chain KPI snapshot job failed: %s", exc, exc_info=True)
+
+
+def _metadata_drift_detector_job() -> None:
+    """Scheduled wrapper for metadata drift detection (#882)."""
+    try:
+        logger.info("Metadata drift detector job placeholder executed")
+    except Exception as exc:
+        logger.error("Metadata drift detector job failed: %s", exc, exc_info=True)
+
+
 def _contributor_reputation_snapshot_job() -> None:
     """Scheduled wrapper for building contributor reputation snapshots.
 
@@ -379,6 +396,15 @@ class AnalyticsScheduler:
                 trigger=CronTrigger(hour=3, minute=30, timezone="UTC"),
                 id="contributor_reputation_snapshot_daily",
                 name="Contributor Reputation Snapshot Builder",
+                replace_existing=True,
+            )
+
+            # ── On-chain KPI Snapshot: daily at 00:05 UTC (#877) ─────────────
+            self.scheduler.add_job(
+                func=_onchain_kpi_snapshot_job,
+                trigger=CronTrigger(hour=0, minute=5, timezone="UTC"),
+                id="onchain_kpi_snapshot_daily",
+                name="On-chain KPI Daily Snapshot",
                 replace_existing=True,
             )
 

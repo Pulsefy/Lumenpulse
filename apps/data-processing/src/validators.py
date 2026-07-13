@@ -9,7 +9,7 @@ Schemas:
 Invalid records are logged and handled safely.
 """
 from typing import Optional, Any
-from pydantic import BaseModel, ValidationError, validator
+from pydantic import BaseModel, ValidationError, field_validator
 import logging
 
 logger = logging.getLogger("data_validation")
@@ -19,11 +19,12 @@ class NewsArticle(BaseModel):
     title: str
     content: str
     published_at: str  # ISO8601 string
-    source: Optional[str]
-    url: Optional[str]
+    source: Optional[str] = None
+    url: Optional[str] = None
 
-    @validator("published_at")
-    def validate_published_at(cls, v):
+    @field_validator("published_at")
+    @classmethod
+    def validate_published_at(cls, v: str) -> str:
         # Optionally, add stricter ISO8601 validation here
         if not v or not isinstance(v, str):
             raise ValueError("published_at must be a non-empty string")
@@ -37,8 +38,9 @@ class OnChainMetric(BaseModel):
     chain: str
     extra: Optional[Any] = None
 
-    @validator("timestamp")
-    def validate_timestamp(cls, v):
+    @field_validator("timestamp")
+    @classmethod
+    def validate_timestamp(cls, v: str) -> str:
         if not v or not isinstance(v, str):
             raise ValueError("timestamp must be a non-empty string")
         return v

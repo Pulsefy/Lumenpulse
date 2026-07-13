@@ -29,6 +29,7 @@ from .models import (
     NewsInsight,
     AssetTrend,
     RoundAnomalySignal,
+    OnchainKpiSnapshot,
     MetadataDriftFinding,
 )
 from src.analytics.ner_service import NERService
@@ -2181,6 +2182,73 @@ class PostgresService:
                 "news_insights": 0,
                 "asset_trends": 0,
             }
+
+    # ── On-chain KPI snapshots (#877) ────────────────────────────────────────
+
+    def save_onchain_kpi_snapshot(
+        self,
+        period_date: str,
+        tvl_xlm: float,
+        volume_xlm: float,
+        active_rounds: int,
+        contribution_count: int,
+        extra_data: Optional[Dict[str, Any]] = None,
+        captured_at: Optional[datetime] = None,
+    ) -> Optional[OnchainKpiSnapshot]:
+        """Persist a daily KPI snapshot; skips if one already exists for *period_date*.
+
+        Args:
+            period_date: ISO date string (YYYY-MM-DD) for the snapshot period.
+            tvl_xlm: Total value locked in XLM.
+            volume_xlm: 24-h volume in XLM.
+            active_rounds: Number of active funding rounds.
+            contribution_count: Total contribution events for the period.
+            extra_data: Optional dict of additional metrics.
+            captured_at: Snapshot capture timestamp (defaults to utcnow).
+
+        Returns:
+            The existing or newly created OnchainKpiSnapshot, or None on error.
+        """
+        try:
+            with self.get_session() as session:
+                existing = session.query(OnchainKpiSnapshot).filter_by(
+                    period_date=period_date
+                ).first()
+                if existing:
+                    logger.info("KPI snapshot already exists for %s – skipping", period_date)
+                    return existing
+                snapshot = OnchainKpiSnapshot(
+                    period_date=period_date,
+                    tvl_xlm=tvl_xlm,
+                    volume_xlm=volume_xlm,
+                    active_rounds=active_rounds,
+                    contribution_count=contribution_count,
+                    extra_data=extra_data,
+                    captured_at=captured_at or datetime.utcnow(),
+                )
+                session.add(snapshot)
+                session.flush()
+                logger.info("Saved KPI snapshot for %s", period_date)
+                return snapshot
+        except SQLAlchemyError as e:
+            logger.error("Failed to save KPI snapshot for %s: %s", period_date, e)
+            return None
+
+    def get_onchain_kpi_snapshots(
+        self, limit: int = 90
+    ) -> List[OnchainKpiSnapshot]:
+        """Return the most recent *limit* daily KPI snapshots, newest first."""
+        try:
+            with self.get_session() as session:
+                return (
+                    session.query(OnchainKpiSnapshot)
+                    .order_by(desc(OnchainKpiSnapshot.period_date))
+                    .limit(limit)
+                    .all()
+                )
+        except SQLAlchemyError as e:
+            logger.error("Failed to query KPI snapshots: %s", e)
+            return []
 
     # Metadata Drift Finding Methods (#882)
 

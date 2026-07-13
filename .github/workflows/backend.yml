@@ -1,5 +1,12 @@
 name: Backend CI
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   push:
@@ -34,7 +41,7 @@ jobs:
       run: npm ci
 
     - name: Lint
-      run: npm run lint
+      run: npx eslint "{src,apps,libs,test}/**/*.ts" --max-warnings=0
 
     - name: Type Check
       # Check if script exists to avoid failure if not set up yet
