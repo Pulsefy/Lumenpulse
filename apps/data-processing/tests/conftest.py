@@ -12,8 +12,10 @@ import sys
 import os
 from unittest.mock import MagicMock
 
-# Add src directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+# Add the data-processing root (apps/data-processing) to sys.path so that
+# "from src.ingestion.xxx import ..." resolves correctly in all environments,
+# including CI where the working directory may not be on sys.path automatically.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
 @pytest.fixture
