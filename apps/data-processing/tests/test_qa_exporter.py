@@ -10,37 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Stub out heavy dependencies before importing our module
-# ---------------------------------------------------------------------------
-for _mod in [
-    "sqlalchemy",
-    "sqlalchemy.orm",
-    "sqlalchemy.dialects",
-    "sqlalchemy.dialects.postgresql",
-    "src.db",
-    "src.db.models",
-]:
-    if _mod not in sys.modules:
-        sys.modules[_mod] = MagicMock()
-
-# Provide the specific names qa_exporter imports from sqlalchemy
-import sqlalchemy as _sa
-_sa.create_engine = MagicMock()
-_sa.select = MagicMock(return_value=MagicMock())
-_sa.and_ = MagicMock()
-
-import sqlalchemy.orm as _orm
-_orm.sessionmaker = MagicMock()
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-# Stub the db models
-_models_mock = sys.modules["src.db.models"]
-_models_mock.AnalyticsRecord = MagicMock()
-_models_mock.Article = MagicMock()
-_models_mock.AssetTrend = MagicMock()
-_models_mock.SocialPost = MagicMock()
 
 from src.qa_exporter import QAExporter, ExportResult  # noqa: E402
 
