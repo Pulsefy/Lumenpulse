@@ -18,6 +18,7 @@ pub enum DataKey {
     ContributorAmount(u64, u64, Address), // (round_id, project_id, contributor) -> i128
     MatchDistributed(u64),                // round_id -> bool
     RoundStatus(u64),                     // round_id -> Symbol ("ACTIVE"|"FINALIZED"|"DISTRIBUTED")
+    FinalizedAt(u64),                     // round_id -> u64 (ledger timestamp when finalized)
 }
 
 /// Core data for a funding round

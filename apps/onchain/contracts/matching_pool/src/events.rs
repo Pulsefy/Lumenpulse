@@ -53,6 +53,7 @@ pub struct RoundFinalizedEvent {
     #[topic]
     pub round_id: u64,
     pub admin: Address,
+    pub finalized_at: u64,
 }
 
 #[contractevent]
