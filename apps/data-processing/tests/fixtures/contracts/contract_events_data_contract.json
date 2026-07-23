@@ -1,0 +1,14 @@
+{
+  "contract_id": "str",
+  "event_id": "str",
+  "ledger": "int",
+  "event_type": "str",
+  "project_id": "int",
+  "contributor": "str",
+  "amount": "float",
+  "milestone_id": "int",
+  "status": "str",
+  "topics": "list",
+  "raw_data": "dict",
+  "timestamp": "str"
+}
