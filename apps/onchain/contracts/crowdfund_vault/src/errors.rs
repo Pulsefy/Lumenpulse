@@ -36,4 +36,10 @@ pub enum CrowdfundError {
     RefundWindowNotOpen = 30,
     Reentrancy = 31,
     AlreadyExecuted = 32,
+    ProjectAlreadyEmergencyPaused = 33,
+    ProjectNotEmergencyPaused = 34,
+    MigrationTargetNotSet = 35,
+    ContributorAlreadyMigrated = 36,
+    ProjectAlreadyMigrated = 37,
+    ProjectNotActiveOrEmergencyPaused = 38,
 }

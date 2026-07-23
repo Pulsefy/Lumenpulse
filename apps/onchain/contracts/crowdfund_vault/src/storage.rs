@@ -41,6 +41,8 @@ pub enum DataKey {
     RefundReceipt(u64, u64),     // (project_id, receipt_id) -> RefundReceipt
     RefundReceiptCount(u64),     // project_id -> u64
     RefundClaimed(u64, Address), // (project_id, contributor) -> bool
+    MigrationTarget,             // -> Address (target contract for migrations)
+    ContributorMigrated(u64, Address), // (project_id, contributor) -> bool
 }
 
 #[contracttype]
