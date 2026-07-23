@@ -589,3 +589,45 @@ class RoundAnomalySignal(Base):
             f"type={self.anomaly_type}, severity={self.severity_score:.2f}, "
             f"reviewed={self.reviewed})>"
         )
+
+
+class EntityLinkingReview(Base):
+    """
+    Human-in-the-loop review queue for low-confidence entity linking and attribution.
+    """
+
+    __tablename__ = "entity_linking_review_queue"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    article_id = Column(String(255), nullable=False, index=True)
+    stable_entity_id = Column(String(255), nullable=False, index=True)
+    entity_type = Column(String(50), nullable=False, index=True)
+    display_name = Column(String(255), nullable=False)
+    matched_text = Column(String(255), nullable=False)
+    confidence = Column(Float, nullable=False)
+    supporting_evidence = Column(JSON, nullable=True)  # Context snippet, reason, candidates
+    status = Column(String(50), default="pending", nullable=False, index=True)  # pending, approved, rejected, corrected
+    corrected_entity_id = Column(String(255), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_entity_review_queue_article_entity",
+            "article_id",
+            "stable_entity_id",
+            unique=True,
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<EntityLinkingReview(id={self.id}, article_id='{self.article_id}', "
+            f"stable_entity_id='{self.stable_entity_id}', status='{self.status}')>"
+        )
+

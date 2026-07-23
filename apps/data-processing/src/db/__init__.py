@@ -15,6 +15,7 @@ from .models import (
     ProjectMilestone,
     NewsInsight,
     AssetTrend,
+    EntityLinkingReview,
 )
 from .postgres_service import PostgresService
 
@@ -31,5 +32,6 @@ __all__ = [
     "ProjectMilestone",
     "NewsInsight",
     "AssetTrend",
+    "EntityLinkingReview",
     "PostgresService",
 ]
