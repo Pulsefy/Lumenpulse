@@ -90,6 +90,10 @@ sentiment_analyzer = SentimentAnalyzer()
 from src.api.ingestion_quality_routes import router as ingestion_quality_router
 app.include_router(ingestion_quality_router)
 
+# Entity linking review queue routes
+from src.api.review_queue_routes import router as review_queue_router
+app.include_router(review_queue_router)
+
 
 try:
     postgres_service = PostgresService()
