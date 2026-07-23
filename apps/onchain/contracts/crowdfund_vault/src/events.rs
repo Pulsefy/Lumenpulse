@@ -212,3 +212,53 @@ pub struct StorageMigratedEvent {
     pub admin: Address,
     pub storage_version: u32,
 }
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MigrationTargetSetEvent {
+    #[topic]
+    pub admin: Address,
+    pub target: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectEmergencyPausedEvent {
+    #[topic]
+    pub admin: Address,
+    pub project_id: u64,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectEmergencyUnpausedEvent {
+    #[topic]
+    pub admin: Address,
+    pub project_id: u64,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContributorMigratedEvent {
+    pub project_id: u64,
+    pub contributor: Address,
+    pub amount: i128,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectBatchMigratedEvent {
+    #[topic]
+    pub admin: Address,
+    pub project_id: u64,
+    pub total_contributors_migrated: u32,
+    pub total_amount_migrated: i128,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EmergencyRefundEvent {
+    pub project_id: u64,
+    pub contributor: Address,
+    pub amount: i128,
+}

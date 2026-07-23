@@ -378,6 +378,12 @@ impl CrowdfundVaultContract {
             .get(&DataKey::Project(project_id))
             .ok_or(CrowdfundError::ProjectNotFound)?;
 
+        // Check if project is in emergency paused or migrated state
+        let status = Self::project_status(&env, project_id);
+        if status == Symbol::new(&env, "EMERGENCY_PAUSED") || status == Symbol::new(&env, "MIGRATED") {
+            return Err(CrowdfundError::ProjectNotActive);
+        }
+
         let is_admin = caller == stored_admin;
         let is_owner = caller == project.owner;
 
@@ -701,6 +707,12 @@ impl CrowdfundVaultContract {
                 .get(&DataKey::Project(project_id))
                 .ok_or(CrowdfundError::ProjectNotFound)?;
 
+            // Check if project is in emergency paused or migrated state
+            let status = Self::project_status(&env, project_id);
+            if status == Symbol::new(&env, "EMERGENCY_PAUSED") || status == Symbol::new(&env, "MIGRATED") {
+                return Err(CrowdfundError::ProjectNotActive);
+            }
+
             Self::fail_if_project_expired(&env, project_id, &mut project)?;
 
             if !project.is_active {
@@ -896,6 +908,13 @@ impl CrowdfundVaultContract {
             .persistent()
             .get(&DataKey::Project(project_id))
             .ok_or(CrowdfundError::ProjectNotFound)?;
+        
+        // Check if project is in emergency paused or migrated state
+        let status = Self::project_status(&env, project_id);
+        if status == Symbol::new(&env, "EMERGENCY_PAUSED") || status == Symbol::new(&env, "MIGRATED") {
+            return Err(CrowdfundError::ProjectNotActive);
+        }
+        
         Self::fail_if_project_expired(&env, project_id, &mut project)?;
 
         // Approve milestone
@@ -932,6 +951,12 @@ impl CrowdfundVaultContract {
             .persistent()
             .get(&DataKey::Project(project_id))
             .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        // Check if project is in emergency paused or migrated state
+        let status = Self::project_status(&env, project_id);
+        if status == Symbol::new(&env, "EMERGENCY_PAUSED") || status == Symbol::new(&env, "MIGRATED") {
+            return Err(CrowdfundError::ProjectNotActive);
+        }
 
         Self::fail_if_project_expired(&env, project_id, &mut project)?;
 
@@ -996,6 +1021,12 @@ impl CrowdfundVaultContract {
             .persistent()
             .get(&DataKey::Project(project_id))
             .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        // Check if project is in emergency paused or migrated state
+        let status = Self::project_status(&env, project_id);
+        if status == Symbol::new(&env, "EMERGENCY_PAUSED") || status == Symbol::new(&env, "MIGRATED") {
+            return Err(CrowdfundError::ProjectNotActive);
+        }
 
         Self::fail_if_project_expired(&env, project_id, &mut project)?;
 
@@ -1122,6 +1153,12 @@ impl CrowdfundVaultContract {
                 .persistent()
                 .get(&DataKey::Project(project_id))
                 .ok_or(CrowdfundError::ProjectNotFound)?;
+
+            // Check if project is in emergency paused or migrated state
+            let status = Self::project_status(&env, project_id);
+            if status == Symbol::new(&env, "EMERGENCY_PAUSED") || status == Symbol::new(&env, "MIGRATED") {
+                return Err(CrowdfundError::ProjectNotActive);
+            }
 
             project.owner.require_auth();
 
@@ -1551,6 +1588,284 @@ impl CrowdfundVaultContract {
             .persistent()
             .get(&DataKey::Reputation(contributor))
             .unwrap_or(0))
+    }
+
+    /// Set the migration target contract (admin only)
+    pub fn set_migration_target(env: Env, admin: Address, target: Address) -> Result<(), CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+        
+        env.storage().instance().set(&DataKey::MigrationTarget, &target);
+        
+        events::MigrationTargetSetEvent { admin, target }.publish(&env);
+        
+        Ok(())
+    }
+
+    /// Pause a project for emergency (admin only)
+    pub fn pause_emergency_project(env: Env, admin: Address, project_id: u64) -> Result<(), CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+        
+        // Check if project exists
+        let project_key = DataKey::Project(project_id);
+        let _project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&project_key)
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+        
+        // Check if already emergency paused
+        let status = Self::project_status(&env, project_id);
+        if status == Symbol::new(&env, "EMERGENCY_PAUSED") {
+            return Err(CrowdfundError::ProjectAlreadyEmergencyPaused);
+        }
+        
+        // Set status to EMERGENCY_PAUSED
+        Self::set_project_status(&env, project_id, "EMERGENCY_PAUSED");
+        
+        events::ProjectEmergencyPausedEvent { admin, project_id }.publish(&env);
+        
+        Ok(())
+    }
+
+    /// Unpause a project from emergency (admin only)
+    pub fn unpause_emergency_project(env: Env, admin: Address, project_id: u64) -> Result<(), CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+        
+        // Check if project exists
+        let project_key = DataKey::Project(project_id);
+        let _project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&project_key)
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+        
+        // Check if emergency paused
+        let status = Self::project_status(&env, project_id);
+        if status != Symbol::new(&env, "EMERGENCY_PAUSED") {
+            return Err(CrowdfundError::ProjectNotEmergencyPaused);
+        }
+        
+        // Set status back to ACTIVE
+        Self::set_project_status(&env, project_id, "ACTIVE");
+        
+        events::ProjectEmergencyUnpausedEvent { admin, project_id }.publish(&env);
+        
+        Ok(())
+    }
+
+    /// Migrate a project's contributors to the target contract (admin only, batch)
+    pub fn migrate_project(env: Env, admin: Address, project_id: u64) -> Result<(u32, i128), CrowdfundError> {
+        Self::with_reentrancy_guard(&env, || {
+            Self::verify_admin(&env, &admin)?;
+            
+            // Get migration target
+            let migration_target: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::MigrationTarget)
+                .ok_or(CrowdfundError::MigrationTargetNotSet)?;
+            
+            // Check project status
+            let status = Self::project_status(&env, project_id);
+            if status != Symbol::new(&env, "EMERGENCY_PAUSED") && status != Symbol::new(&env, "ACTIVE") {
+                return Err(CrowdfundError::ProjectNotActiveOrEmergencyPaused);
+            }
+            
+            // Get project data
+            let mut project: ProjectData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Project(project_id))
+                .ok_or(CrowdfundError::ProjectNotFound)?;
+            
+            // Get contributor count
+            let count_key = DataKey::ContributorCount(project_id);
+            let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+            
+            let mut total_contributors_migrated = 0u32;
+            let mut total_amount_migrated = 0i128;
+            
+            // First, divest any invested funds if needed
+            let invested_key = DataKey::ProjectInvestedBalance(project_id);
+            let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
+            if current_invested > 0 {
+                Self::divest_funds_internal(&env, project_id, current_invested)?;
+            }
+            
+            let contract_address = env.current_contract_address();
+            
+            // Iterate through contributors
+            for i in 0..count {
+                let contrib_key = DataKey::Contributor(project_id, i);
+                let contributor: Address = env
+                    .storage()
+                    .persistent()
+                    .get(&contrib_key)
+                    .ok_or(CrowdfundError::ProjectNotFound)?;
+                
+                // Check if already migrated
+                let migrated_key = DataKey::ContributorMigrated(project_id, contributor.clone());
+                if env.storage().persistent().get(&migrated_key).unwrap_or(false) {
+                    continue;
+                }
+                
+                // Get contribution amount
+                let amount_key = DataKey::Contribution(project_id, contributor.clone());
+                let amount: i128 = env.storage().persistent().get(&amount_key).unwrap_or(0);
+                
+                if amount > 0 {
+                    // Mark as migrated FIRST (prevents double migration)
+                    env.storage().persistent().set(&migrated_key, &true);
+                    env.storage().persistent().extend_ttl(
+                        &migrated_key,
+                        LEDGER_THRESHOLD,
+                        LEDGER_BUMP,
+                    );
+                    
+                    // Remove contribution
+                    env.storage().persistent().remove(&amount_key);
+                    
+                    // Transfer to migration target
+                    token::transfer(
+                        &env,
+                        &project.token_address,
+                        &contract_address,
+                        &migration_target,
+                        &amount,
+                    );
+                    
+                    total_contributors_migrated += 1;
+                    total_amount_migrated += amount;
+                    
+                    // Emit contributor migrated event
+                    events::ContributorMigratedEvent {
+                        project_id,
+                        contributor: contributor.clone(),
+                        amount,
+                    }
+                    .publish(&env);
+                }
+            }
+            
+            // Update project balance
+            let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+            let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+            env.storage().persistent().set(&balance_key, &(current_balance - total_amount_migrated));
+            
+            // Mark project as migrated
+            Self::set_project_status(&env, project_id, "MIGRATED");
+            
+            // Update protocol stats
+            Self::reduce_protocol_tvl(&env, total_amount_migrated);
+            
+            // Emit batch migration event
+            events::ProjectBatchMigratedEvent {
+                admin,
+                project_id,
+                total_contributors_migrated,
+                total_amount_migrated,
+            }
+            .publish(&env);
+            
+            Ok((total_contributors_migrated, total_amount_migrated))
+        })
+    }
+
+    /// Allow a contributor to get an emergency refund (user initiated)
+    pub fn emergency_refund(env: Env, contributor: Address, project_id: u64) -> Result<i128, CrowdfundError> {
+        Self::with_reentrancy_guard(&env, || {
+            Self::require_current_storage_version(&env)?;
+            
+            contributor.require_auth();
+            
+            // Check project status is emergency paused
+            let status = Self::project_status(&env, project_id);
+            if status != Symbol::new(&env, "EMERGENCY_PAUSED") {
+                return Err(CrowdfundError::ProjectNotEmergencyPaused);
+            }
+            
+            // Get project
+            let mut project: ProjectData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Project(project_id))
+                .ok_or(CrowdfundError::ProjectNotFound)?;
+            
+            // Check if already migrated
+            let migrated_key = DataKey::ContributorMigrated(project_id, contributor.clone());
+            if env.storage().persistent().get(&migrated_key).unwrap_or(false) {
+                return Err(CrowdfundError::ContributorAlreadyMigrated);
+            }
+            
+            // Check if already refunded via regular refund
+            let refunded_key = DataKey::RefundClaimed(project_id, contributor.clone());
+            if env.storage().persistent().get(&refunded_key).unwrap_or(false) {
+                return Err(CrowdfundError::RefundFailed);
+            }
+            
+            // Get contribution amount
+            let amount_key = DataKey::Contribution(project_id, contributor.clone());
+            let amount: i128 = env.storage().persistent().get(&amount_key).unwrap_or(0);
+            if amount <= 0 {
+                return Err(CrowdfundError::InsufficientBalance);
+            }
+            
+            // Divest if needed
+            let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+            let total_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+            let invested_key = DataKey::ProjectInvestedBalance(project_id);
+            let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
+            let local_balance = total_balance - current_invested;
+            
+            if local_balance < amount {
+                Self::divest_funds_internal(&env, project_id, amount - local_balance)?;
+            }
+            
+            // Remove contribution
+            env.storage().persistent().remove(&amount_key);
+            
+            // Mark as migrated so they can't also be migrated via batch
+            env.storage().persistent().set(&migrated_key, &true);
+            env.storage().persistent().extend_ttl(
+                &migrated_key,
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
+            
+            // Mark as refunded
+            env.storage().persistent().set(&refunded_key, &true);
+            env.storage().persistent().extend_ttl(
+                &refunded_key,
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
+            
+            // Update balance
+            env.storage().persistent().set(&balance_key, &(total_balance - amount));
+            
+            // Update protocol stats
+            Self::reduce_protocol_tvl(&env, amount);
+            
+            // Transfer to contributor
+            let contract_address = env.current_contract_address();
+            token::transfer(
+                &env,
+                &project.token_address,
+                &contract_address,
+                &contributor,
+                &amount,
+            );
+            
+            // Emit event
+            events::EmergencyRefundEvent {
+                project_id,
+                contributor,
+                amount,
+            }
+            .publish(&env);
+            
+            Ok(amount)
+        })
     }
 
     /// Get project data
