@@ -32,6 +32,13 @@ from .models import (
     MetadataDriftFinding,
     EntityLinkingReview,
 )
+from .cohort_models import (
+    GrantRound,
+    ContributorRoundParticipation,
+    ContributorCohort,
+    CohortRetentionSummary,
+    RepeatContributorSummary,
+)
 from src.analytics.ner_service import NERService
 from src.analytics.onchain_entity_linker import (
     OnchainEntityCandidate,
@@ -59,13 +66,22 @@ class PostgresService:
         )
 
         try:
-            self.engine = create_engine(
-                self.database_url,
-                pool_pre_ping=True,  # Verify connections before using
-                pool_size=5,
-                max_overflow=10,
-                echo=False,  # Set to True for SQL query logging
-            )
+            if self.database_url.startswith("sqlite"):
+                from sqlalchemy.pool import StaticPool
+                self.engine = create_engine(
+                    self.database_url,
+                    connect_args={"check_same_thread": False},
+                    poolclass=StaticPool,
+                    echo=False,
+                )
+            else:
+                self.engine = create_engine(
+                    self.database_url,
+                    pool_pre_ping=True,  # Verify connections before using
+                    pool_size=5,
+                    max_overflow=10,
+                    echo=False,  # Set to True for SQL query logging
+                )
             self.SessionLocal = sessionmaker(
                 autocommit=False,
                 autoflush=False,
