@@ -10,7 +10,7 @@ pub use types::{ProjectMetadata, ProjectStatus, ProposalState, VoteRecord};
 
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
-use events::*;
+use events::{self, *};
 use storage::*;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -263,6 +263,13 @@ impl CommunityCurationContract {
 
     pub fn get_verify_threshold_bps(_env: Env) -> u32 {
         VERIFY_THRESHOLD_BPS
+    }
+
+    /// Returns the current event schema version so consumers can detect
+    /// breaking changes in event field layout.  Consumers SHOULD check this
+    /// at startup and compare with their expected version.
+    pub fn get_event_version(_env: Env) -> u32 {
+        events::EVENT_VERSION
     }
 
     // ── Internal Helpers ─────────────────────────────────────────────────────
