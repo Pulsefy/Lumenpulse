@@ -1,0 +1,65 @@
+{
+  "tablename": "analytics_records",
+  "columns": {
+    "id": {
+      "type": "INTEGER",
+      "nullable": false,
+      "primary_key": true
+    },
+    "record_type": {
+      "type": "VARCHAR(50)",
+      "nullable": false,
+      "primary_key": false
+    },
+    "asset": {
+      "type": "VARCHAR(50)",
+      "nullable": true,
+      "primary_key": false
+    },
+    "metric_name": {
+      "type": "VARCHAR(100)",
+      "nullable": false,
+      "primary_key": false
+    },
+    "window": {
+      "type": "VARCHAR(20)",
+      "nullable": true,
+      "primary_key": false
+    },
+    "value": {
+      "type": "FLOAT",
+      "nullable": false,
+      "primary_key": false
+    },
+    "previous_value": {
+      "type": "FLOAT",
+      "nullable": true,
+      "primary_key": false
+    },
+    "change_percentage": {
+      "type": "FLOAT",
+      "nullable": true,
+      "primary_key": false
+    },
+    "trend_direction": {
+      "type": "VARCHAR(20)",
+      "nullable": true,
+      "primary_key": false
+    },
+    "extra_data": {
+      "type": "JSON",
+      "nullable": true,
+      "primary_key": false
+    },
+    "timestamp": {
+      "type": "DATETIME",
+      "nullable": false,
+      "primary_key": false
+    },
+    "created_at": {
+      "type": "DATETIME",
+      "nullable": false,
+      "primary_key": false
+    }
+  }
+}
