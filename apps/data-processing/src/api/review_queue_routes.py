@@ -57,7 +57,6 @@ def get_db():
 async def get_review_queue(
     status: Optional[str] = Query(None, description="Filter queue by status (pending, approved, rejected, corrected)"),
     limit: int = Query(100, ge=1, le=1000),
-    db: PostgresService = Query(default=None, include_in_schema=False),
 ) -> List[ReviewQueueItemResponse]:
     """Retrieve items from the review queue with optional filters."""
     db_service = get_db()
