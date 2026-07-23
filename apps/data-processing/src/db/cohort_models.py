@@ -5,10 +5,9 @@ Cohort analysis models for grant round contributor tracking
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, BigInteger, Index
-from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
-Base = declarative_base()
+from .models import Base
 
 
 class GrantRound(Base):

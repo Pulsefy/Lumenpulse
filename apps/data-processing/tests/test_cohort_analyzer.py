@@ -35,12 +35,11 @@ class TestCohortAnalyzer:
     
     @pytest.fixture
     def db_service(self):
-        """Create a test database service"""
-        # Use test database URL from environment or default
-        db = PostgresService()
+        """Create a test database service backed by in-memory SQLite"""
+        db = PostgresService(database_url="sqlite:///:memory:")
         db.create_tables()
         yield db
-        # Cleanup if needed
+        db.drop_tables()
     
     @pytest.fixture
     def analyzer(self, db_service):
