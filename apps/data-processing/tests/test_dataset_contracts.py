@@ -3,7 +3,7 @@ import sys
 import json
 import pytest
 from pathlib import Path
-from sqlalchemy.inspection import inspect
+from sqlalchemy import inspect
 
 # Add root directory to path to allow importing src and scripts
 ROOT_DIR = Path(__file__).resolve().parent.parent
