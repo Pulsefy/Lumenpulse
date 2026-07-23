@@ -11,6 +11,11 @@ __all__ = [
     "CorrelationResult",
     "DataPoint",
     "NERService",
+    # Attribution scorer
+    "AttributionScorer",
+    "AttributionTarget",
+    "AttributionResult",
+    "SignalBreakdown",
 ]
 
 
@@ -48,5 +53,25 @@ def __getattr__(name: str):
         from .ner_service import NERService
 
         return NERService
+
+    if name in {
+        "AttributionScorer",
+        "AttributionTarget",
+        "AttributionResult",
+        "SignalBreakdown",
+    }:
+        from .attribution_scorer import (
+            AttributionResult,
+            AttributionScorer,
+            AttributionTarget,
+            SignalBreakdown,
+        )
+
+        return {
+            "AttributionScorer": AttributionScorer,
+            "AttributionTarget": AttributionTarget,
+            "AttributionResult": AttributionResult,
+            "SignalBreakdown": SignalBreakdown,
+        }[name]
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
