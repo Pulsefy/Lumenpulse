@@ -27,7 +27,25 @@ from .social_fetcher import (
     fetch_social,
 )
 
+from .freshness_monitor import (
+    FreshnessResult,
+    FreshnessThreshold,
+    StaleSourceReport,
+    probe_news_freshness,
+    probe_onchain_freshness,
+    probe_price_freshness,
+    run_freshness_check,
+)
+
 __all__ = [
+    # Freshness SLA monitor
+    "FreshnessResult",
+    "FreshnessThreshold",
+    "StaleSourceReport",
+    "probe_news_freshness",
+    "probe_onchain_freshness",
+    "probe_price_freshness",
+    "run_freshness_check",
     "NewsFetcher",
     "NewsArticle",
     "fetch_news",

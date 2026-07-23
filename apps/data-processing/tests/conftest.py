@@ -28,6 +28,27 @@ _HEAVY_MODULES = [
     "stellar_sdk.exceptions",
     "stellar_sdk.call_builder",
     "stellar_sdk.call_builder.call_builder_async",
+    # Translation / NLP deps not installed in the lightweight test env
+    "langdetect",
+    # Database / ORM deps not available in the lightweight test env
+    "sqlalchemy",
+    "sqlalchemy.orm",
+    "sqlalchemy.orm.session",
+    "sqlalchemy.exc",
+    "sqlalchemy.engine",
+    "sqlalchemy.engine.url",
+    "sqlalchemy.dialects",
+    "sqlalchemy.dialects.postgresql",
+    "sqlalchemy.sql",
+    "sqlalchemy.sql.expression",
+    "alembic",
+    "alembic.op",
+    "psycopg2",
+    "asyncpg",
+    # HTTP / networking deps not in lightweight env
+    "requests",
+    "requests.exceptions",
+    "redis",
 ]
 for _mod in _HEAVY_MODULES:
     if _mod not in sys.modules:
