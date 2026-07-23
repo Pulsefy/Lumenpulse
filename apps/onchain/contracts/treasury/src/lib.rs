@@ -410,6 +410,13 @@ impl TreasuryContract {
             .ok_or(TreasuryError::NotInitialized)
     }
 
+    /// Returns the current event schema version so consumers can detect
+    /// breaking changes in event field layout.  Consumers SHOULD check this
+    /// at startup and compare with their expected version.
+    pub fn get_event_version(_env: Env) -> u32 {
+        events::EVENT_VERSION
+    }
+
     // ============================================
     // CANCELLATION & RECOVERY FUNCTIONS
     // ============================================
@@ -461,10 +468,12 @@ impl TreasuryContract {
             token_client.transfer(&contract_address, &beneficiary, &refundable);
         }
 
-        #[allow(deprecated)]
-        env.events().publish(
-            (String::from_str(&env, "stream_cancelled"),),
-            (&beneficiary, total_unlocked, refundable, current_time),
+        events::publish_stream_cancelled(
+            &env,
+            &beneficiary,
+            total_unlocked,
+            refundable,
+            current_time,
         );
 
         env.storage().persistent().remove(&stream_key);
@@ -512,11 +521,7 @@ impl TreasuryContract {
             token_client.transfer(&contract_address, &beneficiary, &full_refund);
         }
 
-        #[allow(deprecated)]
-        env.events().publish(
-            (String::from_str(&env, "emergency_stop"),),
-            (&beneficiary, reason, full_refund),
-        );
+        events::publish_emergency_stop(&env, &beneficiary, reason, full_refund);
 
         env.storage().persistent().remove(&stream_key);
 

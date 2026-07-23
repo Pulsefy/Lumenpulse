@@ -1,11 +1,26 @@
 use crate::types::ProjectMetadata;
 use soroban_sdk::{contractevent, Address, Env, Symbol};
 
+// ── Event Versioning ────────────────────────────────────────────────────────
+//
+// All events in this contract carry a `version` field as their first element.
+// Bump `EVENT_VERSION` when the fields of any event are added, removed, or
+// re-ordered. Consumers MUST check the `version` field they receive against
+// the expected value to detect schema drift at runtime.
+//
+// See apps/onchain/EVENTS_GUIDE.md for the canonical pattern.
+
+/// Current schema version for every event emitted by this contract.
+/// Consumers should call `get_event_version()` on the deployed contract to
+/// detect whether their parser is up to date.
+pub const EVENT_VERSION: u32 = 1;
+
 // ── Event Struct Definitions ────────────────────────────────────────────────
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectProposedEvent {
+    pub version: u32,
     pub project_id: u64,
     pub proposer: Address,
     pub name: Symbol,
@@ -14,6 +29,7 @@ pub struct ProjectProposedEvent {
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VoteCastEvent {
+    pub version: u32,
     pub project_id: u64,
     pub voter: Address,
     pub approve: bool,
@@ -23,18 +39,21 @@ pub struct VoteCastEvent {
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectVerifiedEvent {
+    pub version: u32,
     pub project_id: u64,
 }
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectRejectedEvent {
+    pub version: u32,
     pub project_id: u64,
 }
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProposalExpiredEvent {
+    pub version: u32,
     pub project_id: u64,
 }
 
@@ -61,6 +80,7 @@ pub fn emit_project_proposed(
     let project_name_symbol = Symbol::new(env, name_str);
 
     ProjectProposedEvent {
+        version: EVENT_VERSION,
         project_id,
         proposer: proposer.clone(),
         name: project_name_symbol,
@@ -76,6 +96,7 @@ pub fn emit_vote_cast(
     voting_power: u64,
 ) {
     VoteCastEvent {
+        version: EVENT_VERSION,
         project_id,
         voter: voter.clone(),
         approve,
@@ -85,13 +106,25 @@ pub fn emit_vote_cast(
 }
 
 pub fn emit_project_verified(env: &Env, project_id: u64) {
-    ProjectVerifiedEvent { project_id }.publish(env);
+    ProjectVerifiedEvent {
+        version: EVENT_VERSION,
+        project_id,
+    }
+    .publish(env);
 }
 
 pub fn emit_project_rejected(env: &Env, project_id: u64) {
-    ProjectRejectedEvent { project_id }.publish(env);
+    ProjectRejectedEvent {
+        version: EVENT_VERSION,
+        project_id,
+    }
+    .publish(env);
 }
 
 pub fn emit_proposal_expired(env: &Env, project_id: u64) {
-    ProposalExpiredEvent { project_id }.publish(env);
+    ProposalExpiredEvent {
+        version: EVENT_VERSION,
+        project_id,
+    }
+    .publish(env);
 }
