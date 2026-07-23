@@ -4,7 +4,7 @@ use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Ledger},
     token::{StellarAssetClient, TokenClient},
-    vec, Address, Env,
+    vec, Address, Env, Symbol,
 };
 
 fn create_token<'a>(env: &Env, admin: &Address) -> (TokenClient<'a>, StellarAssetClient<'a>) {
@@ -720,4 +720,134 @@ fn test_distribute_succeeds_after_unpause() {
 
     assert_eq!(total, 1_000_000);
     assert_eq!(token.balance(&owner1), 1_000_000);
+}
+
+// Shared lifecycle invariants for matching_pool rounds:
+// 1. An ACTIVE round may accept contributions only while the current timestamp is within [start_time, end_time].
+// 2. A FINALIZED round is terminal for new contributions and only transitions to DISTRIBUTED through one matching-funds distribution pass.
+// 3. DISTRIBUTED rounds must preserve the storage invariant: round status is fixed, pool balance is zero, and repeated distribution attempts fail.
+#[cfg(test)]
+mod lifecycle_invariants {
+    use super::*;
+    use proptest::prelude::*;
+
+    #[test]
+    fn invariant_active_to_finalized_to_distributed_round_flow() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let (client, admin, token, token_admin) = setup(&env);
+        client.initialize(&admin);
+
+        let funder = Address::generate(&env);
+        let owner = Address::generate(&env);
+        let contributor = Address::generate(&env);
+        token_admin.mint(&funder, &1_000_000);
+
+        env.ledger().set_timestamp(500);
+        let round_id = client.create_round(
+            &admin,
+            &symbol_short!("R1"),
+            &token.address,
+            &1000u64,
+            &3000u64,
+        );
+
+        let before_fund = client.get_round(&round_id);
+        assert_eq!(before_fund.total_pool, 0);
+        assert!(!before_fund.is_finalized);
+        assert!(!before_fund.is_distributed);
+        assert_eq!(client.get_round_status(&round_id), symbol_short!("ACTIVE"));
+
+        client.fund_pool(&funder, &round_id, &1_000_000);
+        assert_eq!(client.get_pool_balance(&round_id), 1_000_000);
+
+        client.approve_project(&admin, &round_id, &1u64);
+
+        env.ledger().set_timestamp(1500);
+        client.record_contribution(&round_id, &1u64, &contributor, &250);
+        assert_eq!(client.get_project_contributions(&round_id, &1u64), 250);
+
+        env.ledger().set_timestamp(3500);
+        let contribution_outside_window = client.try_record_contribution(
+            &round_id,
+            &1u64,
+            &Address::generate(&env),
+            &100,
+        );
+        assert_eq!(contribution_outside_window, Err(Ok(MatchingPoolError::RoundNotActive)));
+
+        env.ledger().set_timestamp(4000);
+        client.finalize_round(&admin, &round_id);
+
+        let finalized = client.get_round(&round_id);
+        assert!(finalized.is_finalized);
+        assert_eq!(client.get_round_status(&round_id), symbol_short!("FINALIZED"));
+        assert_eq!(client.get_finalized_at(&round_id), 4000);
+
+        let contribution_after_finalize = client.try_record_contribution(
+            &round_id,
+            &1u64,
+            &Address::generate(&env),
+            &100,
+        );
+        assert_eq!(contribution_after_finalize, Err(Ok(MatchingPoolError::RoundAlreadyFinalized)));
+
+        let owners = vec![&env, owner.clone()];
+        let total = client.distribute_matching_funds(&admin, &round_id, &owners);
+        assert_eq!(total, 1_000_000);
+
+        let distributed = client.get_round(&round_id);
+        assert!(distributed.is_distributed);
+        assert_eq!(client.get_round_status(&round_id), Symbol::new(&env, "DISTRIBUTED"));
+        assert_eq!(client.get_pool_balance(&round_id), 0);
+        assert_eq!(token.balance(&owner), 1_000_000);
+
+        let repeated_distribution = client.try_distribute_matching_funds(&admin, &round_id, &owners);
+        assert_eq!(repeated_distribution, Err(Ok(MatchingPoolError::MatchAlreadyDistributed)));
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(50))]
+
+        #[test]
+        fn invariant_distribution_cannot_exceed_funded_pool(pool_amount in 1i128..=100_000i128, contribution_amount in 1i128..=10_000i128) {
+            let env = Env::default();
+            env.mock_all_auths();
+
+            let (client, admin, token, token_admin) = setup(&env);
+            client.initialize(&admin);
+
+            let funder = Address::generate(&env);
+            let owner = Address::generate(&env);
+            let contributor = Address::generate(&env);
+            token_admin.mint(&funder, &1_000_000_000);
+
+            env.ledger().set_timestamp(500);
+            let round_id = client.create_round(
+                &admin,
+                &symbol_short!("R1"),
+                &token.address,
+                &1000u64,
+                &3000u64,
+            );
+
+            client.fund_pool(&funder, &round_id, &pool_amount);
+            client.approve_project(&admin, &round_id, &1u64);
+
+            env.ledger().set_timestamp(1500);
+            client.record_contribution(&round_id, &1u64, &contributor, &contribution_amount);
+
+            env.ledger().set_timestamp(4000);
+            client.finalize_round(&admin, &round_id);
+
+            let owners = vec![&env, owner.clone()];
+            let distributed = client.distribute_matching_funds(&admin, &round_id, &owners);
+
+            prop_assert_eq!(distributed, pool_amount, "distribution exceeded the funded pool amount");
+            prop_assert_eq!(client.get_pool_balance(&round_id), 0, "round pool should be fully drained after distribution");
+            prop_assert_eq!(client.get_round_status(&round_id), Symbol::new(&env, "DISTRIBUTED"), "round should terminate in DISTRIBUTED after a single distribution pass");
+            prop_assert_eq!(token.balance(&owner), pool_amount, "owner balance should be exactly the distributed pool amount");
+        }
+    }
 }
