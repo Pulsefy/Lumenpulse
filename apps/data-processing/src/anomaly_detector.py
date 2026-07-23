@@ -33,6 +33,9 @@ class AnomalyResult:
     timestamp: datetime
     ml_anomaly_score: Optional[float] = None  # Isolation Forest anomaly score
     ml_is_anomaly: Optional[bool] = None  # Isolation Forest prediction
+    reason: Optional[str] = None  # Human-readable explanation
+    contributing_signals: Optional[List[str]] = None  # Signals that contributed
+    confidence_level: Optional[str] = None  # high/medium/low
 
     def to_dict(self) -> Dict[str, Any]:
         result = {
@@ -48,6 +51,12 @@ class AnomalyResult:
         if self.ml_anomaly_score is not None:
             result["ml_anomaly_score"] = self.ml_anomaly_score
             result["ml_is_anomaly"] = self.ml_is_anomaly
+        if self.reason is not None:
+            result["reason"] = self.reason
+        if self.contributing_signals is not None:
+            result["contributing_signals"] = self.contributing_signals
+        if self.confidence_level is not None:
+            result["confidence_level"] = self.confidence_level
         return result
 
 
@@ -61,9 +70,12 @@ class MultiDimensionalAnomalyResult:
     features_used: List[str]
     feature_values: Dict[str, float]
     timestamp: datetime
+    reason: Optional[str] = None  # Human-readable explanation
+    contributing_signals: Optional[List[str]] = None  # Signals that contributed
+    confidence_level: Optional[str] = None  # high/medium/low
     
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "is_anomaly": self.is_anomaly,
             "anomaly_score": self.anomaly_score,
             "severity_score": self.severity_score,
@@ -71,6 +83,13 @@ class MultiDimensionalAnomalyResult:
             "feature_values": self.feature_values,
             "timestamp": self.timestamp.isoformat(),
         }
+        if self.reason is not None:
+            result["reason"] = self.reason
+        if self.contributing_signals is not None:
+            result["contributing_signals"] = self.contributing_signals
+        if self.confidence_level is not None:
+            result["confidence_level"] = self.confidence_level
+        return result
 
 
 class IsolationForestDetector:
@@ -269,13 +288,44 @@ class IsolationForestDetector:
             'sentiment_change_rate': float(features[0][3]) if features.shape[1] > 3 else 0.0
         }
         
+        # Generate explanation metadata
+        reason = None
+        contributing_signals = None
+        confidence_level = None
+        
+        if is_anomaly:
+            # Identify which features contributed most
+            contributing_features = []
+            if 'volume' in self.feature_columns and volume > 0:
+                contributing_features.append("volume")
+            if 'sentiment' in self.feature_columns:
+                contributing_features.append("sentiment")
+            if 'volume_change_rate' in self.feature_columns and features.shape[1] > 2:
+                if abs(float(features[0][2])) > 0.5:
+                    contributing_features.append("volume_change_rate")
+            if 'sentiment_change_rate' in self.feature_columns and features.shape[1] > 3:
+                if abs(float(features[0][3])) > 0.3:
+                    contributing_features.append("sentiment_change_rate")
+            
+            reason = (
+                f"Multi-dimensional anomaly detected by Isolation Forest. "
+                f"Anomaly score: {anomaly_score:.3f}. "
+                f"Contributing features: {', '.join(contributing_features)}. "
+                f"This pattern suggests complex interactions between metrics."
+            )
+            contributing_signals = contributing_features + ["ml_isolation_forest"]
+            confidence_level = "high" if severity_score > 0.7 else "medium"
+        
         return MultiDimensionalAnomalyResult(
             is_anomaly=is_anomaly,
             anomaly_score=float(anomaly_score),
             severity_score=severity_score,
             features_used=self.feature_columns,
             feature_values=feature_values,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow(),
+            reason=reason,
+            contributing_signals=contributing_signals,
+            confidence_level=confidence_level,
         )
     
     def add_training_point(self, volume: float, sentiment: float):
@@ -500,6 +550,22 @@ class AnomalyDetector:
             if is_anomaly:
                 ANOMALIES_DETECTED_TOTAL.labels(metric_name="volume").inc()
             
+            # Generate explanation metadata
+            reason = None
+            contributing_signals = None
+            confidence_level = None
+            
+            if is_anomaly:
+                direction = "increase" if z_score > 0 else "decrease"
+                percent_change = ((current_value - mean) / mean) * 100 if mean != 0 else 0
+                reason = (
+                    f"Volume {direction} of {abs(percent_change):.1f}% detected. "
+                    f"Current value ({current_value:.2f}) is {abs(z_score):.2f} standard deviations "
+                    f"from baseline mean ({mean:.2f})."
+                )
+                contributing_signals = ["z_score_deviation", "volume_spike"]
+                confidence_level = "high" if severity > 0.7 else "medium"
+            
             return AnomalyResult(
                 is_anomaly=is_anomaly,
                 severity_score=severity,
@@ -509,6 +575,9 @@ class AnomalyDetector:
                 baseline_std=std,
                 z_score=z_score,
                 timestamp=timestamp,
+                reason=reason,
+                contributing_signals=contributing_signals,
+                confidence_level=confidence_level,
             )
         
         except Exception as e:
@@ -553,6 +622,22 @@ class AnomalyDetector:
             if is_anomaly:
                 ANOMALIES_DETECTED_TOTAL.labels(metric_name="sentiment").inc()
             
+            # Generate explanation metadata
+            reason = None
+            contributing_signals = None
+            confidence_level = None
+            
+            if is_anomaly:
+                direction = "positive" if z_score > 0 else "negative"
+                sentiment_type = "extremely positive" if current_sentiment > 0.5 else "extremely negative" if current_sentiment < -0.5 else "unusual"
+                reason = (
+                    f"{sentiment_type.capitalize()} sentiment detected. "
+                    f"Current sentiment ({current_sentiment:.3f}) is {abs(z_score):.2f} standard deviations "
+                    f"from baseline mean ({mean:.3f}). This indicates a {direction} sentiment shift."
+                )
+                contributing_signals = ["z_score_deviation", "sentiment_shift"]
+                confidence_level = "high" if severity > 0.7 else "medium"
+            
             return AnomalyResult(
                 is_anomaly=is_anomaly,
                 severity_score=severity,
@@ -562,6 +647,9 @@ class AnomalyDetector:
                 baseline_std=std,
                 z_score=z_score,
                 timestamp=timestamp,
+                reason=reason,
+                contributing_signals=contributing_signals,
+                confidence_level=confidence_level,
             )
         
         except Exception as e:
@@ -653,6 +741,16 @@ class AnomalyDetector:
                     )
                     results['combined_severity'] = combined_severity
                     results['is_anomaly_consensus'] = True
+                    
+                    # Add explanation for consensus
+                    results['consensus_reason'] = (
+                        f"Multiple detection methods agree on anomaly. "
+                        f"Z-score detected {'volume' if volume_result.is_anomaly else ''} "
+                        f"{'and ' if volume_result.is_anomaly and sentiment_result.is_anomaly else ''} "
+                        f"{'sentiment' if sentiment_result.is_anomaly else ''} anomaly, "
+                        f"while ML detected multi-dimensional pattern. High confidence consensus."
+                    )
+                    results['consensus_confidence'] = "high"
         
         # Comparison mode: Run both and generate comparison report
         if self.enable_comparison_mode and self.ml_detector and self.ml_detector.is_trained:
