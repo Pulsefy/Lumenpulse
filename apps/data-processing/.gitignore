@@ -147,5 +147,8 @@ dmypy.json
 cython_debug/
 
 # PyCharm
-#  JetBrains specific template is maintained in a separate repository (see .gitignore)
+# JetBrains specific template is maintained in a separate repository (see .gitignore)
 .idea/
+
+# Benchmark results
+benchmark-results/
