@@ -94,6 +94,10 @@ app.include_router(ingestion_quality_router)
 from src.api.review_queue_routes import router as review_queue_router
 app.include_router(review_queue_router)
 
+# Ledger cursor operational visibility routes
+from src.api.ledger_cursor_routes import router as ledger_cursor_router
+app.include_router(ledger_cursor_router)
+
 
 try:
     postgres_service = PostgresService()
