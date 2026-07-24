@@ -769,29 +769,30 @@ mod lifecycle_invariants {
         assert_eq!(client.get_project_contributions(&round_id, &1u64), 250);
 
         env.ledger().set_timestamp(3500);
-        let contribution_outside_window = client.try_record_contribution(
-            &round_id,
-            &1u64,
-            &Address::generate(&env),
-            &100,
+        let contribution_outside_window =
+            client.try_record_contribution(&round_id, &1u64, &Address::generate(&env), &100);
+        assert_eq!(
+            contribution_outside_window,
+            Err(Ok(MatchingPoolError::RoundNotActive))
         );
-        assert_eq!(contribution_outside_window, Err(Ok(MatchingPoolError::RoundNotActive)));
 
         env.ledger().set_timestamp(4000);
         client.finalize_round(&admin, &round_id);
 
         let finalized = client.get_round(&round_id);
         assert!(finalized.is_finalized);
-        assert_eq!(client.get_round_status(&round_id), symbol_short!("FINALIZED"));
+        assert_eq!(
+            client.get_round_status(&round_id),
+            symbol_short!("FINALIZED")
+        );
         assert_eq!(client.get_finalized_at(&round_id), 4000);
 
-        let contribution_after_finalize = client.try_record_contribution(
-            &round_id,
-            &1u64,
-            &Address::generate(&env),
-            &100,
+        let contribution_after_finalize =
+            client.try_record_contribution(&round_id, &1u64, &Address::generate(&env), &100);
+        assert_eq!(
+            contribution_after_finalize,
+            Err(Ok(MatchingPoolError::RoundAlreadyFinalized))
         );
-        assert_eq!(contribution_after_finalize, Err(Ok(MatchingPoolError::RoundAlreadyFinalized)));
 
         let owners = vec![&env, owner.clone()];
         let total = client.distribute_matching_funds(&admin, &round_id, &owners);
@@ -799,12 +800,19 @@ mod lifecycle_invariants {
 
         let distributed = client.get_round(&round_id);
         assert!(distributed.is_distributed);
-        assert_eq!(client.get_round_status(&round_id), Symbol::new(&env, "DISTRIBUTED"));
+        assert_eq!(
+            client.get_round_status(&round_id),
+            Symbol::new(&env, "DISTRIBUTED")
+        );
         assert_eq!(client.get_pool_balance(&round_id), 0);
         assert_eq!(token.balance(&owner), 1_000_000);
 
-        let repeated_distribution = client.try_distribute_matching_funds(&admin, &round_id, &owners);
-        assert_eq!(repeated_distribution, Err(Ok(MatchingPoolError::MatchAlreadyDistributed)));
+        let repeated_distribution =
+            client.try_distribute_matching_funds(&admin, &round_id, &owners);
+        assert_eq!(
+            repeated_distribution,
+            Err(Ok(MatchingPoolError::MatchAlreadyDistributed))
+        );
     }
 
     proptest! {
