@@ -5,8 +5,17 @@ mod events;
 mod storage;
 
 use errors::RegistryError;
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
-use storage::{DataKey, ModuleEntry};
+use multisig_guard::{
+    cancel as multisig_cancel, configure as multisig_configure, consume_approval,
+    expire as multisig_expire, get_config as multisig_get_config, get_proposal,
+    propose as multisig_propose, replace_config as multisig_replace_config, sign as multisig_sign,
+    MultisigConfig, MultisigDataKey, Proposal, ProposalStatus, Signer, MAX_SIGNERS,
+    PROPOSAL_TTL_SECS,
+};
+use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, IntoVal, Symbol, Vec};
+use storage::{DataKey, ModuleEntry, ProposalAction};
+
+pub use storage::ProposalAction as RegistryProposalAction;
 
 #[contract]
 pub struct ProtocolRegistryContract;
@@ -56,22 +65,67 @@ impl ProtocolRegistryContract {
         Ok(())
     }
 
+    /// Configure the multisig signer set. Call once after `initialize`.
+    pub fn configure_multisig(
+        env: Env,
+        signers: Vec<Signer>,
+        threshold: u32,
+    ) -> Result<(), RegistryError> {
+        multisig_configure(&env, signers.clone(), threshold).map_err(|_| RegistryError::Unauthorized)?;
+        Ok(())
+    }
+
+    // ── Multisig proposal lifecycle ──────────────────────────
+
+    pub fn propose(
+        env: Env,
+        proposer: Address,
+        action: ProposalAction,
+    ) -> Result<u64, RegistryError> {
+        let payload = vec![&env, action.into_val(&env)];
+        multisig_propose(&env, proposer, payload).map_err(|_| RegistryError::Unauthorized)
+    }
+
+    pub fn sign_proposal(env: Env, signer: Address, proposal_id: u64) -> Result<(), RegistryError> {
+        multisig_sign(&env, signer, proposal_id).map_err(|_| RegistryError::Unauthorized)?;
+        Ok(())
+    }
+
+    pub fn cancel_proposal(
+        env: Env,
+        signer: Address,
+        proposal_id: u64,
+    ) -> Result<(), RegistryError> {
+        multisig_cancel(&env, signer, proposal_id).map_err(|_| RegistryError::Unauthorized)
+    }
+
+    pub fn expire_proposal(env: Env, proposal_id: u64) -> Result<(), RegistryError> {
+        multisig_expire(&env, proposal_id).map_err(|_| RegistryError::Unauthorized)
+    }
+
+    pub fn get_multisig_config(env: Env) -> Result<MultisigConfig, RegistryError> {
+        multisig_get_config(&env).map_err(|_| RegistryError::NotInitialized)
+    }
+
+    pub fn get_proposal(env: Env, proposal_id: u64) -> Result<Proposal, RegistryError> {
+        get_proposal(&env, proposal_id).map_err(|_| RegistryError::Unauthorized)
+    }
+
     // ── Module registration ───────────────────────────────────────────────────
 
-    /// Register a new protocol module. Admin only. Module name must be unique.
-    ///
-    /// `name`    — canonical module identifier (use `symbol_short!`)
-    /// `address` — deployed contract address for this module
-    /// `version` — starting version number (must be ≥ 1)
-    pub fn register_module(
+    pub fn register_module_via_multisig(
         env: Env,
-        admin: Address,
+        executor: Address,
+        proposal_id: u64,
         name: Symbol,
         address: Address,
         version: u32,
     ) -> Result<(), RegistryError> {
+        let expected_payload = vec![&env, ProposalAction::RegisterModule(name.clone(), address.clone(), version).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
+
         Self::require_not_paused(&env)?;
-        Self::require_admin(&env, &admin)?;
 
         if env
             .storage()
@@ -103,19 +157,19 @@ impl ProtocolRegistryContract {
         Ok(())
     }
 
-    /// Update an existing module to a new address and/or version.
-    ///
-    /// The new `version` must be strictly greater than the current one so
-    /// clients can detect upgrades by comparing version numbers.
-    pub fn update_module(
+    pub fn update_module_via_multisig(
         env: Env,
-        admin: Address,
+        executor: Address,
+        proposal_id: u64,
         name: Symbol,
         new_address: Address,
         new_version: u32,
     ) -> Result<(), RegistryError> {
+        let expected_payload = vec![&env, ProposalAction::UpdateModule(name.clone(), new_address.clone(), new_version).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
+
         Self::require_not_paused(&env)?;
-        Self::require_admin(&env, &admin)?;
 
         let mut entry: ModuleEntry = env
             .storage()
@@ -133,7 +187,7 @@ impl ProtocolRegistryContract {
         entry.address = new_address.clone();
         entry.version = new_version;
         entry.registered_at = env.ledger().timestamp();
-        entry.is_active = true; // updating reactivates a previously deactivated module
+        entry.is_active = true;
 
         env.storage()
             .persistent()
@@ -151,10 +205,10 @@ impl ProtocolRegistryContract {
         Ok(())
     }
 
-    /// Mark a module inactive. Inactive modules are rejected by `resolve`.
-    /// The entry is retained for historical querying via `get_module`.
-    pub fn deactivate_module(env: Env, admin: Address, name: Symbol) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
+    pub fn deactivate_module_via_multisig(env: Env, executor: Address, proposal_id: u64, name: Symbol) -> Result<(), RegistryError> {
+        let expected_payload = vec![&env, ProposalAction::DeactivateModule(name.clone()).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
 
         let mut entry: ModuleEntry = env
             .storage()
@@ -168,15 +222,17 @@ impl ProtocolRegistryContract {
             .persistent()
             .set(&DataKey::Module(name.clone()), &entry);
 
-        events::ModuleDeactivatedEvent { name, admin }.publish(&env);
+        events::ModuleDeactivatedEvent { name: name.clone(), admin: executor }.publish(&env);
 
         Ok(())
     }
 
-    /// Re-enable a previously deactivated module.
-    pub fn activate_module(env: Env, admin: Address, name: Symbol) -> Result<(), RegistryError> {
+    pub fn activate_module_via_multisig(env: Env, executor: Address, proposal_id: u64, name: Symbol) -> Result<(), RegistryError> {
+        let expected_payload = vec![&env, ProposalAction::ActivateModule(name.clone()).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
+
         Self::require_not_paused(&env)?;
-        Self::require_admin(&env, &admin)?;
 
         let mut entry: ModuleEntry = env
             .storage()
@@ -190,14 +246,13 @@ impl ProtocolRegistryContract {
             .persistent()
             .set(&DataKey::Module(name.clone()), &entry);
 
-        events::ModuleActivatedEvent { name, admin }.publish(&env);
+        events::ModuleActivatedEvent { name: name.clone(), admin: executor }.publish(&env);
 
         Ok(())
     }
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
-    /// Return the full `ModuleEntry` for a module, including inactive ones.
     pub fn get_module(env: Env, name: Symbol) -> Result<ModuleEntry, RegistryError> {
         env.storage()
             .persistent()
@@ -205,11 +260,6 @@ impl ProtocolRegistryContract {
             .ok_or(RegistryError::ModuleNotFound)
     }
 
-    /// Resolve the active address for a module.
-    ///
-    /// Returns `ModuleInactive` if the module exists but has been deactivated,
-    /// and `ModuleNotFound` if it was never registered. Clients should prefer
-    /// this over `get_module` when they just need an address to call.
     pub fn resolve(env: Env, name: Symbol) -> Result<Address, RegistryError> {
         let entry: ModuleEntry = env
             .storage()
@@ -224,7 +274,6 @@ impl ProtocolRegistryContract {
         Ok(entry.address)
     }
 
-    /// Returns true only if the module is registered and currently active.
     pub fn is_active(env: Env, name: Symbol) -> bool {
         env.storage()
             .persistent()
@@ -242,13 +291,17 @@ impl ProtocolRegistryContract {
 
     // ── Admin controls ────────────────────────────────────────────────────────
 
-    pub fn set_admin(
+    pub fn set_admin_via_multisig(
         env: Env,
-        current_admin: Address,
+        executor: Address,
+        proposal_id: u64,
         new_admin: Address,
     ) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &current_admin)?;
+        let expected_payload = vec![&env, ProposalAction::SetAdmin(new_admin.clone()).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
 
+        let current_admin = Self::get_admin(env.clone())?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
 
         events::AdminTransferredEvent {
@@ -260,25 +313,31 @@ impl ProtocolRegistryContract {
         Ok(())
     }
 
-    pub fn pause(env: Env, admin: Address) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
+    pub fn pause_via_multisig(env: Env, executor: Address, proposal_id: u64) -> Result<(), RegistryError> {
+        let expected_payload = vec![&env, ProposalAction::Pause.into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
         env.storage().instance().set(&DataKey::Paused, &true);
         Ok(())
     }
 
-    pub fn unpause(env: Env, admin: Address) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
+    pub fn unpause_via_multisig(env: Env, executor: Address, proposal_id: u64) -> Result<(), RegistryError> {
+        let expected_payload = vec![&env, ProposalAction::Unpause.into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
         env.storage().instance().set(&DataKey::Paused, &false);
         Ok(())
     }
 
-    /// Upgrade the contract WASM. Admin only.
-    pub fn upgrade(
+    pub fn upgrade_via_multisig(
         env: Env,
-        caller: Address,
+        executor: Address,
+        proposal_id: u64,
         new_wasm_hash: BytesN<32>,
     ) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &caller)?;
+        let expected_payload = vec![&env, ProposalAction::Upgrade(new_wasm_hash.clone()).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
     }

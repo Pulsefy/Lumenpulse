@@ -1,18 +1,15 @@
 [package]
-name = "protocol_registry"
-version = "0.0.0"
+name = "multisig-guard"
+version = "0.1.0"
 edition = "2021"
 publish = false
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = ["lib"]
 doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-multisig-guard = { path = "../multisig-guard" }
+
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-
-[features]
-testutils = ["soroban-sdk/testutils"]

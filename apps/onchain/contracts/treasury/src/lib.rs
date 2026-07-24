@@ -2,23 +2,21 @@
 
 mod errors;
 mod events;
-mod multisig;
 mod storage;
 
 use errors::TreasuryError;
-use multisig::{
+use multisig_guard::{
     cancel as multisig_cancel, configure as multisig_configure, consume_approval,
     expire as multisig_expire, get_config as multisig_get_config, get_proposal,
     propose as multisig_propose, replace_config as multisig_replace_config, sign as multisig_sign,
-};
-use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
-use soroban_sdk::{contract, contractimpl, token, Address, Env, String, Vec};
-use storage::{DataKey, StreamData, LEDGER_BUMP, LEDGER_THRESHOLD};
-
-pub use storage::{
-    MultisigConfig, Proposal, ProposalAction, ProposalStatus, Signer, MAX_SIGNERS,
+    MultisigConfig, MultisigDataKey, Proposal, ProposalStatus, Signer, MAX_SIGNERS,
     PROPOSAL_TTL_SECS,
 };
+use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, IntoVal, String, Vec, vec};
+use storage::{DataKey, ProposalAction, StreamData, LEDGER_BUMP, LEDGER_THRESHOLD};
+
+pub use storage::{ProposalAction as TreasuryProposalAction};
 
 #[contract]
 pub struct TreasuryContract;
@@ -69,7 +67,7 @@ impl TreasuryContract {
         signers: Vec<Signer>,
         threshold: u32,
     ) -> Result<(), TreasuryError> {
-        multisig_configure(&env, signers.clone(), threshold)?;
+        multisig_configure(&env, signers.clone(), threshold).map_err(|_| TreasuryError::InvalidMultisigConfig)?;
         let signer_count = signers.len();
         let bootstrapper = signers.get(0).ok_or(TreasuryError::InvalidMultisigConfig)?;
         events::publish_multisig_configured(
@@ -88,11 +86,12 @@ impl TreasuryContract {
         proposer: Address,
         action: ProposalAction,
     ) -> Result<u64, TreasuryError> {
-        multisig_propose(&env, proposer, action)
+        let payload = vec![&env, action.into_val(&env)];
+        multisig_propose(&env, proposer, payload).map_err(|_| TreasuryError::Unauthorized)
     }
 
     pub fn sign_proposal(env: Env, signer: Address, proposal_id: u64) -> Result<(), TreasuryError> {
-        let _ = multisig_sign(&env, signer, proposal_id)?;
+        multisig_sign(&env, signer, proposal_id).map_err(|_| TreasuryError::Unauthorized)?;
         Ok(())
     }
 
@@ -101,19 +100,19 @@ impl TreasuryContract {
         signer: Address,
         proposal_id: u64,
     ) -> Result<(), TreasuryError> {
-        multisig_cancel(&env, signer, proposal_id)
+        multisig_cancel(&env, signer, proposal_id).map_err(|_| TreasuryError::Unauthorized)
     }
 
     pub fn expire_proposal(env: Env, proposal_id: u64) -> Result<(), TreasuryError> {
-        multisig_expire(&env, proposal_id)
+        multisig_expire(&env, proposal_id).map_err(|_| TreasuryError::ProposalNotActive)
     }
 
     pub fn get_multisig_config(env: Env) -> Result<MultisigConfig, TreasuryError> {
-        multisig_get_config(&env)
+        multisig_get_config(&env).map_err(|_| TreasuryError::NotInitialized)
     }
 
     pub fn get_proposal(env: Env, proposal_id: u64) -> Result<Proposal, TreasuryError> {
-        get_proposal(&env, proposal_id)
+        get_proposal(&env, proposal_id).map_err(|_| TreasuryError::ProposalNotFound)
     }
 
     pub fn get_next_proposal_id(env: Env) -> u64 {
@@ -122,7 +121,7 @@ impl TreasuryContract {
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         env.storage()
             .instance()
-            .get(&DataKey::NextProposalId)
+            .get(&MultisigDataKey::NextProposalId)
             .unwrap_or(0)
     }
 
@@ -307,7 +306,9 @@ impl TreasuryContract {
         proposal_id: u64,
         new_admin: Address,
     ) -> Result<(), TreasuryError> {
-        consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
+        let expected_payload = vec![&env, ProposalAction::SetAdmin(new_admin.clone()).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| TreasuryError::Unauthorized)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         Ok(())
     }
@@ -321,12 +322,13 @@ impl TreasuryContract {
         new_beneficiary: Address,
     ) -> Result<(), TreasuryError> {
         Self::with_reentrancy_guard(&env, || {
+            let expected_payload = vec![&env, ProposalAction::RotateBeneficiary(old_beneficiary.clone(), new_beneficiary.clone()).into_val(&env)];
             consume_approval(
                 &env,
                 &executor,
                 proposal_id,
-                &ProposalAction::RotateBeneficiary,
-            )?;
+                &expected_payload,
+            ).map_err(|_| TreasuryError::Unauthorized)?;
 
             if old_beneficiary == new_beneficiary {
                 return Err(TreasuryError::SameBeneficiary);
@@ -373,15 +375,17 @@ impl TreasuryContract {
     }
 
     /// Replace the multisig config (signers + threshold).
-    pub fn set_multisig_config(
+    pub fn set_multisig_config_via_multisig(
         env: Env,
         executor: Address,
         proposal_id: u64,
         signers: Vec<Signer>,
         threshold: u32,
     ) -> Result<(), TreasuryError> {
-        consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
-        multisig_replace_config(&env, signers, threshold)
+        let expected_payload = vec![&env, ProposalAction::SetMultisigConfig(signers.clone(), threshold).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| TreasuryError::Unauthorized)?;
+        multisig_replace_config(&env, signers, threshold).map_err(|_| TreasuryError::InvalidMultisigConfig)
     }
 
     /// View currently unlocked amount

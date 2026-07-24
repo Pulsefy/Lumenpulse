@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, String};
+use soroban_sdk::{contracttype, Address, String, Vec};
 
 // TTL constants for Soroban storage rent management.
 // LEDGER_THRESHOLD: if the remaining TTL falls below this value, extend it.
@@ -9,16 +9,10 @@ pub const LEDGER_BUMP: u32 = 518_400;
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
-    // ── Existing keys (unchanged) ─────────────────────────────
     Admin,
     Contributor(Address),
     GitHubIndex(String),
     RegistrationNonce(Address),
-
-    // ── Multisig keys ─────────────────────────────────────────
-    MultisigConfig,
-    Proposal(u64),
-    NextProposalId,
 
     // ── Badge keys ────────────────────────────────────────────
     Badges(Address),
@@ -77,4 +71,16 @@ pub struct PenaltyRecord {
     pub points_deducted: u64,
     pub reason: String,
     pub applied_at: u64,
+}
+
+/// The set of privileged actions that require a multisig proposal.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProposalAction {
+    SetAdmin(Address),
+    UpdateReputation(Address, u64),
+    IssueBadge(Address, Badge),
+    RevokeBadge(Address, Badge),
+    ApplyPenalty(Address, u64, PenaltySeverity, u64, String),
+    SetMultisigConfig(Vec<multisig_guard::Signer>, u32),
 }

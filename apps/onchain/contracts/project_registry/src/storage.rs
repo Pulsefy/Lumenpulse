@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Symbol};
+use soroban_sdk::{contracttype, Address, Symbol, Vec};
 
 /// Verification status of a project
 #[contracttype]
@@ -60,4 +60,18 @@ pub enum DataKey {
     Project(u64),              // project_id -> ProjectEntry
     VoteCast(u64, Address),    // (project_id, voter) -> bool
     VoterWeight(u64, Address), // (project_id, voter) -> i128 (recorded at vote time)
+}
+
+/// The set of privileged actions that require a multisig proposal.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProposalAction {
+    SetAdmin(Address),
+    SetConfig(RegistryConfig),
+    ForceVerifyProject(u64),
+    ForceRejectProject(u64),
+    Pause,
+    Unpause,
+    Upgrade(soroban_sdk::BytesN<32>),
+    SetMultisigConfig(Vec<multisig_guard::Signer>, u32),
 }
