@@ -26,6 +26,8 @@ from .social_fetcher import (
     SocialPlatform,
     fetch_social,
 )
+from .ledger_cursor_store import LedgerCursorStore, LedgerCursorRow
+from .recovery_coordinator import RecoveryCoordinator, DuplicateEventError
 
 __all__ = [
     "NewsFetcher",
@@ -49,4 +51,9 @@ __all__ = [
     "QuarantinedPayload",
     "quarantine_on_error",
     "process_with_quarantine",
+    # Persistent ledger cursor store & recovery coordinator
+    "LedgerCursorStore",
+    "LedgerCursorRow",
+    "RecoveryCoordinator",
+    "DuplicateEventError",
 ]
