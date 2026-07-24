@@ -1,0 +1,12 @@
+{
+  "record_type": "str",
+  "asset": "str",
+  "metric_name": "str",
+  "window": "str",
+  "value": "float",
+  "previous_value": "float",
+  "change_percentage": "float",
+  "trend_direction": "str",
+  "extra_data": "dict",
+  "timestamp": "str"
+}
