@@ -2,16 +2,19 @@ import os
 import time
 import requests
 from src.utils.http_client import RobustHTTPClient
+from src.alert_suppression import AlertSuppressionEngine, AlertSuppressionConfig
+from src.utils.metrics import ALERT_SUPPRESSION_TOTAL, ALERT_SUPPRESSION_ACTIVE_KEYS
 
 
 class AlertNotifier:
-    def __init__(self):
+    def __init__(self, suppression_engine: AlertSuppressionEngine = None):
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.telegram_channel_id = os.getenv("TELEGRAM_CHANNEL_ID")
         self.webhook_urls = self._load_webhook_urls()
         self.max_retries = int(os.getenv("WEBHOOK_MAX_RETRIES", "3"))
         self.base_backoff_seconds = float(os.getenv("WEBHOOK_BACKOFF_SECONDS", "1"))
         self.session = RobustHTTPClient()
+        self.suppression_engine = suppression_engine or AlertSuppressionEngine()
 
     def _load_webhook_urls(self):
         urls = []
@@ -30,6 +33,20 @@ class AlertNotifier:
         if not getattr(result, "is_anomaly", False):
             return
 
+        alert_key = f"anomaly:{getattr(result, 'metric_name', 'unknown')}"
+
+        decision = self.suppression_engine.evaluate(alert_key)
+        ALERT_SUPPRESSION_TOTAL.labels(
+            alert_key=alert_key,
+            decision="emitted" if decision.emitted else "suppressed",
+        ).inc()
+        ALERT_SUPPRESSION_ACTIVE_KEYS.set(
+            len(self.suppression_engine.get_all_records())
+        )
+
+        if not decision.emitted:
+            return
+
         payload = {
             "event": "high_priority_insight",
             "type": "anomaly",
@@ -40,6 +57,7 @@ class AlertNotifier:
             "baseline_std": result.baseline_std,
             "z_score": result.z_score,
             "timestamp": result.timestamp.isoformat() if result.timestamp else None,
+            "suppression_decision": decision.to_dict(),
         }
 
         self._send_telegram(payload)

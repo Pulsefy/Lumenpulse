@@ -14,6 +14,9 @@ from typing import Optional, Dict, Any
 
 import requests
 
+from src.alert_suppression import AlertSuppressionEngine
+from src.utils.metrics import ALERT_SUPPRESSION_TOTAL, ALERT_SUPPRESSION_ACTIVE_KEYS
+
 # Load environment variables from .env file if present
 try:
     from dotenv import load_dotenv
@@ -69,6 +72,7 @@ class AlertBot:
         telegram_bot_token: Optional[str] = None,
         telegram_channel_id: Optional[str] = None,
         dry_run: bool = False,
+        suppression_engine: Optional[AlertSuppressionEngine] = None,
     ):
         """
         Initialize the AlertBot.
@@ -77,11 +81,13 @@ class AlertBot:
             telegram_bot_token: Telegram bot token (falls back to TELEGRAM_BOT_TOKEN env var)
             telegram_channel_id: Target channel/chat ID (falls back to TELEGRAM_CHANNEL_ID env var)
             dry_run: If True, log messages instead of sending them (useful for testing)
+            suppression_engine: Optional pre-configured suppression engine instance
         """
         self.bot_token = telegram_bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
         self.channel_id = telegram_channel_id or os.getenv("TELEGRAM_CHANNEL_ID")
         self.dry_run = dry_run
         self._lock = threading.Lock()
+        self.suppression_engine = suppression_engine or AlertSuppressionEngine()
 
         # Validate configuration
         self._configured = bool(self.bot_token and self.channel_id)
@@ -326,6 +332,10 @@ class AlertBot:
         """
         Check if sentiment score exceeds threshold and send alert if so.
 
+        Applies dedup/suppression: the first occurrence of a threshold breach
+        is always emitted; repeated breaches within the configured window are
+        suppressed to prevent alert spam.
+
         Args:
             analyzer_score: The sentiment/health score from MarketAnalyzer
             sentiment_data: Dictionary containing sentiment analysis details
@@ -337,6 +347,24 @@ class AlertBot:
         if analyzer_score <= self.ALERT_THRESHOLD:
             logger.debug(
                 f"Score {analyzer_score:.2f} below threshold {self.ALERT_THRESHOLD}, no alert"
+            )
+            return False
+
+        alert_key = "sentiment:high"
+        decision = self.suppression_engine.evaluate(alert_key)
+        ALERT_SUPPRESSION_TOTAL.labels(
+            alert_key=alert_key,
+            decision="emitted" if decision.emitted else "suppressed",
+        ).inc()
+        ALERT_SUPPRESSION_ACTIVE_KEYS.set(
+            len(self.suppression_engine.get_all_records())
+        )
+
+        if not decision.emitted:
+            logger.info(
+                "Score %s exceeds threshold but alert suppressed | reason=%s",
+                f"{analyzer_score:.2f}",
+                decision.reason,
             )
             return False
 
