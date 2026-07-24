@@ -1,12 +1,17 @@
 use soroban_sdk::{contracttype, Address, Symbol, Vec};
 
-/// Verification status of a project
+/// Verification status of a project.
+///
+/// `Pending` and `Verified`/`Rejected` represent the verification lifecycle.
+/// `Archived` is a terminal non-active state used for historical or removed
+/// records that must remain queryable by clients and registry consumers.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum VerificationStatus {
     Pending,
     Verified,
     Rejected,
+    Archived,
 }
 
 /// How voter weight is determined

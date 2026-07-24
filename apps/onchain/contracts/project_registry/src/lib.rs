@@ -18,6 +18,11 @@ use storage::{DataKey, ProjectEntry, ProposalAction, RegistryConfig, Verificatio
 
 pub use storage::ProposalAction as ProjectProposalAction;
 
+fn transition_to_archived(env: &Env, entry: &mut ProjectEntry) {
+    entry.status = VerificationStatus::Archived;
+    entry.resolved_at = env.ledger().timestamp();
+}
+
 #[contract]
 pub struct ProjectRegistryContract;
 
@@ -300,6 +305,62 @@ impl ProjectRegistryContract {
             .set(&DataKey::Project(project_id), &entry);
 
         Ok(status)
+    }
+
+    // ── Lifecycle/admin archival ──────────────────────────────────────────────
+
+    /// Archive a project record without deleting it so historical consumers can
+    /// continue to query the project by ID while it is no longer active.
+    pub fn archive_project(env: Env, admin: Address, project_id: u64) -> Result<(), RegistryError> {
+        Self::require_admin(&env, &admin)?;
+
+        let mut entry: ProjectEntry = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(RegistryError::ProjectNotFound)?;
+
+        transition_to_archived(&env, &mut entry);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Project(project_id), &entry);
+
+        events::ProjectArchivedEvent {
+            admin,
+            project_id,
+            archived_at: entry.resolved_at,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Alias for archival in registry terms: delist the project from active
+    /// governance participation while preserving the record for historical reads.
+    pub fn delist_project(env: Env, admin: Address, project_id: u64) -> Result<(), RegistryError> {
+        Self::require_admin(&env, &admin)?;
+
+        let mut entry: ProjectEntry = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(RegistryError::ProjectNotFound)?;
+
+        transition_to_archived(&env, &mut entry);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Project(project_id), &entry);
+
+        events::ProjectDelistedEvent {
+            admin,
+            project_id,
+            delisted_at: entry.resolved_at,
+        }
+        .publish(&env);
+
+        Ok(())
     }
 
     // ── Admin override ────────────────────────────────────────────────────────
