@@ -5,8 +5,30 @@ This service handles compute-heavy tasks such as sentiment analysis and market t
 ## Project Structure
 
 - `src/`: Core logic and service implementation.
+- `src/lineage/`: Feature and KPI lineage manifest (`feature_lineage.yaml`).
 - `tests/`: Unit and integration tests.
 - `scripts/`: Helper scripts for data management and development.
+
+## Feature & KPI Lineage
+
+All ML features and derived KPIs are documented in the lineage manifest so
+contributors can trace how every number is computed, who owns it, and what
+it feeds into.
+
+**Quick links:**
+- Manifest file: [`src/lineage/feature_lineage.yaml`](src/lineage/feature_lineage.yaml)
+- Contributor guide: [`LINEAGE.md`](LINEAGE.md)
+
+```bash
+# Validate the manifest
+python scripts/validate_lineage.py
+
+# Print a human-readable summary
+python scripts/validate_lineage.py --summary
+
+# Inspect a single entry
+python scripts/validate_lineage.py --show market_health_score
+```
 
 ## Setup Instructions
 
