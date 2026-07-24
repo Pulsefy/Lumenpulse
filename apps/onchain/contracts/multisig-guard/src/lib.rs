@@ -1,94 +1,88 @@
-use soroban_sdk::{Address, Env, Vec};
+#![no_std]
 
-use crate::errors::TreasuryError;
-use crate::events::{
-    publish_proposal_cancelled, publish_proposal_created, publish_proposal_executed,
-    publish_signature_collected,
-};
-use crate::storage::{
-    DataKey, MultisigConfig, Proposal, ProposalAction, ProposalStatus, Signer, MAX_SIGNERS,
+mod errors;
+mod events;
+pub mod storage;
+
+use soroban_sdk::{Address, Env, Val, Vec};
+
+pub use errors::MultisigError;
+pub use storage::{
+    MultisigConfig, MultisigDataKey, Proposal, ProposalStatus, Signer, MAX_SIGNERS,
     PROPOSAL_TTL_SECS,
 };
 
-/// Load the multisig config from instance storage.
-pub(crate) fn get_config(env: &Env) -> Result<MultisigConfig, TreasuryError> {
+pub fn get_config(env: &Env) -> Result<MultisigConfig, MultisigError> {
     env.storage()
         .instance()
-        .get(&DataKey::MultisigConfig)
-        .ok_or(TreasuryError::NotInitialized)
+        .get(&MultisigDataKey::MultisigConfig)
+        .ok_or(MultisigError::NotInitialized)
 }
 
-/// Locate the `Signer` record for `addr` or return `Unauthorized`.
-pub(crate) fn find_signer(
+pub fn find_signer(
     config: &MultisigConfig,
     addr: &Address,
-) -> Result<Signer, TreasuryError> {
+) -> Result<Signer, MultisigError> {
     for s in config.signers.iter() {
         if s.address == *addr {
             return Ok(s);
         }
     }
-    Err(TreasuryError::Unauthorized)
+    Err(MultisigError::Unauthorized)
 }
 
-/// Validate a multisig config (non-empty, threshold achievable, size bounded).
-pub(crate) fn validate_config(signers: &Vec<Signer>, threshold: u32) -> Result<(), TreasuryError> {
+pub fn validate_config(signers: &Vec<Signer>, threshold: u32) -> Result<(), MultisigError> {
     if signers.is_empty() || threshold == 0 {
-        return Err(TreasuryError::InvalidMultisigConfig);
+        return Err(MultisigError::InvalidConfig);
     }
     if signers.len() > MAX_SIGNERS {
-        return Err(TreasuryError::TooManySigners);
+        return Err(MultisigError::TooManySigners);
     }
     let total: u32 = signers.iter().map(|s| s.weight).sum();
     if threshold > total {
-        return Err(TreasuryError::InvalidMultisigConfig);
+        return Err(MultisigError::InvalidConfig);
     }
     Ok(())
 }
 
-/// Fetch a proposal by id.
-pub(crate) fn get_proposal(env: &Env, proposal_id: u64) -> Result<Proposal, TreasuryError> {
+pub fn get_proposal(env: &Env, proposal_id: u64) -> Result<Proposal, MultisigError> {
     env.storage()
         .instance()
-        .get(&DataKey::Proposal(proposal_id))
-        .ok_or(TreasuryError::ProposalNotFound)
+        .get(&MultisigDataKey::Proposal(proposal_id))
+        .ok_or(MultisigError::ProposalNotFound)
 }
 
-/// Verify the proposal is still active (Pending or Approved, not expired).
-fn assert_active(env: &Env, proposal: &Proposal) -> Result<(), TreasuryError> {
+fn assert_active(env: &Env, proposal: &Proposal) -> Result<(), MultisigError> {
     match proposal.status {
         ProposalStatus::Pending | ProposalStatus::Approved => {}
-        _ => return Err(TreasuryError::ProposalNotActive),
+        _ => return Err(MultisigError::ProposalNotActive),
     }
     if env.ledger().timestamp() > proposal.expires_at {
-        return Err(TreasuryError::ProposalExpired);
+        return Err(MultisigError::ProposalExpired);
     }
     Ok(())
 }
 
-/// Pop the next monotonic proposal id.
 fn next_id(env: &Env) -> u64 {
     let id: u64 = env
         .storage()
         .instance()
-        .get(&DataKey::NextProposalId)
+        .get(&MultisigDataKey::NextProposalId)
         .unwrap_or(0);
     env.storage()
         .instance()
-        .set(&DataKey::NextProposalId, &(id + 1));
+        .set(&MultisigDataKey::NextProposalId, &(id + 1));
     id
 }
 
-/// Initialize the multisig config. Must be called once after the contract is
-/// initialized. The first signer is required to authenticate the bootstrap.
-pub(crate) fn configure(
+pub fn configure(
     env: &Env,
     signers: Vec<Signer>,
     threshold: u32,
-) -> Result<(), TreasuryError> {
+) -> Result<(), MultisigError> {
     validate_config(&signers, threshold)?;
 
-    let bootstrapper = signers.get(0).ok_or(TreasuryError::InvalidMultisigConfig)?;
+    let bootstrapper = signers.get(0).ok_or(MultisigError::InvalidConfig)?;
     bootstrapper.address.require_auth();
 
     let config = MultisigConfig {
@@ -97,25 +91,22 @@ pub(crate) fn configure(
     };
     env.storage()
         .instance()
-        .set(&DataKey::MultisigConfig, &config);
+        .set(&MultisigDataKey::MultisigConfig, &config);
     env.storage()
         .instance()
-        .set(&DataKey::NextProposalId, &0u64);
+        .set(&MultisigDataKey::NextProposalId, &0u64);
     env.storage().instance().extend_ttl(
-        crate::storage::LEDGER_THRESHOLD,
-        crate::storage::LEDGER_BUMP,
+        storage::LEDGER_THRESHOLD,
+        storage::LEDGER_BUMP,
     );
     Ok(())
 }
 
-/// Replace the multisig signer set. Used by `set_multisig_config`, which is
-/// itself a gated action. Emits `MultisigConfiguredEvt` so the signer-set
-/// rotation is fully auditable.
-pub(crate) fn replace_config(
+pub fn replace_config(
     env: &Env,
     signers: Vec<Signer>,
     threshold: u32,
-) -> Result<(), TreasuryError> {
+) -> Result<(), MultisigError> {
     validate_config(&signers, threshold)?;
     let config = MultisigConfig {
         signers: signers.clone(),
@@ -123,17 +114,15 @@ pub(crate) fn replace_config(
     };
     env.storage()
         .instance()
-        .set(&DataKey::MultisigConfig, &config);
+        .set(&MultisigDataKey::MultisigConfig, &config);
     Ok(())
 }
 
-/// Submit a new proposal. The proposer's weight is counted immediately;
-/// if it reaches the threshold the proposal is auto-approved.
-pub(crate) fn propose(
+pub fn propose(
     env: &Env,
     proposer: Address,
-    action: ProposalAction,
-) -> Result<u64, TreasuryError> {
+    action: Vec<Val>,
+) -> Result<u64, MultisigError> {
     proposer.require_auth();
 
     let config = get_config(env)?;
@@ -165,9 +154,9 @@ pub(crate) fn propose(
 
     env.storage()
         .instance()
-        .set(&DataKey::Proposal(id), &proposal);
+        .set(&MultisigDataKey::Proposal(id), &proposal);
 
-    publish_proposal_created(
+    events::publish_proposal_created(
         env,
         id,
         proposer,
@@ -179,12 +168,11 @@ pub(crate) fn propose(
     Ok(id)
 }
 
-/// Add a signer's weight to an in-flight proposal.
-pub(crate) fn sign(
+pub fn sign(
     env: &Env,
     signer_addr: Address,
     proposal_id: u64,
-) -> Result<ProposalStatus, TreasuryError> {
+) -> Result<ProposalStatus, MultisigError> {
     signer_addr.require_auth();
 
     let config = get_config(env)?;
@@ -195,7 +183,7 @@ pub(crate) fn sign(
 
     for existing in proposal.signers.iter() {
         if existing == signer_addr {
-            return Err(TreasuryError::ProposalAlreadySigned);
+            return Err(MultisigError::ProposalAlreadySigned);
         }
     }
 
@@ -208,9 +196,9 @@ pub(crate) fn sign(
 
     env.storage()
         .instance()
-        .set(&DataKey::Proposal(proposal_id), &proposal);
+        .set(&MultisigDataKey::Proposal(proposal_id), &proposal);
 
-    publish_signature_collected(
+    events::publish_signature_collected(
         env,
         proposal_id,
         signer_addr,
@@ -222,15 +210,12 @@ pub(crate) fn sign(
     Ok(proposal.status)
 }
 
-/// Consume an approved proposal's authority and mark it Executed.
-/// Returns `Err` if the proposal is missing, not Approved, expired, or the
-/// action type does not match `expected_action`.
-pub(crate) fn consume_approval(
+pub fn consume_approval(
     env: &Env,
     executor: &Address,
     proposal_id: u64,
-    expected_action: &ProposalAction,
-) -> Result<(), TreasuryError> {
+    expected_action: &Vec<Val>,
+) -> Result<(), MultisigError> {
     executor.require_auth();
 
     let config = get_config(env)?;
@@ -241,28 +226,27 @@ pub(crate) fn consume_approval(
     assert_active(env, &proposal)?;
 
     if proposal.status != ProposalStatus::Approved {
-        return Err(TreasuryError::ProposalNotApproved);
+        return Err(MultisigError::ProposalNotApproved);
     }
     if &proposal.action != expected_action {
-        return Err(TreasuryError::WrongProposalAction);
+        return Err(MultisigError::WrongProposalAction);
     }
 
     proposal.status = ProposalStatus::Executed;
     env.storage()
         .instance()
-        .set(&DataKey::Proposal(proposal_id), &proposal);
+        .set(&MultisigDataKey::Proposal(proposal_id), &proposal);
 
-    publish_proposal_executed(env, proposal_id, executor.clone(), expected_action.clone());
+    events::publish_proposal_executed(env, proposal_id, executor.clone(), expected_action.clone());
 
     Ok(())
 }
 
-/// Cancel an in-flight proposal. Any signer may cancel.
-pub(crate) fn cancel(
+pub fn cancel(
     env: &Env,
     signer_addr: Address,
     proposal_id: u64,
-) -> Result<(), TreasuryError> {
+) -> Result<(), MultisigError> {
     signer_addr.require_auth();
 
     let config = get_config(env)?;
@@ -272,36 +256,35 @@ pub(crate) fn cancel(
 
     match proposal.status {
         ProposalStatus::Pending | ProposalStatus::Approved => {}
-        _ => return Err(TreasuryError::ProposalNotActive),
+        _ => return Err(MultisigError::ProposalNotActive),
     }
 
     proposal.status = ProposalStatus::Cancelled;
     env.storage()
         .instance()
-        .set(&DataKey::Proposal(proposal_id), &proposal);
+        .set(&MultisigDataKey::Proposal(proposal_id), &proposal);
 
-    publish_proposal_cancelled(env, proposal_id, signer_addr);
+    events::publish_proposal_cancelled(env, proposal_id, signer_addr);
 
     Ok(())
 }
 
-/// Mark an expired proposal as `Expired`. Permissionless.
-pub(crate) fn expire(env: &Env, proposal_id: u64) -> Result<(), TreasuryError> {
+pub fn expire(env: &Env, proposal_id: u64) -> Result<(), MultisigError> {
     let mut proposal = get_proposal(env, proposal_id)?;
 
     match proposal.status {
         ProposalStatus::Pending | ProposalStatus::Approved => {}
-        _ => return Err(TreasuryError::ProposalNotActive),
+        _ => return Err(MultisigError::ProposalNotActive),
     }
 
     if env.ledger().timestamp() <= proposal.expires_at {
-        return Err(TreasuryError::ProposalNotActive);
+        return Err(MultisigError::ProposalNotActive);
     }
 
     proposal.status = ProposalStatus::Expired;
     env.storage()
         .instance()
-        .set(&DataKey::Proposal(proposal_id), &proposal);
+        .set(&MultisigDataKey::Proposal(proposal_id), &proposal);
 
     Ok(())
 }

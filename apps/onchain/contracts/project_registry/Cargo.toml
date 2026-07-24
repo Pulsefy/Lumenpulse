@@ -10,7 +10,7 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-
+multisig-guard = { path = "../multisig-guard" }
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 

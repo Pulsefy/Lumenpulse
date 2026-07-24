@@ -5,9 +5,18 @@ mod events;
 mod storage;
 
 use errors::RegistryError;
+use multisig_guard::{
+    cancel as multisig_cancel, configure as multisig_configure, consume_approval,
+    expire as multisig_expire, get_config as multisig_get_config, get_proposal,
+    propose as multisig_propose, replace_config as multisig_replace_config, sign as multisig_sign,
+    MultisigConfig, MultisigDataKey, Proposal, ProposalStatus, Signer, MAX_SIGNERS,
+    PROPOSAL_TTL_SECS,
+};
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal, Symbol};
-use storage::{DataKey, ProjectEntry, RegistryConfig, VerificationStatus, WeightMode};
+use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, IntoVal, Symbol, Vec};
+use storage::{DataKey, ProjectEntry, ProposalAction, RegistryConfig, VerificationStatus, WeightMode};
+
+pub use storage::ProposalAction as ProjectProposalAction;
 
 fn transition_to_archived(env: &Env, entry: &mut ProjectEntry) {
     entry.status = VerificationStatus::Archived;
@@ -51,9 +60,6 @@ impl ProjectRegistryContract {
     fn resolve_weight(env: &Env, config: &RegistryConfig, voter: &Address) -> i128 {
         let weight = match config.weight_mode {
             WeightMode::Reputation => {
-                // Read reputation_score from contributor_registry via cross-contract call.
-                // The contributor_registry exposes get_reputation(contributor) -> u64.
-                // We call it generically via invoke_contract.
                 if let Some(ref registry) = config.contributor_registry {
                     let score: u64 = env.invoke_contract(
                         registry,
@@ -73,9 +79,6 @@ impl ProjectRegistryContract {
                 }
             }
             WeightMode::Flat => {
-                // Any registered contributor gets weight 1.
-                // We check registration via contributor_registry if configured,
-                // otherwise grant weight 1 to any caller.
                 if let Some(ref registry) = config.contributor_registry {
                     let exists: bool = env.invoke_contract(
                         registry,
@@ -97,13 +100,6 @@ impl ProjectRegistryContract {
 
     // ── Initialisation ────────────────────────────────────────────────────────
 
-    /// Deploy and configure the registry.
-    ///
-    /// `quorum_threshold` — total weight-for votes needed to auto-verify.
-    /// `weight_mode`      — Reputation | TokenBalance | Flat.
-    /// `governance_token` — required when weight_mode = TokenBalance.
-    /// `contributor_registry` — required when weight_mode = Reputation | Flat.
-    /// `min_voter_weight` — minimum weight a voter must hold to participate.
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -137,10 +133,53 @@ impl ProjectRegistryContract {
         Ok(())
     }
 
+    pub fn configure_multisig(
+        env: Env,
+        signers: Vec<Signer>,
+        threshold: u32,
+    ) -> Result<(), RegistryError> {
+        multisig_configure(&env, signers.clone(), threshold).map_err(|_| RegistryError::Unauthorized)?;
+        Ok(())
+    }
+
+    // ── Multisig proposal lifecycle ──────────────────────────
+
+    pub fn propose(
+        env: Env,
+        proposer: Address,
+        action: ProposalAction,
+    ) -> Result<u64, RegistryError> {
+        let payload = vec![&env, action.into_val(&env)];
+        multisig_propose(&env, proposer, payload).map_err(|_| RegistryError::Unauthorized)
+    }
+
+    pub fn sign_proposal(env: Env, signer: Address, proposal_id: u64) -> Result<(), RegistryError> {
+        multisig_sign(&env, signer, proposal_id).map_err(|_| RegistryError::Unauthorized)?;
+        Ok(())
+    }
+
+    pub fn cancel_proposal(
+        env: Env,
+        signer: Address,
+        proposal_id: u64,
+    ) -> Result<(), RegistryError> {
+        multisig_cancel(&env, signer, proposal_id).map_err(|_| RegistryError::Unauthorized)
+    }
+
+    pub fn expire_proposal(env: Env, proposal_id: u64) -> Result<(), RegistryError> {
+        multisig_expire(&env, proposal_id).map_err(|_| RegistryError::Unauthorized)
+    }
+
+    pub fn get_multisig_config(env: Env) -> Result<MultisigConfig, RegistryError> {
+        multisig_get_config(&env).map_err(|_| RegistryError::NotInitialized)
+    }
+
+    pub fn get_proposal(env: Env, proposal_id: u64) -> Result<Proposal, RegistryError> {
+        get_proposal(&env, proposal_id).map_err(|_| RegistryError::Unauthorized)
+    }
+
     // ── Project registration ──────────────────────────────────────────────────
 
-    /// Register a project for community verification.
-    /// Anyone can register a project they own.
     pub fn register_project(
         env: Env,
         owner: Address,
@@ -185,15 +224,6 @@ impl ProjectRegistryContract {
 
     // ── Community voting ──────────────────────────────────────────────────────
 
-    /// Cast a verification vote for a project.
-    ///
-    /// Weight is determined by the configured WeightMode:
-    ///   - Reputation: contributor_registry.get_reputation(voter)
-    ///   - TokenBalance: governance_token.balance(voter)
-    ///   - Flat: 1 per registered contributor
-    ///
-    /// If votes_for reaches quorum_threshold the project is auto-verified.
-    /// If votes_against reaches quorum_threshold the project is auto-rejected.
     pub fn cast_vote(
         env: Env,
         voter: Address,
@@ -209,12 +239,10 @@ impl ProjectRegistryContract {
             .get(&DataKey::Project(project_id))
             .ok_or(RegistryError::ProjectNotFound)?;
 
-        // Only pending projects accept votes
         if entry.status != VerificationStatus::Pending {
             return Err(RegistryError::VotingClosed);
         }
 
-        // Prevent double voting
         let vote_key = DataKey::VoteCast(project_id, voter.clone());
         if env.storage().persistent().has(&vote_key) {
             return Err(RegistryError::AlreadyVoted);
@@ -232,7 +260,6 @@ impl ProjectRegistryContract {
             return Err(RegistryError::InsufficientWeight);
         }
 
-        // Record vote
         env.storage().persistent().set(&vote_key, &true);
         env.storage()
             .persistent()
@@ -252,7 +279,6 @@ impl ProjectRegistryContract {
         }
         .publish(&env);
 
-        // Auto-resolve if quorum reached
         if entry.votes_for >= config.quorum_threshold {
             entry.status = VerificationStatus::Verified;
             entry.resolved_at = env.ledger().timestamp();
@@ -339,14 +365,15 @@ impl ProjectRegistryContract {
 
     // ── Admin override ────────────────────────────────────────────────────────
 
-    /// Admin can override verification status (e.g. emergency revocation).
-    pub fn override_verification(
+    pub fn force_verify_project_via_multisig(
         env: Env,
-        admin: Address,
+        executor: Address,
+        proposal_id: u64,
         project_id: u64,
-        verified: bool,
     ) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
+        let expected_payload = vec![&env, ProposalAction::ForceVerifyProject(project_id).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
 
         let mut entry: ProjectEntry = env
             .storage()
@@ -354,11 +381,7 @@ impl ProjectRegistryContract {
             .get(&DataKey::Project(project_id))
             .ok_or(RegistryError::ProjectNotFound)?;
 
-        entry.status = if verified {
-            VerificationStatus::Verified
-        } else {
-            VerificationStatus::Rejected
-        };
+        entry.status = VerificationStatus::Verified;
         entry.resolved_at = env.ledger().timestamp();
 
         env.storage()
@@ -367,13 +390,47 @@ impl ProjectRegistryContract {
 
         events::VerificationOverriddenEvent {
             project_id,
-            admin,
-            verified,
+            admin: executor,
+            verified: true,
         }
         .publish(&env);
 
         Ok(())
     }
+
+    pub fn force_reject_project_via_multisig(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        project_id: u64,
+    ) -> Result<(), RegistryError> {
+        let expected_payload = vec![&env, ProposalAction::ForceRejectProject(project_id).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
+
+        let mut entry: ProjectEntry = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(RegistryError::ProjectNotFound)?;
+
+        entry.status = VerificationStatus::Rejected;
+        entry.resolved_at = env.ledger().timestamp();
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Project(project_id), &entry);
+
+        events::VerificationOverriddenEvent {
+            project_id,
+            admin: executor,
+            verified: false,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
@@ -421,55 +478,61 @@ impl ProjectRegistryContract {
 
     // ── Admin controls ────────────────────────────────────────────────────────
 
-    pub fn update_config(
+    pub fn update_config_via_multisig(
         env: Env,
-        admin: Address,
-        quorum_threshold: i128,
-        min_voter_weight: i128,
+        executor: Address,
+        proposal_id: u64,
+        config: RegistryConfig,
     ) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
-        if quorum_threshold <= 0 {
+        let expected_payload = vec![&env, ProposalAction::SetConfig(config.clone()).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
+
+        if config.quorum_threshold <= 0 {
             return Err(RegistryError::InvalidThreshold);
         }
-        let mut config: RegistryConfig = env
-            .storage()
-            .instance()
-            .get(&DataKey::Config)
-            .ok_or(RegistryError::NotInitialized)?;
-        config.quorum_threshold = quorum_threshold;
-        config.min_voter_weight = min_voter_weight;
         env.storage().instance().set(&DataKey::Config, &config);
         Ok(())
     }
 
-    pub fn pause(env: Env, admin: Address) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
+    pub fn pause_via_multisig(env: Env, executor: Address, proposal_id: u64) -> Result<(), RegistryError> {
+        let expected_payload = vec![&env, ProposalAction::Pause.into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
         env.storage().instance().set(&DataKey::Paused, &true);
         Ok(())
     }
 
-    pub fn unpause(env: Env, admin: Address) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
+    pub fn unpause_via_multisig(env: Env, executor: Address, proposal_id: u64) -> Result<(), RegistryError> {
+        let expected_payload = vec![&env, ProposalAction::Unpause.into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
         env.storage().instance().set(&DataKey::Paused, &false);
         Ok(())
     }
 
-    pub fn set_admin(
+    pub fn set_admin_via_multisig(
         env: Env,
-        current_admin: Address,
+        executor: Address,
+        proposal_id: u64,
         new_admin: Address,
     ) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &current_admin)?;
+        let expected_payload = vec![&env, ProposalAction::SetAdmin(new_admin.clone()).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         Ok(())
     }
 
-    pub fn upgrade(
+    pub fn upgrade_via_multisig(
         env: Env,
-        caller: Address,
+        executor: Address,
+        proposal_id: u64,
         new_wasm_hash: BytesN<32>,
     ) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &caller)?;
+        let expected_payload = vec![&env, ProposalAction::Upgrade(new_wasm_hash.clone()).into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| RegistryError::Unauthorized)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
     }
