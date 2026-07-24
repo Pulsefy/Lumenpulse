@@ -50,6 +50,17 @@ SOURCE_HEALTH = Gauge(
     ["source"],
 )
 
+ALERT_SUPPRESSION_TOTAL = Counter(
+    "lumenpulse_alert_suppression_total",
+    "Total alert suppression decisions",
+    ["alert_key", "decision"],
+)
+
+ALERT_SUPPRESSION_ACTIVE_KEYS = Gauge(
+    "lumenpulse_alert_suppression_active_keys",
+    "Number of alert keys currently tracked by the suppression engine",
+)
+
 def start_metrics_server(port: int = 9090):
     """Start standalone prometheus metrics server (for background workers)"""
     try:
