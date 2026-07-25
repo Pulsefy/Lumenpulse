@@ -7,6 +7,7 @@ import { TelegramSilence } from './telegram-silence.entity';
 import { PriceModule } from '../price/price.module';
 import { SentimentModule } from '../sentiment/sentiment.module';
 import { NewsModule } from '../news/news.module';
+import { BotAuthModule } from '../bot-auth/bot-auth.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { NewsModule } from '../news/news.module';
     PriceModule,
     SentimentModule,
     NewsModule,
+    BotAuthModule,
   ],
   providers: [TelegramBotService],
   controllers: [TelegramBotController],

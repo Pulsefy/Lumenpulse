@@ -63,6 +63,7 @@ import { TreasuryModule } from './treasury/treasury.module';
 import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { ContractAdminModule } from './contract-admin/contract-admin.module';
+import { BotAuthModule } from './bot-auth/bot-auth.module';
 
 @Module({
   imports: [
@@ -135,6 +136,7 @@ import { ContractAdminModule } from './contract-admin/contract-admin.module';
     VestingWalletModule,
     ContractsModule,
     ContractAdminModule,
+    BotAuthModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

@@ -19,6 +19,8 @@ import { PriceService } from '../price/price.service';
 import { SentimentService } from '../sentiment/sentiment.service';
 import { NewsService } from '../news/news.service';
 
+import { BotAuthService } from '../bot-auth/bot-auth.service';
+
 @Injectable()
 export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TelegramBotService.name);
@@ -33,6 +35,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     private readonly priceService: PriceService,
     private readonly sentimentService: SentimentService,
     private readonly newsService: NewsService,
+    private readonly botAuthService: BotAuthService,
   ) {}
 
   onModuleInit() {
@@ -60,49 +63,49 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     if (!this.bot) return;
 
     this.bot.onText(/\/start/, (msg) => {
-      void this.handleStart(msg);
+      void this.withAuth(msg, () => this.handleStart(msg));
     });
     this.bot.onText(/\/status/, (msg) => {
-      void this.handleStatus(msg);
+      void this.withAuth(msg, () => this.handleStatus(msg));
     });
     this.bot.onText(/\/price (.+)/, (msg, match) => {
-      void this.handlePrice(msg, match);
+      void this.withAuth(msg, () => this.handlePrice(msg, match));
     });
     this.bot.onText(/\/price$/, (msg) => {
-      void this.handlePrice(msg, null);
+      void this.withAuth(msg, () => this.handlePrice(msg, null));
     });
     this.bot.onText(/\/sentiment/, (msg) => {
-      void this.handleSentiment(msg);
+      void this.withAuth(msg, () => this.handleSentiment(msg));
     });
     this.bot.onText(/\/trend/, (msg) => {
-      void this.handleTrend(msg);
+      void this.withAuth(msg, () => this.handleTrend(msg));
     });
     this.bot.onText(/\/subscribe (.+)/, (msg, match) => {
-      void this.handleSubscribe(msg, match);
+      void this.withAuth(msg, () => this.handleSubscribe(msg, match));
     });
     this.bot.onText(/\/subscribe$/, (msg) => {
-      void this.handleSubscribe(msg, null);
+      void this.withAuth(msg, () => this.handleSubscribe(msg, null));
     });
     this.bot.onText(/\/unsubscribe (.+)/, (msg, match) => {
-      void this.handleUnsubscribe(msg, match);
+      void this.withAuth(msg, () => this.handleUnsubscribe(msg, match));
     });
     this.bot.onText(/\/unsubscribe$/, (msg) => {
-      void this.handleUnsubscribe(msg, null);
+      void this.withAuth(msg, () => this.handleUnsubscribe(msg, null));
     });
     this.bot.onText(/\/silence (.+)/, (msg, match) => {
-      void this.handleSilence(msg, match);
+      void this.withAuth(msg, () => this.handleSilence(msg, match));
     });
     this.bot.onText(/\/silence$/, (msg) => {
-      void this.handleSilence(msg, null);
+      void this.withAuth(msg, () => this.handleSilence(msg, null));
     });
     this.bot.onText(/\/unsilence/, (msg) => {
-      void this.handleUnsilence(msg);
+      void this.withAuth(msg, () => this.handleUnsilence(msg));
     });
     this.bot.onText(/\/subscriptions/, (msg) => {
-      void this.handleSubscriptions(msg);
+      void this.withAuth(msg, () => this.handleSubscriptions(msg));
     });
     this.bot.onText(/\/help/, (msg) => {
-      void this.handleHelp(msg);
+      void this.withAuth(msg, () => this.handleHelp(msg));
     });
 
     this.bot.on('polling_error', (error) => {
@@ -121,6 +124,20 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.error(`Failed to send message to ${chatId}`, error);
     }
+  }
+
+  private async withAuth(msg: Message, handlerFn: () => Promise<void>) {
+    const text = msg.text || '';
+    if (!text.startsWith('/')) return;
+    const chatId = this.getChatId(msg);
+    const username = (msg as any).from?.username ?? null;
+    
+    const isAuthorized = await this.botAuthService.authorizeCommand(text, chatId, username);
+    if (!isAuthorized) {
+      await this.sendMessage(chatId, '⛔ Unauthorized or unknown command.');
+      return;
+    }
+    await handlerFn();
   }
 
   private async handleStart(msg: Message) {
