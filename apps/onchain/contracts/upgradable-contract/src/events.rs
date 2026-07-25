@@ -26,6 +26,7 @@ pub struct OperationQueuedEvent {
     pub proposer: Address,
     pub operation_id: u32,
     pub execute_after: u64,
+    pub expires_at: u64,
 }
 
 /// Emitted when a queued operation is cancelled.

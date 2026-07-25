@@ -14,4 +14,5 @@ pub enum ContractError {
     OperationExpired = 7,
 
     InvalidDelay = 8,
+    DirectUpgradeDisabled = 9,
 }
