@@ -21,4 +21,10 @@ pub enum ContributorError {
     BelowThreshold = 15,
     InvalidNonce = 16,
     InvalidSignature = 17,
+    /// The entire contract is paused (legacy / global pause). Kept for
+    /// backward-compatibility; new code should prefer `ScopePaused`.
+    ContractPaused = 18,
+    /// A specific action domain (scope) is currently paused. The caller
+    /// should retry after the scope is unpaused via `unpause_scope`.
+    ScopePaused = 19,
 }

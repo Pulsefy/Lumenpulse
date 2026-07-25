@@ -1,5 +1,7 @@
 use soroban_sdk::{contractevent, Address, Symbol};
 
+use crate::storage::PoolScope;
+
 #[contractevent]
 pub struct InitializedEvent {
     pub admin: Address,
@@ -69,4 +71,28 @@ pub struct AllMatchesDistributedEvent {
     #[topic]
     pub round_id: u64,
     pub total_distributed: i128,
+}
+
+/// Emitted when a specific action scope is paused by an admin.
+/// Observers can use `scope` to identify which subsystem was halted.
+#[contractevent]
+pub struct ScopePausedEvent {
+    /// The admin address that triggered the pause.
+    #[topic]
+    pub admin: Address,
+    /// The domain that was paused (Contributions, Payouts, or Governance).
+    #[topic]
+    pub scope: PoolScope,
+}
+
+/// Emitted when a specific action scope is unpaused by an admin.
+/// Observers can use `scope` to identify which subsystem was resumed.
+#[contractevent]
+pub struct ScopeUnpausedEvent {
+    /// The admin address that triggered the unpause.
+    #[topic]
+    pub admin: Address,
+    /// The domain that was unpaused (Contributions, Payouts, or Governance).
+    #[topic]
+    pub scope: PoolScope,
 }

@@ -9,7 +9,7 @@ use errors::ContributorError;
 use events::{
     AdminChangedEvent, BadgeGrantedEvent, BadgeRevokedEvent, ContributorProfileChangedEvt,
     GaslessRegistrationEvent, MultisigConfiguredEvent, ReputationPenaltyAppliedEvent,
-    UpgradedEvent,
+    ScopePausedEvent, ScopeUnpausedEvent, UpgradedEvent,
 };
 use multisig::{
     cancel, consume_approval, expire, get_config, get_proposal, propose, sign, validate_config,
@@ -21,8 +21,8 @@ use soroban_sdk::{
     contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 use storage::{
-    Badge, ContributorData, ContributorTier, DataKey, PenaltyRecord, PenaltySeverity, LEDGER_BUMP,
-    LEDGER_THRESHOLD,
+    Badge, ContributorData, ContributorTier, DataKey, PauseScope, PenaltyRecord, PenaltySeverity,
+    LEDGER_BUMP, LEDGER_THRESHOLD,
 };
 
 #[contract]
@@ -39,6 +39,44 @@ impl ContributorRegistryContract {
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        Ok(())
+    }
+
+    /// Returns `Err(ContributorError::ScopePaused)` when the given scope is
+    /// currently paused. Read-only queries must NOT call this guard so that
+    /// information remains available during a pause.
+    fn require_scope_not_paused(env: &Env, scope: PauseScope) -> Result<(), ContributorError> {
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::ScopePaused(scope))
+            .unwrap_or(false);
+        if paused {
+            Err(ContributorError::ScopePaused)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Returns the address stored under `DataKey::Admin`, which is set during
+    /// `set_admin` execution. Falls back to the first multisig signer if no
+    /// explicit admin has been set (bootstrapping scenario).
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), ContributorError> {
+        // Prefer an explicitly-set admin key; fall back to first signer.
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .or_else(|| {
+                get_config(env)
+                    .ok()
+                    .and_then(|c| c.signers.get(0).map(|s| s.address))
+            })
+            .ok_or(ContributorError::NotInitialized)?;
+        if caller != &admin {
+            return Err(ContributorError::Unauthorized);
+        }
+        caller.require_auth();
         Ok(())
     }
 
@@ -163,6 +201,8 @@ impl ContributorRegistryContract {
         proposer: Address,
         action: ProposalAction,
     ) -> Result<u64, ContributorError> {
+        Self::ensure_initialized(&env)?;
+        Self::require_scope_not_paused(&env, PauseScope::Governance)?;
         propose(&env, proposer, action)
     }
 
@@ -171,6 +211,8 @@ impl ContributorRegistryContract {
         signer: Address,
         proposal_id: u64,
     ) -> Result<ProposalStatus, ContributorError> {
+        Self::ensure_initialized(&env)?;
+        Self::require_scope_not_paused(&env, PauseScope::Governance)?;
         sign(&env, signer, proposal_id)
     }
 
@@ -179,10 +221,15 @@ impl ContributorRegistryContract {
         signer: Address,
         proposal_id: u64,
     ) -> Result<(), ContributorError> {
+        Self::ensure_initialized(&env)?;
+        Self::require_scope_not_paused(&env, PauseScope::Governance)?;
         cancel(&env, signer, proposal_id)
     }
 
     pub fn expire_proposal(env: Env, proposal_id: u64) -> Result<(), ContributorError> {
+        // Expiry is intentionally NOT gated by a scope pause:
+        // even when governance is paused, time-locked proposals must be
+        // expirable to prevent them from blocking future execution once unpaused.
         expire(&env, proposal_id)
     }
 
@@ -193,6 +240,7 @@ impl ContributorRegistryContract {
         new_signers: Vec<Signer>,
         new_threshold: u32,
     ) -> Result<(), ContributorError> {
+        Self::require_scope_not_paused(&env, PauseScope::Governance)?;
         consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
 
         validate_config(&new_signers, new_threshold)?;
@@ -226,6 +274,7 @@ impl ContributorRegistryContract {
         github_handle: String,
     ) -> Result<(), ContributorError> {
         Self::ensure_initialized(&env)?;
+        Self::require_scope_not_paused(&env, PauseScope::Contributions)?;
         address.require_auth();
         Self::write_contributor(&env, &address, &github_handle)
     }
@@ -257,6 +306,7 @@ impl ContributorRegistryContract {
         signature: Bytes,
     ) -> Result<(), ContributorError> {
         Self::ensure_initialized(&env)?;
+        Self::require_scope_not_paused(&env, PauseScope::Contributions)?;
         if signature.is_empty() {
             return Err(ContributorError::InvalidSignature);
         }
@@ -330,6 +380,7 @@ impl ContributorRegistryContract {
         proposal_id: Option<u64>,
     ) -> Result<(), ContributorError> {
         Self::ensure_initialized(&env)?;
+        Self::require_scope_not_paused(&env, PauseScope::Contributions)?;
 
         if github_handle.is_empty() {
             return Err(ContributorError::InvalidGitHubHandle);
@@ -417,6 +468,7 @@ impl ContributorRegistryContract {
     /// This prevents orphaned index entries and reclaims rent.
     pub fn deregister_contributor(env: Env, address: Address) -> Result<(), ContributorError> {
         Self::ensure_initialized(&env)?;
+        Self::require_scope_not_paused(&env, PauseScope::Contributions)?;
         address.require_auth();
 
         let contributor: ContributorData = env
@@ -448,6 +500,7 @@ impl ContributorRegistryContract {
         contributor_address: Address,
         delta: i64,
     ) -> Result<(), ContributorError> {
+        Self::require_scope_not_paused(&env, PauseScope::Governance)?;
         consume_approval(
             &env,
             &executor,
@@ -495,6 +548,7 @@ impl ContributorRegistryContract {
         contributor_address: Address,
         badge: Badge,
     ) -> Result<(), ContributorError> {
+        Self::require_scope_not_paused(&env, PauseScope::Governance)?;
         consume_approval(&env, &executor, proposal_id, &ProposalAction::GrantBadge)?;
 
         // Ensure contributor exists
@@ -532,6 +586,7 @@ impl ContributorRegistryContract {
         contributor_address: Address,
         badge: Badge,
     ) -> Result<(), ContributorError> {
+        Self::require_scope_not_paused(&env, PauseScope::Governance)?;
         consume_approval(&env, &executor, proposal_id, &ProposalAction::RevokeBadge)?;
 
         // Ensure contributor exists
@@ -581,6 +636,7 @@ impl ContributorRegistryContract {
         points: u64,
         reason: String,
     ) -> Result<(), ContributorError> {
+        Self::require_scope_not_paused(&env, PauseScope::Governance)?;
         consume_approval(&env, &executor, proposal_id, &ProposalAction::ApplyPenalty)?;
 
         let mut contributor: ContributorData = env
@@ -637,6 +693,7 @@ impl ContributorRegistryContract {
         proposal_id: u64,
         new_wasm_hash: BytesN<32>,
     ) -> Result<(), ContributorError> {
+        Self::require_scope_not_paused(&env, PauseScope::Governance)?;
         consume_approval(&env, &executor, proposal_id, &ProposalAction::Upgrade)?;
 
         env.deployer()
@@ -657,6 +714,7 @@ impl ContributorRegistryContract {
         proposal_id: u64,
         new_admin: Address,
     ) -> Result<(), ContributorError> {
+        Self::require_scope_not_paused(&env, PauseScope::Governance)?;
         consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
 
         env.storage().instance().set(&DataKey::Admin, &new_admin);
@@ -671,6 +729,66 @@ impl ContributorRegistryContract {
         .publish(&env);
 
         Ok(())
+    }
+
+    // ── Granular pause controls ──────────────────────────────
+
+    /// Pause a specific action scope. Only the current admin may call this.
+    ///
+    /// Pausing `Contributions` prevents registration and profile mutations
+    /// while keeping all read-only queries available.
+    ///
+    /// Pausing `Governance` prevents new proposals, signing, and execution of
+    /// multisig-gated actions. Expiry of existing proposals remains available
+    /// so that time-locked proposals do not block future governance once unpaused.
+    ///
+    /// Pausing `Payouts` is reserved for future payout flows.
+    ///
+    /// Emits `ScopePausedEvent`.
+    pub fn pause_scope(env: Env, admin: Address, scope: PauseScope) -> Result<(), ContributorError> {
+        Self::ensure_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::ScopePaused(scope), &true);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        ScopePausedEvent {
+            admin,
+            scope,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Unpause a specific action scope. Only the current admin may call this.
+    ///
+    /// Emits `ScopeUnpausedEvent`.
+    pub fn unpause_scope(env: Env, admin: Address, scope: PauseScope) -> Result<(), ContributorError> {
+        Self::ensure_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::ScopePaused(scope), &false);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        ScopeUnpausedEvent {
+            admin,
+            scope,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Returns `true` if the given scope is currently paused, `false` otherwise.
+    /// This is a read-only query and is never itself gated by any pause scope.
+    pub fn is_scope_paused(env: Env, scope: PauseScope) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::ScopePaused(scope))
+            .unwrap_or(false)
     }
 
     // ── Queries ──────────────────────────────────────────────

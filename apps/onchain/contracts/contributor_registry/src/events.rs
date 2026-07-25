@@ -1,7 +1,7 @@
 use soroban_sdk::{contractevent, Address, BytesN, String};
 
 use crate::multisig::{ProposalAction, ProposalStatus};
-use crate::storage::{Badge, PenaltySeverity};
+use crate::storage::{Badge, PauseScope, PenaltySeverity};
 
 #[contractevent]
 pub struct UpgradedEvent {
@@ -117,4 +117,28 @@ pub struct ContributorProfileChangedEvt {
     pub new_github_handle: String,
     /// Proposal id when the change was admin-managed; 0 for self-service.
     pub proposal_id: u64,
+}
+
+/// Emitted when a specific action scope is paused by an admin.
+/// Observers can use `scope` to identify which subsystem was halted.
+#[contractevent]
+pub struct ScopePausedEvent {
+    /// The admin address that triggered the pause.
+    #[topic]
+    pub admin: Address,
+    /// The domain that was paused (Contributions, Governance, or Payouts).
+    #[topic]
+    pub scope: PauseScope,
+}
+
+/// Emitted when a specific action scope is unpaused by an admin.
+/// Observers can use `scope` to identify which subsystem was resumed.
+#[contractevent]
+pub struct ScopeUnpausedEvent {
+    /// The admin address that triggered the unpause.
+    #[topic]
+    pub admin: Address,
+    /// The domain that was unpaused (Contributions, Governance, or Payouts).
+    #[topic]
+    pub scope: PauseScope,
 }

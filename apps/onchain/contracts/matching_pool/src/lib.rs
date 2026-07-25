@@ -6,17 +6,20 @@ mod math;
 mod storage;
 
 use errors::MatchingPoolError;
+use events::{ScopePausedEvent, ScopeUnpausedEvent};
 use math::{sqrt_scaled, unscale};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
-use storage::{DataKey, RoundData};
+use storage::{DataKey, PoolScope, RoundData};
 
 #[contract]
 pub struct MatchingPoolContract;
 
 #[contractimpl]
 impl MatchingPoolContract {
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
     fn require_admin(env: &Env, caller: &Address) -> Result<(), MatchingPoolError> {
         let admin: Address = env
             .storage()
@@ -30,14 +33,17 @@ impl MatchingPoolContract {
         Ok(())
     }
 
-    fn require_not_paused(env: &Env) -> Result<(), MatchingPoolError> {
+    /// Returns `Err(ScopePaused)` when the given scope is currently paused.
+    /// Read-only queries must NOT call this guard so that information remains
+    /// available during a pause.
+    fn require_scope_not_paused(env: &Env, scope: PoolScope) -> Result<(), MatchingPoolError> {
         let paused: bool = env
             .storage()
             .instance()
-            .get(&DataKey::Paused)
+            .get(&DataKey::ScopePaused(scope))
             .unwrap_or(false);
         if paused {
-            Err(MatchingPoolError::ContractPaused)
+            Err(MatchingPoolError::ScopePaused)
         } else {
             Ok(())
         }
@@ -53,17 +59,20 @@ impl MatchingPoolContract {
         result
     }
 
+    // ── Initialisation ────────────────────────────────────────────────────────
+
     pub fn initialize(env: Env, admin: Address) -> Result<(), MatchingPoolError> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(MatchingPoolError::AlreadyInitialized);
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::NextRoundId, &0u64);
         events::InitializedEvent { admin }.publish(&env);
         Ok(())
     }
+
+    // ── Governance-scoped actions ─────────────────────────────────────────────
 
     pub fn create_round(
         env: Env,
@@ -74,7 +83,7 @@ impl MatchingPoolContract {
         end_time: u64,
     ) -> Result<u64, MatchingPoolError> {
         Self::require_admin(&env, &admin)?;
-        Self::require_not_paused(&env)?;
+        Self::require_scope_not_paused(&env, PoolScope::Governance)?;
         if end_time <= start_time {
             return Err(MatchingPoolError::InvalidRoundDates);
         }
@@ -123,49 +132,6 @@ impl MatchingPoolContract {
         Ok(round_id)
     }
 
-    pub fn fund_pool(
-        env: Env,
-        funder: Address,
-        round_id: u64,
-        amount: i128,
-    ) -> Result<(), MatchingPoolError> {
-        Self::with_reentrancy_guard(&env, || {
-            Self::require_not_paused(&env)?;
-            funder.require_auth();
-            if amount <= 0 {
-                return Err(MatchingPoolError::InvalidAmount);
-            }
-            let mut round: RoundData = env
-                .storage()
-                .persistent()
-                .get(&DataKey::Round(round_id))
-                .ok_or(MatchingPoolError::RoundNotFound)?;
-            if round.is_finalized {
-                return Err(MatchingPoolError::RoundAlreadyFinalized);
-            }
-            let pool_key = DataKey::RoundPool(round_id);
-            let current: i128 = env.storage().persistent().get(&pool_key).unwrap_or(0);
-            env.storage()
-                .persistent()
-                .set(&pool_key, &(current + amount));
-            round.total_pool += amount;
-            env.storage()
-                .persistent()
-                .set(&DataKey::Round(round_id), &round);
-
-            let contract_addr = env.current_contract_address();
-            TokenClient::new(&env, &round.token_address).transfer(&funder, &contract_addr, &amount);
-
-            events::PoolFundedEvent {
-                funder,
-                round_id,
-                amount,
-            }
-            .publish(&env);
-            Ok(())
-        })
-    }
-
     pub fn approve_project(
         env: Env,
         admin: Address,
@@ -173,6 +139,7 @@ impl MatchingPoolContract {
         project_id: u64,
     ) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &admin)?;
+        Self::require_scope_not_paused(&env, PoolScope::Governance)?;
         let round: RoundData = env
             .storage()
             .persistent()
@@ -197,9 +164,10 @@ impl MatchingPoolContract {
             .persistent()
             .set(&DataKey::EligibleProjectAt(round_id, count), &project_id);
         env.storage().persistent().set(&count_key, &(count + 1));
-        env.storage()
-            .persistent()
-            .set(&DataKey::ProjectContributions(round_id, project_id), &0i128);
+        env.storage().persistent().set(
+            &DataKey::ProjectContributions(round_id, project_id),
+            &0i128,
+        );
         env.storage().persistent().set(
             &DataKey::ProjectContributorCount(round_id, project_id),
             &0u32,
@@ -219,6 +187,7 @@ impl MatchingPoolContract {
         project_id: u64,
     ) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &admin)?;
+        Self::require_scope_not_paused(&env, PoolScope::Governance)?;
         let round: RoundData = env
             .storage()
             .persistent()
@@ -245,6 +214,52 @@ impl MatchingPoolContract {
         Ok(())
     }
 
+    // ── Contributions-scoped actions ──────────────────────────────────────────
+
+    pub fn fund_pool(
+        env: Env,
+        funder: Address,
+        round_id: u64,
+        amount: i128,
+    ) -> Result<(), MatchingPoolError> {
+        Self::with_reentrancy_guard(&env, || {
+            Self::require_scope_not_paused(&env, PoolScope::Contributions)?;
+            funder.require_auth();
+            if amount <= 0 {
+                return Err(MatchingPoolError::InvalidAmount);
+            }
+            let mut round: RoundData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Round(round_id))
+                .ok_or(MatchingPoolError::RoundNotFound)?;
+            if round.is_finalized {
+                return Err(MatchingPoolError::RoundAlreadyFinalized);
+            }
+            let pool_key = DataKey::RoundPool(round_id);
+            let current: i128 = env.storage().persistent().get(&pool_key).unwrap_or(0);
+            env.storage()
+                .persistent()
+                .set(&pool_key, &(current + amount));
+            round.total_pool += amount;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Round(round_id), &round);
+
+            let contract_addr = env.current_contract_address();
+            TokenClient::new(&env, &round.token_address)
+                .transfer(&funder, &contract_addr, &amount);
+
+            events::PoolFundedEvent {
+                funder,
+                round_id,
+                amount,
+            }
+            .publish(&env);
+            Ok(())
+        })
+    }
+
     pub fn record_contribution(
         env: Env,
         round_id: u64,
@@ -252,7 +267,7 @@ impl MatchingPoolContract {
         contributor: Address,
         amount: i128,
     ) -> Result<(), MatchingPoolError> {
-        Self::require_not_paused(&env)?;
+        Self::require_scope_not_paused(&env, PoolScope::Contributions)?;
         if amount <= 0 {
             return Err(MatchingPoolError::InvalidAmount);
         }
@@ -276,7 +291,8 @@ impl MatchingPoolContract {
         {
             return Err(MatchingPoolError::ProjectNotEligible);
         }
-        let contrib_key = DataKey::ContributorAmount(round_id, project_id, contributor.clone());
+        let contrib_key =
+            DataKey::ContributorAmount(round_id, project_id, contributor.clone());
         let prev: i128 = env.storage().persistent().get(&contrib_key).unwrap_or(0);
         if prev == 0 {
             let cnt_key = DataKey::ProjectContributorCount(round_id, project_id);
@@ -305,6 +321,8 @@ impl MatchingPoolContract {
         Ok(())
     }
 
+    // ── Payouts-scoped actions ────────────────────────────────────────────────
+
     pub fn finalize_round(
         env: Env,
         admin: Address,
@@ -312,7 +330,7 @@ impl MatchingPoolContract {
     ) -> Result<(), MatchingPoolError> {
         Self::with_reentrancy_guard(&env, || {
             Self::require_admin(&env, &admin)?;
-            Self::require_not_paused(&env)?;
+            Self::require_scope_not_paused(&env, PoolScope::Payouts)?;
 
             let mut round: RoundData = env
                 .storage()
@@ -359,7 +377,7 @@ impl MatchingPoolContract {
     ) -> Result<i128, MatchingPoolError> {
         Self::with_reentrancy_guard(&env, || {
             Self::require_admin(&env, &admin)?;
-            Self::require_not_paused(&env)?;
+            Self::require_scope_not_paused(&env, PoolScope::Payouts)?;
             let mut round: RoundData = env
                 .storage()
                 .persistent()
@@ -485,6 +503,8 @@ impl MatchingPoolContract {
         })
     }
 
+    // ── QF computation (internal) ─────────────────────────────────────────────
+
     fn compute_qf_score(env: &Env, round_id: u64, project_id: u64) -> i128 {
         let cnt: u32 = env
             .storage()
@@ -520,6 +540,8 @@ impl MatchingPoolContract {
         let squared = sum_sqrt.checked_mul(sum_sqrt).unwrap_or(i128::MAX);
         unscale(unscale(squared))
     }
+
+    // ── Read-only queries (never gated by any scope) ──────────────────────────
 
     pub fn get_round(env: Env, round_id: u64) -> Result<RoundData, MatchingPoolError> {
         env.storage()
@@ -680,17 +702,63 @@ impl MatchingPoolContract {
             .ok_or(MatchingPoolError::NotInitialized)
     }
 
-    pub fn pause(env: Env, admin: Address) -> Result<(), MatchingPoolError> {
+    /// Returns `true` if the given scope is currently paused, `false` otherwise.
+    /// This is a read-only query and is never itself gated by any pause scope.
+    pub fn is_scope_paused(env: Env, scope: PoolScope) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::ScopePaused(scope))
+            .unwrap_or(false)
+    }
+
+    // ── Granular pause controls ───────────────────────────────────────────────
+
+    /// Pause a specific action scope. Only the current admin may call this.
+    ///
+    /// - `Contributions`: blocks `fund_pool` and `record_contribution`.
+    /// - `Payouts`: blocks `finalize_round` and `distribute_matching_funds`.
+    /// - `Governance`: blocks `create_round`, `approve_project`,
+    ///   `remove_project`, `set_admin`, and `upgrade`.
+    ///
+    /// Read-only queries remain available regardless of any scope pause.
+    /// Emits `ScopePausedEvent`.
+    pub fn pause_scope(
+        env: Env,
+        admin: Address,
+        scope: PoolScope,
+    ) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &admin)?;
-        env.storage().instance().set(&DataKey::Paused, &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::ScopePaused(scope), &true);
+        ScopePausedEvent {
+            admin,
+            scope,
+        }
+        .publish(&env);
         Ok(())
     }
 
-    pub fn unpause(env: Env, admin: Address) -> Result<(), MatchingPoolError> {
+    /// Unpause a specific action scope. Only the current admin may call this.
+    /// Emits `ScopeUnpausedEvent`.
+    pub fn unpause_scope(
+        env: Env,
+        admin: Address,
+        scope: PoolScope,
+    ) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &admin)?;
-        env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::ScopePaused(scope), &false);
+        ScopeUnpausedEvent {
+            admin,
+            scope,
+        }
+        .publish(&env);
         Ok(())
     }
+
+    // ── Legacy global admin helpers ───────────────────────────────────────────
 
     pub fn set_admin(
         env: Env,
@@ -698,6 +766,7 @@ impl MatchingPoolContract {
         new_admin: Address,
     ) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &current_admin)?;
+        Self::require_scope_not_paused(&env, PoolScope::Governance)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         Ok(())
     }
@@ -708,6 +777,7 @@ impl MatchingPoolContract {
         new_wasm_hash: BytesN<32>,
     ) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &caller)?;
+        Self::require_scope_not_paused(&env, PoolScope::Governance)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
     }

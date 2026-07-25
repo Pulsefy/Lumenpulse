@@ -19,6 +19,11 @@ pub enum MatchingPoolError {
     RoundStillOpen = 13,
     MatchAlreadyDistributed = 14,
     InvalidRoundDates = 15,
+    /// The entire contract is paused (legacy / global pause). Kept for
+    /// backward-compatibility; new code should prefer `ScopePaused`.
     ContractPaused = 16,
     Reentrancy = 17,
+    /// A specific action domain (scope) is currently paused. The caller
+    /// should retry after the scope is unpaused via `unpause_scope`.
+    ScopePaused = 18,
 }
