@@ -1,6 +1,13 @@
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 from prometheus_client import start_http_server
 
+CONTRACT_INGESTION_LAG_SECONDS = Gauge(
+    "lumenpulse_contract_ingestion_lag_seconds",
+    "Seconds of lag between the latest on-chain event timestamp and the latest "
+    "processed event timestamp for each contract domain",
+    ["domain"],
+)
+
 # Define simple Prometheus counters
 JOBS_RUN_TOTAL = Counter(
     "jobs_run", 

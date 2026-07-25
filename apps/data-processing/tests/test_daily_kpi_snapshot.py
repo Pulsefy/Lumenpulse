@@ -78,7 +78,7 @@ def test_generator_compute_metrics_and_creation(sqlite_db_service):
                 project_id=101,
                 contributor="GBX111",
                 amount=250.0,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime(2026, 7, 24, 12, 0, 0, tzinfo=timezone.utc),
             )
         )
 
