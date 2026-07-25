@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::Env;
+use soroban_sdk::{Env, Symbol};
 
 #[test]
 fn view_error_can_be_rendered_as_symbol() {
