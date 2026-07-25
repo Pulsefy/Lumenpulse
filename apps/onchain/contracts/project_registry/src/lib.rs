@@ -8,6 +8,7 @@ use errors::RegistryError;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal, Symbol};
 use storage::{DataKey, ProjectEntry, RegistryConfig, VerificationStatus, WeightMode};
+use version::ContractVersion;
 
 fn transition_to_archived(env: &Env, entry: &mut ProjectEntry) {
     entry.status = VerificationStatus::Archived;
@@ -472,6 +473,17 @@ impl ProjectRegistryContract {
         Self::require_admin(&env, &caller)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
+    }
+
+    /// Return the contract's version metadata.
+    ///
+    /// No authentication required. Returns a [`ContractVersion`] struct
+    /// describing the semantic version and minimum compatible interface version
+    /// of this deployment. Clients and backend services can call this to
+    /// confirm the deployed build matches their expectations without relying
+    /// solely on off-chain manifests.
+    pub fn version(env: Env) -> ContractVersion {
+        ContractVersion::new(&env, "project_registry", 1, 0, 0, 1)
     }
 }
 

@@ -16,12 +16,14 @@ members = [
   "contracts/treasury",
   "contracts/idempotency-guard",
   "contracts/yield_vault",
-  "contracts/feature_flags"
+  "contracts/feature_flags",
+  "contracts/version"
 ]
 exclude = ["contracts/tests"]
 
 [workspace.dependencies]
 soroban-sdk = "23"
+version      = { path = "contracts/version" }
 
 [profile.release]
 opt-level = "z"

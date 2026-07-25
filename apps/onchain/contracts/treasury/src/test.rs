@@ -893,3 +893,24 @@ fn test_proposal_ids_are_monotonic() {
     assert_eq!(id3, 2);
     assert_eq!(f.client.get_next_proposal_id(), 3);
 }
+
+// ── Version introspection ─────────────────────────────────────────────────────
+
+/// `version()` must return the documented 1.0.0 descriptor and must satisfy
+/// the invariant `min_interface <= major`.
+#[test]
+fn test_version_returns_expected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let id = env.register(TreasuryContract, ());
+    let client = TreasuryContractClient::new(&env, &id);
+
+    // version() does not require the contract to be initialised.
+    let v = client.version();
+    assert_eq!(v.major, 1);
+    assert_eq!(v.minor, 0);
+    assert_eq!(v.patch, 0);
+    // The minimum compatible interface must never exceed the current major.
+    assert!(v.min_interface <= v.major);
+}

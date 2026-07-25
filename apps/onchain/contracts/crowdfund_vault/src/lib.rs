@@ -19,6 +19,7 @@ use storage::{
     DataKey, MilestoneDispute, ProjectData, ProjectStorageSummary, ProtocolStats, RefundReceipt,
     LEDGER_BUMP, LEDGER_THRESHOLD,
 };
+use version::ContractVersion;
 
 const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
@@ -2396,6 +2397,20 @@ impl CrowdfundVaultContract {
         yield_client.withdraw(&contract_address, &amount);
 
         Ok(())
+    }
+
+    /// Return the contract's version metadata.
+    ///
+    /// No authentication required. Returns a [`ContractVersion`] struct
+    /// describing the semantic version and minimum compatible interface version
+    /// of this deployment. The `major` version is kept in sync with the
+    /// `CURRENT_STORAGE_VERSION` constant so that clients can detect when a
+    /// storage migration is required before calling state-mutating methods.
+    ///
+    /// Clients and backend services can call this to confirm the deployed build
+    /// matches their expectations without relying solely on off-chain manifests.
+    pub fn version(env: Env) -> ContractVersion {
+        ContractVersion::new(&env, "crowdfund_vault", 1, 0, 0, 1)
     }
 }
 

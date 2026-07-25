@@ -10,6 +10,7 @@ mod test;
 
 use events::{AdminChangedEvent, BurnEvent, UpgradedEvent};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
+use version::ContractVersion;
 
 #[contract]
 pub struct LumenToken;
@@ -126,5 +127,16 @@ impl LumenToken {
             new_wasm_hash,
         }
         .publish(&e);
+    }
+
+    /// Return the contract's version metadata.
+    ///
+    /// No authentication required. Returns a [`ContractVersion`] struct
+    /// describing the semantic version and minimum compatible interface version
+    /// of this deployment. Clients and backend services can call this to
+    /// confirm the deployed build matches their expectations without relying
+    /// solely on off-chain manifests.
+    pub fn version(e: Env) -> ContractVersion {
+        ContractVersion::new(&e, "lumen_token", 1, 0, 0, 1)
     }
 }

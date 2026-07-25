@@ -285,6 +285,7 @@ version = "0.0.0"
 dependencies = [
  "notification_interface",
  "soroban-sdk",
+ "version",
 ]
 
 [[package]]
@@ -322,6 +323,7 @@ dependencies = [
  "proptest",
  "reentrancy-guard",
  "soroban-sdk",
+ "version",
 ]
 
 [[package]]
@@ -975,6 +977,7 @@ name = "lumen_token"
 version = "0.1.0"
 dependencies = [
  "soroban-sdk",
+ "version",
 ]
 
 [[package]]
@@ -1001,6 +1004,7 @@ version = "0.0.0"
 dependencies = [
  "reentrancy-guard",
  "soroban-sdk",
+ "version",
 ]
 
 [[package]]
@@ -1150,6 +1154,7 @@ name = "project_registry"
 version = "0.0.0"
 dependencies = [
  "soroban-sdk",
+ "version",
 ]
 
 [[package]]
@@ -1892,6 +1897,7 @@ dependencies = [
  "idempotency-guard",
  "reentrancy-guard",
  "soroban-sdk",
+ "version",
 ]
 
 [[package]]
@@ -1920,6 +1926,13 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "upgradable-contract"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "version"
 version = "0.1.0"
 dependencies = [
  "soroban-sdk",
@@ -2268,6 +2281,7 @@ version = "0.1.0"
 dependencies = [
  "idempotency-guard",
  "soroban-sdk",
+ "version",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 [package]
-name = "lumen_token"
+name = "version"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,12 +9,9 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-version     = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-version     = { workspace = true, features = ["testutils"] }
 
 [features]
 testutils = ["soroban-sdk/testutils"]
-
