@@ -39,6 +39,8 @@ import { z } from 'zod';
  * - STELLAR_TIMEOUT
  * - STELLAR_RETRY_ATTEMPTS
  * - STELLAR_RETRY_DELAY
+ * - STELLAR_SIMULATION_TRACE_LOGGING
+ * - STELLAR_SIMULATION_TRACE_DETAIL
  * - STELLAR_CONTRACT_LUMEN_TOKEN
  * - STELLAR_CONTRACT_CROWDFUND_VAULT
  * - STELLAR_CONTRACT_PROJECT_REGISTRY
@@ -418,6 +420,13 @@ const envSchema = z
     STELLAR_TIMEOUT: z.coerce.number().int().min(1).default(30_000),
     STELLAR_RETRY_ATTEMPTS: z.coerce.number().int().min(0).default(3),
     STELLAR_RETRY_DELAY: z.coerce.number().int().min(0).default(1_000),
+    STELLAR_SIMULATION_TRACE_LOGGING: z.preprocess(
+      parseBoolean,
+      z.boolean().default(true),
+    ),
+    STELLAR_SIMULATION_TRACE_DETAIL: z
+      .enum(['summary', 'full'])
+      .default('summary'),
     STELLAR_SERVER_SECRET: z.string().min(1), // SECRET — never log
     STELLAR_BALANCE_CACHE_TTL: z.coerce.number().int().min(1).default(30_000),
     STELLAR_OPERATIONS_CACHE_TTL: z.coerce
@@ -1009,6 +1018,8 @@ export const config = Object.freeze({
     timeout: parsedEnv.STELLAR_TIMEOUT,
     retryAttempts: parsedEnv.STELLAR_RETRY_ATTEMPTS,
     retryDelay: parsedEnv.STELLAR_RETRY_DELAY,
+    simulationTraceLogging: parsedEnv.STELLAR_SIMULATION_TRACE_LOGGING,
+    simulationTraceDetail: parsedEnv.STELLAR_SIMULATION_TRACE_DETAIL,
     balanceCacheTTL: parsedEnv.STELLAR_BALANCE_CACHE_TTL,
     operationsCacheTTL: parsedEnv.STELLAR_OPERATIONS_CACHE_TTL,
     serverSecret: new SecretString(parsedEnv.STELLAR_SERVER_SECRET),

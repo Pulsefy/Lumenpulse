@@ -9,6 +9,10 @@ import {
 import { Counter, Histogram, Registry } from 'prom-client';
 import { config } from '../../lib/config';
 import { RequestContextService } from '../../common/services/request-context.service';
+import {
+  buildSimulationSummary,
+  extractContractCallTarget,
+} from '../utils/simulation-trace.util';
 
 export enum SorobanErrorCode {
   TIMEOUT = 'SOROBAN_TIMEOUT',
@@ -34,6 +38,9 @@ export interface SorobanClientOptions {
   timeoutMs?: number;
   maxRetries?: number;
   initialBackoffMs?: number;
+  /** Optional hints when the transaction envelope cannot be parsed. */
+  contractId?: string;
+  method?: string;
 }
 
 const DEFAULT_OPTIONS: Required<SorobanClientOptions> = {
@@ -111,6 +118,7 @@ export class SorobanRpcClientService {
     return this.withRetry('simulateTransaction', opts, async () => {
       const result = await this.server.simulateTransaction(tx);
       if (rpc.Api.isSimulationError(result)) {
+        this.logFailedContractSimulation(tx, result, opts);
         throw new SorobanRpcError(
           SorobanErrorCode.SIMULATION_FAILED,
           `Simulation failed: ${result.error ?? 'Unknown error'}`,
@@ -164,12 +172,43 @@ export class SorobanRpcClientService {
       .setTimeout(30)
       .build();
 
-    return this.simulateTransaction(tx, opts);
+    return this.simulateTransaction(tx, {
+      ...opts,
+      contractId,
+      method,
+    });
   }
 
   /** Expose the raw server for advanced usage */
   get rawServer(): rpc.Server {
     return this.server;
+  }
+
+  private logFailedContractSimulation(
+    tx: Parameters<rpc.Server['simulateTransaction']>[0],
+    simulation: rpc.Api.SimulateTransactionResponse,
+    opts?: SorobanClientOptions,
+  ): void {
+    if (!config.stellar.simulationTraceLogging) {
+      return;
+    }
+
+    const detail = config.stellar.simulationTraceDetail;
+    const extracted = extractContractCallTarget(tx);
+    const contract = extracted.contract ?? opts?.contractId ?? null;
+    const method = extracted.method ?? opts?.method ?? null;
+    const requestId = this.requestContextService.getRequestId();
+    const simulationSummary = buildSimulationSummary(simulation, detail);
+
+    this.logger.warn(
+      {
+        requestId,
+        contract,
+        method,
+        simulationSummary,
+      },
+      'Contract simulation failed',
+    );
   }
 
   private async withRetry<T>(
@@ -197,17 +236,24 @@ export class SorobanRpcClientService {
         const exhausted = attempt > maxRetries;
 
         const requestId = this.requestContextService.getRequestId();
-        this.logger.warn(
-          {
-            requestId,
-            method,
-            attempt,
-            maxRetries,
-            retrying: isRetryable && !exhausted,
-            error: err instanceof Error ? err.message : String(err),
-          },
-          'Soroban RPC call failed',
-        );
+        const skipDuplicateSimulationLog =
+          err instanceof SorobanRpcError &&
+          err.code === SorobanErrorCode.SIMULATION_FAILED &&
+          method === 'simulateTransaction';
+
+        if (!skipDuplicateSimulationLog) {
+          this.logger.warn(
+            {
+              requestId,
+              method,
+              attempt,
+              maxRetries,
+              retrying: isRetryable && !exhausted,
+              error: err instanceof Error ? err.message : String(err),
+            },
+            'Soroban RPC call failed',
+          );
+        }
 
         if (!isRetryable || exhausted) {
           timer({ status: 'error' });
