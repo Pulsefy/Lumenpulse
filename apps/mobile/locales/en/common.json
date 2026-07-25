@@ -292,7 +292,25 @@
     "environment_production": "Production",
     "environment_contributor": "Contributor Build",
     "platform": "Platform",
-    "logout": "Log Out"
+    "logout": "Log Out",
+    "status_info": {
+      "title": "Status & Release Notes",
+      "description": "View environment details and recent changes",
+      "active_env": "Active Environment",
+      "api_url": "API Base URL",
+      "stellar_net": "Stellar Network",
+      "soroban_rpc": "Soroban RPC URL",
+      "contract_id": "Contract ID",
+      "network_status": "Network Connection",
+      "online": "Online",
+      "offline": "Offline",
+      "last_checked": "Last checked: {{time}}",
+      "notes_title": "Release Notes",
+      "no_notes": "Release metadata is currently unavailable.",
+      "version_prefix": "Version {{version}}",
+      "published": "Published: {{date}}",
+      "testing": "Testing..."
+    }
   },
   "transaction_receipt": {
     "title": "Transaction Receipt",

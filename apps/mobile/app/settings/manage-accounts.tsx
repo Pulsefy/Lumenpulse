@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
 import { LinkedStellarAccount, usersApi } from '../../lib/api';
 import { storage } from '../../lib/storage';
+import { requireBiometricConfirmation } from '../../lib/biometric-lock';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
 import { useWallet } from '../../contexts/WalletContext';
@@ -177,6 +178,11 @@ export default function ManageAccountsScreen() {
           style: 'destructive' as const,
           onPress: () => {
             void (async () => {
+              const isConfirmed = await requireBiometricConfirmation(
+                'Confirm your identity to remove account'
+              );
+              if (!isConfirmed) return;
+
               setSubmitting(true);
               const response = await usersApi.removeLinkedAccount(account.id);
               setSubmitting(false);

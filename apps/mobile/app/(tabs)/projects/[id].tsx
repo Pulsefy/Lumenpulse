@@ -23,6 +23,7 @@ import {
 } from '../../../lib/crowdfund';
 import { computeFundingProgress, formatTokenAmount } from '../../../lib/stellar';
 import ContributionModal from '../../../components/ContributionModal';
+import { requireBiometricConfirmation } from '../../../lib/biometric-lock';
 import VerificationPanel from '../../../components/VerificationPanel';
 import { usersApi } from '../../../lib/api';
 import { storage } from '../../../lib/storage';
@@ -256,6 +257,13 @@ export default function ProjectDetailScreen() {
   ): Promise<{ transactionHash?: string; errorMessage?: string }> => {
     if (!stellarPublicKey) {
       return { errorMessage: 'No Stellar account linked. Please link one in Settings first.' };
+    }
+
+    const isConfirmed = await requireBiometricConfirmation(
+      'Confirm your identity to contribute',
+    );
+    if (!isConfirmed) {
+      return { errorMessage: 'Biometric confirmation failed or cancelled.' };
     }
 
     try {
