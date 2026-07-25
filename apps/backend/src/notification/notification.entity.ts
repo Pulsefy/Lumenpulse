@@ -20,6 +20,7 @@ export enum NotificationType {
   MODULE = 'module',
   ADMIN = 'admin',
   REPUTATION = 'reputation',
+  SAVED_SEARCH = 'saved_search',
 }
 
 export enum NotificationSeverity {

@@ -4,6 +4,7 @@ import { NotFoundException } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { GrantsService } from './grants.service';
 import { CONTRIBUTION_QUEUE } from '../suspicious-contribution/types';
+import { SavedSearchService } from '../saved-search/saved-search.service';
 
 describe('GrantsService.getLeaderboard', () => {
   let service: GrantsService;
@@ -14,10 +15,11 @@ describe('GrantsService.getLeaderboard', () => {
       providers: [
         GrantsService,
         { provide: ConfigService, useValue: { get: jest.fn() } },
-        {
-          provide: getQueueToken(CONTRIBUTION_QUEUE),
-          useValue: { add: jest.fn().mockResolvedValue(undefined) },
-        },
+          {
+            provide: getQueueToken(CONTRIBUTION_QUEUE),
+            useValue: { add: jest.fn().mockResolvedValue(undefined) },
+          },
+          { provide: SavedSearchService, useValue: { handleNewItem: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 

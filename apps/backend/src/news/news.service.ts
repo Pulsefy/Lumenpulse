@@ -11,6 +11,8 @@ import { CacheService } from '../cache/cache.service';
 import { QueryProfilerService } from '../common/profiling/query-profiler.service';
 import { JobLockService } from '../scheduler/job-lock.service';
 import { JobHistoryService } from '../scheduler/job-history.service';
+import { SavedSearchService } from '../saved-search/saved-search.service';
+import { SavedSearchDomain } from '../saved-search/saved-search.entity';
 
 const FETCH_JOB_NAME = 'news-fetch';
 
@@ -37,12 +39,19 @@ export class NewsService {
     private readonly profiler: QueryProfilerService,
     private readonly jobLock: JobLockService,
     private readonly jobHistory: JobHistoryService,
+    private readonly savedSearchService: SavedSearchService,
   ) {}
 
   async create(createArticleDto: CreateArticleDto): Promise<News> {
     const news = this.newsRepository.create(createArticleDto);
     const saved = await this.newsRepository.save(news);
     await this.cacheService.invalidateNewsCache();
+    
+    // Trigger saved search matcher
+    this.savedSearchService.handleNewItem(SavedSearchDomain.NEWS, saved).catch(err => {
+      this.logger.error('Failed to trigger saved search for news article creation', err);
+    });
+
     return saved;
   }
 
@@ -188,7 +197,14 @@ export class NewsService {
       category: articleDto.categories?.[0] ?? null,
     });
 
-    return this.newsRepository.save(article);
+    const saved = await this.newsRepository.save(article);
+    
+    // Trigger saved search matcher
+    this.savedSearchService.handleNewItem(SavedSearchDomain.NEWS, saved).catch(err => {
+      this.logger.error('Failed to trigger saved search for news article creation in createOrIgnore', err);
+    });
+
+    return saved;
   }
 
   /**

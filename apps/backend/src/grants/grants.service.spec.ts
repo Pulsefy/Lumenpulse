@@ -4,6 +4,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { GrantsService } from './grants.service';
 import { CONTRIBUTION_QUEUE } from '../suspicious-contribution/types';
+import { SavedSearchService } from '../saved-search/saved-search.service';
 
 describe('GrantsService', () => {
   let service: GrantsService;
@@ -20,7 +21,8 @@ describe('GrantsService', () => {
       providers: [
         GrantsService,
         { provide: ConfigService, useValue: { get: jest.fn() } },
-        { provide: getQueueToken(CONTRIBUTION_QUEUE), useValue: mockQueue },
+          { provide: getQueueToken(CONTRIBUTION_QUEUE), useValue: mockQueue },
+          { provide: SavedSearchService, useValue: { handleNewItem: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
     service = module.get<GrantsService>(GrantsService);

@@ -5,6 +5,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { IngestSorobanEventDto } from './dto/ingest-soroban-event.dto';
 import { ProjectRegistryEntity } from '../database/entities/project-registry.entity';
+import { SavedSearchService } from '../saved-search/saved-search.service';
+import { SavedSearchDomain } from '../saved-search/saved-search.entity';
 
 export const SOROBAN_EVENTS_QUEUE = 'soroban-events';
 export const PROCESS_EVENT_JOB = 'process-event';
@@ -28,6 +30,8 @@ export class SorobanEventsService {
 
     @InjectRepository(ProjectRegistryEntity)
     private readonly projectRepo: Repository<ProjectRegistryEntity>,
+
+    private readonly savedSearchService: SavedSearchService,
   ) {}
 
   async ingest(
@@ -77,5 +81,14 @@ export class SorobanEventsService {
       },
       ['projectId'], // Conflict target prevents duplicate rows
     );
+
+    // Trigger saved search matcher
+    await this.savedSearchService.handleNewItem(SavedSearchDomain.PROJECTS, {
+      projectId,
+      owner,
+      name,
+      description: `Description for ${name}`,
+      category: 'crowdfund',
+    });
   }
 }

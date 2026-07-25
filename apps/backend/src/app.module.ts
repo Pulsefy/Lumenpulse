@@ -51,6 +51,7 @@ import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 import { DeprecationInterceptor } from './common/interceptors/deprecation.interceptor';
 import { SearchModule } from './search/search.module';
+import { SavedSearchModule } from './saved-search/saved-search.module';
 import { ExportModule } from './export/export.module';
 import { SignalsModule } from './signals/signals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
@@ -129,6 +130,7 @@ import { BotAuthModule } from './bot-auth/bot-auth.module';
     TelegramBotModule,
     ModerationModule,
     SearchModule,
+    SavedSearchModule,
     FeatureFlagsModule,
     CrowdfundModule,
     ContributorRegistryModule,

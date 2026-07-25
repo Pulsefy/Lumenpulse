@@ -28,6 +28,8 @@ import {
   CONTRIBUTION_QUEUE,
   DETECTION_JOB,
 } from '../suspicious-contribution/types';
+import { SavedSearchService } from '../saved-search/saved-search.service';
+import { SavedSearchDomain } from '../saved-search/saved-search.entity';
 
 /**
  * In-memory store for round and contribution data.
@@ -57,6 +59,7 @@ export class GrantsService {
   constructor(
     private readonly config: ConfigService,
     @InjectQueue(CONTRIBUTION_QUEUE) private readonly suspiciousQueue: Queue,
+    private readonly savedSearchService: SavedSearchService,
   ) {
     if (
       process.env.NODE_ENV !== 'production' &&
@@ -209,6 +212,16 @@ export class GrantsService {
     };
     this.rounds.set(id, record);
     this.logger.log(`Round ${id} created: ${dto.name}`);
+    
+    // Trigger saved search matcher
+    this.savedSearchService.handleNewItem(SavedSearchDomain.GRANTS, {
+      id,
+      name: dto.name,
+      tokenAddress: dto.tokenAddress,
+    }).catch(err => {
+      this.logger.error('Failed to trigger saved search for grant round creation', err);
+    });
+
     return this.toRoundDto(record);
   }
 
