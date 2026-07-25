@@ -284,7 +284,25 @@
     "environment_production": "生产环境",
     "environment_contributor": "贡献者构建版",
     "platform": "平台",
-    "logout": "退出登录"
+    "logout": "退出登录",
+    "status_info": {
+      "title": "状态与发布说明",
+      "description": "查看环境详情和最近的变更",
+      "active_env": "活动环境",
+      "api_url": "API 基础 URL",
+      "stellar_net": "Stellar 网络",
+      "soroban_rpc": "Soroban RPC URL",
+      "contract_id": "合约 ID",
+      "network_status": "网络连接状况",
+      "online": "已连接",
+      "offline": "断开连接",
+      "last_checked": "上次检查时间: {{time}}",
+      "notes_title": "版本说明",
+      "no_notes": "当前无法获取版本发布说明。",
+      "version_prefix": "版本 {{version}}",
+      "published": "发布日期: {{date}}",
+      "testing": "测试中..."
+    }
   },
   "errors": {
     "something_went_wrong": "出错了，请重试。",

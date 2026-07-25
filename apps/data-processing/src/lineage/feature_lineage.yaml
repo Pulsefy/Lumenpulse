@@ -1,0 +1,495 @@
+# ============================================================
+# LumenPulse Data-Processing — Feature & KPI Lineage Manifest
+# ============================================================
+# Purpose : Document how every ML feature and derived KPI is
+#           produced so contributors can trace lineage, avoid
+#           accidental drift, and know who to contact.
+#
+# Schema version : 1.0
+# Last updated   : 2026-07-24
+# Maintainer     : data-team@lumenpulse.io
+#
+# How to validate this file:
+#   python scripts/validate_lineage.py
+# ============================================================
+
+manifest_version: "1.0"
+project: lumenpulse
+module: data-processing
+
+# ============================================================
+# ML FEATURE SETS
+# Feature sets consumed by trained models.
+# ============================================================
+ml_feature_sets:
+
+  # ----------------------------------------------------------
+  - id: price_predictor_features
+    display_name: Price Predictor Feature Set
+    description: >
+      Time-aligned feature matrix fed to the PricePredictor scikit-learn
+      pipeline (LinearRegression + StandardScaler). Features are fetched
+      per asset over a configurable look-back window from three database
+      views and outer-merged on timestamp before forward-filling gaps.
+    owner: data-team@lumenpulse.io
+    source_file: src/ml/feature_store.py
+    model_file: src/ml/price_predictor.py
+    registry_key: price_predictor          # key used in src/ml/model_registry.py
+    update_cadence: on-demand (retraining pipeline)
+    storage: models/price_predictor/current -> v<major>.<minor>.pkl
+
+    features:
+      - name: sentiment_score
+        type: float
+        range: "[-1.0, 1.0]"
+        description: >
+          Per-asset compound sentiment score from SentimentAnalyzer
+          (FinBERT primary, VADER fallback with crypto-slang boost).
+        source_table: asset_sentiment_view
+        upstream:
+          - src/analytics/sentiment.py::SentimentAnalyzer.analyze_text
+          - src/ingestion/news_fetcher.py
+          - src/ingestion/social_fetcher.py
+        null_handling: forward-fill then fill 0
+
+      - name: volume
+        type: float
+        range: "[0, +inf)"
+        description: >
+          Total XLM-equivalent on-chain transaction volume for the asset
+          over the query window, sourced from Stellar Horizon via
+          StellarFetcher.
+        source_table: asset_volume_view
+        upstream:
+          - src/ingestion/stellar_fetcher.py::get_asset_volume
+        null_handling: forward-fill then fill 0
+
+      - name: volatility
+        type: float
+        range: "[0, +inf)"
+        description: >
+          Rolling price volatility (standard deviation of log-returns)
+          pre-computed and stored in the volatility view.
+        source_table: asset_volatility_view
+        upstream:
+          - src/ingestion/price_fetcher.py::PriceFetcher
+        null_handling: forward-fill then fill 0
+
+    merge_strategy: outer join on timestamp, sort ascending, ffill → fillna(0)
+    target_column: target   # set by caller at training time
+
+    quality_gates:
+      min_price_r2: -1.0    # env: MIN_PRICE_R2 (permissive default; tighten in prod)
+
+  # ----------------------------------------------------------
+  - id: sentiment_model_features
+    display_name: Sentiment Model — Training Corpus Features
+    description: >
+      Features used to enrich the VADER lexicon with a custom
+      crypto-slang dictionary during scheduled retraining.  Not a
+      traditional feature matrix — the "features" are lexicon entries
+      (word → sentiment_score mappings) that extend VADER at runtime.
+    owner: data-team@lumenpulse.io
+    source_file: src/ml/retraining_pipeline.py
+    model_file: src/analytics/sentiment.py
+    registry_key: sentiment
+    update_cadence: scheduled (retraining_pipeline trigger)
+    storage: models/sentiment/current -> v<major>.<minor>.pkl
+
+    features:
+      - name: vader_base_lexicon
+        type: dict[str, float]
+        description: >
+          Built-in VADER lexicon (≈7,500 tokens).  Loaded automatically
+          by vaderSentiment.SentimentIntensityAnalyzer.
+        upstream:
+          - vaderSentiment (third-party library)
+        null_handling: n/a
+
+      - name: crypto_slang_lexicon
+        type: dict[str, float]
+        description: >
+          Custom extensions for crypto terms (e.g. "moon", "rekt", "wen
+          lambo").  Loaded from data/crypto_slang_lexicon.json at
+          retraining time.  Merged into VADER via
+          SentimentIntensityAnalyzer.lexicon.update(slang).
+        source_file: data/crypto_slang_lexicon.json
+        upstream:
+          - src/ml/retraining_pipeline.py::_load_crypto_slang
+        null_handling: missing file → empty dict, base VADER only
+
+      - name: finbert_transformer
+        type: model_weights
+        description: >
+          ProsusAI/finbert (HuggingFace) used as primary English scorer
+          when transformers library is available and
+          SENTIMENT_DISABLE_TRANSFORMER != true.  Falls back to VADER
+          compound if inference fails.
+        upstream:
+          - HuggingFace Hub (ProsusAI/finbert)
+          - src/analytics/sentiment.py::SentimentAnalyzer._finbert_compound
+        null_handling: inference failure → VADER fallback silently
+
+    quality_gates:
+      min_sentiment_coverage: 0.0   # env: MIN_SENTIMENT_COVERAGE
+
+
+# ============================================================
+# KPI DATASETS
+# Derived metrics surfaced via the API and stored to the DB.
+# ============================================================
+kpi_datasets:
+
+  # ----------------------------------------------------------
+  - id: market_health_score
+    display_name: Market Health Score
+    description: >
+      Weighted combination of sentiment and normalised volume change
+      that summarises overall market mood for a Stellar asset.  Used
+      as the primary market signal in news feed cards and dashboards.
+    owner: data-team@lumenpulse.io
+    source_file: src/analytics/market_analyzer.py
+    class: MarketAnalyzer
+
+    formula: >
+      market_health_score = (sentiment_score × 0.7) + (tanh(volume_change) × 0.3)
+    output_range: "(-1.0, 1.0)"
+    classification:
+      bullish:  score > 0.2
+      bearish:  score < -0.2
+      neutral:  -0.2 ≤ score ≤ 0.2
+
+    inputs:
+      - name: sentiment_score
+        type: float
+        range: "[-1.0, 1.0]"
+        upstream: ml_feature_sets.price_predictor_features.sentiment_score
+
+      - name: volume_change
+        type: float
+        description: Percentage change in asset volume (e.g. 0.15 = 15% increase).
+        upstream:
+          - src/ingestion/stellar_fetcher.py::get_asset_volume
+
+    downstream:
+      - src/analytics/forecaster.py  (ForecastResult.forecast_score_24h / _48h)
+      - src/api/server.py            (GET /api/market-analysis)
+
+    storage: in-memory + data/analytics.jsonl (append)
+
+  # ----------------------------------------------------------
+  - id: sentiment_compound
+    display_name: Article / Social Sentiment Score
+    description: >
+      Per-text compound sentiment score produced by SentimentAnalyzer.
+      English: FinBERT primary → VADER + crypto-keyword boost fallback.
+      Spanish / Portuguese: keyword-hit ratio.
+      Range clamped to [-1, 1].
+    owner: data-team@lumenpulse.io
+    source_file: src/analytics/sentiment.py
+    class: SentimentAnalyzer
+
+    inputs:
+      - name: raw_text
+        type: str
+        upstream:
+          - src/ingestion/news_fetcher.py
+          - src/ingestion/social_fetcher.py
+
+      - name: lang_hint
+        type: str (optional ISO 639-1)
+        description: Overrides langdetect auto-detection when provided.
+
+    output_fields:
+      - score:                float in [-1, 1]
+      - language:             detected ISO code
+      - language_supported:   bool
+      - language_unsupported: bool
+
+    thresholds:
+      bullish: score ≥ 0.05
+      bearish: score ≤ -0.05
+      neutral: -0.05 < score < 0.05
+
+    downstream:
+      - ml_feature_sets.price_predictor_features.sentiment_score
+      - kpi_datasets.market_health_score
+      - kpi_datasets.correlation_result
+      - src/analytics/sentiment_indicators.py  (visual badge colour)
+      - src/api/server.py (GET /api/sentiment)
+
+    storage: articles.sentiment_score column (PostgreSQL via alembic migration 001)
+
+  # ----------------------------------------------------------
+  - id: cohort_metrics
+    display_name: Contributor Cohort Metrics
+    description: >
+      Aggregated participation and retention statistics for contributor
+      cohorts in Stellar quadratic-funding rounds.  Produced by
+      CohortAnalyzer and stored in the cohort_analysis DB tables.
+    owner: data-team@lumenpulse.io
+    source_file: src/analytics/cohort_analyzer.py
+    class: CohortAnalyzer
+
+    inputs:
+      - name: contribution_events
+        type: list[ContributionRecord]
+        upstream:
+          - src/ingestion/stellar_fetcher.py (on-chain Soroban events)
+          - src/db/cohort_models.py
+
+    output_fields:
+      - cohort_id:               str
+      - member_count:            int
+      - total_contributed:       float (XLM)
+      - avg_contributed_per_member: float (XLM)
+      - retention_rate:          float [0, 1] — fraction of cohort members
+                                  who returned in a subsequent round
+      - retained_total_contributed: float (XLM)
+
+    cohort_types:
+      - FIRST_ROUND:        initial round participants
+      - TIME_WINDOW:        participants within a date range
+      - REPEAT:             2–5 rounds participation
+      - SUPER_CONTRIBUTOR:  6+ rounds or high total contribution
+
+    downstream:
+      - src/api/server.py (GET /api/cohort-analysis)
+      - data/analytics.jsonl (export)
+
+    storage:
+      tables: [cohort_members, cohort_analysis_results, contributor_cohort_snapshots]
+      migration: alembic/versions/006_add_cohort_analysis_tables.py
+
+  # ----------------------------------------------------------
+  - id: attribution_score
+    display_name: Contributor / Project Attribution Score
+    description: >
+      Weighted signal score (0–1) measuring how strongly a news narrative
+      is attributable to a specific contributor or project rather than
+      the broader ecosystem.
+    owner: data-team@lumenpulse.io
+    source_file: src/analytics/attribution_scorer.py
+    class: AttributionScorer
+
+    formula: >
+      attribution_score = Σ(signal_weight × signal_value)
+      where signals and weights are:
+        entity_link        × 0.35
+        mention            × 0.25
+        keyword            × 0.20
+        sentiment_coherence× 0.10
+        category           × 0.10
+
+    output_range: "[0.0, 1.0]"
+    confidence_tiers:
+      high:     score ≥ 0.75
+      medium:   0.50 ≤ score < 0.75
+      low:      0.25 ≤ score < 0.50
+      very_low: score < 0.25  # flagged low_confidence=True; callers should skip
+
+    inputs:
+      - name: article_json
+        type: dict
+        upstream:
+          - src/ingestion/news_fetcher.py
+          - src/db/models.py::Article
+
+      - name: target
+        type: AttributionTarget (target_id, aliases, categories, …)
+        upstream: caller-provided
+
+    downstream:
+      - src/api/server.py (GET /api/attribution)
+      - alembic/versions/006_add_narrative_attribution_scores.py
+
+    storage:
+      table: narrative_attribution_scores
+      migration: alembic/versions/006_add_narrative_attribution_scores.py
+
+  # ----------------------------------------------------------
+  - id: round_anomaly_signals
+    display_name: Round Anomaly Detection Signals
+    description: >
+      Per-round / per-project anomaly signals for suspicious allocation
+      patterns in quadratic-funding rounds.  Produced by
+      RoundAnomalyDetector using statistical thresholds.
+    owner: data-team@lumenpulse.io
+    source_file: src/round_anomaly_detector.py
+    class: RoundAnomalyDetector
+
+    output_fields:
+      - anomaly_type:       enum (CONCENTRATION_RISK | SYBIL_SUSPICION |
+                                  UNUSUAL_TIMING | DISPROPORTIONATE_ALLOCATION |
+                                  LOW_PARTICIPATION | HIGH_SINGLE_CONTRIBUTION)
+      - severity_score:     float [0, 1]
+      - detection_rationale: str
+      - metric_values:      dict (raw metrics that triggered the signal)
+      - threshold_used:     float
+
+    inputs:
+      - name: round_contributions
+        type: list[ContributionRecord]
+        upstream:
+          - src/ingestion/stellar_fetcher.py (Soroban contract events)
+
+    downstream:
+      - src/api/server.py (GET /api/anomaly-detection)
+      - alertbot / alert_notifier
+
+    storage:
+      table: round_anomaly_signals
+      migration: alembic/versions/004_add_round_anomaly_signals.py
+
+  # ----------------------------------------------------------
+  - id: project_verification_trend
+    display_name: Project Verification Trend
+    description: >
+      Aggregated approval / rejection rates for Soroban project
+      verification events over sliding windows; detects momentum
+      shifts in the community review pipeline.
+    owner: data-team@lumenpulse.io
+    source_file: src/analytics/project_verification_trend.py
+    class: ProjectVerificationTrendAnalyzer
+
+    output_fields:
+      - approval_rate:           float [0, 1]
+      - rejection_rate:          float [0, 1]
+      - trend_direction:         str (improving | declining | stable)
+      - delta:                   float  (approval_rate − previous_approval_rate)
+      - total / approved / rejected / pending: int counts
+
+    inputs:
+      - name: verification_events
+        type: list[VerificationRecord]
+        upstream:
+          - src/ingestion/stellar_fetcher.py (on-chain verification events)
+          - src/db/postgres_service.py
+
+    downstream:
+      - src/api/server.py (GET /api/project-trends)
+
+    storage: in-memory result; optionally persisted by caller
+
+  # ----------------------------------------------------------
+  - id: correlation_result
+    display_name: Sentiment ↔ Price/Volume Correlation
+    description: >
+      Pearson correlation coefficient between asset sentiment scores
+      and on-chain price or volume metrics over a configurable window.
+      Exposes scatter data and a natural-language interpretation.
+    owner: data-team@lumenpulse.io
+    source_file: src/analytics/correlation_engine.py
+    class: CorrelationEngine
+
+    formula: >
+      r = Pearson(sentiment_series, metric_series)
+      p_value via scipy.stats.pearsonr
+
+    output_fields:
+      - correlation_score:  float [-1, 1]  (Pearson r)
+      - p_value:            float          (statistical significance)
+      - confidence_level:   str (high | medium | low | insufficient_data)
+      - lag_hours:          int            (time-shift applied before correlation)
+      - scatter_data:       list[DataPoint]
+
+    inputs:
+      - name: sentiment_series
+        type: list[float]
+        upstream: kpi_datasets.sentiment_compound
+
+      - name: price_series
+        type: list[float]
+        upstream:
+          - src/ingestion/price_fetcher.py::PriceFetcher
+
+      - name: volume_series
+        type: list[float]
+        upstream:
+          - src/ingestion/stellar_fetcher.py::get_asset_volume
+
+    downstream:
+      - src/api/server.py (GET /api/correlation)
+
+    storage: returned in API response; not persisted
+
+  # ----------------------------------------------------------
+  - id: market_forecast
+    display_name: 24h / 48h Market Trend Forecast
+    description: >
+      Time-series forecast of market_health_score for the next 24 and 48
+      hours.  Backend auto-selected at runtime: Prophet (preferred) →
+      scikit-learn Ridge → heuristic decay fallback.
+    owner: data-team@lumenpulse.io
+    source_file: src/analytics/forecaster.py
+
+    formula: >
+      Uses historical market_health_score series from data/analytics.jsonl.
+      Sentiment Velocity = dS/dt of mood (Δsentiment per hour).
+      Confidence mapped from |predicted_score|: near 0 → 0.5, near ±1 → 0.95.
+
+    output_fields:
+      - predicted_trend_24h:  str (bullish | bearish | neutral)
+      - predicted_trend_48h:  str
+      - confidence_24h:       float [0, 1]
+      - confidence_48h:       float [0, 1]
+      - sentiment_velocity:   float (Δsentiment/hour)
+      - forecast_score_24h:   float
+      - forecast_score_48h:   float
+      - model_backend:        str (prophet | sklearn | heuristic)
+
+    inputs:
+      - name: historical_analytics
+        type: JSONL records
+        source_file: data/analytics.jsonl
+        upstream: kpi_datasets.market_health_score
+
+    classification_thresholds:
+      bullish: score > 0.2
+      bearish: score < -0.2
+      neutral: -0.2 ≤ score ≤ 0.2
+
+    downstream:
+      - src/api/server.py (GET /api/forecast)
+
+    storage: data/analytics.jsonl read-only at inference time
+
+  # ----------------------------------------------------------
+  - id: anomaly_detection_result
+    display_name: Volume / Sentiment Anomaly Detection
+    description: >
+      Statistical (Z-Score) and ML (Isolation Forest) detection of
+      abnormal spikes in trade volume or social sentiment.  Also
+      supports multi-dimensional Isolation Forest for pump-and-dump
+      pattern detection.
+    owner: data-team@lumenpulse.io
+    source_file: src/anomaly_detector.py
+    class: AnomalyDetector
+    model_artifact: models/test_anomaly_model.pkl
+
+    output_fields:
+      - is_anomaly:          bool
+      - severity_score:      float [0, 1]
+      - z_score:             float
+      - ml_anomaly_score:    float (Isolation Forest score; lower = more anomalous)
+      - ml_is_anomaly:       bool
+
+    inputs:
+      - name: metric_values
+        type: list[float]
+        description: Rolling window of volume or sentiment observations.
+        upstream:
+          - src/ingestion/stellar_fetcher.py  (volume)
+          - kpi_datasets.sentiment_compound   (sentiment)
+
+    detector_config:
+      window_size_hours: 24
+      z_threshold: 2.5
+      isolation_forest_contamination: auto
+
+    downstream:
+      - src/alert_notifier.py
+      - src/alertbot.py
+      - src/api/server.py (GET /api/anomalies)
+
+    storage: in-memory rolling window (deque); alerts emitted on trigger

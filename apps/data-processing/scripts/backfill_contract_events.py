@@ -22,6 +22,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 import requests
 
+# Add the src directory to the Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from src.db.postgres_service import PostgresService
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -42,6 +47,7 @@ class BackfillContractEvents:
         rpc_url,
         batch_size,
         dry_run=False,
+        db_persist=True,
     ):
         self.contract_ids = contract_ids
         self.start_ledger = int(start_ledger)
@@ -52,6 +58,19 @@ class BackfillContractEvents:
         self.dry_run = dry_run
 
         self.output_dir.mkdir(parents=True, exist_ok=True) if not self.dry_run else None
+
+        self.db_persist = db_persist
+        self.db_service = None
+        if self.db_persist and os.getenv("DATABASE_URL") and not self.dry_run:
+            try:
+                self.db_service = PostgresService()
+                logger.info(
+                    "Database persistence enabled; raw events will be saved to PostgreSQL."
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to initialize database service: {e}. Running without DB persistence."
+                )
 
         # Checkpoint files are stored alongside batch outputs.
         self.checkpoint_file = self.output_dir / "checkpoint.json"
@@ -68,9 +87,6 @@ class BackfillContractEvents:
         # Load checkpoint if present.
         if not self.dry_run:
             self._load_or_init_checkpoint()
-
-
-
 
     def _load_or_init_checkpoint(self) -> None:
         if not self.checkpoint_file.exists():
@@ -94,7 +110,9 @@ class BackfillContractEvents:
 
     def _get_last_completed_batch_end(self, contract_id: str):
 
-        contract_cp = (self._checkpoint.get("contracts") or {}).get(str(contract_id)) or {}
+        contract_cp = (self._checkpoint.get("contracts") or {}).get(
+            str(contract_id)
+        ) or {}
         end_ledger = contract_cp.get("last_completed_batch_end")
         return end_ledger if isinstance(end_ledger, int) else None
 
@@ -228,7 +246,9 @@ class BackfillContractEvents:
                 probe_start = self.start_ledger
                 while probe_start <= self.end_ledger:
                     probe_end = min(probe_start + self.batch_size - 1, self.end_ledger)
-                    probe_fp = self._get_output_filepath(contract_id, probe_start, probe_end)
+                    probe_fp = self._get_output_filepath(
+                        contract_id, probe_start, probe_end
+                    )
                     if not self._is_already_processed(probe_fp):
                         all_batches_have_outputs = False
                         break
@@ -236,7 +256,6 @@ class BackfillContractEvents:
 
                 if all_batches_have_outputs:
                     current_start = self.start_ledger
-
 
             logger.info(
                 "[RECOVERY] contract=%s last_completed_batch_end=%s next_ledger=%s",
@@ -252,7 +271,9 @@ class BackfillContractEvents:
 
             while current_start <= self.end_ledger:
                 current_end = min(current_start + self.batch_size - 1, self.end_ledger)
-                filepath = self._get_output_filepath(contract_id, current_start, current_end)
+                filepath = self._get_output_filepath(
+                    contract_id, current_start, current_end
+                )
 
                 # Idempotency: if the batch output file exists and is marked
                 # completed, skip it and count as recovered/processed.
@@ -260,9 +281,7 @@ class BackfillContractEvents:
                     # Ensure we still advance ledger progression even if
                     # stats update fails.
 
-
                     logger.info(
-
                         f"  [SKIPPED] Ledgers {current_start}-{current_end} already processed"
                     )
                     stats["batches_skipped"] += 1
@@ -302,6 +321,24 @@ class BackfillContractEvents:
                             with open(filepath, "w", encoding="utf-8") as f:
                                 json.dump(output_data, f, indent=2)
 
+                            if self.db_service:
+                                db_saved = 0
+                                for event in events:
+                                    saved_ev = self.db_service.save_raw_soroban_event(
+                                        contract_id=contract_id,
+                                        event_id=event.get("id"),
+                                        ledger=int(event.get("ledger", 0)),
+                                        raw_payload=event,
+                                        source_rpc_url=self.rpc_url,
+                                        paging_token=event.get("pagingToken"),
+                                        event_type=event.get("type"),
+                                    )
+                                    if saved_ev:
+                                        db_saved += 1
+                                logger.info(
+                                    f"    Persisted {db_saved}/{len(events)} events to database"
+                                )
+
                             stats["contracts"][contract_id]["events"] += len(events)
                             stats["total_events"] += len(events)
                             stats["batches_processed"] += 1
@@ -325,9 +362,7 @@ class BackfillContractEvents:
         logger.info("=" * 60)
         logger.info(f"Total Events Found: {stats['total_events']}")
         logger.info(f"Batches Processed:  {stats['batches_processed']}")
-        logger.info(
-            f"Batches Skipped:    {stats['batches_skipped']} (Idempotent)"
-        )
+        logger.info(f"Batches Skipped:    {stats['batches_skipped']} (Idempotent)")
         logger.info(f"Batches Failed:     {stats['batches_failed']}")
 
         for cid, c_stats in stats["contracts"].items():
@@ -377,9 +412,16 @@ def parse_args():
         help="Number of ledgers per batch",
     )
     parser.add_argument(
-        "--dry-run",
+        "--db-persist",
         action="store_true",
-        help="Print operations without executing",
+        default=True,
+        help="Persist raw events to PostgreSQL (default: True)",
+    )
+    parser.add_argument(
+        "--no-db-persist",
+        action="store_false",
+        dest="db_persist",
+        help="Disable persisting raw events to PostgreSQL",
     )
 
     return parser.parse_args()
@@ -400,6 +442,7 @@ def main():
         rpc_url=args.rpc_url,
         batch_size=args.batch_size,
         dry_run=args.dry_run,
+        db_persist=args.db_persist,
     )
 
     try:
@@ -417,4 +460,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

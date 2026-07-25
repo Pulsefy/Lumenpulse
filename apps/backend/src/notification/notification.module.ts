@@ -4,10 +4,14 @@ import { Notification } from './notification.entity';
 import { PushToken } from './push-token.entity';
 import { NotificationPreference } from './notification-preference.entity';
 import { NotificationDeliveryLog } from './notification-delivery-log.entity';
+import { NotificationSuppressionLog } from './notification-suppression-log.entity';
+import { WatchlistItem } from '../watchlist/watchlist-item.entity';
 import { NotificationService } from './notification.service';
 import { NotificationPreferenceService } from './notification-preference.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
+import { NotificationFanoutService } from './notification-fanout.service';
 import { NotificationPreferenceController } from './notification-preference.controller';
+import { NotificationFanoutController } from './notification-fanout.controller';
 import { ProfilingModule } from '../common/profiling/profiling.module';
 
 @Module({
@@ -17,6 +21,8 @@ import { ProfilingModule } from '../common/profiling/profiling.module';
       PushToken,
       NotificationPreference,
       NotificationDeliveryLog,
+      NotificationSuppressionLog,
+      WatchlistItem,
     ]),
     ProfilingModule,
   ],
@@ -24,12 +30,14 @@ import { ProfilingModule } from '../common/profiling/profiling.module';
     NotificationService,
     NotificationPreferenceService,
     NotificationDeliveryService,
+    NotificationFanoutService,
   ],
   exports: [
     NotificationService,
     NotificationPreferenceService,
     NotificationDeliveryService,
+    NotificationFanoutService,
   ],
-  controllers: [NotificationPreferenceController],
+  controllers: [NotificationPreferenceController, NotificationFanoutController],
 })
 export class NotificationModule {}

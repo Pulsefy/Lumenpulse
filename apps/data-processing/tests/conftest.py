@@ -32,3 +32,20 @@ _HEAVY_MODULES = [
 for _mod in _HEAVY_MODULES:
     if _mod not in sys.modules:
         sys.modules[_mod] = MagicMock()
+
+
+def pytest_addoption(parser):
+    """Add command line options to pytest."""
+    parser.addoption(
+        "--update-contracts",
+        action="store_true",
+        default=False,
+        help="Update the contract test fixtures/schemas with generated outputs",
+    )
+
+
+@pytest.fixture
+def update_contracts(request):
+    """Fixture to check if --update-contracts was passed or environment variable is set."""
+    return request.config.getoption("--update-contracts") or os.environ.get("UPDATE_CONTRACTS") == "1"
+

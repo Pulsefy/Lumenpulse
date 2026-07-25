@@ -55,3 +55,27 @@ export async function authenticateBiometricPrompt(
     disableDeviceFallback: false,
   });
 }
+
+/**
+ * Requires biometric confirmation if supported and enrolled.
+ * Returns true if the user successfully authenticates or if biometrics are not supported/enrolled.
+ * Returns false if the user cancels or authentication fails.
+ */
+export async function requireBiometricConfirmation(promptMessage: string): Promise<boolean> {
+  try {
+    const supported = await isBiometricLockSupported();
+    if (!supported) return true;
+
+    const enrolled = await isBiometricEnrolled();
+    if (!enrolled) return true;
+
+    const result = await authenticateBiometricPrompt(promptMessage);
+    return result.success;
+  } catch (error) {
+    console.warn('Biometric confirmation error:', error);
+    // Fail safe to not block action if there's a system error, but wait, usually we should return false?
+    // "Failure and cancel states keep the underlying action safe."
+    // If it errors, we probably shouldn't allow it. Or allow it if hardware fails? Let's return false on error.
+    return false;
+  }
+}

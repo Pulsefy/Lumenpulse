@@ -66,6 +66,7 @@
     "notifications": "Notifications",
     "manage_accounts": "Manage Accounts",
     "notification_settings": "Notification Settings",
+    "contributor_profile": "Contributor Profile",
     "cache": "Cache"
   },
   "home": {
@@ -218,6 +219,10 @@
   "settings": {
     "title": "Settings",
     "account_preferences": "Account & Preferences",
+    "contributor_profile": {
+      "title": "Contributor Profile & Verification",
+      "description": "View linked wallet status, verification progress, and key account details."
+    },
     "appearance": "Appearance",
     "app_info": "App Info",
     "manage_accounts": {
@@ -292,7 +297,25 @@
     "environment_production": "Production",
     "environment_contributor": "Contributor Build",
     "platform": "Platform",
-    "logout": "Log Out"
+    "logout": "Log Out",
+    "status_info": {
+      "title": "Status & Release Notes",
+      "description": "View environment details and recent changes",
+      "active_env": "Active Environment",
+      "api_url": "API Base URL",
+      "stellar_net": "Stellar Network",
+      "soroban_rpc": "Soroban RPC URL",
+      "contract_id": "Contract ID",
+      "network_status": "Network Connection",
+      "online": "Online",
+      "offline": "Offline",
+      "last_checked": "Last checked: {{time}}",
+      "notes_title": "Release Notes",
+      "no_notes": "Release metadata is currently unavailable.",
+      "version_prefix": "Version {{version}}",
+      "published": "Published: {{date}}",
+      "testing": "Testing..."
+    }
   },
   "transaction_receipt": {
     "title": "Transaction Receipt",
@@ -324,5 +347,36 @@
     "couldnt_load": "Couldn't load {{item}}",
     "could_not_remove": "Could not remove",
     "could_not_update": "Could not update"
+  },
+  "contributor_profile": {
+    "title": "Contributor Center",
+    "subtitle": "Identity, wallet status, and verification progress",
+    "identity_section": "Contributor Identity",
+    "wallet_section": "Linked Wallet Context",
+    "verification_section": "Verification & Review Progress",
+    "account_section": "Account & Platform Details",
+    "not_found_title": "No Contributor Profile Found",
+    "not_found_desc": "No on-chain contributor record or linked wallet was found for this account. Connect a wallet or register your identity to activate your profile.",
+    "no_wallet_title": "No Wallet Linked",
+    "no_wallet_desc": "Connect your Stellar wallet to view linked status and verification progress.",
+    "connect_wallet": "Connect Wallet",
+    "manage_wallets": "Manage Linked Wallets",
+    "register_identity": "Register Identity",
+    "copy_address": "Copy Public Key",
+    "address_copied": "Public key copied to clipboard",
+    "reputation_score": "Reputation Score",
+    "tier": "Tier",
+    "github_handle": "GitHub Handle",
+    "registered_date": "Registered Date",
+    "quorum_progress": "Quorum Approval Progress",
+    "quorum_votes": "{{votesFor}} / {{quorumThreshold}} Votes",
+    "verification_checklist": "Verification Requirements Checklist",
+    "status": {
+      "verified": "Lumenpulse Verified",
+      "pending": "Pending Verification Review",
+      "rejected": "Verification Rejected",
+      "archived": "Archived Identity",
+      "unregistered": "Unregistered Identity"
+    }
   }
 }
