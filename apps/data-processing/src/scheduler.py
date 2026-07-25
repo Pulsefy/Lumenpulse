@@ -313,6 +313,27 @@ def _kpi_reconciliation_job() -> None:
         logger.error(f"KPI reconciliation job failed: {exc}", exc_info=True)
 
 
+def _contract_lag_metrics_job() -> None:
+    """Scheduled wrapper for per-contract ingestion lag metrics.
+
+    Measures lag for registry, vault, matching_pool, treasury, and vesting
+    domains, publishes values to Prometheus, and emits structured log alerts
+    when thresholds are exceeded.
+    """
+    try:
+        from src.ingestion.contract_lag_metrics import run_contract_lag_cycle
+
+        result = run_contract_lag_cycle()
+        logger.info(
+            "Contract lag cycle complete | healthy=%s | snapshots=%d | lag_alerts=%d",
+            result.get("healthy"),
+            len(result.get("snapshots", [])),
+            len(result.get("lag_alerts", [])),
+        )
+    except Exception as exc:
+        logger.error("Contract lag metrics job failed: %s", exc, exc_info=True)
+
+
 class AnalyticsScheduler:
 
     """Manages the APScheduler scheduler for analytics jobs"""
@@ -416,6 +437,18 @@ class AnalyticsScheduler:
                 trigger=IntervalTrigger(hours=6),
                 id="kpi_reconciliation",
                 name="KPI Reconciler against Live Contract Reads",
+                replace_existing=True,
+            )
+
+            # ── Per-contract ingestion lag metrics: every 5 minutes ──────
+            contract_lag_interval = int(
+                os.getenv("CONTRACT_LAG_INTERVAL_MINUTES", "5")
+            )
+            self.scheduler.add_job(
+                func=_contract_lag_metrics_job,
+                trigger=IntervalTrigger(minutes=contract_lag_interval),
+                id="contract_ingestion_lag_metrics",
+                name="Per-Contract Ingestion Lag Metrics",
                 replace_existing=True,
             )
 
