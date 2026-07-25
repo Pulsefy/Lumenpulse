@@ -18,6 +18,49 @@ from src.ingestion.ingestion_alerting import (
 router = APIRouter()
 
 
+# ---------------------------------------------------------------------------
+# Per-contract ingestion lag
+# ---------------------------------------------------------------------------
+
+class ContractLagSnapshotResponse(BaseModel):
+    domain: str
+    contract_id: Optional[str] = None
+    lag_seconds: Optional[float] = None
+    latest_onchain_ts: Optional[str] = None
+    latest_processed_ts: Optional[str] = None
+    severity: str
+    warning_threshold_seconds: float
+    critical_threshold_seconds: float
+    details: Dict[str, Any] = {}
+
+
+class ContractLagResponse(BaseModel):
+    checked_at: str
+    snapshots: list[ContractLagSnapshotResponse] = []
+    lag_alerts: list[Dict[str, Any]] = []
+    healthy: bool = True
+
+
+@router.get("/ingestion/contract-lag", response_model=ContractLagResponse)
+async def get_contract_lag() -> ContractLagResponse:
+    """Return current per-contract ingestion lag for all five domains."""
+    from src.ingestion.contract_lag_metrics import run_contract_lag_cycle
+
+    result = run_contract_lag_cycle()
+    return ContractLagResponse(**result)
+
+
+@router.post("/ingestion/contract-lag/run", response_model=ContractLagResponse)
+async def run_contract_lag() -> ContractLagResponse:
+    """Trigger an immediate per-contract lag measurement cycle."""
+    from src.ingestion.contract_lag_metrics import run_contract_lag_cycle
+
+    result = run_contract_lag_cycle()
+    return ContractLagResponse(**result)
+
+
+# ---------------------------------------------------------------------------
+
 class IngestionQualityRunRequest(BaseModel):
     network: str = "testnet"  # "testnet" only in MVP
     asset: str = "XLM"
