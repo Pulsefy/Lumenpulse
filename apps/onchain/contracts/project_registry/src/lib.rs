@@ -4,6 +4,7 @@ mod errors;
 mod events;
 mod storage;
 
+use cross_contract_view::{read_bool_view, read_u64_view};
 use errors::RegistryError;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal, Symbol};
@@ -48,18 +49,21 @@ impl ProjectRegistryContract {
 
     /// Resolve voter weight based on the configured WeightMode.
     /// Returns 0 if the voter does not meet the minimum weight requirement.
-    fn resolve_weight(env: &Env, config: &RegistryConfig, voter: &Address) -> i128 {
+    fn resolve_weight(
+        env: &Env,
+        config: &RegistryConfig,
+        voter: &Address,
+    ) -> Result<i128, RegistryError> {
         let weight = match config.weight_mode {
             WeightMode::Reputation => {
-                // Read reputation_score from contributor_registry via cross-contract call.
-                // The contributor_registry exposes get_reputation(contributor) -> u64.
-                // We call it generically via invoke_contract.
                 if let Some(ref registry) = config.contributor_registry {
-                    let score: u64 = env.invoke_contract(
+                    let score = read_u64_view(
+                        env,
                         registry,
                         &Symbol::new(env, "get_reputation"),
                         soroban_sdk::vec![env, voter.into_val(env)],
-                    );
+                    )
+                    .map_err(|_| RegistryError::CrossContractViewFailed)?;
                     score as i128
                 } else {
                     0
@@ -73,26 +77,21 @@ impl ProjectRegistryContract {
                 }
             }
             WeightMode::Flat => {
-                // Any registered contributor gets weight 1.
-                // We check registration via contributor_registry if configured,
-                // otherwise grant weight 1 to any caller.
                 if let Some(ref registry) = config.contributor_registry {
-                    let exists: bool = env.invoke_contract(
+                    let exists = read_bool_view(
+                        env,
                         registry,
                         &Symbol::new(env, "is_registered"),
                         soroban_sdk::vec![env, voter.into_val(env)],
-                    );
-                    if exists {
-                        1
-                    } else {
-                        0
-                    }
+                    )
+                    .map_err(|_| RegistryError::CrossContractViewFailed)?;
+                    if exists { 1 } else { 0 }
                 } else {
                     1
                 }
             }
         };
-        weight
+        Ok(weight)
     }
 
     // ── Initialisation ────────────────────────────────────────────────────────
@@ -226,7 +225,7 @@ impl ProjectRegistryContract {
             .get(&DataKey::Config)
             .ok_or(RegistryError::NotInitialized)?;
 
-        let weight = Self::resolve_weight(&env, &config, &voter);
+        let weight = Self::resolve_weight(&env, &config, &voter)?;
 
         if weight < config.min_voter_weight {
             return Err(RegistryError::InsufficientWeight);

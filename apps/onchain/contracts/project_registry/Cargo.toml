@@ -9,6 +9,7 @@ crate-type = ["lib", "cdylib"]
 doctest = false
 
 [dependencies]
+cross_contract_view = { path = "../cross_contract_view" }
 soroban-sdk = { workspace = true }
 
 [dev-dependencies]
