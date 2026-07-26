@@ -5,6 +5,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import {
   RoundDto,
   // ProjectQfDto,
@@ -22,6 +24,10 @@ import {
   LeaderboardResponseDto,
   LeaderboardEntryDto,
 } from './dto/grants.dto';
+import {
+  CONTRIBUTION_QUEUE,
+  DETECTION_JOB,
+} from '../suspicious-contribution/types';
 
 /**
  * In-memory store for round and contribution data.
@@ -48,13 +54,40 @@ export class GrantsService {
   private rounds = new Map<number, RoundRecord>();
   private nextRoundId = 0;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    @InjectQueue(CONTRIBUTION_QUEUE) private readonly suspiciousQueue: Queue,
+  ) {
     if (
       process.env.NODE_ENV !== 'production' &&
       process.env.NODE_ENV !== 'test'
     ) {
       this.seedRounds();
     }
+  }
+
+  private computeRoundTotal(roundId: number): bigint {
+    const record = this.getRecord(roundId);
+    let total = 0n;
+    for (const contributors of record.contributions.values()) {
+      for (const amount of contributors.values()) {
+        total += amount;
+      }
+    }
+    return total;
+  }
+
+  private computeContributorTotal(
+    roundId: number,
+    contributor: string,
+  ): bigint {
+    const record = this.getRecord(roundId);
+    let total = 0n;
+    for (const contributors of record.contributions.values()) {
+      const amount = contributors.get(contributor) ?? 0n;
+      total += amount;
+    }
+    return total;
   }
 
   private seedRounds() {
@@ -261,6 +294,29 @@ export class GrantsService {
     this.logger.log(
       `Contribution recorded: round=${dto.roundId} project=${dto.projectId} contributor=${dto.contributorPublicKey} amount=${amount}`,
     );
+
+    const roundTotal = this.computeRoundTotal(dto.roundId);
+    const contributorTotal = this.computeContributorTotal(
+      dto.roundId,
+      dto.contributorPublicKey,
+    );
+
+    this.suspiciousQueue
+      .add(
+        DETECTION_JOB,
+        {
+          roundId: dto.roundId,
+          projectId: dto.projectId,
+          contributorPublicKey: dto.contributorPublicKey,
+          amount: dto.amount,
+          roundTotalContributions: roundTotal.toString(),
+          contributorTotalInRound: contributorTotal.toString(),
+        },
+        { attempts: 2, backoff: { type: 'exponential', delay: 2000 } },
+      )
+      .catch((err) => {
+        this.logger.error('Failed to queue fraud detection', err);
+      });
   }
 
   // ── Finalization ───────────────────────────────────────────────────────────

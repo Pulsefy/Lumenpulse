@@ -1,23 +1,24 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { NotificationService, CreateNotificationDto } from './notification.service';
+import {
+  NotificationService,
+  CreateNotificationDto,
+} from './notification.service';
 import { NotificationPreferenceService } from './notification-preference.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import {
   NotificationSuppressionLog,
   SuppressionReason,
 } from './notification-suppression-log.entity';
+import { NotificationPreference } from './notification-preference.entity';
 import {
-  NotificationPreference,
-} from './notification-preference.entity';
-import { WatchlistItem, WatchlistItemType } from '../watchlist/watchlist-item.entity';
+  WatchlistItem,
+  WatchlistItemType,
+} from '../watchlist/watchlist-item.entity';
 import { NotificationType, NotificationSeverity } from './notification.entity';
 import { EventCategory } from '../common/event-catalog';
-import {
-  FanoutRequestDto,
-  FanoutResultDto,
-} from './dto/fanout.dto';
+import { FanoutRequestDto, FanoutResultDto } from './dto/fanout.dto';
 
 /**
  * Maps notification types to the watchlist item type they relate to.
@@ -231,15 +232,21 @@ export class NotificationFanoutService {
       if (typeof val === 'string') {
         symbols.push(val.toUpperCase());
       } else if (Array.isArray(val)) {
-        symbols.push(...val.filter((v): v is string => typeof v === 'string').map((v) => v.toUpperCase()));
+        symbols.push(
+          ...val
+            .filter((v): v is string => typeof v === 'string')
+            .map((v) => v.toUpperCase()),
+        );
       }
     }
 
     // For project-related events, use projectId as a fallback symbol
     if (
-      [NotificationType.PROJECT, NotificationType.CONTRIBUTION, NotificationType.MILESTONE].includes(
-        notificationType as NotificationType,
-      )
+      [
+        NotificationType.PROJECT,
+        NotificationType.CONTRIBUTION,
+        NotificationType.MILESTONE,
+      ].includes(notificationType as NotificationType)
     ) {
       const projectId = metadata['projectId'] as string | undefined;
       if (projectId && !symbols.includes(projectId.toUpperCase())) {

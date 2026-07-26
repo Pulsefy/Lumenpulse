@@ -127,6 +127,23 @@
     "failed": "Contribution Failed",
     "transaction_hash": "Transaction Hash"
   },
+  "report_modal": {
+    "title": "Report Content",
+    "category_label": "What's the issue?",
+    "reason_label": "Additional details (optional)",
+    "reason_placeholder": "Add any context that could help our moderation team",
+    "category_spam": "Spam",
+    "category_fraud": "Fraud or scam",
+    "category_misleading": "Misleading info",
+    "category_inappropriate": "Inappropriate content",
+    "category_copyright": "Copyright violation",
+    "category_other": "Other",
+    "submit": "Submit Report",
+    "submitting": "Submitting...",
+    "success_title": "Report Submitted",
+    "success_body": "Thank you. Our moderation team will review this submission.",
+    "generic_error": "Failed to submit report. Please try again."
+  },
   "grants": {
     "title": "Grants Rounds",
     "description": "Quadratic funding — breadth of support determines matching",
@@ -157,7 +174,10 @@
     "of_pool": "of pool",
     "contributors": "contributors",
     "contributed": "contributed",
-    "estimated_allocations": "Estimated Allocations"
+    "estimated_allocations": "Estimated Allocations",
+    "funding_progress": "Funding progress",
+    "milestones": "Milestones",
+    "no_eligible_projects": "No eligible projects have been added to this round yet."
   },
   "news": {
     "title": "News",

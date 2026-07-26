@@ -16,6 +16,7 @@ import os
 import sys
 import json
 import time
+import math
 import argparse
 import logging
 from datetime import datetime, timezone
@@ -25,7 +26,13 @@ import requests
 # Add the src directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.db.postgres_service import PostgresService
+try:
+    from src.db.postgres_service import PostgresService
+except Exception as exc:  # pragma: no cover - exercised in lightweight environments
+    PostgresService = None
+    _POSTGRES_IMPORT_ERROR = exc
+else:
+    _POSTGRES_IMPORT_ERROR = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -62,15 +69,21 @@ class BackfillContractEvents:
         self.db_persist = db_persist
         self.db_service = None
         if self.db_persist and os.getenv("DATABASE_URL") and not self.dry_run:
-            try:
-                self.db_service = PostgresService()
-                logger.info(
-                    "Database persistence enabled; raw events will be saved to PostgreSQL."
-                )
-            except Exception as e:
+            if PostgresService is None:
                 logger.warning(
-                    f"Failed to initialize database service: {e}. Running without DB persistence."
+                    "Database persistence requested but PostgreSQL support is unavailable: %s. Running without DB persistence.",
+                    _POSTGRES_IMPORT_ERROR,
                 )
+            else:
+                try:
+                    self.db_service = PostgresService()
+                    logger.info(
+                        "Database persistence enabled; raw events will be saved to PostgreSQL."
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to initialize database service: {e}. Running without DB persistence."
+                    )
 
         # Checkpoint files are stored alongside batch outputs.
         self.checkpoint_file = self.output_dir / "checkpoint.json"
@@ -124,6 +137,31 @@ class BackfillContractEvents:
 
     def _get_output_filepath(self, contract_id, batch_start, batch_end):
         return self.output_dir / f"{contract_id}_{batch_start}_{batch_end}.json"
+
+    def _build_plan(self) -> dict:
+        ledger_span = max(0, self.end_ledger - self.start_ledger + 1)
+        batches_per_contract = max(
+            1,
+            math.ceil(ledger_span / max(1, self.batch_size)) if ledger_span else 0,
+        )
+        estimated_batches = batches_per_contract * max(1, len(self.contract_ids))
+        estimated_output_files = estimated_batches
+        estimated_duration_seconds = max(10, estimated_batches * 15)
+
+        return {
+            "start_ledger": self.start_ledger,
+            "end_ledger": self.end_ledger,
+            "ledger_span": ledger_span,
+            "batch_size": self.batch_size,
+            "contract_count": len(self.contract_ids),
+            "estimated_batches": estimated_batches,
+            "estimated_output_files": estimated_output_files,
+            "estimated_duration_seconds": estimated_duration_seconds,
+            "safe_plan_note": (
+                "Split the range into smaller chunks or run one contract at a time "
+                "if the estimate exceeds your operational budget."
+            ),
+        }
 
     def _is_already_processed(self, filepath: Path) -> bool:
         if filepath.exists():
@@ -200,6 +238,7 @@ class BackfillContractEvents:
         return all_events
 
     def run(self):
+        plan = self._build_plan()
         logger.info("=" * 60)
         logger.info("SOROBAN CONTRACT EVENT BACKFILL")
         logger.info("=" * 60)
@@ -207,8 +246,17 @@ class BackfillContractEvents:
         logger.info(f"Ledger Range: {self.start_ledger} to {self.end_ledger}")
         logger.info(f"Contracts: {len(self.contract_ids)}")
         logger.info(f"Batch Size: {self.batch_size}")
+        logger.info(
+            "Dry-run plan: %s ledgers across %s batches (%s output files, ~%ss)",
+            plan["ledger_span"],
+            plan["estimated_batches"],
+            plan["estimated_output_files"],
+            plan["estimated_duration_seconds"],
+        )
 
         stats = {
+            "dry_run": self.dry_run,
+            "plan": plan,
             "total_events": 0,
             "contracts": {},
             "batches_processed": 0,
@@ -216,6 +264,10 @@ class BackfillContractEvents:
             "batches_failed": 0,
             "recovery": {},
         }
+
+        if self.dry_run:
+            logger.info("Dry-run mode enabled; no ledger batches were fetched or persisted.")
+            return stats
 
         for contract_id in self.contract_ids:
             stats["contracts"][contract_id] = {"events": 0, "failures": 0}
@@ -410,6 +462,11 @@ def parse_args():
         type=int,
         default=1000,
         help="Number of ledgers per batch",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Estimate the backfill plan without fetching or persisting batches",
     )
     parser.add_argument(
         "--db-persist",

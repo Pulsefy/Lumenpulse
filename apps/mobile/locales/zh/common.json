@@ -126,6 +126,23 @@
     "failed": "贡献失败",
     "transaction_hash": "交易哈希"
   },
+  "report_modal": {
+    "title": "举报内容",
+    "category_label": "问题类型是什么？",
+    "reason_label": "补充说明（可选）",
+    "reason_placeholder": "添加有助于审核团队处理的详细信息",
+    "category_spam": "垃圾信息",
+    "category_fraud": "欺诈或诈骗",
+    "category_misleading": "误导性信息",
+    "category_inappropriate": "不当内容",
+    "category_copyright": "版权侵权",
+    "category_other": "其他",
+    "submit": "提交举报",
+    "submitting": "提交中...",
+    "success_title": "举报已提交",
+    "success_body": "感谢您的举报，我们的审核团队将进行审查。",
+    "generic_error": "举报提交失败，请重试。"
+  },
   "grants": {
     "title": "资助轮次",
     "description": "二次方资助 - 广泛的社区支持决定匹配金额",
@@ -156,7 +173,10 @@
     "of_pool": "占总池",
     "contributors": "位贡献者",
     "contributed": "已贡献",
-    "estimated_allocations": "预计分配"
+    "estimated_allocations": "预计分配",
+    "funding_progress": "筹资进度",
+    "milestones": "里程碑",
+    "no_eligible_projects": "该轮次尚未添加符合条件的项目。"
   },
   "news": {
     "title": "新闻",
