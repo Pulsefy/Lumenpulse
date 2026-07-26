@@ -139,6 +139,12 @@ export class CrowdfundService {
     };
   }
 
+  resetDemoData(): void {
+    this.projects.clear();
+    this.nextId = 1;
+    this.logger.log('Demo data reset — cleared all projects');
+  }
+
   bootstrapDemoData(): { projectIds: number[] } {
     const demoProjects: CreateProjectDto[] = [
       {

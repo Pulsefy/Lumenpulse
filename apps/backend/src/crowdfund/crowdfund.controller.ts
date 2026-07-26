@@ -122,6 +122,13 @@ export class CrowdfundController {
     description: 'Forbidden or disabled in this environment',
   })
   bootstrapDemoData() {
+    if (config.stellar.network !== 'testnet') {
+      throw new ForbiddenException(
+        `Bootstrap is only available on testnet. Current network: ${config.stellar.network}. ` +
+        'Set STELLAR_NETWORK=testnet to use this feature.',
+      );
+    }
+
     if (!config.featureFlags.bootstrapDemoData) {
       throw new ForbiddenException(
         'Demo bootstrap is disabled. Set BOOTSTRAP_DEMO_DATA_ENABLED=true to enable it.',
