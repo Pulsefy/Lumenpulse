@@ -20,6 +20,7 @@ pandas>=2.2.0
 python-json-logger>=2.0.0
 prometheus-client>=0.20.0
 slowapi>=0.1.9
+starlette>=0.27.0
 spacy>=3.7.0,<3.8.0
 
 # Database
