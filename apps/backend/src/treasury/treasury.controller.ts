@@ -34,6 +34,10 @@ import {
   StreamPreviewDto,
   StreamPreviewResponseDto,
 } from './dto/stream-preview.dto';
+import {
+  QueryBeneficiaryHistoryDto,
+  BeneficiaryHistoryResponseDto,
+} from './dto/beneficiary-history.dto';
 import { TreasuryService } from './treasury.service';
 import { AuditBlockchainAction } from '../admin-audit/decorators/audit-blockchain-action.decorator';
 import { Request as ExpressRequest } from 'express';
@@ -114,7 +118,10 @@ export class TreasuryController {
       req as ExpressRequest,
     );
 
-    return this.treasuryService.allocateBudget(dto);
+    return this.treasuryService.allocateBudget(dto, {
+      actorId: user.id,
+      actorEmail: user.email,
+    });
   }
 
   @Get('streams/:beneficiary')
@@ -145,6 +152,63 @@ export class TreasuryController {
     @Param('beneficiary') beneficiary: string,
   ): Promise<StreamStateDto> {
     return this.treasuryService.getStream(beneficiary);
+  }
+
+  @Get('streams/:beneficiary/history')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, ContractAdminGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary:
+      'Get audit-safe beneficiary change history for a stream or account (admin only)',
+    description:
+      'Exposes treasury stream beneficiary changes and audit history with actor context and timestamps.',
+  })
+  @ApiParam({
+    name: 'beneficiary',
+    description: 'Stellar address of the stream beneficiary or account',
+    example: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Beneficiary history retrieved successfully',
+    type: BeneficiaryHistoryResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Caller is not an admin' })
+  async getStreamHistory(
+    @Param('beneficiary') beneficiary: string,
+    @Query() query: QueryBeneficiaryHistoryDto,
+  ): Promise<BeneficiaryHistoryResponseDto> {
+    return this.treasuryService.getBeneficiaryHistory({
+      ...query,
+      beneficiary,
+    });
+  }
+
+  @Get('beneficiary-history')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, ContractAdminGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary:
+      'Query treasury stream beneficiary history and audit trail (admin only)',
+    description:
+      'Exposes treasury stream beneficiary changes, rotation history, and audit-safe logs for admin UIs and ops teams.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Beneficiary history retrieved successfully',
+    type: BeneficiaryHistoryResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Caller is not an admin' })
+  async getBeneficiaryHistory(
+    @Query() query: QueryBeneficiaryHistoryDto,
+  ): Promise<BeneficiaryHistoryResponseDto> {
+    return this.treasuryService.getBeneficiaryHistory(query);
   }
 
   @Post('streams/rotate')
@@ -202,7 +266,10 @@ export class TreasuryController {
       req as ExpressRequest,
     );
 
-    return this.treasuryService.rotateBeneficiary(dto);
+    return this.treasuryService.rotateBeneficiary(dto, {
+      actorId: user.id,
+      actorEmail: user.email,
+    });
   }
 
   @Get('streams/preview')
