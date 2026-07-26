@@ -11,6 +11,7 @@ import { SorobanEvent } from './soroban-event.entity';
 
 export enum DeadLetterStatus {
   PENDING = 'pending',
+  REPLAYING = 'replaying',
   RESOLVED = 'resolved',
   REPLAYED = 'replayed',
 }
