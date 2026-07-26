@@ -63,6 +63,7 @@
     "transactions": "交易",
     "news": "新闻",
     "settings": "设置",
+    "watchlist": "关注列表",
     "notifications": "通知",
     "manage_accounts": "管理账户",
     "notification_settings": "通知设置",
@@ -173,6 +174,16 @@
     "no_notifications": "暂无通知",
     "notification_text": "价格提醒和账户活动将显示在此处。"
   },
+  "watchlist": {
+    "title": "关注列表",
+    "empty_title": "关注列表为空",
+    "empty_subtitle": "在发现标签页中星标资产以在此处跟踪",
+    "remove": "从关注列表移除",
+    "conflict_banner": "部分项目存在同步冲突。下拉刷新。",
+    "rollback_banner": "部分项目已恢复为服务器状态。下拉刷新。",
+    "syncing_banner": "变更将在恢复网络时同步。",
+    "last_synced": "上次同步: {{time}}"
+  },
   "discover": {
     "title": "发现",
     "search_placeholder": "按名称或代码搜索…",
@@ -184,7 +195,9 @@
     "price": "价格 / 24小时",
     "asset": "资产",
     "search_label": "搜索资产",
-    "asset_hint": "双击查看资产详情"
+    "asset_hint": "双击查看资产详情",
+    "add_to_watchlist": "添加到关注列表",
+    "remove_from_watchlist": "从关注列表移除"
   },
   "portfolio": {
     "title": "投资组合",

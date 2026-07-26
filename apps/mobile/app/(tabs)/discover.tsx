@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -16,6 +16,8 @@ import { useLocalization } from '../../src/context';
 import { stellarApi, StellarAsset } from '../../lib/api';
 import { useCachedData } from '../../hooks/useCachedData';
 import { CACHE_CONFIGS } from '../../lib/cache';
+import { useWatchlist } from '../../contexts/WatchlistContext';
+import { WatchlistItemType } from '../../lib/watchlist';
 
 const MOCK_ASSETS: StellarAsset[] = [
   { code: 'XLM', name: 'Stellar Lumens', issuer: null, priceUsd: 0.1051, change24h: 1.23 },
@@ -117,6 +119,18 @@ function AssetItem({
   const color = assetColor(asset.code);
   const isPositive = asset.change24h >= 0;
   const changeColor = isPositive ? '#27ae60' : '#e74c3c';
+  const { isInWatchlist, toggleItem } = useWatchlist();
+  const inWatchlist = isInWatchlist(asset.code, WatchlistItemType.ASSET);
+
+  const handleToggleWatchlist = useCallback(() => {
+    toggleItem({
+      symbol: asset.code,
+      name: asset.name,
+      type: WatchlistItemType.ASSET,
+      assetIssuer: asset.issuer ?? undefined,
+      imageUrl: asset.iconUrl ?? undefined,
+    });
+  }, [asset, toggleItem]);
 
   return (
     <View
@@ -127,6 +141,21 @@ function AssetItem({
       accessibilityRole="button"
       accessibilityHint={t('discover.asset_hint')}
     >
+      <TouchableOpacity
+        onPress={handleToggleWatchlist}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={styles.watchlistToggle}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: inWatchlist }}
+        accessibilityLabel={inWatchlist ? t('discover.remove_from_watchlist') : t('discover.add_to_watchlist')}
+      >
+        <Ionicons
+          name={inWatchlist ? 'star' : 'star-outline'}
+          size={22}
+          color={inWatchlist ? '#f7b731' : colors.textSecondary}
+        />
+      </TouchableOpacity>
+
       <View style={[styles.assetIcon, { backgroundColor: `${color}22` }]} accessible>
         <Text style={[styles.assetIconText, { color }]}>{asset.code.charAt(0)}</Text>
       </View>
@@ -444,10 +473,11 @@ const styles = StyleSheet.create({
   assetItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  watchlistToggle: { paddingRight: 10, paddingLeft: 4 },
   assetIcon: {
     width: 44,
     height: 44,

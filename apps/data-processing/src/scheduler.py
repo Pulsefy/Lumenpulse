@@ -313,6 +313,51 @@ def _kpi_reconciliation_job() -> None:
         logger.error(f"KPI reconciliation job failed: {exc}", exc_info=True)
 
 
+def _daily_onchain_kpi_snapshot_job() -> None:
+    """Scheduled wrapper for DailyKPISnapshotGenerator (#877).
+
+    Persists daily snapshots of core on-chain KPIs (TVL, volume, active rounds,
+    contribution counts) to enable fast, consistent trend analysis and prevent duplicate entries.
+    """
+    try:
+        from src.analytics.daily_kpi_snapshot import DailyKPISnapshotGenerator
+
+        generator = DailyKPISnapshotGenerator()
+        result = generator.run_snapshot()
+        logger.info(
+            "Daily on-chain KPI snapshot job complete | status=%s | date=%s | tvl=%.2f | volume=%.2f | active_rounds=%d | contributions=%d",
+            result.get("status"),
+            result.get("date"),
+            result.get("tvl", 0.0),
+            result.get("volume", 0.0),
+            result.get("active_rounds", 0),
+            result.get("contribution_count", 0),
+        )
+    except Exception as exc:
+        logger.error(f"Daily on-chain KPI snapshot job failed: {exc}", exc_info=True)
+
+
+def _contract_lag_metrics_job() -> None:
+    """Scheduled wrapper for per-contract ingestion lag metrics.
+
+    Measures lag for registry, vault, matching_pool, treasury, and vesting
+    domains, publishes values to Prometheus, and emits structured log alerts
+    when thresholds are exceeded.
+    """
+    try:
+        from src.ingestion.contract_lag_metrics import run_contract_lag_cycle
+
+        result = run_contract_lag_cycle()
+        logger.info(
+            "Contract lag cycle complete | healthy=%s | snapshots=%d | lag_alerts=%d",
+            result.get("healthy"),
+            len(result.get("snapshots", [])),
+            len(result.get("lag_alerts", [])),
+        )
+    except Exception as exc:
+        logger.error("Contract lag metrics job failed: %s", exc, exc_info=True)
+
+
 class AnalyticsScheduler:
 
     """Manages the APScheduler scheduler for analytics jobs"""
@@ -339,7 +384,7 @@ class AnalyticsScheduler:
             # ── Stellar ingestion quality checks: every hour ──────────
             # Low-noise: only fails CI/process when ingestion lag is critical.
             quality_job = self.scheduler.add_job(
-                func=self._ingestion_quality_checks_job,
+                func=_ingestion_quality_checks_job,
                 trigger=IntervalTrigger(hours=1),
                 id="stellar_ingestion_quality_checks_hourly",
                 name="Stellar Ingestion Quality Checks - Hourly",
@@ -416,6 +461,27 @@ class AnalyticsScheduler:
                 trigger=IntervalTrigger(hours=6),
                 id="kpi_reconciliation",
                 name="KPI Reconciler against Live Contract Reads",
+                replace_existing=True,
+            )
+
+            # ── Daily On-Chain KPI Snapshot: daily at 00:05 UTC (#877) ──
+            self.scheduler.add_job(
+                func=_daily_onchain_kpi_snapshot_job,
+                trigger=CronTrigger(hour=0, minute=5, timezone="UTC"),
+                id="daily_onchain_kpi_snapshot",
+                name="Daily On-Chain KPI Snapshot Scheduler",
+                replace_existing=True,
+            )
+
+            # ── Per-contract ingestion lag metrics: every 5 minutes ──────
+            contract_lag_interval = int(
+                os.getenv("CONTRACT_LAG_INTERVAL_MINUTES", "5")
+            )
+            self.scheduler.add_job(
+                func=_contract_lag_metrics_job,
+                trigger=IntervalTrigger(minutes=contract_lag_interval),
+                id="contract_ingestion_lag_metrics",
+                name="Per-Contract Ingestion Lag Metrics",
                 replace_existing=True,
             )
 
