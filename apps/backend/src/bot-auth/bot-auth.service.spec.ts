@@ -35,7 +35,11 @@ describe('BotAuthService', () => {
   });
 
   it('should authorize safe read commands and log them', async () => {
-    const result = await service.authorizeCommand('/price XLM', '123', 'testuser');
+    const result = await service.authorizeCommand(
+      '/price XLM',
+      '123',
+      'testuser',
+    );
     expect(result).toBe(true);
     expect(auditService.log).toHaveBeenCalledWith(
       'GET_PRICE',
@@ -47,24 +51,36 @@ describe('BotAuthService', () => {
         type: BotActionType.READ,
         status: 'SUCCESS',
         actor: 'bot',
-      })
+      }),
     );
   });
 
   it('should reject unknown commands and log them', async () => {
-    const result = await service.authorizeCommand('/unknown', '123', 'testuser');
+    const result = await service.authorizeCommand(
+      '/unknown',
+      '123',
+      'testuser',
+    );
     expect(result).toBe(false);
     expect(auditService.log).toHaveBeenCalledWith(
       'UNKNOWN_COMMAND',
       '123',
       null,
-      expect.objectContaining({ command: '/unknown', username: 'testuser', actor: 'bot' })
+      expect.objectContaining({
+        command: '/unknown',
+        username: 'testuser',
+        actor: 'bot',
+      }),
     );
   });
 
   it('should reject unauthorized privileged commands', async () => {
     configService.get.mockReturnValue('456,789'); // admin chat IDs
-    const result = await service.authorizeCommand('/broadcast Hello', '123', 'testuser');
+    const result = await service.authorizeCommand(
+      '/broadcast Hello',
+      '123',
+      'testuser',
+    );
     expect(result).toBe(false);
     expect(auditService.log).toHaveBeenCalledWith(
       'ADMIN_BROADCAST',
@@ -77,13 +93,17 @@ describe('BotAuthService', () => {
         status: 'DENIED',
         reason: 'Admin privileges required',
         actor: 'bot',
-      })
+      }),
     );
   });
 
   it('should authorize privileged commands for admins', async () => {
     configService.get.mockReturnValue('123,456'); // admin chat IDs
-    const result = await service.authorizeCommand('/broadcast Hello', '123', 'testuser');
+    const result = await service.authorizeCommand(
+      '/broadcast Hello',
+      '123',
+      'testuser',
+    );
     expect(result).toBe(true);
     expect(auditService.log).toHaveBeenCalledWith(
       'ADMIN_BROADCAST',
@@ -95,7 +115,7 @@ describe('BotAuthService', () => {
         type: BotActionType.PRIVILEGED,
         status: 'SUCCESS',
         actor: 'bot',
-      })
+      }),
     );
   });
 
@@ -106,7 +126,11 @@ describe('BotAuthService', () => {
       return undefined;
     });
 
-    const result = await service.authorizeCommand('/subscribe XLM', '999', 'testuser');
+    const result = await service.authorizeCommand(
+      '/subscribe XLM',
+      '999',
+      'testuser',
+    );
 
     expect(result).toBe(false);
     expect(auditService.log).toHaveBeenCalledWith(

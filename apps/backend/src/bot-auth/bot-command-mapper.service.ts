@@ -23,9 +23,14 @@ export class BotCommandMapperService {
    * Execute a command string by resolving its mapping to an action name
    * and calling the registered handler. Returns true when executed.
    */
-  async executeCommand(commandStr: string, msg: any, match?: RegExpExecArray | null): Promise<boolean> {
+  async executeCommand(
+    commandStr: string,
+    msg: any,
+    match?: RegExpExecArray | null,
+  ): Promise<boolean> {
     const baseCommand = commandStr.split(' ')[0];
-    const mapping: ActionMapping | undefined = BOT_COMMAND_MAPPINGS[baseCommand];
+    const mapping: ActionMapping | undefined =
+      BOT_COMMAND_MAPPINGS[baseCommand];
     if (!mapping) {
       this.logger.warn(`No mapping for command: ${commandStr}`);
       return false;
@@ -33,7 +38,9 @@ export class BotCommandMapperService {
 
     const handler = this.handlers.get(mapping.actionName);
     if (!handler) {
-      this.logger.warn(`No handler registered for action ${mapping.actionName}`);
+      this.logger.warn(
+        `No handler registered for action ${mapping.actionName}`,
+      );
       return false;
     }
 
@@ -41,7 +48,10 @@ export class BotCommandMapperService {
       await handler(msg, match ?? null);
       return true;
     } catch (err) {
-      this.logger.error(`Error executing handler for ${mapping.actionName}`, err as any);
+      this.logger.error(
+        `Error executing handler for ${mapping.actionName}`,
+        err,
+      );
       return false;
     }
   }

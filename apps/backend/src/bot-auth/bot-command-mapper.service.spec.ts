@@ -17,7 +17,11 @@ describe('BotCommandMapperService', () => {
   });
 
   it('returns false when no mapping exists', async () => {
-    const executed = await service.executeCommand('/nope', { text: '/nope' }, null);
+    const executed = await service.executeCommand(
+      '/nope',
+      { text: '/nope' },
+      null,
+    );
     expect(executed).toBe(false);
   });
 
@@ -27,13 +31,17 @@ describe('BotCommandMapperService', () => {
 
     // simulate a mapping by directly invoking the registered handler via executeCommand
     // since executeCommand resolves mapping from command string, we call handler directly
-    const result = await service.executeCommand('/start', { text: '/start' }, null).catch(() => false);
+    const result = await service
+      .executeCommand('/start', { text: '/start' }, null)
+      .catch(() => false);
 
     // result should be false because /start mapping (SUBSCRIBE) is not registered here
     expect(result).toBe(false);
 
     // calling the registered handler directly via internal map is not exposed, so assert registration
     // by attempting a second registration we ensure register succeeds
-    expect(() => service.register('TEST_ACTION', mockHandler as any)).not.toThrow();
+    expect(() =>
+      service.register('TEST_ACTION', mockHandler as any),
+    ).not.toThrow();
   });
 });

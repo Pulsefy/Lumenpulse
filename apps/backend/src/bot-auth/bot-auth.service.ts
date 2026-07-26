@@ -48,7 +48,9 @@ export class BotAuthService {
       return true;
     }
 
-    this.logger.warn(`Unauthorized access attempt for ${mapping.actionName} by ${chatId}`);
+    this.logger.warn(
+      `Unauthorized access attempt for ${mapping.actionName} by ${chatId}`,
+    );
     await this.auditService.log(mapping.actionName, chatId, null, {
       command: commandStr,
       username,
@@ -60,7 +62,10 @@ export class BotAuthService {
     return false;
   }
 
-  private getAuthorizationReason(mapping: ActionMapping, chatId: string): string | null {
+  private getAuthorizationReason(
+    mapping: ActionMapping,
+    chatId: string,
+  ): string | null {
     if (mapping.requiresAdmin) {
       const adminChatIds = this.getConfiguredChatIds('ADMIN_CHAT_IDS');
       if (!adminChatIds.includes(chatId)) {
@@ -69,8 +74,13 @@ export class BotAuthService {
     }
 
     if (mapping.type === BotActionType.MUTATION) {
-      const trustedMutationChatIds = this.getConfiguredChatIds('TRUSTED_MUTATION_CHAT_IDS');
-      if (trustedMutationChatIds.length > 0 && !trustedMutationChatIds.includes(chatId)) {
+      const trustedMutationChatIds = this.getConfiguredChatIds(
+        'TRUSTED_MUTATION_CHAT_IDS',
+      );
+      if (
+        trustedMutationChatIds.length > 0 &&
+        !trustedMutationChatIds.includes(chatId)
+      ) {
         return 'Trusted chat required for mutation actions';
       }
     }
@@ -79,6 +89,12 @@ export class BotAuthService {
   }
 
   private getConfiguredChatIds(key: string): string[] {
-    return this.configService.get<string>(key)?.split(',').map((value) => value.trim()).filter(Boolean) || [];
+    return (
+      this.configService
+        .get<string>(key)
+        ?.split(',')
+        .map((value) => value.trim())
+        .filter(Boolean) || []
+    );
   }
 }
