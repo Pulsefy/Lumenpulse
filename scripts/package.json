@@ -4,7 +4,8 @@
     "description": "Scripts to deploy Stellar contracts",
     "main": "deploy.ts",
     "scripts": {
-        "deploy": "ts-node deploy.ts"
+        "deploy": "ts-node deploy.ts",
+        "smoke": "ts-node smoke.ts"
     },
     "dependencies": {
         "@stellar/stellar-sdk": "^14.4.3",

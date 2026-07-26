@@ -101,7 +101,9 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
               ? 'shield-checkmark'
               : data.status === 'REJECTED'
                 ? 'shield-outline'
-                : 'time-outline'
+                : data.status === 'ARCHIVED'
+                  ? 'archive-outline'
+                  : 'time-outline'
           }
           size={20}
           color={color}

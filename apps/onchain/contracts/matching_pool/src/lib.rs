@@ -310,28 +310,45 @@ impl MatchingPoolContract {
         admin: Address,
         round_id: u64,
     ) -> Result<(), MatchingPoolError> {
-        Self::require_admin(&env, &admin)?;
-        let mut round: RoundData = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Round(round_id))
-            .ok_or(MatchingPoolError::RoundNotFound)?;
-        if round.is_finalized {
-            return Err(MatchingPoolError::RoundAlreadyFinalized);
-        }
-        if env.ledger().timestamp() <= round.end_time {
-            return Err(MatchingPoolError::RoundStillOpen);
-        }
-        round.is_finalized = true;
-        env.storage()
-            .persistent()
-            .set(&DataKey::Round(round_id), &round);
-        env.storage().persistent().set(
-            &DataKey::RoundStatus(round_id),
-            &Symbol::new(&env, "FINALIZED"),
-        );
-        events::RoundFinalizedEvent { round_id, admin }.publish(&env);
-        Ok(())
+        Self::with_reentrancy_guard(&env, || {
+            Self::require_admin(&env, &admin)?;
+            Self::require_not_paused(&env)?;
+
+            let mut round: RoundData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Round(round_id))
+                .ok_or(MatchingPoolError::RoundNotFound)?;
+
+            if round.is_finalized {
+                return Err(MatchingPoolError::RoundAlreadyFinalized);
+            }
+
+            let now = env.ledger().timestamp();
+            if now <= round.end_time {
+                return Err(MatchingPoolError::RoundStillOpen);
+            }
+
+            round.is_finalized = true;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Round(round_id), &round);
+            env.storage().persistent().set(
+                &DataKey::RoundStatus(round_id),
+                &Symbol::new(&env, "FINALIZED"),
+            );
+            env.storage()
+                .persistent()
+                .set(&DataKey::FinalizedAt(round_id), &now);
+
+            events::RoundFinalizedEvent {
+                round_id,
+                admin,
+                finalized_at: now,
+            }
+            .publish(&env);
+            Ok(())
+        })
     }
 
     pub fn distribute_matching_funds(
@@ -342,6 +359,7 @@ impl MatchingPoolContract {
     ) -> Result<i128, MatchingPoolError> {
         Self::with_reentrancy_guard(&env, || {
             Self::require_admin(&env, &admin)?;
+            Self::require_not_paused(&env)?;
             let mut round: RoundData = env
                 .storage()
                 .persistent()
@@ -642,6 +660,17 @@ impl MatchingPoolContract {
             .persistent()
             .get(&DataKey::RoundStatus(round_id))
             .unwrap_or(Symbol::new(&env, "ACTIVE")))
+    }
+
+    pub fn get_finalized_at(env: Env, round_id: u64) -> Result<u64, MatchingPoolError> {
+        env.storage()
+            .persistent()
+            .get::<_, RoundData>(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        env.storage()
+            .persistent()
+            .get(&DataKey::FinalizedAt(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)
     }
 
     pub fn get_admin(env: Env) -> Result<Address, MatchingPoolError> {

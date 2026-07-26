@@ -484,3 +484,240 @@ fn test_fund_pool_cei_state_written_before_token_balance_assertion() {
     assert_eq!(client.get_pool_balance(&round_id), 250_000);
     assert_eq!(token.balance(&client.address), 250_000);
 }
+
+// ── Finalization guardrails ──────────────────────────────────────────────────
+
+#[test]
+fn test_double_finalize_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    env.ledger().set_timestamp(4000);
+    client.finalize_round(&admin, &round_id);
+
+    assert_eq!(
+        client.try_finalize_round(&admin, &round_id),
+        Err(Ok(MatchingPoolError::RoundAlreadyFinalized))
+    );
+
+    assert_eq!(
+        client.get_round_status(&round_id),
+        symbol_short!("FINALIZED")
+    );
+}
+
+#[test]
+fn test_finalize_unauthorized_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    let not_admin = Address::generate(&env);
+    env.ledger().set_timestamp(4000);
+    assert_eq!(
+        client.try_finalize_round(&not_admin, &round_id),
+        Err(Ok(MatchingPoolError::Unauthorized))
+    );
+}
+
+#[test]
+fn test_finalize_nonexistent_round_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, _, _) = setup(&env);
+    client.initialize(&admin);
+
+    assert_eq!(
+        client.try_finalize_round(&admin, &999u64),
+        Err(Ok(MatchingPoolError::RoundNotFound))
+    );
+}
+
+#[test]
+fn test_finalize_while_paused_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    client.pause(&admin);
+
+    env.ledger().set_timestamp(4000);
+    assert_eq!(
+        client.try_finalize_round(&admin, &round_id),
+        Err(Ok(MatchingPoolError::ContractPaused))
+    );
+
+    let round = client.get_round(&round_id);
+    assert!(!round.is_finalized);
+}
+
+#[test]
+fn test_finalize_records_timestamp_and_status() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    env.ledger().set_timestamp(4000);
+    client.finalize_round(&admin, &round_id);
+
+    let round = client.get_round(&round_id);
+    assert!(round.is_finalized);
+    assert_eq!(
+        client.get_round_status(&round_id),
+        symbol_short!("FINALIZED")
+    );
+    assert_eq!(client.get_finalized_at(&round_id), 4000);
+}
+
+#[test]
+fn test_reentrancy_guard_finalize_rejects_when_locked() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("RGF"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    env.as_contract(&client.address, || {
+        env.storage()
+            .instance()
+            .set(&symbol_short!("REENTRANT"), &true);
+    });
+
+    env.ledger().set_timestamp(4000);
+    let result = client.try_finalize_round(&admin, &round_id);
+    assert_eq!(result, Err(Ok(MatchingPoolError::Reentrancy)));
+
+    let round = client.get_round(&round_id);
+    assert!(!round.is_finalized);
+}
+
+#[test]
+fn test_distribute_while_paused_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, token_admin) = setup(&env);
+    client.initialize(&admin);
+
+    let funder = Address::generate(&env);
+    let owner1 = Address::generate(&env);
+    token_admin.mint(&funder, &1_000_000);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    client.fund_pool(&funder, &round_id, &1_000_000);
+    client.approve_project(&admin, &round_id, &1u64);
+
+    env.ledger().set_timestamp(1500);
+    let c = Address::generate(&env);
+    client.record_contribution(&round_id, &1u64, &c, &100);
+
+    env.ledger().set_timestamp(4000);
+    client.finalize_round(&admin, &round_id);
+
+    client.pause(&admin);
+
+    let owners = vec![&env, owner1.clone()];
+    assert_eq!(
+        client.try_distribute_matching_funds(&admin, &round_id, &owners),
+        Err(Ok(MatchingPoolError::ContractPaused))
+    );
+
+    let round = client.get_round(&round_id);
+    assert!(!round.is_distributed);
+}
+
+#[test]
+fn test_distribute_succeeds_after_unpause() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, token_admin) = setup(&env);
+    client.initialize(&admin);
+
+    let funder = Address::generate(&env);
+    let owner1 = Address::generate(&env);
+    token_admin.mint(&funder, &1_000_000);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    client.fund_pool(&funder, &round_id, &1_000_000);
+    client.approve_project(&admin, &round_id, &1u64);
+
+    env.ledger().set_timestamp(1500);
+    let c = Address::generate(&env);
+    client.record_contribution(&round_id, &1u64, &c, &100);
+
+    env.ledger().set_timestamp(4000);
+    client.finalize_round(&admin, &round_id);
+
+    client.pause(&admin);
+    client.unpause(&admin);
+
+    let owners = vec![&env, owner1.clone()];
+    let total = client.distribute_matching_funds(&admin, &round_id, &owners);
+
+    assert_eq!(total, 1_000_000);
+    assert_eq!(token.balance(&owner1), 1_000_000);
+}

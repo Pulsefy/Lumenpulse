@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import create_engine, select, and_
 from sqlalchemy.orm import sessionmaker
 
-from src.db.models import AnalyticsRecord, Article, AssetTrend, SocialPost
+from src.db.models import AnalyticsRecord, Article, AssetTrend, SocialPost, EntityLinkingReview
 
 logger = logging.getLogger(__name__)
 
@@ -246,11 +246,39 @@ class QAExporter:
         logger.info("Exported %d KPIs → %s", len(records), path)
         return ExportResult("kpis", str(path), len(records), "completed")
 
+    def export_review_queue(self) -> ExportResult:
+        """Export the entity linking review queue."""
+        with self.Session() as session:
+            rows = session.execute(select(EntityLinkingReview)).scalars().all()
+            records = [
+                {
+                    "id": r.id,
+                    "article_id": r.article_id,
+                    "stable_entity_id": r.stable_entity_id,
+                    "entity_type": r.entity_type,
+                    "display_name": r.display_name,
+                    "matched_text": r.matched_text,
+                    "confidence": r.confidence,
+                    "supporting_evidence": r.supporting_evidence,
+                    "status": r.status,
+                    "corrected_entity_id": r.corrected_entity_id,
+                    "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in rows
+            ]
+
+        data = self._envelope(records, "review_queue")
+        path = self._write(data, "review_queue")
+        logger.info("Exported %d review queue items → %s", len(records), path)
+        return ExportResult("review_queue", str(path), len(records), "completed")
+
     def run(self) -> List[ExportResult]:
-        """Run all three exports and return results."""
+        """Run all exports and return results."""
         results = [
             self.export_events(),
             self.export_views(),
             self.export_kpis(),
+            self.export_review_queue(),
         ]
         return results

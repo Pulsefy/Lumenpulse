@@ -1,6 +1,6 @@
 import { apiClient, ApiResponse } from './api-client';
 
-export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED';
+export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'ARCHIVED';
 export type WeightMode = 'REPUTATION' | 'TOKEN_BALANCE' | 'FLAT';
 
 export interface ProjectVerification {
@@ -68,6 +68,8 @@ export function statusColor(status: VerificationStatus): string {
       return '#10b981';
     case 'REJECTED':
       return '#ef4444';
+    case 'ARCHIVED':
+      return '#64748b';
     default:
       return '#f59e0b';
   }
@@ -79,6 +81,8 @@ export function statusLabel(status: VerificationStatus): string {
       return 'Lumenpulse Verified';
     case 'REJECTED':
       return 'Not Verified';
+    case 'ARCHIVED':
+      return 'Archived';
     default:
       return 'Pending Review';
   }
