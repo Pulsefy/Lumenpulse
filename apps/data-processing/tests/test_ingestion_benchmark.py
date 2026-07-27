@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Ingestion throughput and backlog benchmark.
 

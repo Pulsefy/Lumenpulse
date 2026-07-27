@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Contributor-Project Narrative Attribution Scorer (#1061)
 

@@ -411,5 +411,50 @@
       "archived": "Archived Identity",
       "unregistered": "Unregistered Identity"
     }
+  },
+  "wallet": {
+    "connect": {
+      "title": "Connect Wallet",
+      "message": "Connect a Stellar wallet to {{network}}. This is the first time connecting on this network.",
+      "mock_button": "Mock Testnet Wallet",
+      "deep_link_button": "Deep Link (SEP-0007)",
+      "no_wallet_title": "No Wallet Found",
+      "no_wallet_message": "Could not find a Stellar wallet supporting SEP-0007 deep links."
+    },
+    "reconnect": {
+      "title": "Reconnect to {{network}}",
+      "message": "Restore your saved wallet session on the new {{network}} network. Choose how you want to reconnect.",
+      "button": "Reconnect Wallet",
+      "restoring": "Restoring wallet session\u2026"
+    },
+    "network_mismatch": {
+      "title": "Network Changed",
+      "message": "Your saved wallet was for a different network. Reconnect to {{network}} to continue.",
+      "last_network_label": "Last connected on {{network}}"
+    },
+    "restore_failed": {
+      "title": "Wallet Restore Failed",
+      "message": "We couldn't safely restore your saved wallet. The stale session has been cleared.",
+      "button": "Try Again"
+    },
+    "status": {
+      "disconnected": "Disconnected",
+      "connecting": "Connecting",
+      "reconnecting": "Reconnecting",
+      "connected": "Connected",
+      "network_mismatch": "Reconnect Required",
+      "restore_failed": "Restore Failed",
+      "signing": "Signing",
+      "rejected": "Rejected"
+    },
+    "sign": {
+      "title": "Sign Transaction",
+      "message": "A transaction requires your signature.",
+      "reject": "Reject",
+      "sign_mock": "Sign (Mock)",
+      "open_app": "Open Wallet App",
+      "error_title": "Error",
+      "error_no_wallet": "No wallet app installed to handle signature."
+    }
   }
 }

@@ -65,6 +65,7 @@ import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { ContractAdminModule } from './contract-admin/contract-admin.module';
 import { ReviewMetricsModule } from './review-metrics/review-metrics.module';
+import { BotAuthModule } from './bot-auth/bot-auth.module';
 
 @Module({
   imports: [
@@ -139,6 +140,7 @@ import { ReviewMetricsModule } from './review-metrics/review-metrics.module';
     ContractsModule,
     ContractAdminModule,
     ReviewMetricsModule,
+    BotAuthModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

@@ -347,5 +347,50 @@
     "couldnt_load": "无法加载 {{item}}",
     "could_not_remove": "无法移除",
     "could_not_update": "无法更新"
+  },
+  "wallet": {
+    "connect": {
+      "title": "连接钱包",
+      "message": "在 {{network}} 连接一个 Stellar 钱包。这是您首次在此网络连接。",
+      "mock_button": "模拟测试网钱包",
+      "deep_link_button": "深度链接 (SEP-0007)",
+      "no_wallet_title": "未找到钱包",
+      "no_wallet_message": "未找到支持 SEP-0007 深度链接的 Stellar 钱包。"
+    },
+    "reconnect": {
+      "title": "重新连接到 {{network}}",
+      "message": "在新的 {{network}} 网络上恢复已保存的钱包会话。请选择重新连接的方式。",
+      "button": "重新连接钱包",
+      "restoring": "正在恢复钱包会话\u2026"
+    },
+    "network_mismatch": {
+      "title": "网络已更改",
+      "message": "您保存的钱包属于其它网络。请重新连接 {{network}} 以继续。",
+      "last_network_label": "上次连接所在网络：{{network}}"
+    },
+    "restore_failed": {
+      "title": "钱包恢复失败",
+      "message": "我们无法安全地恢复保存的钱包。已清除过期的会话。",
+      "button": "重试"
+    },
+    "status": {
+      "disconnected": "未连接",
+      "connecting": "正在连接",
+      "reconnecting": "正在重新连接",
+      "connected": "已连接",
+      "network_mismatch": "需要重新连接",
+      "restore_failed": "恢复失败",
+      "signing": "签名中",
+      "rejected": "已拒绝"
+    },
+    "sign": {
+      "title": "签名交易",
+      "message": "一笔交易需要您的签名。",
+      "reject": "拒绝",
+      "sign_mock": "签名（模拟）",
+      "open_app": "打开钱包 App",
+      "error_title": "错误",
+      "error_no_wallet": "未安装可用于签名的钱包应用。"
+    }
   }
 }

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Job scheduler module - schedules and manages background jobs
 """

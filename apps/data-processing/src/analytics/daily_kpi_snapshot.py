@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Daily On-Chain KPI Snapshot Scheduler Generator (#877)
 
