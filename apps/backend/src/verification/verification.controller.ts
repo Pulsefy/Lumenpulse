@@ -31,18 +31,24 @@ import {
   ProjectSubmissionDto,
   SubmissionStatus,
   SubmissionActionDto,
+  CreateReviewHistoryDto,
+  ReviewHistoryItemDto,
 } from './dto/verification.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/decorators/auth.decorators';
-import { UserRole } from '../users/entities/user.entity';
+import { GetUser, Roles } from '../auth/decorators/auth.decorators';
+import { User, UserRole } from '../users/entities/user.entity';
 import { AuditBlockchainAction } from '../admin-audit/decorators/audit-blockchain-action.decorator';
 import { AdminAuditInterceptor } from '../admin-audit/interceptors/admin-audit.interceptor';
+import { ReviewHistoryService } from '../review-history/review-history.service';
 
 @ApiTags('verification')
 @Controller('verification')
 export class VerificationController {
-  constructor(private readonly svc: VerificationService) {}
+  constructor(
+    private readonly svc: VerificationService,
+    private readonly reviewHistoryService: ReviewHistoryService,
+  ) {}
 
   @Get('config')
   @ApiOperation({
@@ -250,41 +256,95 @@ export class VerificationController {
   }
 
   @Post('submissions/:id/request-changes')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
+  @Roles(UserRole.ADMIN, UserRole.REVIEWER)
   @ApiOperation({
     summary: 'Request changes on submission',
   })
   requestChanges(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: SubmissionActionDto,
+    @GetUser() user: User,
   ) {
-    return this.svc.requestSubmissionChanges(id, dto);
+    return this.svc.requestSubmissionChanges(id, { ...dto, actorId: user.id });
   }
 
   @Post('submissions/:id/approve')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
+  @Roles(UserRole.ADMIN, UserRole.REVIEWER)
   @ApiOperation({
     summary: 'Approve submission for publishing',
   })
   approveSubmission(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: SubmissionActionDto,
+    @GetUser() user: User,
   ) {
-    return this.svc.approveSubmission(id, dto);
+    return this.svc.approveSubmission(id, { ...dto, actorId: user.id });
   }
 
   @Post('submissions/:id/publish')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
+  @Roles(UserRole.ADMIN, UserRole.REVIEWER)
   @ApiOperation({
     summary: 'Publish approved submission',
   })
   publishSubmission(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: SubmissionActionDto,
+    @GetUser() user: User,
   ) {
-    return this.svc.publishSubmission(id, dto);
+    return this.svc.publishSubmission(id, { ...dto, actorId: user.id });
+  }
+
+  @Get('submissions/:id/history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(UserRole.ADMIN, UserRole.REVIEWER)
+  @ApiOperation({ summary: 'Get a submission review timeline' })
+  @ApiQuery({ name: 'includeInternal', required: false, type: Boolean })
+  @ApiResponse({ status: 200, type: [ReviewHistoryItemDto] })
+  getSubmissionHistory(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('includeInternal') includeInternal?: string,
+  ) {
+    return this.reviewHistoryService.findBySubmission(id, includeInternal === 'true');
+  }
+
+  @Get('review-history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(UserRole.ADMIN, UserRole.REVIEWER)
+  @ApiOperation({ summary: 'Get review history for a target entity' })
+  @ApiQuery({ name: 'targetType', required: true })
+  @ApiQuery({ name: 'targetId', required: true })
+  @ApiQuery({ name: 'includeInternal', required: false, type: Boolean })
+  @ApiResponse({ status: 200, type: [ReviewHistoryItemDto] })
+  getTargetHistory(
+    @Query('targetType') targetType: string,
+    @Query('targetId') targetId: string,
+    @Query('includeInternal') includeInternal?: string,
+  ) {
+    return this.reviewHistoryService.findByTarget(
+      targetType,
+      targetId,
+      includeInternal === 'true',
+    );
+  }
+
+  @Post('review-history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(UserRole.ADMIN, UserRole.REVIEWER)
+  @ApiOperation({ summary: 'Add a reviewer comment or decision to a target timeline' })
+  @ApiResponse({ status: 201, type: ReviewHistoryItemDto })
+  createReviewHistory(
+    @Body() dto: CreateReviewHistoryDto,
+    @GetUser() user: User,
+  ) {
+    return this.reviewHistoryService.create(user.id, dto);
   }
 }

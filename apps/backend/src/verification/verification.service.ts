@@ -21,6 +21,8 @@ import {
   SubmissionStatus,
   UpsertSubmissionDto,
 } from './dto/verification.dto';
+import { ReviewHistoryService } from '../review-history/review-history.service';
+import { ReviewDecision } from '../review-history/entities/review-history.entity';
 
 interface ProjectRecord {
   projectId: number;
@@ -56,6 +58,8 @@ interface ProjectSubmissionRecord {
   updatedAt: number;
 }
 
+type AuthenticatedSubmissionAction = SubmissionActionDto & { actorId: string };
+
 @Injectable()
 export class VerificationService {
   private readonly logger = new Logger(VerificationService.name);
@@ -63,7 +67,10 @@ export class VerificationService {
   private submissions = new Map<number, ProjectSubmissionRecord>();
   private config: RegistryConfig;
 
-  constructor(private readonly configSvc: ConfigService) {
+  constructor(
+    private readonly configSvc: ConfigService,
+    private readonly reviewHistoryService: ReviewHistoryService,
+  ) {
     this.config = {
       quorumThreshold: Number(this.configSvc.get('VERIFICATION_QUORUM', '100')),
       weightMode: this.configSvc.get(
@@ -327,10 +334,10 @@ export class VerificationService {
     return this.toSubmissionDto(submission);
   }
 
-  requestSubmissionChanges(
+  async requestSubmissionChanges(
     projectId: number,
-    dto: SubmissionActionDto,
-  ): ProjectSubmissionDto {
+    dto: AuthenticatedSubmissionAction,
+  ): Promise<ProjectSubmissionDto> {
     const submission = this.getSubmissionRecord(projectId);
     if (submission.status !== SubmissionStatus.InReview) {
       throw new BadRequestException(
@@ -342,13 +349,19 @@ export class VerificationService {
     submission.reviewerId = dto.actorId;
     submission.reviewNote = dto.note;
     submission.updatedAt = Math.floor(Date.now() / 1000);
+    await this.reviewHistoryService.recordSubmissionDecision(
+      projectId,
+      dto.actorId,
+      ReviewDecision.ChangesRequested,
+      dto.note,
+    );
     return this.toSubmissionDto(submission);
   }
 
-  approveSubmission(
+  async approveSubmission(
     projectId: number,
-    dto: SubmissionActionDto,
-  ): ProjectSubmissionDto {
+    dto: AuthenticatedSubmissionAction,
+  ): Promise<ProjectSubmissionDto> {
     const submission = this.getSubmissionRecord(projectId);
     if (submission.status !== SubmissionStatus.InReview) {
       throw new BadRequestException(
@@ -360,13 +373,19 @@ export class VerificationService {
     submission.reviewerId = dto.actorId;
     submission.reviewNote = dto.note;
     submission.updatedAt = Math.floor(Date.now() / 1000);
+    await this.reviewHistoryService.recordSubmissionDecision(
+      projectId,
+      dto.actorId,
+      ReviewDecision.Approved,
+      dto.note,
+    );
     return this.toSubmissionDto(submission);
   }
 
-  publishSubmission(
+  async publishSubmission(
     projectId: number,
-    dto: SubmissionActionDto,
-  ): ProjectSubmissionDto {
+    dto: AuthenticatedSubmissionAction,
+  ): Promise<ProjectSubmissionDto> {
     const submission = this.getSubmissionRecord(projectId);
     if (submission.status !== SubmissionStatus.Approved) {
       throw new BadRequestException(
@@ -378,6 +397,12 @@ export class VerificationService {
     submission.reviewerId = dto.actorId;
     submission.reviewNote = dto.note;
     submission.updatedAt = Math.floor(Date.now() / 1000);
+    await this.reviewHistoryService.recordSubmissionDecision(
+      projectId,
+      dto.actorId,
+      ReviewDecision.Published,
+      dto.note,
+    );
     return this.toSubmissionDto(submission);
   }
 

@@ -7,6 +7,7 @@ import {
   IsOptional,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+export { CreateReviewHistoryDto, ReviewHistoryItemDto } from '../../review-history/dto/review-history.dto';
 
 export enum WeightMode {
   Reputation = 'REPUTATION',
@@ -252,11 +253,13 @@ export class UpsertSubmissionDto {
 
 export class SubmissionActionDto {
   @ApiProperty({
-    description: 'Actor performing workflow action (reviewer/admin)',
+    description: 'Actor performing workflow action. This value is ignored; the authenticated reviewer is recorded.',
     example: 'reviewer-1',
+    required: false,
   })
+  @IsOptional()
   @IsString()
-  actorId: string;
+  actorId?: string;
 
   @ApiProperty({
     description: 'Optional notes for this action',
