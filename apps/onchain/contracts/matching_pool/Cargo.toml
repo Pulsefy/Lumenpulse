@@ -15,7 +15,11 @@ version          = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+<<<<<<< HEAD
 version     = { workspace = true, features = ["testutils"] }
+=======
+proptest = "1"
+>>>>>>> 48f4a32aaa588150e84c4b4eb9695ded7cc83378
 
 [features]
 testutils = ["soroban-sdk/testutils"]

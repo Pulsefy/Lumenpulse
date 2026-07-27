@@ -63,6 +63,7 @@
     "transactions": "交易",
     "news": "新闻",
     "settings": "设置",
+    "watchlist": "关注列表",
     "notifications": "通知",
     "manage_accounts": "管理账户",
     "notification_settings": "通知设置",
@@ -125,6 +126,23 @@
     "failed": "贡献失败",
     "transaction_hash": "交易哈希"
   },
+  "report_modal": {
+    "title": "举报内容",
+    "category_label": "问题类型是什么？",
+    "reason_label": "补充说明（可选）",
+    "reason_placeholder": "添加有助于审核团队处理的详细信息",
+    "category_spam": "垃圾信息",
+    "category_fraud": "欺诈或诈骗",
+    "category_misleading": "误导性信息",
+    "category_inappropriate": "不当内容",
+    "category_copyright": "版权侵权",
+    "category_other": "其他",
+    "submit": "提交举报",
+    "submitting": "提交中...",
+    "success_title": "举报已提交",
+    "success_body": "感谢您的举报，我们的审核团队将进行审查。",
+    "generic_error": "举报提交失败，请重试。"
+  },
   "grants": {
     "title": "资助轮次",
     "description": "二次方资助 - 广泛的社区支持决定匹配金额",
@@ -155,7 +173,10 @@
     "of_pool": "占总池",
     "contributors": "位贡献者",
     "contributed": "已贡献",
-    "estimated_allocations": "预计分配"
+    "estimated_allocations": "预计分配",
+    "funding_progress": "筹资进度",
+    "milestones": "里程碑",
+    "no_eligible_projects": "该轮次尚未添加符合条件的项目。"
   },
   "news": {
     "title": "新闻",
@@ -173,6 +194,16 @@
     "no_notifications": "暂无通知",
     "notification_text": "价格提醒和账户活动将显示在此处。"
   },
+  "watchlist": {
+    "title": "关注列表",
+    "empty_title": "关注列表为空",
+    "empty_subtitle": "在发现标签页中星标资产以在此处跟踪",
+    "remove": "从关注列表移除",
+    "conflict_banner": "部分项目存在同步冲突。下拉刷新。",
+    "rollback_banner": "部分项目已恢复为服务器状态。下拉刷新。",
+    "syncing_banner": "变更将在恢复网络时同步。",
+    "last_synced": "上次同步: {{time}}"
+  },
   "discover": {
     "title": "发现",
     "search_placeholder": "按名称或代码搜索…",
@@ -184,7 +215,9 @@
     "price": "价格 / 24小时",
     "asset": "资产",
     "search_label": "搜索资产",
-    "asset_hint": "双击查看资产详情"
+    "asset_hint": "双击查看资产详情",
+    "add_to_watchlist": "添加到关注列表",
+    "remove_from_watchlist": "从关注列表移除"
   },
   "portfolio": {
     "title": "投资组合",

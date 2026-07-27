@@ -63,6 +63,7 @@
     "transactions": "Transactions",
     "news": "News",
     "settings": "Settings",
+    "watchlist": "Watchlist",
     "notifications": "Notifications",
     "manage_accounts": "Manage Accounts",
     "notification_settings": "Notification Settings",
@@ -126,6 +127,23 @@
     "failed": "Contribution Failed",
     "transaction_hash": "Transaction Hash"
   },
+  "report_modal": {
+    "title": "Report Content",
+    "category_label": "What's the issue?",
+    "reason_label": "Additional details (optional)",
+    "reason_placeholder": "Add any context that could help our moderation team",
+    "category_spam": "Spam",
+    "category_fraud": "Fraud or scam",
+    "category_misleading": "Misleading info",
+    "category_inappropriate": "Inappropriate content",
+    "category_copyright": "Copyright violation",
+    "category_other": "Other",
+    "submit": "Submit Report",
+    "submitting": "Submitting...",
+    "success_title": "Report Submitted",
+    "success_body": "Thank you. Our moderation team will review this submission.",
+    "generic_error": "Failed to submit report. Please try again."
+  },
   "grants": {
     "title": "Grants Rounds",
     "description": "Quadratic funding — breadth of support determines matching",
@@ -156,7 +174,10 @@
     "of_pool": "of pool",
     "contributors": "contributors",
     "contributed": "contributed",
-    "estimated_allocations": "Estimated Allocations"
+    "estimated_allocations": "Estimated Allocations",
+    "funding_progress": "Funding progress",
+    "milestones": "Milestones",
+    "no_eligible_projects": "No eligible projects have been added to this round yet."
   },
   "news": {
     "title": "News",
@@ -178,6 +199,16 @@
     "read": "Read",
     "mark_as_read": "Tap to mark as read"
   },
+  "watchlist": {
+    "title": "Watchlist",
+    "empty_title": "Your watchlist is empty",
+    "empty_subtitle": "Star assets from the Discover tab to track them here",
+    "remove": "Remove from watchlist",
+    "conflict_banner": "Some items have sync conflicts. Pull to refresh.",
+    "rollback_banner": "Some items were reverted to server state. Pull to refresh.",
+    "syncing_banner": "Changes will sync when you're back online.",
+    "last_synced": "Last synced: {{time}}"
+  },
   "discover": {
     "title": "Discover",
     "search_placeholder": "Search by name or code…",
@@ -189,7 +220,9 @@
     "price": "Price / 24h",
     "asset": "Asset",
     "search_label": "Search assets",
-    "asset_hint": "Double tap to view asset details"
+    "asset_hint": "Double tap to view asset details",
+    "add_to_watchlist": "Add to watchlist",
+    "remove_from_watchlist": "Remove from watchlist"
   },
   "portfolio": {
     "title": "Portfolio",

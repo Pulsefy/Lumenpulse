@@ -727,3 +727,5 @@ impl MatchingPoolContract {
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod tests;

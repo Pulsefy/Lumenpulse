@@ -39,12 +39,9 @@ export class SorobanEventsProcessor extends WorkerHost {
 
     const { txHash, eventIndex, contractId, eventType, rawPayload } = job.data;
 
-    const existing = await this.eventRepo.findOne({
-      where: { txHash, eventIndex },
-      select: ['id', 'status'],
-    });
+    const existing = await this.eventRepo.findOneBy({ txHash, eventIndex });
 
-    if (existing) {
+    if (existing && existing.status !== SorobanEventStatus.FAILED) {
       this.logger.debug(
         { txHash, eventIndex, status: existing.status },
         'Soroban event already processed, skipping',
@@ -54,7 +51,7 @@ export class SorobanEventsProcessor extends WorkerHost {
 
     const mapping = mapSorobanEvent(eventType ?? null);
 
-    const event = this.eventRepo.create({
+    const event = existing ?? this.eventRepo.create({
       txHash,
       eventIndex,
       contractId: contractId ?? null,
@@ -68,6 +65,11 @@ export class SorobanEventsProcessor extends WorkerHost {
       processedAt: null,
       errorMessage: null,
     });
+
+    if (existing) {
+      event.status = SorobanEventStatus.PENDING;
+      event.errorMessage = null;
+    }
 
     await this.eventRepo.save(event);
 

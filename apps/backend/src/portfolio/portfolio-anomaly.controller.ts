@@ -41,13 +41,19 @@ interface RequestWithUser extends Request {
 @UseGuards(JwtAuthGuard)
 @Controller('portfolio/anomalies')
 export class PortfolioAnomalyController {
-  constructor(private readonly portfolioAnomalyService: PortfolioAnomalyService) {}
+  constructor(
+    private readonly portfolioAnomalyService: PortfolioAnomalyService,
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.REVIEWER)
   @ApiOperation({ summary: 'Create a portfolio anomaly record' })
-  @ApiResponse({ status: 201, description: 'Anomaly created', type: PortfolioAnomalyResponseDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Anomaly created',
+    type: PortfolioAnomalyResponseDto,
+  })
   async createAnomaly(
     @Body() dto: CreatePortfolioAnomalyDto,
   ): Promise<PortfolioAnomalyResponseDto> {
@@ -59,8 +65,16 @@ export class PortfolioAnomalyController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.REVIEWER)
   @ApiOperation({ summary: 'List anomalies for a user or all users' })
-  @ApiQuery({ name: 'userId', required: false, description: 'Filter anomalies by user' })
-  @ApiResponse({ status: 200, description: 'Anomalies listed', type: PortfolioAnomaliesListResponseDto })
+  @ApiQuery({
+    name: 'userId',
+    required: false,
+    description: 'Filter anomalies by user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Anomalies listed',
+    type: PortfolioAnomaliesListResponseDto,
+  })
   async listAnomalies(
     @Query('userId') userId?: string,
   ): Promise<PortfolioAnomaliesListResponseDto> {
@@ -75,7 +89,11 @@ export class PortfolioAnomalyController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.REVIEWER)
   @ApiOperation({ summary: 'Acknowledge or reopen a portfolio anomaly' })
-  @ApiResponse({ status: 200, description: 'Anomaly reviewed', type: PortfolioAnomalyResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Anomaly reviewed',
+    type: PortfolioAnomalyResponseDto,
+  })
   async reviewAnomaly(
     @Param('id') id: string,
     @Body() dto: ReviewPortfolioAnomalyDto,
