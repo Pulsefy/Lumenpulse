@@ -1911,7 +1911,6 @@ mod test {
         assert_eq!(after.github_handle, old_handle);
     }
 
-<<<<<<< HEAD
     /// `version()` must return the documented 1.0.0 descriptor and must satisfy
     /// the invariant `min_interface <= major`.
     #[test]
@@ -1929,7 +1928,7 @@ mod test {
         assert_eq!(v.patch, 0);
         // The minimum compatible interface must never exceed the current major.
         assert!(v.min_interface <= v.major);
-=======
+    }
     // ── Attestation suspension / revocation (issue #1053) ─────
 
     /// A freshly registered contributor starts `Active`.
@@ -2171,6 +2170,5 @@ mod test {
             client.try_suspend_attestation(&s.alice, &pid, &unknown),
             Err(Ok(ContributorError::ContributorNotFound))
         );
->>>>>>> 48f4a32aaa588150e84c4b4eb9695ded7cc83378
     }
 }
