@@ -24,6 +24,7 @@ struct MultisigFixture<'a> {
     _token_admin: Address,
 }
 
+
 impl<'a> MultisigFixture<'a> {
     fn new() -> Self {
         let env = Env::default();
