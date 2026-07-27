@@ -52,7 +52,14 @@ impl ContractVersion {
     /// Panics if `name` contains characters outside the Soroban Symbol
     /// alphabet (ASCII alphanumeric and `_`, max 32 chars) — caught at
     /// compile-time in tests.
-    pub fn new(env: &Env, name: &str, major: u32, minor: u32, patch: u32, min_interface: u32) -> Self {
+    pub fn new(
+        env: &Env,
+        name: &str,
+        major: u32,
+        minor: u32,
+        patch: u32,
+        min_interface: u32,
+    ) -> Self {
         Self {
             contract: Symbol::new(env, name),
             major,

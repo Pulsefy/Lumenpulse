@@ -1772,4 +1772,3 @@ mod test {
         assert!(v.min_interface <= v.major);
     }
 }
-
