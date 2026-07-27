@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Persistent Ledger Cursor Store
 ==============================

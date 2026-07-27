@@ -69,6 +69,20 @@ one rule.
    `RoundNotFound` / `ProjectNotFound`; it must never be treated as valid
    with zeroed defaults.
 
+8. **INV-8 Round contribution cap enforcement** (`matching_pool` only,
+   introduced for #867's anti-whale guardrails). When a round's
+   contribution cap (`RoundCap`, set via `set_round_cap`) is non-zero, a
+   contributor's cumulative recorded contributions to that round — summed
+   across every project in the round, via
+   `get_contributor_round_total(round_id, contributor)` — must never
+   exceed the cap. Any `record_contribution` call that would push the
+   cumulative total over the cap is rejected in full
+   (`ContributionCapExceeded`), with no partial acceptance and no state
+   mutation. A cap of `0` means uncapped. Setting or changing a cap only
+   affects future contributions — it never claws back or invalidates
+   contributions already recorded — and `set_round_cap` itself is subject
+   to `INV-5` (admin-only) and rejected once the round is finalized.
+
 ## Debugging a failing invariant
 
 - Tests use `proptest`; on failure it prints the *minimal* shrunk input in
@@ -81,5 +95,5 @@ one rule.
   numbers, without needing to step through the test in a debugger.
 - Each test module is named after the phase it stresses
   (`open_phase`, `contribute_phase`, `finalize_phase`, `refund_phase`,
-  `close_phase`) so a failing module name narrows down which lifecycle
-  transition regressed.
+  `close_phase`, `cap_phase`) so a failing module name narrows down which
+  lifecycle transition (or guardrail) regressed.

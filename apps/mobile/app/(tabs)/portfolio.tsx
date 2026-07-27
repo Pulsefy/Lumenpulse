@@ -27,6 +27,7 @@ import { useCachedData } from '../../hooks/useCachedData';
 import { CACHE_CONFIGS } from '../../lib/cache';
 import { useWalletAutoRefresh } from '../../hooks/useWalletAutoRefresh';
 import { storage } from '../../lib/storage';
+import { useEnvironment } from '../../contexts/EnvironmentContext';
 
 const truncateKey = (value: string) => `${value.slice(0, 6)}...${value.slice(-6)}`;
 
@@ -245,6 +246,7 @@ export default function PortfolioScreen() {
   const { isAuthenticated } = useAuth();
   const { colors } = useTheme();
   const { t } = useLocalization();
+  const { environmentConfig } = useEnvironment();
   const [accounts, setAccounts] = useState<LinkedStellarAccount[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [activePublicKey, setActivePublicKey] = useState<string | null>(null);
@@ -294,7 +296,7 @@ export default function PortfolioScreen() {
         null;
 
       setActivePublicKey(nextActivePublicKey);
-      await storage.setActiveWalletPublicKey(nextActivePublicKey);
+      await storage.setActiveWalletPublicKey(nextActivePublicKey, environmentConfig.id);
     } finally {
       setAccountsLoading(false);
     }
@@ -312,10 +314,13 @@ export default function PortfolioScreen() {
     }, [isAuthenticated, loadAccounts]),
   );
 
-  const handleSelectAccount = useCallback((publicKey: string) => {
-    setActivePublicKey(publicKey);
-    void storage.setActiveWalletPublicKey(publicKey);
-  }, []);
+  const handleSelectAccount = useCallback(
+    (publicKey: string) => {
+      setActivePublicKey(publicKey);
+      void storage.setActiveWalletPublicKey(publicKey, environmentConfig.id);
+    },
+    [environmentConfig.id],
+  );
 
   const {
     data: summary,

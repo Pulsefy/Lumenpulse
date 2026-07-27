@@ -549,3 +549,116 @@ mod close_phase {
         }
     }
 }
+
+// ─── cap phase — round contribution caps (INV-8) ─────────────────────────────
+
+#[cfg(test)]
+mod cap_phase {
+    use super::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100))]
+
+        // INV-8: any single contribution at or below the round's remaining
+        // headroom must succeed.
+        #[test]
+        fn contribution_within_cap_succeeds(cap in valid_amount(), amount in valid_amount()) {
+            prop_assume!(amount <= cap);
+
+            let env = Env::default();
+            env.mock_all_auths();
+            let (client, admin, token, _) = setup(&env);
+            let round_id = open_round(&env, &client, &admin, &token);
+            client.approve_project(&admin, &round_id, &1u64);
+            client.set_round_cap(&admin, &round_id, &cap);
+
+            let contributor = Address::generate(&env);
+            client.record_contribution(&round_id, &1u64, &contributor, &amount);
+
+            prop_assert_eq!(
+                client.get_contributor_round_total(&round_id, &contributor),
+                amount,
+                "INV-8: a contribution within the cap must be recorded in full"
+            );
+        }
+
+        // INV-8: a single contribution that would push the contributor's
+        // round total over a non-zero cap must be rejected in full, with no
+        // state mutated.
+        #[test]
+        fn contribution_exceeding_cap_rejected(cap in valid_amount(), excess in valid_amount()) {
+            let env = Env::default();
+            env.mock_all_auths();
+            let (client, admin, token, _) = setup(&env);
+            let round_id = open_round(&env, &client, &admin, &token);
+            client.approve_project(&admin, &round_id, &1u64);
+            client.set_round_cap(&admin, &round_id, &cap);
+
+            let contributor = Address::generate(&env);
+            let over_amount = cap + excess;
+            let result = client.try_record_contribution(&round_id, &1u64, &contributor, &over_amount);
+
+            prop_assert_eq!(
+                result,
+                Err(Ok(MatchingPoolError::ContributionCapExceeded)),
+                "INV-8: contributing {} against a cap of {} must be rejected",
+                over_amount,
+                cap
+            );
+            prop_assert_eq!(
+                client.get_contributor_round_total(&round_id, &contributor),
+                0i128,
+                "INV-8: a rejected over-cap contribution must not mutate the contributor's round total"
+            );
+        }
+
+        // INV-8: no matter how a contributor's amounts are split across
+        // multiple projects in the same round, their cumulative round total
+        // must never exceed a non-zero cap.
+        #[test]
+        fn cumulative_total_never_exceeds_cap_across_projects(
+            cap in valid_amount(),
+            amounts in proptest::collection::vec(valid_amount(), 1..=6),
+        ) {
+            let env = Env::default();
+            env.mock_all_auths();
+            let (client, admin, token, _) = setup(&env);
+            let round_id = open_round(&env, &client, &admin, &token);
+            client.approve_project(&admin, &round_id, &1u64);
+            client.approve_project(&admin, &round_id, &2u64);
+            client.set_round_cap(&admin, &round_id, &cap);
+
+            let contributor = Address::generate(&env);
+            for (idx, amount) in amounts.iter().enumerate() {
+                let project_id = (idx % 2) as u64 + 1;
+                let _ = client.try_record_contribution(&round_id, &project_id, &contributor, amount);
+
+                prop_assert!(
+                    client.get_contributor_round_total(&round_id, &contributor) <= cap,
+                    "INV-8: cumulative round total must never exceed the cap ({})",
+                    cap
+                );
+            }
+        }
+
+        // INV-8: a cap of 0 means unlimited — any amount succeeds.
+        #[test]
+        fn zero_cap_means_unlimited(amount in valid_amount()) {
+            let env = Env::default();
+            env.mock_all_auths();
+            let (client, admin, token, _) = setup(&env);
+            let round_id = open_round(&env, &client, &admin, &token);
+            client.approve_project(&admin, &round_id, &1u64);
+            // No cap set — defaults to 0 (uncapped).
+
+            let contributor = Address::generate(&env);
+            client.record_contribution(&round_id, &1u64, &contributor, &amount);
+
+            prop_assert_eq!(
+                client.get_contributor_round_total(&round_id, &contributor),
+                amount,
+                "INV-8: an uncapped round (cap == 0) must accept any positive amount"
+            );
+        }
+    }
+}
