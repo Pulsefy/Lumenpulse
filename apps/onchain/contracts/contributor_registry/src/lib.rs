@@ -7,7 +7,8 @@ mod storage;
 
 use errors::ContributorError;
 use events::{
-    AdminChangedEvent, BadgeGrantedEvent, BadgeRevokedEvent, ContributorProfileChangedEvt,
+    AdminChangedEvent, AttestationRestoredEvent, AttestationRevokedEvent,
+    AttestationSuspendedEvent, BadgeGrantedEvent, BadgeRevokedEvent, ContributorProfileChangedEvt,
     GaslessRegistrationEvent, MultisigConfiguredEvent, ReputationPenaltyAppliedEvent,
     UpgradedEvent,
 };
@@ -21,8 +22,8 @@ use soroban_sdk::{
     contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 use storage::{
-    Badge, ContributorData, ContributorTier, DataKey, PenaltyRecord, PenaltySeverity, LEDGER_BUMP,
-    LEDGER_THRESHOLD,
+    AttestationStatus, Badge, ContributorData, ContributorTier, DataKey, PenaltyRecord,
+    PenaltySeverity, LEDGER_BUMP, LEDGER_THRESHOLD,
 };
 
 #[contract]
@@ -76,6 +77,7 @@ impl ContributorRegistryContract {
             github_handle: github_handle.clone(),
             reputation_score: 0,
             registered_timestamp: timestamp,
+            status: AttestationStatus::Active,
         };
         env.storage()
             .persistent()
@@ -631,6 +633,155 @@ impl ContributorRegistryContract {
         Ok(())
     }
 
+    /// Suspend a contributor's attestation.
+    ///
+    /// Requires multisig approval for `ProposalAction::SuspendAttestation`.
+    /// Only an `Active` attestation can be suspended — suspending an already
+    /// `Suspended` or `Revoked` one is rejected so callers can't paper over a
+    /// stale state read. Reversible via `restore_attestation`.
+    pub fn suspend_attestation(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        contributor_address: Address,
+    ) -> Result<(), ContributorError> {
+        consume_approval(
+            &env,
+            &executor,
+            proposal_id,
+            &ProposalAction::SuspendAttestation,
+        )?;
+
+        let mut contributor: ContributorData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contributor(contributor_address.clone()))
+            .ok_or(ContributorError::ContributorNotFound)?;
+
+        if contributor.status != AttestationStatus::Active {
+            return Err(ContributorError::AttestationNotActive);
+        }
+
+        contributor.status = AttestationStatus::Suspended;
+        env.storage().persistent().set(
+            &DataKey::Contributor(contributor_address.clone()),
+            &contributor,
+        );
+        env.storage().persistent().extend_ttl(
+            &DataKey::Contributor(contributor_address.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        AttestationSuspendedEvent {
+            contributor: contributor_address,
+            executor,
+            proposal_id,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Revoke a contributor's attestation.
+    ///
+    /// Requires multisig approval for `ProposalAction::RevokeAttestation`.
+    /// Callable from `Active` or `Suspended`; revoking an already-`Revoked`
+    /// attestation is rejected. Revocation is terminal — there is no
+    /// `restore` path back from `Revoked`.
+    pub fn revoke_attestation(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        contributor_address: Address,
+    ) -> Result<(), ContributorError> {
+        consume_approval(
+            &env,
+            &executor,
+            proposal_id,
+            &ProposalAction::RevokeAttestation,
+        )?;
+
+        let mut contributor: ContributorData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contributor(contributor_address.clone()))
+            .ok_or(ContributorError::ContributorNotFound)?;
+
+        if contributor.status == AttestationStatus::Revoked {
+            return Err(ContributorError::AttestationAlreadyRevoked);
+        }
+
+        contributor.status = AttestationStatus::Revoked;
+        env.storage().persistent().set(
+            &DataKey::Contributor(contributor_address.clone()),
+            &contributor,
+        );
+        env.storage().persistent().extend_ttl(
+            &DataKey::Contributor(contributor_address.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        AttestationRevokedEvent {
+            contributor: contributor_address,
+            executor,
+            proposal_id,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Restore a suspended attestation back to `Active`.
+    ///
+    /// Requires multisig approval for `ProposalAction::RestoreAttestation`.
+    /// Only callable from `Suspended` — a `Revoked` attestation cannot be
+    /// restored through this path.
+    pub fn restore_attestation(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        contributor_address: Address,
+    ) -> Result<(), ContributorError> {
+        consume_approval(
+            &env,
+            &executor,
+            proposal_id,
+            &ProposalAction::RestoreAttestation,
+        )?;
+
+        let mut contributor: ContributorData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contributor(contributor_address.clone()))
+            .ok_or(ContributorError::ContributorNotFound)?;
+
+        if contributor.status != AttestationStatus::Suspended {
+            return Err(ContributorError::AttestationNotSuspended);
+        }
+
+        contributor.status = AttestationStatus::Active;
+        env.storage().persistent().set(
+            &DataKey::Contributor(contributor_address.clone()),
+            &contributor,
+        );
+        env.storage().persistent().extend_ttl(
+            &DataKey::Contributor(contributor_address.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        AttestationRestoredEvent {
+            contributor: contributor_address,
+            executor,
+            proposal_id,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
     pub fn upgrade(
         env: Env,
         executor: Address,
@@ -677,6 +828,13 @@ impl ContributorRegistryContract {
 
     pub fn get_reputation(env: Env, contributor: Address) -> Result<u64, ContributorError> {
         Ok(Self::get_contributor(env, contributor)?.reputation_score)
+    }
+
+    pub fn get_attestation_status(
+        env: Env,
+        contributor: Address,
+    ) -> Result<AttestationStatus, ContributorError> {
+        Ok(Self::get_contributor(env, contributor)?.status)
     }
 
     pub fn get_tier(env: Env, contributor: Address) -> Result<ContributorTier, ContributorError> {
@@ -1739,5 +1897,248 @@ mod test {
 
         let after = client.get_contributor(&contributor);
         assert_eq!(after.github_handle, old_handle);
+    }
+
+    // ── Attestation suspension / revocation (issue #1053) ─────
+
+    /// A freshly registered contributor starts `Active`.
+    #[test]
+    fn test_attestation_defaults_to_active() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "active_dev");
+        client.register_contributor(&contributor, &handle);
+
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Active
+        );
+    }
+
+    /// Active → Suspended → Active (restored) is the core reversible flow.
+    #[test]
+    fn test_suspend_then_restore_attestation() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "suspend_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+        client.suspend_attestation(&s.alice, &pid, &contributor);
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Suspended
+        );
+
+        let pid2 = client.propose(&s.alice, &ProposalAction::RestoreAttestation);
+        client.sign(&s.bob, &pid2);
+        client.restore_attestation(&s.alice, &pid2, &contributor);
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Active
+        );
+    }
+
+    /// Active → Revoked is terminal: there is no restore path back.
+    #[test]
+    fn test_revoke_attestation_is_terminal() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "revoke_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::RevokeAttestation);
+        client.sign(&s.bob, &pid);
+        client.revoke_attestation(&s.alice, &pid, &contributor);
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Revoked
+        );
+
+        // Restoring a revoked attestation must fail.
+        let pid2 = client.propose(&s.alice, &ProposalAction::RestoreAttestation);
+        client.sign(&s.bob, &pid2);
+        assert_eq!(
+            client.try_restore_attestation(&s.alice, &pid2, &contributor),
+            Err(Ok(ContributorError::AttestationNotSuspended))
+        );
+    }
+
+    /// A suspended attestation can still be revoked directly (abuse confirmed
+    /// after a temporary suspension).
+    #[test]
+    fn test_revoke_attestation_from_suspended() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "escalate_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+        client.suspend_attestation(&s.alice, &pid, &contributor);
+
+        let pid2 = client.propose(&s.alice, &ProposalAction::RevokeAttestation);
+        client.sign(&s.bob, &pid2);
+        client.revoke_attestation(&s.alice, &pid2, &contributor);
+
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Revoked
+        );
+    }
+
+    /// Suspending an already-suspended attestation is rejected.
+    #[test]
+    fn test_suspend_already_suspended_fails() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "double_suspend_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+        client.suspend_attestation(&s.alice, &pid, &contributor);
+
+        let pid2 = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid2);
+        assert_eq!(
+            client.try_suspend_attestation(&s.alice, &pid2, &contributor),
+            Err(Ok(ContributorError::AttestationNotActive))
+        );
+    }
+
+    /// Revoking an already-revoked attestation is rejected.
+    #[test]
+    fn test_revoke_already_revoked_fails() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "double_revoke_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::RevokeAttestation);
+        client.sign(&s.bob, &pid);
+        client.revoke_attestation(&s.alice, &pid, &contributor);
+
+        let pid2 = client.propose(&s.alice, &ProposalAction::RevokeAttestation);
+        client.sign(&s.bob, &pid2);
+        assert_eq!(
+            client.try_revoke_attestation(&s.alice, &pid2, &contributor),
+            Err(Ok(ContributorError::AttestationAlreadyRevoked))
+        );
+    }
+
+    /// Restoring an `Active` attestation (never suspended) is rejected.
+    #[test]
+    fn test_restore_active_attestation_fails() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "no_op_restore_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::RestoreAttestation);
+        client.sign(&s.bob, &pid);
+        assert_eq!(
+            client.try_restore_attestation(&s.alice, &pid, &contributor),
+            Err(Ok(ContributorError::AttestationNotSuspended))
+        );
+    }
+
+    /// Suspension without multisig approval (unauthorized state change) is
+    /// rejected — a bogus/never-approved proposal id cannot be used.
+    #[test]
+    fn test_suspend_attestation_requires_multisig() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "unauth_suspend_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let fake_id = 999u64;
+        assert!(client
+            .try_suspend_attestation(&s.alice, &fake_id, &contributor)
+            .is_err());
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Active
+        );
+    }
+
+    /// A non-signer cannot consume even a fully-approved suspend proposal.
+    #[test]
+    fn test_suspend_attestation_rejects_non_signer_executor() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "outsider_suspend_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+
+        let outsider = Address::generate(&s.env);
+        assert_eq!(
+            client.try_suspend_attestation(&outsider, &pid, &contributor),
+            Err(Ok(ContributorError::Unauthorized))
+        );
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Active
+        );
+    }
+
+    /// A proposal approved for one attestation action cannot be replayed as
+    /// another (e.g. a `SuspendAttestation` approval cannot revoke).
+    #[test]
+    fn test_attestation_action_proposals_are_not_interchangeable() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "wrong_action_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+
+        assert!(client
+            .try_revoke_attestation(&s.alice, &pid, &contributor)
+            .is_err());
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Active
+        );
+    }
+
+    /// Operating on an unregistered address fails with `ContributorNotFound`.
+    #[test]
+    fn test_suspend_attestation_unknown_contributor_fails() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let unknown = Address::generate(&s.env);
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+
+        assert_eq!(
+            client.try_suspend_attestation(&s.alice, &pid, &unknown),
+            Err(Ok(ContributorError::ContributorNotFound))
+        );
     }
 }

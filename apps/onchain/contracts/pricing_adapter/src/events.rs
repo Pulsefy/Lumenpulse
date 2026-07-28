@@ -21,3 +21,17 @@ pub struct OracleUpdatedEvent {
     pub admin: Address,
     pub oracle: Address,
 }
+
+#[contractevent]
+pub struct PriceInvalidatedEvent {
+    #[topic]
+    pub asset: Address,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct StalenessWindowUpdatedEvent {
+    #[topic]
+    pub admin: Address,
+    pub max_age_seconds: u64,
+}

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Automated Model Retraining Pipeline (Issue #454)
 

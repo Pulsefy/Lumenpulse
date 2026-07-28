@@ -146,6 +146,32 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.navRow}
             activeOpacity={0.75}
+            onPress={() => router.push('/contributor/profile')}
+            accessibilityRole="link"
+            accessibilityLabel={t('settings.contributor_profile.title')}
+            accessibilityHint={t('settings.contributor_profile.description')}
+          >
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="person-circle-outline" size={20} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.contributor_profile.title')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t('settings.contributor_profile.description')}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <TouchableOpacity
+            style={styles.navRow}
+            activeOpacity={0.75}
             onPress={() => router.push('/settings/manage-accounts')}
             accessibilityRole="link"
             accessibilityLabel={t('settings.manage_accounts.title')}

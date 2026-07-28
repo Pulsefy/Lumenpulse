@@ -725,3 +725,49 @@ class EntityLinkingReview(Base):
             f"stable_entity_id='{self.stable_entity_id}', status='{self.status}')>"
         )
 
+
+class DailyOnchainKPISnapshot(Base):
+    """
+    Stores daily aggregated snapshots of core on-chain KPIs
+    (TVL, volume, active rounds, contribution count, unique contributors)
+    for cheap and consistent trend analysis (#877).
+    """
+
+    __tablename__ = "daily_onchain_kpi_snapshots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    snapshot_date = Column(String(10), nullable=False)
+    period = Column(String(20), nullable=False, default="daily")
+    tvl = Column(Float, nullable=False, default=0.0)
+    volume = Column(Float, nullable=False, default=0.0)
+    active_rounds = Column(Integer, nullable=False, default=0)
+    contribution_count = Column(Integer, nullable=False, default=0)
+    unique_contributors = Column(Integer, nullable=False, default=0)
+    extra_data = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_daily_onchain_kpi_snapshots_date_period",
+            "snapshot_date",
+            "period",
+            unique=True,
+        ),
+        Index("idx_daily_onchain_kpi_snapshots_period", "period"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<DailyOnchainKPISnapshot(date='{self.snapshot_date}', period='{self.period}', "
+            f"tvl={self.tvl}, volume={self.volume}, active_rounds={self.active_rounds}, "
+            f"contribution_count={self.contribution_count})>"
+        )
+

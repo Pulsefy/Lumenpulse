@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { AllocateBudgetDto } from './dto/allocate-budget.dto';
 import {
   AllocateBudgetResponseDto,
@@ -9,6 +11,13 @@ import {
   StreamPreviewResponseDto,
 } from './dto/stream-preview.dto';
 import { RotateBeneficiaryDto } from './dto/rotate-beneficiary.dto';
+import {
+  QueryBeneficiaryHistoryDto,
+  BeneficiaryHistoryResponseDto,
+  BeneficiaryHistoryItemDto,
+} from './dto/beneficiary-history.dto';
+import { TreasuryBeneficiaryHistory } from './entities/treasury-beneficiary-history.entity';
+import { AdminBlockchainAuditLog } from '../admin-audit/entities/admin-blockchain-audit-log.entity';
 import { TreasuryStreamNotFoundException } from './exceptions/treasury.exceptions';
 import { TreasurySorobanClient } from './treasury-soroban.client';
 import { calculateUnlocked, RawStreamData } from './treasury-stream.util';
@@ -17,7 +26,15 @@ import { calculateUnlocked, RawStreamData } from './treasury-stream.util';
 export class TreasuryService {
   private readonly logger = new Logger(TreasuryService.name);
 
-  constructor(private readonly sorobanClient: TreasurySorobanClient) {}
+  constructor(
+    private readonly sorobanClient: TreasurySorobanClient,
+    @Optional()
+    @InjectRepository(TreasuryBeneficiaryHistory)
+    private readonly beneficiaryHistoryRepo?: Repository<TreasuryBeneficiaryHistory>,
+    @Optional()
+    @InjectRepository(AdminBlockchainAuditLog)
+    private readonly auditLogRepo?: Repository<AdminBlockchainAuditLog>,
+  ) {}
 
   /**
    * Admin flow: allocate a budget and start a vesting stream for a beneficiary
@@ -25,6 +42,7 @@ export class TreasuryService {
    */
   async allocateBudget(
     dto: AllocateBudgetDto,
+    actorContext?: { actorId?: string; actorEmail?: string },
   ): Promise<AllocateBudgetResponseDto> {
     this.logger.log(
       `Allocating budget of ${dto.amount} to ${dto.beneficiary} ` +
@@ -36,6 +54,20 @@ export class TreasuryService {
       amount: dto.amount,
       startTime: dto.startTime,
       duration: dto.duration,
+    });
+
+    await this.recordBeneficiaryHistory({
+      beneficiary: dto.beneficiary,
+      action: 'ALLOCATED',
+      amount: dto.amount,
+      txHash: submitted.hash,
+      actorId: actorContext?.actorId || null,
+      actorEmail: actorContext?.actorEmail || null,
+      metadata: {
+        startTime: dto.startTime,
+        duration: dto.duration,
+        ledger: submitted.ledger,
+      },
     });
 
     // A freshly allocated stream has nothing claimed yet; reflect the request
@@ -117,6 +149,7 @@ export class TreasuryService {
    */
   async rotateBeneficiary(
     dto: RotateBeneficiaryDto,
+    actorContext?: { actorId?: string; actorEmail?: string },
   ): Promise<AllocateBudgetResponseDto> {
     this.logger.log(
       `Rotating beneficiary from ${dto.oldBeneficiary} to ${dto.newBeneficiary}`,
@@ -133,11 +166,164 @@ export class TreasuryService {
       throw new TreasuryStreamNotFoundException(dto.newBeneficiary);
     }
 
+    await this.recordBeneficiaryHistory({
+      beneficiary: dto.newBeneficiary,
+      previousBeneficiary: dto.oldBeneficiary,
+      action: 'ROTATED',
+      amount: stream.totalAmount.toString(),
+      txHash: submitted.hash,
+      actorId: actorContext?.actorId || null,
+      actorEmail: actorContext?.actorEmail || null,
+      metadata: { ledger: submitted.ledger },
+    });
+
     return {
       transactionHash: submitted.hash,
       status: submitted.status,
       ledger: submitted.ledger,
       stream: this.toStreamStateDto(stream),
+    };
+  }
+
+  /**
+   * Record a beneficiary history event safely.
+   */
+  async recordBeneficiaryHistory(
+    data: Partial<TreasuryBeneficiaryHistory>,
+  ): Promise<TreasuryBeneficiaryHistory | null> {
+    if (!this.beneficiaryHistoryRepo) {
+      return null;
+    }
+    try {
+      const entry = this.beneficiaryHistoryRepo.create(data);
+      return await this.beneficiaryHistoryRepo.save(entry);
+    } catch (err) {
+      this.logger.error('Failed to record treasury beneficiary history', err);
+      return null;
+    }
+  }
+
+  /**
+   * Query audit-safe beneficiary change history for streams or accounts.
+   * Handles cases with no history gracefully.
+   */
+  async getBeneficiaryHistory(
+    dto: QueryBeneficiaryHistoryDto,
+  ): Promise<BeneficiaryHistoryResponseDto> {
+    const page = Math.max(1, dto.page ?? 1);
+    const limit = Math.min(100, Math.max(1, dto.limit ?? 20));
+    const targetBeneficiary = dto.beneficiary || dto.account;
+
+    let items: BeneficiaryHistoryItemDto[] = [];
+    let total = 0;
+
+    if (this.beneficiaryHistoryRepo) {
+      if (targetBeneficiary) {
+        const [records, count] = await this.beneficiaryHistoryRepo.findAndCount(
+          {
+            where: [
+              { beneficiary: targetBeneficiary },
+              { previousBeneficiary: targetBeneficiary },
+            ],
+            order: { createdAt: 'DESC' },
+            skip: (page - 1) * limit,
+            take: limit,
+          },
+        );
+        total = count;
+        items = records.map((r) => ({
+          id: r.id,
+          beneficiary: r.beneficiary,
+          previousBeneficiary: r.previousBeneficiary,
+          action: r.action,
+          amount: r.amount,
+          txHash: r.txHash,
+          actorId: r.actorId,
+          actorEmail: r.actorEmail,
+          createdAt: r.createdAt,
+          metadata: r.metadata,
+        }));
+      } else {
+        const [records, count] = await this.beneficiaryHistoryRepo.findAndCount(
+          {
+            order: { createdAt: 'DESC' },
+            skip: (page - 1) * limit,
+            take: limit,
+          },
+        );
+        total = count;
+        items = records.map((r) => ({
+          id: r.id,
+          beneficiary: r.beneficiary,
+          previousBeneficiary: r.previousBeneficiary,
+          action: r.action,
+          amount: r.amount,
+          txHash: r.txHash,
+          actorId: r.actorId,
+          actorEmail: r.actorEmail,
+          createdAt: r.createdAt,
+          metadata: r.metadata,
+        }));
+      }
+    }
+
+    // Fallback/enrichment from audit logs if DB beneficiary history table returned no records
+    if (items.length === 0 && targetBeneficiary && this.auditLogRepo) {
+      try {
+        const auditLogs = await this.auditLogRepo.find({
+          where: { targetContract: 'treasury' },
+          order: { createdAt: 'DESC' },
+          take: 100,
+        });
+
+        const matchedLogs = auditLogs.filter((log) => {
+          const summary = log.paramsSummary ?? {};
+          return (
+            summary.beneficiary === targetBeneficiary ||
+            summary.oldBeneficiary === targetBeneficiary ||
+            summary.newBeneficiary === targetBeneficiary
+          );
+        });
+
+        total = matchedLogs.length;
+        const pageLogs = matchedLogs.slice((page - 1) * limit, page * limit);
+        items = pageLogs.map((log) => {
+          const summary = log.paramsSummary ?? {};
+          const isRotate = log.endpoint.includes('rotate');
+          return {
+            id: log.id,
+            beneficiary: isRotate
+              ? (summary.newBeneficiary as string) || targetBeneficiary
+              : (summary.beneficiary as string) || targetBeneficiary,
+            previousBeneficiary: isRotate
+              ? (summary.oldBeneficiary as string) || null
+              : null,
+            action: isRotate ? 'ROTATED' : 'ALLOCATED',
+            amount: (summary.amount as string) || null,
+            txHash: log.txHash,
+            actorId: log.actorId,
+            actorEmail: log.actorEmail,
+            createdAt: log.createdAt,
+            metadata: {
+              endpoint: log.endpoint,
+              responseStatus: log.responseStatus,
+            },
+          };
+        });
+      } catch (err) {
+        this.logger.error(
+          'Failed to query audit logs for beneficiary history fallback',
+          err,
+        );
+      }
+    }
+
+    return {
+      beneficiary: targetBeneficiary,
+      history: items,
+      total,
+      page,
+      limit,
     };
   }
 

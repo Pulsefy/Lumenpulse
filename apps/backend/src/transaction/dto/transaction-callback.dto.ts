@@ -1,4 +1,4 @@
-import { IsString, IsUrl, IsNotEmpty } from 'class-validator';
+import { IsString, IsUrl, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class RegisterTransactionCallbackDto {
   @IsString()
@@ -8,6 +8,16 @@ export class RegisterTransactionCallbackDto {
   @IsUrl()
   @IsNotEmpty()
   callbackUrl: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  secretId?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  previousSecretId?: string;
 }
 
 export class TransactionStatusUpdateDto {

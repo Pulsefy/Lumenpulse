@@ -6,7 +6,7 @@ import logging
 import math
 import os
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 from collections import defaultdict
@@ -32,6 +32,7 @@ from .models import (
     RoundAnomalySignal,
     MetadataDriftFinding,
     EntityLinkingReview,
+    DailyOnchainKPISnapshot,
 )
 from .cohort_models import (
     GrantRound,
@@ -2763,4 +2764,114 @@ class PostgresService:
         except SQLAlchemyError as e:
             logger.error(f"Failed to retrieve reviewed outcomes: {e}")
             return []
+
+    # Daily On-Chain KPI Snapshot Methods (#877)
+
+    def save_daily_onchain_kpi_snapshot(
+        self,
+        snapshot_data: Dict[str, Any],
+    ) -> Tuple[Optional[DailyOnchainKPISnapshot], bool]:
+        """
+        Save a daily on-chain KPI snapshot.
+        If a snapshot for the same snapshot_date and period already exists,
+        skips creation to prevent duplicates. Uses retry logic for resilience.
+
+        Args:
+            snapshot_data: Dictionary with snapshot metrics and date/period.
+
+        Returns:
+            Tuple of (DailyOnchainKPISnapshot, created_boolean)
+        """
+        snapshot_date = snapshot_data.get("snapshot_date")
+        period = snapshot_data.get("period", "daily")
+
+        if not snapshot_date:
+            snapshot_date = datetime.utcnow().strftime("%Y-%m-%d")
+
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(DailyOnchainKPISnapshot).where(
+                        and_(
+                            DailyOnchainKPISnapshot.snapshot_date == snapshot_date,
+                            DailyOnchainKPISnapshot.period == period,
+                        )
+                    )
+                ).scalar_one_or_none()
+
+                if existing:
+                    logger.info(
+                        f"Daily KPI snapshot for date={snapshot_date} period={period} already exists. Skipping duplicate."
+                    )
+                    return existing, False
+
+                snapshot = DailyOnchainKPISnapshot(
+                    snapshot_date=snapshot_date,
+                    period=period,
+                    tvl=float(snapshot_data.get("tvl", 0.0)),
+                    volume=float(snapshot_data.get("volume", 0.0)),
+                    active_rounds=int(snapshot_data.get("active_rounds", 0)),
+                    contribution_count=int(snapshot_data.get("contribution_count", 0)),
+                    unique_contributors=int(snapshot_data.get("unique_contributors", 0)),
+                    extra_data=snapshot_data.get("extra_data"),
+                )
+                session.add(snapshot)
+                session.flush()
+                logger.info(
+                    f"Saved new daily KPI snapshot for date={snapshot_date} period={period}: "
+                    f"TVL={snapshot.tvl}, Volume={snapshot.volume}, ActiveRounds={snapshot.active_rounds}, Contributions={snapshot.contribution_count}"
+                )
+                return snapshot, True
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save daily on-chain KPI snapshot: {e}")
+            return None, False
+
+    def get_daily_onchain_kpi_snapshots(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        period: str = "daily",
+        limit: int = 100,
+    ) -> List[DailyOnchainKPISnapshot]:
+        """
+        Retrieve historical daily on-chain KPI snapshots.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = select(DailyOnchainKPISnapshot).where(
+                    DailyOnchainKPISnapshot.period == period
+                )
+                if start_date:
+                    stmt = stmt.where(DailyOnchainKPISnapshot.snapshot_date >= start_date)
+                if end_date:
+                    stmt = stmt.where(DailyOnchainKPISnapshot.snapshot_date <= end_date)
+
+                stmt = stmt.order_by(desc(DailyOnchainKPISnapshot.snapshot_date)).limit(limit)
+                return session.execute(stmt).scalars().all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve daily on-chain KPI snapshots: {e}")
+            return []
+
+    def get_latest_daily_onchain_kpi_snapshot(
+        self,
+        period: str = "daily",
+    ) -> Optional[DailyOnchainKPISnapshot]:
+        """
+        Retrieve the most recent daily on-chain KPI snapshot.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(DailyOnchainKPISnapshot)
+                    .where(DailyOnchainKPISnapshot.period == period)
+                    .order_by(desc(DailyOnchainKPISnapshot.snapshot_date))
+                    .limit(1)
+                )
+                return session.execute(stmt).scalar_one_or_none()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve latest daily on-chain KPI snapshot: {e}")
+            return None
 

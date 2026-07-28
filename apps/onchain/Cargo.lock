@@ -999,6 +999,7 @@ dependencies = [
 name = "matching_pool"
 version = "0.0.0"
 dependencies = [
+ "proptest",
  "reentrancy-guard",
  "soroban-sdk",
 ]
