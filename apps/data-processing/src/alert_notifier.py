@@ -42,6 +42,14 @@ class AlertNotifier:
             "timestamp": result.timestamp.isoformat() if result.timestamp else None,
         }
 
+        # Add explanation metadata if available
+        if hasattr(result, "reason") and result.reason:
+            payload["reason"] = result.reason
+        if hasattr(result, "contributing_signals") and result.contributing_signals:
+            payload["contributing_signals"] = result.contributing_signals
+        if hasattr(result, "confidence_level") and result.confidence_level:
+            payload["confidence_level"] = result.confidence_level
+
         self._send_telegram(payload)
         self._send_webhooks(payload)
 
@@ -56,6 +64,14 @@ class AlertNotifier:
             f"Current: {payload['current_value']}\n"
             f"Z-Score: {payload['z_score']}"
         )
+
+        # Add explanation metadata to Telegram message if available
+        if "confidence_level" in payload:
+            text += f"\nConfidence: {payload['confidence_level']}"
+        if "reason" in payload:
+            text += f"\n\nReason: {payload['reason']}"
+        if "contributing_signals" in payload:
+            text += f"\nSignals: {', '.join(payload['contributing_signals'])}"
 
         self.session.post(
             f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage",

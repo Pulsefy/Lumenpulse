@@ -118,3 +118,31 @@ pub struct ContributorProfileChangedEvt {
     /// Proposal id when the change was admin-managed; 0 for self-service.
     pub proposal_id: u64,
 }
+
+/// Emitted when a contributor's attestation is suspended via multisig.
+#[contractevent]
+pub struct AttestationSuspendedEvent {
+    #[topic]
+    pub contributor: Address,
+    pub executor: Address,
+    pub proposal_id: u64,
+}
+
+/// Emitted when a contributor's attestation is revoked via multisig.
+/// Revocation is terminal — there is no corresponding "un-revoke" event.
+#[contractevent]
+pub struct AttestationRevokedEvent {
+    #[topic]
+    pub contributor: Address,
+    pub executor: Address,
+    pub proposal_id: u64,
+}
+
+/// Emitted when a previously suspended attestation is restored to `Active`.
+#[contractevent]
+pub struct AttestationRestoredEvent {
+    #[topic]
+    pub contributor: Address,
+    pub executor: Address,
+    pub proposal_id: u64,
+}

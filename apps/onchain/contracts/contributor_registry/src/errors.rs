@@ -21,4 +21,7 @@ pub enum ContributorError {
     BelowThreshold = 15,
     InvalidNonce = 16,
     InvalidSignature = 17,
+    AttestationNotActive = 18,
+    AttestationNotSuspended = 19,
+    AttestationAlreadyRevoked = 20,
 }

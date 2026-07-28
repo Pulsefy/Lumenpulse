@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import {
   PortfolioAnomalySeverity,
   PortfolioAnomalyStatus,
@@ -80,7 +86,9 @@ export class PortfolioAnomalyResponseDto {
   @ApiPropertyOptional({ description: 'When the anomaly was reviewed' })
   reviewedAt: Date | null;
 
-  @ApiPropertyOptional({ description: 'When the review notes were last updated' })
+  @ApiPropertyOptional({
+    description: 'When the review notes were last updated',
+  })
   reviewerNotesUpdatedAt: Date | null;
 
   @ApiProperty({ description: 'Creation timestamp' })

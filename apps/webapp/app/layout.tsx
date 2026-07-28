@@ -114,11 +114,6 @@ export const metadata: Metadata = {
       },
     ],
   },
-  // Verification
-  verification: {
-    google: "your-google-verification-code",
-    yandex: "your-yandex-verification-code",
-  },
 };
 
 export default function RootLayout({

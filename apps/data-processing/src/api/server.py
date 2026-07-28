@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 FastAPI server to expose sentiment analysis as an HTTP API
 for the Node.js backend to consume.

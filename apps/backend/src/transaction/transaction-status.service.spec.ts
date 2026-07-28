@@ -71,8 +71,8 @@ describe('TransactionStatusService', () => {
       callbackUrl: 'https://example.com/webhook',
       status: TransactionCallbackStatus.PENDING,
       retryCount: 0,
-      secret: 'current-secret',
-      previousSecret: 'previous-secret',
+      previousSecretId: null,
+      lastError: null,
       secretId: 'active',
       deliveryHistory: [],
       lastDeliveryStatus: null,
@@ -82,7 +82,7 @@ describe('TransactionStatusService', () => {
       lastDeliveryError: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-    } as TransactionCallback & {
+    } as unknown as TransactionCallback & {
       deliveryHistory: Array<Record<string, unknown>>;
     };
 
@@ -99,7 +99,7 @@ describe('TransactionStatusService', () => {
     const savedCallback = await service.registerCallback({
       transactionHash: 'abc123',
       callbackUrl: 'https://example.com/webhook',
-      secret: 'current-secret',
+      secretId: 'current-secret',
     });
 
     await service['notifyCallback'](savedCallback, 'SUCCESS');
@@ -108,7 +108,7 @@ describe('TransactionStatusService', () => {
     expect(savedCallback.lastSignature).toBe('sha256=current-signature');
     expect(savedCallback.lastResponseStatusCode).toBe(200);
     expect(savedCallback.deliveryHistory).toHaveLength(1);
-    expect(savedCallback.deliveryHistory[0]).toEqual(
+    expect(savedCallback.deliveryHistory?.[0]).toEqual(
       expect.objectContaining({
         status: 'delivered',
         secretId: 'active',

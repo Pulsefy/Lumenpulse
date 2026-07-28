@@ -132,7 +132,11 @@ export class PortfolioSnapshotBatchStatusDto {
     example: 'running',
   })
   status:
-    'queued' | 'running' | 'completed' | 'completed_with_errors' | 'failed';
+    | 'queued'
+    | 'running'
+    | 'completed'
+    | 'completed_with_errors'
+    | 'failed';
 
   @ApiProperty({
     description: 'Total users scheduled for snapshot generation',
@@ -204,7 +208,11 @@ export class TriggerSnapshotBatchResponseDto {
     example: 'queued',
   })
   status:
-    'queued' | 'running' | 'completed' | 'completed_with_errors' | 'failed';
+    | 'queued'
+    | 'running'
+    | 'completed'
+    | 'completed_with_errors'
+    | 'failed';
 
   @ApiProperty({
     description: 'Total users scheduled for snapshot generation',

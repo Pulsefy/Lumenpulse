@@ -14,6 +14,7 @@ import { TestExceptionController } from './test-exception.controller';
 import { SentimentModule } from './sentiment/sentiment.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { AppCacheModule } from './cache/cache.module';
+import { WarmCacheModule } from './cache/warm-cache.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
 import { StellarModule } from './stellar/stellar.module';
 import { PriceModule } from './price/price.module';
@@ -63,6 +64,8 @@ import { TreasuryModule } from './treasury/treasury.module';
 import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { ContractAdminModule } from './contract-admin/contract-admin.module';
+import { ReviewMetricsModule } from './review-metrics/review-metrics.module';
+import { BotAuthModule } from './bot-auth/bot-auth.module';
 
 @Module({
   imports: [
@@ -101,6 +104,7 @@ import { ContractAdminModule } from './contract-admin/contract-admin.module';
       },
     }),
     AppCacheModule,
+    WarmCacheModule,
     MetricsModule,
     SentimentModule,
     PortfolioModule,
@@ -135,6 +139,8 @@ import { ContractAdminModule } from './contract-admin/contract-admin.module';
     VestingWalletModule,
     ContractsModule,
     ContractAdminModule,
+    ReviewMetricsModule,
+    BotAuthModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

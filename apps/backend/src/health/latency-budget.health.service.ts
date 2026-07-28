@@ -72,7 +72,8 @@ export class LatencyBudgetHealthService {
    */
   async getLatencyBudgetReport(): Promise<LatencyBudgetReport> {
     const network = (process.env.STELLAR_NETWORK ?? 'testnet') as
-      'testnet' | 'mainnet';
+      | 'testnet'
+      | 'mainnet';
 
     const horizonUrl =
       process.env.STELLAR_HORIZON_URL ?? DEFAULT_HORIZON_URLS[network];

@@ -83,10 +83,9 @@ describe('NotificationFanoutService', () => {
         select: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([
-          { userId: 'user-1' },
-          { userId: 'user-2' },
-        ]),
+        getRawMany: jest
+          .fn()
+          .mockResolvedValue([{ userId: 'user-1' }, { userId: 'user-2' }]),
       };
       mockWatchlistRepository.createQueryBuilder.mockReturnValue(mockQuery);
 
@@ -102,7 +101,10 @@ describe('NotificationFanoutService', () => {
       mockPreferenceService.meetsSeverityThreshold.mockReturnValue(true);
       mockPreferenceService.hasReachedDailyLimit.mockResolvedValue(false);
 
-      const savedNotification = { id: 'notif-1', type: NotificationType.PROJECT };
+      const savedNotification = {
+        id: 'notif-1',
+        type: NotificationType.PROJECT,
+      };
       mockNotificationService.create.mockResolvedValue(savedNotification);
       mockDeliveryService.deliverToUser.mockResolvedValue([
         { id: 'log-1', status: 'delivered' },
@@ -163,7 +165,9 @@ describe('NotificationFanoutService', () => {
       expect(result.totalTargeted).toBe(1);
       expect(result.delivered).toBe(0);
       expect(result.suppressed).toBe(1);
-      expect(result.suppressionBreakdown[SuppressionReason.QUIET_HOURS]).toBe(1);
+      expect(result.suppressionBreakdown[SuppressionReason.QUIET_HOURS]).toBe(
+        1,
+      );
       expect(mockSuppressionLogRepository.save).toHaveBeenCalled();
     });
 
@@ -200,7 +204,9 @@ describe('NotificationFanoutService', () => {
 
       expect(result.totalTargeted).toBe(1);
       expect(result.suppressed).toBe(1);
-      expect(result.suppressionBreakdown[SuppressionReason.SEVERITY_THRESHOLD]).toBe(1);
+      expect(
+        result.suppressionBreakdown[SuppressionReason.SEVERITY_THRESHOLD],
+      ).toBe(1);
     });
 
     it('should suppress notifications for disabled event categories', async () => {
@@ -239,7 +245,9 @@ describe('NotificationFanoutService', () => {
 
       expect(result.totalTargeted).toBe(1);
       expect(result.suppressed).toBe(1);
-      expect(result.suppressionBreakdown[SuppressionReason.EVENT_CATEGORY_DISABLED]).toBe(1);
+      expect(
+        result.suppressionBreakdown[SuppressionReason.EVENT_CATEGORY_DISABLED],
+      ).toBe(1);
     });
 
     it('should use explicit targetUserIds when provided', async () => {

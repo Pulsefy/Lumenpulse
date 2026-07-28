@@ -33,7 +33,14 @@ export default function ContributorProfileScreen() {
   const router = useRouter();
   const { colors, t } = useLocalization();
   const { isAuthenticated } = useAuth();
-  const { publicKey: activeWalletPublicKey, status: walletStatus, connect: connectWallet } = useWallet();
+  const {
+    publicKey: activeWalletPublicKey,
+    status: walletStatus,
+    connect: connectWallet,
+    reconnect: reconnectWallet,
+    lastConnectedNetwork,
+    isRestoring: isWalletRestoring,
+  } = useWallet();
   const { environmentConfig } = useEnvironment();
 
   const [loading, setLoading] = useState(true);
@@ -432,7 +439,11 @@ export default function ContributorProfileScreen() {
                           backgroundColor:
                             walletStatus === 'connected'
                               ? colors.success + '20'
-                              : colors.warning + '20',
+                              : walletStatus === 'reconnecting' ||
+                                  isWalletRestoring ||
+                                  walletStatus === 'connecting'
+                                ? colors.accent + '20'
+                                : colors.warning + '20',
                         },
                       ]}
                     >
@@ -441,7 +452,13 @@ export default function ContributorProfileScreen() {
                           styles.statusDot,
                           {
                             backgroundColor:
-                              walletStatus === 'connected' ? colors.success : colors.warning,
+                              walletStatus === 'connected'
+                                ? colors.success
+                                : walletStatus === 'reconnecting' ||
+                                    isWalletRestoring ||
+                                    walletStatus === 'connecting'
+                                  ? colors.accent
+                                  : colors.warning,
                           },
                         ]}
                       />
@@ -449,14 +466,83 @@ export default function ContributorProfileScreen() {
                         style={[
                           styles.walletStatusText,
                           {
-                            color: walletStatus === 'connected' ? colors.success : colors.warning,
+                            color:
+                              walletStatus === 'connected'
+                                ? colors.success
+                                : walletStatus === 'reconnecting' ||
+                                    isWalletRestoring ||
+                                    walletStatus === 'connecting'
+                                  ? colors.accent
+                                  : colors.warning,
                           },
                         ]}
                       >
-                        {walletStatus.toUpperCase()}
+                        {t(`wallet.status.${walletStatus}`, {
+                          defaultValue: walletStatus.toUpperCase(),
+                        })}
                       </Text>
                     </View>
                   </View>
+                  {(isWalletRestoring ||
+                    walletStatus === 'network_mismatch' ||
+                    walletStatus === 'restore_failed' ||
+                    walletStatus === 'reconnecting') && (
+                    <View
+                      style={[
+                        styles.walletStatusRow,
+                        { justifyContent: 'flex-start', flexDirection: 'column', alignItems: 'stretch' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.walletStatusLabel,
+                          { color: colors.textSecondary, marginBottom: 4 },
+                        ]}
+                      >
+                        {walletStatus === 'network_mismatch'
+                          ? t('wallet.network_mismatch.message', {
+                              network: environmentConfig.label,
+                            })
+                          : walletStatus === 'restore_failed'
+                            ? t('wallet.restore_failed.message')
+                            : t('wallet.reconnect.restoring')}
+                      </Text>
+                      {walletStatus === 'network_mismatch' && (
+                        <TouchableOpacity
+                          style={[
+                            styles.primaryButtonInline,
+                            { backgroundColor: colors.warning, alignSelf: 'flex-start' },
+                          ]}
+                          onPress={reconnectWallet}
+                          activeOpacity={0.85}
+                          accessibilityLabel={t('wallet.reconnect.button')}
+                        >
+                          <Ionicons
+                            name="refresh-outline"
+                            size={14}
+                            color="#ffffff"
+                            style={{ marginRight: 6 }}
+                          />
+                          <Text style={styles.primaryButtonText}>
+                            {t('wallet.reconnect.button')}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      {lastConnectedNetwork &&
+                        lastConnectedNetwork !== environmentConfig.id && (
+                          <Text
+                            style={[
+                              styles.walletStatusLabel,
+                              { color: colors.textSecondary, marginTop: 6 },
+                            ]}
+                          >
+                            {t('wallet.network_mismatch.last_network_label', {
+                              network: lastConnectedNetwork,
+                            })}
+                          </Text>
+                        )}
+                    </View>
+                  )}
                 </>
               ) : (
                 <View style={styles.noWalletBox}>
