@@ -15,6 +15,7 @@ import { SorobanIndexerCursor } from './entities/soroban-indexer-cursor.entity';
 
 const JOB_NAME = 'soroban-event-indexer';
 const GLOBAL_CURSOR_KEY = '__global__';
+const BACKFILL_CURSOR_KEY = '__backfill__';
 
 /** Max ledgers to scan per cron tick */
 const MAX_LEDGER_RANGE_PER_RUN = 1000;
@@ -47,17 +48,153 @@ export class SorobanEventIndexerService {
   }
 
   /**
-   * Backfill from a specific start ledger.
-   * Call this to re-index historical data from any point.
+   * Backfill from a specific start ledger or resume from the last saved checkpoint.
+   * Call this to re-index historical data incrementally with recovery support.
    */
-  async backfill(fromLedger: number): Promise<{ indexed: number }> {
-    this.logger.log(`Starting backfill from ledger ${fromLedger}`);
-    return this.sync('backfill', fromLedger);
+  async backfill(fromLedger?: number): Promise<{ indexed: number; resumedFromCheckpoint: boolean }> {
+    return this.jobLock.withLock(`${JOB_NAME}-backfill`, () =>
+      this.executeIncrementalBackfill(fromLedger),
+    );
+  }
+
+  /**
+   * Explicitly resume an interrupted backfill from the last saved checkpoint.
+   */
+  async resumeBackfill(): Promise<{ indexed: number; resumedFromCheckpoint: boolean }> {
+    return this.backfill();
+  }
+
+  /**
+   * Get the current backfill checkpoint status.
+   */
+  async getBackfillCheckpoint(): Promise<SorobanIndexerCursor | null> {
+    return this.cursorRepo.findOne({ where: { cursorKey: BACKFILL_CURSOR_KEY } });
   }
 
   // ---------------------------------------------------------------------------
   // Internal
   // ---------------------------------------------------------------------------
+
+  private async executeIncrementalBackfill(
+    requestedStartLedger?: number,
+  ): Promise<{ indexed: number; resumedFromCheckpoint: boolean }> {
+    const run = await this.jobHistory.start(JOB_NAME, 'backfill');
+
+    try {
+      const latestLedger = await this.fetchLatestLedger();
+      if (latestLedger === null) {
+        this.logger.warn('[Backfill] Soroban RPC unavailable. Aborting backfill run.');
+        await this.jobHistory.complete(run, { indexed: 0, reason: 'rpc-unavailable' });
+        return { indexed: 0, resumedFromCheckpoint: false };
+      }
+
+      const existingCheckpoint = await this.cursorRepo.findOne({
+        where: { cursorKey: BACKFILL_CURSOR_KEY },
+      });
+
+      let startLedger: number;
+      let resumedFromCheckpoint = false;
+
+      if (requestedStartLedger !== undefined) {
+        if (
+          existingCheckpoint &&
+          existingCheckpoint.lastLedgerSequence >= requestedStartLedger &&
+          existingCheckpoint.lastLedgerSequence < latestLedger
+        ) {
+          startLedger = existingCheckpoint.lastLedgerSequence + 1;
+          resumedFromCheckpoint = true;
+          this.logger.log(
+            `[Backfill Recovery] Active backfill checkpoint detected at ledger ${existingCheckpoint.lastLedgerSequence}. ` +
+              `Resuming backfill from ledger ${startLedger} to avoid duplicate processing.`,
+          );
+        } else {
+          startLedger = requestedStartLedger;
+          this.logger.log(
+            `[Backfill Initialized] Starting new backfill sequence from requested ledger ${startLedger} to latest ledger ${latestLedger}.`,
+          );
+        }
+      } else if (existingCheckpoint && existingCheckpoint.lastLedgerSequence > 0) {
+        startLedger = existingCheckpoint.lastLedgerSequence + 1;
+        resumedFromCheckpoint = true;
+        this.logger.log(
+          `[Backfill Recovery] Resuming interrupted backfill from saved checkpoint at ledger ${existingCheckpoint.lastLedgerSequence} ` +
+            `(next ledger: ${startLedger}, target latest: ${latestLedger}).`,
+        );
+      } else {
+        const globalCursor = await this.getOrCreateCursor(GLOBAL_CURSOR_KEY);
+        startLedger = globalCursor.lastLedgerSequence + 1;
+        this.logger.log(
+          `[Backfill Initialized] No backfill checkpoint found. Defaulting start ledger to ${startLedger} (global cursor + 1).`,
+        );
+      }
+
+      if (startLedger > latestLedger) {
+        this.logger.log(
+          `[Backfill Complete] Backfill cursor (${startLedger - 1}) is already at or ahead of latest ledger (${latestLedger}). Nothing to index.`,
+        );
+        await this.jobHistory.complete(run, { indexed: 0, upToDate: true });
+        return { indexed: 0, resumedFromCheckpoint };
+      }
+
+      let totalIndexed = 0;
+      let currentStart = startLedger;
+
+      while (currentStart <= latestLedger) {
+        const currentEnd = Math.min(
+          currentStart + MAX_LEDGER_RANGE_PER_RUN - 1,
+          latestLedger,
+        );
+
+        this.logger.log(
+          `[Backfill Chunk] Processing ledgers ${currentStart}–${currentEnd} ` +
+            `(Target: ${latestLedger}, Progress: ${Math.round(((currentStart - 1) / latestLedger) * 100)}%)`,
+        );
+
+        const indexed = await this.indexLedgerRange(currentStart, currentEnd);
+        totalIndexed += indexed;
+
+        // Persist incremental checkpoint after each chunk range to guarantee recovery
+        await this.cursorRepo.save({
+          cursorKey: BACKFILL_CURSOR_KEY,
+          lastLedgerSequence: currentEnd,
+        });
+
+        // Advance global cursor if backfill moves past global high-water mark
+        const globalCursor = await this.getOrCreateCursor(GLOBAL_CURSOR_KEY);
+        if (currentEnd > globalCursor.lastLedgerSequence) {
+          await this.cursorRepo.save({
+            cursorKey: GLOBAL_CURSOR_KEY,
+            lastLedgerSequence: currentEnd,
+          });
+        }
+
+        this.logger.log(
+          `[Backfill Checkpoint Saved] Saved checkpoint at ledger ${currentEnd}. ` +
+            `Indexed ${indexed} events in chunk (Total backfilled: ${totalIndexed}).`,
+        );
+
+        currentStart = currentEnd + 1;
+      }
+
+      this.logger.log(
+        `[Backfill Execution Completed] Successfully backfilled ledgers ${startLedger}–${latestLedger}. ` +
+          `Total events indexed: ${totalIndexed}.`,
+      );
+
+      await this.jobHistory.complete(run, {
+        indexed: totalIndexed,
+        startLedger,
+        endLedger: latestLedger,
+        resumedFromCheckpoint,
+      });
+
+      return { indexed: totalIndexed, resumedFromCheckpoint };
+    } catch (err) {
+      await this.jobHistory.fail(run, err);
+      this.logger.error('[Backfill Failed] Incremental backfill execution encountered an error', err);
+      return { indexed: 0, resumedFromCheckpoint: false };
+    }
+  }
 
   private async sync(
     triggeredBy: string,
