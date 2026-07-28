@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { getFundingProgress, getRoundMilestones } from '../../../lib/grant-detail-utils';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -216,6 +217,14 @@ function GrantRoundDetailContent() {
   const { round, poolBalance, projects } = summary;
   const endDate = new Date(round.endTime * 1000).toLocaleDateString();
   const startDate = new Date(round.startTime * 1000).toLocaleDateString();
+  const fundingProgress = getFundingProgress(poolBalance, round.totalPool);
+  const milestones = getRoundMilestones(round);
+  const contributionAmount = formatTokenAmount(summary.participationMetrics.totalContributionAmount);
+  const averageContribution = formatTokenAmount(
+    summary.participationMetrics.averageContributionPerContributor,
+  );
+  const averagePerProject = formatTokenAmount(summary.participationMetrics.averageContributionPerProject);
+  const fundedPercentLabel = `${fundingProgress}%`;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -246,35 +255,83 @@ function GrantRoundDetailContent() {
           <Text style={[styles.poolSub, { color: colors.textSecondary }]} accessible>
             {t('grants.qf_explanation')}
           </Text>
+          <View style={[styles.progressTrack, { backgroundColor: colors.cardBorder }]}>
+            <View
+              style={[styles.progressFill, { width: `${fundingProgress}%`, backgroundColor: colors.accent }]}
+              accessibilityRole="progressbar"
+              accessibilityValue={{ min: 0, max: 100, now: fundingProgress }}
+              accessibilityLabel={`Funding progress ${fundedPercentLabel}`}
+            />
+          </View>
+          <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
+            {t('grant_detail.funding_progress')}
+          </Text>
+          <Text style={[styles.progressValue, { color: colors.accent }]}>{fundedPercentLabel}</Text>
+        </View>
+
+        <View style={styles.statsGrid}>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}> 
+            <Text style={[styles.statValue, { color: colors.text }]}>{String(projects.length)}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+              {t('grant_detail.eligible_projects')}
+            </Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}> 
+            <Text style={[styles.statValue, { color: colors.text }]}>{summary.participationMetrics.totalContributors}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+              {t('grant_detail.contributors')}
+            </Text>
+          </View>
         </View>
 
         <InfoRow label={t('grants.start')} value={startDate} colors={colors} />
         <InfoRow label={t('grants.end')} value={endDate} colors={colors} />
         <InfoRow
-          label={t('grant_detail.eligible_projects')}
-          value={String(projects.length)}
-          colors={colors}
-        />
-        <InfoRow
-          label="Total contributors"
-          value={String(summary.participationMetrics.totalContributors)}
-          colors={colors}
-        />
-        <InfoRow
           label="Total contributions"
-          value={`${formatTokenAmount(summary.participationMetrics.totalContributionAmount)} XLM`}
+          value={`${contributionAmount} XLM`}
           colors={colors}
         />
         <InfoRow
           label="Average per contributor"
-          value={`${formatTokenAmount(summary.participationMetrics.averageContributionPerContributor)} XLM`}
+          value={`${averageContribution} XLM`}
           colors={colors}
         />
         <InfoRow
           label="Average per project"
-          value={`${formatTokenAmount(summary.participationMetrics.averageContributionPerProject)} XLM`}
+          value={`${averagePerProject} XLM`}
           colors={colors}
         />
+
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}> 
+          <Text style={[styles.sectionTitle, { color: colors.text }]} accessible accessibilityRole="header">
+            {t('grant_detail.milestones')}
+          </Text>
+          {milestones.map((item) => (
+            <View key={item.id} style={[styles.milestoneCard, { borderColor: colors.cardBorder }]}> 
+              <View style={styles.milestoneHeader}>
+                <View
+                  style={[
+                    styles.milestoneDot,
+                    {
+                      backgroundColor:
+                        item.state === 'completed'
+                          ? colors.accent
+                          : item.state === 'in-progress'
+                            ? '#f59e0b'
+                            : colors.textSecondary,
+                    },
+                  ]}
+                />
+                <View style={styles.milestoneBody}>
+                  <Text style={[styles.milestoneTitle, { color: colors.text }]}>{item.title}</Text>
+                  <Text style={[styles.milestoneDescription, { color: colors.textSecondary }]}>
+                    {item.description}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
 
         <View
           style={[styles.infoBox, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
@@ -304,9 +361,12 @@ function GrantRoundDetailContent() {
         </Text>
 
         {projects.length === 0 ? (
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]} accessible>
-            {t('grants.no_rounds')}
-          </Text>
+          <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}> 
+            <Ionicons name="sparkles-outline" size={28} color={colors.textSecondary} />
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]} accessible>
+              {t('grant_detail.no_eligible_projects')}
+            </Text>
+          </View>
         ) : (
           <View accessibilityRole="list">
             {projects.map((p, idx) => (
@@ -357,12 +417,58 @@ const styles = StyleSheet.create({
   poolLabel: { fontSize: 13, marginBottom: 6 },
   poolValue: { fontSize: 32, fontWeight: '800', letterSpacing: -1, marginBottom: 6 },
   poolSub: { fontSize: 12, textAlign: 'center', lineHeight: 16 },
+  progressTrack: {
+    width: '100%',
+    height: 10,
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  progressFill: { height: '100%', borderRadius: 999 },
+  progressLabel: { fontSize: 12, marginBottom: 2 },
+  progressValue: { fontSize: 15, fontWeight: '700' },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 16,
+    alignItems: 'center',
+  },
+  statValue: { fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  statLabel: { fontSize: 12, textAlign: 'center' },
+  section: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 20,
+  },
+  milestoneCard: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 12,
+    marginTop: 12,
+  },
+  milestoneHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  milestoneDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    marginTop: 6,
+  },
+  milestoneBody: { flex: 1 },
+  milestoneTitle: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  milestoneDescription: { fontSize: 12, lineHeight: 18 },
   infoLabel: { fontSize: 14 },
   infoValue: { fontSize: 14, fontWeight: '600' },
   infoBox: {
@@ -377,7 +483,15 @@ const styles = StyleSheet.create({
   },
   infoBoxText: { flex: 1, fontSize: 12, lineHeight: 18 },
   sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 14 },
-  emptyText: { fontSize: 14, textAlign: 'center', paddingVertical: 20 },
+  emptyState: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 18,
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  emptyText: { fontSize: 14, textAlign: 'center', paddingVertical: 6 },
   projectCard: {
     borderRadius: 14,
     borderWidth: 1,

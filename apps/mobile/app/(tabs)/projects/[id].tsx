@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -27,7 +26,8 @@ import { requireBiometricConfirmation } from '../../../lib/biometric-lock';
 import VerificationPanel from '../../../components/VerificationPanel';
 import { usersApi } from '../../../lib/api';
 import { storage } from '../../../lib/storage';
-import { moderationApi, ReportType, ReportReason } from '../../../lib/moderation';
+import { ReportType } from '../../../lib/moderation';
+import ReportContentModal from '../../../components/ReportContentModal';
 import { useWallet } from '../../../contexts/WalletContext';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -214,7 +214,7 @@ export default function ProjectDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [showContributeModal, setShowContributeModal] = useState(false);
   const { publicKey: stellarPublicKey, signAndSubmitXdr } = useWallet();
-  const [isReporting, setIsReporting] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const projectId = parseInt(id ?? '0', 10);
 
@@ -259,9 +259,7 @@ export default function ProjectDetailScreen() {
       return { errorMessage: 'No Stellar account linked. Please link one in Settings first.' };
     }
 
-    const isConfirmed = await requireBiometricConfirmation(
-      'Confirm your identity to contribute',
-    );
+    const isConfirmed = await requireBiometricConfirmation('Confirm your identity to contribute');
     if (!isConfirmed) {
       return { errorMessage: 'Biometric confirmation failed or cancelled.' };
     }
@@ -299,34 +297,6 @@ export default function ProjectDetailScreen() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Network error. Please try again.';
       return { errorMessage: message };
-    }
-  };
-
-  const handleReport = async (reason: ReportReason) => {
-    if (isReporting || !project) return;
-
-    setIsReporting(true);
-    try {
-      const response = await moderationApi.createReport({
-        targetType: ReportType.PROJECT,
-        targetId: String(projectId),
-        reason,
-        description: `Project reported: ${project.name}`,
-      });
-
-      if (response.success) {
-        Alert.alert(
-          'Report Submitted',
-          'Thank you. Your report has been submitted for review by our moderation team.',
-        );
-      } else {
-        Alert.alert('Error', response.error?.message || 'Failed to submit report.');
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to submit report.';
-      Alert.alert('Error', message);
-    } finally {
-      setIsReporting(false);
     }
   };
 
@@ -507,23 +477,9 @@ export default function ProjectDetailScreen() {
         {/* Report button */}
         <TouchableOpacity
           style={[styles.reportButton, { borderColor: colors.border }]}
-          onPress={() => {
-            Alert.alert('Report Project', 'Why are you reporting this project?', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Spam',
-                onPress: () => void handleReport(ReportReason.SPAM),
-              },
-              {
-                text: 'Fraud',
-                onPress: () => void handleReport(ReportReason.FRAUD),
-              },
-              {
-                text: 'Misleading',
-                onPress: () => void handleReport(ReportReason.MISLEADING_INFO),
-              },
-            ]);
-          }}
+          onPress={() => setShowReportModal(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Report this project"
         >
           <Ionicons name="flag-outline" size={16} color={colors.danger} />
           <Text style={[styles.reportButtonText, { color: colors.danger }]}>
@@ -574,6 +530,15 @@ export default function ProjectDetailScreen() {
         projectName={project.name}
         onClose={() => setShowContributeModal(false)}
         onSubmit={handleContribute}
+      />
+
+      {/* Report modal */}
+      <ReportContentModal
+        visible={showReportModal}
+        targetType={ReportType.PROJECT}
+        targetId={String(projectId)}
+        targetLabel={project.name}
+        onClose={() => setShowReportModal(false)}
       />
     </SafeAreaView>
   );

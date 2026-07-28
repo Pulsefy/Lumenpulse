@@ -7,6 +7,7 @@ import { Web3NewsFallback } from "@/components/web3-news-fallback";
 import { useState, useEffect, useMemo } from "react";
 import { fetchCryptoNews } from "@/lib/news-client";
 import { ExploreFilters } from "./explore-filters";
+import { ReportButton } from "@/components/report/report-button";
 
 interface NewsData {
   id: number;
@@ -220,10 +221,16 @@ export function NewsSection({ newsData: propNewsData, isLoading: propIsLoading, 
                         e.currentTarget.src = 'https://picsum.photos/seed/crypto/800/450';
                       }}
                     />
-                    <div className="absolute top-2 right-2 flex gap-2">
+                    <div className="absolute top-2 right-2 flex items-center gap-2">
                       <div className="bg-primary/90 text-white text-[10px] uppercase font-bold px-2 py-1 rounded-md backdrop-blur-md">
                         {news.category}
                       </div>
+                      <ReportButton
+                        targetType="other"
+                        targetId={String(news.id)}
+                        targetLabel={`"${news.title}"`}
+                        variant="icon"
+                      />
                     </div>
                     <div className="absolute bottom-2 left-2 flex gap-2">
                       <div className="bg-black/60 text-white text-[10px] px-2 py-1 rounded-md backdrop-blur-md flex items-center gap-1 border border-white/10">

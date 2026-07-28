@@ -29,6 +29,21 @@ pub struct ContributorData {
     pub github_handle: String,
     pub reputation_score: u64,
     pub registered_timestamp: u64,
+    pub status: AttestationStatus,
+}
+
+/// Lifecycle state of a contributor's attestation.
+///
+/// `Revoked` is terminal — there is no path back to `Active` once revoked,
+/// by design (revocation is meant for confirmed abuse/policy violations).
+/// `Suspended` is reversible via `restore_attestation`.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum AttestationStatus {
+    Active = 0,
+    Suspended = 1,
+    Revoked = 2,
 }
 
 #[contracttype]
@@ -83,4 +98,9 @@ pub enum ProposalAction {
     RevokeBadge(Address, Badge),
     ApplyPenalty(Address, u64, PenaltySeverity, u64, String),
     SetMultisigConfig(Vec<multisig_guard::Signer>, u32),
+    UpdateProfile(Address, String),
+    SuspendAttestation(Address),
+    RevokeAttestation(Address),
+    RestoreAttestation(Address),
+    Upgrade,
 }

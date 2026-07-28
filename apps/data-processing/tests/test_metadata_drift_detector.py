@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Tests for the metadata drift detector (#882)."""
 
 from datetime import datetime, timedelta, timezone

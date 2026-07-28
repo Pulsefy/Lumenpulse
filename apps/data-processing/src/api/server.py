@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 FastAPI server to expose sentiment analysis as an HTTP API
 for the Node.js backend to consume.
@@ -93,6 +94,10 @@ app.include_router(ingestion_quality_router)
 # Entity linking review queue routes
 from src.api.review_queue_routes import router as review_queue_router
 app.include_router(review_queue_router)
+
+# Ledger cursor operational visibility routes
+from src.api.ledger_cursor_routes import router as ledger_cursor_router
+app.include_router(ledger_cursor_router)
 
 
 try:
@@ -734,4 +739,102 @@ async def analyze_lag_correlation(
         best_correlation=result["best_correlation"],
         lag_analysis=result["lag_analysis"],
         recommendation=result["recommendation"],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Daily On-Chain KPI Snapshot Endpoints (#877)
+# ---------------------------------------------------------------------------
+
+
+class DailyKPISnapshotResponse(BaseModel):
+    snapshot_date: str
+    period: str
+    tvl: float
+    volume: float
+    active_rounds: int
+    contribution_count: int
+    unique_contributors: int
+    extra_data: Optional[Dict[str, Any]] = None
+    created_at: Optional[str] = None
+
+
+class DailyKPISnapshotRunResponse(BaseModel):
+    status: str
+    message: str
+    date: str
+    period: str
+    tvl: float
+    volume: float
+    active_rounds: int
+    contribution_count: int
+    unique_contributors: int
+
+
+@app.get("/analytics/kpis/daily-snapshots", response_model=List[DailyKPISnapshotResponse])
+@limiter.limit("30/minute") if limiter else lambda x: x
+async def get_daily_kpi_snapshots(
+    request: Request,
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    period: str = Query("daily", description="Period type (default: daily)"),
+    limit: int = Query(100, ge=1, le=500),
+) -> List[DailyKPISnapshotResponse]:
+    """
+    Retrieve historical daily on-chain KPI snapshots.
+    Requires X-API-Key header.
+    """
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    snapshots = postgres_service.get_daily_onchain_kpi_snapshots(
+        start_date=start_date,
+        end_date=end_date,
+        period=period,
+        limit=limit,
+    )
+
+    return [
+        DailyKPISnapshotResponse(
+            snapshot_date=s.snapshot_date,
+            period=s.period,
+            tvl=s.tvl,
+            volume=s.volume,
+            active_rounds=s.active_rounds,
+            contribution_count=s.contribution_count,
+            unique_contributors=s.unique_contributors,
+            extra_data=s.extra_data,
+            created_at=s.created_at.isoformat() if s.created_at else None,
+        )
+        for s in snapshots
+    ]
+
+
+@app.post("/analytics/kpis/daily-snapshots/run", response_model=DailyKPISnapshotRunResponse)
+@limiter.limit("10/minute") if limiter else lambda x: x
+async def trigger_daily_kpi_snapshot(
+    request: Request,
+    target_date: Optional[str] = Query(None, description="Target date (YYYY-MM-DD)"),
+    period: str = Query("daily", description="Period identifier"),
+) -> DailyKPISnapshotRunResponse:
+    """
+    Trigger manual generation of a daily on-chain KPI snapshot.
+    Skips duplicate snapshot creation if a snapshot for target_date and period already exists.
+    Requires X-API-Key header.
+    """
+    from src.analytics.daily_kpi_snapshot import DailyKPISnapshotGenerator
+
+    generator = DailyKPISnapshotGenerator(db_service=postgres_service)
+    result = generator.run_snapshot(target_date=target_date, period=period)
+
+    return DailyKPISnapshotRunResponse(
+        status=result["status"],
+        message=result["message"],
+        date=result["date"],
+        period=result["period"],
+        tvl=result["tvl"],
+        volume=result["volume"],
+        active_rounds=result["active_rounds"],
+        contribution_count=result["contribution_count"],
+        unique_contributors=result["unique_contributors"],
     )

@@ -26,8 +26,28 @@ from .social_fetcher import (
     SocialPlatform,
     fetch_social,
 )
+from .ledger_cursor_store import LedgerCursorStore, LedgerCursorRow
+from .recovery_coordinator import RecoveryCoordinator, DuplicateEventError
+
+from .freshness_monitor import (
+    FreshnessResult,
+    FreshnessThreshold,
+    StaleSourceReport,
+    probe_news_freshness,
+    probe_onchain_freshness,
+    probe_price_freshness,
+    run_freshness_check,
+)
 
 __all__ = [
+    # Freshness SLA monitor
+    "FreshnessResult",
+    "FreshnessThreshold",
+    "StaleSourceReport",
+    "probe_news_freshness",
+    "probe_onchain_freshness",
+    "probe_price_freshness",
+    "run_freshness_check",
     "NewsFetcher",
     "NewsArticle",
     "fetch_news",
@@ -49,4 +69,9 @@ __all__ = [
     "QuarantinedPayload",
     "quarantine_on_error",
     "process_with_quarantine",
+    # Persistent ledger cursor store & recovery coordinator
+    "LedgerCursorStore",
+    "LedgerCursorRow",
+    "RecoveryCoordinator",
+    "DuplicateEventError",
 ]
