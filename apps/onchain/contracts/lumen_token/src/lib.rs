@@ -8,7 +8,7 @@ mod metadata;
 mod storage;
 mod test;
 
-use events::{AdminChangedEvent, BurnEvent, UpgradedEvent};
+use events;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
 
 #[contract]
@@ -35,11 +35,7 @@ impl LumenToken {
         let old_admin = admin::read_administrator(&e);
         old_admin.require_auth();
         admin::write_administrator(&e, &new_admin);
-        AdminChangedEvent {
-            old_admin,
-            new_admin,
-        }
-        .publish(&e);
+        events::publish_admin_changed(&e, old_admin, new_admin);
     }
 
     pub fn freeze(e: Env, id: Address) {
@@ -87,15 +83,16 @@ impl LumenToken {
         from.require_auth();
         balance::check_not_frozen(&e, &from);
         balance::spend_balance(&e, from.clone(), amount);
-        BurnEvent { from, amount }.publish(&e);
+        events::publish_burn(&e, from, amount);
     }
 
     pub fn burn_from(e: Env, spender: Address, from: Address, amount: i128) {
         spender.require_auth();
         balance::check_not_frozen(&e, &spender);
+
         allowance::spend_allowance(&e, from.clone(), spender, amount);
         balance::spend_balance(&e, from.clone(), amount);
-        BurnEvent { from, amount }.publish(&e);
+        events::publish_burn(&e, from, amount);
     }
 
     pub fn decimals(e: Env) -> u32 {
@@ -121,10 +118,6 @@ impl LumenToken {
         caller.require_auth();
         e.deployer()
             .update_current_contract_wasm(new_wasm_hash.clone());
-        UpgradedEvent {
-            admin: caller,
-            new_wasm_hash,
-        }
-        .publish(&e);
+        events::publish_upgraded(&e, caller, new_wasm_hash);
     }
 }
