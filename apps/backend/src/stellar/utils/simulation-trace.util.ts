@@ -143,18 +143,32 @@ function sanitizeContractEvent(entry: unknown): Record<string, unknown> {
   };
 }
 
+function simulationErrorMessage(
+  simulation: rpc.Api.SimulateTransactionResponse,
+): string | null {
+  if (rpc.Api.isSimulationError(simulation)) {
+    return simulation.error ?? 'Unknown simulation error';
+  }
+
+  if (typeof simulation !== 'object' || simulation === null) {
+    return null;
+  }
+
+  const error = (simulation as { error?: unknown }).error;
+  return typeof error === 'string' ? error : null;
+}
+
 /** Build a structured, non-sensitive simulation summary for failed invocations. */
 export function buildSimulationSummary(
   simulation: rpc.Api.SimulateTransactionResponse,
   detail: SimulationTraceDetailLevel,
 ): Record<string, unknown> {
-  if (!rpc.Api.isSimulationError(simulation)) {
+  const rawError = simulationErrorMessage(simulation);
+  if (rawError === null) {
     return {};
   }
 
-  const errorMessage = sanitizeSimulationMessage(
-    simulation.error ?? 'Unknown simulation error',
-  );
+  const errorMessage = sanitizeSimulationMessage(rawError);
   const summary: Record<string, unknown> = {
     error: errorMessage,
   };
