@@ -3,16 +3,59 @@ Keyword extraction module for analytics.
 
 Extracts key entities (coins, protocols, people) from news content
 to tag and filter analytics.
+
+The static dicts (CRYPTO_PROJECT_MAP, TICKER_TO_PROJECT, KNOWN_TICKERS) are
+seeded from the alias registry at import time so contributors only need to
+edit ``data/alias_registry.yaml`` to add new projects or assets.  The static
+dicts remain fully available for any code that imports them directly.
 """
 
+import logging
 import re
-from typing import List, Set
+from typing import Dict, List, Set
 
-# Static dictionary of known crypto projects and their tickers
-CRYPTO_PROJECT_MAP: dict[str, List[str]] = {
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Registry-seeded dicts
+# ---------------------------------------------------------------------------
+# These dicts are populated from the alias registry (data/alias_registry.yaml)
+# at import time.  If the registry is unavailable, a minimal built-in fallback
+# is used so the rest of the analytics pipeline is never broken.
+
+def _build_crypto_project_map() -> Dict[str, List[str]]:
+    """Build CRYPTO_PROJECT_MAP from the alias registry."""
+    try:
+        from src.normalization.alias_registry import get_registry  # noqa: PLC0415
+        return get_registry().to_crypto_project_map()
+    except Exception as exc:
+        logger.warning(
+            "Could not load alias registry for CRYPTO_PROJECT_MAP; using built-in fallback. "
+            "Error: %s",
+            exc,
+        )
+        return _BUILTIN_CRYPTO_PROJECT_MAP.copy()
+
+
+def _build_ticker_to_project() -> Dict[str, List[str]]:
+    """Build TICKER_TO_PROJECT from the alias registry."""
+    try:
+        from src.normalization.alias_registry import get_registry  # noqa: PLC0415
+        return get_registry().to_ticker_to_project()
+    except Exception as exc:
+        logger.warning(
+            "Could not load alias registry for TICKER_TO_PROJECT; using built-in fallback. "
+            "Error: %s",
+            exc,
+        )
+        return _BUILTIN_TICKER_TO_PROJECT.copy()
+
+
+# Built-in fallbacks (kept for resilience; registry is the authoritative source)
+_BUILTIN_CRYPTO_PROJECT_MAP: Dict[str, List[str]] = {
     # Stellar ecosystem
     "stellar": ["XLM", "Stellar"],
-    "xlm": ["XLM", "Stellar"],  # XLM ticker also maps to Stellar
+    "xlm": ["XLM", "Stellar"],
     "soroban": ["XLM", "Soroban"],
     "stellar development foundation": ["SDF", "Stellar"],
     # Bitcoin
@@ -60,12 +103,35 @@ CRYPTO_PROJECT_MAP: dict[str, List[str]] = {
     # Uniswap
     "univ3": ["UNI", "Uniswap"],
     "uniswap": ["UNI", "Uniswap"],
-    # DeFi
+    # DeFi / NFT
     "defi": ["DeFi", "DeFi"],
-    # NFTs
     "nft": ["NFT", "NFT"],
     "nfts": ["NFT", "NFT"],
 }
+
+_BUILTIN_TICKER_TO_PROJECT: Dict[str, List[str]] = {
+    "XLM": ["Stellar"],
+    "BTC": ["Bitcoin"],
+    "ETH": ["Ethereum"],
+    "SOL": ["Solana"],
+    "XRP": ["Ripple"],
+    "ADA": ["Cardano"],
+    "DOT": ["Polkadot"],
+    "DOGE": ["Dogecoin"],
+    "LTC": ["Litecoin"],
+    "LINK": ["Chainlink"],
+    "AVAX": ["Avalanche"],
+    "MATIC": ["Polygon"],
+    "ALGO": ["Algorand"],
+    "ATOM": ["Cosmos"],
+    "UNI": ["Uniswap"],
+    "USDC": ["USDC"],
+    "USDT": ["Tether"],
+}
+
+# Public dicts – populated from the registry at import time
+CRYPTO_PROJECT_MAP: Dict[str, List[str]] = _build_crypto_project_map()
+TICKER_TO_PROJECT: Dict[str, List[str]] = _build_ticker_to_project()
 
 # Set of all known tickers for regex matching
 KNOWN_TICKERS: Set[str] = {
@@ -96,26 +162,7 @@ KNOWN_TICKERS: Set[str] = {
 # Regex pattern for matching crypto tickers (2-5 uppercase letters)
 TICKER_PATTERN = r"\b[A-Z]{2,5}\b"
 
-# Reverse mapping from ticker to project names (for when ticker appears without project name)
-TICKER_TO_PROJECT: dict[str, List[str]] = {
-    "XLM": ["Stellar"],
-    "BTC": ["Bitcoin"],
-    "ETH": ["Ethereum"],
-    "SOL": ["Solana"],
-    "XRP": ["Ripple"],
-    "ADA": ["Cardano"],
-    "DOT": ["Polkadot"],
-    "DOGE": ["Dogecoin"],
-    "LTC": ["Litecoin"],
-    "LINK": ["Chainlink"],
-    "AVAX": ["Avalanche"],
-    "MATIC": ["Polygon"],
-    "ALGO": ["Algorand"],
-    "ATOM": ["Cosmos"],
-    "UNI": ["Uniswap"],
-    "USDC": ["USDC"],
-    "USDT": ["Tether"],
-}
+# Reverse mapping from ticker to project names – now generated from registry above.
 
 # Words to exclude from ticker matching (common English words)
 TICKER_EXCLUSIONS: Set[str] = {
