@@ -6,10 +6,7 @@ import { SavedSearchController } from './saved-search.controller';
 import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([SavedSearch]),
-    NotificationModule,
-  ],
+  imports: [TypeOrmModule.forFeature([SavedSearch]), NotificationModule],
   providers: [SavedSearchService],
   controllers: [SavedSearchController],
   exports: [SavedSearchService],

@@ -21,8 +21,11 @@ describe('GrantsService', () => {
       providers: [
         GrantsService,
         { provide: ConfigService, useValue: { get: jest.fn() } },
-          { provide: getQueueToken(CONTRIBUTION_QUEUE), useValue: mockQueue },
-          { provide: SavedSearchService, useValue: { handleNewItem: jest.fn().mockResolvedValue(undefined) } },
+        { provide: getQueueToken(CONTRIBUTION_QUEUE), useValue: mockQueue },
+        {
+          provide: SavedSearchService,
+          useValue: { handleNewItem: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
     service = module.get<GrantsService>(GrantsService);

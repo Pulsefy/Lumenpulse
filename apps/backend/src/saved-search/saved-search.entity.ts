@@ -36,7 +36,7 @@ export class SavedSearch {
   domain: SavedSearchDomain;
 
   @Column({ type: 'jsonb' })
-  query: Record<string, any>;
+  query: Record<string, unknown>;
 
   @Column({ type: 'boolean', default: true })
   isSubscribed: boolean;

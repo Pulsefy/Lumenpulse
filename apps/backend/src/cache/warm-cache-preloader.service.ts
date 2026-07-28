@@ -1,7 +1,11 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CacheService } from './cache.service';
-import { WarmCacheRegistry, WarmCacheReport, PreloadResult } from './warm-cache.registry';
+import {
+  WarmCacheRegistry,
+  WarmCacheReport,
+  PreloadResult,
+} from './warm-cache.registry';
 import { MetricsService } from '../metrics/metrics.service';
 
 // Prometheus metric names
@@ -51,10 +55,9 @@ export class WarmCachePreloaderService {
    * blips do not thrash the preloader.  Adjust via `WARM_CACHE_CRON` env var
    * if you mount a custom schedule factory.
    */
-  @Cron(
-    process.env['WARM_CACHE_CRON'] ?? CronExpression.EVERY_5_MINUTES,
-    { name: 'warm-cache-preload' },
-  )
+  @Cron(process.env['WARM_CACHE_CRON'] ?? CronExpression.EVERY_5_MINUTES, {
+    name: 'warm-cache-preload',
+  })
   async scheduledPreload(): Promise<void> {
     this.logger.log('Scheduled warm-cache preload triggered.');
     await this.runPreload('scheduled');
@@ -109,7 +112,10 @@ export class WarmCachePreloaderService {
       this.logger.warn(
         `Warm-cache preload SKIPPED — Redis health check failed. ${skipped} route(s) not preloaded.`,
       );
-      this.incrementCounter(METRIC_PRELOAD_SKIPPED, { reason: 'unhealthy', trigger });
+      this.incrementCounter(METRIC_PRELOAD_SKIPPED, {
+        reason: 'unhealthy',
+        trigger,
+      });
       return this.buildSkipReport('unhealthy-dependency', skipped);
     }
 
@@ -189,10 +195,7 @@ export class WarmCachePreloaderService {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  private buildSkipReport(
-    reason: string,
-    skippedCount = 0,
-  ): WarmCacheReport {
+  private buildSkipReport(reason: string, skippedCount = 0): WarmCacheReport {
     return {
       triggeredAt: new Date().toISOString(),
       totalRoutes: skippedCount,

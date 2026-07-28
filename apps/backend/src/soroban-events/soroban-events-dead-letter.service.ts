@@ -269,7 +269,9 @@ export class SorobanEventsDeadLetterService {
       })
       .where('id = :id', { id: dlqId })
       .andWhere('status = :status', { status: DeadLetterStatus.PENDING })
-      .andWhere('replay_count < :maxAttempts', { maxAttempts: MAX_REPLAY_ATTEMPTS })
+      .andWhere('replay_count < :maxAttempts', {
+        maxAttempts: MAX_REPLAY_ATTEMPTS,
+      })
       .execute();
 
     if (claim.affected !== 1) {

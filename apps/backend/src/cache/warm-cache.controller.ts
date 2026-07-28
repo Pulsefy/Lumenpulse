@@ -32,9 +32,7 @@ class ForceRefreshDto {
 export class WarmCacheController {
   private readonly logger = new Logger(WarmCacheController.name);
 
-  constructor(
-    private readonly preloaderService: WarmCachePreloaderService,
-  ) {}
+  constructor(private readonly preloaderService: WarmCachePreloaderService) {}
 
   /**
    * POST /cache/warm
@@ -58,9 +56,7 @@ export class WarmCacheController {
     status: HttpStatus.OK,
     description: 'Warm-cache refresh report.',
   })
-  async forceRefresh(
-    @Body() dto?: ForceRefreshDto,
-  ): Promise<WarmCacheReport> {
+  async forceRefresh(@Body() dto?: ForceRefreshDto): Promise<WarmCacheReport> {
     this.logger.log(
       `Manual cache warm triggered by: ${dto?.requestedBy ?? 'unknown'}`,
     );

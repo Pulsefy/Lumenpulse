@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsEnum, IsOptional, IsBoolean, IsObject, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsBoolean,
+  IsObject,
+  MaxLength,
+} from 'class-validator';
 import { SavedSearchDomain } from '../saved-search.entity';
 
 export class CreateSavedSearchDto {
@@ -20,11 +27,12 @@ export class CreateSavedSearchDto {
   domain: SavedSearchDomain;
 
   @ApiProperty({
-    description: 'Search query filters/parameters (suitable for both web & mobile)',
+    description:
+      'Search query filters/parameters (suitable for both web & mobile)',
     example: { q: 'stellar', status: 'VERIFIED' },
   })
   @IsObject()
-  query: Record<string, any>;
+  query: Record<string, unknown>;
 
   @ApiPropertyOptional({
     description: 'Whether search subscription is active for notifications',
@@ -49,7 +57,7 @@ export class SavedSearchResponseDto {
   domain: SavedSearchDomain;
 
   @ApiProperty({ description: 'Search query filters/parameters' })
-  query: Record<string, any>;
+  query: Record<string, unknown>;
 
   @ApiProperty({ description: 'Whether search subscription is active' })
   isSubscribed: boolean;

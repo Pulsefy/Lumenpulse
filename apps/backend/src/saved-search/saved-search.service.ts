@@ -4,7 +4,12 @@ import { Repository } from 'typeorm';
 import { SavedSearch, SavedSearchDomain } from './saved-search.entity';
 import { CreateSavedSearchDto } from './dto/saved-search.dto';
 import { NotificationService } from '../notification/notification.service';
-import { NotificationType, NotificationSeverity } from '../notification/notification.entity';
+import {
+  NotificationType,
+  NotificationSeverity,
+} from '../notification/notification.entity';
+
+export type SavedSearchItem = Record<string, unknown>;
 
 @Injectable()
 export class SavedSearchService {
@@ -16,7 +21,10 @@ export class SavedSearchService {
     private readonly notificationService: NotificationService,
   ) {}
 
-  async create(userId: string, dto: CreateSavedSearchDto): Promise<SavedSearch> {
+  async create(
+    userId: string,
+    dto: CreateSavedSearchDto,
+  ): Promise<SavedSearch> {
     const savedSearch = this.savedSearchRepo.create({
       userId,
       name: dto.name,
@@ -38,7 +46,9 @@ export class SavedSearchService {
   }
 
   async delete(userId: string, id: string): Promise<void> {
-    const search = await this.savedSearchRepo.findOne({ where: { id, userId } });
+    const search = await this.savedSearchRepo.findOne({
+      where: { id, userId },
+    });
     if (!search) {
       throw new NotFoundException(`Saved search with ID ${id} not found`);
     }
@@ -50,7 +60,10 @@ export class SavedSearchService {
    * Matches a newly created or synchronized item against active user saved searches,
    * triggering downstream notification workflows.
    */
-  async handleNewItem(domain: SavedSearchDomain, item: any): Promise<void> {
+  async handleNewItem(
+    domain: SavedSearchDomain,
+    item: SavedSearchItem,
+  ): Promise<void> {
     const activeSearches = await this.savedSearchRepo.find({
       where: { domain, isSubscribed: true },
     });
@@ -62,7 +75,10 @@ export class SavedSearchService {
     for (const search of activeSearches) {
       if (this.matches(search.query, item, domain)) {
         try {
-          const { title, message } = this.buildNotificationContent(search, item);
+          const { title, message } = this.buildNotificationContent(
+            search,
+            item,
+          );
           await this.notificationService.create({
             type: NotificationType.SAVED_SEARCH,
             title,
@@ -71,7 +87,7 @@ export class SavedSearchService {
             metadata: {
               domain,
               savedSearchId: search.id,
-              itemId: item.id || item.projectId || '',
+              itemId: this.itemId(item),
             },
             userId: search.userId,
           });
@@ -88,22 +104,35 @@ export class SavedSearchService {
     }
   }
 
-  private matches(query: Record<string, any>, item: any, domain: SavedSearchDomain): boolean {
+  private matches(
+    query: Record<string, unknown>,
+    item: SavedSearchItem,
+    domain: SavedSearchDomain,
+  ): boolean {
     if (!query || Object.keys(query).length === 0) {
       return true;
     }
 
     // 1. Text search ('q', 'text', 'name')
-    const searchTerm = (query.q || query.text || query.name || '').toString().trim().toLowerCase();
+    const queryValue = query.q ?? query.text ?? query.name;
+    const searchTerm =
+      typeof queryValue === 'string' ? queryValue.trim().toLowerCase() : '';
     if (searchTerm) {
       let itemText = '';
       if (domain === SavedSearchDomain.PROJECTS) {
-        itemText = `${item.name ?? ''} ${item.description ?? ''} ${item.category ?? ''}`.toLowerCase();
+        itemText =
+          `${this.stringValue(item.name)} ${this.stringValue(item.description)} ${this.stringValue(item.category)}`.toLowerCase();
       } else if (domain === SavedSearchDomain.GRANTS) {
-        itemText = `${item.name ?? ''} ${item.tokenAddress ?? ''}`.toLowerCase();
+        itemText =
+          `${this.stringValue(item.name)} ${this.stringValue(item.tokenAddress)}`.toLowerCase();
       } else if (domain === SavedSearchDomain.NEWS) {
-        const tagsStr = Array.isArray(item.tags) ? item.tags.join(' ') : '';
-        itemText = `${item.title ?? ''} ${item.category ?? ''} ${tagsStr}`.toLowerCase();
+        const tagsStr = Array.isArray(item.tags)
+          ? item.tags
+              .filter((tag): tag is string => typeof tag === 'string')
+              .join(' ')
+          : '';
+        itemText =
+          `${this.stringValue(item.title)} ${this.stringValue(item.category)} ${tagsStr}`.toLowerCase();
       }
 
       if (!itemText.includes(searchTerm)) {
@@ -138,22 +167,22 @@ export class SavedSearchService {
 
   private buildNotificationContent(
     search: SavedSearch,
-    item: any,
+    item: SavedSearchItem,
   ): { title: string; message: string } {
     switch (search.domain) {
       case SavedSearchDomain.PROJECTS:
         return {
-          title: `New Project Match: ${item.name || 'Unnamed Project'}`,
+          title: `New Project Match: ${this.stringValue(item.name) || 'Unnamed Project'}`,
           message: `A new project matching your saved search "${search.name}" has been registered.`,
         };
       case SavedSearchDomain.GRANTS:
         return {
-          title: `New Grant Round: ${item.name || 'Unnamed Round'}`,
+          title: `New Grant Round: ${this.stringValue(item.name) || 'Unnamed Round'}`,
           message: `A new grant round matching your saved search "${search.name}" is now active.`,
         };
       case SavedSearchDomain.NEWS:
         return {
-          title: `New Article Match: ${item.title || 'Untitled Article'}`,
+          title: `New Article Match: ${this.stringValue(item.title) || 'Untitled Article'}`,
           message: `A new news article matching your saved search "${search.name}" has been published.`,
         };
       default:
@@ -162,5 +191,13 @@ export class SavedSearchService {
           message: `A new item matching your saved search "${search.name}" has been detected.`,
         };
     }
+  }
+
+  private stringValue(value: unknown): string {
+    return typeof value === 'string' ? value : '';
+  }
+
+  private itemId(item: SavedSearchItem): string {
+    return this.stringValue(item.id) || this.stringValue(item.projectId);
   }
 }

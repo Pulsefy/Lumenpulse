@@ -46,11 +46,16 @@ export class NewsService {
     const news = this.newsRepository.create(createArticleDto);
     const saved = await this.newsRepository.save(news);
     await this.cacheService.invalidateNewsCache();
-    
+
     // Trigger saved search matcher
-    this.savedSearchService.handleNewItem(SavedSearchDomain.NEWS, saved).catch(err => {
-      this.logger.error('Failed to trigger saved search for news article creation', err);
-    });
+    this.savedSearchService
+      .handleNewItem(SavedSearchDomain.NEWS, saved)
+      .catch((err) => {
+        this.logger.error(
+          'Failed to trigger saved search for news article creation',
+          err,
+        );
+      });
 
     return saved;
   }
@@ -198,11 +203,16 @@ export class NewsService {
     });
 
     const saved = await this.newsRepository.save(article);
-    
+
     // Trigger saved search matcher
-    this.savedSearchService.handleNewItem(SavedSearchDomain.NEWS, saved).catch(err => {
-      this.logger.error('Failed to trigger saved search for news article creation in createOrIgnore', err);
-    });
+    this.savedSearchService
+      .handleNewItem(SavedSearchDomain.NEWS, saved)
+      .catch((err) => {
+        this.logger.error(
+          'Failed to trigger saved search for news article creation in createOrIgnore',
+          err,
+        );
+      });
 
     return saved;
   }

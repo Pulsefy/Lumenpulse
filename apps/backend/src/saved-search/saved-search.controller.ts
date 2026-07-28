@@ -10,11 +10,18 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SavedSearchService } from './saved-search.service';
-import { CreateSavedSearchDto, SavedSearchResponseDto } from './dto/saved-search.dto';
+import {
+  CreateSavedSearchDto,
+  SavedSearchResponseDto,
+} from './dto/saved-search.dto';
 
 @ApiTags('saved-searches')
 @ApiBearerAuth('JWT-auth')
@@ -27,7 +34,8 @@ export class SavedSearchController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Save a discovery search query',
-    description: 'Save a search query/filters and subscribe to downstream notifications.',
+    description:
+      'Save a search query/filters and subscribe to downstream notifications.',
   })
   @ApiResponse({
     status: 201,
@@ -47,7 +55,8 @@ export class SavedSearchController {
   @Get()
   @ApiOperation({
     summary: 'List user saved searches',
-    description: 'Returns all saved searches and subscriptions for the authenticated user.',
+    description:
+      'Returns all saved searches and subscriptions for the authenticated user.',
   })
   @ApiResponse({
     status: 200,
@@ -65,9 +74,13 @@ export class SavedSearchController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Delete a saved search',
-    description: 'Remove a saved search and unsubscribe from its notifications.',
+    description:
+      'Remove a saved search and unsubscribe from its notifications.',
   })
-  @ApiResponse({ status: 204, description: 'Saved search deleted successfully' })
+  @ApiResponse({
+    status: 204,
+    description: 'Saved search deleted successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Saved search not found' })
   async delete(@Request() req: any, @Param('id') id: string): Promise<void> {

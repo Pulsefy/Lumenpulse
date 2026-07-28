@@ -212,15 +212,20 @@ export class GrantsService {
     };
     this.rounds.set(id, record);
     this.logger.log(`Round ${id} created: ${dto.name}`);
-    
+
     // Trigger saved search matcher
-    this.savedSearchService.handleNewItem(SavedSearchDomain.GRANTS, {
-      id,
-      name: dto.name,
-      tokenAddress: dto.tokenAddress,
-    }).catch(err => {
-      this.logger.error('Failed to trigger saved search for grant round creation', err);
-    });
+    this.savedSearchService
+      .handleNewItem(SavedSearchDomain.GRANTS, {
+        id,
+        name: dto.name,
+        tokenAddress: dto.tokenAddress,
+      })
+      .catch((err) => {
+        this.logger.error(
+          'Failed to trigger saved search for grant round creation',
+          err,
+        );
+      });
 
     return this.toRoundDto(record);
   }

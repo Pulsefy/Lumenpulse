@@ -1,20 +1,34 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { SavedSearchService } from './saved-search.service';
 import { SavedSearch, SavedSearchDomain } from './saved-search.entity';
 import { NotificationService } from '../notification/notification.service';
-import { NotificationType, NotificationSeverity } from '../notification/notification.entity';
+import {
+  NotificationType,
+  NotificationSeverity,
+} from '../notification/notification.entity';
 
 describe('SavedSearchService', () => {
   let service: SavedSearchService;
-  let savedSearchRepo: Pick<Repository<SavedSearch>, 'create' | 'save' | 'find' | 'findOne' | 'remove'>;
+  let savedSearchRepo: Pick<
+    Repository<SavedSearch>,
+    'create' | 'save' | 'find' | 'findOne' | 'remove'
+  >;
   let notificationService: Pick<Repository<any>, 'create'>;
 
   beforeEach(async () => {
     savedSearchRepo = {
-      create: jest.fn().mockImplementation((dto) => dto),
-      save: jest.fn().mockImplementation((entity) => Promise.resolve({ id: 'mock-id', ...entity })),
+      create: jest
+        .fn()
+        .mockImplementation(
+          (dto: DeepPartial<SavedSearch>) => dto as SavedSearch,
+        ),
+      save: jest
+        .fn()
+        .mockImplementation((entity: SavedSearch) =>
+          Promise.resolve({ id: 'mock-id', ...entity }),
+        ),
       find: jest.fn(),
       findOne: jest.fn(),
       remove: jest.fn(),
@@ -94,7 +108,8 @@ describe('SavedSearchService', () => {
       expect(notificationService.create).toHaveBeenCalledWith({
         type: NotificationType.SAVED_SEARCH,
         title: 'New Article Match: Exciting Stellar project launch',
-        message: 'A new news article matching your saved search "Stellar News" has been published.',
+        message:
+          'A new news article matching your saved search "Stellar News" has been published.',
         severity: NotificationSeverity.LOW,
         metadata: {
           domain: SavedSearchDomain.NEWS,
