@@ -24,8 +24,8 @@ use soroban_sdk::{
     contract, contractimpl, vec, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 use storage::{
-    AttestationStatus, Badge, ContributorData, ContributorTier, DataKey, PenaltyRecord, PenaltySeverity, ProposalAction, LEDGER_BUMP,
-    LEDGER_THRESHOLD,
+    AttestationStatus, Badge, ContributorData, ContributorTier, DataKey, PenaltyRecord,
+    PenaltySeverity, ProposalAction, LEDGER_BUMP, LEDGER_THRESHOLD,
 };
 
 pub use storage::ProposalAction as ContributorProposalAction;
@@ -138,9 +138,12 @@ impl ContributorRegistryContract {
         signers: Vec<Signer>,
         threshold: u32,
     ) -> Result<(), ContributorError> {
-        multisig_configure(&env, signers.clone(), threshold).map_err(|_| ContributorError::Unauthorized)?;
+        multisig_configure(&env, signers.clone(), threshold)
+            .map_err(|_| ContributorError::Unauthorized)?;
         let signer_count = signers.len();
-        let bootstrapper = signers.get(0).ok_or(ContributorError::InvalidMultisigConfig)?;
+        let bootstrapper = signers
+            .get(0)
+            .ok_or(ContributorError::InvalidMultisigConfig)?;
         events::MultisigConfiguredEvent {
             configured_by: bootstrapper.address.clone(),
             threshold,
@@ -189,11 +192,15 @@ impl ContributorRegistryContract {
         new_signers: Vec<Signer>,
         new_threshold: u32,
     ) -> Result<(), ContributorError> {
-        let expected_payload = vec![&env, ProposalAction::SetMultisigConfig(new_signers.clone(), new_threshold).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::SetMultisigConfig(new_signers.clone(), new_threshold).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| ContributorError::Unauthorized)?;
 
-        multisig_replace_config(&env, new_signers.clone(), new_threshold).map_err(|_| ContributorError::InvalidMultisigConfig)?;
+        multisig_replace_config(&env, new_signers.clone(), new_threshold)
+            .map_err(|_| ContributorError::InvalidMultisigConfig)?;
 
         MultisigConfiguredEvent {
             configured_by: executor,
@@ -319,8 +326,13 @@ impl ContributorRegistryContract {
                 }
             }
             Some(pid) => {
-                let expected_payload = vec![&env, ProposalAction::UpdateProfile(address.clone(), github_handle.clone()).into_val(&env)];
-                consume_approval(&env, &actor, pid, &expected_payload).map_err(|_| ContributorError::Unauthorized)?;
+                let expected_payload = vec![
+                    &env,
+                    ProposalAction::UpdateProfile(address.clone(), github_handle.clone())
+                        .into_val(&env),
+                ];
+                consume_approval(&env, &actor, pid, &expected_payload)
+                    .map_err(|_| ContributorError::Unauthorized)?;
             }
         }
 
@@ -370,13 +382,12 @@ impl ContributorRegistryContract {
         contributor_address: Address,
         delta: u64,
     ) -> Result<(), ContributorError> {
-        let expected_payload = vec![&env, ProposalAction::UpdateReputation(contributor_address.clone(), delta).into_val(&env)];
-        consume_approval(
+        let expected_payload = vec![
             &env,
-            &executor,
-            proposal_id,
-            &expected_payload,
-        ).map_err(|_| ContributorError::Unauthorized)?;
+            ProposalAction::UpdateReputation(contributor_address.clone(), delta).into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
         let mut contributor: ContributorData = env
             .storage()
@@ -413,7 +424,10 @@ impl ContributorRegistryContract {
         contributor_address: Address,
         badge: Badge,
     ) -> Result<(), ContributorError> {
-        let expected_payload = vec![&env, ProposalAction::IssueBadge(contributor_address.clone(), badge.clone()).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::IssueBadge(contributor_address.clone(), badge.clone()).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| ContributorError::Unauthorized)?;
 
@@ -451,7 +465,10 @@ impl ContributorRegistryContract {
         contributor_address: Address,
         badge: Badge,
     ) -> Result<(), ContributorError> {
-        let expected_payload = vec![&env, ProposalAction::RevokeBadge(contributor_address.clone(), badge.clone()).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::RevokeBadge(contributor_address.clone(), badge.clone()).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| ContributorError::Unauthorized)?;
 
@@ -494,7 +511,17 @@ impl ContributorRegistryContract {
         points: u64,
         reason: String,
     ) -> Result<(), ContributorError> {
-        let expected_payload = vec![&env, ProposalAction::ApplyPenalty(contributor_address.clone(), dispute_id, severity, points, reason.clone()).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::ApplyPenalty(
+                contributor_address.clone(),
+                dispute_id,
+                severity,
+                points,
+                reason.clone(),
+            )
+            .into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| ContributorError::Unauthorized)?;
 
@@ -558,13 +585,12 @@ impl ContributorRegistryContract {
         proposal_id: u64,
         contributor_address: Address,
     ) -> Result<(), ContributorError> {
-        let expected_payload = vec![&env, ProposalAction::SuspendAttestation(contributor_address.clone()).into_val(&env)];
-        consume_approval(
+        let expected_payload = vec![
             &env,
-            &executor,
-            proposal_id,
-            &expected_payload,
-        ).map_err(|_| ContributorError::Unauthorized)?;
+            ProposalAction::SuspendAttestation(contributor_address.clone()).into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
         let mut contributor: ContributorData = env
             .storage()
@@ -609,13 +635,12 @@ impl ContributorRegistryContract {
         proposal_id: u64,
         contributor_address: Address,
     ) -> Result<(), ContributorError> {
-        let expected_payload = vec![&env, ProposalAction::RevokeAttestation(contributor_address.clone()).into_val(&env)];
-        consume_approval(
+        let expected_payload = vec![
             &env,
-            &executor,
-            proposal_id,
-            &expected_payload,
-        ).map_err(|_| ContributorError::Unauthorized)?;
+            ProposalAction::RevokeAttestation(contributor_address.clone()).into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
         let mut contributor: ContributorData = env
             .storage()
@@ -659,13 +684,12 @@ impl ContributorRegistryContract {
         proposal_id: u64,
         contributor_address: Address,
     ) -> Result<(), ContributorError> {
-        let expected_payload = vec![&env, ProposalAction::RestoreAttestation(contributor_address.clone()).into_val(&env)];
-        consume_approval(
+        let expected_payload = vec![
             &env,
-            &executor,
-            proposal_id,
-            &expected_payload,
-        ).map_err(|_| ContributorError::Unauthorized)?;
+            ProposalAction::RestoreAttestation(contributor_address.clone()).into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
         let mut contributor: ContributorData = env
             .storage()
@@ -726,7 +750,10 @@ impl ContributorRegistryContract {
         proposal_id: u64,
         new_admin: Address,
     ) -> Result<(), ContributorError> {
-        let expected_payload = vec![&env, ProposalAction::SetAdmin(new_admin.clone()).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::SetAdmin(new_admin.clone()).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| ContributorError::Unauthorized)?;
 
@@ -836,10 +863,7 @@ impl ContributorRegistryContract {
         Self::registration_nonce_of(&env, &address)
     }
 
-    pub fn get_proposal(
-        env: Env,
-        proposal_id: u64,
-    ) -> Result<Proposal, ContributorError> {
+    pub fn get_proposal(env: Env, proposal_id: u64) -> Result<Proposal, ContributorError> {
         get_proposal(&env, proposal_id).map_err(|_| ContributorError::Unauthorized)
     }
 
@@ -879,9 +903,7 @@ impl NotificationReceiverTrait for ContributorRegistryContract {
 }
 
 #[cfg(test)]
-<<<<<<< HEAD
-mod test;
-=======
+
 mod test {
     use super::*;
     use soroban_sdk::{
@@ -2060,4 +2082,3 @@ mod test {
         );
     }
 }
->>>>>>> origin/main
