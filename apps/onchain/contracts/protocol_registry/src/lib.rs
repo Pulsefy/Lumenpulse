@@ -71,7 +71,8 @@ impl ProtocolRegistryContract {
         signers: Vec<Signer>,
         threshold: u32,
     ) -> Result<(), RegistryError> {
-        multisig_configure(&env, signers.clone(), threshold).map_err(|_| RegistryError::Unauthorized)?;
+        multisig_configure(&env, signers.clone(), threshold)
+            .map_err(|_| RegistryError::Unauthorized)?;
         Ok(())
     }
 
@@ -121,7 +122,10 @@ impl ProtocolRegistryContract {
         address: Address,
         version: u32,
     ) -> Result<(), RegistryError> {
-        let expected_payload = vec![&env, ProposalAction::RegisterModule(name.clone(), address.clone(), version).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::RegisterModule(name.clone(), address.clone(), version).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
 
@@ -165,7 +169,11 @@ impl ProtocolRegistryContract {
         new_address: Address,
         new_version: u32,
     ) -> Result<(), RegistryError> {
-        let expected_payload = vec![&env, ProposalAction::UpdateModule(name.clone(), new_address.clone(), new_version).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::UpdateModule(name.clone(), new_address.clone(), new_version)
+                .into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
 
@@ -205,8 +213,16 @@ impl ProtocolRegistryContract {
         Ok(())
     }
 
-    pub fn deactivate_module_via_multisig(env: Env, executor: Address, proposal_id: u64, name: Symbol) -> Result<(), RegistryError> {
-        let expected_payload = vec![&env, ProposalAction::DeactivateModule(name.clone()).into_val(&env)];
+    pub fn deactivate_module_via_multisig(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        name: Symbol,
+    ) -> Result<(), RegistryError> {
+        let expected_payload = vec![
+            &env,
+            ProposalAction::DeactivateModule(name.clone()).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
 
@@ -222,13 +238,25 @@ impl ProtocolRegistryContract {
             .persistent()
             .set(&DataKey::Module(name.clone()), &entry);
 
-        events::ModuleDeactivatedEvent { name: name.clone(), admin: executor }.publish(&env);
+        events::ModuleDeactivatedEvent {
+            name: name.clone(),
+            admin: executor,
+        }
+        .publish(&env);
 
         Ok(())
     }
 
-    pub fn activate_module_via_multisig(env: Env, executor: Address, proposal_id: u64, name: Symbol) -> Result<(), RegistryError> {
-        let expected_payload = vec![&env, ProposalAction::ActivateModule(name.clone()).into_val(&env)];
+    pub fn activate_module_via_multisig(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        name: Symbol,
+    ) -> Result<(), RegistryError> {
+        let expected_payload = vec![
+            &env,
+            ProposalAction::ActivateModule(name.clone()).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
 
@@ -246,7 +274,11 @@ impl ProtocolRegistryContract {
             .persistent()
             .set(&DataKey::Module(name.clone()), &entry);
 
-        events::ModuleActivatedEvent { name: name.clone(), admin: executor }.publish(&env);
+        events::ModuleActivatedEvent {
+            name: name.clone(),
+            admin: executor,
+        }
+        .publish(&env);
 
         Ok(())
     }
@@ -297,7 +329,10 @@ impl ProtocolRegistryContract {
         proposal_id: u64,
         new_admin: Address,
     ) -> Result<(), RegistryError> {
-        let expected_payload = vec![&env, ProposalAction::SetAdmin(new_admin.clone()).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::SetAdmin(new_admin.clone()).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
 
@@ -313,7 +348,11 @@ impl ProtocolRegistryContract {
         Ok(())
     }
 
-    pub fn pause_via_multisig(env: Env, executor: Address, proposal_id: u64) -> Result<(), RegistryError> {
+    pub fn pause_via_multisig(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+    ) -> Result<(), RegistryError> {
         let expected_payload = vec![&env, ProposalAction::Pause.into_val(&env)];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
@@ -321,7 +360,11 @@ impl ProtocolRegistryContract {
         Ok(())
     }
 
-    pub fn unpause_via_multisig(env: Env, executor: Address, proposal_id: u64) -> Result<(), RegistryError> {
+    pub fn unpause_via_multisig(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+    ) -> Result<(), RegistryError> {
         let expected_payload = vec![&env, ProposalAction::Unpause.into_val(&env)];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
@@ -335,7 +378,10 @@ impl ProtocolRegistryContract {
         proposal_id: u64,
         new_wasm_hash: BytesN<32>,
     ) -> Result<(), RegistryError> {
-        let expected_payload = vec![&env, ProposalAction::Upgrade(new_wasm_hash.clone()).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::Upgrade(new_wasm_hash.clone()).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);

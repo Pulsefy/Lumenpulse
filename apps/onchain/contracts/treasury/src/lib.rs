@@ -13,10 +13,10 @@ use multisig_guard::{
     PROPOSAL_TTL_SECS,
 };
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
-use soroban_sdk::{contract, contractimpl, token, Address, Env, IntoVal, String, Vec, vec};
+use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, IntoVal, String, Vec};
 use storage::{DataKey, ProposalAction, StreamData, LEDGER_BUMP, LEDGER_THRESHOLD};
 
-pub use storage::{ProposalAction as TreasuryProposalAction};
+pub use storage::ProposalAction as TreasuryProposalAction;
 
 #[contract]
 pub struct TreasuryContract;
@@ -67,7 +67,8 @@ impl TreasuryContract {
         signers: Vec<Signer>,
         threshold: u32,
     ) -> Result<(), TreasuryError> {
-        multisig_configure(&env, signers.clone(), threshold).map_err(|_| TreasuryError::InvalidMultisigConfig)?;
+        multisig_configure(&env, signers.clone(), threshold)
+            .map_err(|_| TreasuryError::InvalidMultisigConfig)?;
         let signer_count = signers.len();
         let bootstrapper = signers.get(0).ok_or(TreasuryError::InvalidMultisigConfig)?;
         events::publish_multisig_configured(
@@ -306,7 +307,10 @@ impl TreasuryContract {
         proposal_id: u64,
         new_admin: Address,
     ) -> Result<(), TreasuryError> {
-        let expected_payload = vec![&env, ProposalAction::SetAdmin(new_admin.clone()).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::SetAdmin(new_admin.clone()).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| TreasuryError::Unauthorized)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
@@ -322,13 +326,13 @@ impl TreasuryContract {
         new_beneficiary: Address,
     ) -> Result<(), TreasuryError> {
         Self::with_reentrancy_guard(&env, || {
-            let expected_payload = vec![&env, ProposalAction::RotateBeneficiary(old_beneficiary.clone(), new_beneficiary.clone()).into_val(&env)];
-            consume_approval(
+            let expected_payload = vec![
                 &env,
-                &executor,
-                proposal_id,
-                &expected_payload,
-            ).map_err(|_| TreasuryError::Unauthorized)?;
+                ProposalAction::RotateBeneficiary(old_beneficiary.clone(), new_beneficiary.clone())
+                    .into_val(&env),
+            ];
+            consume_approval(&env, &executor, proposal_id, &expected_payload)
+                .map_err(|_| TreasuryError::Unauthorized)?;
 
             if old_beneficiary == new_beneficiary {
                 return Err(TreasuryError::SameBeneficiary);
@@ -382,10 +386,14 @@ impl TreasuryContract {
         signers: Vec<Signer>,
         threshold: u32,
     ) -> Result<(), TreasuryError> {
-        let expected_payload = vec![&env, ProposalAction::SetMultisigConfig(signers.clone(), threshold).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::SetMultisigConfig(signers.clone(), threshold).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| TreasuryError::Unauthorized)?;
-        multisig_replace_config(&env, signers, threshold).map_err(|_| TreasuryError::InvalidMultisigConfig)
+        multisig_replace_config(&env, signers, threshold)
+            .map_err(|_| TreasuryError::InvalidMultisigConfig)
     }
 
     /// View currently unlocked amount

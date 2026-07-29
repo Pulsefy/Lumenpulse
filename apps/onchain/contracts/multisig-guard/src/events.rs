@@ -1,5 +1,5 @@
-use soroban_sdk::{Address, Env, Symbol, Val, Vec};
 use crate::storage::ProposalStatus;
+use soroban_sdk::{Address, Env, Symbol, Val, Vec};
 
 pub fn publish_multisig_configured(
     env: &Env,
@@ -44,12 +44,7 @@ pub fn publish_signature_collected(
     );
 }
 
-pub fn publish_proposal_executed(
-    env: &Env,
-    proposal_id: u64,
-    executor: Address,
-    action: Vec<Val>,
-) {
+pub fn publish_proposal_executed(env: &Env, proposal_id: u64, executor: Address, action: Vec<Val>) {
     #[allow(deprecated)]
     env.events().publish(
         (Symbol::new(env, "proposal_executed"), proposal_id),

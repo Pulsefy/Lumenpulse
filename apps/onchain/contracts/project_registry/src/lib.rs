@@ -14,7 +14,9 @@ use multisig_guard::{
 };
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, IntoVal, Symbol, Vec};
-use storage::{DataKey, ProjectEntry, ProposalAction, RegistryConfig, VerificationStatus, WeightMode};
+use storage::{
+    DataKey, ProjectEntry, ProposalAction, RegistryConfig, VerificationStatus, WeightMode,
+};
 
 pub use storage::ProposalAction as ProjectProposalAction;
 
@@ -138,7 +140,8 @@ impl ProjectRegistryContract {
         signers: Vec<Signer>,
         threshold: u32,
     ) -> Result<(), RegistryError> {
-        multisig_configure(&env, signers.clone(), threshold).map_err(|_| RegistryError::Unauthorized)?;
+        multisig_configure(&env, signers.clone(), threshold)
+            .map_err(|_| RegistryError::Unauthorized)?;
         Ok(())
     }
 
@@ -371,7 +374,10 @@ impl ProjectRegistryContract {
         proposal_id: u64,
         project_id: u64,
     ) -> Result<(), RegistryError> {
-        let expected_payload = vec![&env, ProposalAction::ForceVerifyProject(project_id).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::ForceVerifyProject(project_id).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
 
@@ -404,7 +410,10 @@ impl ProjectRegistryContract {
         proposal_id: u64,
         project_id: u64,
     ) -> Result<(), RegistryError> {
-        let expected_payload = vec![&env, ProposalAction::ForceRejectProject(project_id).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::ForceRejectProject(project_id).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
 
@@ -430,7 +439,6 @@ impl ProjectRegistryContract {
 
         Ok(())
     }
-
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
@@ -484,7 +492,10 @@ impl ProjectRegistryContract {
         proposal_id: u64,
         config: RegistryConfig,
     ) -> Result<(), RegistryError> {
-        let expected_payload = vec![&env, ProposalAction::SetConfig(config.clone()).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::SetConfig(config.clone()).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
 
@@ -495,7 +506,11 @@ impl ProjectRegistryContract {
         Ok(())
     }
 
-    pub fn pause_via_multisig(env: Env, executor: Address, proposal_id: u64) -> Result<(), RegistryError> {
+    pub fn pause_via_multisig(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+    ) -> Result<(), RegistryError> {
         let expected_payload = vec![&env, ProposalAction::Pause.into_val(&env)];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
@@ -503,7 +518,11 @@ impl ProjectRegistryContract {
         Ok(())
     }
 
-    pub fn unpause_via_multisig(env: Env, executor: Address, proposal_id: u64) -> Result<(), RegistryError> {
+    pub fn unpause_via_multisig(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+    ) -> Result<(), RegistryError> {
         let expected_payload = vec![&env, ProposalAction::Unpause.into_val(&env)];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
@@ -517,7 +536,10 @@ impl ProjectRegistryContract {
         proposal_id: u64,
         new_admin: Address,
     ) -> Result<(), RegistryError> {
-        let expected_payload = vec![&env, ProposalAction::SetAdmin(new_admin.clone()).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::SetAdmin(new_admin.clone()).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
@@ -530,7 +552,10 @@ impl ProjectRegistryContract {
         proposal_id: u64,
         new_wasm_hash: BytesN<32>,
     ) -> Result<(), RegistryError> {
-        let expected_payload = vec![&env, ProposalAction::Upgrade(new_wasm_hash.clone()).into_val(&env)];
+        let expected_payload = vec![
+            &env,
+            ProposalAction::Upgrade(new_wasm_hash.clone()).into_val(&env),
+        ];
         consume_approval(&env, &executor, proposal_id, &expected_payload)
             .map_err(|_| RegistryError::Unauthorized)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);

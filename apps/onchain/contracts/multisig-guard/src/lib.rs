@@ -19,10 +19,7 @@ pub fn get_config(env: &Env) -> Result<MultisigConfig, MultisigError> {
         .ok_or(MultisigError::NotInitialized)
 }
 
-pub fn find_signer(
-    config: &MultisigConfig,
-    addr: &Address,
-) -> Result<Signer, MultisigError> {
+pub fn find_signer(config: &MultisigConfig, addr: &Address) -> Result<Signer, MultisigError> {
     for s in config.signers.iter() {
         if s.address == *addr {
             return Ok(s);
@@ -75,11 +72,7 @@ fn next_id(env: &Env) -> u64 {
     id
 }
 
-pub fn configure(
-    env: &Env,
-    signers: Vec<Signer>,
-    threshold: u32,
-) -> Result<(), MultisigError> {
+pub fn configure(env: &Env, signers: Vec<Signer>, threshold: u32) -> Result<(), MultisigError> {
     validate_config(&signers, threshold)?;
 
     let bootstrapper = signers.get(0).ok_or(MultisigError::InvalidConfig)?;
@@ -95,10 +88,9 @@ pub fn configure(
     env.storage()
         .instance()
         .set(&MultisigDataKey::NextProposalId, &0u64);
-    env.storage().instance().extend_ttl(
-        storage::LEDGER_THRESHOLD,
-        storage::LEDGER_BUMP,
-    );
+    env.storage()
+        .instance()
+        .extend_ttl(storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
     Ok(())
 }
 
@@ -118,11 +110,7 @@ pub fn replace_config(
     Ok(())
 }
 
-pub fn propose(
-    env: &Env,
-    proposer: Address,
-    action: Vec<Val>,
-) -> Result<u64, MultisigError> {
+pub fn propose(env: &Env, proposer: Address, action: Vec<Val>) -> Result<u64, MultisigError> {
     proposer.require_auth();
 
     let config = get_config(env)?;
@@ -242,11 +230,7 @@ pub fn consume_approval(
     Ok(())
 }
 
-pub fn cancel(
-    env: &Env,
-    signer_addr: Address,
-    proposal_id: u64,
-) -> Result<(), MultisigError> {
+pub fn cancel(env: &Env, signer_addr: Address, proposal_id: u64) -> Result<(), MultisigError> {
     signer_addr.require_auth();
 
     let config = get_config(env)?;
