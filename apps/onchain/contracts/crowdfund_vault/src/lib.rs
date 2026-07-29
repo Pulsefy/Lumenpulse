@@ -23,6 +23,9 @@ use storage::{
 const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
 const DEFAULT_REFUND_WINDOW_SECONDS: u64 = 14 * 24 * 60 * 60;
+/// Maximum number of milestones that can be processed in a single batch.
+/// Prevents oversized batch payloads that could exhaust host resources.
+const MAX_MILESTONE_BATCH_SIZE: u32 = 50;
 
 #[contract]
 pub struct CrowdfundVaultContract;
@@ -1445,6 +1448,178 @@ impl CrowdfundVaultContract {
         .publish(&env);
 
         Ok(())
+    }
+
+    /// Batch-approve multiple milestones for a project in a single admin call.
+    ///
+    /// Accepts a bounded batch payload (max `MAX_MILESTONE_BATCH_SIZE` entries).
+    /// Per-item outcomes are deterministic: each milestone is either
+    /// approved (and its dispute flag cleared) or skipped if already approved.
+    /// Duplicate milestone IDs are rejected to prevent inconsistent batches.
+    /// Emits a single `MilestonesBulkApprovedEvent` that identifies all
+    /// processed milestone IDs.
+    pub fn batch_approve_milestones(
+        env: Env,
+        admin: Address,
+        project_id: u64,
+        milestone_ids: Vec<u32>,
+    ) -> Result<u32, CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+
+        // Guard against oversized batches
+        if milestone_ids.len() > MAX_MILESTONE_BATCH_SIZE {
+            return Err(CrowdfundError::BatchTooLarge);
+        }
+        if milestone_ids.is_empty() {
+            return Err(CrowdfundError::InvalidAmount);
+        }
+
+        // Check pause state
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            return Err(CrowdfundError::ContractPaused);
+        }
+
+        let mut project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+        Self::fail_if_project_expired(&env, project_id, &mut project)?;
+
+        // Guard against duplicate milestone IDs in the batch
+        let mut seen: Vec<u32> = Vec::new(&env);
+        for milestone_id in milestone_ids.iter() {
+            if seen.contains(&milestone_id) {
+                return Err(CrowdfundError::DuplicateMilestoneId);
+            }
+            seen.push_back(milestone_id);
+        }
+
+        let mut processed_count: u32 = 0;
+        let mut processed_ids: Vec<u32> = Vec::new(&env);
+
+        for milestone_id in milestone_ids.iter() {
+            let id = milestone_id;
+
+            // Deterministic: each milestone is approved regardless of prior state
+            env.storage()
+                .persistent()
+                .set(
+                    &DataKey::MilestoneApproved(project_id, id),
+                    &true,
+                );
+            env.storage()
+                .persistent()
+                .set(
+                    &DataKey::MilestoneDisputed(project_id, id),
+                    &false,
+                );
+
+            processed_ids.push_back(id);
+            processed_count += 1;
+        }
+
+        // Emit a single bulk approval event
+        events::MilestonesBulkApprovedEvent {
+            admin,
+            project_id,
+            milestone_ids: processed_ids,
+            processed_count,
+        }
+        .publish(&env);
+
+        Ok(processed_count)
+    }
+
+    /// Batch-reject (revoke approval for) multiple milestones for a project.
+    ///
+    /// Accepts a bounded batch payload (max `MAX_MILESTONE_BATCH_SIZE` entries).
+    /// Per-item outcomes are deterministic: each milestone has its approval
+    /// flag set to `false` and its dispute flag cleared.
+    /// Duplicate milestone IDs are rejected to prevent inconsistent batches.
+    /// Emits a single `MilestonesBulkRejectedEvent` that identifies all
+    /// processed milestone IDs.
+    pub fn batch_reject_milestones(
+        env: Env,
+        admin: Address,
+        project_id: u64,
+        milestone_ids: Vec<u32>,
+    ) -> Result<u32, CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+
+        // Guard against oversized batches
+        if milestone_ids.len() > MAX_MILESTONE_BATCH_SIZE {
+            return Err(CrowdfundError::BatchTooLarge);
+        }
+        if milestone_ids.is_empty() {
+            return Err(CrowdfundError::InvalidAmount);
+        }
+
+        // Check pause state
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            return Err(CrowdfundError::ContractPaused);
+        }
+
+        let mut project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+        Self::fail_if_project_expired(&env, project_id, &mut project)?;
+
+        // Guard against duplicate milestone IDs in the batch
+        let mut seen: Vec<u32> = Vec::new(&env);
+        for milestone_id in milestone_ids.iter() {
+            if seen.contains(&milestone_id) {
+                return Err(CrowdfundError::DuplicateMilestoneId);
+            }
+            seen.push_back(milestone_id);
+        }
+
+        let mut processed_count: u32 = 0;
+        let mut processed_ids: Vec<u32> = Vec::new(&env);
+
+        for milestone_id in milestone_ids.iter() {
+            let id = milestone_id;
+
+            // Deterministic: each milestone is rejected (approval set to false)
+            env.storage()
+                .persistent()
+                .set(
+                    &DataKey::MilestoneApproved(project_id, id),
+                    &false,
+                );
+            env.storage()
+                .persistent()
+                .set(
+                    &DataKey::MilestoneDisputed(project_id, id),
+                    &false,
+                );
+
+            processed_ids.push_back(id);
+            processed_count += 1;
+        }
+
+        // Emit a single bulk rejection event
+        events::MilestonesBulkRejectedEvent {
+            admin,
+            project_id,
+            milestone_ids: processed_ids,
+            processed_count,
+        }
+        .publish(&env);
+
+        Ok(processed_count)
     }
 
     /// Register a new contributor
