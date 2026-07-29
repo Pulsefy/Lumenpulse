@@ -12,6 +12,19 @@ pub struct StreamCreatedEvent {
     pub duration: u64,
 }
 
+/// Emitted by `allocate_budget_with_cliff`. Carries the cliff timestamp so
+/// indexers and admin tooling can render cliff-aware schedules.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CliffStreamCreatedEvent {
+    #[topic]
+    pub beneficiary: Address,
+    pub amount: i128,
+    pub start_time: u64,
+    pub duration: u64,
+    pub cliff_time: u64,
+}
+
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TokensClaimedEvent {
@@ -96,6 +109,24 @@ pub fn publish_stream_created(
         amount,
         start_time,
         duration,
+    }
+    .publish(env);
+}
+
+pub fn publish_cliff_stream_created(
+    env: &Env,
+    beneficiary: Address,
+    amount: i128,
+    start_time: u64,
+    duration: u64,
+    cliff_time: u64,
+) {
+    CliffStreamCreatedEvent {
+        beneficiary,
+        amount,
+        start_time,
+        duration,
+        cliff_time,
     }
     .publish(env);
 }

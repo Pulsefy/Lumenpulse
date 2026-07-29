@@ -173,3 +173,136 @@ export class StellarApiService {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Portfolio API — interfaces mirroring backend DTOs
+// ---------------------------------------------------------------------------
+
+export interface AssetBalanceWithCurrency {
+  assetCode: string;
+  assetIssuer: string | null;
+  amount: string;
+  /** Value in the requested currency */
+  value: number;
+  valueUsd: number;
+}
+
+export interface PortfolioSummaryResponse {
+  /** Total portfolio value in the requested currency */
+  totalValue: string;
+  currency: string;
+  totalValueUsd: string;
+  assets: AssetBalanceWithCurrency[];
+  /** ISO timestamp of last recorded snapshot, or null for first-time users */
+  lastUpdated: string | null;
+  hasLinkedAccount: boolean;
+  exchangeRate: number;
+}
+
+export interface TimeWindowPerformance {
+  window: '24h' | '7d' | '30d';
+  hasData: boolean;
+  absolutePnl: number | null;
+  percentageChange: number | null;
+  currentValueUsd: number;
+  baselineValueUsd: number | null;
+  baselineDate: string | null;
+}
+
+export interface PortfolioPerformanceResponse {
+  userId: string;
+  currentValueUsd: number;
+  calculatedAt: string;
+  windows: TimeWindowPerformance[];
+}
+
+export interface AllocationAsset {
+  assetCode: string;
+  assetIssuer: string | null;
+  amount: string;
+  valueUsd: number;
+  percentage: number;
+}
+
+export class PortfolioApiService {
+  private static readonly BASE_URL =
+    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+  /** Read the JWT from the auth-token cookie (same pattern as StellarApiService). */
+  private static getAuthHeaders(): Record<string, string> {
+    if (typeof document === 'undefined') return { 'Content-Type': 'application/json' };
+    const match = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith('auth-token='));
+    const token = match?.split('=')[1];
+    return {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }
+
+  /**
+   * Returns true when an auth token cookie is present.
+   * Used by the hook to skip fetching for unauthenticated visitors.
+   */
+  static isAuthenticated(): boolean {
+    if (typeof document === 'undefined') return false;
+    return document.cookie.split('; ').some((row) => row.startsWith('auth-token='));
+  }
+
+  /**
+   * GET /portfolio/summary
+   * Latest portfolio snapshot with total value and per-asset balances.
+   */
+  static async getSummary(
+    currency = 'USD',
+    signal?: AbortSignal,
+  ): Promise<PortfolioSummaryResponse> {
+    const response = await fetch(
+      `${this.BASE_URL}/portfolio/summary?currency=${encodeURIComponent(currency)}`,
+      { headers: this.getAuthHeaders(), signal },
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as any).message || `Portfolio summary fetch failed (${response.status})`);
+    }
+    return response.json();
+  }
+
+  /**
+   * GET /portfolio/performance
+   * 24h / 7d / 30d performance windows with absolute and percentage PnL.
+   */
+  static async getPerformance(
+    signal?: AbortSignal,
+  ): Promise<PortfolioPerformanceResponse> {
+    const response = await fetch(`${this.BASE_URL}/portfolio/performance`, {
+      headers: this.getAuthHeaders(),
+      signal,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as any).message || `Portfolio performance fetch failed (${response.status})`);
+    }
+    return response.json();
+  }
+
+  /**
+   * GET /portfolio/allocation
+   * Asset allocation breakdown with percentage per asset.
+   */
+  static async getAllocation(
+    signal?: AbortSignal,
+  ): Promise<AllocationAsset[]> {
+    const response = await fetch(`${this.BASE_URL}/portfolio/allocation`, {
+      headers: this.getAuthHeaders(),
+      signal,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as any).message || `Portfolio allocation fetch failed (${response.status})`);
+    }
+    return response.json();
+  }
+}
+
