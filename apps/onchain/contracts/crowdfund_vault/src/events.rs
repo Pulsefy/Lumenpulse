@@ -205,6 +205,36 @@ pub struct MilestoneDisputeResolvedEvent {
     pub upheld_completion: bool,
 }
 
+/// Emitted when an admin bulk-approves multiple milestones in a single batch.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestonesBulkApprovedEvent {
+    #[topic]
+    pub admin: Address,
+    /// The project whose milestones were processed.
+    #[topic]
+    pub project_id: u64,
+    /// The list of milestone IDs that were approved.
+    pub milestone_ids: soroban_sdk::Vec<u32>,
+    /// How many milestones were successfully approved in this batch.
+    pub processed_count: u32,
+}
+
+/// Emitted when an admin bulk-rejects (revokes approval for) multiple milestones.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestonesBulkRejectedEvent {
+    #[topic]
+    pub admin: Address,
+    /// The project whose milestones were processed.
+    #[topic]
+    pub project_id: u64,
+    /// The list of milestone IDs that were rejected.
+    pub milestone_ids: soroban_sdk::Vec<u32>,
+    /// How many milestones were successfully rejected in this batch.
+    pub processed_count: u32,
+}
+
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StorageMigratedEvent {

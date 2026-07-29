@@ -36,4 +36,6 @@ pub enum CrowdfundError {
     RefundWindowNotOpen = 30,
     Reentrancy = 31,
     AlreadyExecuted = 32,
+    BatchTooLarge = 33,
+    DuplicateMilestoneId = 34,
 }

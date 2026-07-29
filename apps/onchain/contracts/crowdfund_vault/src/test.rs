@@ -2849,3 +2849,402 @@ fn test_get_project_storage_summary_total_projects_reflects_next_project_id() {
     assert_eq!(summary_2.total_projects, 3);
     assert_eq!(summary_3.total_projects, 3);
 }
+
+// ---------------------------------------------------------------------------
+// Batch milestone approval / rejection tests (Issue #869)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_batch_approve_milestones() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("BatchApprove"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Batch approve milestones 0, 1, 2
+    let milestone_ids = vec![&env, 0u32, 1u32, 2u32];
+    let processed = client.batch_approve_milestones(&admin, &project_id, &milestone_ids);
+    assert_eq!(processed, 3);
+
+    // Verify all milestones are approved
+    assert!(client.is_milestone_approved(&project_id, &0));
+    assert!(client.is_milestone_approved(&project_id, &1));
+    assert!(client.is_milestone_approved(&project_id, &2));
+
+    // Verify no milestone is disputed
+    assert!(!client.is_milestone_disputed(&project_id, &0));
+    assert!(!client.is_milestone_disputed(&project_id, &1));
+    assert!(!client.is_milestone_disputed(&project_id, &2));
+}
+
+#[test]
+fn test_batch_reject_milestones() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("BatchReject"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // First approve then reject
+    let milestone_ids = vec![&env, 0u32, 1u32];
+    client.batch_approve_milestones(&admin, &project_id, &milestone_ids);
+    assert!(client.is_milestone_approved(&project_id, &0));
+
+    // Now reject
+    let processed = client.batch_reject_milestones(&admin, &project_id, &milestone_ids);
+    assert_eq!(processed, 2);
+
+    // Verify milestones are no longer approved
+    assert!(!client.is_milestone_approved(&project_id, &0));
+    assert!(!client.is_milestone_approved(&project_id, &1));
+}
+
+#[test]
+fn test_batch_approve_rejects_oversized_payload() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Oversized"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Create a batch larger than MAX_MILESTONE_BATCH_SIZE (50)
+    let mut large_batch = Vec::new(&env);
+    for i in 0..51u32 {
+        large_batch.push_back(i);
+    }
+
+    let result =
+        client.try_batch_approve_milestones(&admin, &project_id, &large_batch);
+    assert_eq!(result, Err(Ok(CrowdfundError::BatchTooLarge)));
+}
+
+#[test]
+fn test_batch_reject_rejects_oversized_payload() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Oversized"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let mut large_batch = Vec::new(&env);
+    for i in 0..51u32 {
+        large_batch.push_back(i);
+    }
+
+    let result =
+        client.try_batch_reject_milestones(&admin, &project_id, &large_batch);
+    assert_eq!(result, Err(Ok(CrowdfundError::BatchTooLarge)));
+}
+
+#[test]
+fn test_batch_approve_empty_batch_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("EmptyBatch"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let empty: Vec<u32> = Vec::new(&env);
+    let result = client.try_batch_approve_milestones(&admin, &project_id, &empty);
+    assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
+}
+
+#[test]
+fn test_batch_reject_empty_batch_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("EmptyBatch"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let empty: Vec<u32> = Vec::new(&env);
+    let result = client.try_batch_reject_milestones(&admin, &project_id, &empty);
+    assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
+}
+
+#[test]
+fn test_batch_approve_non_admin_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("NonAdmin"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let milestone_ids = vec![&env, 0u32];
+    let non_admin = Address::generate(&env);
+    let result = client.try_batch_approve_milestones(&non_admin, &project_id, &milestone_ids);
+    assert_eq!(result, Err(Ok(CrowdfundError::Unauthorized)));
+}
+
+#[test]
+fn test_batch_reject_non_admin_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("NonAdmin"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    let milestone_ids = vec![&env, 0u32];
+    let non_admin = Address::generate(&env);
+    let result = client.try_batch_reject_milestones(&non_admin, &project_id, &milestone_ids);
+    assert_eq!(result, Err(Ok(CrowdfundError::Unauthorized)));
+}
+
+#[test]
+fn test_batch_approve_project_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, _) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let milestone_ids = vec![&env, 0u32];
+    let result = client.try_batch_approve_milestones(&admin, &999, &milestone_ids);
+    assert_eq!(result, Err(Ok(CrowdfundError::ProjectNotFound)));
+}
+
+#[test]
+fn test_batch_reject_project_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _, _, _) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let milestone_ids = vec![&env, 0u32];
+    let result = client.try_batch_reject_milestones(&admin, &999, &milestone_ids);
+    assert_eq!(result, Err(Ok(CrowdfundError::ProjectNotFound)));
+}
+
+#[test]
+fn test_batch_approve_deterministic_per_item() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Deterministic"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Pre-approve milestone 0 individually
+    client.approve_milestone(&admin, &project_id, &0);
+
+    // Batch approve 0, 1, 2 - milestone 0 should remain approved (idempotent)
+    let milestone_ids = vec![&env, 0u32, 1u32, 2u32];
+    let processed = client.batch_approve_milestones(&admin, &project_id, &milestone_ids);
+    assert_eq!(processed, 3);
+
+    // All should be approved
+    assert!(client.is_milestone_approved(&project_id, &0));
+    assert!(client.is_milestone_approved(&project_id, &1));
+    assert!(client.is_milestone_approved(&project_id, &2));
+}
+
+#[test]
+fn test_batch_approve_max_batch_size() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("MaxBatch"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Create a batch at exactly MAX_MILESTONE_BATCH_SIZE (50)
+    let mut batch = Vec::new(&env);
+    for i in 0..50u32 {
+        batch.push_back(i);
+    }
+
+    let processed = client.batch_approve_milestones(&admin, &project_id, &batch);
+    assert_eq!(processed, 50);
+
+    // Verify a few milestones
+    assert!(client.is_milestone_approved(&project_id, &0));
+    assert!(client.is_milestone_approved(&project_id, &25));
+    assert!(client.is_milestone_approved(&project_id, &49));
+}
+
+#[test]
+fn test_batch_approve_duplicate_ids_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("DupTest"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Batch with duplicate milestone IDs
+    let duplicate_ids = vec![&env, 0u32, 1u32, 0u32];
+    let result =
+        client.try_batch_approve_milestones(&admin, &project_id, &duplicate_ids);
+    assert_eq!(result, Err(Ok(CrowdfundError::DuplicateMilestoneId)));
+}
+
+#[test]
+fn test_batch_reject_duplicate_ids_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("DupTest"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Batch with duplicate milestone IDs
+    let duplicate_ids = vec![&env, 0u32, 1u32, 0u32];
+    let result =
+        client.try_batch_reject_milestones(&admin, &project_id, &duplicate_ids);
+    assert_eq!(result, Err(Ok(CrowdfundError::DuplicateMilestoneId)));
+}
+
+#[test]
+fn test_batch_reject_paused_contract() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("PausedReject"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Pause the contract
+    let _ = client.pause(&admin);
+
+    let milestone_ids = vec![&env, 0u32];
+    let result =
+        client.try_batch_reject_milestones(&admin, &project_id, &milestone_ids);
+    assert_eq!(result, Err(Ok(CrowdfundError::ContractPaused)));
+}
+
+#[test]
+fn test_batch_approve_and_reject_are_independent() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, _, token_client) = setup_test(&env);
+
+    client.initialize(&admin);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("Independent"),
+        &1_000_000,
+        &token_client.address,
+    );
+
+    // Approve milestones 0 and 1
+    let approve_ids = vec![&env, 0u32, 1u32];
+    client.batch_approve_milestones(&admin, &project_id, &approve_ids);
+
+    // Reject milestones 2 and 3 (they were never approved, but rejection is idempotent)
+    let reject_ids = vec![&env, 2u32, 3u32];
+    let processed = client.batch_reject_milestones(&admin, &project_id, &reject_ids);
+    assert_eq!(processed, 2);
+
+    // Milestones 0 and 1 should still be approved
+    assert!(client.is_milestone_approved(&project_id, &0));
+    assert!(client.is_milestone_approved(&project_id, &1));
+
+    // Milestones 2 and 3 should NOT be approved
+    assert!(!client.is_milestone_approved(&project_id, &2));
+    assert!(!client.is_milestone_approved(&project_id, &3));
+}
