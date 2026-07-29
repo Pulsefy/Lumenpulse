@@ -13,13 +13,10 @@ use multisig_guard::{
     PROPOSAL_TTL_SECS,
 };
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
-<<<<<<< HEAD
 use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, IntoVal, String, Vec};
-use storage::{DataKey, ProposalAction, StreamData, LEDGER_BUMP, LEDGER_THRESHOLD};
-=======
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
-use storage::{DataKey, ScheduleEntry, StreamData, StreamDataV2, LEDGER_BUMP, LEDGER_THRESHOLD};
->>>>>>> a31d6fb9a06613eadd4e6221d510839cb0bdaadc
+use storage::{
+    DataKey, ProposalAction, ScheduleEntry, StreamData, StreamDataV2, LEDGER_BUMP, LEDGER_THRESHOLD,
+};
 
 pub use storage::ProposalAction as TreasuryProposalAction;
 
