@@ -439,16 +439,60 @@ export class AccessControlService implements IAccessControlService {
   }
 
   /**
-   * Verify API key (placeholder for future implementation)
+   * Verify API key against configured admin API keys.
+   * Checks the provided key against CONTRACT_ADMIN_API_KEY env var.
    */
   private verifyApiKey(
-    _verificationData: Record<string, any>,
+    verificationData: Record<string, any>,
   ): Promise<TrustedCallerResult> {
-    // Placeholder - implement based on your API key strategy
+    const providedKey = verificationData.apiKey as string | undefined;
+
+    if (!providedKey) {
+      return Promise.resolve({
+        trusted: false,
+        error: 'API key is required',
+      });
+    }
+
+    const configuredKey =
+      this.configService.get<string>('CONTRACT_ADMIN_API_KEY');
+
+    if (!configuredKey) {
+      this.logger.warn(
+        'CONTRACT_ADMIN_API_KEY not configured. API key verification cannot proceed.',
+      );
+      return Promise.resolve({
+        trusted: false,
+        error: 'API key verification not configured',
+      });
+    }
+
+    // Constant-time comparison to prevent timing attacks
+    const trusted = this.constantTimeCompare(providedKey, configuredKey);
+
     return Promise.resolve({
-      trusted: false,
-      error: 'API key verification not implemented',
+      trusted,
+      callerId: trusted ? 'api-key:contract-admin' : undefined,
+      error: trusted ? undefined : 'Invalid API key',
+      metadata: {
+        verificationMethod: 'api_key',
+      },
     });
+  }
+
+  /**
+   * Constant-time string comparison to prevent timing attacks
+   */
+  private constantTimeCompare(a: string, b: string): boolean {
+    if (a.length !== b.length) {
+      return false;
+    }
+
+    let result = 0;
+    for (let i = 0; i < a.length; i++) {
+      result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return result === 0;
   }
 
   /**

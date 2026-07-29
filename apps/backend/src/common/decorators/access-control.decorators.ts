@@ -182,3 +182,18 @@ export const RequireIpAllowlist = (required = true) =>
     verificationType: 'ip_allowlist',
     required,
   });
+
+/**
+ * Require API key verification for trusted caller access.
+ * Checks the x-api-key header or Bearer token against configured keys.
+ *
+ * @example
+ * @RequireApiKey()
+ * @Post('admin/operation')
+ * performAdminOperation() { ... }
+ */
+export const RequireApiKey = (required = true) =>
+  RequireTrustedCaller({
+    verificationType: 'api_key',
+    required,
+  });

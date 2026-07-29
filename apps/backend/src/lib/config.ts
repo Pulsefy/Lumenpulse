@@ -448,6 +448,12 @@ const envSchema = z
     WEBHOOK_SECRET: z.string().trim().optional(),
     WEBHOOK_PROVIDERS: z.string().trim().optional(),
 
+    CONTRACT_ADMIN_API_KEY: z.string().trim().optional(),
+    CONTRACT_ADMIN_TRUSTED_CALLER_ENABLED: z.preprocess(
+      parseBoolean,
+      z.boolean().default(false),
+    ),
+
     SOROBAN_INGEST_SECRET: z.string().trim().optional(),
     SOROBAN_TIMESTAMP_TOLERANCE_MS: z.coerce
       .number()
@@ -860,6 +866,14 @@ const optionalSummary = [
     parsedEnv.WEBHOOK_PROVIDERS ? '[REDACTED]' : '(not set)',
   ],
   [
+    'CONTRACT_ADMIN_API_KEY',
+    parsedEnv.CONTRACT_ADMIN_API_KEY ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'CONTRACT_ADMIN_TRUSTED_CALLER_ENABLED',
+    String(parsedEnv.CONTRACT_ADMIN_TRUSTED_CALLER_ENABLED),
+  ],
+  [
     'SOROBAN_INGEST_SECRET',
     parsedEnv.SOROBAN_INGEST_SECRET ? '[REDACTED]' : '(not set)',
   ],
@@ -1037,6 +1051,10 @@ export const config = Object.freeze({
     webhookSecret: parsedEnv.WEBHOOK_SECRET,
     webhookProviders: parsedEnv.WEBHOOK_PROVIDERS,
     telegramBotToken: parsedEnv.TELEGRAM_BOT_TOKEN,
+    contractAdmin: parsedEnv.CONTRACT_ADMIN_API_KEY,
+  }),
+  contractAdmin: Object.freeze({
+    trustedCallerEnabled: parsedEnv.CONTRACT_ADMIN_TRUSTED_CALLER_ENABLED,
   }),
   soroban: Object.freeze({
     ingestSecret: parsedEnv.SOROBAN_INGEST_SECRET,
