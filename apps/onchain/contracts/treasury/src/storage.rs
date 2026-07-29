@@ -14,13 +14,19 @@ pub const MAX_SIGNERS: u32 = 10;
 pub enum DataKey {
     Admin,
     Token,
-    Stream(Address), // beneficiary -> StreamData
+    Stream(Address), // beneficiary -> StreamData (legacy V1)
     /// Multisig config (signers + threshold).
     MultisigConfig,
     /// A single in-flight proposal, keyed by id.
     Proposal(u64),
     /// Monotonic counter for proposal ids.
     NextProposalId,
+    /// V2 stream with optional cliff - beneficiary -> StreamDataV2.
+    ///
+    /// Appended at the end of the enum so the XDR discriminants for the
+    /// pre-existing variants stay stable across upgrades (Soroban assigns
+    /// discriminants in declaration order).
+    StreamV2(Address),
 }
 
 #[contracttype]
@@ -31,6 +37,25 @@ pub struct StreamData {
     pub claimed_amount: i128,
     pub start_time: u64,
     pub duration: u64,
+}
+
+/// V2 streaming record with an optional cliff.
+///
+/// `cliff_time` semantics:
+/// - `0`          → no cliff (legacy equivalent; linear from `start_time`).
+/// - `> 0`        → lockout until `cliff_time`. Linear vesting still begins
+///                  at `start_time`; nothing is claimable until `cliff_time`,
+///                  at which point the full linearly-vested amount becomes
+///                  available for one claim and continues normally thereafter.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StreamDataV2 {
+    pub beneficiary: Address,
+    pub total_amount: i128,
+    pub claimed_amount: i128,
+    pub start_time: u64,
+    pub duration: u64,
+    pub cliff_time: u64,
 }
 
 /// A registered signer with a voting weight.
@@ -58,6 +83,16 @@ pub enum ProposalAction {
     SetAdmin,
     /// Rotate a vesting stream's beneficiary.
     RotateBeneficiary,
+}
+
+/// A single installment (timestamp, cumulative_projected_unlocked) entry
+/// returned by `preview_schedule`. Useful for building off-chain UI charts
+/// and admin dashboards without making speculative claims.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScheduleEntry {
+    pub at: u64,
+    pub cumulative_unlocked: i128,
 }
 
 #[contracttype]
