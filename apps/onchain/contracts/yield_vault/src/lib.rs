@@ -8,6 +8,7 @@ use errors::YieldVaultError;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractclient, contractimpl, Address, BytesN, Env, Symbol};
 use storage::{DataKey, YieldProvider};
+use version::ContractVersion;
 
 #[contractclient(name = "YieldProviderClient")]
 pub trait YieldProviderTrait {
@@ -395,6 +396,17 @@ impl YieldVaultContract {
 
         Ok(best_id)
     }
+
+    /// Return the contract's version metadata.
+    ///
+    /// No authentication required. Returns a [`ContractVersion`] struct
+    /// describing the semantic version and minimum compatible interface version
+    /// of this deployment. Clients and backend services can call this to
+    /// confirm the deployed build matches their expectations without relying
+    /// solely on off-chain manifests.
+    pub fn version(env: Env) -> ContractVersion {
+        ContractVersion::new(&env, "yield_vault", 1, 0, 0, 1)
+    }
 }
 
 #[cfg(test)]
@@ -495,5 +507,26 @@ mod test {
 
         let result = vault_client.try_withdraw(&withdraw_amount, &user, &request_id(&env));
         assert_eq!(result, Err(Ok(YieldVaultError::AlreadyExecuted)));
+    }
+
+    // ── Version introspection ────────────────────────────────────────────────
+
+    /// `version()` must return the documented 1.0.0 descriptor and must satisfy
+    /// the invariant `min_interface <= major`.
+    #[test]
+    fn test_version_returns_expected() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let vault_id = env.register(YieldVaultContract, ());
+        let vault_client = YieldVaultContractClient::new(&env, &vault_id);
+
+        // version() does not require the contract to be initialised.
+        let v = vault_client.version();
+        assert_eq!(v.major, 1);
+        assert_eq!(v.minor, 0);
+        assert_eq!(v.patch, 0);
+        // The minimum compatible interface must never exceed the current major.
+        assert!(v.min_interface <= v.major);
     }
 }

@@ -185,3 +185,26 @@ fn test_ttl_extended_after_read_write() {
     env.ledger().set_sequence_number(200_002);
     assert_eq!(client.balance(&user), 500);
 }
+
+// ---------------------------------------------------------------------------
+// Version introspection tests
+// ---------------------------------------------------------------------------
+
+/// `version()` must return the documented 1.0.0 descriptor and must satisfy
+/// the invariant `min_interface <= major`.
+#[test]
+fn test_version_returns_expected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(LumenToken, ());
+    let client = LumenTokenClient::new(&env, &contract_id);
+
+    // version() does not require the contract to be initialised.
+    let v = client.version();
+    assert_eq!(v.major, 1);
+    assert_eq!(v.minor, 0);
+    assert_eq!(v.patch, 0);
+    // The minimum compatible interface must never exceed the current major.
+    assert!(v.min_interface <= v.major);
+}

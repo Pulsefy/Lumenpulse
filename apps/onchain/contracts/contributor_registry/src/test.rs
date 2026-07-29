@@ -471,3 +471,24 @@ fn test_old_admin_cannot_upgrade_after_rotation() {
         Err(Ok(crate::errors::ContributorError::Unauthorized))
     );
 }
+
+// ── Version introspection ─────────────────────────────────────────────────────
+
+/// `version()` must return the documented 1.0.0 descriptor and must satisfy
+/// the invariant `min_interface <= major`.
+#[test]
+fn test_version_returns_expected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let id = env.register(ContributorRegistryContract, ());
+    let client = ContributorRegistryContractClient::new(&env, &id);
+
+    // version() does not require the contract to be initialised.
+    let v = client.version();
+    assert_eq!(v.major, 1);
+    assert_eq!(v.minor, 0);
+    assert_eq!(v.patch, 0);
+    // The minimum compatible interface must never exceed the current major.
+    assert!(v.min_interface <= v.major);
+}

@@ -11,6 +11,7 @@ use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentra
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
 use storage::{DataKey, RoundData};
+use version::ContractVersion;
 
 #[contract]
 pub struct MatchingPoolContract;
@@ -796,6 +797,17 @@ impl MatchingPoolContract {
         Self::require_admin(&env, &caller)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
+    }
+
+    /// Return the contract's version metadata.
+    ///
+    /// No authentication required. Returns a [`ContractVersion`] struct
+    /// describing the semantic version and minimum compatible interface version
+    /// of this deployment. Clients and backend services can call this to
+    /// confirm the deployed build matches their expectations without relying
+    /// solely on off-chain manifests.
+    pub fn version(env: Env) -> ContractVersion {
+        ContractVersion::new(&env, "matching_pool", 1, 0, 0, 1)
     }
 }
 

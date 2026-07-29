@@ -9,14 +9,16 @@ crate-type = ["lib", "cdylib"]
 doctest = false
 
 [dependencies]
-soroban-sdk = { workspace = true }
+soroban-sdk            = { workspace = true }
 notification_interface = { path = "../notification_interface" }
-reentrancy-guard = { path = "../reentrancy-guard" }
-idempotency-guard = { path = "../idempotency-guard" }
+reentrancy-guard       = { path = "../reentrancy-guard" }
+idempotency-guard      = { path = "../idempotency-guard" }
+version                = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-proptest = "1"
+proptest    = "1"
+version     = { workspace = true, features = ["testutils"] }
 
 [features]
 testutils = ["soroban-sdk/testutils"]
