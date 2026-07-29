@@ -31,7 +31,12 @@ impl YieldVaultContract {
         env.storage().instance().set(&DataKey::ProviderCount, &0u32);
         env.storage().instance().extend_ttl(100, 100);
 
-        events::VaultInitializedEvent { admin, asset }.publish(&env);
+        events::VaultInitializedEvent {
+            version: events::EVENT_VERSION,
+            admin,
+            asset,
+        }
+        .publish(&env);
 
         Ok(())
     }
@@ -79,6 +84,7 @@ impl YieldVaultContract {
             .set(&DataKey::ProviderCount, &new_count);
 
         events::ProviderRegisteredEvent {
+            version: events::EVENT_VERSION,
             provider_id,
             name,
             address,
@@ -167,6 +173,7 @@ impl YieldVaultContract {
             .set(&DataKey::TotalAUM, &(total_aum + amount));
 
         events::DepositEvent {
+            version: events::EVENT_VERSION,
             user: user.clone(),
             amount,
             provider_id: best_provider,
@@ -284,6 +291,7 @@ impl YieldVaultContract {
             .set(&DataKey::TotalAUM, &(total_aum - withdrawn));
 
         events::WithdrawEvent {
+            version: events::EVENT_VERSION,
             user: user.clone(),
             amount: withdrawn,
         }
@@ -330,6 +338,7 @@ impl YieldVaultContract {
         }
 
         events::YieldHarvestedEvent {
+            version: events::EVENT_VERSION,
             provider_id,
             yield_earned,
         }

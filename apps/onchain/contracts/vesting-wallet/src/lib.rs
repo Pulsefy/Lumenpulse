@@ -233,8 +233,8 @@ impl VestingWalletContract {
 
         transfer(&env, &token, &admin, &contract_address, &amount);
 
-        // Emit VestingCreated event
         events::VestingCreatedEvent {
+            version: events::EVENT_VERSION,
             beneficiary: vesting.beneficiary.clone(),
             amount: vesting.total_amount,
             start_time: vesting.start_time,
@@ -304,6 +304,7 @@ impl VestingWalletContract {
             );
 
             events::TokensClaimedEvent {
+                version: events::EVENT_VERSION,
                 beneficiary: vesting.beneficiary.clone(),
                 amount_claimed: available_amount,
                 remaining,
@@ -418,6 +419,7 @@ impl VestingWalletContract {
         env.deployer()
             .update_current_contract_wasm(new_wasm_hash.clone());
         UpgradedEvent {
+            version: events::EVENT_VERSION,
             admin: caller,
             new_wasm_hash,
         }
@@ -447,6 +449,7 @@ impl VestingWalletContract {
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         AdminChangedEvent {
+            version: events::EVENT_VERSION,
             old_admin: current_admin,
             new_admin,
         }
@@ -486,6 +489,7 @@ impl VestingWalletContract {
         }
 
         events::DelegateApprovedEvent {
+            version: events::EVENT_VERSION,
             beneficiary,
             delegate,
         }
@@ -527,6 +531,7 @@ impl VestingWalletContract {
         }
 
         events::DelegateRevokedEvent {
+            version: events::EVENT_VERSION,
             beneficiary,
             delegate,
         }
@@ -617,6 +622,7 @@ impl VestingWalletContract {
             );
 
             events::DelegatedClaimEvent {
+                version: events::EVENT_VERSION,
                 beneficiary: vesting.beneficiary.clone(),
                 delegate,
                 amount_claimed: available_amount,

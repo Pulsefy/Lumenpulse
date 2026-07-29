@@ -1,8 +1,14 @@
 use soroban_sdk::{contractevent, Address, BytesN};
 
+/// Canonical event version. Bump this when the schema of any event in this
+/// module changes so consumers can detect the difference.
+pub const EVENT_VERSION: u32 = 1;
+
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VestingCreatedEvent {
+    /// Schema version for consumer-side migration detection.
+    pub version: u32,
     #[topic]
     pub beneficiary: Address,
     pub amount: i128,
@@ -13,6 +19,8 @@ pub struct VestingCreatedEvent {
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TokensClaimedEvent {
+    /// Schema version for consumer-side migration detection.
+    pub version: u32,
     #[topic]
     pub beneficiary: Address,
     pub amount_claimed: i128,
@@ -22,6 +30,8 @@ pub struct TokensClaimedEvent {
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UpgradedEvent {
+    /// Schema version for consumer-side migration detection.
+    pub version: u32,
     #[topic]
     pub admin: Address,
     pub new_wasm_hash: BytesN<32>,
@@ -31,6 +41,8 @@ pub struct UpgradedEvent {
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminChangedEvent {
+    /// Schema version for consumer-side migration detection.
+    pub version: u32,
     #[topic]
     pub old_admin: Address,
     pub new_admin: Address,
@@ -40,6 +52,8 @@ pub struct AdminChangedEvent {
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DelegateApprovedEvent {
+    /// Schema version for consumer-side migration detection.
+    pub version: u32,
     #[topic]
     pub beneficiary: Address,
     pub delegate: Address,
@@ -49,6 +63,8 @@ pub struct DelegateApprovedEvent {
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DelegateRevokedEvent {
+    /// Schema version for consumer-side migration detection.
+    pub version: u32,
     #[topic]
     pub beneficiary: Address,
     pub delegate: Address,
@@ -58,6 +74,8 @@ pub struct DelegateRevokedEvent {
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DelegatedClaimEvent {
+    /// Schema version for consumer-side migration detection.
+    pub version: u32,
     #[topic]
     pub beneficiary: Address,
     pub delegate: Address,

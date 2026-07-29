@@ -1,9 +1,15 @@
 use soroban_sdk::{contractevent, Address, Symbol};
 
+/// Canonical event version. Bump this when the schema of any event in this
+/// module changes so consumers can detect the difference.
+pub const EVENT_VERSION: u32 = 1;
+
 /// Emitted when the vault is initialized.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VaultInitializedEvent {
+    /// Schema version for consumer-side migration detection.
+    pub version: u32,
     /// The address granted admin privileges.
     #[topic]
     pub admin: Address,
@@ -15,6 +21,8 @@ pub struct VaultInitializedEvent {
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProviderRegisteredEvent {
+    /// Schema version for consumer-side migration detection.
+    pub version: u32,
     /// The address of the provider (contract).
     #[topic]
     pub address: Address,
@@ -31,6 +39,8 @@ pub struct ProviderRegisteredEvent {
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DepositEvent {
+    /// Schema version for consumer-side migration detection.
+    pub version: u32,
     /// The address of the user making the deposit.
     #[topic]
     pub user: Address,
@@ -45,6 +55,8 @@ pub struct DepositEvent {
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WithdrawEvent {
+    /// Schema version for consumer-side migration detection.
+    pub version: u32,
     /// The address of the user making the withdrawal.
     #[topic]
     pub user: Address,
@@ -56,6 +68,8 @@ pub struct WithdrawEvent {
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct YieldHarvestedEvent {
+    /// Schema version for consumer-side migration detection.
+    pub version: u32,
     /// The unique identifier of the provider from which yield was harvested.
     #[topic]
     pub provider_id: u32,
