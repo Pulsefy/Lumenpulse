@@ -1,12 +1,21 @@
-"""Link article text to on-chain project and asset entities."""
+"""Link article text to on-chain project and asset entities.
+
+``DEFAULT_ASSETS`` is seeded from the alias registry
+(``data/alias_registry.yaml``) so new assets and projects can be added by
+contributors without modifying this file.  If the registry is unavailable at
+import time, a built-in fallback from ``keywords.TICKER_TO_PROJECT`` is used.
+"""
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 
 from .keywords import TICKER_TO_PROJECT
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -54,22 +63,49 @@ class OnchainEntityLink:
 class OnchainEntityLinker:
     """Deterministic linker for testnet projects/assets mentioned in news."""
 
-    DEFAULT_ASSETS: Sequence[OnchainEntityCandidate] = tuple(
-        OnchainEntityCandidate(
-            stable_id=f"asset:{asset_code}",
-            entity_type="asset",
-            display_name=project_names[0],
-            aliases=tuple({asset_code, *project_names}),
-            asset_code=asset_code,
+    @staticmethod
+    def _load_default_assets() -> Sequence["OnchainEntityCandidate"]:
+        """
+        Build the default asset candidates from the alias registry.
+
+        Falls back to ``TICKER_TO_PROJECT`` if the registry is unavailable so
+        the linker always has a working baseline.
+        """
+        try:
+            from src.normalization.alias_registry import get_registry  # noqa: PLC0415
+            candidates = get_registry().to_onchain_entity_candidates()
+            if candidates:
+                return tuple(candidates)
+        except Exception as exc:
+            logger.warning(
+                "Could not load alias registry for OnchainEntityLinker; "
+                "falling back to TICKER_TO_PROJECT. Error: %s",
+                exc,
+            )
+
+        # Built-in fallback
+        return tuple(
+            OnchainEntityCandidate(
+                stable_id=f"asset:{asset_code}",
+                entity_type="asset",
+                display_name=project_names[0],
+                aliases=tuple({asset_code, *project_names}),
+                asset_code=asset_code,
+            )
+            for asset_code, project_names in sorted(TICKER_TO_PROJECT.items())
         )
-        for asset_code, project_names in sorted(TICKER_TO_PROJECT.items())
-    )
+
+    DEFAULT_ASSETS: Sequence["OnchainEntityCandidate"] = ()  # populated below
 
     def __init__(
         self,
         candidates: Optional[Sequence[OnchainEntityCandidate]] = None,
         overrides: Optional[Dict[str, str]] = None,
     ) -> None:
+        # Ensure DEFAULT_ASSETS is populated on first instantiation
+        if not OnchainEntityLinker.DEFAULT_ASSETS:
+            OnchainEntityLinker.DEFAULT_ASSETS = self._load_default_assets()
+
         self.candidates = self._dedupe_candidates(
             list(candidates or []) + list(self.DEFAULT_ASSETS)
         )

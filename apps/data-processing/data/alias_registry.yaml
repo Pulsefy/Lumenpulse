@@ -1,0 +1,289 @@
+# =============================================================================
+# LumenPulse Alias Registry
+# =============================================================================
+#
+# This file is the single source of truth for canonical entity names across
+# ingestion and analytics.  Contributors can add or update entries here
+# without touching any pipeline code.
+#
+# Schema
+# ------
+# Each entry has:
+#   canonical   – the unique, stable identifier used in DB and API responses
+#   entity_type – one of: asset | project | ecosystem_term
+#   display_name – short human-readable label (used in UI and legacy columns)
+#   aliases     – list of alternative spellings/names that map to this entity
+#
+# For assets, two extra optional fields apply:
+#   asset_code  – Stellar asset code (upper-case)
+#   asset_issuer – Stellar issuer account ID (omit or null for native XLM)
+#
+# For projects, an optional field applies:
+#   stable_id   – overrides the auto-generated stable ID (asset:<canonical>
+#                 or project:<canonical>).  Useful when migrating from an old
+#                 ID scheme.
+#
+# Rules
+# -----
+# * canonical values must be globally unique within this file.
+# * aliases are case-insensitive at lookup time; store them in the most
+#   natural casing for readability.
+# * Do NOT duplicate a string in both canonical and aliases.
+#
+# =============================================================================
+
+schema_version: 1
+
+entries:
+
+  # ---------------------------------------------------------------------------
+  # Stellar-native assets
+  # ---------------------------------------------------------------------------
+
+  - canonical: XLM
+    entity_type: asset
+    display_name: Stellar Lumens
+    asset_code: XLM
+    asset_issuer: null        # native asset – no issuer
+    aliases:
+      - Lumens
+      - Stellar Lumens
+      - XLM
+      - xlm
+      - native
+
+  - canonical: USDC
+    entity_type: asset
+    display_name: USD Coin
+    asset_code: USDC
+    asset_issuer: GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN
+    aliases:
+      - USD Coin
+      - USDC
+      - usdc
+      - Circle USDC
+
+  - canonical: USDT
+    entity_type: asset
+    display_name: Tether
+    asset_code: USDT
+    asset_issuer: GCQTGZQQ5G4PTM2GL7CDIFKUBIPEC52BROAQIAPW53XBRJVN6ZJVTG6V
+    aliases:
+      - Tether
+      - USDT
+      - usdt
+
+  - canonical: yXLM
+    entity_type: asset
+    display_name: Yieldblox XLM
+    asset_code: yXLM
+    asset_issuer: GARDNV3Q7YGT4AKSDF25LT32YSCCW4EV22Y2TV3I2PU2MMXJTEDL5T55
+    aliases:
+      - yXLM
+      - yxlm
+      - Yieldblox XLM
+
+  # ---------------------------------------------------------------------------
+  # Cross-chain anchored assets (issued on Stellar)
+  # ---------------------------------------------------------------------------
+
+  - canonical: BTC.stellar
+    entity_type: asset
+    display_name: Bitcoin (Stellar)
+    asset_code: BTC
+    asset_issuer: GBD5AF4S7JQKZODA7KX2LL7FQKBTJHYEYJ6K7Z3L5Y7V7MUQGEOUP7OIA
+    aliases:
+      - BTC
+      - Bitcoin
+      - bitcoin
+      - Bitcoin (Stellar)
+
+  - canonical: ETH.stellar
+    entity_type: asset
+    display_name: Ethereum (Stellar)
+    asset_code: ETH
+    asset_issuer: null          # no single canonical issuer; treat as alias family
+    aliases:
+      - ETH
+      - Ethereum
+      - ethereum
+      - Ethereum (Stellar)
+
+  # ---------------------------------------------------------------------------
+  # Other well-known crypto assets (no Stellar issuer – referenced by ticker)
+  # ---------------------------------------------------------------------------
+
+  - canonical: SOL
+    entity_type: asset
+    display_name: Solana
+    asset_code: SOL
+    aliases:
+      - Solana
+      - solana
+      - SOL
+
+  - canonical: XRP
+    entity_type: asset
+    display_name: XRP
+    asset_code: XRP
+    aliases:
+      - Ripple
+      - ripple
+      - XRP
+      - xrp
+
+  - canonical: ADA
+    entity_type: asset
+    display_name: Cardano
+    asset_code: ADA
+    aliases:
+      - Cardano
+      - cardano
+      - ADA
+      - ada
+
+  - canonical: DOT
+    entity_type: asset
+    display_name: Polkadot
+    asset_code: DOT
+    aliases:
+      - Polkadot
+      - polkadot
+      - DOT
+      - dot
+
+  - canonical: DOGE
+    entity_type: asset
+    display_name: Dogecoin
+    asset_code: DOGE
+    aliases:
+      - Dogecoin
+      - dogecoin
+      - DOGE
+      - doge
+
+  - canonical: LTC
+    entity_type: asset
+    display_name: Litecoin
+    asset_code: LTC
+    aliases:
+      - Litecoin
+      - litecoin
+      - LTC
+      - ltc
+
+  - canonical: LINK
+    entity_type: asset
+    display_name: Chainlink
+    asset_code: LINK
+    aliases:
+      - Chainlink
+      - chainlink
+      - LINK
+      - link
+
+  - canonical: AVAX
+    entity_type: asset
+    display_name: Avalanche
+    asset_code: AVAX
+    aliases:
+      - Avalanche
+      - avalanche
+      - AVAX
+      - avax
+
+  - canonical: MATIC
+    entity_type: asset
+    display_name: Polygon
+    asset_code: MATIC
+    aliases:
+      - Polygon
+      - polygon
+      - MATIC
+      - matic
+
+  - canonical: ALGO
+    entity_type: asset
+    display_name: Algorand
+    asset_code: ALGO
+    aliases:
+      - Algorand
+      - algorand
+      - ALGO
+      - algo
+
+  - canonical: ATOM
+    entity_type: asset
+    display_name: Cosmos
+    asset_code: ATOM
+    aliases:
+      - Cosmos
+      - cosmos
+      - ATOM
+      - atom
+
+  - canonical: UNI
+    entity_type: asset
+    display_name: Uniswap
+    asset_code: UNI
+    aliases:
+      - Uniswap
+      - uniswap
+      - UNI
+      - uni
+      - univ3
+
+  # ---------------------------------------------------------------------------
+  # Stellar ecosystem projects
+  # ---------------------------------------------------------------------------
+
+  - canonical: stellar
+    entity_type: project
+    display_name: Stellar
+    aliases:
+      - Stellar
+      - stellar
+      - XLM
+      - xlm
+      - Stellar Network
+
+  - canonical: soroban
+    entity_type: project
+    display_name: Soroban
+    aliases:
+      - Soroban
+      - soroban
+      - Stellar Smart Contracts
+
+  - canonical: stellar_development_foundation
+    entity_type: project
+    display_name: Stellar Development Foundation
+    aliases:
+      - SDF
+      - Stellar Development Foundation
+      - stellar development foundation
+      - stellar.org
+
+  # ---------------------------------------------------------------------------
+  # Ecosystem terms
+  # ---------------------------------------------------------------------------
+
+  - canonical: defi
+    entity_type: ecosystem_term
+    display_name: DeFi
+    aliases:
+      - DeFi
+      - defi
+      - Decentralized Finance
+      - decentralized finance
+
+  - canonical: nft
+    entity_type: ecosystem_term
+    display_name: NFT
+    aliases:
+      - NFT
+      - nft
+      - NFTs
+      - nfts
+      - Non-Fungible Token
+      - non-fungible token
