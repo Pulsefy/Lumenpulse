@@ -47,7 +47,7 @@ impl FeatureFlagsContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
 
-        events::InitializedEvent { admin }.publish(&env);
+        events::publish_initialized(&env, admin);
         Ok(())
     }
 
@@ -83,12 +83,7 @@ impl FeatureFlagsContract {
             env.storage().instance().set(&DataKey::FlagList, &list);
         }
 
-        events::FlagSetEvent {
-            key,
-            enabled,
-            toggled_by: caller,
-        }
-        .publish(&env);
+        events::publish_flag_set(&env, key, enabled, caller);
 
         Ok(())
     }
@@ -141,11 +136,7 @@ impl FeatureFlagsContract {
 
         env.storage().instance().set(&DataKey::Admin, &new_admin);
 
-        events::AdminTransferredEvent {
-            old_admin: current_admin,
-            new_admin,
-        }
-        .publish(&env);
+        events::publish_admin_transferred(&env, current_admin, new_admin);
 
         Ok(())
     }

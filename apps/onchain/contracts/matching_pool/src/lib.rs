@@ -61,7 +61,7 @@ impl MatchingPoolContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::NextRoundId, &0u64);
-        events::InitializedEvent { admin }.publish(&env);
+        events::publish_initialized(&env, admin);
         Ok(())
     }
 
@@ -112,14 +112,7 @@ impl MatchingPoolContract {
         env.storage()
             .instance()
             .set(&DataKey::NextRoundId, &(round_id + 1));
-        events::RoundCreatedEvent {
-            admin,
-            round_id,
-            name,
-            start_time,
-            end_time,
-        }
-        .publish(&env);
+        events::publish_round_created(&env, admin, round_id, name, start_time, end_time);
         Ok(round_id)
     }
 
@@ -156,12 +149,7 @@ impl MatchingPoolContract {
             let contract_addr = env.current_contract_address();
             TokenClient::new(&env, &round.token_address).transfer(&funder, &contract_addr, &amount);
 
-            events::PoolFundedEvent {
-                funder,
-                round_id,
-                amount,
-            }
-            .publish(&env);
+            events::publish_pool_funded(&env, funder, round_id, amount);
             Ok(())
         })
     }
@@ -204,11 +192,7 @@ impl MatchingPoolContract {
             &DataKey::ProjectContributorCount(round_id, project_id),
             &0u32,
         );
-        events::ProjectApprovedEvent {
-            round_id,
-            project_id,
-        }
-        .publish(&env);
+        events::publish_project_approved(&env, round_id, project_id);
         Ok(())
     }
 
@@ -237,11 +221,7 @@ impl MatchingPoolContract {
             return Err(MatchingPoolError::ProjectNotEligible);
         }
         env.storage().persistent().set(&eligible_key, &false);
-        events::ProjectRemovedEvent {
-            round_id,
-            project_id,
-        }
-        .publish(&env);
+        events::publish_project_removed(&env, round_id, project_id);
         Ok(())
     }
 
@@ -271,12 +251,7 @@ impl MatchingPoolContract {
         env.storage()
             .persistent()
             .set(&DataKey::RoundCap(round_id), &cap);
-        events::RoundCapUpdatedEvent {
-            admin,
-            round_id,
-            cap,
-        }
-        .publish(&env);
+        events::publish_round_cap_updated(&env, admin, round_id, cap);
         Ok(())
     }
 
@@ -350,13 +325,7 @@ impl MatchingPoolContract {
         env.storage()
             .persistent()
             .set(&round_total_key, &new_round_total);
-        events::ContributionRecordedEvent {
-            round_id,
-            project_id,
-            contributor,
-            amount,
-        }
-        .publish(&env);
+        events::publish_contribution_recorded(&env, round_id, project_id, contributor, amount);
         Ok(())
     }
 

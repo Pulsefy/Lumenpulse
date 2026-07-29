@@ -1208,6 +1208,14 @@
               "map": [
                 {
                   "key": {
+                    "symbol": "version"
+                  },
+                  "val": {
+                    "u32": 1
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "amount_claimed"
                   },
                   "val": {
