@@ -225,7 +225,11 @@ export class ModerationService {
    */
   private mapStatusToEventType(
     status: ReportStatus,
-  ): 'moderation.pending' | 'moderation.under_review' | 'moderation.resolved' | 'moderation.dismissed' {
+  ):
+    | 'moderation.pending'
+    | 'moderation.under_review'
+    | 'moderation.resolved'
+    | 'moderation.dismissed' {
     const mapping = {
       [ReportStatus.PENDING]: 'moderation.pending' as const,
       [ReportStatus.UNDER_REVIEW]: 'moderation.under_review' as const,

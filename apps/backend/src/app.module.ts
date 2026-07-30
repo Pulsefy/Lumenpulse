@@ -66,6 +66,8 @@ import { ContractsModule } from './contracts/contracts.module';
 import { ContractAdminModule } from './contract-admin/contract-admin.module';
 import { ReviewMetricsModule } from './review-metrics/review-metrics.module';
 import { BotAuthModule } from './bot-auth/bot-auth.module';
+import { DemoBootstrapModule } from './demo-bootstrap/demo-bootstrap.module';
+import { ContributorFeedModule } from './contributor-feed/contributor-feed.module';
 
 @Module({
   imports: [
@@ -141,6 +143,8 @@ import { BotAuthModule } from './bot-auth/bot-auth.module';
     ContractAdminModule,
     ReviewMetricsModule,
     BotAuthModule,
+    DemoBootstrapModule,
+    ContributorFeedModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

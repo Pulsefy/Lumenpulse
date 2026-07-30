@@ -27,9 +27,7 @@ import { config } from '../../lib/config';
 export class ContractAdminTrustedCallerGuard implements CanActivate {
   private readonly logger = new Logger(ContractAdminTrustedCallerGuard.name);
 
-  constructor(
-    private readonly accessControlService: AccessControlService,
-  ) {}
+  constructor(private readonly accessControlService: AccessControlService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const enabled = config.contractAdmin.trustedCallerEnabled;

@@ -1,4 +1,8 @@
-import { ReportReason, ReportStatus, ReportType } from '../entities/content-report.entity';
+import {
+  ReportReason,
+  ReportStatus,
+  ReportType,
+} from '../entities/content-report.entity';
 
 /**
  * Moderation event types representing state transitions

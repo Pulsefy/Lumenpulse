@@ -46,7 +46,7 @@ export class ModerationEventPublisherService {
           delay: 2000,
         },
         removeOnComplete: 1000, // Keep last 1000 completed jobs for debugging
-        removeOnFail: 5000,     // Keep last 5000 failed jobs for analysis
+        removeOnFail: 5000, // Keep last 5000 failed jobs for analysis
       });
 
       this.logger.log(
@@ -54,9 +54,10 @@ export class ModerationEventPublisherService {
       );
     } catch (error) {
       // Log error without leaking sensitive data — only log event metadata
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      
+
       this.logger.error(
         `Failed to publish event ${eventType} for report ${report.id}: ${errorMessage}`,
         errorStack,

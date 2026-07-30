@@ -351,11 +351,10 @@
   "wallet": {
     "connect": {
       "title": "连接钱包",
-      "message": "在 {{network}} 连接一个 Stellar 钱包。这是您首次在此网络连接。",
-      "mock_button": "模拟测试网钱包",
-      "deep_link_button": "深度链接 (SEP-0007)",
-      "no_wallet_title": "未找到钱包",
-      "no_wallet_message": "未找到支持 SEP-0007 深度链接的 Stellar 钱包。"
+      "message": "在 {{network}} 连接 Stellar 钱包。这将打开您的钱包应用以授权连接。",
+      "continue_button": "打开钱包应用",
+      "error_title": "连接失败",
+      "error_message": "无法连接钱包。"
     },
     "reconnect": {
       "title": "重新连接到 {{network}}",
@@ -380,17 +379,22 @@
       "connected": "已连接",
       "network_mismatch": "需要重新连接",
       "restore_failed": "恢复失败",
-      "signing": "签名中",
       "rejected": "已拒绝"
     },
     "sign": {
       "title": "签名交易",
-      "message": "一笔交易需要您的签名。",
-      "reject": "拒绝",
-      "sign_mock": "签名（模拟）",
-      "open_app": "打开钱包 App",
-      "error_title": "错误",
-      "error_no_wallet": "未安装可用于签名的钱包应用。"
+      "message": "一笔交易需要您的签名。这将打开您的钱包应用。",
+      "error_failed": "钱包报告签名失败。",
+      "error_unknown": "钱包返回了意外响应。",
+      "error_timeout": "钱包未在时间内响应，请重试。",
+      "error_concurrent": "已有签名请求正在进行中。"
+    },
+    "error": {
+      "not_available": "当前无法使用该钱包选项。",
+      "missing_wallet": "未找到 Stellar 钱包应用。请安装兼容的钱包后重试。",
+      "unsupported_device": "此设备无法打开钱包应用。",
+      "rejected": "钱包连接被拒绝。",
+      "unknown": "钱包出现未知问题，请重试。"
     }
   }
 }

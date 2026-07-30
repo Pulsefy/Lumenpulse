@@ -415,11 +415,10 @@
   "wallet": {
     "connect": {
       "title": "Connect Wallet",
-      "message": "Connect a Stellar wallet to {{network}}. This is the first time connecting on this network.",
-      "mock_button": "Mock Testnet Wallet",
-      "deep_link_button": "Deep Link (SEP-0007)",
-      "no_wallet_title": "No Wallet Found",
-      "no_wallet_message": "Could not find a Stellar wallet supporting SEP-0007 deep links."
+      "message": "Connect a Stellar wallet to {{network}}. This will open your wallet app to authorize the connection.",
+      "continue_button": "Open Wallet App",
+      "error_title": "Connection Failed",
+      "error_message": "Could not connect the wallet."
     },
     "reconnect": {
       "title": "Reconnect to {{network}}",
@@ -444,17 +443,22 @@
       "connected": "Connected",
       "network_mismatch": "Reconnect Required",
       "restore_failed": "Restore Failed",
-      "signing": "Signing",
       "rejected": "Rejected"
     },
     "sign": {
       "title": "Sign Transaction",
-      "message": "A transaction requires your signature.",
-      "reject": "Reject",
-      "sign_mock": "Sign (Mock)",
-      "open_app": "Open Wallet App",
-      "error_title": "Error",
-      "error_no_wallet": "No wallet app installed to handle signature."
+      "message": "A transaction requires your signature. This will open your wallet app.",
+      "error_failed": "The wallet reported a signing failure.",
+      "error_unknown": "Unexpected wallet response.",
+      "error_timeout": "Wallet did not respond in time. Please try again.",
+      "error_concurrent": "A signing request is already in progress."
+    },
+    "error": {
+      "not_available": "This wallet option is not available right now.",
+      "missing_wallet": "No Stellar wallet app found. Install a compatible wallet and try again.",
+      "unsupported_device": "This device cannot open the wallet app.",
+      "rejected": "Wallet connection was rejected.",
+      "unknown": "Something went wrong with the wallet. Please try again."
     }
   }
 }

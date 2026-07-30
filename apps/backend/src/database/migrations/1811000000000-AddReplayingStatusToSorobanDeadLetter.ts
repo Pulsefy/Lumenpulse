@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddReplayingStatusToSorobanDeadLetter1811000000000
-  implements MigrationInterface
-{
+export class AddReplayingStatusToSorobanDeadLetter1811000000000 implements MigrationInterface {
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
       `ALTER TYPE soroban_event_dead_letter_status ADD VALUE IF NOT EXISTS 'replaying'`,

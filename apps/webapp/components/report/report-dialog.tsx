@@ -63,7 +63,9 @@ export function ReportDialog({
       });
       setState("success");
     } catch (err: any) {
-      setErrorMessage(err?.message ?? "Failed to submit report. Please try again.");
+      setErrorMessage(
+        err?.message ?? "Failed to submit report. Please try again.",
+      );
       setState("error");
     }
   };
@@ -92,7 +94,8 @@ export function ReportDialog({
                   Report submitted
                 </Dialog.Title>
                 <Dialog.Description className="text-sm text-zinc-400">
-                  Thanks for flagging this. Our moderation team will review it shortly.
+                  Thanks for flagging this. Our moderation team will review it
+                  shortly.
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
@@ -108,7 +111,8 @@ export function ReportDialog({
                   Report {targetLabel}
                 </Dialog.Title>
                 <Dialog.Description className="text-sm text-zinc-400">
-                  Let us know what's wrong. Reports are sent to our moderation queue for review.
+                  Let us know what&apos;s wrong. Reports are sent to our
+                  moderation queue for review.
                 </Dialog.Description>
               </div>
 
@@ -136,13 +140,23 @@ export function ReportDialog({
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="report-description" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Additional details <span className="normal-case font-normal text-zinc-600">(optional)</span>
+                <label
+                  htmlFor="report-description"
+                  className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
+                >
+                  Additional details{" "}
+                  <span className="normal-case font-normal text-zinc-600">
+                    (optional)
+                  </span>
                 </label>
                 <textarea
                   id="report-description"
                   value={description}
-                  onChange={(e) => setDescription(e.target.value.slice(0, REPORT_DESCRIPTION_MAX_LENGTH))}
+                  onChange={(e) =>
+                    setDescription(
+                      e.target.value.slice(0, REPORT_DESCRIPTION_MAX_LENGTH),
+                    )
+                  }
                   rows={3}
                   maxLength={REPORT_DESCRIPTION_MAX_LENGTH}
                   placeholder="Anything that would help our reviewers, e.g. links or specific concerns."
@@ -177,7 +191,9 @@ export function ReportDialog({
                   disabled={!canSubmit}
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-black transition-colors hover:bg-primary/90 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {state === "submitting" && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {state === "submitting" && (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  )}
                   {state === "submitting" ? "Submitting..." : "Submit report"}
                 </button>
               </div>
