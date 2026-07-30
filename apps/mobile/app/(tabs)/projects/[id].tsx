@@ -274,16 +274,20 @@ export default function ProjectDetailScreen() {
       if (response.success && response.data) {
         let finalTxHash = response.data.transactionHash;
 
-        // Use wallet signing if backend requests client signature (or mock for Testnet app flow)
-        if (response.data.unsignedXdr || !finalTxHash) {
-          const xdrToSign = response.data.unsignedXdr || 'AAAA_MOCK_XDR_FOR_TESTNET_DEMO';
-          const signResult = await signAndSubmitXdr(xdrToSign);
+        // Use wallet signing when the backend requests a client-side signature.
+        // The backend must provide a real unsigned XDR; there is no mock fallback.
+        if (response.data.unsignedXdr) {
+          const signResult = await signAndSubmitXdr(response.data.unsignedXdr);
 
           if (signResult.status === 'rejected') {
             return { errorMessage: 'Transaction signature rejected by the wallet.' };
           }
           if (signResult.status === 'failed' || !signResult.txHash) {
-            return { errorMessage: 'Wallet signing failed.' };
+            return {
+              errorMessage:
+                signResult.error?.message ??
+                'Wallet signing failed. Please check your wallet app and try again.',
+            };
           }
           finalTxHash = signResult.txHash;
         }

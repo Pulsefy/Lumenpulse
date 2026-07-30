@@ -211,12 +211,23 @@ def _ingestion_alerting_job() -> None:
         from src.ingestion.ingestion_alerting import run_ingestion_alerting_cycle
 
         result = run_ingestion_alerting_cycle()
+        suppressed = result.get("suppressed_alerts", [])
+        engine_stats = result.get("suppression_engine_stats", {})
         logger.info(
-            "Ingestion alerting cycle complete | healthy=%s | metrics=%d | lag_alerts=%d",
+            "Ingestion alerting cycle complete | healthy=%s | metrics=%d | "
+            "lag_alerts=%d | suppressed=%d | rules=%d",
             result.get("healthy"),
             len(result.get("metrics", [])),
             len(result.get("lag_alerts", [])),
+            len(suppressed),
+            len(engine_stats.get("rules", [])),
         )
+        if suppressed:
+            logger.info(
+                "ALERT_SUPPRESSION suppressed=%d aler-types=%s",
+                len(suppressed),
+                [s.get("alert_type") for s in suppressed[:5]],
+            )
     except Exception as exc:
         logger.error("Ingestion alerting job failed: %s", exc, exc_info=True)
 

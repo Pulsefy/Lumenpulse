@@ -182,9 +182,13 @@ describe('ModerationService - Event Integration', () => {
       (repository.findOne as jest.Mock).mockResolvedValue(mockReport);
       (repository.save as jest.Mock).mockResolvedValue(updatedReport);
 
-      const result = await service.updateReport('test-report-id', 'reviewer-id', {
-        status: ReportStatus.RESOLVED,
-      });
+      const result = await service.updateReport(
+        'test-report-id',
+        'reviewer-id',
+        {
+          status: ReportStatus.RESOLVED,
+        },
+      );
 
       expect(result.status).toBe(ReportStatus.RESOLVED);
       expect(repository.save).toHaveBeenCalled();
@@ -219,9 +223,9 @@ describe('ModerationService - Event Integration', () => {
       // Verify the queue was called
       expect(mockQueue.add).toHaveBeenCalledTimes(1);
       const [jobName, event] = mockQueue.add.mock.calls[0];
-      
+
       expect(jobName).toBe('moderation-decision');
-      
+
       const serialized = JSON.stringify(event);
       expect(serialized).not.toContain('secret-reviewer-id');
       expect(serialized).not.toContain('Confidential notes');

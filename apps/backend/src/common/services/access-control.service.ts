@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 /* eslint-disable @typescript-eslint/require-await */
-/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -454,8 +454,9 @@ export class AccessControlService implements IAccessControlService {
       });
     }
 
-    const configuredKey =
-      this.configService.get<string>('CONTRACT_ADMIN_API_KEY');
+    const configuredKey = this.configService.get<string>(
+      'CONTRACT_ADMIN_API_KEY',
+    );
 
     if (!configuredKey) {
       this.logger.warn(
