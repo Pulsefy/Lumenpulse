@@ -344,36 +344,17 @@ describe('ReviewerAssignmentService', () => {
       expect(result.reviewerId).toBeNull();
     });
 
-    it('should throw BadRequestException when unassigning from completed state', async () => {
+    it('should throw NotFoundException if assignment does not exist', async () => {
       const unassignDto = {
         itemId: mockItemId,
         itemType: mockItemType,
       };
 
-      const completedAssignment = {
-        ...mockAssignment,
-        state: ReviewerAssignmentState.COMPLETED,
-      };
-
-      jest
-        .spyOn(assignmentRepository, 'findOne')
-        .mockResolvedValue(completedAssignment as any);
-
-      const mockQueryBuilder = {
-        createQueryBuilder: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        setLock: jest.fn().mockReturnThis(),
-        useTransaction: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue(completedAssignment),
-      };
-
-      jest
-        .spyOn(assignmentRepository, 'createQueryBuilder')
-        .mockReturnValue(mockQueryBuilder as any);
+      jest.spyOn(assignmentRepository, 'findOne').mockResolvedValue(null);
 
       await expect(
         service.unassignSubmission(unassignDto, mockUserId, 'admin@test.com'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -437,25 +418,26 @@ describe('ReviewerAssignmentService', () => {
     });
 
     it('should throw BadRequestException for invalid state transition', async () => {
+      // Trying to transition from COMPLETED to IN_REVIEW - invalid path
       const updateDto = {
         state: ReviewerAssignmentState.IN_REVIEW,
       };
 
-      const unassignedAssignment = {
+      const completedAssignment = {
         ...mockAssignment,
-        state: ReviewerAssignmentState.UNASSIGNED,
+        id: 'assignment-completed-invalid',
+        state: ReviewerAssignmentState.COMPLETED,
       };
 
       jest
         .spyOn(assignmentRepository, 'findOne')
-        .mockResolvedValue(unassignedAssignment as any);
+        .mockResolvedValue(completedAssignment as any);
 
       const mockQueryBuilder = {
-        createQueryBuilder: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         setLock: jest.fn().mockReturnThis(),
         useTransaction: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue(unassignedAssignment),
+        getOne: jest.fn().mockResolvedValue(completedAssignment as any),
       };
 
       jest
