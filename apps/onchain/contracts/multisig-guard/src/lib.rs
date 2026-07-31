@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(dead_code)]
 
 mod errors;
 mod events;
