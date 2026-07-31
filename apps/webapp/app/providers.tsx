@@ -59,7 +59,7 @@ function ConfigGate({ children }: { children: ReactNode }) {
 
 import { OnboardingProvider } from "@/lib/onboarding";
 import { ThemeProvider } from "@/components/theme-provider";
-import { WatchlistProvider } from "@/contexts/WatchlistContext";
+import { WatchlistProvider } from "@/hooks/use-watchlist";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (

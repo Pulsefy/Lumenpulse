@@ -57,6 +57,19 @@ SOURCE_HEALTH = Gauge(
     ["source"],
 )
 
+ALERT_SUPPRESSIONS_TOTAL = Counter(
+    "lumenpulse_alert_suppressions_total",
+    "Total number of alerts suppressed by the dedup engine",
+    ["rule_name", "reason"],
+)
+
+ALERT_EMISSIONS_TOTAL = Counter(
+    "lumenpulse_alert_emissions_total",
+    "Total number of alerts emitted by the dedup engine",
+    ["rule_name", "reason"],
+)
+
+
 def start_metrics_server(port: int = 9090):
     """Start standalone prometheus metrics server (for background workers)"""
     try:

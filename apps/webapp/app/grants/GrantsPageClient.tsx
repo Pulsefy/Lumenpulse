@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Trophy, Bookmark, ChevronDown, Check } from "lucide-react";
 import { GrantRound, RoundCard, RoundTable } from "./components";
 import { DependencyStatusBanner } from "@/components/DependencyStatusBanner";
-import { useWatchlist } from "@/contexts/WatchlistContext";
+import { useWatchlist } from "@/hooks/use-watchlist";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 

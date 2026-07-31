@@ -68,6 +68,7 @@ import { ReviewMetricsModule } from './review-metrics/review-metrics.module';
 import { BotAuthModule } from './bot-auth/bot-auth.module';
 import { DemoBootstrapModule } from './demo-bootstrap/demo-bootstrap.module';
 import { ContributorFeedModule } from './contributor-feed/contributor-feed.module';
+import { ReadModelRebuildModule } from './read-model-rebuild';
 
 @Module({
   imports: [
@@ -145,6 +146,7 @@ import { ContributorFeedModule } from './contributor-feed/contributor-feed.modul
     BotAuthModule,
     DemoBootstrapModule,
     ContributorFeedModule,
+    ReadModelRebuildModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

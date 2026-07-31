@@ -21,7 +21,7 @@ interface WatchlistPanelProps {
 }
 
 export default function WatchlistPanel({ onSelectAsset }: WatchlistPanelProps) {
-  const { items, total, isLoading, error, removeItem, refresh } = useWatchlist();
+  const { items, total, isLoading, isSyncing, error, removeItem, refresh } = useWatchlist();
   const [filterType, setFilterType] = useState<WatchlistItemType | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -82,12 +82,20 @@ export default function WatchlistPanel({ onSelectAsset }: WatchlistPanelProps) {
             ({total} {total === 1 ? "item" : "items"})
           </span>
         </h2>
-        <button
-          onClick={refresh}
-          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {isSyncing && (
+            <span className="text-xs text-gray-400 flex items-center gap-1">
+              <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-gray-400" />
+              Syncing...
+            </span>
+          )}
+          <button
+            onClick={refresh}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Search and Filter */}
@@ -165,7 +173,7 @@ export default function WatchlistPanel({ onSelectAsset }: WatchlistPanelProps) {
                   issuer: item.assetIssuer || undefined,
                 })
               }
-              className="group flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5"
+              className={`group flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5 ${item.id.startsWith('temp-') ? 'opacity-50 pointer-events-none' : ''}`}
             >
               {/* Drag Handle */}
               <GripVertical

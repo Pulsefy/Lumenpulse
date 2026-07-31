@@ -19,12 +19,17 @@ from src.db.models import AnalyticsRecord
 from src.db.postgres_service import PostgresService
 from src.ingestion.stellar_fetcher import StellarDataFetcher
 from src.ingestion.stellar_ingestion_checks import _horizon_latest_ledger, _parse_iso_datetime
+from src.alert_engine.engine import AlertSuppressionEngine
 from src.utils.logger import setup_logger
 from src.utils.metrics import (
+    ALERT_SUPPRESSIONS_TOTAL,
+    ALERT_EMISSIONS_TOTAL,
     INDEXER_LAG_SECONDS,
     SOURCE_FAILURES_TOTAL,
     SOURCE_HEALTH,
 )
+
+_suppression_engine: AlertSuppressionEngine = None
 
 alert_logger = setup_logger("lumenpulse.ingestion_alerts")
 
@@ -128,6 +133,20 @@ def _emit_log_alert(
 
 _recent_failures: List[SourceFailureEvent] = []
 _last_cycle_result: Dict[str, Any] = {}
+_suppressed_alerts: List[Dict[str, Any]] = []
+
+
+def get_suppression_engine() -> AlertSuppressionEngine:
+    global _suppression_engine
+    if _suppression_engine is None:
+        _suppression_engine = AlertSuppressionEngine()
+    return _suppression_engine
+
+
+def reset_suppression_engine() -> None:
+    global _suppression_engine, _suppressed_alerts
+    _suppression_engine = None
+    _suppressed_alerts = []
 
 
 def get_last_alerting_status() -> Dict[str, Any]:
@@ -152,13 +171,31 @@ def record_source_failure(
     SOURCE_FAILURES_TOTAL.labels(source=source, failure_type=failure_type).inc()
     SOURCE_HEALTH.labels(source=source).set(0)
 
-    _emit_log_alert(
-        alert_type="source_failure",
-        severity=AlertSeverity.WARNING,
-        title=f"External source failure: {source}",
-        message=message or failure_type,
-        payload=event.to_dict(),
-    )
+    engine = get_suppression_engine()
+    alert = {
+        "alert_type": "source_failure",
+        "severity": AlertSeverity.WARNING.value,
+        "source": source,
+        "failure_type": failure_type,
+        "message": message,
+    }
+    decision = engine.evaluate(alert)
+    if decision.emit:
+        ALERT_EMISSIONS_TOTAL.labels(
+            rule_name=decision.rule_name, reason=decision.reason
+        ).inc()
+        _emit_log_alert(
+            alert_type="source_failure",
+            severity=AlertSeverity.WARNING,
+            title=f"External source failure: {source}",
+            message=message or failure_type,
+            payload=event.to_dict(),
+        )
+    else:
+        _suppressed_alerts.append(alert)
+        ALERT_SUPPRESSIONS_TOTAL.labels(
+            rule_name=decision.rule_name, reason=decision.reason
+        ).inc()
 
 
 def record_source_success(source: str) -> None:
@@ -275,6 +312,7 @@ def measure_pipeline_analytics_lag(
 
 def evaluate_lag_alerts(metrics: List[LagMetricSnapshot]) -> List[Dict[str, Any]]:
     alerts: List[Dict[str, Any]] = []
+    engine = get_suppression_engine()
     for metric in metrics:
         _publish_lag_metric(metric)
         if metric.severity == AlertSeverity.HEALTHY:
@@ -282,19 +320,34 @@ def evaluate_lag_alerts(metrics: List[LagMetricSnapshot]) -> List[Dict[str, Any]
 
         alert = {
             "alert_type": "indexer_lag",
+            "severity": metric.severity.value,
+            "metric_name": metric.metric_name,
+            "source": metric.source,
             "metric": metric.to_dict(),
         }
-        alerts.append(alert)
-        _emit_log_alert(
-            alert_type="indexer_lag",
-            severity=metric.severity,
-            title=f"Indexer lag alert: {metric.metric_name}",
-            message=(
-                f"{metric.source} lag {metric.lag_seconds:.0f}s exceeds "
-                f"{metric.severity.value} threshold"
-            ),
-            payload=alert,
-        )
+
+        decision = engine.evaluate(alert)
+        if decision.emit:
+            alerts.append(alert)
+            ALERT_EMISSIONS_TOTAL.labels(
+                rule_name=decision.rule_name, reason=decision.reason
+            ).inc()
+            _emit_log_alert(
+                alert_type="indexer_lag",
+                severity=metric.severity,
+                title=f"Indexer lag alert: {metric.metric_name}",
+                message=(
+                    f"{metric.source} lag {metric.lag_seconds:.0f}s exceeds "
+                    f"{metric.severity.value} threshold"
+                ),
+                payload=alert,
+            )
+        else:
+            _suppressed_alerts.append(alert)
+            ALERT_SUPPRESSIONS_TOTAL.labels(
+                rule_name=decision.rule_name, reason=decision.reason
+            ).inc()
+
     return alerts
 
 
@@ -318,12 +371,22 @@ def run_ingestion_alerting_cycle(
     recent_failures = [event.to_dict() for event in _recent_failures[-20:]]
     lag_alerts = evaluate_lag_alerts(metrics)
 
+    engine = get_suppression_engine()
+    suppressed = list(_suppressed_alerts)
+    _suppressed_alerts.clear()
+
     result = {
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "metrics": [metric.to_dict() for metric in metrics],
         "lag_alerts": lag_alerts,
         "recent_source_failures": recent_failures,
         "healthy": not lag_alerts and not recent_failures,
+        "suppressed_alerts": suppressed,
+        "suppression_engine_stats": engine.stats,
     }
     _last_cycle_result = result
     return result
+
+
+def get_suppressed_alerts() -> List[Dict[str, Any]]:
+    return list(_suppressed_alerts)

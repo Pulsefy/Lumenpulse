@@ -9,7 +9,7 @@ import WatchlistPanel from "@/components/watchlist-panel";
 import ContributionInsightsWidget from "@/components/contribution-insights-widget";
 import PortfolioOverviewCard from "@/components/portfolio-overview-card";
 import MarketInsightsCard from "@/components/market-insights-card";
-import { WatchlistProvider } from "@/hooks/use-watchlist";
+
 import { useStellarAccount } from "@/hooks/useStellarAccount";
 import { useStellarWallet } from "@/app/providers";
 import { usePortfolioSnapshot } from "@/hooks/usePortfolioSnapshot";
@@ -40,7 +40,7 @@ export default function DashboardPage() {
   } = usePortfolioSnapshot(publicKey);
 
   return (
-    <WatchlistProvider>
+    <>
       <div className="min-h-screen bg-black text-white p-8">
         {selectedAsset ? (
           <AssetDetail
@@ -283,6 +283,6 @@ export default function DashboardPage() {
           </>
         )}
       </div>
-    </WatchlistProvider>
+    </>
   );
 }
