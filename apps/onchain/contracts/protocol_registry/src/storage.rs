@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Symbol};
+use soroban_sdk::{contracttype, Address, Symbol, Vec};
 
 /// A single protocol module registration entry.
 #[contracttype]
@@ -25,4 +25,19 @@ pub enum DataKey {
     Paused,
     /// `ModuleEntry` keyed by module name Symbol.
     Module(Symbol),
+}
+
+/// The set of privileged actions that require a multisig proposal.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProposalAction {
+    SetAdmin(Address),
+    RegisterModule(Symbol, Address, u32),
+    UpdateModule(Symbol, Address, u32),
+    DeactivateModule(Symbol),
+    ActivateModule(Symbol),
+    Pause,
+    Unpause,
+    Upgrade(soroban_sdk::BytesN<32>),
+    SetMultisigConfig(Vec<multisig_guard::Signer>, u32),
 }

@@ -2,7 +2,6 @@
 
 mod errors;
 mod events;
-mod multisig;
 mod storage;
 
 use errors::ContributorError;
@@ -12,19 +11,24 @@ use events::{
     GaslessRegistrationEvent, MultisigConfiguredEvent, ReputationPenaltyAppliedEvent,
     UpgradedEvent,
 };
-use multisig::{
-    cancel, consume_approval, expire, get_config, get_proposal, propose, sign, validate_config,
-    MultisigConfig, ProposalAction, ProposalStatus, Signer,
+use multisig_guard::{
+    cancel as multisig_cancel, configure as multisig_configure, consume_approval,
+    expire as multisig_expire, get_config as multisig_get_config, get_proposal,
+    propose as multisig_propose, replace_config as multisig_replace_config, sign as multisig_sign,
+    MultisigConfig, MultisigDataKey, Proposal, ProposalStatus, Signer, MAX_SIGNERS,
+    PROPOSAL_TTL_SECS,
 };
 use notification_interface::{Notification, NotificationReceiverTrait};
 use soroban_sdk::xdr::FromXdr;
 use soroban_sdk::{
-    contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
+    contract, contractimpl, vec, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 use storage::{
     AttestationStatus, Badge, ContributorData, ContributorTier, DataKey, PenaltyRecord,
-    PenaltySeverity, LEDGER_BUMP, LEDGER_THRESHOLD,
+    PenaltySeverity, ProposalAction, LEDGER_BUMP, LEDGER_THRESHOLD,
 };
+
+pub use storage::ProposalAction as ContributorProposalAction;
 
 #[contract]
 pub struct ContributorRegistryContract;
@@ -34,7 +38,7 @@ impl ContributorRegistryContract {
     // ── Helpers ──────────────────────────────────────────────
 
     fn ensure_initialized(env: &Env) -> Result<(), ContributorError> {
-        if !env.storage().instance().has(&DataKey::MultisigConfig) {
+        if !env.storage().instance().has(&DataKey::Admin) {
             return Err(ContributorError::NotInitialized);
         }
         env.storage()
@@ -118,43 +122,34 @@ impl ContributorRegistryContract {
 
     // ── Initialisation ───────────────────────────────────────
 
-    pub fn initialize(
+    pub fn initialize(env: Env, admin: Address) -> Result<(), ContributorError> {
+        if env.storage().instance().has(&DataKey::Admin) {
+            return Err(ContributorError::AlreadyInitialized);
+        }
+        admin.require_auth();
+
+        env.storage().instance().set(&DataKey::Admin, &admin);
+
+        Ok(())
+    }
+
+    pub fn configure_multisig(
         env: Env,
         signers: Vec<Signer>,
         threshold: u32,
     ) -> Result<(), ContributorError> {
-        if env.storage().instance().has(&DataKey::MultisigConfig) {
-            return Err(ContributorError::AlreadyInitialized);
-        }
-
-        validate_config(&signers, threshold)?;
-
+        multisig_configure(&env, signers.clone(), threshold)
+            .map_err(|_| ContributorError::Unauthorized)?;
+        let signer_count = signers.len();
         let bootstrapper = signers
             .get(0)
             .ok_or(ContributorError::InvalidMultisigConfig)?;
-        bootstrapper.address.require_auth();
-
-        let config = MultisigConfig {
-            signers: signers.clone(),
-            threshold,
-        };
-        env.storage()
-            .instance()
-            .set(&DataKey::MultisigConfig, &config);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextProposalId, &0u64);
-        env.storage()
-            .instance()
-            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
-
-        MultisigConfiguredEvent {
+        events::MultisigConfiguredEvent {
             configured_by: bootstrapper.address.clone(),
             threshold,
-            signer_count: signers.len(), // no cast needed, already u32 in Soroban Vec
+            signer_count,
         }
         .publish(&env);
-
         Ok(())
     }
 
@@ -165,15 +160,17 @@ impl ContributorRegistryContract {
         proposer: Address,
         action: ProposalAction,
     ) -> Result<u64, ContributorError> {
-        propose(&env, proposer, action)
+        let payload = vec![&env, action.into_val(&env)];
+        multisig_propose(&env, proposer, payload).map_err(|_| ContributorError::Unauthorized)
     }
 
-    pub fn sign(
+    pub fn sign_proposal(
         env: Env,
         signer: Address,
         proposal_id: u64,
-    ) -> Result<ProposalStatus, ContributorError> {
-        sign(&env, signer, proposal_id)
+    ) -> Result<(), ContributorError> {
+        multisig_sign(&env, signer, proposal_id).map_err(|_| ContributorError::Unauthorized)?;
+        Ok(())
     }
 
     pub fn cancel_proposal(
@@ -181,39 +178,34 @@ impl ContributorRegistryContract {
         signer: Address,
         proposal_id: u64,
     ) -> Result<(), ContributorError> {
-        cancel(&env, signer, proposal_id)
+        multisig_cancel(&env, signer, proposal_id).map_err(|_| ContributorError::Unauthorized)
     }
 
     pub fn expire_proposal(env: Env, proposal_id: u64) -> Result<(), ContributorError> {
-        expire(&env, proposal_id)
+        multisig_expire(&env, proposal_id).map_err(|_| ContributorError::Unauthorized)
     }
 
-    pub fn set_multisig_config(
+    pub fn set_multisig_config_via_multisig(
         env: Env,
         executor: Address,
         proposal_id: u64,
         new_signers: Vec<Signer>,
         new_threshold: u32,
     ) -> Result<(), ContributorError> {
-        consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
+        let expected_payload = vec![
+            &env,
+            ProposalAction::SetMultisigConfig(new_signers.clone(), new_threshold).into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
-        validate_config(&new_signers, new_threshold)?;
-
-        let config = MultisigConfig {
-            signers: new_signers.clone(),
-            threshold: new_threshold,
-        };
-        env.storage()
-            .instance()
-            .set(&DataKey::MultisigConfig, &config);
-        env.storage()
-            .instance()
-            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        multisig_replace_config(&env, new_signers.clone(), new_threshold)
+            .map_err(|_| ContributorError::InvalidMultisigConfig)?;
 
         MultisigConfiguredEvent {
             configured_by: executor,
             threshold: new_threshold,
-            signer_count: new_signers.len(), // no cast needed
+            signer_count: new_signers.len(),
         }
         .publish(&env);
 
@@ -232,26 +224,6 @@ impl ContributorRegistryContract {
         Self::write_contributor(&env, &address, &github_handle)
     }
 
-    /// Gasless / meta-transaction registration.
-    ///
-    /// The caller (relayer) submits the transaction and pays fees.  The user
-    /// never touches a wallet or holds XLM.  Instead the user signs a
-    /// `SorobanAuthorizationEntry` off-chain that commits to:
-    ///
-    ///   `("register_contributor_with_sig", github_handle, address, nonce)`
-    ///
-    /// The signed entry is attached to the transaction by the relayer.  Soroban's
-    /// host verifies the user's Ed25519 signature and consumes the host-managed
-    /// nonce automatically.  The contract also advances its own per-address
-    /// `RegistrationNonce` counter as an independent replay-guard so that even if
-    /// an auth-entry nonce were somehow reused, the contract-layer nonce change
-    /// would make re-registration fail with `ContributorAlreadyExists` (and for
-    /// future mutable operations, with `InvalidNonce`).
-    ///
-    /// The `signature` parameter is a caller-visible artifact — arbitrary bytes
-    /// that the user may include in their off-chain commitment.  It is NOT part
-    /// of the `require_auth_for_args` scope (to avoid the circular dependency
-    /// where the user would have to sign their own signature).
     pub fn register_contributor_with_sig(
         env: Env,
         github_handle: String,
@@ -263,16 +235,8 @@ impl ContributorRegistryContract {
             return Err(ContributorError::InvalidSignature);
         }
 
-        // Read the current contract-layer nonce before mutating state.
         let nonce = Self::registration_nonce_of(&env, &address);
 
-        // Require that `address` has authorised this specific invocation.
-        // The authorisation scope binds the function name, the handle being
-        // registered, the caller address, and the current nonce — preventing
-        // cross-user, cross-handle, and replay attacks.
-        // NOTE: `signature` is intentionally excluded from this scope; it is
-        // the SorobanAuthorizationEntry itself that carries the cryptographic
-        // proof, not a raw bytes argument.
         address.require_auth_for_args(
             (
                 Symbol::new(&env, "register_contributor_with_sig"),
@@ -285,8 +249,6 @@ impl ContributorRegistryContract {
 
         Self::write_contributor(&env, &address, &github_handle)?;
 
-        // Advance the contract-layer nonce so every future signed intent must
-        // reference a strictly higher value.
         let new_nonce = nonce + 1;
         env.storage()
             .persistent()
@@ -307,23 +269,29 @@ impl ContributorRegistryContract {
         Ok(())
     }
 
-    /// Update a contributor's profile (currently `github_handle`).
-    ///
-    /// Authorization:
-    /// * `proposal_id = None` — self-service update. The caller (`actor`) MUST
-    ///   be the contributor themselves (`actor == address`) and MUST
-    ///   authenticate via `require_auth()`.
-    /// * `proposal_id = Some(id)` — admin-managed update. The caller (`actor`)
-    ///   MUST be a multisig signer who consumes an `UpdateProfile` proposal
-    ///   via `consume_approval`. This path is used for handle corrections,
-    ///   migrations, or recovery actions initiated by the multisig.
-    ///
-    /// Either path emits `ContributorProfileChangedEvt` so the mutation is
-    /// fully auditable. Self-service updates carry `proposal_id = None` so
-    /// the event consumer can distinguish the two paths.
-    ///
-    /// Empty handles are rejected; existing contributors are required; handle
-    /// uniqueness is enforced via the existing index.
+    pub fn deregister_contributor(env: Env, address: Address) -> Result<(), ContributorError> {
+        Self::ensure_initialized(&env)?;
+        address.require_auth();
+
+        let contributor: ContributorData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contributor(address.clone()))
+            .ok_or(ContributorError::ContributorNotFound)?;
+
+        env.storage()
+            .persistent()
+            .remove(&DataKey::GitHubIndex(contributor.github_handle));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Contributor(address.clone()));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::RegistrationNonce(address));
+
+        Ok(())
+    }
+
     pub fn update_contributor(
         env: Env,
         actor: Address,
@@ -350,30 +318,26 @@ impl ContributorRegistryContract {
 
         Self::ensure_github_handle_available(&env, &github_handle, &address)?;
 
-        // Decide authorization path.
         match proposal_id {
             None => {
-                // Self-service: caller must authenticate as the contributor
-                // and the addresses must match (a third party cannot pass
-                // proposal_id = None to update someone else).
                 actor.require_auth();
                 if actor != address {
                     return Err(ContributorError::Unauthorized);
                 }
             }
             Some(pid) => {
-                // Admin-managed: caller must be a multisig signer consuming
-                // an already-approved UpdateProfile proposal. consume_approval
-                // verifies the proposal exists, is Approved, matches the
-                // action, and has not been executed or expired.
-                consume_approval(&env, &actor, pid, &ProposalAction::UpdateProfile)?;
+                let expected_payload = vec![
+                    &env,
+                    ProposalAction::UpdateProfile(address.clone(), github_handle.clone())
+                        .into_val(&env),
+                ];
+                consume_approval(&env, &actor, pid, &expected_payload)
+                    .map_err(|_| ContributorError::Unauthorized)?;
             }
         }
 
         let old_handle = contributor.github_handle.clone();
 
-        // Only write if the handle actually changes (no-op short-circuit
-        // avoids emitting duplicate audit events and bumping TTL needlessly).
         if old_handle != github_handle {
             let mut contributor = contributor;
             contributor.github_handle = github_handle.clone();
@@ -409,53 +373,21 @@ impl ContributorRegistryContract {
         Ok(())
     }
 
-    /// Deregister a contributor, removing all associated storage entries.
-    ///
-    /// Requires the contributor's own authorization. Removes:
-    /// - `DataKey::Contributor(address)`
-    /// - `DataKey::GitHubIndex(github_handle)`
-    /// - `DataKey::RegistrationNonce(address)`
-    ///
-    /// This prevents orphaned index entries and reclaims rent.
-    pub fn deregister_contributor(env: Env, address: Address) -> Result<(), ContributorError> {
-        Self::ensure_initialized(&env)?;
-        address.require_auth();
-
-        let contributor: ContributorData = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Contributor(address.clone()))
-            .ok_or(ContributorError::ContributorNotFound)?;
-
-        // State compaction: remove all three related entries atomically.
-        env.storage()
-            .persistent()
-            .remove(&DataKey::GitHubIndex(contributor.github_handle));
-        env.storage()
-            .persistent()
-            .remove(&DataKey::Contributor(address.clone()));
-        env.storage()
-            .persistent()
-            .remove(&DataKey::RegistrationNonce(address));
-
-        Ok(())
-    }
-
     // ── Sensitive functions — multisig-gated ─────────────────
 
-    pub fn update_reputation(
+    pub fn update_reputation_via_multisig(
         env: Env,
         executor: Address,
         proposal_id: u64,
         contributor_address: Address,
-        delta: i64,
+        delta: u64,
     ) -> Result<(), ContributorError> {
-        consume_approval(
+        let expected_payload = vec![
             &env,
-            &executor,
-            proposal_id,
-            &ProposalAction::UpdateReputation,
-        )?;
+            ProposalAction::UpdateReputation(contributor_address.clone(), delta).into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
         let mut contributor: ContributorData = env
             .storage()
@@ -468,15 +400,10 @@ impl ContributorRegistryContract {
             LEDGER_BUMP,
         );
 
-        let new_score = if delta > 0 {
-            contributor
-                .reputation_score
-                .checked_add(delta as u64)
-                .ok_or(ContributorError::ReputationOverflow)?
-        } else {
-            let abs = delta.checked_abs().unwrap_or(0) as u64;
-            contributor.reputation_score.saturating_sub(abs)
-        };
+        let new_score = contributor
+            .reputation_score
+            .checked_add(delta)
+            .ok_or(ContributorError::ReputationOverflow)?;
         contributor.reputation_score = new_score;
         env.storage().persistent().set(
             &DataKey::Contributor(contributor_address.clone()),
@@ -490,16 +417,20 @@ impl ContributorRegistryContract {
         Ok(())
     }
 
-    pub fn grant_badge(
+    pub fn grant_badge_via_multisig(
         env: Env,
         executor: Address,
         proposal_id: u64,
         contributor_address: Address,
         badge: Badge,
     ) -> Result<(), ContributorError> {
-        consume_approval(&env, &executor, proposal_id, &ProposalAction::GrantBadge)?;
+        let expected_payload = vec![
+            &env,
+            ProposalAction::IssueBadge(contributor_address.clone(), badge.clone()).into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
-        // Ensure contributor exists
         let _ = Self::get_contributor(env.clone(), contributor_address.clone())?;
 
         let key = DataKey::Badges(contributor_address.clone());
@@ -527,16 +458,20 @@ impl ContributorRegistryContract {
         Ok(())
     }
 
-    pub fn revoke_badge(
+    pub fn revoke_badge_via_multisig(
         env: Env,
         executor: Address,
         proposal_id: u64,
         contributor_address: Address,
         badge: Badge,
     ) -> Result<(), ContributorError> {
-        consume_approval(&env, &executor, proposal_id, &ProposalAction::RevokeBadge)?;
+        let expected_payload = vec![
+            &env,
+            ProposalAction::RevokeBadge(contributor_address.clone(), badge.clone()).into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
-        // Ensure contributor exists
         let _ = Self::get_contributor(env.clone(), contributor_address.clone())?;
 
         let key = DataKey::Badges(contributor_address.clone());
@@ -566,14 +501,7 @@ impl ContributorRegistryContract {
         Ok(())
     }
 
-    /// Apply a reputation penalty triggered by a resolved dispute.
-    ///
-    /// Requires multisig approval for `ProposalAction::ApplyPenalty`.
-    /// Deducts `points` from the contributor's reputation (floored at 0),
-    /// stores a `PenaltyRecord` for auditability, and emits
-    /// `ReputationPenaltyAppliedEvent`.
-    #[allow(clippy::too_many_arguments)]
-    pub fn apply_reputation_penalty(
+    pub fn apply_reputation_penalty_via_multisig(
         env: Env,
         executor: Address,
         proposal_id: u64,
@@ -583,7 +511,19 @@ impl ContributorRegistryContract {
         points: u64,
         reason: String,
     ) -> Result<(), ContributorError> {
-        consume_approval(&env, &executor, proposal_id, &ProposalAction::ApplyPenalty)?;
+        let expected_payload = vec![
+            &env,
+            ProposalAction::ApplyPenalty(
+                contributor_address.clone(),
+                dispute_id,
+                severity,
+                points,
+                reason.clone(),
+            )
+            .into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
         let mut contributor: ContributorData = env
             .storage()
@@ -645,12 +585,12 @@ impl ContributorRegistryContract {
         proposal_id: u64,
         contributor_address: Address,
     ) -> Result<(), ContributorError> {
-        consume_approval(
+        let expected_payload = vec![
             &env,
-            &executor,
-            proposal_id,
-            &ProposalAction::SuspendAttestation,
-        )?;
+            ProposalAction::SuspendAttestation(contributor_address.clone()).into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
         let mut contributor: ContributorData = env
             .storage()
@@ -695,12 +635,12 @@ impl ContributorRegistryContract {
         proposal_id: u64,
         contributor_address: Address,
     ) -> Result<(), ContributorError> {
-        consume_approval(
+        let expected_payload = vec![
             &env,
-            &executor,
-            proposal_id,
-            &ProposalAction::RevokeAttestation,
-        )?;
+            ProposalAction::RevokeAttestation(contributor_address.clone()).into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
         let mut contributor: ContributorData = env
             .storage()
@@ -744,12 +684,12 @@ impl ContributorRegistryContract {
         proposal_id: u64,
         contributor_address: Address,
     ) -> Result<(), ContributorError> {
-        consume_approval(
+        let expected_payload = vec![
             &env,
-            &executor,
-            proposal_id,
-            &ProposalAction::RestoreAttestation,
-        )?;
+            ProposalAction::RestoreAttestation(contributor_address.clone()).into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
         let mut contributor: ContributorData = env
             .storage()
@@ -788,7 +728,9 @@ impl ContributorRegistryContract {
         proposal_id: u64,
         new_wasm_hash: BytesN<32>,
     ) -> Result<(), ContributorError> {
-        consume_approval(&env, &executor, proposal_id, &ProposalAction::Upgrade)?;
+        let expected_payload = vec![&env, ProposalAction::Upgrade.into_val(&env)];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
         env.deployer()
             .update_current_contract_wasm(new_wasm_hash.clone());
@@ -802,13 +744,18 @@ impl ContributorRegistryContract {
         Ok(())
     }
 
-    pub fn set_admin(
+    pub fn set_admin_via_multisig(
         env: Env,
         executor: Address,
         proposal_id: u64,
         new_admin: Address,
     ) -> Result<(), ContributorError> {
-        consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
+        let expected_payload = vec![
+            &env,
+            ProposalAction::SetAdmin(new_admin.clone()).into_val(&env),
+        ];
+        consume_approval(&env, &executor, proposal_id, &expected_payload)
+            .map_err(|_| ContributorError::Unauthorized)?;
 
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         env.storage()
@@ -862,7 +809,6 @@ impl ContributorRegistryContract {
         badges
     }
 
-    /// Returns the most recent penalty record for a contributor, if any.
     pub fn get_penalty_record(env: Env, contributor: Address) -> Option<PenaltyRecord> {
         let key = DataKey::ReputationPenalty(contributor);
         let record: Option<PenaltyRecord> = env.storage().persistent().get(&key);
@@ -910,18 +856,15 @@ impl ContributorRegistryContract {
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
-        get_config(&env)
+        multisig_get_config(&env).map_err(|_| ContributorError::NotInitialized)
     }
 
     pub fn get_registration_nonce(env: Env, address: Address) -> u64 {
         Self::registration_nonce_of(&env, &address)
     }
 
-    pub fn get_proposal(
-        env: Env,
-        proposal_id: u64,
-    ) -> Result<multisig::Proposal, ContributorError> {
-        get_proposal(&env, proposal_id)
+    pub fn get_proposal(env: Env, proposal_id: u64) -> Result<Proposal, ContributorError> {
+        get_proposal(&env, proposal_id).map_err(|_| ContributorError::Unauthorized)
     }
 
     pub fn get_next_proposal_id(env: Env) -> u64 {
@@ -930,12 +873,10 @@ impl ContributorRegistryContract {
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         env.storage()
             .instance()
-            .get(&DataKey::NextProposalId)
+            .get(&MultisigDataKey::NextProposalId)
             .unwrap_or(0)
     }
 }
-
-// ── Notification receiver ─────────────────────────────────────
 
 #[contractimpl]
 impl NotificationReceiverTrait for ContributorRegistryContract {
@@ -961,9 +902,8 @@ impl NotificationReceiverTrait for ContributorRegistryContract {
     }
 }
 
-// ── Tests ─────────────────────────────────────────────────────
-
 #[cfg(test)]
+
 mod test {
     use super::*;
     use soroban_sdk::{

@@ -3,12 +3,6 @@ use soroban_sdk::{contracttype, Address, Vec};
 pub const LEDGER_THRESHOLD: u32 = 120_960; // ~1 week
 pub const LEDGER_BUMP: u32 = 241_920; // ~2 weeks
 
-/// Proposals expire after 72 hours if threshold is never reached.
-pub const PROPOSAL_TTL_SECS: u64 = 72 * 60 * 60;
-
-/// Hard cap on the signer set size to keep iteration costs bounded.
-pub const MAX_SIGNERS: u32 = 10;
-
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
@@ -80,7 +74,7 @@ pub struct MultisigConfig {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProposalAction {
     /// Change the admin address.
-    SetAdmin,
+    SetAdmin(Address),
     /// Rotate a vesting stream's beneficiary.
     RotateBeneficiary,
 }
