@@ -51,20 +51,22 @@ export class SorobanEventsProcessor extends WorkerHost {
 
     const mapping = mapSorobanEvent(eventType ?? null);
 
-    const event = existing ?? this.eventRepo.create({
-      txHash,
-      eventIndex,
-      contractId: contractId ?? null,
-      eventType: eventType ?? null,
-      canonicalType: mapping?.canonicalType ?? null,
-      category: mapping?.category ?? null,
-      rawPayload,
-      ledgerSequence:
-        (job.data as { ledgerSequence?: number }).ledgerSequence ?? null,
-      status: SorobanEventStatus.PENDING,
-      processedAt: null,
-      errorMessage: null,
-    });
+    const event =
+      existing ??
+      this.eventRepo.create({
+        txHash,
+        eventIndex,
+        contractId: contractId ?? null,
+        eventType: eventType ?? null,
+        canonicalType: mapping?.canonicalType ?? null,
+        category: mapping?.category ?? null,
+        rawPayload,
+        ledgerSequence:
+          (job.data as { ledgerSequence?: number }).ledgerSequence ?? null,
+        status: SorobanEventStatus.PENDING,
+        processedAt: null,
+        errorMessage: null,
+      });
 
     if (existing) {
       event.status = SorobanEventStatus.PENDING;

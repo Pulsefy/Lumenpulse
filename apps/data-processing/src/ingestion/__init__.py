@@ -1,5 +1,6 @@
 """
 Data ingestion module for fetching external data.
+Includes account operation ingestion from Horizon.
 """
 from .payload_quarantine import (
     QuarantineStore,
@@ -39,6 +40,13 @@ from .freshness_monitor import (
     run_freshness_check,
 )
 
+# Account operation ingestion (Issue #743)
+from .account_operation_ingestor import (
+    AccountOperationIngestor,
+    ingest_account_operations,
+    get_ingestion_status,
+)
+
 __all__ = [
     # Freshness SLA monitor
     "FreshnessResult",
@@ -74,4 +82,8 @@ __all__ = [
     "LedgerCursorRow",
     "RecoveryCoordinator",
     "DuplicateEventError",
+    # Account operation ingestion (Issue #743)
+    "AccountOperationIngestor",
+    "ingest_account_operations",
+    "get_ingestion_status",
 ]

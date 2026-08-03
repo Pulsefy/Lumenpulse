@@ -10,6 +10,7 @@ import { ContentReport, ReportStatus } from './entities/content-report.entity';
 import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 import { QueryReportsDto } from './dto/query-reports.dto';
+import { ModerationEventPublisherService } from './services/moderation-event-publisher.service';
 
 @Injectable()
 export class ModerationService {
@@ -18,6 +19,7 @@ export class ModerationService {
   constructor(
     @InjectRepository(ContentReport)
     private reportsRepository: Repository<ContentReport>,
+    private readonly eventPublisher: ModerationEventPublisherService,
   ) {}
 
   /**
@@ -55,6 +57,13 @@ export class ModerationService {
     const savedReport = await this.reportsRepository.save(report);
     this.logger.log(
       `New report created: ${savedReport.id} for ${dto.targetType} ${dto.targetId}`,
+    );
+
+    // Emit event after successful database write
+    await this.eventPublisher.publishModerationEvent(
+      'moderation.pending',
+      savedReport,
+      null, // No previous status for new reports
     );
 
     return savedReport;
@@ -170,6 +179,9 @@ export class ModerationService {
   ): Promise<ContentReport> {
     const report = await this.getReportById(id);
 
+    // Capture previous status before update
+    const previousStatus = report.status;
+
     // Update fields
     if (dto.status) {
       report.status = dto.status;
@@ -195,7 +207,37 @@ export class ModerationService {
       `Report ${id} updated by ${reviewerId}. Status: ${updatedReport.status}`,
     );
 
+    // Emit event after successful database write (only if status changed)
+    if (dto.status && previousStatus !== dto.status) {
+      const eventType = this.mapStatusToEventType(dto.status);
+      await this.eventPublisher.publishModerationEvent(
+        eventType,
+        updatedReport,
+        previousStatus,
+      );
+    }
+
     return updatedReport;
+  }
+
+  /**
+   * Map a ReportStatus to its corresponding event type
+   */
+  private mapStatusToEventType(
+    status: ReportStatus,
+  ):
+    | 'moderation.pending'
+    | 'moderation.under_review'
+    | 'moderation.resolved'
+    | 'moderation.dismissed' {
+    const mapping = {
+      [ReportStatus.PENDING]: 'moderation.pending' as const,
+      [ReportStatus.UNDER_REVIEW]: 'moderation.under_review' as const,
+      [ReportStatus.RESOLVED]: 'moderation.resolved' as const,
+      [ReportStatus.DISMISSED]: 'moderation.dismissed' as const,
+    };
+
+    return mapping[status];
   }
 
   /**

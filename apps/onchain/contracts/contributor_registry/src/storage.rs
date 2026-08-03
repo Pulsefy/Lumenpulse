@@ -6,6 +6,26 @@ use soroban_sdk::{contracttype, Address, String};
 pub const LEDGER_THRESHOLD: u32 = 100_000;
 pub const LEDGER_BUMP: u32 = 518_400;
 
+/// Named pause scopes for the contributor registry.
+///
+/// - `Contribution` — blocks `register_contributor` and `gasless_register`.
+/// - `Governance`   — blocks all multisig operations: `propose`, `sign`,
+///                    `cancel_proposal`, `expire_proposal`,
+///                    `set_multisig_config`, and any multisig-gated admin
+///                    actions (`suspend_attestation`, `revoke_attestation`,
+///                    `restore_attestation`, `grant_badge`, `revoke_badge`,
+///                    `apply_reputation_penalty`, `update_contributor` via
+///                    admin path).
+///
+/// Read-only queries (`get_contributor`, `get_admin`, etc.) are never blocked.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum ContribPauseScope {
+    Contribution = 1,
+    Governance = 2,
+}
+
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
@@ -26,6 +46,10 @@ pub enum DataKey {
     // ── Penalty keys ──────────────────────────────────────────
     /// Latest penalty record for a contributor (keyed by contributor address).
     ReputationPenalty(Address),
+
+    // ── Granular pause scope flags ────────────────────────────
+    /// Per-scope pause flag.  Key: `ScopePaused(ContribPauseScope)`.
+    ScopePaused(ContribPauseScope),
 }
 
 #[contracttype]

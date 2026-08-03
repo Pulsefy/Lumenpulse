@@ -3,19 +3,34 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import { Menu, X, Layers, Users, LayoutDashboard, Trophy, ShieldCheck, Bell } from "lucide-react";
+import {
+  Menu,
+  X,
+  Layers,
+  Users,
+  LayoutDashboard,
+  Trophy,
+  ShieldCheck,
+  Bell,
+  UserCircle,
+} from "lucide-react";
 import { WalletButton } from "./wallet-button";
 import { ThemeSelector } from "./theme-selector";
 import { WalletSwitcher } from "@/components/wallet-switcher";
 import { useStellarConfig } from "@/contexts/StellarConfigContext";
+import { useWallet } from "@/contexts/WalletContext";
 import { useExplorerUrl } from "@/hooks/useExplorerUrl";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { config } = useStellarConfig();
+  const wallet = useWallet();
   const buildExplorerUrl = useExplorerUrl();
   const isTestnet = config?.network === "testnet";
   const vaultContractId = config?.contracts?.crowdfundVault;
+  const profileHref = wallet.activeWallet
+    ? `/contributor/${wallet.activeWallet.address}`
+    : "/community";
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-xl border-b border-primary/20">
@@ -78,12 +93,12 @@ export function Navbar() {
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
             <Link
-              href="/verification"
+              href={profileHref}
               className="px-3 py-2 text-sm font-medium text-white hover:text-white transition-all flex items-center gap-2 group relative"
             >
-              <ShieldCheck className="w-4 h-4 text-primary group-hover:text-white transition-colors" />
+              <UserCircle className="w-4 h-4 text-primary group-hover:text-white transition-colors" />
               <span className="group-hover:translate-x-0.5 transition-transform">
-                Verify
+                Profile
               </span>
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
@@ -192,12 +207,12 @@ export function Navbar() {
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
             <Link
-              href="/verification"
+              href={profileHref}
               className="flex items-center gap-3 p-3 rounded-lg text-white hover:bg-white/5 transition-all relative group"
               onClick={() => setIsMenuOpen(false)}
             >
-              <ShieldCheck className="w-5 h-5 text-primary" />
-              <span>Verify</span>
+              <UserCircle className="w-5 h-5 text-primary" />
+              <span>Profile</span>
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
             <Link
@@ -231,16 +246,16 @@ export function Navbar() {
                 </span>
               )}
               {vaultContractId && (
-              <a
-                href={buildExplorerUrl("contract", vaultContractId)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-primary/10 text-primary/70 border border-primary/20 hover:bg-primary/20 hover:text-primary transition-colors"
-              >
-                View Vault Contract ↗
-              </a>
-            )}
-            <WalletButton className="w-full justify-center" />
+                <a
+                  href={buildExplorerUrl("contract", vaultContractId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-primary/10 text-primary/70 border border-primary/20 hover:bg-primary/20 hover:text-primary transition-colors"
+                >
+                  View Vault Contract ↗
+                </a>
+              )}
+              <WalletButton className="w-full justify-center" />
             </div>
 
             {/* Theme Selector in mobile menu */}

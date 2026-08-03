@@ -106,8 +106,7 @@ export class WebhookService {
     if (configuredSecrets) {
       try {
         const parsed = JSON.parse(configuredSecrets) as
-          | WebhookSecretEntry[]
-          | WebhookSecretEntry;
+          WebhookSecretEntry[] | WebhookSecretEntry;
         const entries = Array.isArray(parsed) ? parsed : [parsed];
         for (const entry of entries) {
           if (entry?.secret) {

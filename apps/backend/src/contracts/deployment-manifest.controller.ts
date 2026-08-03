@@ -23,6 +23,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ContractAdminGuard } from '../common/guards/contract-admin.guard';
+import { ContractAdminTrustedCallerGuard } from '../common/guards/contract-admin-trusted-caller.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
 import { DeploymentManifestService } from './deployment-manifest.service';
@@ -128,7 +129,7 @@ export class DeploymentManifestController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtAuthGuard, ContractAdminGuard)
+  @UseGuards(JwtAuthGuard, ContractAdminGuard, ContractAdminTrustedCallerGuard)
   @Roles(UserRole.ADMIN)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -154,7 +155,7 @@ export class DeploymentManifestController {
 
   @Put(':id')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard, ContractAdminGuard)
+  @UseGuards(JwtAuthGuard, ContractAdminGuard, ContractAdminTrustedCallerGuard)
   @Roles(UserRole.ADMIN)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -185,7 +186,7 @@ export class DeploymentManifestController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(JwtAuthGuard, ContractAdminGuard)
+  @UseGuards(JwtAuthGuard, ContractAdminGuard, ContractAdminTrustedCallerGuard)
   @Roles(UserRole.ADMIN)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({

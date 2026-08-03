@@ -770,4 +770,3 @@ class DailyOnchainKPISnapshot(Base):
             f"tvl={self.tvl}, volume={self.volume}, active_rounds={self.active_rounds}, "
             f"contribution_count={self.contribution_count})>"
         )
-

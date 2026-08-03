@@ -19,23 +19,31 @@ import {
 function ConfigGate({ children }: { children: ReactNode }) {
   const { config, status, error, retry } = useStellarConfig();
 
-  if (status === "error") {
-    return (
-      <ConfigErrorBanner
-        error={error}
-        onRetry={retry}
-        isRetrying={false}
-      />
-    );
-  }
-
   const isTestnet = config?.network === "testnet";
+  const isError = status === "error";
 
   // While loading we let the app render normally — individual components
   // can show their own skeletons. The config is available as soon as it resolves.
   return (
     <>
-      {isTestnet && (
+      {isError && (
+        <div
+          id="config-error-banner"
+          className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-between gap-4 bg-red-500/10 border-b border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 backdrop-blur-md"
+        >
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+            <span className="truncate">Degraded Mode: Unable to load Stellar configuration. Some features may be unavailable.</span>
+          </div>
+          <button
+            onClick={retry}
+            className="rounded bg-red-500/20 px-3 py-1 text-xs hover:bg-red-500/30 transition-colors shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {isTestnet && !isError && (
         <div
           id="testnet-banner"
           className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-center gap-2 bg-amber-500/10 border-b border-amber-500/30 py-1.5 text-xs font-medium text-amber-400 backdrop-blur-sm"
@@ -51,7 +59,7 @@ function ConfigGate({ children }: { children: ReactNode }) {
 
 import { OnboardingProvider } from "@/lib/onboarding";
 import { ThemeProvider } from "@/components/theme-provider";
-import { WatchlistProvider } from "@/contexts/WatchlistContext";
+import { WatchlistProvider } from "@/hooks/use-watchlist";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (

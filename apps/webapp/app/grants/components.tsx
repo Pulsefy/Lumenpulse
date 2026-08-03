@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Wallet, Info, Bookmark } from "lucide-react";
 import { useStellarConfig } from "@/contexts/StellarConfigContext";
 import { useStellarWallet } from "@/app/providers";
-import { useWatchlist } from "@/contexts/WatchlistContext";
+import { useWatchlist } from "@/hooks/use-watchlist";
 import { TransactionReceiptModal } from "@/components/TransactionReceiptModal";
 import { WalletReadinessBanner } from "@/components/WalletReadinessBanner";
 import { useWalletReadiness } from "@/hooks/useWalletReadiness";

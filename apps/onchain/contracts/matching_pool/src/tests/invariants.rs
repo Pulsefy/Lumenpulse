@@ -158,7 +158,7 @@ mod open_phase {
             );
             prop_assert_eq!(
                 result,
-                Err(Ok(MatchingPoolError::ContractPaused)),
+                Err(Ok(MatchingPoolError::GovernanceScopePaused)),
                 "INV-6: paused contract must reject create_round"
             );
         }
@@ -297,7 +297,7 @@ mod contribute_phase {
             let result = client.try_fund_pool(&admin, &round_id, &amount);
             prop_assert_eq!(
                 result,
-                Err(Ok(MatchingPoolError::ContractPaused)),
+                Err(Ok(MatchingPoolError::ContributionScopePaused)),
                 "INV-6: paused contract must reject fund_pool"
             );
         }
