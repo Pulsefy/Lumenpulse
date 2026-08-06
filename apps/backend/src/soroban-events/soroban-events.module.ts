@@ -18,6 +18,7 @@ import { ProjectRegistryEntity } from '../database/entities/project-registry.ent
 import { StellarModule } from '../stellar/stellar.module';
 import { SchedulerModule } from '../scheduler/scheduler.module';
 import { AdminAuditModule } from '../admin-audit/admin-audit.module';
+import { SavedSearchModule } from '../saved-search/saved-search.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { AdminAuditModule } from '../admin-audit/admin-audit.module';
     StellarModule,
     SchedulerModule,
     AdminAuditModule,
+    SavedSearchModule,
   ],
   controllers: [SorobanEventsController, SorobanEventsDeadLetterController],
   providers: [
