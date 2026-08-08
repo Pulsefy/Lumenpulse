@@ -8,7 +8,8 @@ mod types;
 pub use errors::CurationError;
 pub use types::{ProjectMetadata, ProjectStatus, ProposalState, VoteRecord};
 
-use soroban_sdk::{contract, contractimpl, token, Address, Env};
+use cross_contract_view::read_u64_view;
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol};
 
 use events::*;
 use storage::*;
@@ -143,14 +144,14 @@ impl CommunityCurationContract {
         }
 
         // Fetch voting power from contributor-registry
-        let voting_power = Self::get_reputation(&env, &voter);
+        let voting_power = Self::get_reputation(&env, &voter)?;
         if voting_power == 0 {
             return Err(CurationError::InsufficientReputation);
         }
 
         // Snapshot total voting power on first vote (gas-efficient approximation)
         if proposal.total_voting_power_snapshot == 0 {
-            proposal.total_voting_power_snapshot = Self::get_total_reputation(&env);
+            proposal.total_voting_power_snapshot = Self::get_total_reputation(&env)?;
         }
 
         // Record vote
@@ -268,24 +269,27 @@ impl CommunityCurationContract {
     // ── Internal Helpers ─────────────────────────────────────────────────────
 
     /// Cross-contract call into contributor-registry to read a voter's reputation.
-    fn get_reputation(env: &Env, voter: &Address) -> u64 {
-        // contributor-registry exposes: get_reputation(address) -> u64
+    fn get_reputation(env: &Env, voter: &Address) -> Result<u64, CurationError> {
         let registry = get_contributor_registry(env);
-        env.invoke_contract(
+        read_u64_view(
+            env,
             &registry,
-            &soroban_sdk::Symbol::new(env, "get_reputation"),
+            &Symbol::new(env, "get_reputation"),
             soroban_sdk::vec![env, voter.to_val()],
         )
+        .map_err(|_| CurationError::CrossContractViewFailed)
     }
 
     /// Cross-contract call to read the sum of all reputations (total supply proxy).
-    fn get_total_reputation(env: &Env) -> u64 {
+    fn get_total_reputation(env: &Env) -> Result<u64, CurationError> {
         let registry = get_contributor_registry(env);
-        env.invoke_contract(
+        read_u64_view(
+            env,
             &registry,
-            &soroban_sdk::Symbol::new(env, "total_reputation"),
+            &Symbol::new(env, "total_reputation"),
             soroban_sdk::vec![env],
         )
+        .map_err(|_| CurationError::CrossContractViewFailed)
     }
 
     /// Check whether YES votes cross the threshold; update status in place.

@@ -14,4 +14,5 @@ pub enum CurationError {
     InsufficientReputation = 8,
     InvalidMetadata = 9,
     Unauthorized = 10,
+    CrossContractViewFailed = 11,
 }
