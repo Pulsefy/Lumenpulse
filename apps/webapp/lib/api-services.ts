@@ -306,3 +306,211 @@ export class PortfolioApiService {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Project API — interfaces and methods for crowdfund projects
+// ---------------------------------------------------------------------------
+
+export interface ProjectMilestone {
+  id: string;
+  title: string;
+  description: string;
+  targetDate: string;
+  isCompleted: boolean;
+  completedAt?: string;
+  fundingReleaseAmount?: string;
+  fundingReleaseTx?: string;
+}
+
+export interface ProjectDetail {
+  id: number;
+  owner: string;
+  name: string;
+  description?: string;
+  bannerUrl?: string;
+  targetAmount: string;
+  tokenAddress: string;
+  contractAddress?: string;
+  totalDeposited: string;
+  totalWithdrawn: string;
+  isActive: boolean;
+  onChainStatus: "ACTIVE" | "COMPLETED" | "PAUSED" | "CANCELLED";
+  lastSyncedAt: string;
+  contributorCount: number;
+  roadmap: ProjectMilestone[];
+  createdAt: string;
+}
+
+export interface ProjectContributor {
+  publicKey: string;
+  totalContributed: string;
+  contributionCount: number;
+  lastContributionAt: string;
+}
+
+export interface ContributionRecord {
+  projectId: number;
+  contributor: string;
+  amount: string;
+  timestamp: string;
+  transactionHash: string;
+}
+
+export interface ProjectBalance {
+  balance: string;
+}
+
+export interface ProjectSummary {
+  id: number;
+  name: string;
+  description?: string;
+  targetAmount: string;
+  totalDeposited: string;
+  totalWithdrawn: string;
+  isActive: boolean;
+  onChainStatus: "ACTIVE" | "COMPLETED" | "PAUSED" | "CANCELLED";
+  contributorCount: number;
+  createdAt: string;
+}
+
+/**
+ * API service for interacting with crowdfund project endpoints
+ */
+export class ProjectApiService {
+  private static readonly BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+  /**
+   * Get all projects
+   */
+  static async getProjects(): Promise<ProjectSummary[]> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load projects: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get a single project by ID
+   */
+  static async getProject(id: number): Promise<ProjectDetail> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/${id}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Project not found');
+      }
+      throw new Error(`Failed to load project: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get project balance
+   */
+  static async getProjectBalance(id: number): Promise<ProjectBalance> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/${id}/balance`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load balance: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get project contributors
+   */
+  static async getProjectContributors(id: number): Promise<ProjectContributor[]> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/${id}/contributors`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load contributors: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get contributions for a specific user on a project
+   */
+  static async getMyContributions(id: number, publicKey: string): Promise<ContributionRecord[]> {
+    const response = await fetch(
+      `${this.BASE_URL}/crowdfund/projects/${id}/contributions/${publicKey}`,
+      { headers: { Accept: 'application/json' } }
+    );
+    if (!response.ok) {
+      if (response.status === 404) {
+        return [];
+      }
+      throw new Error(`Failed to load contributions: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get all contributions for a project
+   */
+  static async getProjectContributions(id: number): Promise<ContributionRecord[]> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/${id}/contributions`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load contributions: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get project by contract address
+   */
+  static async getProjectByContract(contractAddress: string): Promise<ProjectDetail> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/contract/${contractAddress}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Project not found for this contract');
+      }
+      throw new Error(`Failed to load project: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get project by token address
+   */
+  static async getProjectByToken(tokenAddress: string): Promise<ProjectDetail> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/token/${tokenAddress}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Project not found for this token');
+      }
+      throw new Error(`Failed to load project: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get project statistics
+   */
+  static async getProjectStats(id: number): Promise<{
+    totalContributors: number;
+    totalContributions: number;
+    averageContribution: string;
+    progressPercentage: number;
+    daysRemaining?: number;
+  }> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/${id}/stats`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load project stats: ${response.statusText}`);
+    }
+    return response.json();
+  }
+}

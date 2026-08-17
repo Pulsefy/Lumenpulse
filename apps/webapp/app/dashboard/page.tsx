@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Star } from "lucide-react";
+import { Star, Rocket } from "lucide-react";
 import StellarBalancesPanel from "@/components/stellar-balances-panel";
 import AssetDetail from "@/components/asset-detail";
 import WatchlistPanel from "@/components/watchlist-panel";
@@ -51,15 +51,30 @@ export default function DashboardPage() {
           />
         ) : (
           <>
-            <div className="flex justify-between items-center mb-6">
+            {/* Header with navigation buttons */}
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
               <h1 className="text-3xl font-bold">Dashboard</h1>
-              <button
-                onClick={() => router.push("/dashboard/watchlist")}
-                className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded-lg transition-colors"
-              >
-                <Star size={16} className="fill-yellow-400" />
-                My Watchlist
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Explore Projects Button */}
+                <button
+                  onClick={() => router.push("/projects")}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors text-sm font-medium"
+                >
+                  <Rocket size={16} />
+                  <span>Explore Projects</span>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                {/* Watchlist Button */}
+                <button
+                  onClick={() => router.push("/dashboard/watchlist")}
+                  className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded-lg transition-colors"
+                >
+                  <Star size={16} className="fill-yellow-400" />
+                  My Watchlist
+                </button>
+              </div>
             </div>
             <p className="text-lg mb-4 text-gray-400">Welcome to your personal dashboard.</p>
 

@@ -575,7 +575,7 @@ fn test_finalize_while_paused_fails() {
     env.ledger().set_timestamp(4000);
     assert_eq!(
         client.try_finalize_round(&admin, &round_id),
-        Err(Ok(MatchingPoolError::ContractPaused))
+        Err(Ok(MatchingPoolError::GovernanceScopePaused))
     );
 
     let round = client.get_round(&round_id);
@@ -675,7 +675,7 @@ fn test_distribute_while_paused_fails() {
     let owners = vec![&env, owner1.clone()];
     assert_eq!(
         client.try_distribute_matching_funds(&admin, &round_id, &owners),
-        Err(Ok(MatchingPoolError::ContractPaused))
+        Err(Ok(MatchingPoolError::PayoutScopePaused))
     );
 
     let round = client.get_round(&round_id);
@@ -1028,4 +1028,305 @@ fn test_qf_score_unaffected_by_cap_bookkeeping() {
     // — proves the cap bookkeeping doesn't perturb QF scoring.
     let score = client.get_project_qf_score(&round_id, &1u64);
     assert!(score > 0);
+}
+
+// ── Granular pause scopes ────────────────────────────────────────────────────
+
+#[test]
+fn test_pause_contribution_scope_blocks_fund_pool() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, token_admin) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(1000);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R"),
+        &token.address,
+        &1000u64,
+        &2000u64,
+    );
+
+    let funder = Address::generate(&env);
+    token_admin.mint(&funder, &1000i128);
+
+    // Pause contribution scope only.
+    client.pause_scope(&admin, &crate::storage::PauseScope::Contribution);
+    assert!(client.is_paused(&crate::storage::PauseScope::Contribution));
+    assert!(!client.is_paused(&crate::storage::PauseScope::Payout));
+    assert!(!client.is_paused(&crate::storage::PauseScope::Governance));
+
+    assert_eq!(
+        client.try_fund_pool(&funder, &round_id, &100i128),
+        Err(Ok(MatchingPoolError::ContributionScopePaused))
+    );
+
+    // Governance ops still work while contribution is paused.
+    client.approve_project(&admin, &round_id, &42u64);
+
+    // Unpause restores fund_pool.
+    client.unpause_scope(&admin, &crate::storage::PauseScope::Contribution);
+    assert!(!client.is_paused(&crate::storage::PauseScope::Contribution));
+    client.fund_pool(&funder, &round_id, &100i128);
+    assert_eq!(client.get_pool_balance(&round_id), 100i128);
+}
+
+#[test]
+fn test_pause_contribution_scope_blocks_record_contribution() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+    client.approve_project(&admin, &round_id, &1u64);
+
+    client.pause_scope(&admin, &crate::storage::PauseScope::Contribution);
+    env.ledger().set_timestamp(1500);
+
+    let contributor = Address::generate(&env);
+    assert_eq!(
+        client.try_record_contribution(&round_id, &1u64, &contributor, &100i128),
+        Err(Ok(MatchingPoolError::ContributionScopePaused))
+    );
+
+    // After unpause the contribution goes through.
+    client.unpause_scope(&admin, &crate::storage::PauseScope::Contribution);
+    client.record_contribution(&round_id, &1u64, &contributor, &100i128);
+    assert_eq!(client.get_project_contributions(&round_id, &1u64), 100i128);
+}
+
+#[test]
+fn test_pause_payout_scope_blocks_distribute() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, token_admin) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+    client.approve_project(&admin, &round_id, &1u64);
+
+    let funder = Address::generate(&env);
+    token_admin.mint(&funder, &10_000i128);
+    client.fund_pool(&funder, &round_id, &1_000i128);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+    client.record_contribution(&round_id, &1u64, &contributor, &100i128);
+
+    // Round ends at 3000; finalize requires now > end_time.
+    env.ledger().set_timestamp(3001);
+    client.finalize_round(&admin, &round_id);
+
+    // Pause payout scope only.
+    client.pause_scope(&admin, &crate::storage::PauseScope::Payout);
+    assert!(client.is_paused(&crate::storage::PauseScope::Payout));
+    assert!(!client.is_paused(&crate::storage::PauseScope::Contribution));
+    assert!(!client.is_paused(&crate::storage::PauseScope::Governance));
+
+    let owner = Address::generate(&env);
+    assert_eq!(
+        client.try_distribute_matching_funds(&admin, &round_id, &vec![&env, owner.clone()]),
+        Err(Ok(MatchingPoolError::PayoutScopePaused))
+    );
+
+    // Unpause and distribution succeeds.
+    client.unpause_scope(&admin, &crate::storage::PauseScope::Payout);
+    let distributed = client.distribute_matching_funds(&admin, &round_id, &vec![&env, owner]);
+    assert!(distributed > 0);
+}
+
+#[test]
+fn test_pause_governance_scope_blocks_create_round() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    client.pause_scope(&admin, &crate::storage::PauseScope::Governance);
+    assert!(client.is_paused(&crate::storage::PauseScope::Governance));
+
+    assert_eq!(
+        client.try_create_round(
+            &admin,
+            &symbol_short!("R"),
+            &token.address,
+            &1000u64,
+            &2000u64,
+        ),
+        Err(Ok(MatchingPoolError::GovernanceScopePaused))
+    );
+
+    // Contribution scope still open while governance is paused.
+    assert!(!client.is_paused(&crate::storage::PauseScope::Contribution));
+}
+
+#[test]
+fn test_pause_governance_scope_blocks_finalize_round() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+
+    // Round ends at 3000; advance past it.
+    env.ledger().set_timestamp(3001);
+    client.pause_scope(&admin, &crate::storage::PauseScope::Governance);
+
+    assert_eq!(
+        client.try_finalize_round(&admin, &round_id),
+        Err(Ok(MatchingPoolError::GovernanceScopePaused))
+    );
+
+    // After unpause finalize succeeds.
+    client.unpause_scope(&admin, &crate::storage::PauseScope::Governance);
+    client.finalize_round(&admin, &round_id);
+    assert!(client.get_round(&round_id).is_finalized);
+}
+
+#[test]
+fn test_pause_governance_scope_blocks_approve_and_remove_project() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+
+    client.pause_scope(&admin, &crate::storage::PauseScope::Governance);
+
+    assert_eq!(
+        client.try_approve_project(&admin, &round_id, &99u64),
+        Err(Ok(MatchingPoolError::GovernanceScopePaused))
+    );
+    assert_eq!(
+        client.try_remove_project(&admin, &round_id, &99u64),
+        Err(Ok(MatchingPoolError::GovernanceScopePaused))
+    );
+}
+
+#[test]
+fn test_pause_governance_scope_blocks_set_round_cap() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+
+    client.pause_scope(&admin, &crate::storage::PauseScope::Governance);
+
+    assert_eq!(
+        client.try_set_round_cap(&admin, &round_id, &500i128),
+        Err(Ok(MatchingPoolError::GovernanceScopePaused))
+    );
+}
+
+#[test]
+fn test_read_queries_always_available_under_all_scopes_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+
+    // Pause all three scopes.
+    client.pause_scope(&admin, &crate::storage::PauseScope::Contribution);
+    client.pause_scope(&admin, &crate::storage::PauseScope::Payout);
+    client.pause_scope(&admin, &crate::storage::PauseScope::Governance);
+
+    // All read queries must succeed regardless.
+    let _round = client.get_round(&round_id);
+    let _bal = client.get_pool_balance(&round_id);
+    let _status = client.get_round_status(&round_id);
+    let _admin_addr = client.get_admin();
+    assert!(client.is_paused(&crate::storage::PauseScope::Contribution));
+    assert!(client.is_paused(&crate::storage::PauseScope::Payout));
+    assert!(client.is_paused(&crate::storage::PauseScope::Governance));
+}
+
+#[test]
+fn test_mixed_scopes_contribution_paused_payout_open() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, token_admin) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+    client.approve_project(&admin, &round_id, &1u64);
+
+    // Pre-fund before pausing contribution.
+    let funder = Address::generate(&env);
+    token_admin.mint(&funder, &10_000i128);
+    client.fund_pool(&funder, &round_id, &2_000i128);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+    client.record_contribution(&round_id, &1u64, &contributor, &200i128);
+
+    // Now pause contribution — payout and governance remain open.
+    client.pause_scope(&admin, &crate::storage::PauseScope::Contribution);
+
+    // Governance: finalize still works (round ends at 3000).
+    env.ledger().set_timestamp(3001);
+    client.finalize_round(&admin, &round_id);
+
+    // Payout: distribute still works.
+    let owner = Address::generate(&env);
+    let distributed = client.distribute_matching_funds(&admin, &round_id, &vec![&env, owner]);
+    assert!(distributed > 0);
+
+    // Contribution: record is blocked.
+    let latecontributor = Address::generate(&env);
+    assert_eq!(
+        client.try_record_contribution(&round_id, &1u64, &latecontributor, &10i128),
+        Err(Ok(MatchingPoolError::ContributionScopePaused))
+    );
+}
+
+#[test]
+fn test_legacy_pause_still_blocks_all_write_operations() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, token_admin) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(1000);
+
+    // Use legacy global pause.
+    client.pause(&admin);
+
+    let funder = Address::generate(&env);
+    token_admin.mint(&funder, &1000i128);
+
+    // All three scope guards treat global pause as paused.
+    assert_eq!(
+        client.try_create_round(
+            &admin,
+            &symbol_short!("R"),
+            &token.address,
+            &1000u64,
+            &2000u64,
+        ),
+        Err(Ok(MatchingPoolError::GovernanceScopePaused))
+    );
+
+    client.unpause(&admin);
+
+    // After unpause create_round succeeds.
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R"),
+        &token.address,
+        &1000u64,
+        &2000u64,
+    );
+    assert_eq!(round_id, 0);
+}
+
+#[test]
+fn test_only_admin_can_pause_scope() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, _, _) = setup(&env);
+    client.initialize(&admin);
+
+    let non_admin = Address::generate(&env);
+    assert_eq!(
+        client.try_pause_scope(&non_admin, &crate::storage::PauseScope::Contribution),
+        Err(Ok(MatchingPoolError::Unauthorized))
+    );
+    assert_eq!(
+        client.try_unpause_scope(&non_admin, &crate::storage::PauseScope::Contribution),
+        Err(Ok(MatchingPoolError::Unauthorized))
+    );
 }

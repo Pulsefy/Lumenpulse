@@ -56,7 +56,7 @@ describe('TestnetBootstrapService', () => {
         'isAxiosError' in error &&
         (error as { isAxiosError?: boolean }).isAxiosError === true,
       ),
-    ) as typeof axios.isAxiosError;
+    ) as unknown as typeof mockedAxios.isAxiosError;
   });
 
   afterEach(() => {

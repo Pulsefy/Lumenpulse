@@ -344,7 +344,14 @@ export function ProjectAllocationRow({
     <div className="flex flex-col gap-3 p-4 rounded-xl border border-white/5 bg-white/[0.02]">
       <div className="flex items-center gap-3">
         <span className={`text-sm font-bold w-6 ${rankColors[rank] ?? "text-foreground/40"}`}>#{rank + 1}</span>
-        <span className="flex-1 font-medium text-sm">Project #{item.projectId}</span>
+        {/* Project name with link to project detail page */}
+        <Link
+          href={`/projects/${item.projectId}`}
+          className="flex-1 font-medium text-sm hover:text-primary transition-colors hover:underline"
+          title={`View Project #${item.projectId} details`}
+        >
+          Project #{item.projectId}
+        </Link>
         <span className="text-primary font-bold text-sm">~{formatAmount(item.estimatedMatch)} XLM</span>
         <ReportButton
           targetType="project"
@@ -384,7 +391,14 @@ export function ProjectAllocationRow({
       {isExpanded && (
         <div className="mt-2 p-4 rounded-xl border border-white/10 bg-white/[0.01] backdrop-blur-md space-y-4 transition-all duration-300">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-white/80">Contribute to Project #{item.projectId}</h4>
+            <h4 className="text-sm font-semibold text-white/80">
+              <Link
+                href={`/projects/${item.projectId}`}
+                className="hover:text-primary transition-colors hover:underline"
+              >
+                Contribute to Project #{item.projectId}
+              </Link>
+            </h4>
             {config?.contracts?.crowdfundVault && (
               <a
                 href={buildExplorerUrl("contract", config.contracts.crowdfundVault)}
@@ -584,7 +598,18 @@ export function RoundDetail({ summary, onBack }: { summary: RoundSummary; onBack
       </div>
 
       <div>
-        <h3 className="font-semibold text-base mb-3">Estimated Allocations</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-base">Estimated Allocations</h3>
+          <Link
+            href="/projects"
+            className="text-xs text-primary hover:underline flex items-center gap-1"
+          >
+            View all projects
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
+        </div>
         {projects.length === 0 ? (
           <p className="text-foreground/40 text-sm text-center py-8">No eligible projects yet.</p>
         ) : (

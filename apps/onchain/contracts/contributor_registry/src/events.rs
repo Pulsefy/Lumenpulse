@@ -146,3 +146,21 @@ pub struct AttestationRestoredEvent {
     pub executor: Address,
     pub proposal_id: u64,
 }
+
+/// Emitted whenever the pause state of a specific scope changes.
+///
+/// `scope` identifies which subsystem was affected:
+///  - `1` → Contribution (register_contributor, gasless_register)
+///  - `2` → Governance (multisig proposals, admin-gated mutations)
+///
+/// `paused` is the **new** state after the call.
+#[contractevent]
+pub struct ScopePauseChangedEvent {
+    #[topic]
+    pub admin: Address,
+    /// Numeric discriminant of `ContribPauseScope`.
+    pub scope: u32,
+    /// `true` = scope is now paused; `false` = scope is now unpaused.
+    pub paused: bool,
+    pub timestamp: u64,
+}

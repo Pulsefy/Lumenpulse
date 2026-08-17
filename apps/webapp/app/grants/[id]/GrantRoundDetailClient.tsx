@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users } from "lucide-react";
+import { Users, ArrowRight } from "lucide-react";
 import { RoundDetail, RoundSummary } from "../components";
 import { DependencyStatusBanner } from "@/components/DependencyStatusBanner";
 
@@ -47,14 +47,23 @@ export default function GrantRoundDetailClient({ roundId, initialData }: GrantRo
     <div className="min-h-screen bg-background text-foreground">
       <section className="relative pt-24 pb-8 px-4">
         <div className="container mx-auto max-w-4xl">
-          <div className="flex items-center gap-3 mb-6">
-            <Users className="w-7 h-7 text-primary" />
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Grant Round Detail</h1>
-              <p className="text-foreground/50 text-base leading-relaxed">
-                View pool balance, allocation ranking, and project-level context for the selected round.
-              </p>
+          <div className="flex items-center justify-between gap-3 mb-6">
+            <div className="flex items-center gap-3">
+              <Users className="w-7 h-7 text-primary" />
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">Grant Round Detail</h1>
+                <p className="text-foreground/50 text-base leading-relaxed">
+                  View pool balance, allocation ranking, and project-level context for the selected round.
+                </p>
+              </div>
             </div>
+            <Link
+              href="/projects"
+              className="flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+            >
+              <span>View Projects</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
 
           <div className="mt-2">
