@@ -9,27 +9,6 @@ from .payload_quarantine import (
     process_with_quarantine,
 )
 
-from .news_fetcher import NewsFetcher, NewsArticle, fetch_news
-from .stellar_fetcher import (
-    StellarDataFetcher,
-    VolumeData,
-    TransactionRecord,
-    get_asset_volume,
-    get_network_overview,
-)
-from .price_fetcher import PriceFetcher
-from .social_fetcher import (
-    SocialFetcher,
-    SocialPost,
-    TwitterFetcher,
-    RedditFetcher,
-    RateLimiter,
-    SocialPlatform,
-    fetch_social,
-)
-from .ledger_cursor_store import LedgerCursorStore, LedgerCursorRow
-from .recovery_coordinator import RecoveryCoordinator, DuplicateEventError
-
 from .freshness_monitor import (
     FreshnessResult,
     FreshnessThreshold,
@@ -39,19 +18,74 @@ from .freshness_monitor import (
     probe_price_freshness,
     run_freshness_check,
 )
-
-# Account operation ingestion (Issue #743)
-from .account_operation_ingestor import (
-    AccountOperationIngestor,
-    ingest_account_operations,
-    get_ingestion_status,
+from .dataset_sla import (
+    DatasetSLABreach,
+    DatasetSLAMeasurement,
+    DatasetSLATarget,
+    evaluate_dataset_slas,
+    get_dataset_sla_targets,
 )
+
+try:
+    from .news_fetcher import NewsFetcher, NewsArticle, fetch_news
+except ImportError:
+    pass
+
+try:
+    from .stellar_fetcher import (
+        StellarDataFetcher,
+        VolumeData,
+        TransactionRecord,
+        get_asset_volume,
+        get_network_overview,
+    )
+except ImportError:
+    pass
+
+try:
+    from .price_fetcher import PriceFetcher
+except ImportError:
+    pass
+
+try:
+    from .social_fetcher import (
+        SocialFetcher,
+        SocialPost,
+        TwitterFetcher,
+        RedditFetcher,
+        RateLimiter,
+        SocialPlatform,
+        fetch_social,
+    )
+except ImportError:
+    pass
+
+try:
+    from .ledger_cursor_store import LedgerCursorStore, LedgerCursorRow
+    from .recovery_coordinator import RecoveryCoordinator, DuplicateEventError
+except ImportError:
+    pass
+
+try:
+    # Account operation ingestion (Issue #743)
+    from .account_operation_ingestor import (
+        AccountOperationIngestor,
+        ingest_account_operations,
+        get_ingestion_status,
+    )
+except ImportError:
+    pass
 
 __all__ = [
     # Freshness SLA monitor
     "FreshnessResult",
     "FreshnessThreshold",
     "StaleSourceReport",
+    "DatasetSLABreach",
+    "DatasetSLAMeasurement",
+    "DatasetSLATarget",
+    "evaluate_dataset_slas",
+    "get_dataset_sla_targets",
     "probe_news_freshness",
     "probe_onchain_freshness",
     "probe_price_freshness",

@@ -125,6 +125,8 @@ for _mod in _HEAVY_MODULES:
     if _mod == 'numpy':
         m.array = lambda x, *a, **k: list(x) if x is not None else []
         m.asarray = m.array
+        m.isscalar = lambda x: not isinstance(x, (list, tuple, dict, set))
+        m.bool_ = bool
         m.zeros = lambda shape, *a, **k: [0] * (shape if isinstance(shape, int) else 1)
 
     # pydantic: BaseModel shim and helpers
@@ -243,4 +245,3 @@ def pytest_addoption(parser):
 def update_contracts(request):
     """Fixture to check if --update-contracts was passed or environment variable is set."""
     return request.config.getoption("--update-contracts") or os.environ.get("UPDATE_CONTRACTS") == "1"
-

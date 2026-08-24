@@ -41,17 +41,29 @@ ONCHAIN_FRESHNESS_CRITICAL_SECONDS = 600  (10 min)
 
 from __future__ import annotations
 
-import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from src.alert_engine.engine import AlertSuppressionEngine
+from src.ingestion.dataset_sla import (
+    DatasetSLAMeasurement,
+    evaluate_dataset_slas,
+    get_dataset_sla_target,
+)
 from src.utils.logger import setup_logger
-from src.utils.metrics import INDEXER_LAG_SECONDS, SOURCE_FAILURES_TOTAL, SOURCE_HEALTH
+from src.utils.metrics import (
+    ALERT_EMISSIONS_TOTAL,
+    ALERT_SUPPRESSIONS_TOTAL,
+    INDEXER_LAG_SECONDS,
+    SOURCE_FAILURES_TOTAL,
+    SOURCE_HEALTH,
+)
 
 logger = setup_logger("lumenpulse.freshness_monitor")
+_sla_suppression_engine: Optional[AlertSuppressionEngine] = None
 
 # ---------------------------------------------------------------------------
 # Severity enum — mirrors AlertSeverity in ingestion_alerting without importing
@@ -75,6 +87,12 @@ _FRESHNESS_DEFAULTS: Dict[str, Dict[str, float]] = {
     "news_freshness": {"warning": 1800.0, "critical": 3600.0},
     "price_freshness": {"warning": 300.0, "critical": 900.0},
     "onchain_freshness": {"warning": 120.0, "critical": 600.0},
+}
+
+_DATASET_BY_METRIC: Dict[str, str] = {
+    "news_freshness": "news_articles",
+    "price_freshness": "price_ticks",
+    "onchain_freshness": "stellar_ledger_events",
 }
 
 
@@ -133,8 +151,11 @@ class FreshnessResult:
 
     source: str
     metric_name: str
+    dataset: str
     last_seen_at: Optional[datetime]
     age_seconds: float
+    completeness_ratio: float
+    completeness_target_ratio: float
     severity: FreshnessSeverity
     warning_threshold_seconds: float
     critical_threshold_seconds: float
@@ -149,8 +170,11 @@ class FreshnessResult:
         return {
             "source": self.source,
             "metric_name": self.metric_name,
+            "dataset": self.dataset,
             "last_seen_at": self.last_seen_at.isoformat() if self.last_seen_at else None,
             "age_seconds": self.age_seconds,
+            "completeness_ratio": self.completeness_ratio,
+            "completeness_target_ratio": self.completeness_target_ratio,
             "severity": self.severity.value,
             "warning_threshold_seconds": self.warning_threshold_seconds,
             "critical_threshold_seconds": self.critical_threshold_seconds,
@@ -169,6 +193,7 @@ class FreshnessResult:
         return {
             "metric_name": self.metric_name,
             "source": self.source,
+            "dataset": self.dataset,
             "lag_seconds": self.age_seconds,
             "severity": self.severity.value,
             "warning_threshold_seconds": self.warning_threshold_seconds,
@@ -207,6 +232,33 @@ def _publish_freshness_metric(result: FreshnessResult) -> None:
         ).set(result.age_seconds if result.age_seconds != float("inf") else -1.0)
     except Exception:
         pass  # Never let metrics emission crash the pipeline
+
+
+def _get_sla_suppression_engine() -> AlertSuppressionEngine:
+    global _sla_suppression_engine
+    if _sla_suppression_engine is None:
+        _sla_suppression_engine = AlertSuppressionEngine()
+    return _sla_suppression_engine
+
+
+def _completeness_or_default(
+    explicit_ratio: Optional[float],
+    has_data: bool,
+) -> float:
+    if explicit_ratio is not None:
+        return max(0.0, min(1.0, float(explicit_ratio)))
+    return 1.0 if has_data else 0.0
+
+
+def _dataset_for_metric(metric_name: str) -> str:
+    return _DATASET_BY_METRIC.get(metric_name, metric_name)
+
+
+def _target_completeness_for_metric(metric_name: str) -> float:
+    try:
+        return get_dataset_sla_target(_dataset_for_metric(metric_name)).completeness_target_ratio
+    except KeyError:
+        return 1.0
 
 
 def _record_source_failure_metric(source: str, failure_type: str) -> None:
@@ -263,14 +315,18 @@ def _unknown_freshness(
     metric_name: str,
     error: str,
     checked_at: datetime,
+    completeness_ratio: Optional[float] = None,
 ) -> FreshnessResult:
     """Return a CRITICAL result when we cannot determine the last-seen timestamp."""
     t = _freshness_thresholds(metric_name)
     return FreshnessResult(
         source=source,
         metric_name=metric_name,
+        dataset=_dataset_for_metric(metric_name),
         last_seen_at=None,
         age_seconds=float("inf"),
+        completeness_ratio=_completeness_or_default(completeness_ratio, False),
+        completeness_target_ratio=_target_completeness_for_metric(metric_name),
         severity=FreshnessSeverity.CRITICAL,
         warning_threshold_seconds=t["warning"],
         critical_threshold_seconds=t["critical"],
@@ -284,6 +340,7 @@ def probe_news_freshness(
     *,
     last_article_at: Optional[datetime] = None,
     fetcher_fn: Optional[Any] = None,
+    completeness_ratio: Optional[float] = None,
 ) -> FreshnessResult:
     """Probe how fresh the latest ingested news article is.
 
@@ -313,8 +370,11 @@ def probe_news_freshness(
             result = FreshnessResult(
                 source=source,
                 metric_name=metric_name,
+                dataset=_dataset_for_metric(metric_name),
                 last_seen_at=None,
                 age_seconds=float("inf"),
+                completeness_ratio=_completeness_or_default(completeness_ratio, False),
+                completeness_target_ratio=_target_completeness_for_metric(metric_name),
                 severity=FreshnessSeverity.CRITICAL,
                 warning_threshold_seconds=t["warning"],
                 critical_threshold_seconds=t["critical"],
@@ -339,8 +399,11 @@ def probe_news_freshness(
         result = FreshnessResult(
             source=source,
             metric_name=metric_name,
+            dataset=_dataset_for_metric(metric_name),
             last_seen_at=ts,
             age_seconds=age,
+            completeness_ratio=_completeness_or_default(completeness_ratio, True),
+            completeness_target_ratio=_target_completeness_for_metric(metric_name),
             severity=severity,
             warning_threshold_seconds=t["warning"],
             critical_threshold_seconds=t["critical"],
@@ -363,13 +426,16 @@ def probe_news_freshness(
     except Exception as exc:  # non-blocking: catch all
         logger.warning("News freshness probe failed: %s", exc, exc_info=True)
         _record_source_failure_metric(source, type(exc).__name__)
-        return _unknown_freshness(source, metric_name, str(exc), checked_at)
+        return _unknown_freshness(
+            source, metric_name, str(exc), checked_at, completeness_ratio
+        )
 
 
 def probe_price_freshness(
     *,
     last_price_at: Optional[datetime] = None,
     fetcher_fn: Optional[Any] = None,
+    completeness_ratio: Optional[float] = None,
 ) -> FreshnessResult:
     """Probe how fresh the latest ingested price tick is.
 
@@ -395,8 +461,11 @@ def probe_price_freshness(
             result = FreshnessResult(
                 source=source,
                 metric_name=metric_name,
+                dataset=_dataset_for_metric(metric_name),
                 last_seen_at=None,
                 age_seconds=float("inf"),
+                completeness_ratio=_completeness_or_default(completeness_ratio, False),
+                completeness_target_ratio=_target_completeness_for_metric(metric_name),
                 severity=FreshnessSeverity.CRITICAL,
                 warning_threshold_seconds=t["warning"],
                 critical_threshold_seconds=t["critical"],
@@ -420,8 +489,11 @@ def probe_price_freshness(
         result = FreshnessResult(
             source=source,
             metric_name=metric_name,
+            dataset=_dataset_for_metric(metric_name),
             last_seen_at=ts,
             age_seconds=age,
+            completeness_ratio=_completeness_or_default(completeness_ratio, True),
+            completeness_target_ratio=_target_completeness_for_metric(metric_name),
             severity=severity,
             warning_threshold_seconds=t["warning"],
             critical_threshold_seconds=t["critical"],
@@ -444,13 +516,16 @@ def probe_price_freshness(
     except Exception as exc:
         logger.warning("Price freshness probe failed: %s", exc, exc_info=True)
         _record_source_failure_metric(source, type(exc).__name__)
-        return _unknown_freshness(source, metric_name, str(exc), checked_at)
+        return _unknown_freshness(
+            source, metric_name, str(exc), checked_at, completeness_ratio
+        )
 
 
 def probe_onchain_freshness(
     *,
     last_ledger_at: Optional[datetime] = None,
     fetcher_fn: Optional[Any] = None,
+    completeness_ratio: Optional[float] = None,
 ) -> FreshnessResult:
     """Probe how fresh the latest on-chain (Stellar ledger) data is.
 
@@ -476,8 +551,11 @@ def probe_onchain_freshness(
             result = FreshnessResult(
                 source=source,
                 metric_name=metric_name,
+                dataset=_dataset_for_metric(metric_name),
                 last_seen_at=None,
                 age_seconds=float("inf"),
+                completeness_ratio=_completeness_or_default(completeness_ratio, False),
+                completeness_target_ratio=_target_completeness_for_metric(metric_name),
                 severity=FreshnessSeverity.CRITICAL,
                 warning_threshold_seconds=t["warning"],
                 critical_threshold_seconds=t["critical"],
@@ -501,8 +579,11 @@ def probe_onchain_freshness(
         result = FreshnessResult(
             source=source,
             metric_name=metric_name,
+            dataset=_dataset_for_metric(metric_name),
             last_seen_at=ts,
             age_seconds=age,
+            completeness_ratio=_completeness_or_default(completeness_ratio, True),
+            completeness_target_ratio=_target_completeness_for_metric(metric_name),
             severity=severity,
             warning_threshold_seconds=t["warning"],
             critical_threshold_seconds=t["critical"],
@@ -525,7 +606,9 @@ def probe_onchain_freshness(
     except Exception as exc:
         logger.warning("On-chain freshness probe failed: %s", exc, exc_info=True)
         _record_source_failure_metric(source, type(exc).__name__)
-        return _unknown_freshness(source, metric_name, str(exc), checked_at)
+        return _unknown_freshness(
+            source, metric_name, str(exc), checked_at, completeness_ratio
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -583,6 +666,78 @@ def evaluate_freshness_results(
     return reports
 
 
+def _dataset_measurements_from_results(
+    results: List[FreshnessResult],
+) -> List[DatasetSLAMeasurement]:
+    measurements: List[DatasetSLAMeasurement] = []
+    for result in results:
+        measurements.append(
+            DatasetSLAMeasurement(
+                dataset=result.dataset,
+                freshness_seconds=result.age_seconds,
+                completeness_ratio=result.completeness_ratio,
+                checked_at=result.checked_at,
+                details=result.to_dict(),
+            )
+        )
+    return measurements
+
+
+def evaluate_dataset_sla_alerts(
+    results: List[FreshnessResult],
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Evaluate dataset SLA breaches and dedupe alerts via src.alert_engine."""
+
+    emitted: List[Dict[str, Any]] = []
+    suppressed: List[Dict[str, Any]] = []
+    engine = _get_sla_suppression_engine()
+
+    for breach in evaluate_dataset_slas(_dataset_measurements_from_results(results)):
+        alert = {
+            "alert_type": "dataset_sla_breach",
+            "severity": breach.severity,
+            "dataset": breach.dataset,
+            "sla_type": breach.sla_type,
+            "metric_name": f"dataset_{breach.sla_type}_sla",
+            "source": breach.dataset,
+            "breach": breach.to_dict(),
+        }
+        decision = engine.evaluate(alert)
+        alert["_suppression"] = {
+            "dedup_key": decision.dedup_key,
+            "rule_name": decision.rule_name,
+            "reason": decision.reason,
+        }
+        if decision.emit:
+            emitted.append(alert)
+            ALERT_EMISSIONS_TOTAL.labels(
+                rule_name=decision.rule_name, reason=decision.reason
+            ).inc()
+            logger.error(
+                "DATASET_SLA_BREACH dataset=%s type=%s current=%s target=%s severity=%s",
+                breach.dataset,
+                breach.sla_type,
+                breach.current_value,
+                breach.target_value,
+                breach.severity,
+                extra={
+                    "alert_type": "dataset_sla_breach",
+                    "dataset_sla_breach": breach.to_dict(),
+                    "runbook_hint": breach.runbook_hint,
+                },
+            )
+        else:
+            suppressed.append(alert)
+            ALERT_SUPPRESSIONS_TOTAL.labels(
+                rule_name=decision.rule_name, reason=decision.reason
+            ).inc()
+
+    return {
+        "emitted": emitted,
+        "suppressed": suppressed,
+    }
+
+
 def run_freshness_check(
     *,
     news_last_seen_at: Optional[datetime] = None,
@@ -591,6 +746,9 @@ def run_freshness_check(
     news_fetcher_fn: Optional[Any] = None,
     price_fetcher_fn: Optional[Any] = None,
     onchain_fetcher_fn: Optional[Any] = None,
+    news_completeness_ratio: Optional[float] = None,
+    price_completeness_ratio: Optional[float] = None,
+    onchain_completeness_ratio: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Run freshness probes for all three feeds and return a consolidated report.
 
@@ -623,6 +781,7 @@ def run_freshness_check(
         probe_news_freshness(
             last_article_at=news_last_seen_at,
             fetcher_fn=news_fetcher_fn,
+            completeness_ratio=news_completeness_ratio,
         )
     )
 
@@ -631,6 +790,7 @@ def run_freshness_check(
         probe_price_freshness(
             last_price_at=price_last_seen_at,
             fetcher_fn=price_fetcher_fn,
+            completeness_ratio=price_completeness_ratio,
         )
     )
 
@@ -639,14 +799,20 @@ def run_freshness_check(
         probe_onchain_freshness(
             last_ledger_at=onchain_last_seen_at,
             fetcher_fn=onchain_fetcher_fn,
+            completeness_ratio=onchain_completeness_ratio,
         )
     )
 
     stale_reports = evaluate_freshness_results(results)
+    sla_alerts = evaluate_dataset_sla_alerts(results)
 
     return {
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "results": [r.to_dict() for r in results],
         "stale_sources": [r.to_dict() for r in stale_reports],
-        "healthy": len(stale_reports) == 0,
+        "dataset_sla_alerts": sla_alerts["emitted"],
+        "suppressed_dataset_sla_alerts": sla_alerts["suppressed"],
+        "healthy": len(stale_reports) == 0
+        and not sla_alerts["emitted"]
+        and not sla_alerts["suppressed"],
     }

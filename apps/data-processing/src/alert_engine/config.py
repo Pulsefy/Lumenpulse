@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from src.alert_engine.rule import (
     AlertTypeRule,
@@ -14,6 +14,12 @@ from src.alert_engine.rule import (
 
 DEFAULT_RULES_YAML = """
 suppression_rules:
+  - type: alert_type
+    name: "dedup_dataset_sla_breach"
+    window_seconds: 300
+    key_fields: ["dataset", "sla_type", "severity"]
+    alert_types: ["dataset_sla_breach"]
+
   - type: repeat_alert
     name: "dedup_indexer_lag"
     window_seconds: 300
@@ -90,6 +96,12 @@ def load_rules_from_env() -> List[SuppressionRule]:
 
 def _default_rules() -> List[SuppressionRule]:
     return [
+        AlertTypeRule(
+            name="dedup_dataset_sla_breach",
+            window_seconds=300,
+            key_fields=["dataset", "sla_type", "severity"],
+            alert_types=["dataset_sla_breach"],
+        ),
         RepeatAlertRule(
             name="dedup_indexer_lag",
             window_seconds=300,

@@ -6,6 +6,7 @@ detected-but-unsupported language is marked as unscored instead of being fed
 to the English scorer, which would otherwise produce confidently wrong scores.
 """
 
+import hashlib
 import os
 import logging
 from typing import List, Dict, Any, Optional, Tuple
@@ -16,19 +17,35 @@ from dataclasses import dataclass
 # Import keyword extractor for asset filtering
 from src.analytics.keywords import KeywordExtractor
 
-# Shared language detection + keyword lexicons from the analytics module.
-from src.analytics.sentiment import (
-    NEGATIVE_KEYWORDS,
-    POSITIVE_KEYWORDS,
-    SUPPORTED_LANGUAGES,
-    SentimentAnalyzer as _MultilingualSentimentAnalyzer,
-    score_to_label,
-)
+try:
+    from src.ml.model_registry import get_current_version as _get_current_version
+except ImportError:  # pragma: no cover - module is optional in some contexts
+    _get_current_version = None
 
 logger = logging.getLogger(__name__)
 
 # Minimum batch size to justify spawning worker processes.
 _PARALLEL_THRESHOLD = 20
+
+# Fallback version label used when no model has been promoted to the registry yet.
+DEFAULT_MODEL_VERSION = "v1.0"
+
+
+def _current_sentiment_model_version() -> str:
+    """
+    Return the promoted sentiment model version for cache keying.
+
+    Falls back to ``DEFAULT_MODEL_VERSION`` when the model registry is
+    unavailable or no sentiment model has been promoted yet.
+    """
+    if _get_current_version is not None:
+        try:
+            version = _get_current_version("sentiment")
+            if version:
+                return version
+        except Exception:
+            pass
+    return DEFAULT_MODEL_VERSION
 
 
 def _language_metadata(language: str) -> Dict[str, Any]:
@@ -206,12 +223,24 @@ class SentimentAnalyzer:
             else:
                 logger.info("Sentiment cache ready")
 
-    def analyze(
-        self,
-        text: str,
-        asset_filter: Optional[str] = None,
-        lang_hint: Optional[str] = None,
-    ) -> SentimentResult:
+    @staticmethod
+    def _cache_key_for(text: str, asset_filter: Optional[str]) -> str:
+        """
+        Build a deterministic cache key for an analysis request.
+
+        The key is derived from a sha256 content hash of the text, the
+        promoted model version, and the optional asset filter, so that
+        (a) identical content always maps to the same entry and (b) a model
+        promotion never serves results produced by an older model.
+        """
+        content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        # Same "|".join format as CacheManager.make_key so the derived Redis
+        # key is namespaced by content hash and model version.
+        return "|".join(
+            (content_hash, _current_sentiment_model_version(), asset_filter or "")
+        )
+
+    def analyze(self, text: str, asset_filter: Optional[str] = None) -> SentimentResult:
         """
         Analyze sentiment of a single text
 
@@ -243,12 +272,8 @@ class SentimentAnalyzer:
                         self._multilingual.detect_language(text, lang_hint)
                     ),
                 )
-
-        cache_key = (
-            f"{text}:{asset_filter}:{lang_hint}"
-            if (asset_filter or lang_hint)
-            else text
-        )
+        
+        cache_key = self._cache_key_for(text, asset_filter)
         if self.cache:
             cached = self.cache.get(cache_key)
             if cached:

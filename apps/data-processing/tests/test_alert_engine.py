@@ -354,8 +354,9 @@ class TestConfigLoading:
         from src.alert_engine.config import _default_rules
 
         rules = _default_rules()
-        assert len(rules) == 5
+        assert len(rules) == 6
         names = [r.name for r in rules]
+        assert "dedup_dataset_sla_breach" in names
         assert "dedup_indexer_lag" in names
         assert "dedup_source_failures" in names
         assert "rate_limit_source_failures" in names

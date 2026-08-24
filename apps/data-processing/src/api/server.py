@@ -4,6 +4,7 @@ FastAPI server to expose sentiment analysis as an HTTP API
 for the Node.js backend to consume.
 """
 
+import time
 from fastapi import FastAPI, HTTPException, Request, Response, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
@@ -18,6 +19,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from sentiment import SentimentAnalyzer
+from src.config.latency_budget import record_latency
 from src.utils.logger import setup_logger, correlation_id_ctx, generate_correlation_id
 from src.utils.metrics import API_FAILURES_TOTAL, generate_latest, CONTENT_TYPE_LATEST
 from src.security import (
@@ -75,6 +77,7 @@ app.add_middleware(
 async def metrics_and_logging_middleware(request: Request, call_next):
     corr_id = request.headers.get("X-Correlation-ID", generate_correlation_id())
     correlation_id_ctx.set(corr_id)
+    start_time = time.monotonic()
     try:
         response = await call_next(request)
         if response.status_code >= 500:
@@ -85,6 +88,14 @@ async def metrics_and_logging_middleware(request: Request, call_next):
         API_FAILURES_TOTAL.labels(method=request.method, endpoint=request.url.path).inc()
         logger.error("Unhandled exception during request processing", exc_info=True)
         raise
+    finally:
+        # Enforce the documented per-endpoint inference latency budget:
+        # breaches are exported as Prometheus metrics for alerting.
+        record_latency(
+            path=request.url.path,
+            method=request.method,
+            duration_seconds=time.monotonic() - start_time,
+        )
 
 
 # Initialize your existing SentimentAnalyzer

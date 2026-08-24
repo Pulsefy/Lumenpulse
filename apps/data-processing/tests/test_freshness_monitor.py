@@ -31,6 +31,7 @@ from src.ingestion.freshness_monitor import (
     probe_price_freshness,
     run_freshness_check,
 )
+from src.ingestion import freshness_monitor as freshness_module
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -175,7 +176,8 @@ class TestProbeNewsFreshness:
         result = probe_news_freshness(last_article_at=_ts_ago(60))
         d = result.to_dict()
         for key in (
-            "source", "metric_name", "last_seen_at", "age_seconds",
+            "source", "metric_name", "dataset", "last_seen_at", "age_seconds",
+            "completeness_ratio", "completeness_target_ratio",
             "severity", "warning_threshold_seconds", "critical_threshold_seconds",
             "checked_at", "is_stale",
         ):
@@ -186,6 +188,7 @@ class TestProbeNewsFreshness:
         snap = result.to_lag_snapshot()
         assert snap["metric_name"] == "news_freshness"
         assert snap["source"] == "news"
+        assert snap["dataset"] == "news_articles"
         assert snap["lag_seconds"] == pytest.approx(result.age_seconds, abs=1.0)
         assert snap["severity"] == "healthy"
 
@@ -346,6 +349,7 @@ class TestRunFreshnessCheck:
         )
         assert report["healthy"] is True
         assert report["stale_sources"] == []
+        assert report["dataset_sla_alerts"] == []
         assert len(report["results"]) == 3
 
     def test_stale_news_sets_healthy_false(self):
@@ -445,6 +449,41 @@ class TestRunFreshnessCheck:
         )
         sources = {r["source"] for r in report["results"]}
         assert sources == {"news", "price", "onchain"}
+
+    def test_current_completeness_exported_per_dataset(self):
+        report = run_freshness_check(
+            news_last_seen_at=_ts_ago(10),
+            price_last_seen_at=_ts_ago(10),
+            onchain_last_seen_at=_ts_ago(10),
+            news_completeness_ratio=0.98,
+            price_completeness_ratio=1.0,
+            onchain_completeness_ratio=1.0,
+        )
+        by_dataset = {r["dataset"]: r for r in report["results"]}
+        assert by_dataset["news_articles"]["completeness_ratio"] == pytest.approx(0.98)
+        assert by_dataset["price_ticks"]["completeness_ratio"] == pytest.approx(1.0)
+
+    def test_completeness_breach_raises_deduped_sla_alert(self, monkeypatch, tmp_path):
+        monkeypatch.setenv(
+            "ALERT_SUPPRESSION_STORE_PATH",
+            str(tmp_path / "freshness_sla_alerts.json"),
+        )
+        freshness_module._sla_suppression_engine = None
+
+        report = run_freshness_check(
+            news_last_seen_at=_ts_ago(10),
+            price_last_seen_at=_ts_ago(10),
+            onchain_last_seen_at=_ts_ago(10),
+            news_completeness_ratio=0.50,
+        )
+
+        assert report["healthy"] is False
+        assert report["dataset_sla_alerts"]
+        alert = report["dataset_sla_alerts"][0]
+        assert alert["alert_type"] == "dataset_sla_breach"
+        assert alert["dataset"] == "news_articles"
+        assert alert["sla_type"] == "completeness"
+        assert alert["_suppression"]["rule_name"]
 
 
 # ---------------------------------------------------------------------------

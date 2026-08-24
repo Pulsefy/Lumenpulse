@@ -161,6 +161,32 @@ def promote_model(model_type: str, version: str) -> None:
 
     logger.info(f"Model promoted: type={model_type} version={version} (zero-downtime swap complete)")
 
+    # Cached inference results from the previous model version must not be
+    # served after promotion, so evict every entry for this model type.
+    _invalidate_cached_inference(model_type)
+
+
+def _invalidate_cached_inference(model_type: str) -> None:
+    """
+    Best-effort invalidation of cached inference results for a model type.
+
+    Called after a model promotion so that entries produced by the previous
+    model version are never served again. Runs in a worker/API process where
+    Redis may be unavailable, so failures are logged and swallowed.
+    """
+    try:
+        from cache_manager import CacheManager
+
+        cache = CacheManager(namespace=model_type)
+        cleared = cache.clear_namespace()
+        logger.info(
+            "Invalidated %d cached entries for model type=%s", cleared, model_type
+        )
+    except Exception as exc:
+        logger.warning(
+            "Cache invalidation skipped for model type=%s: %s", model_type, exc
+        )
+
 
 def get_live_model(model_type: str) -> Any:
     """

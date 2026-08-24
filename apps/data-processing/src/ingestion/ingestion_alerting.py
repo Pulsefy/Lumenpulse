@@ -11,14 +11,10 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from sqlalchemy import func, select
-
-from src.db.models import AnalyticsRecord
-from src.db.postgres_service import PostgresService
+from src.ingestion.dataset_sla import DatasetSLAMeasurement, evaluate_dataset_slas
 from src.ingestion.stellar_fetcher import StellarDataFetcher
-from src.ingestion.stellar_ingestion_checks import _horizon_latest_ledger, _parse_iso_datetime
 from src.alert_engine.engine import AlertSuppressionEngine
 from src.utils.logger import setup_logger
 from src.utils.metrics import (
@@ -28,6 +24,9 @@ from src.utils.metrics import (
     SOURCE_FAILURES_TOTAL,
     SOURCE_HEALTH,
 )
+
+if TYPE_CHECKING:
+    from src.db.postgres_service import PostgresService
 
 _suppression_engine: AlertSuppressionEngine = None
 
@@ -40,6 +39,25 @@ class AlertSeverity(str, Enum):
     HEALTHY = "healthy"
     WARNING = "warning"
     CRITICAL = "critical"
+
+
+def _parse_iso_datetime(s: str) -> Optional[datetime]:
+    if not s:
+        return None
+    try:
+        if s.endswith("Z"):
+            return datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return datetime.fromisoformat(s)
+    except Exception:
+        return None
+
+
+def _horizon_latest_ledger(fetcher: StellarDataFetcher) -> Dict[str, Any]:
+    from src.ingestion.stellar_ingestion_checks import (
+        _horizon_latest_ledger as quality_horizon_latest_ledger,
+    )
+
+    return quality_horizon_latest_ledger(fetcher)
 
 
 @dataclass
@@ -255,8 +273,13 @@ def measure_stellar_ledger_lag(
 
 
 def measure_pipeline_analytics_lag(
-    postgres: Optional[PostgresService] = None,
+    postgres: Optional["PostgresService"] = None,
 ) -> Optional[LagMetricSnapshot]:
+    from sqlalchemy import func, select
+
+    from src.db.models import AnalyticsRecord
+    from src.db.postgres_service import PostgresService
+
     thresholds = _thresholds("pipeline_analytics_lag")
     now = datetime.now(timezone.utc)
 
@@ -351,10 +374,91 @@ def evaluate_lag_alerts(metrics: List[LagMetricSnapshot]) -> List[Dict[str, Any]
     return alerts
 
 
+_DATASET_BY_LAG_METRIC = {
+    "stellar_ledger_lag": "stellar_ledger_events",
+    "pipeline_analytics_lag": "analytics_records",
+}
+
+
+def _dataset_measurements_from_lag_metrics(
+    metrics: List[LagMetricSnapshot],
+) -> List[DatasetSLAMeasurement]:
+    measurements: List[DatasetSLAMeasurement] = []
+    for metric in metrics:
+        dataset = _DATASET_BY_LAG_METRIC.get(metric.metric_name)
+        if dataset is None:
+            continue
+        completeness_ratio = 1.0 if metric.lag_seconds != float("inf") else 0.0
+        measurements.append(
+            DatasetSLAMeasurement(
+                dataset=dataset,
+                freshness_seconds=metric.lag_seconds,
+                completeness_ratio=completeness_ratio,
+                details={
+                    "source_metric": metric.to_dict(),
+                    "completeness_basis": "1 when the lag probe produced a finite value, 0 otherwise",
+                },
+            )
+        )
+    return measurements
+
+
+def evaluate_dataset_sla_alerts(
+    measurements: List[DatasetSLAMeasurement],
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Evaluate dataset SLA breaches through the alert suppression engine."""
+
+    emitted: List[Dict[str, Any]] = []
+    suppressed: List[Dict[str, Any]] = []
+    engine = get_suppression_engine()
+
+    for breach in evaluate_dataset_slas(measurements):
+        alert = {
+            "alert_type": "dataset_sla_breach",
+            "severity": breach.severity,
+            "dataset": breach.dataset,
+            "sla_type": breach.sla_type,
+            "metric_name": f"dataset_{breach.sla_type}_sla",
+            "source": breach.dataset,
+            "breach": breach.to_dict(),
+        }
+        decision = engine.evaluate(alert)
+        alert["_suppression"] = {
+            "dedup_key": decision.dedup_key,
+            "rule_name": decision.rule_name,
+            "reason": decision.reason,
+        }
+        if decision.emit:
+            emitted.append(alert)
+            ALERT_EMISSIONS_TOTAL.labels(
+                rule_name=decision.rule_name, reason=decision.reason
+            ).inc()
+            _emit_log_alert(
+                alert_type="dataset_sla_breach",
+                severity=AlertSeverity(breach.severity),
+                title=f"Dataset SLA breach: {breach.dataset}",
+                message=(
+                    f"{breach.dataset} {breach.sla_type} current "
+                    f"{breach.current_value} violates target {breach.target_value}"
+                ),
+                payload=alert,
+            )
+        else:
+            suppressed.append(alert)
+            ALERT_SUPPRESSIONS_TOTAL.labels(
+                rule_name=decision.rule_name, reason=decision.reason
+            ).inc()
+
+    return {
+        "emitted": emitted,
+        "suppressed": suppressed,
+    }
+
+
 def run_ingestion_alerting_cycle(
     *,
     network: Optional[str] = None,
-    postgres: Optional[PostgresService] = None,
+    postgres: Optional["PostgresService"] = None,
     fetcher: Optional[StellarDataFetcher] = None,
 ) -> Dict[str, Any]:
     """Collect lag metrics, update Prometheus, and emit log-based alerts."""
@@ -370,17 +474,27 @@ def run_ingestion_alerting_cycle(
 
     recent_failures = [event.to_dict() for event in _recent_failures[-20:]]
     lag_alerts = evaluate_lag_alerts(metrics)
+    dataset_measurements = _dataset_measurements_from_lag_metrics(metrics)
+    dataset_sla_alerts = evaluate_dataset_sla_alerts(dataset_measurements)
 
     engine = get_suppression_engine()
     suppressed = list(_suppressed_alerts)
+    suppressed.extend(dataset_sla_alerts["suppressed"])
     _suppressed_alerts.clear()
 
     result = {
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "metrics": [metric.to_dict() for metric in metrics],
+        "dataset_sla_measurements": [
+            measurement.to_dict() for measurement in dataset_measurements
+        ],
+        "dataset_sla_alerts": dataset_sla_alerts["emitted"],
         "lag_alerts": lag_alerts,
         "recent_source_failures": recent_failures,
-        "healthy": not lag_alerts and not recent_failures,
+        "healthy": not lag_alerts
+        and not dataset_sla_alerts["emitted"]
+        and not dataset_sla_alerts["suppressed"]
+        and not recent_failures,
         "suppressed_alerts": suppressed,
         "suppression_engine_stats": engine.stats,
     }

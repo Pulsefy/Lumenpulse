@@ -100,6 +100,37 @@ groups:
           description: '{{ .Labels.queue_name }} has > 10% job failures (current: {{ $value | humanize }}/sec)'
 
       # ====================
+      # Ingestion Dataset SLA Alerts
+      # ====================
+
+      - alert: IngestionDatasetFreshnessSLABreach
+        expr: |
+          lumenpulse_ingestion_dataset_freshness_seconds
+            > on(dataset) lumenpulse_ingestion_dataset_freshness_target_seconds
+        for: 5m
+        labels:
+          severity: critical
+          service: data-processing
+        annotations:
+          summary: 'Ingestion dataset freshness SLA breach'
+          description: '{{ .Labels.dataset }} freshness is {{ $value | humanizeDuration }}, above its configured SLA target'
+          runbook: 'apps/data-processing/INGESTION_ALERTING_RUNBOOK.md'
+
+      - alert: IngestionDatasetCompletenessSLABreach
+        expr: |
+          lumenpulse_ingestion_dataset_completeness_ratio < 0
+            or lumenpulse_ingestion_dataset_completeness_ratio
+              < on(dataset) lumenpulse_ingestion_dataset_completeness_target_ratio
+        for: 5m
+        labels:
+          severity: critical
+          service: data-processing
+        annotations:
+          summary: 'Ingestion dataset completeness SLA breach'
+          description: '{{ .Labels.dataset }} completeness ratio is {{ $value | humanize }}, below its configured SLA target or unknown'
+          runbook: 'apps/data-processing/INGESTION_ALERTING_RUNBOOK.md'
+
+      # ====================
       # Request Rate Alerts
       # ====================
 
