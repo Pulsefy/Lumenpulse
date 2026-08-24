@@ -135,10 +135,7 @@ pub(crate) fn is_configured(env: &Env) -> bool {
 }
 
 /// Locate the signer record for `addr`, or reject as `Unauthorized`.
-pub(crate) fn find_signer(
-    config: &QuorumConfig,
-    addr: &Address,
-) -> Result<Signer, RegistryError> {
+pub(crate) fn find_signer(config: &QuorumConfig, addr: &Address) -> Result<Signer, RegistryError> {
     for s in config.signers.iter() {
         if s.address == *addr {
             return Ok(s);
@@ -151,10 +148,7 @@ pub(crate) fn find_signer(
 ///
 /// Rejecting `threshold > total_weight` matters because such a policy would
 /// permanently deadlock every gated action.
-pub(crate) fn validate_config(
-    signers: &Vec<Signer>,
-    threshold: u32,
-) -> Result<(), RegistryError> {
+pub(crate) fn validate_config(signers: &Vec<Signer>, threshold: u32) -> Result<(), RegistryError> {
     if signers.is_empty() || threshold == 0 {
         return Err(RegistryError::InvalidQuorumConfig);
     }
@@ -177,14 +171,20 @@ pub(crate) fn validate_config(
 }
 
 /// Fetch a proposal by id.
-pub(crate) fn get_proposal(
-    env: &Env,
-    proposal_id: u64,
-) -> Result<RegistryProposal, RegistryError> {
+pub(crate) fn get_proposal(env: &Env, proposal_id: u64) -> Result<RegistryProposal, RegistryError> {
     env.storage()
         .instance()
         .get(&QuorumKey::Proposal(proposal_id))
         .ok_or(RegistryError::ProposalNotFound)
+}
+
+/// The id the next proposal will receive. Read-only; does not advance the
+/// counter.
+pub(crate) fn next_proposal_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&QuorumKey::NextProposalId)
+        .unwrap_or(0)
 }
 
 /// Verify a proposal is still in flight (Pending or Approved, not expired).
@@ -201,11 +201,7 @@ fn assert_active(env: &Env, proposal: &RegistryProposal) -> Result<(), RegistryE
 
 /// Pop the next monotonic proposal id.
 fn next_id(env: &Env) -> u64 {
-    let id: u64 = env
-        .storage()
-        .instance()
-        .get(&QuorumKey::NextProposalId)
-        .unwrap_or(0);
+    let id: u64 = next_proposal_id(env);
     env.storage()
         .instance()
         .set(&QuorumKey::NextProposalId, &(id + 1));
@@ -234,10 +230,7 @@ pub(crate) fn configure(
     bootstrapper.address.require_auth();
 
     let signer_count = signers.len();
-    let config = QuorumConfig {
-        signers,
-        threshold,
-    };
+    let config = QuorumConfig { signers, threshold };
     env.storage().instance().set(&QuorumKey::Config, &config);
     env.storage()
         .instance()
@@ -264,10 +257,7 @@ pub(crate) fn replace_config(
     validate_config(&signers, threshold)?;
 
     let signer_count = signers.len();
-    let config = QuorumConfig {
-        signers,
-        threshold,
-    };
+    let config = QuorumConfig { signers, threshold };
     env.storage().instance().set(&QuorumKey::Config, &config);
     bump_instance_ttl(env);
 
