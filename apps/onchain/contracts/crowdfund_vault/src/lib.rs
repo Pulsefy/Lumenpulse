@@ -29,6 +29,28 @@ pub struct CrowdfundVaultContract;
 
 #[contractimpl]
 impl CrowdfundVaultContract {
+    fn deposit_nonce_of(env: &Env, user: &Address) -> u64 {
+        let key = DataKey::DepositNonce(user.clone());
+        let nonce = env.storage().persistent().get(&key).unwrap_or(0);
+        if env.storage().persistent().has(&key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        nonce
+    }
+
+    fn register_nonce_of(env: &Env, user: &Address) -> u64 {
+        let key = DataKey::RegistrationNonce(user.clone());
+        let nonce = env.storage().persistent().get(&key).unwrap_or(0);
+        if env.storage().persistent().has(&key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        nonce
+    }
+
     fn get_admin_address(env: &Env) -> Result<Address, CrowdfundError> {
         env.storage()
             .instance()
@@ -671,6 +693,47 @@ impl CrowdfundVaultContract {
     }
 
     /// Deposit funds into a project
+    pub fn deposit_with_sig(
+        env: Env,
+        user: Address,
+        project_id: u64,
+        amount: i128,
+        signature: soroban_sdk::Bytes,
+    ) -> Result<(), CrowdfundError> {
+        Self::with_reentrancy_guard(&env, || {
+            Self::require_current_storage_version(&env)?;
+
+            if signature.is_empty() {
+                return Err(CrowdfundError::InvalidSignature);
+            }
+
+            let nonce = Self::deposit_nonce_of(&env, &user);
+            user.require_auth_for_args(
+                (
+                    soroban_sdk::Symbol::new(&env, "deposit_with_sig"),
+                    user.clone(),
+                    project_id,
+                    amount,
+                    nonce,
+                )
+                    .into_val(&env),
+            );
+
+            let new_nonce = nonce + 1;
+            env.storage()
+                .persistent()
+                .set(&DataKey::DepositNonce(user.clone()), &new_nonce);
+            env.storage().persistent().extend_ttl(
+                &DataKey::DepositNonce(user.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
+
+            Self::deposit_internal(&env, &user, project_id, amount)
+        })
+    }
+
+    /// Deposit funds into a project
     pub fn deposit(
         env: Env,
         user: Address,
@@ -681,7 +744,16 @@ impl CrowdfundVaultContract {
             Self::require_current_storage_version(&env)?;
 
             user.require_auth();
+            Self::deposit_internal(&env, &user, project_id, amount)
+        })
+    }
 
+    fn deposit_internal(
+        env: &Env,
+        user: &Address,
+        project_id: u64,
+        amount: i128,
+    ) -> Result<(), CrowdfundError> {
             let is_paused: bool = env
                 .storage()
                 .instance()
@@ -801,13 +873,12 @@ impl CrowdfundVaultContract {
             .publish(&env);
 
             Self::notify_subscribers(
-                &env,
-                Symbol::new(&env, "deposit"),
-                (user, project_id, amount).to_xdr(&env),
+                env,
+                Symbol::new(env, "deposit"),
+                (user.clone(), project_id, amount).to_xdr(env),
             );
 
             Ok(())
-        })
     }
 
     /// Add a notification subscriber (admin only)
@@ -1448,11 +1519,48 @@ impl CrowdfundVaultContract {
     }
 
     /// Register a new contributor
+    pub fn register_contributor_with_sig(
+        env: Env,
+        contributor: Address,
+        signature: soroban_sdk::Bytes,
+    ) -> Result<(), CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+        
+        if signature.is_empty() {
+            return Err(CrowdfundError::InvalidSignature);
+        }
+
+        let nonce = Self::register_nonce_of(&env, &contributor);
+        contributor.require_auth_for_args(
+            (
+                soroban_sdk::Symbol::new(&env, "register_contributor_with_sig"),
+                contributor.clone(),
+                nonce,
+            )
+                .into_val(&env),
+        );
+
+        let new_nonce = nonce + 1;
+        env.storage()
+            .persistent()
+            .set(&DataKey::RegistrationNonce(contributor.clone()), &new_nonce);
+        env.storage().persistent().extend_ttl(
+            &DataKey::RegistrationNonce(contributor.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        Self::register_contributor_internal(&env, &contributor)
+    }
+
+    /// Register a new contributor
     pub fn register_contributor(env: Env, contributor: Address) -> Result<(), CrowdfundError> {
         Self::require_current_storage_version(&env)?;
-        // Require contributor authorization
         contributor.require_auth();
+        Self::register_contributor_internal(&env, &contributor)
+    }
 
+    fn register_contributor_internal(env: &Env, contributor: &Address) -> Result<(), CrowdfundError> {
         // Check if already registered
         if env
             .storage()

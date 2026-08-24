@@ -41,6 +41,8 @@ pub enum DataKey {
     RefundReceipt(u64, u64),     // (project_id, receipt_id) -> RefundReceipt
     RefundReceiptCount(u64),     // project_id -> u64
     RefundClaimed(u64, Address), // (project_id, contributor) -> bool
+    RegistrationNonce(Address),  // Address -> u64
+    DepositNonce(Address),       // Address -> u64
     // ── Emergency migration (issue #1047) ─────────────────────────────────────
     EmergencyMigrationPlan(u64), // project_id -> EmergencyMigrationPlan
 }
