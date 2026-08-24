@@ -179,6 +179,16 @@ yield_vault.deposit(amount, user)?;
 // Update internal state based on event data
 ```
 
+## NotificationReceiverTrait Implementers
+
+The following contracts implement `NotificationReceiverTrait` from `notification_interface`:
+
+| Contract | Location | Purpose |
+|----------|----------|---------|
+| `contributor_registry` | `contracts/contributor_registry/src/lib.rs` | Reputation tracking on deposit events |
+| `notification_broker` | `contracts/notification_broker/src/lib.rs` | Relays notifications to subscribers |
+| `crowdfund_vault` | `contracts/crowdfund_vault/src/lib.rs` | Tracks contributor reputation on deposits |
+
 ### Pattern 4: Harvest and Distribute
 
 ```rust
