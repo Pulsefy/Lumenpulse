@@ -1,29 +1,25 @@
 //! N-of-M weighted quorum approval for privileged protocol-registry actions.
 //!
 //! The registry historically gated every privileged action behind a single
-//! `admin` address. This module adds a multi-admin approval lifecycle so that
-//! sensitive changes (module registration/upgrade, deactivation, admin
-//! rotation) require agreement from several signers before they can execute.
+//! `admin` address. This module adds a multi-admin approval lifecycle so
+//! sensitive changes require agreement from several signers before executing.
 //!
 //! Design notes:
-//!
-//! - Storage uses its own [`QuorumKey`] enum rather than extending the
-//!   pre-existing `storage::DataKey`. Soroban assigns XDR discriminants in
-//!   declaration order, so keeping the two key spaces separate means this
-//!   feature cannot shift the discriminants of already-deployed keys.
-//! - [`RegistryAction`] binds the action's *parameters* at proposal time. A
-//!   proposal approved to register `vault -> AAA v1` cannot be replayed at
-//!   execution time against a different address or version, because
-//!   [`consume_approval`] compares the whole action payload.
-//! - Weights are relative and the threshold is expressed in the same unit, so
-//!   a plain N-of-M policy is just "every signer has weight 1, threshold = N".
+//! - Storage uses its own `QuorumKey` enum rather than extending the existing
+//!   `storage::DataKey`. Soroban assigns XDR discriminants in declaration
+//!   order, so separate key spaces mean this feature cannot shift the
+//!   discriminants of already-deployed keys.
+//! - `RegistryAction` binds the action's parameters at proposal time, so an
+//!   approval cannot be replayed against different arguments.
+//! - Weights are relative and the threshold uses the same unit, so a plain
+//!   N-of-M policy is every signer at weight 1 with `threshold = N`.
 
 use soroban_sdk::{contracttype, Address, Env, Symbol, Vec};
 
 use crate::errors::RegistryError;
 use crate::events;
 
-/// Hard cap on the signer set size, to keep per-call iteration cost bounded.
+/// Hard cap on signer set size, to keep per-call iteration cost bounded.
 pub const MAX_SIGNERS: u32 = 10;
 
 /// Proposals expire 72 hours after creation if the threshold is never reached.
@@ -36,11 +32,8 @@ const LEDGER_BUMP: u32 = 241_920; // ~2 weeks
 #[contracttype]
 #[derive(Clone)]
 pub enum QuorumKey {
-    /// `QuorumConfig` — the signer set and threshold.
     Config,
-    /// `RegistryProposal` keyed by proposal id.
     Proposal(u64),
-    /// `u64` — monotonic proposal id counter.
     NextProposalId,
 }
 
@@ -49,7 +42,6 @@ pub enum QuorumKey {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Signer {
     pub address: Address,
-    /// Relative weight; the threshold is expressed in the same unit.
     pub weight: u32,
 }
 
@@ -58,15 +50,10 @@ pub struct Signer {
 #[derive(Clone, Debug)]
 pub struct QuorumConfig {
     pub signers: Vec<Signer>,
-    /// Total weight required before a proposal becomes executable.
     pub threshold: u32,
 }
 
 /// Parameters for a module registration or upgrade proposal.
-///
-/// Carried as a single struct so [`RegistryAction`] only needs single-field
-/// variants, and so the full parameter set is covered by the equality check in
-/// [`consume_approval`].
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModuleProposal {
@@ -75,23 +62,17 @@ pub struct ModuleProposal {
     pub version: u32,
 }
 
-/// The set of privileged registry actions that can be put to a quorum vote.
+/// Privileged registry actions that can be put to a quorum vote.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RegistryAction {
-    /// Register a brand new module.
     RegisterModule(ModuleProposal),
-    /// Point an existing module at a new address/version.
     UpdateModule(ModuleProposal),
-    /// Mark a module inactive so `resolve` refuses it.
     DeactivateModule(Symbol),
-    /// Re-enable a previously deactivated module.
     ActivateModule(Symbol),
-    /// Rotate the registry admin address.
     SetAdmin(Address),
-    /// Replace the quorum signer set / threshold. Distinct from `SetAdmin` so
-    /// an admin-rotation approval can never be redirected into a signer-set
-    /// takeover.
+    /// Distinct from `SetAdmin` so an admin-rotation approval can never be
+    /// redirected into a signer-set takeover.
     SetQuorumConfig,
 }
 
@@ -116,12 +97,11 @@ pub struct RegistryProposal {
     pub created_at: u64,
     pub expires_at: u64,
     pub status: ProposalStatus,
-    /// Addresses that have already approved; used to reject double-signing.
+    /// Addresses that already approved; used to reject double-signing.
     pub signers: Vec<Address>,
     pub weight_collected: u32,
 }
 
-/// Load the quorum config, or `QuorumNotConfigured` if it was never set up.
 pub(crate) fn get_config(env: &Env) -> Result<QuorumConfig, RegistryError> {
     env.storage()
         .instance()
@@ -129,12 +109,6 @@ pub(crate) fn get_config(env: &Env) -> Result<QuorumConfig, RegistryError> {
         .ok_or(RegistryError::QuorumNotConfigured)
 }
 
-/// Returns true once a quorum policy has been installed.
-pub(crate) fn is_configured(env: &Env) -> bool {
-    env.storage().instance().has(&QuorumKey::Config)
-}
-
-/// Locate the signer record for `addr`, or reject as `Unauthorized`.
 pub(crate) fn find_signer(config: &QuorumConfig, addr: &Address) -> Result<Signer, RegistryError> {
     for s in config.signers.iter() {
         if s.address == *addr {
@@ -144,7 +118,7 @@ pub(crate) fn find_signer(config: &QuorumConfig, addr: &Address) -> Result<Signe
     Err(RegistryError::Unauthorized)
 }
 
-/// Validate a candidate config: non-empty, bounded, and a reachable threshold.
+/// Validate a candidate config: non-empty, bounded, reachable threshold.
 ///
 /// Rejecting `threshold > total_weight` matters because such a policy would
 /// permanently deadlock every gated action.
@@ -170,7 +144,6 @@ pub(crate) fn validate_config(signers: &Vec<Signer>, threshold: u32) -> Result<(
     Ok(())
 }
 
-/// Fetch a proposal by id.
 pub(crate) fn get_proposal(env: &Env, proposal_id: u64) -> Result<RegistryProposal, RegistryError> {
     env.storage()
         .instance()
@@ -178,8 +151,7 @@ pub(crate) fn get_proposal(env: &Env, proposal_id: u64) -> Result<RegistryPropos
         .ok_or(RegistryError::ProposalNotFound)
 }
 
-/// The id the next proposal will receive. Read-only; does not advance the
-/// counter.
+/// The id the next proposal will receive. Read-only.
 pub(crate) fn next_proposal_id(env: &Env) -> u64 {
     env.storage()
         .instance()
@@ -199,29 +171,28 @@ fn assert_active(env: &Env, proposal: &RegistryProposal) -> Result<(), RegistryE
     Ok(())
 }
 
-/// Pop the next monotonic proposal id.
-fn next_id(env: &Env) -> u64 {
-    let id: u64 = next_proposal_id(env);
+fn take_next_id(env: &Env) -> u64 {
+    let id = next_proposal_id(env);
     env.storage()
         .instance()
         .set(&QuorumKey::NextProposalId, &(id + 1));
     id
 }
 
-fn bump_instance_ttl(env: &Env) {
+fn bump_ttl(env: &Env) {
     env.storage()
         .instance()
         .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 }
 
-/// Install the initial quorum policy. The first signer bootstraps the policy
-/// and must authenticate the call.
+/// Install the initial quorum policy. The first signer bootstraps it and must
+/// authenticate the call.
 pub(crate) fn configure(
     env: &Env,
     signers: Vec<Signer>,
     threshold: u32,
 ) -> Result<(), RegistryError> {
-    if is_configured(env) {
+    if env.storage().instance().has(&QuorumKey::Config) {
         return Err(RegistryError::QuorumAlreadyConfigured);
     }
     validate_config(&signers, threshold)?;
@@ -235,7 +206,7 @@ pub(crate) fn configure(
     env.storage()
         .instance()
         .set(&QuorumKey::NextProposalId, &0u64);
-    bump_instance_ttl(env);
+    bump_ttl(env);
 
     events::QuorumConfiguredEvent {
         bootstrapper: bootstrapper.address,
@@ -248,7 +219,7 @@ pub(crate) fn configure(
 }
 
 /// Replace the signer set / threshold. Only reachable through an executed
-/// `SetQuorumConfig` proposal, so rotating the approver set is itself gated.
+/// `SetQuorumConfig` proposal.
 pub(crate) fn replace_config(
     env: &Env,
     signers: Vec<Signer>,
@@ -259,7 +230,7 @@ pub(crate) fn replace_config(
     let signer_count = signers.len();
     let config = QuorumConfig { signers, threshold };
     env.storage().instance().set(&QuorumKey::Config, &config);
-    bump_instance_ttl(env);
+    bump_ttl(env);
 
     events::QuorumReconfiguredEvent {
         threshold,
@@ -283,7 +254,7 @@ pub(crate) fn propose(
     let signer = find_signer(&config, &proposer)?;
 
     let now = env.ledger().timestamp();
-    let id = next_id(env);
+    let id = take_next_id(env);
 
     let mut signers_vec = Vec::new(env);
     signers_vec.push_back(proposer.clone());
@@ -309,7 +280,7 @@ pub(crate) fn propose(
     env.storage()
         .instance()
         .set(&QuorumKey::Proposal(id), &proposal);
-    bump_instance_ttl(env);
+    bump_ttl(env);
 
     events::ProposalCreatedEvent {
         proposal_id: id,
@@ -324,10 +295,8 @@ pub(crate) fn propose(
     Ok(id)
 }
 
-/// Add a signer's weight to an in-flight proposal.
-///
-/// Re-signing is rejected with `ProposalAlreadySigned`, so one approver cannot
-/// reach the threshold alone by calling this repeatedly.
+/// Add a signer's weight to an in-flight proposal. Re-signing is rejected, so
+/// one approver cannot reach the threshold alone by calling this repeatedly.
 pub(crate) fn sign(
     env: &Env,
     signer_addr: Address,
@@ -357,7 +326,7 @@ pub(crate) fn sign(
     env.storage()
         .instance()
         .set(&QuorumKey::Proposal(proposal_id), &proposal);
-    bump_instance_ttl(env);
+    bump_ttl(env);
 
     events::SignatureCollectedEvent {
         proposal_id,
@@ -371,11 +340,11 @@ pub(crate) fn sign(
     Ok(proposal.status)
 }
 
-/// Consume an approved proposal's authority exactly once and mark it Executed.
+/// Consume an approved proposal's authority exactly once, marking it Executed.
 ///
-/// Fails if the proposal is missing, not yet approved, expired, already
-/// executed, or if `expected_action` does not match the approved action -
-/// including its bound parameters.
+/// Fails if the proposal is missing, not approved, expired, already spent, or
+/// if `expected_action` differs from the approved action - including its bound
+/// parameters.
 pub(crate) fn consume_approval(
     env: &Env,
     executor: &Address,
@@ -402,7 +371,7 @@ pub(crate) fn consume_approval(
     env.storage()
         .instance()
         .set(&QuorumKey::Proposal(proposal_id), &proposal);
-    bump_instance_ttl(env);
+    bump_ttl(env);
 
     events::ProposalExecutedEvent {
         proposal_id,
@@ -436,7 +405,7 @@ pub(crate) fn cancel(
     env.storage()
         .instance()
         .set(&QuorumKey::Proposal(proposal_id), &proposal);
-    bump_instance_ttl(env);
+    bump_ttl(env);
 
     events::ProposalCancelledEvent {
         proposal_id,
@@ -465,7 +434,7 @@ pub(crate) fn expire(env: &Env, proposal_id: u64) -> Result<(), RegistryError> {
     env.storage()
         .instance()
         .set(&QuorumKey::Proposal(proposal_id), &proposal);
-    bump_instance_ttl(env);
+    bump_ttl(env);
 
     Ok(())
 }
