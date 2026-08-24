@@ -13,17 +13,21 @@ Models:
 import os
 import json
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 import pandas as pd
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
+from src.analytics.sentiment import (
+    NEGATIVE_KEYWORDS,
+    POSITIVE_KEYWORDS,
+    SUPPORTED_LANGUAGES,
+)
 from src.ml.model_registry import (
     save_model,
     promote_model,
-    get_current_version,
     get_registry_status,
 )
 from src.ml.price_predictor import PricePredictor
@@ -90,6 +94,16 @@ def _build_sentiment_model() -> Tuple[SentimentIntensityAnalyzer, Dict[str, Any]
         "custom_terms_added": len(slang),
         "total_lexicon_size": len(analyzer.lexicon),
         "coverage_ratio": len(slang) / max(len(analyzer.lexicon), 1),
+        # Multilingual support (issue #1252): per-language lexicon sizes so
+        # the retraining run reports which languages can actually be scored.
+        "language_support": {
+            lang: {
+                "supported": True,
+                "positive_keywords": len(POSITIVE_KEYWORDS.get(lang, set())),
+                "negative_keywords": len(NEGATIVE_KEYWORDS.get(lang, set())),
+            }
+            for lang in sorted(SUPPORTED_LANGUAGES)
+        },
     }
     return analyzer, metrics
 

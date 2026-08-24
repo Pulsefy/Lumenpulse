@@ -129,12 +129,18 @@ class SentimentIndicatorResponse(BaseModel):
 class AnalyzeRequest(BaseModel):
     text: str
     asset: Optional[str] = None  # Optional asset filter
+    lang_hint: Optional[str] = None  # Optional ISO language hint (e.g. "en", "zh")
 
 
 class AnalyzeResponse(BaseModel):
     sentiment: float  # compound_score from SentimentResult
     asset_codes: List[str] = []  # Asset codes found in text
     sentiment_label: str = ""  # positive/negative/neutral
+    language: str = "unknown"  # Detected ISO-639-1 language code
+    language_supported: bool = False  # True when the language can be scored
+    language_unsupported: bool = False  # True when detected but unsupported
+    score_reliable: bool = False  # True when scored with a language-appropriate method
+    unscored: bool = True  # True when no score was produced (not a confident guess)
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
 
 
@@ -170,6 +176,8 @@ class NewsArticleResponse(BaseModel):
     onchain_entity_links: List[Dict[str, Any]] = []
     sentiment_score: Optional[float] = None  # Raw compound score stored in DB
     sentiment_label: Optional[str] = None  # positive / negative / neutral
+    language: Optional[str] = None  # Detected language (when stored)
+    score_reliable: Optional[bool] = None  # Whether the stored score is reliable
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
 
 
@@ -218,6 +226,7 @@ async def root(request: Request) -> Dict[str, Any]:
             "POST /analyze-batch": "Batch analyze multiple texts (requires X-API-Key header)",
             "GET /contributors/{contributor}/timeline": "Get contributor activity timeline from on-chain events (requires X-API-Key header)",
             "GET /sentiment/legend": "Get colour legend for sentiment indicators (no auth required)",
+            "GET /sentiment/accuracy": "Report per-language sentiment accuracy (requires X-API-Key header)",
             # KPI endpoints (Issue #734)
             "GET /api/kpi/latest": "Get latest KPI snapshot (TVL, Volume) (requires X-API-Key header)",
             "GET /api/kpi/series": "Get KPI time series data (requires X-API-Key header)",
@@ -305,6 +314,8 @@ async def get_news(
                 onchain_entity_links=article.onchain_entity_links or [],
                 sentiment_score=article.sentiment_score,
                 sentiment_label=article.sentiment_label,
+                language=getattr(article, "language", None),
+                score_reliable=getattr(article, "score_reliable", None),
                 indicator=_build_indicator(article.sentiment_score),
             )
             for article in articles
@@ -381,22 +392,28 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
         if not body.text or not body.text.strip():
             raise HTTPException(status_code=400, detail="Text cannot be empty")
 
-        # Use your existing SentimentAnalyzer with asset filter
-        result = sentiment_analyzer.analyze(body.text, body.asset)
+        # Use your existing SentimentAnalyzer with asset filter and language hint
+        result = sentiment_analyzer.analyze(body.text, body.asset, body.lang_hint)
 
         logger.info(
             f"Analyzed text: '{body.text[:50]}...' -> sentiment: {result.compound_score} | "
+            f"language: {result.language} | reliable: {result.score_reliable} | "
             f"asset: {body.asset} | client_ip: {request.client.host}"
         )
 
         # Build visual indicator
         ind = _indicator_mapper.score_to_indicator(result.compound_score)
 
-        # Return enhanced response with asset information
+        # Return enhanced response with asset and language information
         return AnalyzeResponse(
             sentiment=result.compound_score,
             asset_codes=result.asset_codes,
             sentiment_label=result.sentiment_label,
+            language=result.language,
+            language_supported=result.language_supported,
+            language_unsupported=result.language_unsupported,
+            score_reliable=result.score_reliable,
+            unscored=result.unscored,
             indicator=SentimentIndicatorResponse(**ind.to_dict()),
         )
 
@@ -460,13 +477,18 @@ async def get_asset_analysis(
 # Optional: Batch analysis endpoint if needed
 @app.post("/analyze-batch")
 @limiter.limit("10/minute") if limiter else lambda x: x
-async def analyze_batch(request: Request, texts: list[str], asset: Optional[str] = None) -> Dict[str, Any]:
-    """Batch analyze multiple texts with optional asset filter"""
+async def analyze_batch(
+    request: Request,
+    texts: list[str],
+    asset: Optional[str] = None,
+    lang_hint: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Batch analyze multiple texts with optional asset filter and language hint"""
     try:
         if not texts:
             raise HTTPException(status_code=400, detail="Texts list cannot be empty")
 
-        results = sentiment_analyzer.analyze_batch(texts, asset)
+        results = sentiment_analyzer.analyze_batch(texts, asset, lang_hint)
         summary = sentiment_analyzer.get_sentiment_summary(results)
 
         return {
@@ -474,6 +496,7 @@ async def analyze_batch(request: Request, texts: list[str], asset: Optional[str]
             "summary": summary,
             "count": len(results),
             "asset_filter": asset,
+            "lang_hint": lang_hint,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -502,6 +525,36 @@ async def get_sentiment_legend() -> Dict[str, Any]:
             "neutral": "-0.05 < score < 0.05",
         },
     }
+
+
+@app.get("/sentiment/accuracy")
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def get_sentiment_accuracy(request: Request) -> Dict[str, Any]:
+    """
+    Report per-language sentiment accuracy against the labelled set.
+
+    No external services required — evaluates the language-aware analyzer
+    against ``data/sentiment_labelled_set.json`` (issue #1252).
+
+    Requires X-API-Key header.
+    """
+    from src.analytics.sentiment import evaluate_language_accuracy
+
+    try:
+        report = evaluate_language_accuracy()
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=503,
+            detail="Labelled sentiment set not found; cannot report accuracy",
+        )
+
+    logger.info(
+        "Sentiment accuracy reported | overall=%.4f | languages=%s | client_ip=%s",
+        report.get("accuracy", 0.0),
+        report.get("languages_evaluated", []),
+        request.client.host,
+    )
+    return report
 
 
 if __name__ == "__main__":

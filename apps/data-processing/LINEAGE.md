@@ -163,7 +163,11 @@ Written to: `data/analytics.jsonl`.
 Per-text score from `SentimentAnalyzer`:
 
 - **English**: FinBERT primary, VADER + crypto-keyword boost as fallback.
-- **Spanish / Portuguese**: keyword-hit ratio.
+- **Spanish / Portuguese / Chinese (zh)**: keyword-hit ratio.
+- Language is detected before scoring and recorded on the result; content in a
+  detected-but-unsupported language is marked **unscored** instead of being
+  scored by the English model (per-language accuracy is reported against
+  `data/sentiment_labelled_set.json` via `GET /sentiment/accuracy`).
 
 Range `[-1, 1]`.  Thresholds: bullish ≥ 0.05, bearish ≤ −0.05.  
 Stored in: `articles.sentiment_score` (PostgreSQL).

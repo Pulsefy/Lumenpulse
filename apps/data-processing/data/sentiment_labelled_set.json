@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "name": "sentiment-labelled-set",
+    "description": "Small labelled set of crypto/finance headlines used to report per-language sentiment accuracy (issue #1252). Samples marked with label \"unscored\" are expected to be marked unscored rather than scored by an inappropriate model.",
+    "languages": ["en", "es", "pt", "zh"],
+    "labels": ["positive", "negative", "neutral", "unscored"],
+    "origin": "Issue #1252 multilingual sentiment analysis"
+  },
+  "samples": [
+    {"text": "Stellar hits all time high", "language": "en", "label": "positive"},
+    {"text": "Stellar surges past its previous peak", "language": "en", "label": "positive"},
+    {"text": "Investors cheer the strong rally", "language": "en", "label": "positive"},
+    {"text": "Bitcoin is crashing", "language": "en", "label": "negative"},
+    {"text": "Investors are dumping their crypto holdings", "language": "en", "label": "negative"},
+    {"text": "Crypto prices plunged to yearly lows", "language": "en", "label": "negative"},
+    {"text": "The market collapsed under heavy selling", "language": "en", "label": "negative"},
+
+    {"text": "Bitcoin sube con fuerte rally en el mercado", "language": "es", "label": "positive"},
+    {"text": "La moneda sube a su maximo historico", "language": "es", "label": "positive"},
+    {"text": "Tendencia alcista en el mercado hoy", "language": "es", "label": "positive"},
+    {"text": "El mercado cae y se desploma", "language": "es", "label": "negative"},
+    {"text": "Colapso del mercado de criptomonedas", "language": "es", "label": "negative"},
+    {"text": "El precio baja y el sentimiento es bajista", "language": "es", "label": "negative"},
+
+    {"text": "Bitcoin sobe em alta no mercado", "language": "pt", "label": "positive"},
+    {"text": "Rali de alta no mercado de cripto", "language": "pt", "label": "positive"},
+    {"text": "O sentimento e altista no mercado hoje", "language": "pt", "label": "positive"},
+    {"text": "O preco cai e o mercado despenca", "language": "pt", "label": "negative"},
+    {"text": "Colapso no mercado de criptomoedas", "language": "pt", "label": "negative"},
+    {"text": "Baixa forte, tendencia baixista", "language": "pt", "label": "negative"},
+
+    {"text": "比特币价格大幅上涨", "language": "zh", "label": "positive"},
+    {"text": "比特币突破历史新高", "language": "zh", "label": "positive"},
+    {"text": "加密货币市场看涨，牛市来了", "language": "zh", "label": "positive"},
+    {"text": "市场崩盘，投资者抛售", "language": "zh", "label": "negative"},
+    {"text": "股市暴跌，看跌情绪蔓延", "language": "zh", "label": "negative"},
+    {"text": "价格持续下跌，熊市来袭", "language": "zh", "label": "negative"},
+
+    {"text": "これはテストです", "language": "ja", "label": "unscored"},
+    {"text": "Ceci est un test", "language": "fr", "label": "unscored"}
+  ]
+}

@@ -130,6 +130,19 @@ ml_feature_sets:
           - src/analytics/sentiment.py::SentimentAnalyzer._finbert_compound
         null_handling: inference failure → VADER fallback silently
 
+      - name: language_keyword_lexicons
+        type: dict[str, set[str]]
+        description: >
+          Per-language keyword lexicons (es / pt / zh) used to score
+          non-English content with a language-appropriate method instead
+          of feeding it to the English model.  Defined in
+          src/analytics/sentiment.py (POSITIVE_KEYWORDS / NEGATIVE_KEYWORDS).
+          Content in a detected-but-unsupported language is marked unscored.
+        source_file: src/analytics/sentiment.py
+        upstream:
+          - src/analytics/sentiment.py::SentimentAnalyzer.keyword_score
+        null_handling: unsupported language → score 0 + unscored flag
+
     quality_gates:
       min_sentiment_coverage: 0.0   # env: MIN_SENTIMENT_COVERAGE
 
@@ -182,8 +195,11 @@ kpi_datasets:
     display_name: Article / Social Sentiment Score
     description: >
       Per-text compound sentiment score produced by SentimentAnalyzer.
+      Language is detected before scoring and recorded on the result.
       English: FinBERT primary → VADER + crypto-keyword boost fallback.
-      Spanish / Portuguese: keyword-hit ratio.
+      Spanish / Portuguese / Chinese: keyword-hit ratio.
+      Content in a detected-but-unsupported language is marked unscored
+      instead of being scored by the English model.
       Range clamped to [-1, 1].
     owner: data-team@lumenpulse.io
     source_file: src/analytics/sentiment.py
@@ -205,6 +221,8 @@ kpi_datasets:
       - language:             detected ISO code
       - language_supported:   bool
       - language_unsupported: bool
+      - score_reliable:       bool (true only when a language-appropriate method scored the text)
+      - unscored:             bool (true for empty/unsupported content)
 
     thresholds:
       bullish: score ≥ 0.05
