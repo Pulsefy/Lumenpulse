@@ -1,0 +1,51 @@
+name: Webapp CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'apps/webapp/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'apps/webapp/**'
+
+jobs:
+  webapp-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/webapp
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 9
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'pnpm'
+        cache-dependency-path: './pnpm-lock.yaml'
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile --filter ./apps/webapp...
+      working-directory: .
+
+    - name: Lint
+      run: pnpm run lint
+
+    - name: Type Check
+      run: pnpm exec tsc --noEmit
+
+    - name: Run Tests
+      run: pnpm run test
+
+    - name: Build
+      run: pnpm run build

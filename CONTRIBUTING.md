@@ -42,10 +42,12 @@ git checkout -b docs/short-description
 4. Run validation locally
 - Run the relevant lint/test commands for your area:
 ```bash
+pnpm install --frozen-lockfile --filter ./apps/webapp... && cd apps/webapp && pnpm run lint && pnpm exec tsc --noEmit && pnpm run test && pnpm run build
 cd apps/mobile && npm run lint && npm run tsc
 cd apps/backend && npm run lint && npm run test
 cd apps/onchain && cargo fmt --all && cargo clippy --all-targets --all-features -- -D warnings && cargo test --workspace
 ```
+- The webapp CI check is required to pass before a webapp PR is reviewed.
 - If your change spans multiple areas, validate each affected area.
 
 5. Commit using Conventional Commits
