@@ -1,4 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { Registry } from 'prom-client';
+import { MetricsService } from '../metrics/metrics.service';
 import { ConfigModule } from '@nestjs/config';
 import stellarConfig from './config/stellar.config';
 import { StellarController } from './stellar.controller';
@@ -9,6 +11,7 @@ import { StellarContractRotationService } from './services/stellar-contract-rota
 import { AuditModule } from '../audit/audit.module';
 import { AppConfigModule } from '../config/config.module';
 import { SorobanRpcClientService } from './services/soroban-rpc-client.service';
+import { SimulationCacheService } from './services/simulation-cache.service';
 import { HorizonClientService } from './services/horizon-client.service';
 import { MatchingPoolAdminController } from './controllers/matching-pool-admin.controller';
 import { TestnetBootstrapController } from './controllers/testnet-bootstrap.controller';
@@ -31,14 +34,21 @@ import { AppCacheModule } from '../cache/cache.module';
   providers: [
     StellarService,
     SorobanRpcClientService,
+    SimulationCacheService,
     HorizonClientService,
     ContractRotationService,
     StellarContractRotationService,
     TestnetBootstrapService,
+    {
+      provide: Registry,
+      useFactory: (metricsService: MetricsService) => metricsService.registry,
+      inject: [MetricsService],
+    },
   ],
   exports: [
     StellarService,
     SorobanRpcClientService,
+    SimulationCacheService,
     HorizonClientService,
     ContractRotationService,
     StellarContractRotationService,

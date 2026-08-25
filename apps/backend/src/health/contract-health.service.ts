@@ -11,6 +11,7 @@ import {
   xdr,
 } from '@stellar/stellar-sdk';
 import { config } from '../lib/config';
+import { SimulationCacheService } from '../stellar/services/simulation-cache.service';
 
 const NETWORK_PASSPHRASES = {
   testnet: Networks.TESTNET,
@@ -101,6 +102,7 @@ export interface ContractHealthReport {
 
 @Injectable()
 export class ContractHealthService {
+  constructor(private readonly simulationCache: SimulationCacheService) {}
   async getContractHealthReport(): Promise<ContractHealthReport> {
     const context = await this.loadSimulationContextIfNeeded();
     const contracts = await Promise.all(
@@ -256,7 +258,13 @@ export class ContractHealthService {
         .addOperation(new Contract(contractId).call(method))
         .setTimeout(30)
         .build();
-      const simulation = await context.server.simulateTransaction(tx);
+
+      const simulation = await this.simulationCache.getOrFetch(
+        contractId,
+        `health:${method}`,
+        {},
+        () => context.server.simulateTransaction(tx),
+      );
 
       if (rpc.Api.isSimulationError(simulation)) {
         return {

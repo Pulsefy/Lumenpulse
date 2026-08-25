@@ -202,24 +202,27 @@ export class CacheService {
     method?: string,
   ): Promise<void> {
     try {
-      const pattern = method
-        ? `${CONTRACT_READ_PREFIX}:${contractId}:${method}:*`
-        : `${CONTRACT_READ_PREFIX}:${contractId}:*`;
+      const prefixes = [CONTRACT_READ_PREFIX, 'sim:cache'];
+      for (const prefix of prefixes) {
+        const pattern = method
+          ? `${prefix}:${contractId}:${method}:*`
+          : `${prefix}:${contractId}:*`;
 
-      interface RedisClient {
-        keys: (pattern: string) => Promise<string[]>;
-      }
-      const store = (this.cacheManager as { store?: { client?: RedisClient } })
-        .store;
-      const keys = store?.client ? await store.client.keys(pattern) : [];
-
-      if (keys && Array.isArray(keys) && keys.length > 0) {
-        for (const key of keys) {
-          await this.cacheManager.del(key);
+        interface RedisClient {
+          keys: (pattern: string) => Promise<string[]>;
         }
-        this.logger.debug(
-          `Invalidated ${keys.length} contract read cache entries for ${contractId}${method ? `:${method}` : ''}`,
-        );
+        const store = (this.cacheManager as { store?: { client?: RedisClient } })
+          .store;
+        const keys = store?.client ? await store.client.keys(pattern) : [];
+
+        if (keys && Array.isArray(keys) && keys.length > 0) {
+          for (const key of keys) {
+            await this.cacheManager.del(key);
+          }
+          this.logger.debug(
+            `Invalidated ${keys.length} cache entries with prefix ${prefix} for ${contractId}${method ? `:${method}` : ''}`,
+          );
+        }
       }
     } catch (error) {
       this.logger.warn(

@@ -43,10 +43,23 @@ const resetContracts = () => {
 describe('ContractHealthService', () => {
   let service: ContractHealthService;
 
+  const mockSimulationCache = {
+    isEnabled: true,
+    getOrFetch: jest.fn((_contractId, _method, _args, fetcher) => fetcher()),
+    invalidateContract: jest.fn(),
+    getStats: jest.fn(() => ({
+      hitRate: 0,
+      totalHits: 0,
+      totalMisses: 0,
+      rpcCallsAvoided: 0,
+      enabled: true,
+    })),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     resetContracts();
-    service = new ContractHealthService();
+    service = new ContractHealthService(mockSimulationCache as any);
   });
 
   it('reports missing contract IDs as misconfigured without loading RPC context', async () => {

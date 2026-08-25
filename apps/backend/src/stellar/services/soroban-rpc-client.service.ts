@@ -9,6 +9,7 @@ import {
 import { Counter, Histogram, Registry } from 'prom-client';
 import { config } from '../../lib/config';
 import { RequestContextService } from '../../common/services/request-context.service';
+import { SimulationCacheService } from './simulation-cache.service';
 
 export enum SorobanErrorCode {
   TIMEOUT = 'SOROBAN_TIMEOUT',
@@ -54,6 +55,7 @@ export class SorobanRpcClientService {
 
   constructor(
     private readonly requestContextService: RequestContextService,
+    @Optional() private readonly simulationCache?: SimulationCacheService,
     @Optional() private readonly registry?: Registry,
   ) {
     const rpcUrl =
@@ -116,6 +118,10 @@ export class SorobanRpcClientService {
           `Simulation failed: ${result.error ?? 'Unknown error'}`,
         );
       }
+      // Propagate latest ledger to simulation cache for key invalidation
+      if (this.simulationCache && result.latestLedger) {
+        this.simulationCache.onLedgerAdvance(Number(result.latestLedger));
+      }
       return result;
     });
   }
@@ -165,6 +171,57 @@ export class SorobanRpcClientService {
       .build();
 
     return this.simulateTransaction(tx, opts);
+  }
+
+  /**
+   * Simulate a read-only contract method call with caching.
+   *
+   * Cache key = contract + method + args + ledger sequence.
+   * Only eligible for caching when explicitly called through this method
+   * (i.e. the caller guarantees the call has no state-changing effect).
+   *
+   * @param sourceAccountId  - Account to use as simulation source
+   * @param sourceSequence   - Account sequence number
+   * @param contractId       - Soroban contract address
+   * @param method           - Contract method name (read-only)
+   * @param networkPassphrase - Network passphrase
+   * @param args             - Serialized arguments for cache key generation
+   * @param opts             - RPC client options (retry, timeout)
+   */
+  async simulateContractReadCached(
+    sourceAccountId: string,
+    sourceSequence: string,
+    contractId: string,
+    method: string,
+    networkPassphrase: string,
+    args: Record<string, unknown> = {},
+    opts?: SorobanClientOptions,
+  ): Promise<rpc.Api.SimulateTransactionResponse> {
+    if (!this.simulationCache?.isEnabled) {
+      return this.simulateContractRead(
+        sourceAccountId,
+        sourceSequence,
+        contractId,
+        method,
+        networkPassphrase,
+        opts,
+      );
+    }
+
+    return this.simulationCache.getOrFetch(
+      contractId,
+      method,
+      args,
+      () =>
+        this.simulateContractRead(
+          sourceAccountId,
+          sourceSequence,
+          contractId,
+          method,
+          networkPassphrase,
+          opts,
+        ),
+    );
   }
 
   /** Expose the raw server for advanced usage */

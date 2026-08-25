@@ -195,7 +195,7 @@ export class ContractRotationService {
     contractId: string,
     method: string,
   ): Promise<void> {
-    await this.sorobanRpc.simulateContractRead(
+    await this.sorobanRpc.simulateContractReadCached(
       context.sourceAccountId,
       context.sourceSequence,
       contractId,

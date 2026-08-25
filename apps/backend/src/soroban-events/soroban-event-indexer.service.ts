@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { rpc } from '@stellar/stellar-sdk';
 import { SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
+import { SimulationCacheService } from '../stellar/services/simulation-cache.service';
 import { JobLockService } from '../scheduler/job-lock.service';
 import { JobHistoryService } from '../scheduler/job-history.service';
 import {
@@ -35,6 +36,7 @@ export class SorobanEventIndexerService {
     private readonly eventRepo: Repository<SorobanEvent>,
     @InjectRepository(SorobanIndexerCursor)
     private readonly cursorRepo: Repository<SorobanIndexerCursor>,
+    @Optional() private readonly simulationCache?: SimulationCacheService,
   ) {}
 
   /**
@@ -74,6 +76,9 @@ export class SorobanEventIndexerService {
         });
         return { indexed: 0 };
       }
+
+      // Propagate latest ledger to simulation cache for key invalidation
+      this.simulationCache?.onLedgerAdvance(latestLedger);
 
       const cursor = await this.getOrCreateCursor(GLOBAL_CURSOR_KEY);
       const startLedger = overrideStartLedger ?? cursor.lastLedgerSequence + 1;

@@ -1,9 +1,10 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Optional } from '@nestjs/common';
 import { AuditLog } from '../../audit/entities/audit-log.entity';
 import { config } from '../../lib/config';
 import { AuditService } from '../../audit/audit.service';
 import { ContractRotationService } from './contract-rotation.service';
 import { ConfigService } from '../../config/config.service';
+import { SimulationCacheService } from './simulation-cache.service';
 import {
   RotateContractIdsResponseDto,
   ContractIdUpdateDto,
@@ -28,6 +29,7 @@ export class StellarContractRotationService {
     private readonly auditService: AuditService,
     private readonly contractRotationService: ContractRotationService,
     private readonly configService: ConfigService,
+    @Optional() private readonly simulationCache?: SimulationCacheService,
   ) {}
 
   /**
@@ -105,6 +107,17 @@ export class StellarContractRotationService {
 
       // Invalidate config cache so clients get updated values
       await this.configService.invalidateCache();
+
+      // Invalidate simulation cache for both old and new contract IDs
+      if (this.simulationCache) {
+        for (const [name, contractId] of Object.entries(updatedContracts)) {
+          const oldContractId = previousValues[name];
+          if (oldContractId) {
+            await this.simulationCache.invalidateContract(oldContractId);
+          }
+          await this.simulationCache.invalidateContract(contractId);
+        }
+      }
 
       return {
         message: 'Contracts rotated successfully',

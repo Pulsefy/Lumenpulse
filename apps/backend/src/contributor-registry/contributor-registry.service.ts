@@ -24,6 +24,7 @@ import {
 import { CacheService } from '../cache/cache.service';
 import { config } from '../lib/config';
 import { SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
+import { SimulationCacheService } from '../stellar/services/simulation-cache.service';
 import {
   ContributorResponseDto,
   NonceResponseDto,
@@ -62,6 +63,7 @@ export class ContributorRegistryService {
   constructor(
     private readonly cacheService: CacheService,
     private readonly sorobanRpcClient: SorobanRpcClientService,
+    private readonly simulationCache: SimulationCacheService,
   ) {}
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -367,7 +369,12 @@ export class ContributorRegistryService {
 
     let simulation: rpc.Api.SimulateTransactionResponse;
     try {
-      simulation = await this.sorobanRpcClient.simulateTransaction(tx);
+      simulation = await this.simulationCache.getOrFetch(
+        contractId,
+        'get_contributor',
+        { address },
+        () => this.sorobanRpcClient.simulateTransaction(tx),
+      );
     } catch (err) {
       if (
         err instanceof SorobanRpcError &&
@@ -423,7 +430,12 @@ export class ContributorRegistryService {
 
     let simulation: rpc.Api.SimulateTransactionResponse;
     try {
-      simulation = await this.sorobanRpcClient.simulateTransaction(tx);
+      simulation = await this.simulationCache.getOrFetch(
+        contractId,
+        'get_contributor_by_github',
+        { githubHandle },
+        () => this.sorobanRpcClient.simulateTransaction(tx),
+      );
     } catch (err) {
       if (
         err instanceof SorobanRpcError &&
@@ -479,7 +491,12 @@ export class ContributorRegistryService {
 
     let simulation: rpc.Api.SimulateTransactionResponse;
     try {
-      simulation = await this.sorobanRpcClient.simulateTransaction(tx);
+      simulation = await this.simulationCache.getOrFetch(
+        contractId,
+        'get_reputation',
+        { address },
+        () => this.sorobanRpcClient.simulateTransaction(tx),
+      );
     } catch (err) {
       if (
         err instanceof SorobanRpcError &&
@@ -528,7 +545,12 @@ export class ContributorRegistryService {
       .build();
 
     try {
-      const simulation = await this.sorobanRpcClient.simulateTransaction(tx);
+      const simulation = await this.simulationCache.getOrFetch(
+        contractId,
+        'get_registration_nonce',
+        { address },
+        () => this.sorobanRpcClient.simulateTransaction(tx),
+      );
 
       if (!rpc.Api.isSimulationSuccess(simulation) || !simulation.result) {
         return 0;

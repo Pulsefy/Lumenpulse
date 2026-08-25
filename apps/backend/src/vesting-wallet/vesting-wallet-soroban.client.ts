@@ -15,6 +15,7 @@ import { config } from '../lib/config';
 import { BadRequestException } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import { SorobanRpcError } from '../stellar/services/soroban-rpc-client.service';
+import { SimulationCacheService } from '../stellar/services/simulation-cache.service';
 import {
   VestingWalletNotConfiguredException,
   VestingWalletRpcUnavailableException,
@@ -59,6 +60,8 @@ export interface SubmittedTransaction {
 @Injectable()
 export class VestingWalletSorobanClient {
   private readonly logger = new Logger(VestingWalletSorobanClient.name);
+
+  constructor(private readonly simulationCache: SimulationCacheService) {}
 
   private getContractId(): string {
     const contractId = config.stellar.contracts.contributorRegistry;
@@ -256,7 +259,13 @@ export class VestingWalletSorobanClient {
         .setTimeout(30)
         .build();
 
-      const simulation = await server.simulateTransaction(tx);
+      const simulation = await this.simulationCache.getOrFetch(
+        contractId,
+        'get_claimable',
+        { beneficiary },
+        () => server.simulateTransaction(tx),
+      );
+
       if (rpc.Api.isSimulationError(simulation)) {
         const simError = simulation.error;
         throw toVestingWalletException(
