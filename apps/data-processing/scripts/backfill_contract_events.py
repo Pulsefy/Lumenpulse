@@ -289,36 +289,24 @@ class BackfillContractEvents:
             if last_completed_end is not None:
                 current_start = max(self.start_ledger, int(last_completed_end) + 1)
 
-            # If we already have completed batch files for the whole range,
-            # still iterate from start_ledger so we can accurately count
-            # skipped batches. This preserves the contract of the
-            # test_run_idempotency unit test.
+            # When resuming from a checkpoint, always iterate from start_ledger
+            # so the inner loop can count already-completed batches as skipped
+            # (preserving consistent skip/processed stats for both the
+            # idempotency test and partial-resume scenarios).
+            resume_next_ledger = current_start  # the true resume point for logging
             if not self.dry_run and last_completed_end is not None:
-                all_batches_have_outputs = True
-                probe_start = self.start_ledger
-                while probe_start <= self.end_ledger:
-                    probe_end = min(probe_start + self.batch_size - 1, self.end_ledger)
-                    probe_fp = self._get_output_filepath(
-                        contract_id, probe_start, probe_end
-                    )
-                    if not self._is_already_processed(probe_fp):
-                        all_batches_have_outputs = False
-                        break
-                    probe_start = probe_end + 1
-
-                if all_batches_have_outputs:
-                    current_start = self.start_ledger
+                current_start = self.start_ledger
 
             logger.info(
                 "[RECOVERY] contract=%s last_completed_batch_end=%s next_ledger=%s",
                 contract_id,
                 last_completed_end,
-                current_start,
+                resume_next_ledger,
             )
             if not self.dry_run:
                 stats["recovery"][contract_id] = {
                     "last_completed_batch_end": last_completed_end,
-                    "next_ledger": current_start,
+                    "next_ledger": resume_next_ledger,
                 }
 
             while current_start <= self.end_ledger:
