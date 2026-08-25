@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contractclient, contracttype, Env, String, Symbol};
+use soroban_sdk::{contracttype, Env, String, Symbol};
 
 /// Semantic version information for a contract.
 /// Follows semver.org specification: MAJOR.MINOR.PATCH
@@ -67,13 +67,12 @@ impl ContractVersion {
 /// Standard interface for contract version introspection.
 /// Contracts implementing this trait expose their version information
 /// for clients and operators to query without relying on off-chain manifests.
-#[contractclient(name = "VersionClient")]
 pub trait VersionTrait {
     /// Returns the contract's semantic version information.
-    /// 
+    ///
     /// # Returns
     /// `ContractVersion` struct containing major, minor, patch, and optional pre-release/build metadata.
-    /// 
+    ///
     /// # Example
     /// ```
     /// let version = contract.version();
@@ -83,10 +82,10 @@ pub trait VersionTrait {
 
     /// Returns the contract's name identifier.
     /// This should be a short, canonical name for the contract type.
-    /// 
+    ///
     /// # Returns
     /// `Symbol` representing the contract name (e.g., `Symbol::short("ContributorRegistry")`)
-    /// 
+    ///
     /// # Example
     /// ```
     /// let name = contract.contract_name();
@@ -95,10 +94,10 @@ pub trait VersionTrait {
     fn contract_name(env: Env) -> Symbol;
 
     /// Returns a human-readable description of the contract's purpose.
-    /// 
+    ///
     /// # Returns
     /// `String` describing the contract's functionality.
-    /// 
+    ///
     /// # Example
     /// ```
     /// let description = contract.contract_description();

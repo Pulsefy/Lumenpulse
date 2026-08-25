@@ -114,14 +114,28 @@ Pre-release versions have lower precedence than the corresponding stable version
 ### Querying Contract Version (Soroban SDK)
 
 ```rust
-use version_interface::{ContractVersion, VersionClient};
+use version_interface::ContractVersion;
 
 let contract_id = Address::from_string(&env, "CB..."); // Contract address
-let client = VersionClient::new(&env, &contract_id);
 
-let version = client.version(&env);
-let name = client.contract_name(&env);
-let description = client.contract_description(&env);
+// Call the version introspection functions directly on the contract
+let version: ContractVersion = env.invoke_contract(
+    &contract_id,
+    &Symbol::new(&env, "version"),
+    soroban_sdk::vec![&env],
+);
+
+let name: Symbol = env.invoke_contract(
+    &contract_id,
+    &Symbol::new(&env, "contract_name"),
+    soroban_sdk::vec![&env],
+);
+
+let description: String = env.invoke_contract(
+    &contract_id,
+    &Symbol::new(&env, "contract_description"),
+    soroban_sdk::vec![&env],
+);
 ```
 
 ### Version Comparison
@@ -138,7 +152,11 @@ assert!(v2.patch > v1.patch);
 ### Checking for Incompatible Upgrades
 
 ```rust
-let current_version = client.version(&env);
+let current_version: ContractVersion = env.invoke_contract(
+    &contract_id,
+    &Symbol::new(&env, "version"),
+    soroban_sdk::vec![&env],
+);
 let new_version = ContractVersion::stable(&env, 2, 0, 0);
 
 // Major version change indicates incompatible upgrade
@@ -168,7 +186,11 @@ Backend systems can validate contract versions before allowing operations:
 
 ```rust
 let required_version = ContractVersion::stable(&env, 1, 0, 0);
-let deployed_version = client.version(&env);
+let deployed_version: ContractVersion = env.invoke_contract(
+    &contract_id,
+    &Symbol::new(&env, "version"),
+    soroban_sdk::vec![&env],
+);
 
 if deployed_version.major < required_version.major {
     return Err("Contract version too old");
@@ -213,8 +235,11 @@ fn test_version_introspection() {
     let env = Env::default();
     let contract_id = env.register_contract(None, Contract);
     
-    let client = VersionClient::new(&env, &contract_id);
-    let version = client.version(&env);
+    let version: ContractVersion = env.invoke_contract(
+        &contract_id,
+        &Symbol::new(&env, "version"),
+        soroban_sdk::vec![&env],
+    );
     
     assert_eq!(version.major, 1);
     assert_eq!(version.minor, 0);
