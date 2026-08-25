@@ -96,6 +96,7 @@ from src.api.review_queue_routes import router as review_queue_router
 from src.api.ledger_cursor_routes import router as ledger_cursor_router
 from src.api.kpi_routes import router as kpi_router
 from src.api.account_operation_routes import router as account_operation_router
+from src.api.lineage_routes import router as lineage_router
 
 app.include_router(ingestion_quality_router)
 app.include_router(review_queue_router)
@@ -103,6 +104,7 @@ app.include_router(ledger_cursor_router)
 app.include_router(kpi_router)  # KPI routes for TVL and volume computation
 app.include_router(account_operation_router)  # Account operation ingestion
 app.include_router(rebuild_router)  # Rebuild routes for admin
+app.include_router(lineage_router)  # Feature lineage graph endpoints (Issue #1254)
 
 
 try:
@@ -228,6 +230,10 @@ async def root(request: Request) -> Dict[str, Any]:
             "GET /api/account-operations/status": "Get ingestion status (Admin only, requires X-API-Key header)",
             "POST /api/account-operations/reset-cursor": "Reset ingestion cursor (Admin only, requires X-API-Key header)",
             "GET /api/account-operations/operations": "Get account operations from database (Admin only, requires X-API-Key header)",
+            # Feature lineage endpoints (Issue #1254)
+            "GET /api/lineage": "List all registered ML feature sets and KPI datasets (no auth required)",
+            "GET /api/lineage/{name}": "Get upstream/downstream lineage graph for a named feature or dataset (no auth required)",
+            "GET /api/lineage/validate": "Validate the lineage manifest and check all source files exist (no auth required)",
         },
         "note": "Returns sentiment score between -1 (negative) and 1 (positive)",
         "security": "All endpoints except /health, /metrics, and /sentiment/legend require X-API-Key header",

@@ -279,8 +279,9 @@ def setup_security_middleware(app) -> None:
             "/openapi.json",
             "/sentiment/legend",
         ]
-        
-        if request.url.path in excluded_paths:
+
+        # Lineage endpoints are read-only manifest inspection — no auth required
+        if request.url.path in excluded_paths or request.url.path.startswith("/api/lineage"):
             return await call_next(request)
         
         # Validate API key
