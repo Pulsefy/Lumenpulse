@@ -18,6 +18,7 @@ use storage::{
 #[contracttype]
 pub enum DataKey {
     Admin,
+    PendingAdmin,
     Counter,
     NextOperationId,
     QueuedOperation(u32),
@@ -65,6 +66,65 @@ impl UpgradableContract {
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(())
+    }
+
+    /// Propose a new admin. The current admin remains active until the
+    /// proposed admin accepts the transfer.
+    pub fn propose_admin(
+        env: Env,
+        proposer: Address,
+        new_admin: Address,
+    ) -> Result<(), ContractError> {
+        Self::require_admin(&env, &proposer)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingAdmin, &new_admin);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        Ok(())
+    }
+
+    /// Accept a pending admin transfer. Only the proposed admin may accept.
+    pub fn accept_admin(env: Env, new_admin: Address) -> Result<(), ContractError> {
+        let pending_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::PendingAdmin)
+            .ok_or(ContractError::AdminRotationNotFound)?;
+        if new_admin != pending_admin {
+            return Err(ContractError::Unauthorized);
+        }
+        new_admin.require_auth();
+
+        let old_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ContractError::NotInitialized)?;
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        env.storage().instance().remove(&DataKey::PendingAdmin);
+
+        AdminChangedEvent {
+            old_admin,
+            new_admin,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Cancel a pending admin transfer. Only the current admin may cancel.
+    pub fn cancel_admin(env: Env, canceller: Address) -> Result<(), ContractError> {
+        Self::require_admin(&env, &canceller)?;
+        if !env.storage().instance().has(&DataKey::PendingAdmin) {
+            return Err(ContractError::AdminRotationNotFound);
+        }
+        env.storage().instance().remove(&DataKey::PendingAdmin);
+        Ok(())
+    }
+
+    pub fn get_pending_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::PendingAdmin)
     }
 
     /// Queue a sensitive admin action (upgrade or admin rotation). Admin
@@ -211,12 +271,9 @@ impl UpgradableContract {
                 .publish(&env);
             }
             TimelockAction::SetAdmin(new_admin) => {
-                env.storage().instance().set(&DataKey::Admin, &new_admin);
-                AdminChangedEvent {
-                    old_admin: executor.clone(),
-                    new_admin,
-                }
-                .publish(&env);
+                // The timelock only makes the proposal active. The new admin
+                // must still call `accept_admin` before authority changes.
+                env.storage().instance().set(&DataKey::PendingAdmin, &new_admin);
             }
         }
 

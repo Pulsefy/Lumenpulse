@@ -137,6 +137,62 @@ fn test_non_admin_cannot_queue() {
     );
 }
 
+#[test]
+fn test_admin_rotation_requires_acceptance() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    client.propose_admin(&admin, &new_admin);
+    assert_eq!(client.get_admin(), admin);
+    assert_eq!(client.get_pending_admin(), Some(new_admin.clone()));
+
+    let before = env.events().all().len();
+    client.accept_admin(&new_admin);
+    assert_eq!(client.get_admin(), new_admin);
+    assert_eq!(client.get_pending_admin(), None);
+    assert!(env.events().all().len() > before);
+}
+
+#[test]
+fn test_admin_rotation_can_be_cancelled_by_previous_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    client.propose_admin(&admin, &new_admin);
+    client.cancel_admin(&admin);
+
+    assert_eq!(client.get_admin(), admin);
+    assert_eq!(client.get_pending_admin(), None);
+    assert_eq!(
+        client.try_accept_admin(&new_admin),
+        Err(Ok(ContractError::AdminRotationNotFound))
+    );
+}
+
+#[test]
+fn test_non_admin_cannot_propose_admin_rotation() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    assert_eq!(
+        client.try_propose_admin(&attacker, &attacker),
+        Err(Ok(ContractError::Unauthorized))
+    );
+    assert_eq!(client.get_pending_admin(), None);
+}
+
 // ---------------------------------------------------------------------------
 // Get / status
 // ---------------------------------------------------------------------------
@@ -350,6 +406,9 @@ fn test_execute_at_exact_delay_boundary_succeeds() {
     advance_to_ready(&env);
     client.execute_operation(&admin, &id);
 
+    assert_eq!(client.get_admin(), admin);
+    assert_eq!(client.get_pending_admin(), Some(new_admin.clone()));
+    client.accept_admin(&new_admin);
     assert_eq!(client.get_admin(), new_admin);
 }
 
@@ -370,6 +429,8 @@ fn test_execute_after_delay_succeeds() {
 
     client.execute_operation(&admin, &id);
 
+    assert_eq!(client.get_admin(), admin);
+    client.accept_admin(&new_admin);
     assert_eq!(client.get_admin(), new_admin);
 }
 
@@ -389,6 +450,8 @@ fn test_execute_at_exact_expiry_boundary_succeeds() {
         .set_timestamp(env.ledger().timestamp() + MIN_DELAY_SECONDS + GRACE_PERIOD_SECONDS);
 
     client.execute_operation(&admin, &id);
+    assert_eq!(client.get_admin(), admin);
+    client.accept_admin(&new_admin);
     assert_eq!(client.get_admin(), new_admin);
 }
 
@@ -575,6 +638,8 @@ fn test_old_admin_cannot_execute_after_rotation() {
     let rotate_id = client.queue_operation(&admin, &TimelockAction::SetAdmin(new_admin.clone()));
     advance_to_ready(&env);
     client.execute_operation(&admin, &rotate_id);
+    assert_eq!(client.get_admin(), admin);
+    client.accept_admin(&new_admin);
     assert_eq!(client.get_admin(), new_admin);
 
     // The old admin can no longer queue anything, including an upgrade.
