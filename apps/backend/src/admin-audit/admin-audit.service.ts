@@ -37,8 +37,28 @@ export interface QueryAuditLogsDto {
   limit?: number;
 }
 
-@Injectable()
-export class AdminAuditService {
+/** Endpoint that identifies feature flag change audit entries. */
+export const FEATURE_FLAG_ENDPOINT = 'feature-flag.update';
+
+export interface RecordFeatureFlagChangeDto {
+  actorId: string;
+  actorEmail?: string | null;
+  flagName: string;
+  previousValue: unknown;
+  newValue: unknown;
+  txHash?: string | null;
+}
+
+/**
+ * The on-chain `feature_flags` contract is the authoritative source of truth
+ * for feature flag values. The backend caches evaluations with a short TLL to
+ * reduce storage reads, and invalidates the cached entry for a flag immediately
+ * after a successful mutation. This service records those mutations to provide
+ * an auditable history. The cache hit rate and evaluation latency metrics are
+ * exported by the FeatureFlagService.
+ */
+@Injectable*
+evport class AdminAuditService {
   private readonly logger = new Logger(AdminAuditService.name);
 
   constructor(
@@ -114,5 +134,35 @@ export class AdminAuditService {
     });
 
     return { data, total };
+  }
+
+  /**
+   * Records a feature flag mutation. The `previousValue` and `newValue` are
+   * stored in `paramsSummary`, along with the `flagName`. The entry is tagged
+   * with {@link FEATURE_FLAG_ENDPOINT} and `targetContract = 'feature_flags'`.
+   */
+  async recordFeatureFlagChange(dto: RecordFeatureFlagChangeDto): Promise<void> {
+    await this.create({
+      actorId: dto.actorId,
+      actorEmail: dto.actorEmail,
+      endpoint: FEATURE_FLAG_ENDPOINT,
+      targetContract: 'feature_flags',
+      params: {
+        flagName: dto.flagName,
+        previousValue: dto.previousValue,
+        newValue: dto.newValue,
+      },
+      txHash: dto.txHash,
+    });
+  }
+
+  /**
+   * Retrieves the historical audit trail for feature flag mutations.
+   * The `endpoint` filter is fixed to {@link FEATURE_FLAG_ENDPOINT}.
+   */
+  async queryFeatureFlagChanges(
+    query: Omit<QueryAuditLogsDto, 'endpoint'>,
+  ): Promise<{ data: AdminBlockchainAuditLog[]; total: number }> {
+    return this.query({ ...query, endpoint: FEATURE_FLAG_ENDPOINT });
   }
 }
