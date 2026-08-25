@@ -5,8 +5,9 @@ mod events;
 mod storage;
 
 use errors::RegistryError;
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Symbol};
 use storage::{DataKey, ModuleEntry};
+use version_interface::{ContractVersion, VersionTrait};
 
 #[contract]
 pub struct ProtocolRegistryContract;
@@ -281,6 +282,20 @@ impl ProtocolRegistryContract {
         Self::require_admin(&env, &caller)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
+    }
+
+    // ── Version introspection ────────────────────────────────────
+
+    pub fn version(env: Env) -> ContractVersion {
+        ContractVersion::stable(&env, 1, 0, 0)
+    }
+
+    pub fn contract_name(env: Env) -> Symbol {
+        Symbol::new(&env, "ProtocolRegistry")
+    }
+
+    pub fn contract_description(env: Env) -> String {
+        String::from_str(&env, "Manages protocol module registration and versioning")
     }
 }
 

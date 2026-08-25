@@ -1,0 +1,10 @@
+[package]
+name = "version_interface"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+soroban-sdk = "23"
+
+[dev-dependencies]
+soroban-sdk = { version = "23", features = ["testutils"] }

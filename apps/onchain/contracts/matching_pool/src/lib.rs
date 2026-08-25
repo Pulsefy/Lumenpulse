@@ -9,8 +9,9 @@ use errors::MatchingPoolError;
 use math::{sqrt_scaled, unscale};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, String, Symbol, Vec};
 use storage::{DataKey, PauseScope, RoundData};
+use version_interface::{ContractVersion, VersionTrait};
 
 #[contract]
 pub struct MatchingPoolContract;
@@ -918,6 +919,20 @@ impl MatchingPoolContract {
         Self::require_governance_not_paused(&env)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
+    }
+
+    // ── Version introspection ────────────────────────────────────
+
+    pub fn version(env: Env) -> ContractVersion {
+        ContractVersion::stable(&env, 1, 0, 0)
+    }
+
+    pub fn contract_name(env: Env) -> Symbol {
+        Symbol::new(&env, "MatchingPool")
+    }
+
+    pub fn contract_description(env: Env) -> String {
+        String::from_str(&env, "Manages quadratic funding rounds and matching fund distribution")
     }
 }
 

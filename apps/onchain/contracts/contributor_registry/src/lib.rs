@@ -21,6 +21,7 @@ use soroban_sdk::xdr::FromXdr;
 use soroban_sdk::{
     contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
+use version_interface::{ContractVersion, VersionTrait};
 use storage::{
     AttestationStatus, Badge, ContribPauseScope, ContributorData, ContributorTier, DataKey,
     PenaltyRecord, PenaltySeverity, LEDGER_BUMP, LEDGER_THRESHOLD,
@@ -1051,6 +1052,20 @@ impl ContributorRegistryContract {
             .instance()
             .get(&DataKey::NextProposalId)
             .unwrap_or(0)
+    }
+
+    // ── Version introspection ────────────────────────────────────
+
+    pub fn version(env: Env) -> ContractVersion {
+        ContractVersion::stable(&env, 1, 0, 0)
+    }
+
+    pub fn contract_name(env: Env) -> Symbol {
+        Symbol::new(&env, "ContributorRegistry")
+    }
+
+    pub fn contract_description(env: Env) -> String {
+        String::from_str(&env, "Manages contributor registration, reputation, and governance")
     }
 }
 

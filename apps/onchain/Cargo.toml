@@ -15,6 +15,7 @@ members = [
   "contracts/pricing_adapter",
   "contracts/treasury",
   "contracts/idempotency-guard",
+  "contracts/version_interface",
   "contracts/yield_vault",
   "contracts/feature_flags"
 ]

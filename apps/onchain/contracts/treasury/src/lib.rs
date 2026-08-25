@@ -12,8 +12,9 @@ use multisig::{
     propose as multisig_propose, replace_config as multisig_replace_config, sign as multisig_sign,
 };
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, String, Vec};
 use storage::{DataKey, ScheduleEntry, StreamData, StreamDataV2, LEDGER_BUMP, LEDGER_THRESHOLD};
+use version_interface::{ContractVersion, VersionTrait};
 
 pub use storage::{
     MultisigConfig, Proposal, ProposalAction, ProposalStatus, Signer, MAX_SIGNERS,
@@ -881,6 +882,20 @@ impl TreasuryContract {
             });
         }
         Ok(entries)
+    }
+
+    // ── Version introspection ────────────────────────────────────
+
+    pub fn version(env: Env) -> ContractVersion {
+        ContractVersion::stable(&env, 1, 0, 0)
+    }
+
+    pub fn contract_name(env: Env) -> Symbol {
+        Symbol::new(&env, "Treasury")
+    }
+
+    pub fn contract_description(env: Env) -> String {
+        String::from_str(&env, "Manages treasury streams and multisig governance")
     }
 }
 

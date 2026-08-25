@@ -6,8 +6,9 @@ mod storage;
 
 use errors::RegistryError;
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal, Symbol};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal, String, Symbol};
 use storage::{DataKey, ProjectEntry, RegistryConfig, VerificationStatus, WeightMode};
+use version_interface::{ContractVersion, VersionTrait};
 
 fn transition_to_archived(env: &Env, entry: &mut ProjectEntry) {
     entry.status = VerificationStatus::Archived;
@@ -472,6 +473,20 @@ impl ProjectRegistryContract {
         Self::require_admin(&env, &caller)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
+    }
+
+    // ── Version introspection ────────────────────────────────────
+
+    pub fn version(env: Env) -> ContractVersion {
+        ContractVersion::stable(&env, 1, 0, 0)
+    }
+
+    pub fn contract_name(env: Env) -> Symbol {
+        Symbol::new(&env, "ProjectRegistry")
+    }
+
+    pub fn contract_description(env: Env) -> String {
+        String::from_str(&env, "Manages project registration and verification")
     }
 }
 

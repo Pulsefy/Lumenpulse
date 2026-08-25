@@ -6,8 +6,9 @@ mod storage;
 
 use errors::YieldVaultError;
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{contract, contractclient, contractimpl, Address, BytesN, Env, Symbol};
+use soroban_sdk::{contract, contractclient, contractimpl, Address, BytesN, Env, String, Symbol};
 use storage::{DataKey, YieldProvider};
+use version_interface::{ContractVersion, VersionTrait};
 
 #[contractclient(name = "YieldProviderClient")]
 pub trait YieldProviderTrait {
@@ -437,6 +438,20 @@ impl YieldVaultContract {
         }
 
         Ok(best_id)
+    }
+
+    // ── Version introspection ────────────────────────────────────
+
+    pub fn version(env: Env) -> ContractVersion {
+        ContractVersion::stable(&env, 1, 0, 0)
+    }
+
+    pub fn contract_name(env: Env) -> Symbol {
+        Symbol::new(&env, "YieldVault")
+    }
+
+    pub fn contract_description(env: Env) -> String {
+        String::from_str(&env, "Manages yield generation across multiple providers")
     }
 }
 
