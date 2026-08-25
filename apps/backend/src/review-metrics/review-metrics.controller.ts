@@ -9,6 +9,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
+import { Throttle } from '@nestjs/throttler';
+import { getAnalyticsReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
 import { ReviewMetricsService } from './review-metrics.service';
 import {
   ReviewMetricsQueryDto,
@@ -20,6 +22,7 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
 @Controller('review-metrics')
+@Throttle(getAnalyticsReadThrottleOverride())
 export class ReviewMetricsController {
   constructor(private readonly reviewMetricsService: ReviewMetricsService) {}
 

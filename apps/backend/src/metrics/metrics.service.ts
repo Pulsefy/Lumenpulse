@@ -22,6 +22,7 @@ export class MetricsService implements OnModuleInit {
   private readonly httpRequestCounter: Counter<string>;
   private readonly httpRequestDuration: Histogram<string>;
   private readonly httpErrorCounter: Counter<string>;
+  private readonly rateLimitRejectionsCounter: Counter<string>;
   private readonly jobQueueSize: Gauge<string>;
   private readonly jobsProcessed: Counter<string>;
   private readonly jobsFailedCounter: Counter<string>;
@@ -71,6 +72,13 @@ export class MetricsService implements OnModuleInit {
       name: 'http_errors_total',
       help: 'Total number of HTTP errors',
       labelNames: ['method', 'route', 'status'] as const,
+      registers: [this.registry],
+    });
+
+    this.rateLimitRejectionsCounter = new Counter({
+      name: 'rate_limit_rejections_total',
+      help: 'Total number of rate limit rejections',
+      labelNames: ['endpoint_class', 'method', 'route'] as const,
       registers: [this.registry],
     });
 
@@ -198,6 +206,18 @@ export class MetricsService implements OnModuleInit {
     if (statusCode >= 400) {
       this.httpErrorCounter.inc(labels);
     }
+  }
+
+  recordRateLimitRejection(
+    endpointClass: string,
+    method = 'UNKNOWN',
+    route = 'unknown',
+  ): void {
+    this.rateLimitRejectionsCounter.inc({
+      endpoint_class: endpointClass || 'unknown',
+      method,
+      route,
+    });
   }
 
   // Job-queue instrumentation

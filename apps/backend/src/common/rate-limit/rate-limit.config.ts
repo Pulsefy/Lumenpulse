@@ -23,6 +23,9 @@ export interface RateLimitSettings {
   searchRead: RateLimitProfile;
   analyticsRead: RateLimitProfile;
   friendbotBootstrap: RateLimitProfile;
+  export: RateLimitProfile;
+  contractSimulation: RateLimitProfile;
+  botAuth: RateLimitProfile;
   tracker: {
     useIp: boolean;
     useApiKey: boolean;
@@ -47,6 +50,9 @@ const DEFAULTS = {
     searchRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
     friendbotBootstrap: { limit: 5, ttl: 3_600_000, blockDuration: 3_600_000 },
+    export: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
+    contractSimulation: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
+    botAuth: { limit: 100, ttl: 60_000, blockDuration: 60_000 },
   },
   staging: {
     global: { limit: 180, ttl: 60_000, blockDuration: 60_000 },
@@ -62,6 +68,9 @@ const DEFAULTS = {
     searchRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
     friendbotBootstrap: { limit: 3, ttl: 3_600_000, blockDuration: 3_600_000 },
+    export: { limit: 20, ttl: 60_000, blockDuration: 60_000 },
+    contractSimulation: { limit: 20, ttl: 60_000, blockDuration: 60_000 },
+    botAuth: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
   },
   production: {
     global: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
@@ -77,6 +86,9 @@ const DEFAULTS = {
     searchRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     friendbotBootstrap: { limit: 2, ttl: 3_600_000, blockDuration: 3_600_000 },
+    export: { limit: 10, ttl: 60_000, blockDuration: 60_000 },
+    contractSimulation: { limit: 10, ttl: 60_000, blockDuration: 60_000 },
+    botAuth: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
   },
 } as const;
 
@@ -126,7 +138,10 @@ function resolveProfile(
     | 'stellarRead'
     | 'searchRead'
     | 'analyticsRead'
-    | 'friendbotBootstrap',
+    | 'friendbotBootstrap'
+    | 'export'
+    | 'contractSimulation'
+    | 'botAuth',
 ): RateLimitProfile {
   const profileDefaults = DEFAULTS[getEnvironmentName(env.NODE_ENV)][key];
   const envKeyPrefix = key
@@ -152,24 +167,33 @@ function resolveProfile(
 export function getRateLimitSettings(
   env?: NodeJS.ProcessEnv,
 ): RateLimitSettings {
+  const envDefaults = DEFAULTS.development;
+
   if (!env) {
     return {
-      global: config.rateLimit.global,
-      auth: config.rateLimit.auth,
-      portfolioRead: config.rateLimit.portfolioRead,
-      portfolioWrite: config.rateLimit.portfolioWrite,
-      watchlistRead: config.rateLimit.watchlistRead,
-      watchlistWrite: config.rateLimit.watchlistWrite,
-      newsRead: config.rateLimit.newsRead,
-      projectRead: config.rateLimit.projectRead,
-      crowdfundRead: config.rateLimit.crowdfundRead,
-      stellarRead: config.rateLimit.stellarRead,
-      searchRead: config.rateLimit.searchRead,
-      analyticsRead: config.rateLimit.analyticsRead,
-      friendbotBootstrap: config.rateLimit.friendbotBootstrap,
-      tracker: config.rateLimit.tracker,
-      redisUrl: config.rateLimit.redisUrl,
-      redisNamespace: config.rateLimit.redisNamespace,
+      global: config.rateLimit?.global ?? envDefaults.global,
+      auth: config.rateLimit?.auth ?? envDefaults.auth,
+      portfolioRead: config.rateLimit?.portfolioRead ?? envDefaults.portfolioRead,
+      portfolioWrite: config.rateLimit?.portfolioWrite ?? envDefaults.portfolioWrite,
+      watchlistRead: config.rateLimit?.watchlistRead ?? envDefaults.watchlistRead,
+      watchlistWrite: config.rateLimit?.watchlistWrite ?? envDefaults.watchlistWrite,
+      newsRead: config.rateLimit?.newsRead ?? envDefaults.newsRead,
+      projectRead: config.rateLimit?.projectRead ?? envDefaults.projectRead,
+      crowdfundRead: config.rateLimit?.crowdfundRead ?? envDefaults.crowdfundRead,
+      stellarRead: config.rateLimit?.stellarRead ?? envDefaults.stellarRead,
+      searchRead: config.rateLimit?.searchRead ?? envDefaults.searchRead,
+      analyticsRead: config.rateLimit?.analyticsRead ?? envDefaults.analyticsRead,
+      friendbotBootstrap: config.rateLimit?.friendbotBootstrap ?? envDefaults.friendbotBootstrap,
+      export: (config.rateLimit as any)?.export ?? envDefaults.export,
+      contractSimulation: (config.rateLimit as any)?.contractSimulation ?? envDefaults.contractSimulation,
+      botAuth: (config.rateLimit as any)?.botAuth ?? envDefaults.botAuth,
+      tracker: config.rateLimit?.tracker ?? {
+        useIp: true,
+        useApiKey: false,
+        apiKeyHeader: 'x-api-key',
+      },
+      redisUrl: config.rateLimit?.redisUrl,
+      redisNamespace: config.rateLimit?.redisNamespace ?? 'rate-limit',
     };
   }
 
@@ -187,6 +211,9 @@ export function getRateLimitSettings(
     searchRead: resolveProfile(env, 'searchRead'),
     analyticsRead: resolveProfile(env, 'analyticsRead'),
     friendbotBootstrap: resolveProfile(env, 'friendbotBootstrap'),
+    export: resolveProfile(env, 'export'),
+    contractSimulation: resolveProfile(env, 'contractSimulation'),
+    botAuth: resolveProfile(env, 'botAuth'),
     tracker: {
       useIp: parseBoolean(env.RATE_LIMIT_TRACK_BY_IP, true),
       useApiKey: parseBoolean(env.RATE_LIMIT_TRACK_BY_API_KEY, false),
@@ -200,33 +227,85 @@ export function getRateLimitSettings(
 
 export function getTrackerId(
   request: Record<string, unknown>,
-  settings: RateLimitSettings,
+  settings?: RateLimitSettings,
 ): string {
   const headers =
     (request.headers as Record<string, string | string[] | undefined>) || {};
-  const headerValue = headers[settings.tracker.apiKeyHeader];
-  const apiKey =
-    typeof headerValue === 'string'
-      ? headerValue.trim()
-      : Array.isArray(headerValue)
-        ? headerValue[0]?.trim()
-        : '';
+  const getHeader = (key: string): string => {
+    const val = headers[key.toLowerCase()] || headers[key];
+    if (typeof val === 'string') return val.trim();
+    if (Array.isArray(val)) return val[0]?.trim() || '';
+    return '';
+  };
+
+  // 1. Authenticated User (JWT / Passport)
+  const user = request.user as Record<string, unknown> | undefined;
+  if (user) {
+    const userId = String(
+      user.id || user.sub || user.email || user.username || user.stellarPublicKey || '',
+    ).trim();
+    if (userId) {
+      return `user:${userId}`;
+    }
+  }
+
+  // 2. Authenticated Principal (AccessControl / custom principal)
+  const principal = request.principal;
+  if (principal) {
+    const principalId =
+      typeof principal === 'string'
+        ? principal.trim()
+        : String(
+            (principal as Record<string, unknown>).id ||
+              (principal as Record<string, unknown>).sub ||
+              (principal as Record<string, unknown>).name ||
+              '',
+          ).trim();
+    if (principalId) {
+      return `principal:${principalId}`;
+    }
+  }
+
+  // 3. Bot or Service Principal (req.bot, req.service, or bot-auth headers)
+  const bot = request.bot as Record<string, unknown> | undefined;
+  if (bot) {
+    const botId = String(bot.id || bot.name || 'known').trim();
+    if (botId) return `bot:${botId}`;
+  }
+
+  const service = request.service as Record<string, unknown> | undefined;
+  if (service) {
+    const serviceId = String(service.id || service.name || 'known').trim();
+    if (serviceId) return `service:${serviceId}`;
+  }
+
+  const botHeader = getHeader('x-bot-id') || getHeader('x-bot-auth');
+  if (botHeader) {
+    return `bot:${botHeader}`;
+  }
+
+  const serviceHeader = getHeader('x-service-id') || getHeader('x-service-key');
+  if (serviceHeader) {
+    return `service:${serviceHeader}`;
+  }
+
+  // 4. API Key tracking
+  const apiKeyHeaderName = settings?.tracker?.apiKeyHeader || 'x-api-key';
+  const apiKey = getHeader(apiKeyHeaderName);
+  if (settings?.tracker?.useApiKey && apiKey) {
+    return `api-key:${apiKey}`;
+  }
+
+  // 5. Fallback to source IP address
   const ipAddress =
     typeof request.ip === 'string' && request.ip.trim().length > 0
       ? request.ip.trim()
-      : 'unknown';
+      : typeof (request.socket as Record<string, unknown>)?.remoteAddress ===
+          'string'
+        ? ((request.socket as Record<string, unknown>).remoteAddress as string)
+        : 'unknown';
 
-  const parts: string[] = [];
-
-  if (settings.tracker.useApiKey && apiKey) {
-    parts.push(`api-key:${apiKey}`);
-  }
-
-  if (settings.tracker.useIp || parts.length === 0) {
-    parts.push(`ip:${ipAddress}`);
-  }
-
-  return parts.join('|');
+  return `ip:${ipAddress}`;
 }
 
 export function createThrottlerOptions(
@@ -334,3 +413,22 @@ export function getRegistryWriteThrottleOverride() {
     default: getRateLimitSettings().portfolioWrite,
   };
 }
+
+export function getExportThrottleOverride() {
+  return {
+    default: getRateLimitSettings().export,
+  };
+}
+
+export function getContractSimulationThrottleOverride() {
+  return {
+    default: getRateLimitSettings().contractSimulation,
+  };
+}
+
+export function getBotAuthThrottleOverride() {
+  return {
+    default: getRateLimitSettings().botAuth,
+  };
+}
+

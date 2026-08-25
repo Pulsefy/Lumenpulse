@@ -22,7 +22,8 @@ import {
 import { ExportService } from './export.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles, UserRole } from '../auth/decorators/auth.decorators';
+import { Throttle } from '@nestjs/throttler';
+import { getExportThrottleOverride } from '../common/rate-limit/rate-limit.config';
 import { CreateExportJobDto, ExportJobResponseDto } from './dto/export-job.dto';
 import { ExportStatus, ExportType } from './entities/export-job.entity';
 
@@ -35,6 +36,7 @@ const ANALYTICS_TYPES = new Set<ExportType>([
 @ApiBearerAuth('JWT-auth')
 @Controller('exports')
 @UseGuards(JwtAuthGuard)
+@Throttle(getExportThrottleOverride())
 export class ExportController {
   constructor(private readonly exportService: ExportService) {}
 

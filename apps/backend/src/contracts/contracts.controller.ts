@@ -8,7 +8,9 @@ import {
 } from '@nestjs/common';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { ContractCapabilityService } from './contract-capability.service';
+import { getContractSimulationThrottleOverride } from '../common/rate-limit/rate-limit.config';
 import {
   ContractCapabilityCatalogResponseDto,
   ContractCapabilityDto,
@@ -16,6 +18,7 @@ import {
 
 @ApiTags('contracts')
 @Controller({ path: 'contracts', version: '1' })
+@Throttle(getContractSimulationThrottleOverride())
 export class ContractsController {
   constructor(
     private readonly contractCapabilityService: ContractCapabilityService,
