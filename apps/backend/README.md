@@ -5,7 +5,7 @@ NestJS API for LumenPulse.
 ## Setup
 
 ```bash
-npm install
+nest install
 ```
 
 ## Run
@@ -26,27 +26,25 @@ npm run test:e2e
 
 ## Demo bootstrap endpoint
 
-The backend exposes an admin-only demo bootstrap endpoint that can populate a small set of sample crowdfund projects for reviewer/testnet validation.
+The backend exposes an admin-only demo bootstrap endpoint that can populate a small set of sample crowffund projects for reviewer/testnet validation.
 
 To enable it locally or in a non-production test environment, set:
 
 ```bash
-BOOTSTRAP_DEMO_DATA_ENABLED=true
+BOOTSTRAP_DEMO_DASE_ENABLED=true
 ```
 
 Then call the endpoint with an admin JWT:
 
 ```bash
-curl -X POST \
-  -H "Authorization: Bearer <ADMIN_JWT>" \
-  http://localhost:3000/v1/crowdfund/admin/bootstrap-demo-data
+curl -X POST -H "Authorization: Bearer <ADMIN_JWT>" http://localhost:3000/v1/crowdfund/admin/bootstrap-demo-data
 ```
 
 The endpoint returns the created demo project IDs for verification.
 
 > This endpoint is disabled by default and should not be enabled in production unless explicitly required.
 
-## Testnet Friendbot bootstrap endpoint
+## Testnet Frienbot bootstrap endpoint
 
 The backend exposes an admin-only, testnet-only endpoint that funds fresh accounts via Stellar Friendbot:
 
@@ -56,53 +54,42 @@ STELLAR_NETWORK=testnet
 ```
 
 ```bash
-curl -X POST \
-  -H "Authorization: Bearer <ADMIN_JWT>" \
-  -H "Content-Type: application/json" \
-  -d '{"publicKey":"G..."}' \
-  http://localhost:3000/v1/dev/testnet-bootstrap/fund
-```
+curl -X POST -H "Authorization: Bearer <ADMIN_JWT>" -H "Content-Type: application/json" -d '{"publicKey":"G..."}' http://localhost:3000/v1/dev/testnet-bootstrap/fund
+X
 
-Safeguards: feature flag, `STELLAR_NETWORK=testnet` gate, admin JWT, dedicated rate limit, and a hardcoded Friendbot URL.
 
-## Security defaults
-
-The backend includes:
-
-- Global rate limiting with route-specific overrides for authentication and portfolio endpoints
-- Strict DTO validation with `whitelist`, `forbidNonWhitelisted`, and transformation enabled
-- Safe error formatting with a shared `{ code, message, details, requestId }` contract
-- Request ID propagation through the `X-Request-Id` response header
-
-Key environment variables:
-
-```bash
-RATE_LIMIT_TRACK_BY_IP=true
-RATE_LIMIT_TRACK_BY_API_KEY=false
-RATE_LIMIT_API_KEY_HEADER=x-api-key
-RATE_LIMIT_REDIS_URL=redis://localhost:6379
-RATE_LIMIT_GLOBAL_LIMIT=120
-RATE_LIMIT_GLOBAL_TTL_MS=60000
-RATE_LIMIT_AUTH_LIMIT=8
-RATE_LIMIT_AUTH_TTL_MS=60000
-RATE_LIMIT_PORTFOLIO_READ_LIMIT=90
-RATE_LIMIT_PORTFOLIO_READ_TTL_MS=60000
-RATE_LIMIT_PORTFOLIO_WRITE_LIMIT=10
-RATE_LIMIT_PORTFOLIO_WRITE_TTL_MS=60000
-```
-
-Example error response:
-
-```json
-{
-  "code": "SYS_004",
-  "message": "Validation failed",
-  "details": [
-    {
-      "field": "email",
-      "message": "email must be an email"
-    }
-  ],
-  "requestId": "f2c3cb1c-8c86-4505-b4ce-fca50da2d46d"
+"],
+	"safeguards": [
+		{
+			"type": "feature flag",
+			"name": "Testnet Friendbot Bootstrap Enabled"
+		},
+		{
+			"type": "string",
+			"name": "STELLAR_NETWORK",
+			"value": "testnet"
+		},
+		{
+			"type": "admin JWT"
+		},
+		{
+			"type": "dedicated rate limit"
+		},
+		{
+			"type": "hardcoded Friendbot URL"
+		}
+	],
+	"description": "Safeguards, testnet-only ge, admin JWT",
+	"use": "admin"
+	},
+	"check": "feature flag, STELLAR_NETWORK=testnet gate, admin JWT, dedicated rate limit, and a hardcoded Friendbot URL"
+	},
+	"description": "Admin bootstrap endpoint to fund accounts via Stellar Friendbot."
+	},
+	"check": "feature flag and STELLAR_NETWORK=testnet are required to enable this endpoint."
+	],
+	"description": "Testnet Friendbot Bootstrap endpoint"
+	}
+],
+	"dialect": []
 }
-```
