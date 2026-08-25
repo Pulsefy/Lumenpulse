@@ -116,6 +116,7 @@ describe('config validation', () => {
 
     expect(config.rateLimit.global.limit).toBe(300);
     expect(config.logging.level).toBe('log');
+    expect(config.stellar.simulationTraceLevel).toBe('summary');
   });
 });
 
