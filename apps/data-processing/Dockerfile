@@ -35,6 +35,18 @@ RUN pip install --require-hashes -r requirements.lock \
 # access at runtime. Done here so the runtime stage stays tool-free.
 RUN python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; m='ProsusAI/finbert'; AutoTokenizer.from_pretrained(m); AutoModelForSequenceClassification.from_pretrained(m)"
 
+# ---------------------------------------------------------------------------
+# Bake the pinned spaCy NER model into the image.
+#
+# Model : en_core_web_sm 3.7.1
+# Licence: MIT  (https://github.com/explosion/spacy-models/blob/master/LICENSE)
+#
+# Installing by exact versioned package name guarantees reproducibility:
+# the version string here MUST stay in sync with NER_MODEL_VERSION in
+# src/analytics/ner_service.py.  Update both in the same commit.
+# ---------------------------------------------------------------------------
+RUN python -m spacy download en_core_web_sm-3.7.1
+
 ###############################################################################
 # Stage 2 — runtime
 # Slim base image: no compilers, no build tooling, no pip caches.

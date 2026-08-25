@@ -3,6 +3,13 @@ Named Entity Recognition service for news tagging.
 
 Uses spaCy for entity extraction and includes crypto-specific patterns so
 LumenPulse ecosystem entities are detected consistently.
+
+Model: en_core_web_sm 3.7.1
+Licence: MIT (https://github.com/explosion/spacy-models/blob/master/LICENSE)
+Source: https://github.com/explosion/spacy-models/releases/tag/en_core_web_sm-3.7.1
+
+The model artifact is fetched at image **build** time (see Dockerfile) and is
+therefore available without any outbound network access at container start.
 """
 
 from __future__ import annotations
@@ -21,11 +28,23 @@ from .keywords import CRYPTO_PROJECT_MAP, KNOWN_TICKERS
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Pinned model identity
+# ---------------------------------------------------------------------------
+# Bump ONLY via a deliberate commit that also updates the Dockerfile RUN step
+# and this file's module docstring.
+NER_MODEL_NAME = "en_core_web_sm"
+NER_MODEL_VERSION = "3.7.1"
+NER_MODEL_FULL = f"{NER_MODEL_NAME}-{NER_MODEL_VERSION}"
+
+
+class ModelVersionError(RuntimeError):
+    """Raised when the loaded spaCy model does not match the pinned version."""
+
 
 class NERService:
     """Extract entities from news text for downstream filtering and tagging."""
 
-    _MODEL_CANDIDATES = ("en_core_web_sm", "en_core_web_md")
     _PERSON_PATTERN = re.compile(
         r"\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+)\b"
     )
@@ -51,6 +70,45 @@ class NERService:
 
         return canonical_names
 
+    # ------------------------------------------------------------------
+    # Startup version guard
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _check_model_version(nlp: Any) -> None:
+        """Raise ModelVersionError if *nlp* does not match the pinned version.
+
+        The check inspects the ``meta`` dict that every spaCy model exposes.
+        If the meta is absent (e.g. a blank pipeline) the check is skipped so
+        that unit tests using ``spacy.blank("en")`` still work.
+        """
+        if nlp is None:
+            return
+
+        meta = getattr(nlp, "meta", {})
+        if not meta:
+            # Blank pipeline created as a fallback — no version to check.
+            return
+
+        loaded_name = meta.get("name", "")
+        loaded_version = meta.get("version", "")
+        loaded_full = f"{loaded_name}-{loaded_version}"
+
+        if loaded_name != NER_MODEL_NAME or loaded_version != NER_MODEL_VERSION:
+            raise ModelVersionError(
+                f"Expected spaCy model '{NER_MODEL_FULL}' but found "
+                f"'{loaded_full}'. "
+                "Update NER_MODEL_VERSION and rebuild the Docker image."
+            )
+
+        logger.info(
+            "spaCy model version check passed: %s", loaded_full
+        )
+
+    # ------------------------------------------------------------------
+    # Pipeline initialisation
+    # ------------------------------------------------------------------
+
     def _initialize_pipeline(self) -> Optional[Any]:
         if spacy is None:
             logger.warning(
@@ -60,20 +118,32 @@ class NERService:
 
         nlp: Optional[Any] = None
 
-        for model_name in self._MODEL_CANDIDATES:
+        # Try the exact pinned name first, then the bare name as a fallback so
+        # that local development environments that installed the model without
+        # the version suffix still work.
+        for model_name in (NER_MODEL_FULL, NER_MODEL_NAME):
             try:
-                nlp = spacy.load(model_name, disable=["parser", "lemmatizer", "textcat"])
+                nlp = spacy.load(
+                    model_name, disable=["parser", "lemmatizer", "textcat"]
+                )
                 logger.info("Initialized spaCy model for NER: %s", model_name)
                 break
             except OSError:
                 continue
 
         if nlp is None:
+            # No pretrained model found — use a blank pipeline so the service
+            # still starts, but log a prominent warning.
             nlp = spacy.blank("en")
             logger.warning(
-                "spaCy pretrained model not found; using blank English "
-                "pipeline with custom entity rules"
+                "spaCy pretrained model '%s' not found; using blank English "
+                "pipeline with custom entity rules. "
+                "Ensure the model was downloaded at image build time.",
+                NER_MODEL_FULL,
             )
+
+        # Fail fast if the loaded model is not the pinned version.
+        self._check_model_version(nlp)
 
         if "entity_ruler" in nlp.pipe_names:
             nlp.remove_pipe("entity_ruler")
