@@ -40,3 +40,4 @@ lerna-debug.log*
 .DS_Store
 Thumbs.db
 COMMIT_MSG.md
+pr.md

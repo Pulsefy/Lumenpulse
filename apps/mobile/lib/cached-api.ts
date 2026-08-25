@@ -2,6 +2,7 @@ import { cache, CACHE_CONFIGS } from './cache';
 import { portfolioApi, stellarApi } from './api';
 import { apiClient } from './api-client';
 import { crowdfundApi, CrowdfundProject } from './crowdfund';
+import { grantsApi, GrantRound, RoundSummary } from './grants';
 import { Article } from './types/news';
 
 /**
@@ -180,6 +181,68 @@ export class CachedApi {
   // Single project — not cached (detail screens should always show fresh on-chain state)
   static async getProject(id: number) {
     return crowdfundApi.getProject(id);
+  }
+
+  // Grants rounds list with caching
+  static async getGrantRounds() {
+    const cacheKey = 'grants_rounds';
+
+    const cached = await cache.get<GrantRound[]>(cacheKey, CACHE_CONFIGS.GRANTS);
+    if (
+      cached &&
+      (!cache.isOnlineStatus() || Date.now() - cached.timestamp < CACHE_CONFIGS.GRANTS.ttl)
+    ) {
+      return { success: true, data: cached.data, fromCache: true };
+    }
+
+    if (cache.isOnlineStatus()) {
+      try {
+        const response = await grantsApi.listRounds();
+        if (response.success && response.data) {
+          await cache.set(cacheKey, response.data, CACHE_CONFIGS.GRANTS);
+          return { ...response, fromCache: false };
+        }
+      } catch (error) {
+        console.warn('Failed to fetch fresh grant rounds:', error);
+      }
+    }
+
+    if (cached) {
+      return { success: true, data: cached.data, fromCache: true, isStale: true };
+    }
+
+    return { success: false, error: { message: 'No grant rounds available offline' } };
+  }
+
+  // Grant round summary with caching
+  static async getGrantRoundSummary(roundId: number) {
+    const cacheKey = `grants_round_summary_${roundId}`;
+
+    const cached = await cache.get<RoundSummary>(cacheKey, CACHE_CONFIGS.GRANTS);
+    if (
+      cached &&
+      (!cache.isOnlineStatus() || Date.now() - cached.timestamp < CACHE_CONFIGS.GRANTS.ttl)
+    ) {
+      return { success: true, data: cached.data, fromCache: true };
+    }
+
+    if (cache.isOnlineStatus()) {
+      try {
+        const response = await grantsApi.getRoundSummary(roundId);
+        if (response.success && response.data) {
+          await cache.set(cacheKey, response.data, CACHE_CONFIGS.GRANTS);
+          return { ...response, fromCache: false };
+        }
+      } catch (error) {
+        console.warn('Failed to fetch fresh grant round summary:', error);
+      }
+    }
+
+    if (cached) {
+      return { success: true, data: cached.data, fromCache: true, isStale: true };
+    }
+
+    return { success: false, error: { message: 'No grant round summary available offline' } };
   }
 
   // Clear all cached data

@@ -10,6 +10,10 @@ import { DataSource } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
 import { CacheService } from '../cache/cache.service';
 import { StellarService } from '../stellar/stellar.service';
+import {
+  LatencyBudgetHealthService,
+  LatencyBudgetReport,
+} from './latency-budget.health.service';
 
 interface DependencyCheckResult {
   name: string;
@@ -30,6 +34,7 @@ type HealthPayload = {
 
 export interface LumenpulseHealthReport extends HealthCheckResult {
   summary: 'healthy' | 'degraded' | 'down';
+  latencyBudget: LatencyBudgetReport;
 }
 
 @Injectable()
@@ -40,11 +45,13 @@ export class HealthService {
     private readonly cacheService: CacheService,
     private readonly stellarService: StellarService,
     private readonly httpService: HttpService,
+    private readonly latencyBudgetHealthService: LatencyBudgetHealthService,
   ) {}
 
   async getHealthReport(): Promise<LumenpulseHealthReport> {
-    const database = await this.checkDatabase();
-    const dependencyChecks = await Promise.all([
+    const [database, latencyBudget, ...dependencyChecks] = await Promise.all([
+      this.checkDatabase(),
+      this.latencyBudgetHealthService.getLatencyBudgetReport(),
       this.checkRedis(),
       this.checkHorizon(),
       this.checkExternalApis(),
@@ -66,17 +73,23 @@ export class HealthService {
       }
     }
 
-    const status = database.isUp ? 'ok' : 'error';
-    const summary =
+    // A hard_down latency result is treated as a critical failure (503).
+    const latencyIsHardDown = latencyBudget.overallState === 'hard_down';
+    const latencyIsDegraded = latencyBudget.overallState === 'degraded';
+
+    const status = !database.isUp || latencyIsHardDown ? 'error' : 'ok';
+
+    const summary: LumenpulseHealthReport['summary'] =
       status === 'error'
         ? 'down'
-        : Object.keys(error).length > 0
+        : Object.keys(error).length > 0 || latencyIsDegraded
           ? 'degraded'
           : 'healthy';
 
     return {
       status,
       summary,
+      latencyBudget,
       info,
       error,
       details,

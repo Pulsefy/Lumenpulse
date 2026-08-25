@@ -83,6 +83,13 @@ export function useCachedData<T>({
 
   const refresh = useCallback(() => fetchData(true), [fetchData]);
 
+  useEffect(() => {
+    setData(null);
+    setError(null);
+    setIsStale(false);
+    setLastUpdated(null);
+  }, [key, enabled]);
+
   // Listen for cache refresh events
   useEffect(() => {
     const handleCacheRefresh = (event: { key: string }) => {

@@ -5,12 +5,12 @@ import { i18nResourcesToBackend } from 'i18next-resources-to-backend';
 
 // Supported languages
 export const supportedLanguages = ['en', 'zh'] as const;
-export type LanguageCode = typeof supportedLanguages[number];
+export type LanguageCode = (typeof supportedLanguages)[number];
 
 // Get device locale
 const deviceLocale = Localization.locale?.split('-')[0] || 'en';
-const defaultLocale: LanguageCode = supportedLanguages.includes(deviceLocale as LanguageCode) 
-  ? (deviceLocale as LanguageCode) 
+const defaultLocale: LanguageCode = supportedLanguages.includes(deviceLocale as LanguageCode)
+  ? (deviceLocale as LanguageCode)
   : 'en';
 
 // Initialize i18next

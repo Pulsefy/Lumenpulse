@@ -10,6 +10,16 @@ export enum NotificationType {
   ANOMALY = 'anomaly',
   SENTIMENT_SPIKE = 'sentiment_spike',
   SYSTEM = 'system',
+  PROJECT = 'project',
+  CONTRIBUTION = 'contribution',
+  MILESTONE = 'milestone',
+  GOVERNANCE = 'governance',
+  TOKEN = 'token',
+  POOL = 'pool',
+  PRICE = 'price',
+  MODULE = 'module',
+  ADMIN = 'admin',
+  REPUTATION = 'reputation',
 }
 
 export enum NotificationSeverity {

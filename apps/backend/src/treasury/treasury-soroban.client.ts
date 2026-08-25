@@ -14,6 +14,7 @@ import {
 import { config } from '../lib/config';
 import { BadRequestException } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
+import { SorobanRpcError } from '../stellar/services/soroban-rpc-client.service';
 import {
   TreasuryNotConfiguredException,
   TreasuryRpcUnavailableException,
@@ -50,6 +51,11 @@ export interface AllocateBudgetParams {
   startTime: number;
   /** Duration in seconds. */
   duration: number;
+}
+
+export interface RotateBeneficiaryParams {
+  oldBeneficiary: string;
+  newBeneficiary: string;
 }
 
 export interface SubmittedTransaction {
@@ -145,6 +151,54 @@ export class TreasurySorobanClient {
       const simulation = await server.simulateTransaction(tx);
       if (rpc.Api.isSimulationError(simulation)) {
         throw toTreasuryException(simulation.error, params.beneficiary);
+      }
+
+      const prepared = rpc.assembleTransaction(tx, simulation).build();
+      prepared.sign(keypair);
+
+      return await this.submitAndConfirm(server, prepared);
+    } catch (error) {
+      throw this.normalizeError(error);
+    }
+  }
+
+  /**
+   * Builds, signs (as the treasury admin), and submits a `rotate_beneficiary`
+   * transaction. Contract-level validation errors are surfaced during
+   * simulation and mapped to the standard API error contract.
+   */
+  async rotateBeneficiary(
+    params: RotateBeneficiaryParams,
+  ): Promise<SubmittedTransaction> {
+    const contractId = this.getContractId();
+    this.validateAddressOrThrow(params.oldBeneficiary, 'oldBeneficiary');
+    this.validateAddressOrThrow(params.newBeneficiary, 'newBeneficiary');
+
+    const keypair = this.getAdminKeypair();
+    const server = this.createServer();
+
+    try {
+      const sourceAccount = await server.getAccount(keypair.publicKey());
+
+      const contract = new Contract(contractId);
+      const operation = contract.call(
+        'rotate_beneficiary',
+        Address.fromString(keypair.publicKey()).toScVal(),
+        Address.fromString(params.oldBeneficiary).toScVal(),
+        Address.fromString(params.newBeneficiary).toScVal(),
+      );
+
+      const tx = new TransactionBuilder(sourceAccount, {
+        fee: BASE_INCLUSION_FEE,
+        networkPassphrase: this.getNetworkPassphrase(),
+      })
+        .addOperation(operation)
+        .setTimeout(30)
+        .build();
+
+      const simulation = await server.simulateTransaction(tx);
+      if (rpc.Api.isSimulationError(simulation)) {
+        throw toTreasuryException(simulation.error, params.oldBeneficiary);
       }
 
       const prepared = rpc.assembleTransaction(tx, simulation).build();
@@ -271,9 +325,16 @@ export class TreasurySorobanClient {
       error &&
       typeof error === 'object' &&
       'getStatus' in error &&
-      typeof (error as { getStatus: unknown }).getStatus === 'function'
+      typeof error.getStatus === 'function'
     ) {
       return error as unknown as Error;
+    }
+
+    if (error instanceof SorobanRpcError) {
+      this.logger.error(`Soroban RPC error: ${error.message}`);
+      return new TreasuryRpcUnavailableException(error.message, {
+        sorobanCode: error.code,
+      });
     }
 
     const message = error instanceof Error ? error.message : String(error);

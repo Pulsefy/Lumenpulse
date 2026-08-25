@@ -10,37 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Stub out heavy dependencies before importing our module
-# ---------------------------------------------------------------------------
-for _mod in [
-    "sqlalchemy",
-    "sqlalchemy.orm",
-    "sqlalchemy.dialects",
-    "sqlalchemy.dialects.postgresql",
-    "src.db",
-    "src.db.models",
-]:
-    if _mod not in sys.modules:
-        sys.modules[_mod] = MagicMock()
-
-# Provide the specific names qa_exporter imports from sqlalchemy
-import sqlalchemy as _sa
-_sa.create_engine = MagicMock()
-_sa.select = MagicMock(return_value=MagicMock())
-_sa.and_ = MagicMock()
-
-import sqlalchemy.orm as _orm
-_orm.sessionmaker = MagicMock()
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-# Stub the db models
-_models_mock = sys.modules["src.db.models"]
-_models_mock.AnalyticsRecord = MagicMock()
-_models_mock.Article = MagicMock()
-_models_mock.AssetTrend = MagicMock()
-_models_mock.SocialPost = MagicMock()
 
 from src.qa_exporter import QAExporter, ExportResult  # noqa: E402
 
@@ -225,16 +195,43 @@ class TestExportViews:
 
 
 class TestRunAll:
-    def test_run_returns_three_results(self, tmp_path):
+    def test_run_returns_four_results(self, tmp_path):
         exporter = _make_exporter(tmp_path)
         mock_session = MagicMock()
         mock_session.__enter__ = MagicMock(return_value=mock_session)
         mock_session.__exit__ = MagicMock(return_value=False)
-        # run() calls export_events, export_views (3 queries), export_kpis
+        # run() calls export_events, export_views (3 queries), export_kpis, export_review_queue
         mock_session.execute.return_value.scalars.return_value.all.return_value = []
         exporter.Session = MagicMock(return_value=mock_session)
 
         results = exporter.run()
 
-        assert len(results) == 3
-        assert {r.dataset for r in results} == {"events", "views", "kpis"}
+        assert len(results) == 4
+        assert {r.dataset for r in results} == {"events", "views", "kpis", "review_queue"}
+
+    def test_export_review_queue(self, tmp_path):
+        exporter = _make_exporter(tmp_path)
+        item = MagicMock()
+        item.id = 42
+        item.article_id = "art-1"
+        item.stable_entity_id = "project:7"
+        item.entity_type = "project"
+        item.display_name = "Lumen Devs"
+        item.matched_text = "LumenDevs"
+        item.confidence = 0.85
+        item.supporting_evidence = {"reason": "test"}
+        item.status = "pending"
+        item.corrected_entity_id = None
+        item.reviewed_at = None
+        item.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+        _mock_session(exporter, return_value=[item])
+        result = exporter.export_review_queue()
+
+        data = json.loads((tmp_path / "review_queue_1000_2000.json").read_text())
+        assert data["dataset"] == "review_queue"
+        assert len(data["records"]) == 1
+        assert data["records"][0]["id"] == 42
+        assert data["records"][0]["matched_text"] == "LumenDevs"
+        assert result.status == "completed"
+

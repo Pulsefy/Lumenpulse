@@ -93,7 +93,9 @@ export default function NewsScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('common.retry')}
         >
-          <Text style={styles.retryText} accessible>{t('common.retry')}</Text>
+          <Text style={styles.retryText} accessible>
+            {t('common.retry')}
+          </Text>
         </TouchableOpacity>
       </SafeAreaView>
     );

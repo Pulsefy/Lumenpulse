@@ -28,6 +28,15 @@ export class ProjectRegistryEntity {
   @Column({ default: 'active' })
   status: string;
 
+  @Column({ nullable: true })
+  contractAddress: string;
+
+  @Column({ nullable: true })
+  tokenAddress: string;
+
+  @Column({ type: 'text', nullable: true })
+  targetAmount: string;
+
   @Column()
   lastLedgerSeq: number;
 

@@ -7,12 +7,14 @@ mod storage;
 
 use errors::ContributorError;
 use events::{
-    AdminChangedEvent, BadgeGrantedEvent, BadgeRevokedEvent, GaslessRegistrationEvent,
-    MultisigConfiguredEvent, ReputationPenaltyAppliedEvent, UpgradedEvent,
+    AdminChangedEvent, AttestationRestoredEvent, AttestationRevokedEvent,
+    AttestationSuspendedEvent, BadgeGrantedEvent, BadgeRevokedEvent, ContributorProfileChangedEvt,
+    GaslessRegistrationEvent, MultisigConfiguredEvent, ReputationPenaltyAppliedEvent,
+    ScopePauseChangedEvent, UpgradedEvent,
 };
 use multisig::{
-    cancel, consume_approval, expire, get_config, get_proposal, propose, sign, validate_config,
-    MultisigConfig, ProposalAction, ProposalStatus, Signer,
+    cancel, consume_approval, expire, find_signer, get_config, get_proposal, propose, sign,
+    validate_config, MultisigConfig, ProposalAction, ProposalStatus, Signer,
 };
 use notification_interface::{Notification, NotificationReceiverTrait};
 use soroban_sdk::xdr::FromXdr;
@@ -20,8 +22,8 @@ use soroban_sdk::{
     contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 use storage::{
-    Badge, ContributorData, ContributorTier, DataKey, PenaltyRecord, PenaltySeverity, LEDGER_BUMP,
-    LEDGER_THRESHOLD,
+    AttestationStatus, Badge, ContribPauseScope, ContributorData, ContributorTier, DataKey,
+    PenaltyRecord, PenaltySeverity, LEDGER_BUMP, LEDGER_THRESHOLD,
 };
 
 #[contract]
@@ -39,6 +41,34 @@ impl ContributorRegistryContract {
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(())
+    }
+
+    // ── Granular pause scope helpers ─────────────────────────
+
+    /// Returns `true` when the given scope is paused.
+    fn is_scope_paused(env: &Env, scope: ContribPauseScope) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::ScopePaused(scope))
+            .unwrap_or(false)
+    }
+
+    /// Guard for registration writes.
+    fn require_contribution_not_paused(env: &Env) -> Result<(), ContributorError> {
+        if Self::is_scope_paused(env, ContribPauseScope::Contribution) {
+            Err(ContributorError::ContributionScopePaused)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Guard for multisig / admin-gated governance writes.
+    fn require_governance_not_paused(env: &Env) -> Result<(), ContributorError> {
+        if Self::is_scope_paused(env, ContribPauseScope::Governance) {
+            Err(ContributorError::GovernanceScopePaused)
+        } else {
+            Ok(())
+        }
     }
 
     fn registration_nonce_of(env: &Env, address: &Address) -> u64 {
@@ -75,6 +105,7 @@ impl ContributorRegistryContract {
             github_handle: github_handle.clone(),
             reputation_score: 0,
             registered_timestamp: timestamp,
+            status: AttestationStatus::Active,
         };
         env.storage()
             .persistent()
@@ -141,6 +172,14 @@ impl ContributorRegistryContract {
         env.storage()
             .instance()
             .set(&DataKey::NextProposalId, &0u64);
+        // All granular pause scopes start unpaused.
+        env.storage().instance().set(
+            &DataKey::ScopePaused(ContribPauseScope::Contribution),
+            &false,
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::ScopePaused(ContribPauseScope::Governance), &false);
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
@@ -162,6 +201,8 @@ impl ContributorRegistryContract {
         proposer: Address,
         action: ProposalAction,
     ) -> Result<u64, ContributorError> {
+        Self::ensure_initialized(&env)?;
+        Self::require_governance_not_paused(&env)?;
         propose(&env, proposer, action)
     }
 
@@ -170,6 +211,8 @@ impl ContributorRegistryContract {
         signer: Address,
         proposal_id: u64,
     ) -> Result<ProposalStatus, ContributorError> {
+        Self::ensure_initialized(&env)?;
+        Self::require_governance_not_paused(&env)?;
         sign(&env, signer, proposal_id)
     }
 
@@ -178,10 +221,14 @@ impl ContributorRegistryContract {
         signer: Address,
         proposal_id: u64,
     ) -> Result<(), ContributorError> {
+        Self::ensure_initialized(&env)?;
+        Self::require_governance_not_paused(&env)?;
         cancel(&env, signer, proposal_id)
     }
 
     pub fn expire_proposal(env: Env, proposal_id: u64) -> Result<(), ContributorError> {
+        // Expiry is a time-based cleanup; allow even under governance pause so
+        // stale proposals can always be cleared.
         expire(&env, proposal_id)
     }
 
@@ -192,6 +239,7 @@ impl ContributorRegistryContract {
         new_signers: Vec<Signer>,
         new_threshold: u32,
     ) -> Result<(), ContributorError> {
+        Self::require_governance_not_paused(&env)?;
         consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
 
         validate_config(&new_signers, new_threshold)?;
@@ -225,6 +273,7 @@ impl ContributorRegistryContract {
         github_handle: String,
     ) -> Result<(), ContributorError> {
         Self::ensure_initialized(&env)?;
+        Self::require_contribution_not_paused(&env)?;
         address.require_auth();
         Self::write_contributor(&env, &address, &github_handle)
     }
@@ -256,6 +305,7 @@ impl ContributorRegistryContract {
         signature: Bytes,
     ) -> Result<(), ContributorError> {
         Self::ensure_initialized(&env)?;
+        Self::require_contribution_not_paused(&env)?;
         if signature.is_empty() {
             return Err(ContributorError::InvalidSignature);
         }
@@ -304,22 +354,37 @@ impl ContributorRegistryContract {
         Ok(())
     }
 
+    /// Update a contributor's profile (currently `github_handle`).
+    ///
+    /// Authorization:
+    /// * `proposal_id = None` — self-service update. The caller (`actor`) MUST
+    ///   be the contributor themselves (`actor == address`) and MUST
+    ///   authenticate via `require_auth()`.
+    /// * `proposal_id = Some(id)` — admin-managed update. The caller (`actor`)
+    ///   MUST be a multisig signer who consumes an `UpdateProfile` proposal
+    ///   via `consume_approval`. This path is used for handle corrections,
+    ///   migrations, or recovery actions initiated by the multisig.
+    ///
+    /// Either path emits `ContributorProfileChangedEvt` so the mutation is
+    /// fully auditable. Self-service updates carry `proposal_id = None` so
+    /// the event consumer can distinguish the two paths.
+    ///
+    /// Empty handles are rejected; existing contributors are required; handle
+    /// uniqueness is enforced via the existing index.
     pub fn update_contributor(
         env: Env,
+        actor: Address,
         address: Address,
         github_handle: String,
+        proposal_id: Option<u64>,
     ) -> Result<(), ContributorError> {
-        if !env.storage().instance().has(&DataKey::MultisigConfig) {
-            return Err(ContributorError::NotInitialized);
-        }
-        env.storage()
-            .instance()
-            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
-        address.require_auth();
+        Self::ensure_initialized(&env)?;
+
         if github_handle.is_empty() {
             return Err(ContributorError::InvalidGitHubHandle);
         }
-        let mut contributor: ContributorData = env
+
+        let contributor: ContributorData = env
             .storage()
             .persistent()
             .get(&DataKey::Contributor(address.clone()))
@@ -331,28 +396,63 @@ impl ContributorRegistryContract {
         );
 
         Self::ensure_github_handle_available(&env, &github_handle, &address)?;
-        if contributor.github_handle != github_handle {
+
+        // Decide authorization path.
+        match proposal_id {
+            None => {
+                // Self-service: caller must authenticate as the contributor
+                // and the addresses must match (a third party cannot pass
+                // proposal_id = None to update someone else).
+                actor.require_auth();
+                if actor != address {
+                    return Err(ContributorError::Unauthorized);
+                }
+            }
+            Some(pid) => {
+                // Admin-managed: caller must be a multisig signer consuming
+                // an already-approved UpdateProfile proposal. consume_approval
+                // verifies the proposal exists, is Approved, matches the
+                // action, and has not been executed or expired.
+                consume_approval(&env, &actor, pid, &ProposalAction::UpdateProfile)?;
+            }
+        }
+
+        let old_handle = contributor.github_handle.clone();
+
+        // Only write if the handle actually changes (no-op short-circuit
+        // avoids emitting duplicate audit events and bumping TTL needlessly).
+        if old_handle != github_handle {
+            let mut contributor = contributor;
+            contributor.github_handle = github_handle.clone();
             env.storage()
                 .persistent()
-                .remove(&DataKey::GitHubIndex(contributor.github_handle.clone()));
+                .remove(&DataKey::GitHubIndex(old_handle.clone()));
+            env.storage()
+                .persistent()
+                .set(&DataKey::Contributor(address.clone()), &contributor);
+            env.storage().persistent().extend_ttl(
+                &DataKey::Contributor(address.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
+            env.storage()
+                .persistent()
+                .set(&DataKey::GitHubIndex(github_handle.clone()), &address);
+            env.storage().persistent().extend_ttl(
+                &DataKey::GitHubIndex(github_handle.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
         }
-        contributor.github_handle = github_handle.clone();
-        env.storage()
-            .persistent()
-            .set(&DataKey::Contributor(address.clone()), &contributor);
-        env.storage().persistent().extend_ttl(
-            &DataKey::Contributor(address.clone()),
-            LEDGER_THRESHOLD,
-            LEDGER_BUMP,
-        );
-        env.storage()
-            .persistent()
-            .set(&DataKey::GitHubIndex(github_handle.clone()), &address);
-        env.storage().persistent().extend_ttl(
-            &DataKey::GitHubIndex(github_handle),
-            LEDGER_THRESHOLD,
-            LEDGER_BUMP,
-        );
+
+        ContributorProfileChangedEvt {
+            contributor: address,
+            actor,
+            new_github_handle: github_handle,
+            proposal_id: proposal_id.unwrap_or(0),
+        }
+        .publish(&env);
+
         Ok(())
     }
 
@@ -444,6 +544,7 @@ impl ContributorRegistryContract {
         contributor_address: Address,
         badge: Badge,
     ) -> Result<(), ContributorError> {
+        Self::require_governance_not_paused(&env)?;
         consume_approval(&env, &executor, proposal_id, &ProposalAction::GrantBadge)?;
 
         // Ensure contributor exists
@@ -481,6 +582,7 @@ impl ContributorRegistryContract {
         contributor_address: Address,
         badge: Badge,
     ) -> Result<(), ContributorError> {
+        Self::require_governance_not_paused(&env)?;
         consume_approval(&env, &executor, proposal_id, &ProposalAction::RevokeBadge)?;
 
         // Ensure contributor exists
@@ -530,6 +632,7 @@ impl ContributorRegistryContract {
         points: u64,
         reason: String,
     ) -> Result<(), ContributorError> {
+        Self::require_governance_not_paused(&env)?;
         consume_approval(&env, &executor, proposal_id, &ProposalAction::ApplyPenalty)?;
 
         let mut contributor: ContributorData = env
@@ -580,12 +683,165 @@ impl ContributorRegistryContract {
         Ok(())
     }
 
+    /// Suspend a contributor's attestation.
+    ///
+    /// Requires multisig approval for `ProposalAction::SuspendAttestation`.
+    /// Only an `Active` attestation can be suspended — suspending an already
+    /// `Suspended` or `Revoked` one is rejected so callers can't paper over a
+    /// stale state read. Reversible via `restore_attestation`.
+    pub fn suspend_attestation(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        contributor_address: Address,
+    ) -> Result<(), ContributorError> {
+        Self::require_governance_not_paused(&env)?;
+        consume_approval(
+            &env,
+            &executor,
+            proposal_id,
+            &ProposalAction::SuspendAttestation,
+        )?;
+
+        let mut contributor: ContributorData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contributor(contributor_address.clone()))
+            .ok_or(ContributorError::ContributorNotFound)?;
+
+        if contributor.status != AttestationStatus::Active {
+            return Err(ContributorError::AttestationNotActive);
+        }
+
+        contributor.status = AttestationStatus::Suspended;
+        env.storage().persistent().set(
+            &DataKey::Contributor(contributor_address.clone()),
+            &contributor,
+        );
+        env.storage().persistent().extend_ttl(
+            &DataKey::Contributor(contributor_address.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        AttestationSuspendedEvent {
+            contributor: contributor_address,
+            executor,
+            proposal_id,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Revoke a contributor's attestation.
+    ///
+    /// Requires multisig approval for `ProposalAction::RevokeAttestation`.
+    /// Callable from `Active` or `Suspended`; revoking an already-`Revoked`
+    /// attestation is rejected. Revocation is terminal — there is no
+    /// `restore` path back from `Revoked`.
+    pub fn revoke_attestation(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        contributor_address: Address,
+    ) -> Result<(), ContributorError> {
+        Self::require_governance_not_paused(&env)?;
+        consume_approval(
+            &env,
+            &executor,
+            proposal_id,
+            &ProposalAction::RevokeAttestation,
+        )?;
+
+        let mut contributor: ContributorData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contributor(contributor_address.clone()))
+            .ok_or(ContributorError::ContributorNotFound)?;
+
+        if contributor.status == AttestationStatus::Revoked {
+            return Err(ContributorError::AttestationAlreadyRevoked);
+        }
+
+        contributor.status = AttestationStatus::Revoked;
+        env.storage().persistent().set(
+            &DataKey::Contributor(contributor_address.clone()),
+            &contributor,
+        );
+        env.storage().persistent().extend_ttl(
+            &DataKey::Contributor(contributor_address.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        AttestationRevokedEvent {
+            contributor: contributor_address,
+            executor,
+            proposal_id,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Restore a suspended attestation back to `Active`.
+    ///
+    /// Requires multisig approval for `ProposalAction::RestoreAttestation`.
+    /// Only callable from `Suspended` — a `Revoked` attestation cannot be
+    /// restored through this path.
+    pub fn restore_attestation(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+        contributor_address: Address,
+    ) -> Result<(), ContributorError> {
+        Self::require_governance_not_paused(&env)?;
+        consume_approval(
+            &env,
+            &executor,
+            proposal_id,
+            &ProposalAction::RestoreAttestation,
+        )?;
+
+        let mut contributor: ContributorData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Contributor(contributor_address.clone()))
+            .ok_or(ContributorError::ContributorNotFound)?;
+
+        if contributor.status != AttestationStatus::Suspended {
+            return Err(ContributorError::AttestationNotSuspended);
+        }
+
+        contributor.status = AttestationStatus::Active;
+        env.storage().persistent().set(
+            &DataKey::Contributor(contributor_address.clone()),
+            &contributor,
+        );
+        env.storage().persistent().extend_ttl(
+            &DataKey::Contributor(contributor_address.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        AttestationRestoredEvent {
+            contributor: contributor_address,
+            executor,
+            proposal_id,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
     pub fn upgrade(
         env: Env,
         executor: Address,
         proposal_id: u64,
         new_wasm_hash: BytesN<32>,
     ) -> Result<(), ContributorError> {
+        Self::require_governance_not_paused(&env)?;
         consume_approval(&env, &executor, proposal_id, &ProposalAction::Upgrade)?;
 
         env.deployer()
@@ -606,6 +862,7 @@ impl ContributorRegistryContract {
         proposal_id: u64,
         new_admin: Address,
     ) -> Result<(), ContributorError> {
+        Self::require_governance_not_paused(&env)?;
         consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
 
         env.storage().instance().set(&DataKey::Admin, &new_admin);
@@ -622,10 +879,81 @@ impl ContributorRegistryContract {
         Ok(())
     }
 
+    // ── Granular pause controls ──────────────────────────────
+
+    /// Pause a specific scope.  Only a registered multisig signer may call this.
+    ///
+    /// Scopes:
+    ///  - `Contribution` — blocks `register_contributor` and
+    ///                     `register_contributor_with_sig`.
+    ///  - `Governance`   — blocks all multisig proposal creation/signing and
+    ///                     every admin-gated mutation (badge grants/revocations,
+    ///                     attestation lifecycle, reputation penalties, upgrade,
+    ///                     set_admin, set_multisig_config).
+    ///
+    /// Read-only queries are never blocked by any scope.
+    pub fn pause_scope(
+        env: Env,
+        caller: Address,
+        scope: ContribPauseScope,
+    ) -> Result<(), ContributorError> {
+        Self::ensure_initialized(&env)?;
+        caller.require_auth();
+        let config = get_config(&env)?;
+        find_signer(&config, &caller)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::ScopePaused(scope), &true);
+        ScopePauseChangedEvent {
+            admin: caller,
+            scope: scope as u32,
+            paused: true,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Unpause a specific scope. Only a registered multisig signer may call this.
+    pub fn unpause_scope(
+        env: Env,
+        caller: Address,
+        scope: ContribPauseScope,
+    ) -> Result<(), ContributorError> {
+        Self::ensure_initialized(&env)?;
+        caller.require_auth();
+        let config = get_config(&env)?;
+        find_signer(&config, &caller)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::ScopePaused(scope), &false);
+        ScopePauseChangedEvent {
+            admin: caller,
+            scope: scope as u32,
+            paused: false,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Read-only query: returns `true` when the given scope is currently paused.
+    /// Always callable regardless of pause state.
+    pub fn is_paused(env: Env, scope: ContribPauseScope) -> bool {
+        Self::is_scope_paused(&env, scope)
+    }
+
     // ── Queries ──────────────────────────────────────────────
 
     pub fn get_reputation(env: Env, contributor: Address) -> Result<u64, ContributorError> {
         Ok(Self::get_contributor(env, contributor)?.reputation_score)
+    }
+
+    pub fn get_attestation_status(
+        env: Env,
+        contributor: Address,
+    ) -> Result<AttestationStatus, ContributorError> {
+        Ok(Self::get_contributor(env, contributor)?.status)
     }
 
     pub fn get_tier(env: Env, contributor: Address) -> Result<ContributorTier, ContributorError> {
@@ -1451,5 +1779,744 @@ mod test {
         client.register_contributor(&contributor, &handle);
 
         assert!(client.get_penalty_record(&contributor).is_none());
+    }
+
+    // ── Contributor profile update authorization (issue #861) ─
+
+    /// Self-service path: the contributor updates their own handle.
+    /// `proposal_id == 0` selects self-service and the contributor's
+    /// own auth is sufficient.
+    #[test]
+    fn test_update_contributor_self_service_succeeds() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "old_handle");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "new_handle");
+        client.register_contributor(&contributor, &old_handle);
+
+        // Self-service path: actor == contributor, proposal_id == None
+        client.update_contributor(&contributor, &contributor, &new_handle, &None);
+
+        let updated = client.get_contributor(&contributor);
+        assert_eq!(updated.github_handle, new_handle);
+    }
+
+    /// Self-service path rejects an empty handle even when the caller is
+    /// authorized as the contributor.
+    #[test]
+    fn test_update_contributor_self_service_rejects_empty_handle() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "valid_handle");
+        client.register_contributor(&contributor, &old_handle);
+
+        let empty = soroban_sdk::String::from_str(&s.env, "");
+        assert_eq!(
+            client.try_update_contributor(&contributor, &contributor, &empty, &None),
+            Err(Ok(ContributorError::InvalidGitHubHandle))
+        );
+    }
+
+    /// Self-service path: a third party with `proposal_id == 0` cannot
+    /// mutate someone else's profile even with their auth.
+    #[test]
+    fn test_update_contributor_self_service_rejects_third_party() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "valid_handle");
+        client.register_contributor(&contributor, &old_handle);
+
+        let third_party = Address::generate(&s.env);
+        let new_handle = soroban_sdk::String::from_str(&s.env, "hijacked");
+        assert_eq!(
+            client.try_update_contributor(&third_party, &contributor, &new_handle, &None),
+            Err(Ok(ContributorError::Unauthorized))
+        );
+
+        // Contributor data unchanged
+        let after = client.get_contributor(&contributor);
+        assert_eq!(after.github_handle, old_handle);
+    }
+
+    /// Admin-managed path: a multisig signer proposes an UpdateProfile
+    /// proposal, threshold is reached, then the signer consumes the
+    /// approval to update someone else's handle.
+    #[test]
+    fn test_update_contributor_admin_managed_via_multisig() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "typo_handle");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "fixed_handle");
+        client.register_contributor(&contributor, &old_handle);
+
+        // 1) Multisig signer proposes UpdateProfile
+        let pid = client.propose(&s.alice, &ProposalAction::UpdateProfile);
+        // 2) Second signer reaches threshold
+        client.sign(&s.bob, &pid);
+        assert_eq!(client.get_proposal(&pid).status, ProposalStatus::Approved);
+
+        // 3) Admin consumes approval — proposal is now Executed
+        //    actor = alice (multisig signer), address = contributor
+        client.update_contributor(&s.alice, &contributor, &new_handle, &Some(pid));
+
+        let updated = client.get_contributor(&contributor);
+        assert_eq!(updated.github_handle, new_handle);
+        assert_eq!(client.get_proposal(&pid).status, ProposalStatus::Executed);
+
+        // 4) Replay is rejected
+        let again = soroban_sdk::String::from_str(&s.env, "replay");
+        assert!(client
+            .try_update_contributor(&s.alice, &contributor, &again, &Some(pid))
+            .is_err());
+    }
+
+    /// Admin-managed path without an approved proposal fails. The multisig
+    /// is bypassed if the caller just hands in a stale or never-existed id.
+    #[test]
+    fn test_update_contributor_admin_managed_requires_approval() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "h0");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "h1");
+        client.register_contributor(&contributor, &old_handle);
+
+        // Try with a bogus proposal id
+        assert!(client
+            .try_update_contributor(&s.alice, &contributor, &new_handle, &Some(999u64))
+            .is_err());
+
+        // Propose but do not reach threshold — still must fail
+        let pid = client.propose(&s.bob, &ProposalAction::UpdateProfile);
+        assert_eq!(client.get_proposal(&pid).status, ProposalStatus::Pending);
+        assert!(client
+            .try_update_contributor(&s.alice, &contributor, &new_handle, &Some(pid))
+            .is_err());
+
+        // Contributor data must not have been mutated by failed attempts
+        let after = client.get_contributor(&contributor);
+        assert_eq!(after.github_handle, old_handle);
+    }
+
+    /// Admin-managed update from a non-signer must fail even when the
+    /// proposal is properly approved.
+    #[test]
+    fn test_update_contributor_admin_managed_rejects_non_signer() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "h0");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "h1");
+        client.register_contributor(&contributor, &old_handle);
+
+        // Approve a proposal
+        let pid = client.propose(&s.alice, &ProposalAction::UpdateProfile);
+        client.sign(&s.bob, &pid);
+        assert_eq!(client.get_proposal(&pid).status, ProposalStatus::Approved);
+
+        // An outsider tries to consume the approval
+        let outsider = Address::generate(&s.env);
+        assert_eq!(
+            client.try_update_contributor(&outsider, &contributor, &new_handle, &Some(pid)),
+            Err(Ok(ContributorError::Unauthorized))
+        );
+
+        // Proposal must NOT be consumed on a failed call
+        let proposal = client.get_proposal(&pid);
+        assert_eq!(proposal.status, ProposalStatus::Approved);
+
+        // Contributor data is unchanged
+        let after = client.get_contributor(&contributor);
+        assert_eq!(after.github_handle, old_handle);
+    }
+
+    /// The wrong action type cannot be replayed as an UpdateProfile:
+    /// trying to consume an `Upgrade` proposal to update a contributor
+    /// must fail.
+    #[test]
+    fn test_update_contributor_rejects_wrong_action_proposal() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "h0");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "h1");
+        client.register_contributor(&contributor, &old_handle);
+
+        // Approve an `Upgrade` proposal
+        let pid = client.propose(&s.alice, &ProposalAction::Upgrade);
+        client.sign(&s.bob, &pid);
+
+        // Attempting to use it for an UpdateProfile must fail
+        assert!(client
+            .try_update_contributor(&s.alice, &contributor, &new_handle, &Some(pid))
+            .is_err());
+
+        // Proposal is still Approved — it was not consumed
+        assert_eq!(client.get_proposal(&pid).status, ProposalStatus::Approved);
+    }
+
+    /// Cancelled proposals cannot be used to update a contributor's profile.
+    #[test]
+    fn test_update_contributor_rejects_cancelled_proposal() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "h0");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "h1");
+        client.register_contributor(&contributor, &old_handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::UpdateProfile);
+        client.sign(&s.bob, &pid);
+        client.cancel_proposal(&s.alice, &pid);
+
+        assert!(client
+            .try_update_contributor(&s.alice, &contributor, &new_handle, &Some(pid))
+            .is_err());
+
+        let after = client.get_contributor(&contributor);
+        assert_eq!(after.github_handle, old_handle);
+    }
+
+    /// Expired proposals cannot be used to update a contributor's profile.
+    #[test]
+    fn test_update_contributor_rejects_expired_proposal() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let old_handle = soroban_sdk::String::from_str(&s.env, "h0");
+        let new_handle = soroban_sdk::String::from_str(&s.env, "h1");
+        client.register_contributor(&contributor, &old_handle);
+
+        s.env.ledger().set_timestamp(1_000_000);
+        let pid = client.propose(&s.alice, &ProposalAction::UpdateProfile);
+        client.sign(&s.bob, &pid);
+
+        // Advance past the proposal TTL
+        s.env
+            .ledger()
+            .set_timestamp(1_000_000 + multisig::PROPOSAL_TTL_SECS + 1);
+        client.expire_proposal(&pid);
+
+        assert!(client
+            .try_update_contributor(&s.alice, &contributor, &new_handle, &Some(pid))
+            .is_err());
+
+        let after = client.get_contributor(&contributor);
+        assert_eq!(after.github_handle, old_handle);
+    }
+
+    // ── Attestation suspension / revocation (issue #1053) ─────
+
+    /// A freshly registered contributor starts `Active`.
+    #[test]
+    fn test_attestation_defaults_to_active() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "active_dev");
+        client.register_contributor(&contributor, &handle);
+
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Active
+        );
+    }
+
+    /// Active → Suspended → Active (restored) is the core reversible flow.
+    #[test]
+    fn test_suspend_then_restore_attestation() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "suspend_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+        client.suspend_attestation(&s.alice, &pid, &contributor);
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Suspended
+        );
+
+        let pid2 = client.propose(&s.alice, &ProposalAction::RestoreAttestation);
+        client.sign(&s.bob, &pid2);
+        client.restore_attestation(&s.alice, &pid2, &contributor);
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Active
+        );
+    }
+
+    /// Active → Revoked is terminal: there is no restore path back.
+    #[test]
+    fn test_revoke_attestation_is_terminal() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "revoke_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::RevokeAttestation);
+        client.sign(&s.bob, &pid);
+        client.revoke_attestation(&s.alice, &pid, &contributor);
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Revoked
+        );
+
+        // Restoring a revoked attestation must fail.
+        let pid2 = client.propose(&s.alice, &ProposalAction::RestoreAttestation);
+        client.sign(&s.bob, &pid2);
+        assert_eq!(
+            client.try_restore_attestation(&s.alice, &pid2, &contributor),
+            Err(Ok(ContributorError::AttestationNotSuspended))
+        );
+    }
+
+    /// A suspended attestation can still be revoked directly (abuse confirmed
+    /// after a temporary suspension).
+    #[test]
+    fn test_revoke_attestation_from_suspended() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "escalate_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+        client.suspend_attestation(&s.alice, &pid, &contributor);
+
+        let pid2 = client.propose(&s.alice, &ProposalAction::RevokeAttestation);
+        client.sign(&s.bob, &pid2);
+        client.revoke_attestation(&s.alice, &pid2, &contributor);
+
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Revoked
+        );
+    }
+
+    /// Suspending an already-suspended attestation is rejected.
+    #[test]
+    fn test_suspend_already_suspended_fails() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "double_suspend_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+        client.suspend_attestation(&s.alice, &pid, &contributor);
+
+        let pid2 = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid2);
+        assert_eq!(
+            client.try_suspend_attestation(&s.alice, &pid2, &contributor),
+            Err(Ok(ContributorError::AttestationNotActive))
+        );
+    }
+
+    /// Revoking an already-revoked attestation is rejected.
+    #[test]
+    fn test_revoke_already_revoked_fails() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "double_revoke_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::RevokeAttestation);
+        client.sign(&s.bob, &pid);
+        client.revoke_attestation(&s.alice, &pid, &contributor);
+
+        let pid2 = client.propose(&s.alice, &ProposalAction::RevokeAttestation);
+        client.sign(&s.bob, &pid2);
+        assert_eq!(
+            client.try_revoke_attestation(&s.alice, &pid2, &contributor),
+            Err(Ok(ContributorError::AttestationAlreadyRevoked))
+        );
+    }
+
+    /// Restoring an `Active` attestation (never suspended) is rejected.
+    #[test]
+    fn test_restore_active_attestation_fails() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "no_op_restore_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::RestoreAttestation);
+        client.sign(&s.bob, &pid);
+        assert_eq!(
+            client.try_restore_attestation(&s.alice, &pid, &contributor),
+            Err(Ok(ContributorError::AttestationNotSuspended))
+        );
+    }
+
+    /// Suspension without multisig approval (unauthorized state change) is
+    /// rejected — a bogus/never-approved proposal id cannot be used.
+    #[test]
+    fn test_suspend_attestation_requires_multisig() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "unauth_suspend_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let fake_id = 999u64;
+        assert!(client
+            .try_suspend_attestation(&s.alice, &fake_id, &contributor)
+            .is_err());
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Active
+        );
+    }
+
+    /// A non-signer cannot consume even a fully-approved suspend proposal.
+    #[test]
+    fn test_suspend_attestation_rejects_non_signer_executor() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "outsider_suspend_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+
+        let outsider = Address::generate(&s.env);
+        assert_eq!(
+            client.try_suspend_attestation(&outsider, &pid, &contributor),
+            Err(Ok(ContributorError::Unauthorized))
+        );
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Active
+        );
+    }
+
+    /// A proposal approved for one attestation action cannot be replayed as
+    /// another (e.g. a `SuspendAttestation` approval cannot revoke).
+    #[test]
+    fn test_attestation_action_proposals_are_not_interchangeable() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "wrong_action_dev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+
+        assert!(client
+            .try_revoke_attestation(&s.alice, &pid, &contributor)
+            .is_err());
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Active
+        );
+    }
+
+    /// Operating on an unregistered address fails with `ContributorNotFound`.
+    #[test]
+    fn test_suspend_attestation_unknown_contributor_fails() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let unknown = Address::generate(&s.env);
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+
+        assert_eq!(
+            client.try_suspend_attestation(&s.alice, &pid, &unknown),
+            Err(Ok(ContributorError::ContributorNotFound))
+        );
+    }
+
+    // ── Granular pause scope tests ────────────────────────────
+
+    #[test]
+    fn test_pause_contribution_scope_blocks_register() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        // Pause contribution scope.
+        client.pause_scope(&s.alice, &ContribPauseScope::Contribution);
+        assert!(client.is_paused(&ContribPauseScope::Contribution));
+        // Governance scope is still open.
+        assert!(!client.is_paused(&ContribPauseScope::Governance));
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "blocked_dev");
+
+        assert_eq!(
+            client.try_register_contributor(&contributor, &handle),
+            Err(Ok(ContributorError::ContributionScopePaused))
+        );
+    }
+
+    #[test]
+    fn test_unpause_contribution_scope_restores_register() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        client.pause_scope(&s.alice, &ContribPauseScope::Contribution);
+        client.unpause_scope(&s.alice, &ContribPauseScope::Contribution);
+        assert!(!client.is_paused(&ContribPauseScope::Contribution));
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "restored_dev");
+        // Should succeed now.
+        client.register_contributor(&contributor, &handle);
+        let data = client.get_contributor(&contributor);
+        assert_eq!(data.github_handle, handle);
+    }
+
+    #[test]
+    fn test_pause_governance_scope_blocks_propose() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        client.pause_scope(&s.alice, &ContribPauseScope::Governance);
+        assert!(client.is_paused(&ContribPauseScope::Governance));
+
+        assert_eq!(
+            client.try_propose(&s.alice, &ProposalAction::GrantBadge),
+            Err(Ok(ContributorError::GovernanceScopePaused))
+        );
+    }
+
+    #[test]
+    fn test_pause_governance_scope_blocks_sign() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        // Create a proposal before pausing.
+        let pid = client.propose(&s.alice, &ProposalAction::GrantBadge);
+
+        client.pause_scope(&s.alice, &ContribPauseScope::Governance);
+
+        assert_eq!(
+            client.try_sign(&s.bob, &pid),
+            Err(Ok(ContributorError::GovernanceScopePaused))
+        );
+    }
+
+    #[test]
+    fn test_pause_governance_scope_blocks_cancel_proposal() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let pid = client.propose(&s.alice, &ProposalAction::GrantBadge);
+        client.pause_scope(&s.alice, &ContribPauseScope::Governance);
+
+        assert_eq!(
+            client.try_cancel_proposal(&s.alice, &pid),
+            Err(Ok(ContributorError::GovernanceScopePaused))
+        );
+    }
+
+    #[test]
+    fn test_expire_proposal_allowed_even_under_governance_pause() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let pid = client.propose(&s.alice, &ProposalAction::GrantBadge);
+
+        // Advance ledger past the TTL so the proposal expires.
+        s.env.ledger().set_timestamp(999_999_999);
+
+        client.pause_scope(&s.alice, &ContribPauseScope::Governance);
+
+        // expire_proposal is a time-based cleanup; it must work even when paused.
+        client.expire_proposal(&pid);
+    }
+
+    #[test]
+    fn test_pause_governance_scope_blocks_grant_badge() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "badgedev");
+        client.register_contributor(&contributor, &handle);
+
+        // Build a fully-approved proposal before pausing.
+        let pid = client.propose(&s.alice, &ProposalAction::GrantBadge);
+        client.sign(&s.bob, &pid);
+
+        // Now pause governance.
+        client.pause_scope(&s.alice, &ContribPauseScope::Governance);
+
+        assert_eq!(
+            client.try_grant_badge(&s.alice, &pid, &contributor, &Badge::EarlyAdopter),
+            Err(Ok(ContributorError::GovernanceScopePaused))
+        );
+    }
+
+    #[test]
+    fn test_pause_governance_scope_blocks_suspend_attestation() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "suspdev");
+        client.register_contributor(&contributor, &handle);
+
+        let pid = client.propose(&s.alice, &ProposalAction::SuspendAttestation);
+        client.sign(&s.bob, &pid);
+
+        client.pause_scope(&s.alice, &ContribPauseScope::Governance);
+
+        assert_eq!(
+            client.try_suspend_attestation(&s.alice, &pid, &contributor),
+            Err(Ok(ContributorError::GovernanceScopePaused))
+        );
+        // Status unchanged.
+        assert_eq!(
+            client.get_attestation_status(&contributor),
+            AttestationStatus::Active
+        );
+    }
+
+    #[test]
+    fn test_read_queries_always_available_under_all_scopes_paused() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "readdev");
+        client.register_contributor(&contributor, &handle);
+
+        // Pause all scopes.
+        client.pause_scope(&s.alice, &ContribPauseScope::Contribution);
+        client.pause_scope(&s.alice, &ContribPauseScope::Governance);
+
+        // All reads must succeed.
+        let _ = client.get_contributor(&contributor);
+        let _ = client.get_contributor_by_github(&handle);
+        let _ = client.get_attestation_status(&contributor);
+        let _ = client.get_reputation(&contributor);
+        let _ = client.get_multisig_config();
+        assert!(client.is_paused(&ContribPauseScope::Contribution));
+        assert!(client.is_paused(&ContribPauseScope::Governance));
+    }
+
+    #[test]
+    fn test_mixed_contribution_paused_governance_open() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "mixeddev");
+
+        // Register before pausing contribution.
+        client.register_contributor(&contributor, &handle);
+
+        // Pause only contribution.
+        client.pause_scope(&s.alice, &ContribPauseScope::Contribution);
+
+        // Governance still works: propose + sign + grant_badge.
+        let pid = client.propose(&s.alice, &ProposalAction::GrantBadge);
+        client.sign(&s.bob, &pid);
+        client.grant_badge(&s.alice, &pid, &contributor, &Badge::TopContributor);
+        let badges = client.get_badges(&contributor);
+        assert_eq!(badges.len(), 1);
+
+        // New registration is blocked.
+        let newcomer = Address::generate(&s.env);
+        let new_handle = soroban_sdk::String::from_str(&s.env, "newcomer");
+        assert_eq!(
+            client.try_register_contributor(&newcomer, &new_handle),
+            Err(Ok(ContributorError::ContributionScopePaused))
+        );
+    }
+
+    #[test]
+    fn test_mixed_governance_paused_contribution_open() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        // Pause only governance.
+        client.pause_scope(&s.alice, &ContribPauseScope::Governance);
+
+        // Registration (contribution scope) still works.
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "govpauseddev");
+        client.register_contributor(&contributor, &handle);
+        let data = client.get_contributor(&contributor);
+        assert_eq!(data.github_handle, handle);
+
+        // Governance op blocked.
+        assert_eq!(
+            client.try_propose(&s.alice, &ProposalAction::GrantBadge),
+            Err(Ok(ContributorError::GovernanceScopePaused))
+        );
+    }
+
+    #[test]
+    fn test_only_admin_can_pause_scope() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let non_admin = Address::generate(&s.env);
+        assert_eq!(
+            client.try_pause_scope(&non_admin, &ContribPauseScope::Contribution),
+            Err(Ok(ContributorError::Unauthorized))
+        );
+        assert_eq!(
+            client.try_unpause_scope(&non_admin, &ContribPauseScope::Governance),
+            Err(Ok(ContributorError::Unauthorized))
+        );
+    }
+
+    #[test]
+    fn test_unpause_governance_restores_multisig_operations() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        client.pause_scope(&s.alice, &ContribPauseScope::Governance);
+
+        // Unblock.
+        client.unpause_scope(&s.alice, &ContribPauseScope::Governance);
+        assert!(!client.is_paused(&ContribPauseScope::Governance));
+
+        // Proposal lifecycle works again.
+        let pid = client.propose(&s.alice, &ProposalAction::GrantBadge);
+        client.sign(&s.bob, &pid);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "govrestored");
+        client.register_contributor(&contributor, &handle);
+        client.grant_badge(&s.alice, &pid, &contributor, &Badge::BugHunter);
+        assert_eq!(client.get_badges(&contributor).len(), 1);
     }
 }

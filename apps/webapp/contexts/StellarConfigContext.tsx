@@ -38,6 +38,39 @@ const CONFIG_URL = "/api/config/stellar";
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2_000;
 
+const SUPPORTED_NETWORKS: ReadonlySet<string> = new Set(["testnet", "mainnet"]);
+
+function validateStellarConfig(data: unknown): StellarConfig {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error(
+      "Invalid configuration: the server returned an unexpected response format."
+    );
+  }
+
+  const d = data as Record<string, unknown>;
+
+  if (typeof d.network !== "string" || !SUPPORTED_NETWORKS.has(d.network)) {
+    throw new Error(
+      `Unsupported environment "${String(d.network ?? "unknown")}". ` +
+        'Expected "testnet" or "mainnet". ' +
+        "Check BACKEND_API_URL and server environment variables."
+    );
+  }
+
+  if (
+    !d.contracts ||
+    typeof d.contracts !== "object" ||
+    Array.isArray(d.contracts)
+  ) {
+    throw new Error(
+      "Contract configuration is missing from the server response. " +
+        "The backend may not have contract addresses configured for this environment."
+    );
+  }
+
+  return data as StellarConfig;
+}
+
 async function fetchStellarConfig(signal: AbortSignal): Promise<StellarConfig> {
   let lastError: Error = new Error("Unknown error");
 
@@ -55,7 +88,7 @@ async function fetchStellarConfig(signal: AbortSignal): Promise<StellarConfig> {
         );
       }
 
-      const data: StellarConfig = await response.json();
+      const data: StellarConfig = validateStellarConfig(await response.json());
       return data;
     } catch (err) {
       if ((err as { name?: string }).name === "AbortError") {

@@ -1,0 +1,32 @@
+[
+  {
+    "record_type": "sentiment_summary",
+    "asset": "XLM",
+    "metric_name": "volume",
+    "window": "7d",
+    "value": 43.133,
+    "previous_value": 48.458,
+    "change_percentage": -10.99,
+    "trend_direction": "down",
+    "extra_data": {
+      "source": "SyntheticDataGenerator",
+      "project_slug": "pulse-project-1"
+    },
+    "timestamp": "2026-06-23T16:27:07.654272+00:00"
+  },
+  {
+    "record_type": "volume_snapshot",
+    "asset": "BTC",
+    "metric_name": "engagement",
+    "window": "24h",
+    "value": 48.028,
+    "previous_value": 54.231,
+    "change_percentage": -11.44,
+    "trend_direction": "down",
+    "extra_data": {
+      "source": "SyntheticDataGenerator",
+      "project_slug": "pulse-project-2"
+    },
+    "timestamp": "2026-06-23T12:48:07.654297+00:00"
+  }
+]

@@ -1,6 +1,7 @@
 name: Data Processing CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "main" ]
     paths:
@@ -9,6 +10,7 @@ on:
     branches: [ "main" ]
     paths:
       - 'apps/data-processing/**'
+      - 'apps/data-processing/.ci-trigger'
 
 jobs:
   data-processing-checks:

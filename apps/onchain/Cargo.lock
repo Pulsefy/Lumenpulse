@@ -317,6 +317,7 @@ dependencies = [
 name = "crowdfund_vault"
 version = "0.0.0"
 dependencies = [
+ "idempotency-guard",
  "notification_interface",
  "proptest",
  "reentrancy-guard",
@@ -631,15 +632,22 @@ checksum = "2bfcf67fea2815c2fc3b90873fae90957be12ff417335dfadc7f52927feb03b2"
 
 [[package]]
 name = "ethnum"
-version = "1.5.2"
+version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca81e6b4777c89fd810c25a4be2b1bd93ea034fbe58e6a75216a34c6b82c539b"
+checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
 name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
+
+[[package]]
+name = "feature_flags"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
 
 [[package]]
 name = "ff"
@@ -845,6 +853,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954"
 
 [[package]]
+name = "idempotency-guard"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -984,6 +999,7 @@ dependencies = [
 name = "matching_pool"
 version = "0.0.0"
 dependencies = [
+ "proptest",
  "reentrancy-guard",
  "soroban-sdk",
 ]
@@ -1874,6 +1890,7 @@ dependencies = [
 name = "treasury"
 version = "0.1.0"
 dependencies = [
+ "idempotency-guard",
  "reentrancy-guard",
  "soroban-sdk",
 ]
@@ -2244,6 +2261,14 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser 0.244.0",
+]
+
+[[package]]
+name = "yield-vault"
+version = "0.1.0"
+dependencies = [
+ "idempotency-guard",
+ "soroban-sdk",
 ]
 
 [[package]]

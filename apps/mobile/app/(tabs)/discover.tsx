@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -16,6 +16,8 @@ import { useLocalization } from '../../src/context';
 import { stellarApi, StellarAsset } from '../../lib/api';
 import { useCachedData } from '../../hooks/useCachedData';
 import { CACHE_CONFIGS } from '../../lib/cache';
+import { useWatchlist } from '../../contexts/WatchlistContext';
+import { WatchlistItemType } from '../../lib/watchlist';
 
 const MOCK_ASSETS: StellarAsset[] = [
   { code: 'XLM', name: 'Stellar Lumens', issuer: null, priceUsd: 0.1051, change24h: 1.23 },
@@ -105,10 +107,30 @@ function assetColor(code: string): string {
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
-function AssetItem({ asset, colors, t }: { asset: StellarAsset; colors: ThemeColors; t: (key: string) => string }) {
+function AssetItem({
+  asset,
+  colors,
+  t,
+}: {
+  asset: StellarAsset;
+  colors: ThemeColors;
+  t: (key: string) => string;
+}) {
   const color = assetColor(asset.code);
   const isPositive = asset.change24h >= 0;
   const changeColor = isPositive ? '#27ae60' : '#e74c3c';
+  const { isInWatchlist, toggleItem } = useWatchlist();
+  const inWatchlist = isInWatchlist(asset.code, WatchlistItemType.ASSET);
+
+  const handleToggleWatchlist = useCallback(() => {
+    toggleItem({
+      symbol: asset.code,
+      name: asset.name,
+      type: WatchlistItemType.ASSET,
+      assetIssuer: asset.issuer ?? undefined,
+      imageUrl: asset.iconUrl ?? undefined,
+    });
+  }, [asset, toggleItem]);
 
   return (
     <View
@@ -119,6 +141,21 @@ function AssetItem({ asset, colors, t }: { asset: StellarAsset; colors: ThemeCol
       accessibilityRole="button"
       accessibilityHint={t('discover.asset_hint')}
     >
+      <TouchableOpacity
+        onPress={handleToggleWatchlist}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={styles.watchlistToggle}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: inWatchlist }}
+        accessibilityLabel={inWatchlist ? t('discover.remove_from_watchlist') : t('discover.add_to_watchlist')}
+      >
+        <Ionicons
+          name={inWatchlist ? 'star' : 'star-outline'}
+          size={22}
+          color={inWatchlist ? '#f7b731' : colors.textSecondary}
+        />
+      </TouchableOpacity>
+
       <View style={[styles.assetIcon, { backgroundColor: `${color}22` }]} accessible>
         <Text style={[styles.assetIconText, { color }]}>{asset.code.charAt(0)}</Text>
       </View>
@@ -127,7 +164,11 @@ function AssetItem({ asset, colors, t }: { asset: StellarAsset; colors: ThemeCol
         <Text style={[styles.assetCode, { color: colors.text }]} numberOfLines={1} accessible>
           {asset.code}
         </Text>
-        <Text style={[styles.assetName, { color: colors.textSecondary }]} numberOfLines={1} accessible>
+        <Text
+          style={[styles.assetName, { color: colors.textSecondary }]}
+          numberOfLines={1}
+          accessible
+        >
           {asset.name}
         </Text>
       </View>
@@ -204,7 +245,11 @@ export default function AssetDiscoveryScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={[styles.screenTitle, { color: colors.text }]} accessible accessibilityRole="header">
+        <Text
+          style={[styles.screenTitle, { color: colors.text }]}
+          accessible
+          accessibilityRole="header"
+        >
           {t('discover.title')}
         </Text>
         <View style={[styles.center, { flex: 1 }]}>
@@ -222,7 +267,11 @@ export default function AssetDiscoveryScreen() {
   if (error) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={[styles.screenTitle, { color: colors.text }]} accessible accessibilityRole="header">
+        <Text
+          style={[styles.screenTitle, { color: colors.text }]}
+          accessible
+          accessibilityRole="header"
+        >
           {t('discover.title')}
         </Text>
         <View style={[styles.center, { flex: 1, padding: 32 }]}>
@@ -234,7 +283,11 @@ export default function AssetDiscoveryScreen() {
             accessible
             accessibilityLabel={t('errors.couldnt_load', { item: 'assets' })}
           />
-          <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+          <Text
+            style={[styles.emptyTitle, { color: colors.text }]}
+            accessible
+            accessibilityRole="header"
+          >
             {t('errors.couldnt_load', { item: 'assets' })}
           </Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} accessible>
@@ -247,7 +300,9 @@ export default function AssetDiscoveryScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('common.retry')}
           >
-            <Text style={styles.retryText} accessible>{t('common.retry')}</Text>
+            <Text style={styles.retryText} accessible>
+              {t('common.retry')}
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -270,7 +325,11 @@ export default function AssetDiscoveryScreen() {
         }
         ListHeaderComponent={
           <>
-            <Text style={[styles.screenTitle, { color: colors.text }]} accessible accessibilityRole="header">
+            <Text
+              style={[styles.screenTitle, { color: colors.text }]}
+              accessible
+              accessibilityRole="header"
+            >
               {t('discover.title')}
             </Text>
 
@@ -337,7 +396,11 @@ export default function AssetDiscoveryScreen() {
           </>
         }
         ListEmptyComponent={
-          <View style={[styles.center, { paddingVertical: 60 }]} accessible accessibilityLabel="No results">
+          <View
+            style={[styles.center, { paddingVertical: 60 }]}
+            accessible
+            accessibilityLabel="No results"
+          >
             <Ionicons
               name="search-outline"
               size={48}
@@ -346,7 +409,11 @@ export default function AssetDiscoveryScreen() {
               accessible
               accessibilityLabel={t('discover.title')}
             />
-            <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+            <Text
+              style={[styles.emptyTitle, { color: colors.text }]}
+              accessible
+              accessibilityRole="header"
+            >
               {t('discover.no_results')}
             </Text>
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} accessible>
@@ -406,10 +473,11 @@ const styles = StyleSheet.create({
   assetItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  watchlistToggle: { paddingRight: 10, paddingLeft: 4 },
   assetIcon: {
     width: 44,
     height: 44,

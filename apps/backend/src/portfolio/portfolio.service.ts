@@ -343,6 +343,64 @@ export class PortfolioService {
     };
   }
 
+  async getPortfolioSummaryForAccount(
+    userId: string,
+    publicKey: string,
+  ): Promise<PortfolioSummaryWithCurrencyResponseDto> {
+    this.logger.log(
+      `Fetching portfolio summary for linked account ${publicKey}`,
+    );
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['stellarAccounts'],
+    });
+
+    const linkedAccount = user?.stellarAccounts?.find(
+      (account) => account.isActive && account.publicKey === publicKey,
+    );
+
+    if (!linkedAccount) {
+      throw new NotFoundException('Linked Stellar account not found');
+    }
+
+    const balances =
+      await this.stellarBalanceService.getAccountBalances(publicKey);
+
+    const assets = await Promise.all(
+      balances.map(async (balance) => {
+        const valueUsd = await this.stellarBalanceService.getAssetValueUsd(
+          balance.assetCode,
+          balance.assetIssuer,
+          balance.balance,
+        );
+
+        return {
+          assetCode: balance.assetCode,
+          assetIssuer: balance.assetIssuer,
+          amount: balance.balance,
+          value: valueUsd,
+          valueUsd,
+        };
+      }),
+    );
+
+    const totalValueUsd = assets.reduce(
+      (sum, asset) => sum + asset.valueUsd,
+      0,
+    );
+
+    return {
+      totalValue: totalValueUsd.toFixed(2),
+      currency: CurrencyCode.USD,
+      totalValueUsd: totalValueUsd.toFixed(2),
+      assets,
+      lastUpdated: new Date(),
+      hasLinkedAccount: true,
+      exchangeRate: 1,
+    };
+  }
+
   // /**
   //  * Get portfolio summary (latest snapshot) for the mobile dashboard
   //  * Returns total USD value and individual asset balances

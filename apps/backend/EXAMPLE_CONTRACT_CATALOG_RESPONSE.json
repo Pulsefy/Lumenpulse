@@ -1,0 +1,182 @@
+{
+  "environment": "development",
+  "apiVersion": "v1",
+  "catalogVersion": "1.0.0",
+  "generatedAt": "2026-06-28T10:00:00Z",
+  "contracts": [
+    {
+      "contractId": "lumen-token",
+      "displayName": "Lumen Token",
+      "version": "1.0.0",
+      "status": "active",
+      "category": "token",
+      "address": "CCOVDGHF3XQ5RAFY6DJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLDGXQJSB",
+      "supportedMethods": [
+        {
+          "name": "decimals",
+          "category": "read-only",
+          "description": "Returns the number of decimals used by the token",
+          "public": true
+        },
+        {
+          "name": "symbol",
+          "category": "read-only",
+          "description": "Returns the token symbol",
+          "public": true
+        },
+        {
+          "name": "balance",
+          "category": "read-only",
+          "description": "Returns the token balance for an account",
+          "public": true
+        },
+        {
+          "name": "transfer",
+          "category": "write",
+          "description": "Transfers tokens between accounts",
+          "public": true
+        },
+        {
+          "name": "approve",
+          "category": "write",
+          "description": "Approves token spending by another address",
+          "public": true
+        },
+        {
+          "name": "transfer_from",
+          "category": "write",
+          "description": "Transfers tokens on behalf of another account",
+          "public": true
+        }
+      ],
+      "network": "testnet",
+      "lastValidatedAt": "2026-06-28T10:00:00Z"
+    },
+    {
+      "contractId": "crowdfund-vault",
+      "displayName": "Crowdfund Vault",
+      "version": "1.0.0",
+      "status": "active",
+      "category": "vault",
+      "address": "CBBQW7T65XBDPIPXEIIPJVJEEIBSPC566HMEU2LTBAULLKCNUFRFBKRO",
+      "supportedMethods": [
+        {
+          "name": "get_admin",
+          "category": "read-only",
+          "description": "Returns the admin address for the vault",
+          "public": true
+        },
+        {
+          "name": "get_storage_version",
+          "category": "read-only",
+          "description": "Returns the storage version of the contract",
+          "public": true
+        },
+        {
+          "name": "contribute",
+          "category": "write",
+          "description": "Contribute funds to a crowdfunding project",
+          "public": true
+        },
+        {
+          "name": "withdraw",
+          "category": "write",
+          "description": "Withdraw funds from a completed crowdfunding project",
+          "public": true
+        },
+        {
+          "name": "get_contribution",
+          "category": "read-only",
+          "description": "Returns contribution details for an account",
+          "public": true
+        }
+      ],
+      "network": "testnet",
+      "lastValidatedAt": "2026-06-28T10:00:00Z"
+    },
+    {
+      "contractId": "project-registry",
+      "displayName": "Project Registry",
+      "version": "1.0.0",
+      "status": "active",
+      "category": "registry",
+      "address": "CBYFZU7C5TV2J56PEOXI5Q53HNFYFOW4USEBG4M6BCV7RUIMJI7JISLC",
+      "supportedMethods": [
+        {
+          "name": "get_admin",
+          "category": "read-only",
+          "description": "Returns the admin address for the registry",
+          "public": true
+        },
+        {
+          "name": "get_config",
+          "category": "read-only",
+          "description": "Returns the registry configuration",
+          "public": true
+        },
+        {
+          "name": "register_project",
+          "category": "write",
+          "description": "Registers a new project",
+          "public": true
+        },
+        {
+          "name": "update_project",
+          "category": "write",
+          "description": "Updates project metadata",
+          "public": true
+        },
+        {
+          "name": "get_project",
+          "category": "read-only",
+          "description": "Returns project details by ID",
+          "public": true
+        }
+      ],
+      "network": "testnet",
+      "lastValidatedAt": "2026-06-28T10:00:00Z"
+    },
+    {
+      "contractId": "contributor-registry",
+      "displayName": "Contributor Registry",
+      "version": "1.0.0",
+      "status": "active",
+      "category": "registry",
+      "address": "CCOVDGHF3XQ5RAFY6DJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLDGXQJSB",
+      "supportedMethods": [
+        {
+          "name": "get_multisig_config",
+          "category": "read-only",
+          "description": "Returns multisig configuration for the registry",
+          "public": true
+        },
+        {
+          "name": "register_contributor",
+          "category": "write",
+          "description": "Registers a new contributor",
+          "public": true
+        },
+        {
+          "name": "update_contributor",
+          "category": "write",
+          "description": "Updates contributor information",
+          "public": true
+        },
+        {
+          "name": "get_contributor",
+          "category": "read-only",
+          "description": "Returns contributor details by address",
+          "public": true
+        },
+        {
+          "name": "verify_contributor",
+          "category": "read-only",
+          "description": "Verifies if an address is a registered contributor",
+          "public": true
+        }
+      ],
+      "network": "testnet",
+      "lastValidatedAt": "2026-06-28T10:00:00Z"
+    }
+  ]
+}

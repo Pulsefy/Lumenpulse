@@ -10,6 +10,8 @@ import {
 export enum ExportType {
   PORTFOLIO_HISTORY = 'portfolio_history',
   TAX_TRANSACTIONS = 'tax_transactions',
+  ONCHAIN_ANALYTICS = 'onchain_analytics',
+  ROUND_ANALYTICS = 'round_analytics',
 }
 
 export enum ExportStatus {

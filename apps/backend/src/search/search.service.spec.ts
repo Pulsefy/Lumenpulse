@@ -16,7 +16,7 @@ describe('SearchService', () => {
   beforeEach(async () => {
     verificationService = { listProjects: jest.fn() };
     stellarService = { discoverAssets: jest.fn() };
-    newsRepo = { query: jest.fn() } as any;
+    newsRepo = { query: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -172,7 +172,7 @@ describe('SearchService', () => {
       const res = await service.searchAssets({
         minAccounts: 100,
         authRequired: false,
-      } as any);
+      });
       expect(res.assets).toHaveLength(1);
       expect(res.assets[0].assetCode).toBe('B');
     });

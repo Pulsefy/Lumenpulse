@@ -38,6 +38,7 @@ export class StellarService {
     this.cacheService.setCacheConfig({
       balanceCacheTTL: config.balanceCacheTTL,
       operationsCacheTTL: config.operationsCacheTTL,
+      contractReadTTL: 60_000,
     });
 
     this.logger.log(

@@ -1,0 +1,68 @@
+[
+  {
+    "project_id": 10001,
+    "milestone_id": 1,
+    "status": "rejected",
+    "approved_at": null,
+    "last_event_ledger": 200002,
+    "extra_data": {
+      "title": "Milestone 1 for pulse-project-1",
+      "description": "Synthetic milestone measuring community adoption and technical progress."
+    }
+  },
+  {
+    "project_id": 10001,
+    "milestone_id": 2,
+    "status": "approved",
+    "approved_at": "2026-06-20T16:36:07.653857+00:00",
+    "last_event_ledger": 200003,
+    "extra_data": {
+      "title": "Milestone 2 for pulse-project-1",
+      "description": "Synthetic milestone measuring community adoption and technical progress."
+    }
+  },
+  {
+    "project_id": 10001,
+    "milestone_id": 3,
+    "status": "rejected",
+    "approved_at": null,
+    "last_event_ledger": 200004,
+    "extra_data": {
+      "title": "Milestone 3 for pulse-project-1",
+      "description": "Synthetic milestone measuring community adoption and technical progress."
+    }
+  },
+  {
+    "project_id": 10002,
+    "milestone_id": 1,
+    "status": "rejected",
+    "approved_at": null,
+    "last_event_ledger": 200003,
+    "extra_data": {
+      "title": "Milestone 1 for pulse-project-2",
+      "description": "Synthetic milestone measuring community adoption and technical progress."
+    }
+  },
+  {
+    "project_id": 10002,
+    "milestone_id": 2,
+    "status": "approved",
+    "approved_at": "2026-06-13T16:36:07.653907+00:00",
+    "last_event_ledger": 200004,
+    "extra_data": {
+      "title": "Milestone 2 for pulse-project-2",
+      "description": "Synthetic milestone measuring community adoption and technical progress."
+    }
+  },
+  {
+    "project_id": 10002,
+    "milestone_id": 3,
+    "status": "pending",
+    "approved_at": null,
+    "last_event_ledger": 200005,
+    "extra_data": {
+      "title": "Milestone 3 for pulse-project-2",
+      "description": "Synthetic milestone measuring community adoption and technical progress."
+    }
+  }
+]

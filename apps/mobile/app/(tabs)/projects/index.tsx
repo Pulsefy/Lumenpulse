@@ -15,18 +15,24 @@ import { useLocalization } from '../../../src/context';
 import { CrowdfundProject, OnChainStatus } from '../../../lib/crowdfund';
 import { computeFundingProgress, formatTokenAmount } from '../../../lib/stellar';
 import { CachedApi } from '../../../lib/cached-api';
+import { ReportType } from '../../../lib/moderation';
+import ReportContentModal from '../../../components/ReportContentModal';
 
 // ── On-chain status chip ───────────────────────────────────────────────────
 
 const STATUS_META: Record<
   OnChainStatus,
-  { label: string; icon: React.ComponentProps<typeof Ionicons>['name']; colorKey: 'success' | 'warning' | 'danger' | 'accent' | 'textSecondary' }
+  {
+    label: string;
+    icon: React.ComponentProps<typeof Ionicons>['name'];
+    colorKey: 'success' | 'warning' | 'danger' | 'accent' | 'textSecondary';
+  }
 > = {
-  ACTIVE:    { label: 'Active',     icon: 'radio-button-on-outline',  colorKey: 'success' },
-  PAUSED:    { label: 'Paused',     icon: 'pause-circle-outline',     colorKey: 'warning' },
-  COMPLETED: { label: 'Completed',  icon: 'checkmark-circle-outline', colorKey: 'accent' },
-  CANCELLED: { label: 'Cancelled',  icon: 'close-circle-outline',     colorKey: 'danger' },
-  PENDING:   { label: 'Pending',    icon: 'time-outline',             colorKey: 'textSecondary' },
+  ACTIVE: { label: 'Active', icon: 'radio-button-on-outline', colorKey: 'success' },
+  PAUSED: { label: 'Paused', icon: 'pause-circle-outline', colorKey: 'warning' },
+  COMPLETED: { label: 'Completed', icon: 'checkmark-circle-outline', colorKey: 'accent' },
+  CANCELLED: { label: 'Cancelled', icon: 'close-circle-outline', colorKey: 'danger' },
+  PENDING: { label: 'Pending', icon: 'time-outline', colorKey: 'textSecondary' },
 };
 
 function OnChainBadge({
@@ -57,7 +63,10 @@ function ProgressBar({ progress, accentColor }: { progress: number; accentColor:
   return (
     <View style={styles.progressTrack} accessible accessibilityLabel={`${progress}% funded`}>
       <View
-        style={[styles.progressFill, { width: `${Math.min(progress, 100)}%`, backgroundColor: accentColor }]}
+        style={[
+          styles.progressFill,
+          { width: `${Math.min(progress, 100)}%`, backgroundColor: accentColor },
+        ]}
         accessibilityRole="progressbar"
         accessibilityValue={{ min: 0, max: 100, now: progress }}
       />
@@ -71,13 +80,16 @@ function ProjectCard({
   project,
   colors,
   onPress,
+  onReportPress,
 }: {
   project: CrowdfundProject;
   colors: ReturnType<typeof useTheme>['colors'];
   onPress: () => void;
+  onReportPress: () => void;
 }) {
   const progress = computeFundingProgress(project.totalDeposited, project.targetAmount);
-  const status: OnChainStatus = project.onChainStatus ?? (project.isActive ? 'ACTIVE' : 'COMPLETED');
+  const status: OnChainStatus =
+    project.onChainStatus ?? (project.isActive ? 'ACTIVE' : 'COMPLETED');
 
   return (
     <TouchableOpacity
@@ -89,10 +101,25 @@ function ProjectCard({
       accessibilityHint="Double tap to view project details"
     >
       <View style={styles.cardHeader}>
-        <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1} accessible accessibilityRole="header">
+        <Text
+          style={[styles.cardTitle, { color: colors.text }]}
+          numberOfLines={1}
+          accessible
+          accessibilityRole="header"
+        >
           {project.name}
         </Text>
         <OnChainBadge status={status} colors={colors} />
+        <TouchableOpacity
+          style={styles.cardReportButton}
+          onPress={onReportPress}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={`Report ${project.name}`}
+        >
+          <Ionicons name="flag-outline" size={16} color={colors.textSecondary} />
+        </TouchableOpacity>
       </View>
 
       <ProgressBar progress={progress} accentColor={colors.accent} />
@@ -138,30 +165,37 @@ export default function ProjectsScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fromCache, setFromCache] = useState(false);
+  const [reportTarget, setReportTarget] = useState<CrowdfundProject | null>(null);
 
-  const fetchProjects = useCallback(async (refresh = false) => {
-    if (refresh) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-    setError(null);
-
-    try {
-      const response = await CachedApi.getProjects();
-      if (response.success && response.data) {
-        setProjects(response.data as CrowdfundProject[]);
-        setFromCache(!!(response as { fromCache?: boolean }).fromCache);
+  const fetchProjects = useCallback(
+    async (refresh = false) => {
+      if (refresh) {
+        setIsRefreshing(true);
       } else {
-        setError((response.error as { message?: string })?.message ?? t('errors.couldnt_load', { item: 'projects' }));
+        setIsLoading(true);
       }
-    } catch {
-      setError(t('errors.something_went_wrong'));
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [t]);
+      setError(null);
+
+      try {
+        const response = await CachedApi.getProjects();
+        if (response.success && response.data) {
+          setProjects(response.data as CrowdfundProject[]);
+          setFromCache(!!(response as { fromCache?: boolean }).fromCache);
+        } else {
+          setError(
+            (response.error as { message?: string })?.message ??
+              t('errors.couldnt_load', { item: 'projects' }),
+          );
+        }
+      } catch {
+        setError(t('errors.something_went_wrong'));
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
     void fetchProjects(false);
@@ -176,13 +210,31 @@ export default function ProjectsScreen() {
           {[1, 2, 3].map((i) => (
             <View
               key={i}
-              style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}
+              style={[
+                styles.card,
+                { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+              ]}
               accessible
               accessibilityLabel="Loading project"
             >
-              <View style={[styles.skeleton, { width: '60%', height: 18, backgroundColor: colors.border }]} />
-              <View style={[styles.skeleton, { width: '100%', height: 8, marginTop: 16, backgroundColor: colors.border }]} />
-              <View style={[styles.skeleton, { width: '40%', height: 14, marginTop: 12, backgroundColor: colors.border }]} />
+              <View
+                style={[
+                  styles.skeleton,
+                  { width: '60%', height: 18, backgroundColor: colors.border },
+                ]}
+              />
+              <View
+                style={[
+                  styles.skeleton,
+                  { width: '100%', height: 8, marginTop: 16, backgroundColor: colors.border },
+                ]}
+              />
+              <View
+                style={[
+                  styles.skeleton,
+                  { width: '40%', height: 14, marginTop: 12, backgroundColor: colors.border },
+                ]}
+              />
             </View>
           ))}
         </View>
@@ -203,7 +255,11 @@ export default function ProjectsScreen() {
           accessible
           accessibilityLabel={t('errors.couldnt_load', { item: 'projects' })}
         />
-        <Text style={[styles.emptyTitle, { color: colors.text }]} accessible accessibilityRole="header">
+        <Text
+          style={[styles.emptyTitle, { color: colors.text }]}
+          accessible
+          accessibilityRole="header"
+        >
           {t('errors.couldnt_load', { item: 'projects' })}
         </Text>
         <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]} accessible>
@@ -216,7 +272,9 @@ export default function ProjectsScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('common.retry')}
         >
-          <Text style={styles.ctaButtonText} accessible>{t('common.retry')}</Text>
+          <Text style={styles.ctaButtonText} accessible>
+            {t('common.retry')}
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -227,7 +285,12 @@ export default function ProjectsScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {fromCache && (
-        <View style={[styles.offlineBanner, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View
+          style={[
+            styles.offlineBanner,
+            { backgroundColor: colors.surface, borderBottomColor: colors.border },
+          ]}
+        >
           <Ionicons name="cloud-offline-outline" size={14} color={colors.textSecondary} />
           <Text style={[styles.offlineBannerText, { color: colors.textSecondary }]}>
             Showing cached data
@@ -252,6 +315,7 @@ export default function ProjectsScreen() {
             project={item}
             colors={colors}
             onPress={() => router.push(`/projects/${item.id}`)}
+            onReportPress={() => setReportTarget(item)}
           />
         )}
         ListEmptyComponent={
@@ -274,6 +338,16 @@ export default function ProjectsScreen() {
         accessibilityLabel="Projects list"
         accessibilityRole="list"
       />
+
+      {reportTarget && (
+        <ReportContentModal
+          visible={!!reportTarget}
+          targetType={ReportType.PROJECT}
+          targetId={String(reportTarget.id)}
+          targetLabel={reportTarget.name}
+          onClose={() => setReportTarget(null)}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -328,6 +402,9 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     flex: 1,
+  },
+  cardReportButton: {
+    padding: 2,
   },
 
   // On-chain status badge

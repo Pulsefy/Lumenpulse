@@ -11,6 +11,8 @@ import { REQUEST_ID_HEADER } from '../common/constants/request.constants';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import { ErrorResponse } from '../interfaces/error-response.interface';
 import { resolveNodeEnv } from '../lib/config';
+import { mapSorobanRpcErrorToApi } from '../stellar/utils/soroban-error.mapper';
+import { SorobanRpcError } from '../stellar/services/soroban-rpc-client.service';
 
 type RequestWithRequestId = Request & { requestId?: string };
 
@@ -89,6 +91,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       };
     }
 
+    if (exception instanceof SorobanRpcError) {
+      const mapped = mapSorobanRpcErrorToApi(exception);
+      return {
+        code: mapped.code,
+        message: mapped.message,
+        details: mapped.details,
+        requestId,
+      };
+    }
+
     if (exception instanceof Error) {
       return {
         code: ErrorCode.SYS_INTERNAL_ERROR,
@@ -109,6 +121,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   private getStatus(exception: unknown): number {
     if (exception instanceof HttpException) {
       return exception.getStatus();
+    }
+
+    if (exception instanceof SorobanRpcError) {
+      return mapSorobanRpcErrorToApi(exception).status;
     }
 
     return HttpStatus.INTERNAL_SERVER_ERROR;

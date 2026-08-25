@@ -6,19 +6,22 @@ import {
   IsNumber,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsStellarAddress } from '../../common/validators/stellar.validators';
 
 export class CreateRoundDto {
   @ApiProperty({ example: 'Q3 2025 Matching Round' })
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'name is required' })
   name: string;
 
   @ApiProperty({
     example: 1000000,
     description: 'Total matching funds in stroops',
   })
-  @IsNumber()
-  @Min(1)
+  @Type(() => Number)
+  @IsNumber({}, { message: 'matchingFunds must be a number' })
+  @Min(1, { message: 'matchingFunds must be at least 1 stroop' })
   matchingFunds: number;
 
   @ApiPropertyOptional({ example: 'Optional round description' })
@@ -33,7 +36,10 @@ export class ApproveProjectDto {
     description: 'Stellar project address',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'projectAddress is required' })
+  @IsStellarAddress({
+    message: 'projectAddress must be a valid Stellar address (G...)',
+  })
   projectAddress: string;
 }
 

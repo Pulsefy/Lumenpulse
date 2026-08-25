@@ -1,6 +1,6 @@
-import { View, Text, TouchableOpacity } from "react-native";
-import { useRouter } from "expo-router";
-import { useNotifications } from "@/hooks/useNotifications";
+import { View, Text, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useNotifications } from '@/hooks/useNotifications';
 
 export const HeaderBell = () => {
   const router = useRouter();
@@ -9,24 +9,22 @@ export const HeaderBell = () => {
   const unreadCount = data.filter((n) => !n.read).length;
 
   return (
-    <TouchableOpacity onPress={() => router.push("/notifications")}>
+    <TouchableOpacity onPress={() => router.push('/notifications')}>
       <View>
         <Text>🔔</Text>
 
         {unreadCount > 0 && (
           <View
             style={{
-              position: "absolute",
+              position: 'absolute',
               top: -5,
               right: -5,
-              backgroundColor: "red",
+              backgroundColor: 'red',
               borderRadius: 10,
               paddingHorizontal: 6,
             }}
           >
-            <Text style={{ color: "#fff", fontSize: 10 }}>
-              {unreadCount}
-            </Text>
+            <Text style={{ color: '#fff', fontSize: 10 }}>{unreadCount}</Text>
           </View>
         )}
       </View>

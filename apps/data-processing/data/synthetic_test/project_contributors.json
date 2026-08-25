@@ -1,0 +1,42 @@
+[
+  {
+    "project_id": 10001,
+    "contributor": "GP7C5IDDPWCJP65C2QEFGQ5ROTIRBUY7HET7DKFUT5HNHUUTNCGMNACZ",
+    "total_contributed": 6753.45,
+    "first_contribution_ledger": 200002,
+    "last_contribution_ledger": 200003,
+    "extra_data": {
+      "handle": "contributor_10001_1"
+    }
+  },
+  {
+    "project_id": 10001,
+    "contributor": "G5VIMPS5XLECNLQZXXIF7PGQQHS2XQWKBNRHVMW2UD32WY6FD2U4TRO3",
+    "total_contributed": 4512.8,
+    "first_contribution_ledger": 200004,
+    "last_contribution_ledger": 200005,
+    "extra_data": {
+      "handle": "contributor_10001_2"
+    }
+  },
+  {
+    "project_id": 10002,
+    "contributor": "GDXBMSZJPFUHIYKTGA52PQ6V6ZP42XAH33AORZB2J3CWAZLMCJX2VRJ7",
+    "total_contributed": 6111.24,
+    "first_contribution_ledger": 200007,
+    "last_contribution_ledger": 200008,
+    "extra_data": {
+      "handle": "contributor_10002_1"
+    }
+  },
+  {
+    "project_id": 10002,
+    "contributor": "GPJF5BX5DIYZF3BWDS5CK77EGCYXNGRO6X767JHVB35VUQY3Y4ZAFOO2",
+    "total_contributed": 2875.82,
+    "first_contribution_ledger": 200009,
+    "last_contribution_ledger": 200010,
+    "extra_data": {
+      "handle": "contributor_10002_2"
+    }
+  }
+]

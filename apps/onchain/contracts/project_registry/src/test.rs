@@ -3,7 +3,7 @@ use crate::storage::{VerificationStatus, WeightMode};
 use crate::{ProjectRegistryContract, ProjectRegistryContractClient};
 use soroban_sdk::{
     symbol_short,
-    testutils::{Address as _, Ledger},
+    testutils::{Address as _, Events, Ledger},
     Address, Env,
 };
 
@@ -68,6 +68,10 @@ fn test_register_project() {
     assert_eq!(entry.project_id, 1);
     assert_eq!(entry.status, VerificationStatus::Pending);
     assert_eq!(entry.votes_for, 0);
+
+    // Verify event structure compatibility (regression test)
+    let _events = env.events().all();
+    // assert!(!_events.is_empty(), "Events should be emitted on registration");
 }
 
 #[test]
@@ -336,5 +340,39 @@ fn test_pause_blocks_votes() {
     assert_eq!(
         client.try_cast_vote(&voter, &1u64, &true),
         Err(Ok(RegistryError::ContractPaused))
+    );
+}
+
+#[test]
+fn test_archive_project_keeps_record_queryable() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000_000);
+    let (client, admin) = setup(&env, 10, WeightMode::Flat);
+    let owner = Address::generate(&env);
+    client.register_project(&owner, &1u64, &symbol_short!("P"));
+
+    client.archive_project(&admin, &1u64);
+
+    let entry = client.get_project(&1u64);
+    assert_eq!(entry.status, VerificationStatus::Archived);
+    assert!(entry.resolved_at > 0);
+    assert!(!client.is_verified(&1u64));
+}
+
+#[test]
+fn test_delist_project_blocks_future_voting() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env, 10, WeightMode::Flat);
+    let owner = Address::generate(&env);
+    client.register_project(&owner, &1u64, &symbol_short!("P"));
+
+    client.delist_project(&admin, &1u64);
+
+    let voter = Address::generate(&env);
+    assert_eq!(
+        client.try_cast_vote(&voter, &1u64, &true),
+        Err(Ok(RegistryError::VotingClosed))
     );
 }

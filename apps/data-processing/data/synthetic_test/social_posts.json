@@ -1,0 +1,56 @@
+[
+  {
+    "post_id": "synthetic_post_00001",
+    "platform": "reddit",
+    "content": "Users are discussing projected staking yields. #BTC #LumenPulse",
+    "author": "synthetic_user_1",
+    "url": "https://synthetic.social/reddit/00001",
+    "likes": 932,
+    "comments": 137,
+    "shares": 474,
+    "asset_codes": [
+      "BTC"
+    ],
+    "primary_asset": "BTC",
+    "hashtags": [
+      "BTC",
+      "LumenPulse",
+      "synthetic"
+    ],
+    "sentiment_score": 0.132,
+    "positive_score": 0.132,
+    "negative_score": 0.0,
+    "neutral_score": 0.868,
+    "sentiment_label": "neutral",
+    "posted_at": "2026-06-20T16:36:07.654147+00:00",
+    "fetched_at": "2026-06-23T16:36:07.654183+00:00",
+    "analyzed_at": "2026-06-23T16:36:07.654187+00:00"
+  },
+  {
+    "post_id": "synthetic_post_00002",
+    "platform": "twitter",
+    "content": "A new dApp proposal is driving positive momentum. #BTC #LumenPulse",
+    "author": "synthetic_user_2",
+    "url": "https://synthetic.social/twitter/00002",
+    "likes": 118,
+    "comments": 1,
+    "shares": 193,
+    "asset_codes": [
+      "BTC"
+    ],
+    "primary_asset": "BTC",
+    "hashtags": [
+      "BTC",
+      "LumenPulse",
+      "synthetic"
+    ],
+    "sentiment_score": 0.582,
+    "positive_score": 0.582,
+    "negative_score": 0.0,
+    "neutral_score": 0.418,
+    "sentiment_label": "positive",
+    "posted_at": "2026-06-19T14:36:07.654193+00:00",
+    "fetched_at": "2026-06-23T16:36:07.654246+00:00",
+    "analyzed_at": "2026-06-23T16:36:07.654251+00:00"
+  }
+]

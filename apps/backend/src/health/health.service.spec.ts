@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 import { CacheService } from '../cache/cache.service';
 import { StellarService } from '../stellar/stellar.service';
 import { HealthService } from './health.service';
+import { LatencyBudgetHealthService } from './latency-budget.health.service';
 
 describe('HealthService', () => {
   let service: HealthService;
@@ -13,6 +14,9 @@ describe('HealthService', () => {
   let cacheService: { checkHealth: jest.Mock };
   let stellarService: { checkHealth: jest.Mock };
   let httpService: { get: jest.Mock };
+  let latencyBudgetHealthService: {
+    getLatencyBudgetReport: jest.Mock;
+  };
 
   const mockHealthIndicatorService = {
     check: jest.fn((key: string) => ({
@@ -23,6 +27,12 @@ describe('HealthService', () => {
         [key]: { status: 'down', ...data },
       }),
     })),
+  };
+
+  const okLatencyReport = {
+    overallState: 'ok' as const,
+    checkedAt: new Date().toISOString(),
+    dependencies: [],
   };
 
   beforeEach(async () => {
@@ -37,6 +47,9 @@ describe('HealthService', () => {
     };
     httpService = {
       get: jest.fn(),
+    };
+    latencyBudgetHealthService = {
+      getLatencyBudgetReport: jest.fn().mockResolvedValue(okLatencyReport),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -62,11 +75,20 @@ describe('HealthService', () => {
           provide: HttpService,
           useValue: httpService,
         },
+        {
+          provide: LatencyBudgetHealthService,
+          useValue: latencyBudgetHealthService,
+        },
       ],
     }).compile();
 
     service = module.get<HealthService>(HealthService);
     jest.clearAllMocks();
+
+    // Re-apply the default latency mock after clearAllMocks
+    latencyBudgetHealthService.getLatencyBudgetReport.mockResolvedValue(
+      okLatencyReport,
+    );
   });
 
   it('returns healthy when all critical and non-critical checks pass', async () => {
@@ -83,6 +105,8 @@ describe('HealthService', () => {
     expect(report.details.redis.status).toBe('up');
     expect(report.details.horizon.status).toBe('up');
     expect(report.details.externalApis.status).toBe('up');
+    expect(report.latencyBudget).toBeDefined();
+    expect(report.latencyBudget.overallState).toBe('ok');
   });
 
   it('returns degraded when a non-critical dependency fails', async () => {
@@ -138,5 +162,43 @@ describe('HealthService', () => {
         message: 'One or more external APIs are unavailable',
       }),
     );
+  });
+
+  // ── Latency budget integration ─────────────────────────────────────────────
+
+  it('returns status=error and summary=down when latency is hard_down', async () => {
+    dataSource.query.mockResolvedValue([{ '?column?': 1 }]);
+    cacheService.checkHealth.mockResolvedValue(true);
+    stellarService.checkHealth.mockResolvedValue(true);
+    httpService.get.mockReturnValue(of({ data: {} }));
+    latencyBudgetHealthService.getLatencyBudgetReport.mockResolvedValue({
+      overallState: 'hard_down',
+      checkedAt: new Date().toISOString(),
+      dependencies: [],
+    });
+
+    const report = await service.getHealthReport();
+
+    expect(report.status).toBe('error');
+    expect(report.summary).toBe('down');
+    expect(report.latencyBudget.overallState).toBe('hard_down');
+  });
+
+  it('returns status=ok and summary=degraded when latency is degraded', async () => {
+    dataSource.query.mockResolvedValue([{ '?column?': 1 }]);
+    cacheService.checkHealth.mockResolvedValue(true);
+    stellarService.checkHealth.mockResolvedValue(true);
+    httpService.get.mockReturnValue(of({ data: {} }));
+    latencyBudgetHealthService.getLatencyBudgetReport.mockResolvedValue({
+      overallState: 'degraded',
+      checkedAt: new Date().toISOString(),
+      dependencies: [],
+    });
+
+    const report = await service.getHealthReport();
+
+    expect(report.status).toBe('ok');
+    expect(report.summary).toBe('degraded');
+    expect(report.latencyBudget.overallState).toBe('degraded');
   });
 });

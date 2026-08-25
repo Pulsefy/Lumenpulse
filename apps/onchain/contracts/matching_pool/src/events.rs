@@ -53,6 +53,7 @@ pub struct RoundFinalizedEvent {
     #[topic]
     pub round_id: u64,
     pub admin: Address,
+    pub finalized_at: u64,
 }
 
 #[contractevent]
@@ -68,4 +69,32 @@ pub struct AllMatchesDistributedEvent {
     #[topic]
     pub round_id: u64,
     pub total_distributed: i128,
+}
+
+#[contractevent]
+pub struct RoundCapUpdatedEvent {
+    #[topic]
+    pub admin: Address,
+    #[topic]
+    pub round_id: u64,
+    pub cap: i128,
+}
+
+/// Emitted whenever the pause state of a specific scope changes.
+///
+/// `scope` identifies which subsystem was affected:
+///  - `1` → Contribution (fund_pool, record_contribution)
+///  - `2` → Payout (distribute_matching_funds)
+///  - `3` → Governance (create_round, finalize_round, approve/remove project, …)
+///
+/// `paused` is the **new** state after the call.
+#[contractevent]
+pub struct ScopePauseChangedEvent {
+    #[topic]
+    pub admin: Address,
+    /// Numeric discriminant of `PauseScope`.
+    pub scope: u32,
+    /// `true` = scope is now paused; `false` = scope is now unpaused.
+    pub paused: bool,
+    pub timestamp: u64,
 }

@@ -71,6 +71,90 @@ class TestCacheManager(unittest.TestCase):
         self.assertEqual(k, "BTC|7d")
 
 
+class TestCacheKeying(unittest.TestCase):
+    """Tests for content-hash + model-version cache keying (#1251)."""
+
+    def test_key_contains_content_hash_and_model_version(self):
+        key = SentimentAnalyzer._cache_key_for("Bitcoin is great", None)
+        parts = key.split("|")
+        self.assertEqual(len(parts), 3)
+        # First part is the sha256 content hash of the text.
+        self.assertEqual(len(parts[0]), 64)
+        self.assertTrue(all(c in "0123456789abcdef" for c in parts[0]))
+        # Second part is a non-empty model version label.
+        self.assertTrue(parts[1])
+
+    def test_same_text_same_key_different_text_different_key(self):
+        key1 = SentimentAnalyzer._cache_key_for("Bitcoin is great", None)
+        key1_again = SentimentAnalyzer._cache_key_for("Bitcoin is great", None)
+        key2 = SentimentAnalyzer._cache_key_for("Bitcoin is bad", None)
+        self.assertEqual(key1, key1_again)
+        self.assertNotEqual(key1, key2)
+
+    def test_asset_filter_is_part_of_key(self):
+        key_no_asset = SentimentAnalyzer._cache_key_for("Bitcoin is great", None)
+        key_asset = SentimentAnalyzer._cache_key_for("Bitcoin is great", "XLM")
+        self.assertNotEqual(key_no_asset, key_asset)
+        self.assertTrue(key_asset.endswith("|XLM"))
+
+
+class TestCacheManagerDisabled(unittest.TestCase):
+    """The cache can be switched off by configuration (#1251)."""
+
+    def test_disabled_cache_is_a_noop(self):
+        cache = CacheManager(namespace="test_disabled", enabled=False)
+        self.assertFalse(cache.enabled)
+        self.assertIsNone(cache.redis_client)
+        self.assertIsNone(cache.get("anything"))
+        self.assertFalse(cache.set("anything", {"a": 1}))
+        self.assertFalse(cache.delete("anything"))
+        self.assertEqual(cache.clear_namespace(), 0)
+        self.assertFalse(cache.ping())
+        self.assertIsNone(cache.hit_rate())
+
+
+class TestCacheMetrics(unittest.TestCase):
+    """Cache hit/miss accounting and exported hit rate (#1251)."""
+
+    def test_hit_rate_tracks_hits_and_misses(self):
+        from unittest import mock
+
+        import cache_manager as cm
+
+        class FakeRedis:
+            def __init__(self, *args, **kwargs):
+                self.store = {}
+
+            def ping(self):
+                return True
+
+            def get(self, key):
+                return self.store.get(key)
+
+            def setex(self, key, ttl, value):
+                self.store[key] = value
+                return True
+
+            def delete(self, *keys):
+                return len(keys)
+
+            def scan_iter(self, match=None):
+                return iter(self.store)
+
+        with mock.patch.object(cm.redis, "Redis", FakeRedis):
+            cache = cm.CacheManager(namespace="test_metrics", ttl_seconds=60)
+
+            self.assertIsNone(cache.get("missing"))
+            self.assertEqual(cache.hit_rate(), 0.0)
+
+            self.assertTrue(cache.set("present", {"compound_score": 0.5}))
+            self.assertEqual(cache.get("present"), {"compound_score": 0.5})
+            self.assertEqual(cache.hit_rate(), 0.5)
+
+            self.assertEqual(cache.get("present"), {"compound_score": 0.5})
+            self.assertAlmostEqual(cache.hit_rate(), 2 / 3)
+
+
 class TestSentimentAnalyzerWithCache(unittest.TestCase):
     """Test cases for SentimentAnalyzer with caching"""
 

@@ -44,29 +44,25 @@ export class ConfigService {
       networkPassphrase: NETWORK_PASSPHRASES[network],
       contracts: {
         lumenToken:
-          (overrides.lumenToken as string | undefined) ??
-          config.stellar.contracts.lumenToken ??
-          null,
+          overrides.lumenToken ?? config.stellar.contracts.lumenToken ?? null,
         crowdfundVault:
-          (overrides.crowdfundVault as string | undefined) ??
+          overrides.crowdfundVault ??
           config.stellar.contracts.crowdfundVault ??
           null,
         projectRegistry:
-          (overrides.projectRegistry as string | undefined) ??
+          overrides.projectRegistry ??
           config.stellar.contracts.projectRegistry ??
           null,
         contributorRegistry:
-          (overrides.contributorRegistry as string | undefined) ??
+          overrides.contributorRegistry ??
           config.stellar.contracts.contributorRegistry ??
           null,
         matchingPool:
-          (overrides.matchingPool as string | undefined) ??
+          overrides.matchingPool ??
           config.stellar.contracts.matchingPool ??
           null,
         treasury:
-          (overrides.treasury as string | undefined) ??
-          config.stellar.contracts.treasury ??
-          null,
+          overrides.treasury ?? config.stellar.contracts.treasury ?? null,
       },
     };
   }

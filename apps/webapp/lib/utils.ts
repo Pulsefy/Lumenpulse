@@ -19,13 +19,20 @@ export const formatNumber = (num: number) => {
 };
 
 // Stellar explorer URL helpers
-const STELLAR_EXPERT_BASE = "https://stellar.expert/explorer";
+// Override via NEXT_PUBLIC_STELLAR_EXPLORER_URL to switch explorer (e.g. stellar.expert, steexp.com).
+// Must be the base path before the /{network}/{type}/{id} segments.
+const STELLAR_EXPLORER_BASE =
+  process.env.NEXT_PUBLIC_STELLAR_EXPLORER_URL ?? "https://stellar.expert/explorer";
 
+/** Destination types supported by the Stellar explorer. */
+export type ExplorerDestination = "tx" | "account" | "contract";
+
+/** Build a Stellar explorer URL for transactions, accounts, or Soroban contracts. */
 export function getExplorerUrl(
-  type: "tx" | "account",
+  type: ExplorerDestination,
   id: string,
   network: "testnet" | "mainnet" = "testnet"
 ): string {
   const net = network === "mainnet" ? "public" : "testnet";
-  return `${STELLAR_EXPERT_BASE}/${net}/${type}/${id}`;
+  return `${STELLAR_EXPLORER_BASE}/${net}/${type}/${id}`;
 }

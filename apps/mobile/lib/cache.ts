@@ -155,6 +155,11 @@ export const CACHE_CONFIGS = {
     staleWhileRevalidate: true,
     maxAge: 60 * 60 * 1000, // 1 hour max — list is safe to serve stale offline
   },
+  GRANTS: {
+    ttl: 5 * 60 * 1000, // 5 minutes
+    staleWhileRevalidate: true,
+    maxAge: 60 * 60 * 1000, // 1 hour max — rounds change infrequently
+  },
 } as const;
 
 export const cache = CacheManager.getInstance();

@@ -77,6 +77,7 @@ export class FeatureFlagsController {
       body.key,
       body.enabled,
       body.conditions ?? undefined,
+      body.changedBy,
     );
   }
 

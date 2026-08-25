@@ -63,9 +63,11 @@
     "transactions": "Transactions",
     "news": "News",
     "settings": "Settings",
+    "watchlist": "Watchlist",
     "notifications": "Notifications",
     "manage_accounts": "Manage Accounts",
     "notification_settings": "Notification Settings",
+    "contributor_profile": "Contributor Profile",
     "cache": "Cache"
   },
   "home": {
@@ -115,6 +117,8 @@
     "amount_label": "Contribution amount in XLM",
     "estimated_fee": "Estimated network fee: ~{{amount}} XLM",
     "disclaimer": "This is an on-chain transaction on the Stellar network. Contributions are non-refundable unless the project is cancelled.",
+    "amount_hint": "Enter an amount using up to {{decimals}} decimal places. Minimum {{min}} XLM.",
+    "clear_amount": "Clear amount",
     "submit": "Confirm Contribution",
     "submitting": "Submitting...",
     "done": "Done",
@@ -122,6 +126,34 @@
     "success_message": "You contributed {{amount}} XLM to {{project}}.",
     "failed": "Contribution Failed",
     "transaction_hash": "Transaction Hash"
+  },
+  "contribution_draft": {
+    "banner_title": "Unfinished contribution",
+    "banner_body": "You started contributing {{amount}} XLM to {{project}}.",
+    "saved_at": "Saved {{date}}",
+    "resume": "Resume",
+    "discard": "Discard",
+    "restored_notice": "Draft restored — review the amount and confirm when you're ready.",
+    "stale_notice": "This saved draft has expired and can no longer be resumed.",
+    "invalid_amount_notice": "This draft's amount is no longer valid and cannot be resumed.",
+    "config_missing_notice": "Testnet configuration is unavailable, so this draft can't be resumed right now."
+  },
+  "report_modal": {
+    "title": "Report Content",
+    "category_label": "What's the issue?",
+    "reason_label": "Additional details (optional)",
+    "reason_placeholder": "Add any context that could help our moderation team",
+    "category_spam": "Spam",
+    "category_fraud": "Fraud or scam",
+    "category_misleading": "Misleading info",
+    "category_inappropriate": "Inappropriate content",
+    "category_copyright": "Copyright violation",
+    "category_other": "Other",
+    "submit": "Submit Report",
+    "submitting": "Submitting...",
+    "success_title": "Report Submitted",
+    "success_body": "Thank you. Our moderation team will review this submission.",
+    "generic_error": "Failed to submit report. Please try again."
   },
   "grants": {
     "title": "Grants Rounds",
@@ -153,7 +185,10 @@
     "of_pool": "of pool",
     "contributors": "contributors",
     "contributed": "contributed",
-    "estimated_allocations": "Estimated Allocations"
+    "estimated_allocations": "Estimated Allocations",
+    "funding_progress": "Funding progress",
+    "milestones": "Milestones",
+    "no_eligible_projects": "No eligible projects have been added to this round yet."
   },
   "news": {
     "title": "News",
@@ -175,6 +210,16 @@
     "read": "Read",
     "mark_as_read": "Tap to mark as read"
   },
+  "watchlist": {
+    "title": "Watchlist",
+    "empty_title": "Your watchlist is empty",
+    "empty_subtitle": "Star assets from the Discover tab to track them here",
+    "remove": "Remove from watchlist",
+    "conflict_banner": "Some items have sync conflicts. Pull to refresh.",
+    "rollback_banner": "Some items were reverted to server state. Pull to refresh.",
+    "syncing_banner": "Changes will sync when you're back online.",
+    "last_synced": "Last synced: {{time}}"
+  },
   "discover": {
     "title": "Discover",
     "search_placeholder": "Search by name or code…",
@@ -186,7 +231,9 @@
     "price": "Price / 24h",
     "asset": "Asset",
     "search_label": "Search assets",
-    "asset_hint": "Double tap to view asset details"
+    "asset_hint": "Double tap to view asset details",
+    "add_to_watchlist": "Add to watchlist",
+    "remove_from_watchlist": "Remove from watchlist"
   },
   "portfolio": {
     "title": "Portfolio",
@@ -216,6 +263,10 @@
   "settings": {
     "title": "Settings",
     "account_preferences": "Account & Preferences",
+    "contributor_profile": {
+      "title": "Contributor Profile & Verification",
+      "description": "View linked wallet status, verification progress, and key account details."
+    },
     "appearance": "Appearance",
     "app_info": "App Info",
     "manage_accounts": {
@@ -254,7 +305,11 @@
       "news_alerts": "News Alerts",
       "news_alerts_desc": "Breaking ecosystem and market headlines relevant to your portfolio.",
       "security_alerts": "Security Alerts",
-      "security_alerts_desc": "Critical account, phishing, and suspicious-activity notices."
+      "security_alerts_desc": "Critical account, phishing, and suspicious-activity notices.",
+      "grant_alerts": "Grant Alerts",
+      "grant_alerts_desc": "Notifications about new grant rounds, round starts, and deadline reminders.",
+      "contribution_alerts": "Contribution Alerts",
+      "contribution_alerts_desc": "Updates on your contributions, matching status, and contribution confirmations."
     },
     "theme": {
       "system": "System",
@@ -286,7 +341,45 @@
     "environment_production": "Production",
     "environment_contributor": "Contributor Build",
     "platform": "Platform",
-    "logout": "Log Out"
+    "logout": "Log Out",
+    "status_info": {
+      "title": "Status & Release Notes",
+      "description": "View environment details and recent changes",
+      "active_env": "Active Environment",
+      "api_url": "API Base URL",
+      "stellar_net": "Stellar Network",
+      "soroban_rpc": "Soroban RPC URL",
+      "contract_id": "Contract ID",
+      "network_status": "Network Connection",
+      "online": "Online",
+      "offline": "Offline",
+      "last_checked": "Last checked: {{time}}",
+      "notes_title": "Release Notes",
+      "no_notes": "Release metadata is currently unavailable.",
+      "version_prefix": "Version {{version}}",
+      "published": "Published: {{date}}",
+      "testing": "Testing..."
+    }
+  },
+  "transaction_receipt": {
+    "title": "Transaction Receipt",
+    "status_success": "Transaction Confirmed",
+    "status_failed": "Transaction Failed",
+    "status_pending": "Transaction Pending",
+    "hash": "Transaction Hash",
+    "status": "Status",
+    "timestamp": "Timestamp",
+    "type": "Type",
+    "amount": "Amount",
+    "network": "Network",
+    "testnet": "Stellar Testnet",
+    "view_explorer": "View on Stellar Explorer",
+    "copy_hash": "Copy Hash",
+    "hash_copied": "Hash copied",
+    "done": "Done",
+    "back": "Back",
+    "error_detail": "Error Details",
+    "no_hash": "Hash not available"
   },
   "errors": {
     "something_went_wrong": "Something went wrong. Please try again.",
@@ -298,5 +391,85 @@
     "couldnt_load": "Couldn't load {{item}}",
     "could_not_remove": "Could not remove",
     "could_not_update": "Could not update"
+  },
+  "contributor_profile": {
+    "title": "Contributor Center",
+    "subtitle": "Identity, wallet status, and verification progress",
+    "identity_section": "Contributor Identity",
+    "wallet_section": "Linked Wallet Context",
+    "verification_section": "Verification & Review Progress",
+    "account_section": "Account & Platform Details",
+    "not_found_title": "No Contributor Profile Found",
+    "not_found_desc": "No on-chain contributor record or linked wallet was found for this account. Connect a wallet or register your identity to activate your profile.",
+    "no_wallet_title": "No Wallet Linked",
+    "no_wallet_desc": "Connect your Stellar wallet to view linked status and verification progress.",
+    "connect_wallet": "Connect Wallet",
+    "manage_wallets": "Manage Linked Wallets",
+    "register_identity": "Register Identity",
+    "copy_address": "Copy Public Key",
+    "address_copied": "Public key copied to clipboard",
+    "reputation_score": "Reputation Score",
+    "tier": "Tier",
+    "github_handle": "GitHub Handle",
+    "registered_date": "Registered Date",
+    "quorum_progress": "Quorum Approval Progress",
+    "quorum_votes": "{{votesFor}} / {{quorumThreshold}} Votes",
+    "verification_checklist": "Verification Requirements Checklist",
+    "status": {
+      "verified": "Lumenpulse Verified",
+      "pending": "Pending Verification Review",
+      "rejected": "Verification Rejected",
+      "archived": "Archived Identity",
+      "unregistered": "Unregistered Identity"
+    }
+  },
+  "wallet": {
+    "connect": {
+      "title": "Connect Wallet",
+      "message": "Connect a Stellar wallet to {{network}}. This will open your wallet app to authorize the connection.",
+      "continue_button": "Open Wallet App",
+      "error_title": "Connection Failed",
+      "error_message": "Could not connect the wallet."
+    },
+    "reconnect": {
+      "title": "Reconnect to {{network}}",
+      "message": "Restore your saved wallet session on the new {{network}} network. Choose how you want to reconnect.",
+      "button": "Reconnect Wallet",
+      "restoring": "Restoring wallet session\u2026"
+    },
+    "network_mismatch": {
+      "title": "Network Changed",
+      "message": "Your saved wallet was for a different network. Reconnect to {{network}} to continue.",
+      "last_network_label": "Last connected on {{network}}"
+    },
+    "restore_failed": {
+      "title": "Wallet Restore Failed",
+      "message": "We couldn't safely restore your saved wallet. The stale session has been cleared.",
+      "button": "Try Again"
+    },
+    "status": {
+      "disconnected": "Disconnected",
+      "connecting": "Connecting",
+      "reconnecting": "Reconnecting",
+      "connected": "Connected",
+      "network_mismatch": "Reconnect Required",
+      "restore_failed": "Restore Failed",
+      "rejected": "Rejected"
+    },
+    "sign": {
+      "title": "Sign Transaction",
+      "message": "A transaction requires your signature. This will open your wallet app.",
+      "error_failed": "The wallet reported a signing failure.",
+      "error_unknown": "Unexpected wallet response.",
+      "error_timeout": "Wallet did not respond in time. Please try again.",
+      "error_concurrent": "A signing request is already in progress."
+    },
+    "error": {
+      "not_available": "This wallet option is not available right now.",
+      "missing_wallet": "No Stellar wallet app found. Install a compatible wallet and try again.",
+      "unsupported_device": "This device cannot open the wallet app.",
+      "rejected": "Wallet connection was rejected.",
+      "unknown": "Something went wrong with the wallet. Please try again."
+    }
   }
 }

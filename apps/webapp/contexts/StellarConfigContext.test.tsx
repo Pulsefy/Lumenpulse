@@ -101,6 +101,42 @@ describe('StellarConfigProvider', () => {
   })
 
 
+  it('transitions to error with descriptive message when network is unsupported', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ ...MOCK_CONFIG, network: 'devnet' }),
+        { status: 200 }
+      )
+    )
+    render(
+      <StellarConfigProvider>
+        <TestConsumer />
+      </StellarConfigProvider>
+    )
+    await act(async () => { await vi.runAllTimersAsync() })
+    await waitFor(() =>
+      expect(screen.getByTestId('status').textContent).toBe('error')
+    )
+    expect(screen.getByTestId('error').textContent).toMatch(/unsupported environment/i)
+  })
+
+  it('transitions to error with descriptive message when contracts are missing', async () => {
+    const { contracts: _contracts, ...withoutContracts } = MOCK_CONFIG
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(withoutContracts), { status: 200 })
+    )
+    render(
+      <StellarConfigProvider>
+        <TestConsumer />
+      </StellarConfigProvider>
+    )
+    await act(async () => { await vi.runAllTimersAsync() })
+    await waitFor(() =>
+      expect(screen.getByTestId('status').textContent).toBe('error')
+    )
+    expect(screen.getByTestId('error').textContent).toMatch(/contract configuration is missing/i)
+  })
+
   it('does not update state after unmount', async () => {
     vi.mocked(fetch).mockReturnValue(new Promise(() => {}))
     const { unmount } = render(

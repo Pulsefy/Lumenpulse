@@ -2,7 +2,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Queue } from 'bullmq';
+import { Queue, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { PortfolioAsset } from './portfolio-asset.entity';
 import { PortfolioSnapshot } from './entities/portfolio-snapshot.entity';
@@ -25,6 +25,9 @@ import { StellarModule } from '../stellar/stellar.module';
 import { PriceModule } from '../price/price.module';
 import { MaterializedSnapshotService } from './materialized-snapshot.service';
 import { ProfilingModule } from '../common/profiling/profiling.module';
+import { PortfolioAnomaly } from './entities/portfolio-anomaly.entity';
+import { PortfolioAnomalyService } from './portfolio-anomaly.service';
+import { PortfolioAnomalyController } from './portfolio-anomaly.controller';
 
 @Module({
   imports: [
@@ -32,6 +35,7 @@ import { ProfilingModule } from '../common/profiling/profiling.module';
       PortfolioAsset,
       PortfolioSnapshot,
       PortfolioMaterializedSnapshot,
+      PortfolioAnomaly,
       User,
     ]),
     MetricsModule,
@@ -40,9 +44,10 @@ import { ProfilingModule } from '../common/profiling/profiling.module';
     PriceModule,
     ProfilingModule,
   ],
-  controllers: [PortfolioController],
+  controllers: [PortfolioController, PortfolioAnomalyController],
   providers: [
     PortfolioService,
+    PortfolioAnomalyService,
     MaterializedSnapshotService,
     StellarBalanceService,
     PortfolioSnapshotProgressStore,
@@ -65,7 +70,8 @@ import { ProfilingModule } from '../common/profiling/profiling.module';
       provide: PORTFOLIO_SNAPSHOT_QUEUE,
       useFactory: (connection: Redis) =>
         new Queue(PORTFOLIO_SNAPSHOT_QUEUE_NAME, {
-          connection,
+          // BullMQ's ConnectionOptions can resolve to a different bundled ioredis type.
+          connection: connection as unknown as ConnectionOptions,
           defaultJobOptions: {
             removeOnComplete: true,
             removeOnFail: false,
@@ -76,6 +82,7 @@ import { ProfilingModule } from '../common/profiling/profiling.module';
   ],
   exports: [
     PortfolioService,
+    PortfolioAnomalyService,
     MaterializedSnapshotService,
     PortfolioSnapshotQueueService,
     TypeOrmModule,

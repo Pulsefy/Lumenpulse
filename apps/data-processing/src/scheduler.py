@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 Job scheduler module - schedules and manages background jobs
 """
 
+import os
 from src.utils.logger import setup_logger
 from src.utils.metrics import JOBS_RUN_TOTAL
 from datetime import datetime
@@ -18,6 +20,16 @@ from anomaly_detector import AnomalyDetector, AnomalyResult
 from alertbot import AlertBot
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
 from src.ingestion.run_ingestion_quality_checks import main as run_ingestion_quality_checks
+from src.analytics.project_verification_trend import (
+    ProjectVerificationTrendAnalyzer,
+    VerificationRecord,
+)
+from src.db.postgres_service import PostgresService
+from src.ingestion.rpc_benchmark import RPCProviderBenchmark
+from src.round_analyzer import _round_analyzer_job
+from src.metadata_drift_detector import MetadataDriftDetector
+from src.kpi_reconciliation import KPIReconciler
+
 
 
 logger = setup_logger(__name__)
@@ -193,6 +205,196 @@ def _ingestion_quality_checks_job() -> None:
         logger.error(f"Ingestion quality checks failed: {e}", exc_info=True)
 
 
+def _ingestion_alerting_job() -> None:
+    """Evaluate indexer lag metrics and emit log-based alerts (#745)."""
+    try:
+        from src.ingestion.ingestion_alerting import run_ingestion_alerting_cycle
+
+        result = run_ingestion_alerting_cycle()
+        suppressed = result.get("suppressed_alerts", [])
+        engine_stats = result.get("suppression_engine_stats", {})
+        logger.info(
+            "Ingestion alerting cycle complete | healthy=%s | metrics=%d | "
+            "lag_alerts=%d | suppressed=%d | rules=%d",
+            result.get("healthy"),
+            len(result.get("metrics", [])),
+            len(result.get("lag_alerts", [])),
+            len(suppressed),
+            len(engine_stats.get("rules", [])),
+        )
+        if suppressed:
+            logger.info(
+                "ALERT_SUPPRESSION suppressed=%d aler-types=%s",
+                len(suppressed),
+                [s.get("alert_type") for s in suppressed[:5]],
+            )
+    except Exception as exc:
+        logger.error("Ingestion alerting job failed: %s", exc, exc_info=True)
+
+
+def _project_verification_trend_job() -> None:
+    """Scheduled wrapper for ProjectVerificationTrendAnalyzer (#885).
+
+    Runs analysis over any buffered verification records and logs the result.
+    Errors are caught so the scheduler keeps running.
+    """
+    try:
+        analyzer = ProjectVerificationTrendAnalyzer()
+        result = analyzer.analyze()
+        logger.info(
+            "Project verification trend: direction=%s approval=%.1f%% total=%d",
+            result.trend_direction,
+            result.approval_rate * 100,
+            result.total,
+        )
+    except Exception as exc:
+        logger.error("Project verification trend job failed: %s", exc, exc_info=True)
+
+
+def _rpc_provider_benchmark_job() -> None:
+    """Scheduled wrapper for RPCProviderBenchmark (#884).
+
+    Probes all configured Stellar RPC/Horizon providers and logs the winner.
+    Errors are caught so the scheduler keeps running.
+    """
+    try:
+        bench = RPCProviderBenchmark()
+        report = bench.run()
+        logger.info("RPC benchmark best provider: %s", report.best_provider)
+    except Exception as exc:
+        logger.error("RPC provider benchmark job failed: %s", exc, exc_info=True)
+
+def _contributor_reputation_snapshot_job() -> None:
+    """Scheduled wrapper for building contributor reputation snapshots.
+
+    Builds top-N contributor snapshots for all known projects and persists
+    them for downstream leaderboards and reputation queries.
+    """
+    try:
+        service = PostgresService()
+        saved_count = service.build_all_project_contributor_reputation_snapshots(
+            top_n=int(os.getenv("REPUTATION_SNAPSHOT_TOP_N", "100")),
+        )
+        logger.info(
+            "Contributor reputation snapshot job completed: %d snapshots persisted",
+            saved_count,
+        )
+    except Exception as exc:
+        logger.error(
+            f"Contributor reputation snapshot job failed: {exc}",
+            exc_info=True,
+        )
+
+
+def _metadata_drift_detector_job() -> None:
+    """Scheduled wrapper for MetadataDriftDetector (#882).
+
+    Recomputes chain-derived project/milestone state from the ContractEvent
+    log and diffs it against ProjectView/ProjectMilestone. Read-only with
+    respect to source data — findings are persisted separately for review.
+    Errors are caught so the scheduler keeps running.
+    """
+    try:
+        detector = MetadataDriftDetector()
+        report = detector.run_and_persist(
+            limit=int(os.getenv("METADATA_DRIFT_PROJECT_LIMIT", "500"))
+        )
+        logger.info(
+            "Metadata drift detection: projects_checked=%d projects_with_drift=%d findings=%d",
+            report.projects_checked,
+            report.projects_with_drift,
+            len(report.findings),
+        )
+    except Exception as exc:
+        logger.error(f"Metadata drift detector job failed: {exc}", exc_info=True)
+
+
+def _feature_drift_detection_job() -> None:
+    """Scheduled wrapper for FeatureDriftDetector (#1239).
+
+    Compares the current serving feature distribution against the training-time
+    baseline recorded with the live price-predictor model and raises an alert
+    through the existing alerting path when any feature drifts beyond the
+    configured PSI threshold (or the feature schema version/fingerprint no
+    longer matches). Read-only; errors are caught so the scheduler keeps running.
+    """
+    try:
+        from src.ml.feature_drift_detector import FeatureDriftDetector
+
+        detector = FeatureDriftDetector()
+        report = detector.detect()
+        logger.info(
+            "Feature drift detection: status=%s drifted=%s schema_mismatch=%s alerted=%s",
+            report.status,
+            report.drifted_features,
+            report.schema_mismatch,
+            report.alerted,
+        )
+    except Exception as exc:
+        logger.error(f"Feature drift detector job failed: {exc}", exc_info=True)
+
+
+def _kpi_reconciliation_job() -> None:
+    """Scheduled wrapper for KPIReconciler (#1054).
+
+    Compares off-chain ProjectView KPIs against on-chain contract state via
+    direct Soroban RPC queries. Safe for rate limits.
+    """
+    try:
+        reconciler = KPIReconciler()
+        reconciler.run_reconciliation(
+            limit=int(os.getenv("KPI_RECONCILIATION_PROJECT_LIMIT", "10")),
+            rate_limit_sleep=float(os.getenv("KPI_RECONCILIATION_RATE_LIMIT_SLEEP", "0.2")),
+        )
+    except Exception as exc:
+        logger.error(f"KPI reconciliation job failed: {exc}", exc_info=True)
+
+
+def _daily_onchain_kpi_snapshot_job() -> None:
+    """Scheduled wrapper for DailyKPISnapshotGenerator (#877).
+
+    Persists daily snapshots of core on-chain KPIs (TVL, volume, active rounds,
+    contribution counts) to enable fast, consistent trend analysis and prevent duplicate entries.
+    """
+    try:
+        from src.analytics.daily_kpi_snapshot import DailyKPISnapshotGenerator
+
+        generator = DailyKPISnapshotGenerator()
+        result = generator.run_snapshot()
+        logger.info(
+            "Daily on-chain KPI snapshot job complete | status=%s | date=%s | tvl=%.2f | volume=%.2f | active_rounds=%d | contributions=%d",
+            result.get("status"),
+            result.get("date"),
+            result.get("tvl", 0.0),
+            result.get("volume", 0.0),
+            result.get("active_rounds", 0),
+            result.get("contribution_count", 0),
+        )
+    except Exception as exc:
+        logger.error(f"Daily on-chain KPI snapshot job failed: {exc}", exc_info=True)
+
+
+def _contract_lag_metrics_job() -> None:
+    """Scheduled wrapper for per-contract ingestion lag metrics.
+
+    Measures lag for registry, vault, matching_pool, treasury, and vesting
+    domains, publishes values to Prometheus, and emits structured log alerts
+    when thresholds are exceeded.
+    """
+    try:
+        from src.ingestion.contract_lag_metrics import run_contract_lag_cycle
+
+        result = run_contract_lag_cycle()
+        logger.info(
+            "Contract lag cycle complete | healthy=%s | snapshots=%d | lag_alerts=%d",
+            result.get("healthy"),
+            len(result.get("snapshots", [])),
+            len(result.get("lag_alerts", [])),
+        )
+    except Exception as exc:
+        logger.error("Contract lag metrics job failed: %s", exc, exc_info=True)
+
+
 class AnalyticsScheduler:
 
     """Manages the APScheduler scheduler for analytics jobs"""
@@ -219,10 +421,20 @@ class AnalyticsScheduler:
             # ── Stellar ingestion quality checks: every hour ──────────
             # Low-noise: only fails CI/process when ingestion lag is critical.
             quality_job = self.scheduler.add_job(
-                func=self._ingestion_quality_checks_job,
+                func=_ingestion_quality_checks_job,
                 trigger=IntervalTrigger(hours=1),
                 id="stellar_ingestion_quality_checks_hourly",
                 name="Stellar Ingestion Quality Checks - Hourly",
+                replace_existing=True,
+            )
+
+            # ── Indexer lag + source failure alerting: every 5 minutes (#745) ──
+            alerting_interval = int(os.getenv("INGESTION_ALERT_INTERVAL_MINUTES", "5"))
+            self.scheduler.add_job(
+                func=_ingestion_alerting_job,
+                trigger=IntervalTrigger(minutes=alerting_interval),
+                id="ingestion_lag_alerting",
+                name="Indexer Lag and Source Failure Alerting",
                 replace_existing=True,
             )
 
@@ -234,6 +446,94 @@ class AnalyticsScheduler:
                 name="Automated Model Retraining - Daily",
                 replace_existing=True,
             )
+
+            # ── Project Verification Trend: every 6 hours (#885) ─────────
+            self.scheduler.add_job(
+                func=_project_verification_trend_job,
+                trigger=IntervalTrigger(hours=6),
+                id="project_verification_trend",
+                name="Project Verification Trend Analyzer",
+                replace_existing=True,
+            )
+
+            # ── RPC Provider Benchmark: every 30 minutes (#884) ──────────
+            self.scheduler.add_job(
+                func=_rpc_provider_benchmark_job,
+                trigger=IntervalTrigger(minutes=30),
+                id="rpc_provider_benchmark",
+                name="RPC Provider Benchmark",
+                replace_existing=True,
+            )
+
+            # ── Round Anomaly Detection: every 6 hours (#874) ───────────
+            self.scheduler.add_job(
+                func=_round_analyzer_job,
+                trigger=IntervalTrigger(hours=6),
+                id="round_anomaly_detection",
+                name="Round Anomaly Detection",
+                replace_existing=True,
+            )
+
+            # ── Contributor Reputation Snapshot: daily at 03:30 UTC ─────────
+            self.scheduler.add_job(
+                func=_contributor_reputation_snapshot_job,
+                trigger=CronTrigger(hour=3, minute=30, timezone="UTC"),
+                id="contributor_reputation_snapshot_daily",
+                name="Contributor Reputation Snapshot Builder",
+                replace_existing=True,
+            )
+
+            # ── Metadata Drift Detection: every 6 hours (#882) ───────────
+            self.scheduler.add_job(
+                func=_metadata_drift_detector_job,
+                trigger=IntervalTrigger(hours=6),
+                id="metadata_drift_detection",
+                name="Metadata Drift Detector (backend vs on-chain)",
+                replace_existing=True,
+            )
+
+            # ── Feature Drift Detection: every 6 hours (#1239) ───────────
+            feature_drift_interval = int(
+                os.getenv("FEATURE_DRIFT_INTERVAL_HOURS", "6")
+            )
+            self.scheduler.add_job(
+                func=_feature_drift_detection_job,
+                trigger=IntervalTrigger(hours=feature_drift_interval),
+                id="feature_drift_detection",
+                name="Training-vs-Serving Feature Drift Detection",
+                replace_existing=True,
+            )
+
+            # ── KPI Reconciliation: every 6 hours (#1054) ───────────────
+            self.scheduler.add_job(
+                func=_kpi_reconciliation_job,
+                trigger=IntervalTrigger(hours=6),
+                id="kpi_reconciliation",
+                name="KPI Reconciler against Live Contract Reads",
+                replace_existing=True,
+            )
+
+            # ── Daily On-Chain KPI Snapshot: daily at 00:05 UTC (#877) ──
+            self.scheduler.add_job(
+                func=_daily_onchain_kpi_snapshot_job,
+                trigger=CronTrigger(hour=0, minute=5, timezone="UTC"),
+                id="daily_onchain_kpi_snapshot",
+                name="Daily On-Chain KPI Snapshot Scheduler",
+                replace_existing=True,
+            )
+
+            # ── Per-contract ingestion lag metrics: every 5 minutes ──────
+            contract_lag_interval = int(
+                os.getenv("CONTRACT_LAG_INTERVAL_MINUTES", "5")
+            )
+            self.scheduler.add_job(
+                func=_contract_lag_metrics_job,
+                trigger=IntervalTrigger(minutes=contract_lag_interval),
+                id="contract_ingestion_lag_metrics",
+                name="Per-Contract Ingestion Lag Metrics",
+                replace_existing=True,
+            )
+
 
             self.scheduler.start()
             logger.info("✓ Analytics scheduler started")

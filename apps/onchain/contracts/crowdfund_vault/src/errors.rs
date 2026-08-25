@@ -35,7 +35,20 @@ pub enum CrowdfundError {
     RefundWindowClosed = 29,
     RefundWindowNotOpen = 30,
     Reentrancy = 31,
-    /// The idempotency key supplied to `deposit()` has already been consumed
-    /// within the current TTL window — the operation was already submitted.
-    DuplicateSubmission = 32,
+    AlreadyExecuted = 32,
+    // ── Emergency migration (issue #1047) ─────────────────────────────────────
+    /// The contract is not in a paused state; emergency migration requires pause.
+    EmergencyMigrationRequiresPause = 33,
+    /// A migration plan has already been registered for this project.
+    MigrationPlanAlreadyExists = 34,
+    /// No migration plan was found for this project.
+    MigrationPlanNotFound = 35,
+    /// The migration plan has already been executed; it cannot be run twice.
+    MigrationAlreadyExecuted = 36,
+    /// The recipient address supplied for migration is invalid (e.g. the contract itself).
+    InvalidMigrationRecipient = 37,
+    /// The migration amount exceeds the project's current on-chain balance.
+    MigrationAmountExceedsBalance = 38,
+    /// The migration plan was vetoed by a second admin; it cannot proceed.
+    MigrationPlanVetoed = 39,
 }

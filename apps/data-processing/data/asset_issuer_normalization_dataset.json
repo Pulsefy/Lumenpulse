@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "description": "Validation dataset for issuer-aware asset normalization. This dataset ensures that asset normalization logic correctly handles both native assets (no issuer) and issued assets (with issuer addresses).",
+  "last_updated": "2026-06-29T23:00:00Z",
+  "test_cases": [
+    {
+      "id": "native_xlm",
+      "description": "Native XLM asset (no issuer)",
+      "input": {
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "asset_type": "native"
+      },
+      "expected_canonical": {
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical_form": "XLM-native",
+        "is_native": true
+      }
+    },
+    {
+      "id": "native_xlm_uppercase",
+      "description": "Native XLM with uppercase code",
+      "input": {
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "asset_type": "native"
+      },
+      "expected_canonical": {
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical_form": "XLM-native",
+        "is_native": true
+      }
+    },
+    {
+      "id": "native_xlm_lowercase",
+      "description": "Native XLM with lowercase code (should normalize to uppercase)",
+      "input": {
+        "asset_code": "xlm",
+        "asset_issuer": null,
+        "asset_type": "native"
+      },
+      "expected_canonical": {
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical_form": "XLM-native",
+        "is_native": true
+      }
+    },
+    {
+      "id": "issued_usdc_circle",
+      "description": "USDC issued by Circle on Stellar",
+      "input": {
+        "asset_code": "USDC",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I4OZU3D7QDNZMP4J2T",
+        "asset_type": "credit_alphanum4"
+      },
+      "expected_canonical": {
+        "asset_code": "USDC",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I4OZU3D7QDNZMP4J2T",
+        "canonical_form": "USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I4OZU3D7QDNZMP4J2T",
+        "is_native": false
+      }
+    },
+    {
+      "id": "issued_usdt_tether",
+      "description": "USDT issued by Tether on Stellar",
+      "input": {
+        "asset_code": "USDT",
+        "asset_issuer": "GDRXBYQKJGKJGRK7GPBL7BKXWNVBDOCXGZVQOZT7Y7V7MUQGEOUP7OIA",
+        "asset_type": "credit_alphanum4"
+      },
+      "expected_canonical": {
+        "asset_code": "USDT",
+        "asset_issuer": "GDRXBYQKJGKJGRK7GPBL7BKXWNVBDOCXGZVQOZT7Y7V7MUQGEOUP7OIA",
+        "canonical_form": "USDT-GDRXBYQKJGKJGRK7GPBL7BKXWNVBDOCXGZVQOZT7Y7V7MUQGEOUP7OIA",
+        "is_native": false
+      }
+    },
+    {
+      "id": "issued_usd_apex",
+      "description": "USD Apex issued by Apex Clearing",
+      "input": {
+        "asset_code": "USD",
+        "asset_issuer": "GCHLH7OKFGPCHX2LLNBXHI5H3WD4V7LZFXDKJGKQEGEHX7VD7KXWVGAD",
+        "asset_type": "credit_alphanum4"
+      },
+      "expected_canonical": {
+        "asset_code": "USD",
+        "asset_issuer": "GCHLH7OKFGPCHX2LLNBXHI5H3WD4V7LZFXDKJGKQEGEHX7VD7KXWVGAD",
+        "canonical_form": "USD-GCHLH7OKFGPCHX2LLNBXHI5H3WD4V7LZFXDKJGKQEGEHX7VD7KXWVGAD",
+        "is_native": false
+      }
+    },
+    {
+      "id": "issued_btc_anchored",
+      "description": "BTC anchored asset on Stellar",
+      "input": {
+        "asset_code": "BTC",
+        "asset_issuer": "GBD5AF4S7JQKZODA7KX2LL7FQKBTJHYEYJ6K7Z3L5Y7V7MUQGEOUP7OIA",
+        "asset_type": "credit_alphanum4"
+      },
+      "expected_canonical": {
+        "asset_code": "BTC",
+        "asset_issuer": "GBD5AF4S7JQKZODA7KX2LL7FQKBTJHYEYJ6K7Z3L5Y7V7MUQGEOUP7OIA",
+        "canonical_form": "BTC-GBD5AF4S7JQKZODA7KX2LL7FQKBTJHYEYJ6K7Z3L5Y7V7MUQGEOUP7OIA",
+        "is_native": false
+      }
+    },
+    {
+      "id": "issued_eth_anchored",
+      "description": "ETH anchored asset on Stellar",
+      "input": {
+        "asset_code": "ETH",
+        "asset_issuer": "GDE5XGVRJCN2L5NPTT4E4N6L5F5H5Y7V7MUQGEOUP7OIA",
+        "asset_type": "credit_alphanum4"
+      },
+      "expected_canonical": {
+        "asset_code": "ETH",
+        "asset_issuer": "GDE5XGVRJCN2L5NPTT4E4N6L5F5H5Y7V7MUQGEOUP7OIA",
+        "canonical_form": "ETH-GDE5XGVRJCN2L5NPTT4E4N6L5F5H5Y7V7MUQGEOUP7OIA",
+        "is_native": false
+      }
+    },
+    {
+      "id": "issued_asset_lowercase_code",
+      "description": "Issued asset with lowercase code (should normalize to uppercase)",
+      "input": {
+        "asset_code": "usdc",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I4OZU3D7QDNZMP4J2T",
+        "asset_type": "credit_alphanum4"
+      },
+      "expected_canonical": {
+        "asset_code": "USDC",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I4OZU3D7QDNZMP4J2T",
+        "canonical_form": "USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I4OZU3D7QDNZMP4J2T",
+        "is_native": false
+      }
+    },
+    {
+      "id": "issued_asset_mixed_case_code",
+      "description": "Issued asset with mixed case code (should normalize to uppercase)",
+      "input": {
+        "asset_code": "UsDc",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I4OZU3D7QDNZMP4J2T",
+        "asset_type": "credit_alphanum4"
+      },
+      "expected_canonical": {
+        "asset_code": "USDC",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I4OZU3D7QDNZMP4J2T",
+        "canonical_form": "USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I4OZU3D7QDNZMP4J2T",
+        "is_native": false
+      }
+    },
+    {
+      "id": "issued_asset_12_char_code",
+      "description": "Issued asset with 12-character code (credit_alphanum12)",
+      "input": {
+        "asset_code": "CUSTOMTOKEN",
+        "asset_issuer": "GD5J6JF7J2K7L5M5N5O5P5Q5R5S5T5U5V5W5X5Y5Z5",
+        "asset_type": "credit_alphanum12"
+      },
+      "expected_canonical": {
+        "asset_code": "CUSTOMTOKEN",
+        "asset_issuer": "GD5J6JF7J2K7L5M5N5O5P5Q5R5S5T5U5V5W5X5Y5Z5",
+        "canonical_form": "CUSTOMTOKEN-GD5J6JF7J2K7L5M5N5O5P5Q5R5S5T5U5V5W5X5Y5Z5",
+        "is_native": false
+      }
+    },
+    {
+      "id": "issuer_whitespace_trimming",
+      "description": "Issuer address with whitespace (should be trimmed)",
+      "input": {
+        "asset_code": "USDC",
+        "asset_issuer": "  GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I4OZU3D7QDNZMP4J2T  ",
+        "asset_type": "credit_alphanum4"
+      },
+      "expected_canonical": {
+        "asset_code": "USDC",
+        "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I4OZU3D7QDNZMP4J2T",
+        "canonical_form": "USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I4OZU3D7QDNZMP4J2T",
+        "is_native": false
+      }
+    },
+    {
+      "id": "empty_issuer_for_native",
+      "description": "Empty string issuer for native asset (should be treated as null)",
+      "input": {
+        "asset_code": "XLM",
+        "asset_issuer": "",
+        "asset_type": "native"
+      },
+      "expected_canonical": {
+        "asset_code": "XLM",
+        "asset_issuer": null,
+        "canonical_form": "XLM-native",
+        "is_native": true
+      }
+    },
+    {
+      "id": "null_issuer_treated_as_native",
+      "description": "Null issuer is treated as native asset (correct behavior)",
+      "input": {
+        "asset_code": "CUSTOM",
+        "asset_issuer": null,
+        "asset_type": "credit_alphanum4"
+      },
+      "expected_canonical": {
+        "asset_code": "CUSTOM",
+        "asset_issuer": null,
+        "canonical_form": "CUSTOM-native",
+        "is_native": true
+      }
+    }
+  ]
+}

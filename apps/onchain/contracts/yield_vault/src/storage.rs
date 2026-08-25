@@ -18,7 +18,7 @@ pub struct YieldProvider {
 pub struct ProviderMetrics {
     pub apy: u32, // In basis points (e.g., 500 = 5%)
     pub tvl: i128,
-    pub risk_rating: u8, // 1-10
+    pub risk_rating: u32, // 1-10
 }
 
 #[contracttype]

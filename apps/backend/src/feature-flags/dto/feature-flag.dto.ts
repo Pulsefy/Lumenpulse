@@ -20,6 +20,14 @@ export class UpsertFeatureFlagDto {
   @IsOptional()
   @IsObject()
   conditions?: Record<string, any>;
+
+  @ApiPropertyOptional({
+    description: 'Identifier of the user who changed this flag',
+    example: 'admin@lumenpulse.com',
+  })
+  @IsOptional()
+  @IsString()
+  changedBy?: string;
 }
 
 export class FeatureFlagResponseDto {
@@ -37,4 +45,10 @@ export class FeatureFlagResponseDto {
     example: { roles: ['ADMIN'] },
   })
   conditions?: Record<string, any>;
+
+  @ApiPropertyOptional({
+    description: 'Identifier of the user who last changed this flag',
+    example: 'admin@lumenpulse.com',
+  })
+  changedBy?: string | null;
 }

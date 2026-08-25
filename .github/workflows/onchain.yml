@@ -1,6 +1,7 @@
 name: Onchain CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "main" ]
     paths:
@@ -9,6 +10,7 @@ on:
     branches: [ "main" ]
     paths:
       - 'apps/onchain/**'
+      - 'apps/onchain/.ci-trigger'
 
 jobs:
   onchain-checks:

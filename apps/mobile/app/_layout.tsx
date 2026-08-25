@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { View } from 'react-native';
 import { AuthProvider } from '../contexts/AuthContext';
+import { DeepLinkProvider } from '../contexts/DeepLinkContext';
 import { EnvironmentProvider } from '../contexts/EnvironmentContext';
 import { WalletProvider } from '../contexts/WalletContext';
 import { NotificationsProvider } from '../contexts/NotificationsContext';
@@ -16,19 +17,21 @@ export default function RootLayout() {
           <AuthProvider>
             <WalletProvider>
               <NotificationsProvider>
-                <View style={{ flex: 1 }}>
-                  <Stack
-                    screenOptions={{
-                      headerShown: false,
-                      // Accessibility improvements for screen readers
-                      animation: 'fade',
-                    }}
-                  >
-                    <Stack.Screen name="(tabs)" />
-                    <Stack.Screen name="auth" />
-                  </Stack>
-                  <NetworkBadge />
-                </View>
+                <DeepLinkProvider>
+                  <View style={{ flex: 1 }}>
+                    <Stack
+                      screenOptions={{
+                        headerShown: false,
+                        // Accessibility improvements for screen readers
+                        animation: 'fade',
+                      }}
+                    >
+                      <Stack.Screen name="(tabs)" />
+                      <Stack.Screen name="auth" />
+                    </Stack>
+                    <NetworkBadge />
+                  </View>
+                </DeepLinkProvider>
               </NotificationsProvider>
             </WalletProvider>
           </AuthProvider>

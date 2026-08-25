@@ -49,9 +49,8 @@ export const LocalizationProvider: React.FC<LocalizationProviderProps> = ({ chil
   const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const colorScheme = useColorScheme();
 
-  const resolvedMode = themeMode === 'system' 
-    ? (colorScheme === 'dark' ? 'dark' : 'light')
-    : themeMode;
+  const resolvedMode =
+    themeMode === 'system' ? (colorScheme === 'dark' ? 'dark' : 'light') : themeMode;
 
   const colors = resolvedMode === 'dark' ? darkColors : lightColors;
 
