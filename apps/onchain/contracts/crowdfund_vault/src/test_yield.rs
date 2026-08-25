@@ -4,7 +4,7 @@ use soroban_sdk::{
     contract, contractimpl, symbol_short,
     testutils::Address as _,
     token::{StellarAssetClient, TokenClient},
-    Address, Env,
+    Address, BytesN, Env,
 };
 
 #[contract]
@@ -56,6 +56,16 @@ impl YieldProviderTrait for MockYieldProvider {
     fn balance(env: Env, address: Address) -> i128 {
         env.storage().persistent().get(&address).unwrap_or(0)
     }
+}
+
+/// Generate a unique 32-byte idempotency key for each test deposit invocation.
+fn unique_idem_key(env: &Env) -> BytesN<32> {
+    use core::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(1_000_000); // offset from test.rs
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut bytes = [0u8; 32];
+    bytes[..8].copy_from_slice(&n.to_be_bytes());
+    BytesN::from_array(env, &bytes)
 }
 
 fn setup_yield_test<'a>(
@@ -119,7 +129,7 @@ fn test_yield_investment_and_withdrawal() {
     );
 
     // Deposit funds
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
 
     // Invest idle funds
     client.invest_idle_funds(&owner, &project_id, &300_000);
@@ -171,7 +181,7 @@ fn test_yield_refund_divests_automatically() {
     );
 
     // Deposit funds
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
 
     // Invest ALL funds
     client.invest_idle_funds(&owner, &project_id, &500_000);

@@ -9,6 +9,7 @@ mod treasury_interface;
 mod yield_provider;
 
 use errors::CrowdfundError;
+use idempotency_guard::guard as idempotency_guard_fn;
 use math::{sqrt_scaled, unscale};
 use notification_interface::{Notification, NotificationReceiverClient};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
@@ -22,6 +23,10 @@ use storage::{
 const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
 const DEFAULT_REFUND_WINDOW_SECONDS: u64 = 14 * 24 * 60 * 60;
+/// Idempotency window for `deposit()`: approximately 1 day at 5 s/ledger.
+/// Keys older than this are automatically evicted from temporary storage and
+/// the same key will be accepted again.
+const DEPOSIT_IDEMPOTENCY_TTL: u32 = 17_280;
 
 #[contract]
 pub struct CrowdfundVaultContract;
@@ -579,17 +584,32 @@ impl CrowdfundVaultContract {
         })
     }
 
-    /// Deposit funds into a project
+    /// Deposit funds into a project.
+    ///
+    /// `idempotency_key` is a caller-supplied 32-byte key (e.g. a hash of
+    /// `(caller_address || nonce || project_id || amount)`) that prevents
+    /// duplicate submissions.  A second call with the same key within
+    /// `DEPOSIT_IDEMPOTENCY_TTL` ledgers is rejected with
+    /// [`CrowdfundError::DuplicateSubmission`].
     pub fn deposit(
         env: Env,
         user: Address,
         project_id: u64,
         amount: i128,
+        idempotency_key: BytesN<32>,
     ) -> Result<(), CrowdfundError> {
         Self::with_reentrancy_guard(&env, || {
             Self::require_current_storage_version(&env)?;
 
             user.require_auth();
+
+            // ── Idempotency gate ────────────────────────────────────────────
+            // Check before any state reads/writes so duplicate rejections are
+            // as cheap as possible (one temporary-storage read).
+            //
+            // TTL: DEPOSIT_IDEMPOTENCY_TTL ledgers (≈ 1 day at 5 s/ledger).
+            idempotency_guard_fn(&env, &idempotency_key, DEPOSIT_IDEMPOTENCY_TTL)
+                .map_err(|_| CrowdfundError::DuplicateSubmission)?;
 
             let is_paused: bool = env
                 .storage()
@@ -2210,5 +2230,7 @@ impl CrowdfundVaultContract {
 mod test;
 #[cfg(test)]
 mod test_yield;
+#[cfg(test)]
+mod test_idempotency;
 #[cfg(test)]
 mod tests;

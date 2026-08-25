@@ -1,7 +1,7 @@
 #![cfg(test)]
 extern crate std;
 
-use soroban_sdk::{testutils::Address as _, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Symbol, Vec};
 
 // 1. IMPORT SOURCE CONTRACTS
 use contributor_registry::{
@@ -11,6 +11,16 @@ use contributor_registry::{
 };
 use crowdfund_vault::{CrowdfundVaultContract, CrowdfundVaultContractClient as VaultClient};
 use lumen_token::{LumenToken, LumenTokenClient as TokenClient};
+
+/// Generate a unique 32-byte idempotency key for each test deposit invocation.
+fn unique_idem_key(env: &Env) -> BytesN<32> {
+    use core::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(2_000_000); // offset from other test files
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut bytes = [0u8; 32];
+    bytes[..8].copy_from_slice(&n.to_be_bytes());
+    BytesN::from_array(env, &bytes)
+}
 
 #[test]
 fn test_lumenpulse_protocol_e2e() {
@@ -62,7 +72,7 @@ fn test_lumenpulse_protocol_e2e() {
         &token_id,
     );
 
-    vault_client.deposit(&contributor, &project_id, &3000i128);
+    vault_client.deposit(&contributor, &project_id, &3000i128, &unique_idem_key(&env));
 
     assert_eq!(token_client.balance(&contributor), 7000i128);
     assert_eq!(vault_client.get_balance(&project_id), 3000i128);
@@ -129,11 +139,11 @@ fn test_notification_flow() {
         &token_id,
     );
 
-    vault_client.deposit(&contributor, &project_id, &1000i128);
+    vault_client.deposit(&contributor, &project_id, &1000i128, &unique_idem_key(&env));
 
     assert_eq!(reg_client.get_reputation(&contributor), 1);
 
-    vault_client.deposit(&contributor, &project_id, &1000i128);
+    vault_client.deposit(&contributor, &project_id, &1000i128, &unique_idem_key(&env));
 
     assert_eq!(reg_client.get_reputation(&contributor), 2);
 
@@ -215,7 +225,7 @@ fn invariant_balance_never_negative_after_withdrawal() {
         &token_id,
     );
 
-    vault_client.deposit(&contributor, &project_id, &3000i128);
+    vault_client.deposit(&contributor, &project_id, &3000i128, &unique_idem_key(&env));
 
     vault_client.approve_milestone(&admin, &project_id, &0u32);
 
@@ -268,7 +278,7 @@ fn invariant_withdrawal_requires_milestone_approval() {
         &token_id,
     );
 
-    vault_client.deposit(&contributor, &project_id, &3000i128);
+    vault_client.deposit(&contributor, &project_id, &3000i128, &unique_idem_key(&env));
 
     let result = vault_client.try_withdraw(&project_id, &0u32, &1000i128);
 

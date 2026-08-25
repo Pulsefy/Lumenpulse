@@ -5,7 +5,7 @@ use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Events, Ledger},
     token::{StellarAssetClient, TokenClient},
-    vec, Address, Env,
+    vec, Address, BytesN, Env,
 };
 fn create_token_contract<'a>(
     env: &Env,
@@ -16,6 +16,20 @@ fn create_token_contract<'a>(
         TokenClient::new(env, &contract_address.address()),
         StellarAssetClient::new(env, &contract_address.address()),
     )
+}
+
+/// Generate a unique 32-byte idempotency key for each test deposit invocation.
+///
+/// A monotonically-increasing atomic counter is embedded in the first 8 bytes
+/// so every call within a test (and across tests in the same process) receives
+/// a distinct key, avoiding false `DuplicateSubmission` errors.
+fn unique_idem_key(env: &Env) -> BytesN<32> {
+    use core::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut bytes = [0u8; 32];
+    bytes[..8].copy_from_slice(&n.to_be_bytes());
+    BytesN::from_array(env, &bytes)
 }
 
 fn setup_test<'a>(
@@ -178,7 +192,7 @@ fn test_deposit() {
 
     // Deposit funds
     let deposit_amount: i128 = 500_000;
-    client.deposit(&user, &project_id, &deposit_amount);
+    client.deposit(&user, &project_id, &deposit_amount, &unique_idem_key(&env));
 
     // Verify balance
     assert_eq!(client.get_balance(&project_id), deposit_amount);
@@ -207,7 +221,7 @@ fn test_deposit_invalid_amount() {
     );
 
     // Try to deposit zero
-    let result = client.try_deposit(&user, &project_id, &0);
+    let result = client.try_deposit(&user, &project_id, &0, &unique_idem_key(&env));
     assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
 }
 
@@ -230,7 +244,7 @@ fn test_withdraw_without_approval_fails() {
     );
 
     // Deposit funds
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
 
     // Try to withdraw without milestone approval - should fail
     let result = client.try_withdraw(&project_id, &0, &100_000);
@@ -257,7 +271,7 @@ fn test_withdraw_after_approval() {
 
     // Deposit funds
     let deposit_amount: i128 = 500_000;
-    client.deposit(&user, &project_id, &deposit_amount);
+    client.deposit(&user, &project_id, &deposit_amount, &unique_idem_key(&env));
 
     // Approve milestone
     client.approve_milestone(&admin, &project_id, &0);
@@ -326,7 +340,7 @@ fn test_insufficient_balance_withdrawal() {
     );
 
     // Deposit small amount
-    client.deposit(&user, &project_id, &100_000);
+    client.deposit(&user, &project_id, &100_000, &unique_idem_key(&env));
 
     // Approve milestone
     client.approve_milestone(&admin, &project_id, &0);
@@ -410,7 +424,7 @@ fn test_deposit_project_not_found() {
 
     client.initialize(&admin);
 
-    let result = client.try_deposit(&user, &999, &1000);
+    let result = client.try_deposit(&user, &999, &1000, &unique_idem_key(&env));
     assert_eq!(result, Err(Ok(CrowdfundError::ProjectNotFound)));
 }
 
@@ -455,7 +469,7 @@ fn test_withdraw_invalid_amount() {
         &1000000,
         &token_client.address,
     );
-    client.deposit(&user, &project_id, &500000);
+    client.deposit(&user, &project_id, &500000, &unique_idem_key(&env));
     client.approve_milestone(&admin, &project_id, &0);
 
     let result = client.try_withdraw(&project_id, &0, &0);
@@ -539,7 +553,7 @@ fn test_deposit_negative_amount() {
     );
 
     // Try to deposit negative amount
-    let result = client.try_deposit(&user, &project_id, &-500);
+    let result = client.try_deposit(&user, &project_id, &-500, &unique_idem_key(&env));
     assert_eq!(result, Err(Ok(CrowdfundError::InvalidAmount)));
 }
 
@@ -584,7 +598,7 @@ fn test_withdraw_from_inactive_project() {
         &token_client.address,
     );
 
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
     client.approve_milestone(&admin, &project_id, &0);
 
     // Withdraw works when project is active
@@ -613,11 +627,11 @@ fn test_multiple_deposits() {
     );
 
     // First deposit
-    client.deposit(&user, &project_id, &200_000);
+    client.deposit(&user, &project_id, &200_000, &unique_idem_key(&env));
     assert_eq!(client.get_balance(&project_id), 200_000);
 
     // Second deposit
-    client.deposit(&user, &project_id, &300_000);
+    client.deposit(&user, &project_id, &300_000, &unique_idem_key(&env));
     assert_eq!(client.get_balance(&project_id), 500_000);
 
     // Verify total deposited
@@ -643,7 +657,7 @@ fn test_partial_withdrawal() {
     );
 
     // Deposit more than target
-    client.deposit(&user, &project_id, &1_500_000);
+    client.deposit(&user, &project_id, &1_500_000, &unique_idem_key(&env));
     assert_eq!(client.get_balance(&project_id), 1_500_000);
 
     client.approve_milestone(&admin, &project_id, &0);
@@ -677,7 +691,7 @@ fn test_unauthorized_withdrawal() {
         &token_client.address,
     );
 
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
     client.approve_milestone(&admin, &project_id, &0);
 
     // User (non-owner) tries to withdraw - should fail due to authorization
@@ -727,7 +741,7 @@ fn test_dispute_escrows_withdrawal_until_resolved() {
         &token_client.address,
     );
 
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
     client.approve_milestone(&admin, &project_id, &0);
 
     client.dispute_milestone(&user, &project_id, &0, &symbol_short!("quality"));
@@ -759,7 +773,7 @@ fn test_dispute_resolution_can_revoke_approval() {
         &token_client.address,
     );
 
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
     client.approve_milestone(&admin, &project_id, &0);
     client.dispute_milestone(&user, &project_id, &0, &symbol_short!("quality"));
 
@@ -787,7 +801,7 @@ fn test_only_contributors_can_dispute_milestones() {
         &token_client.address,
     );
 
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
     client.approve_milestone(&admin, &project_id, &0);
 
     let result =
@@ -813,7 +827,7 @@ fn test_duplicate_dispute_is_rejected_and_metadata_is_readable() {
         &token_client.address,
     );
 
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
     client.approve_milestone(&admin, &project_id, &0);
     client.dispute_milestone(&user, &project_id, &0, &symbol_short!("quality"));
 
@@ -848,7 +862,7 @@ fn test_balance_tracking() {
     assert_eq!(client.get_balance(&project_id), 0);
 
     // After deposit
-    client.deposit(&user, &project_id, &100_000);
+    client.deposit(&user, &project_id, &100_000, &unique_idem_key(&env));
     assert_eq!(client.get_balance(&project_id), 100_000);
 
     // After approval and withdrawal
@@ -885,7 +899,7 @@ fn test_project_data_integrity() {
     assert!(project.is_active);
 
     // After deposit
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
     let project_after_deposit = client.get_project(&project_id);
     assert_eq!(project_after_deposit.total_deposited, 500_000);
 
@@ -929,7 +943,7 @@ fn test_withdraw_exact_balance() {
     );
 
     let deposit_amount = 300_000;
-    client.deposit(&user, &project_id, &deposit_amount);
+    client.deposit(&user, &project_id, &deposit_amount, &unique_idem_key(&env));
     assert_eq!(client.get_balance(&project_id), deposit_amount);
 
     client.approve_milestone(&admin, &project_id, &0);
@@ -1024,7 +1038,7 @@ fn test_calculate_match_single_contributor() {
 
     // Deposit funds from single contributor
     let contribution: i128 = 1_000_000; // 1M tokens
-    client.deposit(&user, &project_id, &contribution);
+    client.deposit(&user, &project_id, &contribution, &unique_idem_key(&env));
 
     // Calculate match
     // sqrt(1_000_000) = 1000
@@ -1074,9 +1088,9 @@ fn test_calculate_match_multiple_contributors() {
     // user3: 900 (sqrt = 30)
     // sum of sqrt = 60
     // match = 60^2 = 3600
-    client.deposit(&user1, &project_id, &100);
-    client.deposit(&user2, &project_id, &400);
-    client.deposit(&user3, &project_id, &900);
+    client.deposit(&user1, &project_id, &100, &unique_idem_key(&env));
+    client.deposit(&user2, &project_id, &400, &unique_idem_key(&env));
+    client.deposit(&user3, &project_id, &900, &unique_idem_key(&env));
 
     // Calculate match
     let match_amount = client.calculate_match(&project_id);
@@ -1133,7 +1147,7 @@ fn test_distribute_match() {
 
     // Deposit funds
     let contribution: i128 = 1_000_000;
-    client.deposit(&user, &project_id, &contribution);
+    client.deposit(&user, &project_id, &contribution, &unique_idem_key(&env));
 
     // Fund matching pool
     let pool_amount: i128 = 10_000_000;
@@ -1231,8 +1245,8 @@ fn test_events_emission() {
     token_admin_client.mint(&user2, &10_000_000);
 
     // Large contributions that will create a large match
-    client.deposit(&user1, &project_id, &1_000_000);
-    client.deposit(&user2, &project_id, &1_000_000);
+    client.deposit(&user1, &project_id, &1_000_000, &unique_idem_key(&env));
+    client.deposit(&user2, &project_id, &1_000_000, &unique_idem_key(&env));
 
     // Fund matching pool with small amount
     let pool_amount: i128 = 100_000; // Less than the calculated match
@@ -1272,8 +1286,8 @@ fn test_multiple_contributions_same_user() {
     );
 
     // Same user makes multiple contributions
-    client.deposit(&user, &project_id, &100);
-    client.deposit(&user, &project_id, &300); // Total: 400
+    client.deposit(&user, &project_id, &100, &unique_idem_key(&env));
+    client.deposit(&user, &project_id, &300, &unique_idem_key(&env)); // Total: 400
 
     // Should only count as one contributor
     assert_eq!(client.get_contributor_count(&project_id), 1);
@@ -1286,7 +1300,7 @@ fn test_multiple_contributions_same_user() {
     // Should be approximately 400 (allowing for rounding)
     assert!((390..=410).contains(&match_amount));
     // Deposit
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
 
     // Register contributor
     client.register_contributor(&user);
@@ -1627,7 +1641,7 @@ fn test_deposit_pause() {
 
     // Deposit funds
     let deposit_amount: i128 = 500_000;
-    client.deposit(&user, &project_id, &deposit_amount);
+    client.deposit(&user, &project_id, &deposit_amount, &unique_idem_key(&env));
 }
 
 #[test]
@@ -1660,7 +1674,7 @@ fn test_deposit_pause_unpause() {
 
     // Deposit funds
     let deposit_amount: i128 = 500_000;
-    client.deposit(&user, &project_id, &deposit_amount);
+    client.deposit(&user, &project_id, &deposit_amount, &unique_idem_key(&env));
 
     // Verify balance
     assert_eq!(client.get_balance(&project_id), deposit_amount);
@@ -1691,7 +1705,7 @@ fn test_distribute_match_pause() {
 
     // Deposit funds
     let contribution: i128 = 1_000_000;
-    client.deposit(&user, &project_id, &contribution);
+    client.deposit(&user, &project_id, &contribution, &unique_idem_key(&env));
 
     // Fund matching pool
     let pool_amount: i128 = 10_000_000;
@@ -1726,7 +1740,7 @@ fn test_distribute_match_pause_unpause() {
 
     // Deposit funds
     let contribution: i128 = 1_000_000;
-    client.deposit(&user, &project_id, &contribution);
+    client.deposit(&user, &project_id, &contribution, &unique_idem_key(&env));
 
     // Fund matching pool
     let pool_amount: i128 = 10_000_000;
@@ -1919,7 +1933,7 @@ fn test_cancel_project_cant_deposit() {
     let project = client.get_project(&project_id);
     client.cancel_project(&project.owner, &project_id);
 
-    client.deposit(&user, &project_id, &100);
+    client.deposit(&user, &project_id, &100, &unique_idem_key(&env));
 }
 
 #[test]
@@ -1949,15 +1963,15 @@ fn test_cancel_projects() {
 
     // Deposit funds
     let deposit_amount: i128 = 100_000;
-    client.deposit(&user1, &project_id, &deposit_amount);
+    client.deposit(&user1, &project_id, &deposit_amount, &unique_idem_key(&env));
     // client.register_contributor(&user);
 
     let deposit_amount_2: i128 = 200_000;
-    client.deposit(&user2, &project_id, &deposit_amount_2);
+    client.deposit(&user2, &project_id, &deposit_amount_2, &unique_idem_key(&env));
     // client.register_contributor(&user2);
 
     let deposit_amount_3: i128 = 300_000;
-    client.deposit(&user3, &project_id, &deposit_amount_3);
+    client.deposit(&user3, &project_id, &deposit_amount_3, &unique_idem_key(&env));
 
     // Verify balance
     assert_eq!(
@@ -2002,7 +2016,7 @@ fn test_cancel_project_failed() {
 
     // Deposit funds
     let deposit_amount: i128 = 100_000;
-    client.deposit(&user, &project_id, &deposit_amount);
+    client.deposit(&user, &project_id, &deposit_amount, &unique_idem_key(&env));
 
     // Verify balance
     assert_eq!(client.get_balance(&project_id), deposit_amount);
@@ -2025,7 +2039,7 @@ fn test_milestone_expiry_enables_contributor_clawback() {
         &token_client.address,
     );
 
-    client.deposit(&user, &project_id, &400_000);
+    client.deposit(&user, &project_id, &400_000, &unique_idem_key(&env));
     client.approve_milestone(&admin, &project_id, &0);
 
     env.ledger()
@@ -2059,7 +2073,7 @@ fn test_clawback_window_closes_after_deadline() {
         &token_client.address,
     );
 
-    client.deposit(&user, &project_id, &200_000);
+    client.deposit(&user, &project_id, &200_000, &unique_idem_key(&env));
     client.approve_milestone(&admin, &project_id, &0);
 
     env.ledger()
@@ -2106,8 +2120,8 @@ fn test_analytics_views() {
     assert_eq!(client.get_contributor_contribution(&project_id, &user), 0);
 
     // Deposits
-    client.deposit(&user, &project_id, &100_000);
-    client.deposit(&user2, &project_id, &200_000);
+    client.deposit(&user, &project_id, &100_000, &unique_idem_key(&env));
+    client.deposit(&user2, &project_id, &200_000, &unique_idem_key(&env));
 
     // Verify analytics
     assert_eq!(client.get_total_contributions(&project_id), 300_000);
@@ -2148,7 +2162,7 @@ fn test_milestone_voting_success() {
     );
 
     // Deposit funds to project
-    client.deposit(&user, &project_id, &600_000);
+    client.deposit(&user, &project_id, &600_000, &unique_idem_key(&env));
 
     // Start milestone vote (milestone 0 for simplicity, though normally it would be next)
     // Actually our withdraw checks milestone 0.
@@ -2187,8 +2201,8 @@ fn test_milestone_voting_insufficient_weight() {
     let user2 = Address::generate(&env);
     token_client.transfer(&user, &user2, &300_000);
 
-    client.deposit(&user, &project_id, &300_000);
-    client.deposit(&user2, &project_id, &300_000);
+    client.deposit(&user, &project_id, &300_000, &unique_idem_key(&env));
+    client.deposit(&user2, &project_id, &300_000, &unique_idem_key(&env));
 
     // Start milestone vote
     client.start_milestone_vote(&project_id, &0, &3600);
@@ -2221,7 +2235,7 @@ fn test_milestone_voting_window_expires() {
         &token_client.address,
     );
 
-    client.deposit(&user, &project_id, &600_000);
+    client.deposit(&user, &project_id, &600_000, &unique_idem_key(&env));
 
     // Start milestone vote with short duration
     client.start_milestone_vote(&project_id, &0, &3600);
@@ -2275,7 +2289,7 @@ fn test_already_voted_fails() {
         &token_client.address,
     );
 
-    client.deposit(&user, &project_id, &100_000);
+    client.deposit(&user, &project_id, &100_000, &unique_idem_key(&env));
     client.start_milestone_vote(&project_id, &0, &3600);
 
     client.vote_milestone(&user, &project_id, &0, &true);
@@ -2323,7 +2337,7 @@ fn test_withdraw_with_fee() {
     );
 
     let deposit_amount = 500_000;
-    client.deposit(&user, &project_id, &deposit_amount);
+    client.deposit(&user, &project_id, &deposit_amount, &unique_idem_key(&env));
 
     client.approve_milestone(&admin, &project_id, &0);
 
@@ -2387,7 +2401,7 @@ fn test_ttl_extended_after_read_write() {
         &token_client.address,
     );
 
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
 
     // First ledger advance.
     env.ledger().set_sequence_number(100_001);
@@ -2419,7 +2433,7 @@ fn test_campaign_entries_removed_after_refund() {
         &token_client.address,
     );
 
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
 
     // Cancel the project.
     client.cancel_project(&admin, &project_id);
@@ -2450,7 +2464,7 @@ fn test_reentrancy_guard_withdraw_rejects_when_locked() {
         &1_000_000,
         &token_client.address,
     );
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
     client.approve_milestone(&admin, &project_id, &0);
 
     env.as_contract(&contract_id, || {
@@ -2487,11 +2501,11 @@ fn test_reentrancy_guard_resets_for_sequential_withdraw_and_deposit() {
         &1_000_000,
         &token_client.address,
     );
-    client.deposit(&user, &project_id, &600_000);
+    client.deposit(&user, &project_id, &600_000, &unique_idem_key(&env));
     client.approve_milestone(&admin, &project_id, &0);
 
     client.withdraw(&project_id, &0, &100_000);
-    client.deposit(&user, &project_id, &200_000);
+    client.deposit(&user, &project_id, &200_000, &unique_idem_key(&env));
     client.withdraw(&project_id, &0, &50_000);
 
     let lock_state: bool = env.as_contract(&contract_id, || {
@@ -2517,7 +2531,7 @@ fn test_withdraw_cei_state_written_before_balance_assertion() {
         &1_000_000,
         &token_client.address,
     );
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(&user, &project_id, &500_000, &unique_idem_key(&env));
     client.approve_milestone(&admin, &project_id, &0);
 
     client.withdraw(&project_id, &0, &200_000);

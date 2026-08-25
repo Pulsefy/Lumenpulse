@@ -35,4 +35,7 @@ pub enum CrowdfundError {
     RefundWindowClosed = 29,
     RefundWindowNotOpen = 30,
     Reentrancy = 31,
+    /// The idempotency key supplied to `deposit()` has already been consumed
+    /// within the current TTL window — the operation was already submitted.
+    DuplicateSubmission = 32,
 }

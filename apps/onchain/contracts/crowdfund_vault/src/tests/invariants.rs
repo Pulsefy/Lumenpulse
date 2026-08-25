@@ -12,7 +12,7 @@ use soroban_sdk::{
     symbol_short,
     testutils::Address as _,
     token::{StellarAssetClient, TokenClient},
-    Address, Env,
+    Address, BytesN, Env,
 };
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
@@ -50,9 +50,22 @@ pub fn setup_vault<'a>(
     (client, admin, token_client, token_admin_client)
 }
 
+/// Generate a unique idempotency key for each test deposit call.
+///
+/// Uses the current ledger sequence number combined with a call counter so
+/// that consecutive calls within the same ledger each get a distinct key.
+fn unique_idem_key(env: &Env) -> BytesN<32> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut bytes = [0u8; 32];
+    bytes[..8].copy_from_slice(&n.to_be_bytes());
+    BytesN::from_array(env, &bytes)
+}
+
 /// Mint `amount` tokens to `user` and deposit them into `project_id`.
 pub fn do_deposit(
-    _env: &Env,
+    env: &Env,
     client: &CrowdfundVaultContractClient,
     token_admin: &StellarAssetClient,
     user: &Address,
@@ -60,7 +73,7 @@ pub fn do_deposit(
     amount: i128,
 ) {
     token_admin.mint(user, &amount);
-    client.deposit(user, &project_id, &amount);
+    client.deposit(user, &project_id, &amount, &unique_idem_key(env));
 }
 
 /// Read ProtocolStats directly from contract instance storage.
