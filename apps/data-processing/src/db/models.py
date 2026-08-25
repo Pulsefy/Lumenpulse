@@ -770,3 +770,73 @@ class DailyOnchainKPISnapshot(Base):
             f"tvl={self.tvl}, volume={self.volume}, active_rounds={self.active_rounds}, "
             f"contribution_count={self.contribution_count})>"
         )
+
+
+# ---------------------------------------------------------------------------
+# Sentiment labelled examples (human ground-truth store — Issue Wave 8)
+# ---------------------------------------------------------------------------
+
+VALID_LABELS = {"positive", "negative", "neutral"}
+VALID_SPLITS = {"train", "eval"}
+
+
+class SentimentLabelledExample(Base):
+    """
+    Stores human-annotated sentiment examples used as ground truth
+    for model evaluation and retraining quality gates.
+
+    ``split`` separates training-eligible rows (``"train"``) from the
+    held-out evaluation set (``"eval"``).  The evaluation set is never
+    used to enrich the VADER lexicon; it is only used to measure
+    precision, recall, and F1 during retraining runs.
+    """
+
+    __tablename__ = "sentiment_labelled_examples"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # The raw text being labelled (headline, tweet, etc.)
+    text = Column(Text, nullable=False)
+
+    # Human-assigned label: "positive" | "negative" | "neutral"
+    label = Column(String(20), nullable=False, index=True)
+
+    # Who assigned the label (username, service account, or "seed")
+    labeller = Column(String(255), nullable=False, default="seed")
+
+    # When the label was created / last corrected
+    labelled_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Train / eval split assignment
+    split = Column(String(10), nullable=False, default="train", index=True)
+
+    # Optional free-text note attached when correcting a label
+    correction_note = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index("idx_sle_label", "label"),
+        Index("idx_sle_split", "split"),
+        Index("idx_sle_labeller", "labeller"),
+        Index("idx_sle_split_label", "split", "label"),
+        Index("idx_sle_labelled_at", "labelled_at"),
+    )
+
+    def __repr__(self) -> str:
+        preview = (self.text or "")[:40].replace("\n", " ")
+        return (
+            f"<SentimentLabelledExample(id={self.id}, label='{self.label}', "
+            f"split='{self.split}', labeller='{self.labeller}', "
+            f"text='{preview}...')>"
+        )

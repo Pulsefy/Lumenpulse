@@ -124,6 +124,7 @@ from src.api.review_queue_routes import router as review_queue_router
 from src.api.ledger_cursor_routes import router as ledger_cursor_router
 from src.api.kpi_routes import router as kpi_router
 from src.api.account_operation_routes import router as account_operation_router
+from src.api.sentiment_label_routes import router as sentiment_label_router
 
 app.include_router(ingestion_quality_router)
 app.include_router(review_queue_router)
@@ -131,6 +132,7 @@ app.include_router(ledger_cursor_router)
 app.include_router(kpi_router)  # KPI routes for TVL and volume computation
 app.include_router(account_operation_router)  # Account operation ingestion
 app.include_router(rebuild_router)  # Rebuild routes for admin
+app.include_router(sentiment_label_router)  # Human-labelled sentiment ground-truth store (Wave 8)
 
 
 try:

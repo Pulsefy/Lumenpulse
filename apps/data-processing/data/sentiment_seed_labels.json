@@ -1,0 +1,182 @@
+[
+  {
+    "text": "Bitcoin surges to a new all-time high as institutional demand soars",
+    "label": "positive",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Stellar lumens rally 40% on partnership announcement with major bank",
+    "label": "positive",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Crypto markets boom as ETF approval sparks widespread buying",
+    "label": "positive",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "DeFi protocol hits record TVL amid growing user adoption",
+    "label": "positive",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "XLM bulls dominate as Soroban smart contract ecosystem expands",
+    "label": "positive",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Bitcoin crashes more than 20% in 24 hours on regulatory fears",
+    "label": "negative",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Crypto exchange collapses leaving millions of users unable to withdraw",
+    "label": "negative",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Market-wide sell-off erases $200 billion in crypto value overnight",
+    "label": "negative",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "DeFi hack drains $150 million from liquidity pool",
+    "label": "negative",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Stellar bear trap triggered as whales dump large XLM positions",
+    "label": "negative",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Bitcoin price remains flat as traders await Federal Reserve decision",
+    "label": "neutral",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Crypto markets trade sideways with low volume on holiday weekend",
+    "label": "neutral",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Stellar network processes 1.2 million transactions in latest ledger window",
+    "label": "neutral",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "XLM developer conference scheduled for next quarter",
+    "label": "neutral",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Blockchain analytics firm publishes new report on on-chain activity",
+    "label": "neutral",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "New Soroban smart contract deployed with multi-sig treasury management",
+    "label": "neutral",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Ethereum bull run spills over into altcoins including XLM",
+    "label": "positive",
+    "labeller": "seed",
+    "split": "eval"
+  },
+  {
+    "text": "Lumens hit six-month high after Stellar Foundation announces grant program",
+    "label": "positive",
+    "labeller": "seed",
+    "split": "eval"
+  },
+  {
+    "text": "Crypto market recovery accelerates as fear index drops to yearly low",
+    "label": "positive",
+    "labeller": "seed",
+    "split": "eval"
+  },
+  {
+    "text": "Stellar price plunges after core developer announces departure",
+    "label": "negative",
+    "labeller": "seed",
+    "split": "eval"
+  },
+  {
+    "text": "Regulatory crackdown on stablecoins sends XLM tumbling 15%",
+    "label": "negative",
+    "labeller": "seed",
+    "split": "eval"
+  },
+  {
+    "text": "Bitcoin dips below key support as bear market sentiment deepens",
+    "label": "negative",
+    "labeller": "seed",
+    "split": "eval"
+  },
+  {
+    "text": "XLM holds steady as macro uncertainty keeps traders on the sidelines",
+    "label": "neutral",
+    "labeller": "seed",
+    "split": "eval"
+  },
+  {
+    "text": "Stellar development foundation releases quarterly progress update",
+    "label": "neutral",
+    "labeller": "seed",
+    "split": "eval"
+  },
+  {
+    "text": "Crypto exchange adds XLM to its supported trading pairs",
+    "label": "neutral",
+    "labeller": "seed",
+    "split": "eval"
+  },
+  {
+    "text": "Bitcoin mining difficulty adjusts upward by 3% in latest epoch",
+    "label": "neutral",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Stellar's Soroban VM surpasses 10,000 deployed contracts milestone",
+    "label": "positive",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Flash crash wipes out over-leveraged longs in Bitcoin futures market",
+    "label": "negative",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Crypto market open interest unchanged as consolidation phase continues",
+    "label": "neutral",
+    "labeller": "seed",
+    "split": "train"
+  },
+  {
+    "text": "Altcoin season begins as Bitcoin dominance slips below 40%",
+    "label": "positive",
+    "labeller": "seed",
+    "split": "train"
+  }
+]

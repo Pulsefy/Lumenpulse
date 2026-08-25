@@ -17,6 +17,9 @@ from .models import (
     NewsInsight,
     AssetTrend,
     EntityLinkingReview,
+    SentimentLabelledExample,
+    VALID_LABELS,
+    VALID_SPLITS,
 )
 from .cohort_models import (
     GrantRound,
@@ -26,6 +29,7 @@ from .cohort_models import (
     RepeatContributorSummary,
 )
 from .postgres_service import PostgresService
+from .label_store import LabelStore, LabelValidationError
 
 __all__ = [
     "Base",
@@ -47,5 +51,10 @@ __all__ = [
     "CohortRetentionSummary",
     "RepeatContributorSummary",
     "EntityLinkingReview",
+    "SentimentLabelledExample",
+    "VALID_LABELS",
+    "VALID_SPLITS",
     "PostgresService",
+    "LabelStore",
+    "LabelValidationError",
 ]
