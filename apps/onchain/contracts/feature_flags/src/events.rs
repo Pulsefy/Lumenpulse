@@ -18,3 +18,11 @@ pub struct AdminTransferredEvent {
     pub old_admin: Address,
     pub new_admin: Address,
 }
+
+/// Emitted when the contract pause state changes.
+#[contractevent]
+pub struct ContractPauseEvent {
+    #[topic]
+    pub admin: Address,
+    pub paused: bool,
+}

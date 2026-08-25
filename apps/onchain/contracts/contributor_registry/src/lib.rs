@@ -275,7 +275,15 @@ impl ContributorRegistryContract {
         Self::ensure_initialized(&env)?;
         Self::require_contribution_not_paused(&env)?;
         address.require_auth();
-        Self::write_contributor(&env, &address, &github_handle)
+        Self::write_contributor(&env, &address, &github_handle)?;
+
+        events::ContributorRegisteredEvent {
+            contributor: address,
+            github_handle,
+        }
+        .publish(&env);
+
+        Ok(())
     }
 
     /// Gasless / meta-transaction registration.
@@ -483,7 +491,12 @@ impl ContributorRegistryContract {
             .remove(&DataKey::Contributor(address.clone()));
         env.storage()
             .persistent()
-            .remove(&DataKey::RegistrationNonce(address));
+            .remove(&DataKey::RegistrationNonce(address.clone()));
+
+        events::ContributorDeregisteredEvent {
+            contributor: address,
+        }
+        .publish(&env);
 
         Ok(())
     }

@@ -22,3 +22,40 @@ pub struct BurnEvent {
     pub from: Address,
     pub amount: i128,
 }
+
+#[contractevent]
+pub struct MintedEvent {
+    #[topic]
+    pub to: Address,
+    pub amount: i128,
+}
+
+#[contractevent]
+pub struct TransferEvent {
+    #[topic]
+    pub from: Address,
+    #[topic]
+    pub to: Address,
+    pub amount: i128,
+}
+
+#[contractevent]
+pub struct FreezeEvent {
+    #[topic]
+    pub id: Address,
+}
+
+#[contractevent]
+pub struct UnfreezeEvent {
+    #[topic]
+    pub id: Address,
+}
+
+#[contractevent]
+pub struct ApprovalEvent {
+    #[topic]
+    pub from: Address,
+    #[topic]
+    pub spender: Address,
+    pub amount: i128,
+}

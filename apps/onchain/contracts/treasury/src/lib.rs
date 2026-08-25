@@ -271,6 +271,7 @@ impl TreasuryContract {
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Token, &token);
+        events::InitializedEvent { admin, token }.publish(&env);
         Ok(())
     }
 
@@ -620,6 +621,11 @@ impl TreasuryContract {
     ) -> Result<(), TreasuryError> {
         consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+        events::AdminChangedEvent {
+            old_admin: executor,
+            new_admin,
+        }
+        .publish(&env);
         Ok(())
     }
 
@@ -763,11 +769,13 @@ impl TreasuryContract {
             token_client.transfer(&contract_address, &beneficiary, &refundable);
         }
 
-        #[allow(deprecated)]
-        env.events().publish(
-            (soroban_sdk::String::from_str(&env, "stream_cancelled"),),
-            (&beneficiary, total_unlocked, refundable, current_time),
-        );
+        events::StreamCancelledEvent {
+            beneficiary: beneficiary.clone(),
+            total_unlocked,
+            refundable,
+            cancelled_at: current_time,
+        }
+        .publish(&env);
 
         Self::delete_stream(&env, &beneficiary);
 
@@ -811,11 +819,12 @@ impl TreasuryContract {
             token_client.transfer(&contract_address, &beneficiary, &full_refund);
         }
 
-        #[allow(deprecated)]
-        env.events().publish(
-            (soroban_sdk::String::from_str(&env, "emergency_stop"),),
-            (&beneficiary, reason, full_refund),
-        );
+        events::EmergencyStopEvent {
+            beneficiary: beneficiary.clone(),
+            refund_amount: full_refund,
+            reason,
+        }
+        .publish(&env);
 
         Self::delete_stream(&env, &beneficiary);
 

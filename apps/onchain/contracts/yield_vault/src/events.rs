@@ -62,3 +62,12 @@ pub struct YieldHarvestedEvent {
     /// The amount of yield earned.
     pub yield_earned: i128,
 }
+
+/// Emitted when the vault pause state changes.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VaultPauseEvent {
+    #[topic]
+    pub admin: Address,
+    pub paused: bool,
+}

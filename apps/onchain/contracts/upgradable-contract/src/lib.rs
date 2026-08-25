@@ -6,8 +6,8 @@ mod storage;
 
 use errors::ContractError;
 use events::{
-    AdminChangedEvent, OperationCancelledEvent, OperationExecutedEvent, OperationQueuedEvent,
-    UpgradedEvent,
+    AdminChangedEvent, InitializedEvent, OperationCancelledEvent, OperationExecutedEvent,
+    OperationQueuedEvent, UpgradedEvent,
 };
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 use storage::{
@@ -64,6 +64,9 @@ impl UpgradableContract {
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        InitializedEvent { admin }.publish(&env);
+
         Ok(())
     }
 

@@ -164,3 +164,18 @@ pub struct ScopePauseChangedEvent {
     pub paused: bool,
     pub timestamp: u64,
 }
+
+/// Emitted when a contributor is registered directly (not gasless).
+#[contractevent]
+pub struct ContributorRegisteredEvent {
+    #[topic]
+    pub contributor: Address,
+    pub github_handle: String,
+}
+
+/// Emitted when a contributor is deregistered.
+#[contractevent]
+pub struct ContributorDeregisteredEvent {
+    #[topic]
+    pub contributor: Address,
+}

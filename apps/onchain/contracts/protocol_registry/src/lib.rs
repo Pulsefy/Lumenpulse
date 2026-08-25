@@ -263,12 +263,14 @@ impl ProtocolRegistryContract {
     pub fn pause(env: Env, admin: Address) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &true);
+        events::ContractPauseEvent { admin, paused: true }.publish(&env);
         Ok(())
     }
 
     pub fn unpause(env: Env, admin: Address) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &false);
+        events::ContractPauseEvent { admin, paused: false }.publish(&env);
         Ok(())
     }
 
@@ -279,7 +281,12 @@ impl ProtocolRegistryContract {
         new_wasm_hash: BytesN<32>,
     ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &caller)?;
-        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        events::UpgradedEvent {
+            admin: caller,
+            new_wasm_hash,
+        }
+        .publish(&env);
         Ok(())
     }
 }

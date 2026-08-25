@@ -18,6 +18,14 @@ pub struct AdminChangedEvent {
     pub new_admin: Address,
 }
 
+/// Emitted when the contract is initialized with an admin.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InitializedEvent {
+    #[topic]
+    pub admin: Address,
+}
+
 /// Emitted when a sensitive operation is queued.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -232,3 +232,45 @@ pub fn publish_multisig_configured(
     }
     .publish(env);
 }
+
+// ── Admin lifecycle events ──────────────────────────────────
+
+/// Emitted when the treasury admin is changed (via multisig or direct).
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminChangedEvent {
+    #[topic]
+    pub old_admin: Address,
+    #[topic]
+    pub new_admin: Address,
+}
+
+/// Emitted when the treasury is initialized.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InitializedEvent {
+    #[topic]
+    pub admin: Address,
+    pub token: Address,
+}
+
+/// Emitted when a stream is cancelled and remaining tokens refunded.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StreamCancelledEvent {
+    #[topic]
+    pub beneficiary: Address,
+    pub total_unlocked: i128,
+    pub refundable: i128,
+    pub cancelled_at: u64,
+}
+
+/// Emitted when an emergency stop refunds remaining tokens.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EmergencyStopEvent {
+    #[topic]
+    pub beneficiary: Address,
+    pub refund_amount: i128,
+    pub reason: soroban_sdk::String,
+}

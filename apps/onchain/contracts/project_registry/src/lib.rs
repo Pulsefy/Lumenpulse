@@ -439,18 +439,26 @@ impl ProjectRegistryContract {
         config.quorum_threshold = quorum_threshold;
         config.min_voter_weight = min_voter_weight;
         env.storage().instance().set(&DataKey::Config, &config);
+        events::ConfigUpdatedEvent {
+            admin,
+            quorum_threshold,
+            min_voter_weight,
+        }
+        .publish(&env);
         Ok(())
     }
 
     pub fn pause(env: Env, admin: Address) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &true);
+        events::ContractPauseEvent { admin, paused: true }.publish(&env);
         Ok(())
     }
 
     pub fn unpause(env: Env, admin: Address) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &false);
+        events::ContractPauseEvent { admin, paused: false }.publish(&env);
         Ok(())
     }
 
@@ -461,6 +469,11 @@ impl ProjectRegistryContract {
     ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &current_admin)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+        events::AdminChangedEvent {
+            old_admin: current_admin,
+            new_admin,
+        }
+        .publish(&env);
         Ok(())
     }
 
@@ -470,7 +483,12 @@ impl ProjectRegistryContract {
         new_wasm_hash: BytesN<32>,
     ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &caller)?;
-        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        events::UpgradedEvent {
+            admin: caller,
+            new_wasm_hash,
+        }
+        .publish(&env);
         Ok(())
     }
 }

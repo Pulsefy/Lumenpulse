@@ -98,3 +98,28 @@ pub struct ScopePauseChangedEvent {
     pub paused: bool,
     pub timestamp: u64,
 }
+
+/// Emitted when the admin role is transferred.
+#[contractevent]
+pub struct AdminChangedEvent {
+    #[topic]
+    pub old_admin: Address,
+    #[topic]
+    pub new_admin: Address,
+}
+
+/// Emitted when the contract WASM is upgraded.
+#[contractevent]
+pub struct UpgradedEvent {
+    #[topic]
+    pub admin: Address,
+    pub new_wasm_hash: soroban_sdk::BytesN<32>,
+}
+
+/// Emitted when the global contract pause state changes.
+#[contractevent]
+pub struct ContractPauseEvent {
+    #[topic]
+    pub admin: Address,
+    pub paused: bool,
+}

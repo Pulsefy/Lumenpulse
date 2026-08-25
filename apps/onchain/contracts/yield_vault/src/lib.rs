@@ -58,6 +58,8 @@ impl YieldVaultContract {
 
         env.storage().instance().set(&DataKey::Paused, &paused);
 
+        events::VaultPauseEvent { admin: caller, paused }.publish(&env);
+
         Ok(())
     }
 

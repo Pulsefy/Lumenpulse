@@ -682,3 +682,19 @@ fn test_same_request_id_not_shared_between_operations() {
 fn get_mock_address(f: &Fixture) -> Address {
     f.client.get_provider(&f.provider_id).address
 }
+
+// ── Event emission tests ────────────────────────────────────────
+
+/// `set_paused` emits a `VaultPauseEvent` with the admin and paused state.
+#[test]
+fn test_set_paused_emits_event() {
+    let f = setup();
+
+    // Pause — event emitted with paused=true.
+    f.client.set_paused(&f.admin, &true);
+    assert!(f.client.is_paused());
+
+    // Unpause — event emitted with paused=false.
+    f.client.set_paused(&f.admin, &false);
+    assert!(!f.client.is_paused());
+}

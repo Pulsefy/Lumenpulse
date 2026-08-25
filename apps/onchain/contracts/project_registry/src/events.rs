@@ -106,3 +106,41 @@ pub struct VerificationOverriddenEvent {
     /// The new verification status (true for verified, false for rejected).
     pub verified: bool,
 }
+
+/// Emitted when the registry config is updated.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConfigUpdatedEvent {
+    #[topic]
+    pub admin: Address,
+    pub quorum_threshold: i128,
+    pub min_voter_weight: i128,
+}
+
+/// Emitted when the registry is paused.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractPauseEvent {
+    #[topic]
+    pub admin: Address,
+    pub paused: bool,
+}
+
+/// Emitted when the admin is changed.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminChangedEvent {
+    #[topic]
+    pub old_admin: Address,
+    #[topic]
+    pub new_admin: Address,
+}
+
+/// Emitted when the contract WASM is upgraded.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UpgradedEvent {
+    #[topic]
+    pub admin: Address,
+    pub new_wasm_hash: soroban_sdk::BytesN<32>,
+}

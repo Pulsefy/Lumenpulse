@@ -2,7 +2,7 @@ use crate::errors::MatchingPoolError;
 use crate::{MatchingPoolContract, MatchingPoolContractClient};
 use soroban_sdk::{
     symbol_short,
-    testutils::{Address as _, Ledger},
+    testutils::{Address as _, Events, Ledger},
     token::{StellarAssetClient, TokenClient},
     vec, Address, Env,
 };
@@ -739,6 +739,53 @@ fn setup_round<'a>(
         &1000u64,
         &3000u64,
     )
+}
+
+#[test]
+fn test_set_admin_emits_event() {
+    let env = Env::default();
+    let contract = env.register(MatchingPoolContract, ());
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let client = MatchingPoolContractClient::new(&env, &contract);
+
+    env.mock_all_auths();
+    client.initialize(&admin);
+    client.set_admin(&admin, &new_admin);
+
+    let events = env.events().all();
+    assert!(events.len() >= 1);
+}
+
+#[test]
+fn test_pause_emits_event() {
+    let env = Env::default();
+    let contract = env.register(MatchingPoolContract, ());
+    let admin = Address::generate(&env);
+    let client = MatchingPoolContractClient::new(&env, &contract);
+
+    env.mock_all_auths();
+    client.initialize(&admin);
+    client.pause(&admin);
+
+    let events = env.events().all();
+    assert!(!events.is_empty());
+}
+
+#[test]
+fn test_unpause_emits_event() {
+    let env = Env::default();
+    let contract = env.register(MatchingPoolContract, ());
+    let admin = Address::generate(&env);
+    let client = MatchingPoolContractClient::new(&env, &contract);
+
+    env.mock_all_auths();
+    client.initialize(&admin);
+    client.pause(&admin);
+    client.unpause(&admin);
+
+    let events = env.events().all();
+    assert!(events.len() >= 2);
 }
 
 #[test]

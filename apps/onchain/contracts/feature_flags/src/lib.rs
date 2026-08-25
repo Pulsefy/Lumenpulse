@@ -153,12 +153,14 @@ impl FeatureFlagsContract {
     pub fn pause(env: Env, admin: Address) -> Result<(), FlagError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &true);
+        events::ContractPauseEvent { admin, paused: true }.publish(&env);
         Ok(())
     }
 
     pub fn unpause(env: Env, admin: Address) -> Result<(), FlagError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &false);
+        events::ContractPauseEvent { admin, paused: false }.publish(&env);
         Ok(())
     }
 }

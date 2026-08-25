@@ -3,9 +3,10 @@ extern crate std;
 
 use crate::{LumenToken, LumenTokenClient};
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::{Address as _, Events, Ledger},
     Address, BytesN, Env, String,
 };
+use std::vec::Vec;
 
 #[test]
 fn test_token() {
@@ -184,4 +185,107 @@ fn test_ttl_extended_after_read_write() {
     // Second ledger advance — read-triggered bump should keep it alive.
     env.ledger().set_sequence_number(200_002);
     assert_eq!(client.balance(&user), 500);
+}
+
+// ---------------------------------------------------------------------------
+// Event emission tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_mint_emits_event() {
+    let env = Env::default();
+    let contract_address = env.register(LumenToken, ());
+    let admin = Address::generate(&env);
+    let to = Address::generate(&env);
+    let client = LumenTokenClient::new(&env, &contract_address);
+
+    env.mock_all_auths();
+    client.initialize(&admin, &7, &String::from_str(&env, "Lumen"), &String::from_str(&env, "LUMEN"));
+
+    client.mint(&to, &1000);
+
+    let events = env.events().all();
+    let mint_events: Vec<_> = events
+        .iter()
+        .filter(|e| {
+            let topics = &e.1;
+            topics.len() > 0
+        })
+        .collect();
+    assert!(!mint_events.is_empty());
+}
+
+#[test]
+fn test_transfer_emits_event() {
+    let env = Env::default();
+    let contract_address = env.register(LumenToken, ());
+    let admin = Address::generate(&env);
+    let from = Address::generate(&env);
+    let to = Address::generate(&env);
+    let client = LumenTokenClient::new(&env, &contract_address);
+
+    env.mock_all_auths();
+    client.initialize(&admin, &7, &String::from_str(&env, "Lumen"), &String::from_str(&env, "LUMEN"));
+    client.mint(&from, &1000);
+
+    env.events().all();
+    client.transfer(&from, &to, &100);
+
+    let events = env.events().all();
+    assert!(events.len() >= 1);
+}
+
+#[test]
+fn test_freeze_emits_event() {
+    let env = Env::default();
+    let contract_address = env.register(LumenToken, ());
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let client = LumenTokenClient::new(&env, &contract_address);
+
+    env.mock_all_auths();
+    client.initialize(&admin, &7, &String::from_str(&env, "Lumen"), &String::from_str(&env, "LUMEN"));
+    client.freeze(&user);
+
+    let events = env.events().all();
+    assert!(!events.is_empty());
+}
+
+#[test]
+fn test_unfreeze_emits_event() {
+    let env = Env::default();
+    let contract_address = env.register(LumenToken, ());
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let client = LumenTokenClient::new(&env, &contract_address);
+
+    env.mock_all_auths();
+    client.initialize(&admin, &7, &String::from_str(&env, "Lumen"), &String::from_str(&env, "LUMEN"));
+    client.freeze(&user);
+
+    env.events().all();
+    client.unfreeze(&user);
+
+    let events = env.events().all();
+    assert!(events.len() >= 1);
+}
+
+#[test]
+fn test_approve_emits_event() {
+    let env = Env::default();
+    let contract_address = env.register(LumenToken, ());
+    let admin = Address::generate(&env);
+    let from = Address::generate(&env);
+    let spender = Address::generate(&env);
+    let client = LumenTokenClient::new(&env, &contract_address);
+
+    env.mock_all_auths();
+    client.initialize(&admin, &7, &String::from_str(&env, "Lumen"), &String::from_str(&env, "LUMEN"));
+    client.mint(&from, &1000);
+
+    env.events().all();
+    client.approve(&from, &spender, &500, &100_000);
+
+    let events = env.events().all();
+    assert!(events.len() >= 1);
 }

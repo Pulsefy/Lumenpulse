@@ -8,7 +8,7 @@ mod metadata;
 mod storage;
 mod test;
 
-use events::{AdminChangedEvent, BurnEvent, UpgradedEvent};
+use events::{AdminChangedEvent, ApprovalEvent, BurnEvent, FreezeEvent, MintedEvent, TransferEvent, UnfreezeEvent, UpgradedEvent};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
 
 #[contract]
@@ -27,6 +27,7 @@ impl LumenToken {
     pub fn mint(e: Env, to: Address, amount: i128) {
         let admin = admin::read_administrator(&e);
         admin.require_auth();
+        MintedEvent { to: to.clone(), amount }.publish(&e);
         balance::receive_balance(&e, to, amount);
     }
 
@@ -45,12 +46,14 @@ impl LumenToken {
     pub fn freeze(e: Env, id: Address) {
         let admin = admin::read_administrator(&e);
         admin.require_auth();
+        FreezeEvent { id: id.clone() }.publish(&e);
         balance::write_state(&e, id, true);
     }
 
     pub fn unfreeze(e: Env, id: Address) {
         let admin = admin::read_administrator(&e);
         admin.require_auth();
+        UnfreezeEvent { id: id.clone() }.publish(&e);
         balance::write_state(&e, id, false);
     }
 
@@ -61,6 +64,7 @@ impl LumenToken {
     pub fn approve(e: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
         from.require_auth();
         balance::check_not_frozen(&e, &from);
+        ApprovalEvent { from: from.clone(), spender: spender.clone(), amount }.publish(&e);
         allowance::write_allowance(&e, from, spender, amount, expiration_ledger);
     }
 
@@ -70,7 +74,8 @@ impl LumenToken {
 
     pub fn transfer(e: Env, from: Address, to: Address, amount: i128) {
         from.require_auth();
-        balance::spend_balance(&e, from.clone(), amount);
+        TransferEvent { from: from.clone(), to: to.clone(), amount }.publish(&e);
+        balance::spend_balance(&e, from, amount);
         balance::receive_balance(&e, to, amount);
     }
 
@@ -79,7 +84,8 @@ impl LumenToken {
         balance::check_not_frozen(&e, &spender);
 
         allowance::spend_allowance(&e, from.clone(), spender, amount);
-        balance::spend_balance(&e, from.clone(), amount);
+        TransferEvent { from: from.clone(), to: to.clone(), amount }.publish(&e);
+        balance::spend_balance(&e, from, amount);
         balance::receive_balance(&e, to, amount);
     }
 

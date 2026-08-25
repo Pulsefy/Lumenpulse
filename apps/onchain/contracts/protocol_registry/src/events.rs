@@ -42,3 +42,19 @@ pub struct AdminTransferredEvent {
     pub old_admin: Address,
     pub new_admin: Address,
 }
+
+/// Emitted when the registry is paused.
+#[contractevent]
+pub struct ContractPauseEvent {
+    #[topic]
+    pub admin: Address,
+    pub paused: bool,
+}
+
+/// Emitted when the contract WASM is upgraded.
+#[contractevent]
+pub struct UpgradedEvent {
+    #[topic]
+    pub admin: Address,
+    pub new_wasm_hash: soroban_sdk::BytesN<32>,
+}
