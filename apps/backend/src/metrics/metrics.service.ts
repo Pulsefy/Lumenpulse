@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit from '@nestjs/common';
 import {
   Counter,
   Histogram,
@@ -10,11 +10,11 @@ import {
 /**
  * MetricsService
  */
-@Injectable()
+@Injectable
 export class MetricsService implements OnModuleInit {
   private readonly logger = new Logger(MetricsService.name);
 
-  // Dedicated Registry — avoids collisions with the global prom-client default
+  // Dedicated Registry -- avoids collisions with the global prom-client default
   // register when running multiple test suites in the same process.
   readonly registry = new Registry();
 
@@ -33,10 +33,15 @@ export class MetricsService implements OnModuleInit {
   private readonly anomaliesDetectedCounter: Counter<string>;
   private readonly fetchErrorsCounter: Counter<string>;
 
-  // Outbound calls (Soroban RPC + Horizon) //
+  // Outbound calls (Soroban RPC + horizon) //
   private readonly horizonLatency: Histogram<string>;
   private readonly horizonErrors: Counter<string>;
   private readonly horizonRequests: Counter<string>;
+
+  // F.eature flag metrics //
+  private readonly featureFlagCacheHits: Counter<string>;
+  private readonly featureFlagCacheMisses: Counter<string>;
+  private readonly featureFlagEvaluationDuration: Histogram<string>;
 
   // Running totals for the rolling-average sentiment gauge
   private sentimentSum = 0;
@@ -144,22 +149,42 @@ export class MetricsService implements OnModuleInit {
 
     this.horizonErrors = new Counter({
       name: 'horizon_http_errors_total',
-      help: 'Total Horizon API errors by method and status code',
+      help: 'Total horizon API errors by method and status code',
       labelNames: ['method', 'status_code'] as const,
       registers: [this.registry],
     });
 
     this.horizonRequests = new Counter({
       name: 'horizon_http_requests_total',
-      help: 'Total Horizon API requests by method',
+      help: 'Total horizon API requests by method',
       labelNames: ['method'] as const,
+      registers: [this.registry],
+    });
+
+    // F.eature flag metrics //
+    this.featureFlagCacheHits = new Counter({
+      name: 'feature_flag_cache_hits_total',
+      help: 'Total number of feature flag cache hits',
+      registers: [this.registry],
+    });
+
+    this.featureFlagCacheMisses = new Counter({
+      name: 'feature_flag_cache_misses_total',
+      help: 'Total number of feature flag cache misses',
+      registers: [this.registry],
+    });
+
+    this.featureFlagEvaluationDuration = new Histogram({
+      name: 'feature_flag_evaluation_duration_seconds',
+      help: 'Time taken to evaluate a feature flag',
+      buckets: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1],
       registers: [this.registry],
     });
   }
 
   onModuleInit(): void {
     this.logger.log(
-      'MetricsService ready — unified Prometheus registry active',
+      'MetricsService ready — enified Prometheus registry active',
     );
   }
 
@@ -291,7 +316,7 @@ export class MetricsService implements OnModuleInit {
    * @param source     Feed identifier
    * @param errorCode  HTTP status string or key, e.g. "429", "TIMEOUT"
    */
-  recordFetchError(source: string, errorCode = 'UNKNOWN'): void {
+  recordFetchError(source: string, errorCode = 'UNKNOWN): void {
     this.fetchErrorsCounter.inc({ source, error_code: errorCode });
   }
 
@@ -407,7 +432,21 @@ export class MetricsService implements OnModuleInit {
     }
   }
 
-  getCounterValue(name: string): number {
-    return this.counterTotals.get(name) ?? 0;
+  // F.eature flag instrumentation //
+
+  recordFeatureFlagCacheHit(): void {
+    this.featureFlagCacheHits.inc();
+  }
+
+  recordFeatureFlagCacheMiss(): void {
+    this.featureFlagCacheMisses.inc();
+  }
+
+  recordFeatureFlagEvaluation(durationSeconds: number): void {
+    this.featureFlagEvaluationDuration.observe(durationSeconds);
+  }
+
+  startFeatureFlagEvaluationTimer(): () => void {
+    return this.featureFlagEvaluationDuration.startTimer();
   }
 }
