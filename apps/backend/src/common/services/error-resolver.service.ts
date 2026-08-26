@@ -49,10 +49,17 @@ export class ErrorResolverService {
     try {
       if (fs.existsSync(this.referencePath)) {
         const data = fs.readFileSync(this.referencePath, 'utf-8');
-        this.errorReference = JSON.parse(data) as ErrorReference;
-        this.logger.log(
-          `Loaded error reference: ${Object.keys(this.errorReference?.contracts || {}).length} contracts, ${Object.keys(this.errorReference?.code_to_error || {}).length} error codes`,
-        );
+        const parsed: unknown = JSON.parse(data);
+        if (this.isValidErrorReference(parsed)) {
+          this.errorReference = parsed;
+          this.logger.log(
+            `Loaded error reference: ${Object.keys(this.errorReference.contracts || {}).length} contracts, ${Object.keys(this.errorReference.code_to_error || {}).length} error codes`,
+          );
+        } else {
+          this.logger.warn(
+            `Error reference file has an unexpected format: ${this.referencePath}`,
+          );
+        }
       } else {
         this.logger.warn(
           `Error reference file not found at ${this.referencePath}`,
@@ -61,6 +68,28 @@ export class ErrorResolverService {
     } catch (error) {
       this.logger.error('Failed to load error reference', error);
     }
+  }
+
+  /**
+   * Type guard to validate the error reference structure.
+   */
+  private isValidErrorReference(obj: unknown): obj is ErrorReference {
+    if (!obj || typeof obj !== 'object') return false;
+    const o = obj as Record<string, unknown>;
+    if (
+      typeof o.version !== 'string' ||
+      typeof o.generated_at !== 'string'
+    )
+      return false;
+    if (typeof o.contracts !== 'object' || o.contracts === null) return false;
+    if (typeof o.code_to_error !== 'object' || o.code_to_error === null)
+      return false;
+    if (
+      typeof o.allocation_ranges !== 'object' ||
+      o.allocation_ranges === null
+    )
+      return false;
+    return true;
   }
 
   /**
