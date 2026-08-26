@@ -46,6 +46,25 @@ The endpoint returns the created demo project IDs for verification.
 
 > This endpoint is disabled by default and should not be enabled in production unless explicitly required.
 
+## Testnet Friendbot bootstrap endpoint
+
+The backend exposes an admin-only, testnet-only endpoint that funds fresh accounts via Stellar Friendbot:
+
+```bash
+FRIENDBOT_BOOTSTRAP_ENABLED=true
+STELLAR_NETWORK=testnet
+```
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <ADMIN_JWT>" \
+  -H "Content-Type: application/json" \
+  -d '{"publicKey":"G..."}' \
+  http://localhost:3000/v1/dev/testnet-bootstrap/fund
+```
+
+Safeguards: feature flag, `STELLAR_NETWORK=testnet` gate, admin JWT, dedicated rate limit, and a hardcoded Friendbot URL.
+
 ## Security defaults
 
 The backend includes:

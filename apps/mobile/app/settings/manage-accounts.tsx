@@ -16,9 +16,11 @@ import { useRouter } from 'expo-router';
 import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
 import { LinkedStellarAccount, usersApi } from '../../lib/api';
 import { storage } from '../../lib/storage';
+import { requireBiometricConfirmation } from '../../lib/biometric-lock';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
 import { useWallet } from '../../contexts/WalletContext';
+import { useEnvironment } from '../../contexts/EnvironmentContext';
 
 const STELLAR_PUBLIC_KEY_REGEX = /\bG[A-Z2-7]{55}\b/;
 
@@ -51,7 +53,18 @@ export default function ManageAccountsScreen() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [scanLocked, setScanLocked] = useState(false);
-  const { publicKey, status, connect, disconnect } = useWallet();
+  const {
+    publicKey,
+    status,
+    connect,
+    disconnect,
+    reconnect,
+    lastConnectedNetwork,
+    isRestoring,
+    adoptLinkedAccount,
+  } = useWallet();
+  const { environmentConfig } = useEnvironment();
+  const environmentLabel = environmentConfig.label;
 
   const sortedAccounts = useMemo(
     () =>
@@ -157,7 +170,10 @@ export default function ManageAccountsScreen() {
 
     setNickname('');
     await loadAccounts();
-    await storage.setActiveWalletPublicKey(publicKey);
+    // Persist on the active environment and propagate into WalletProvider
+    // state so screens that read useWallet() (e.g. contributor profile)
+    // reflect the newly linked account immediately.
+    await adoptLinkedAccount(publicKey, environmentConfig.id);
     Alert.alert(
       t('settings.manage_accounts.account_linked'),
       `${truncateKey(publicKey)} ${t('settings.manage_accounts.account_linked_message')}`,
@@ -177,6 +193,11 @@ export default function ManageAccountsScreen() {
           style: 'destructive' as const,
           onPress: () => {
             void (async () => {
+              const isConfirmed = await requireBiometricConfirmation(
+                'Confirm your identity to remove account'
+              );
+              if (!isConfirmed) return;
+
               setSubmitting(true);
               const response = await usersApi.removeLinkedAccount(account.id);
               setSubmitting(false);
@@ -307,6 +328,23 @@ export default function ManageAccountsScreen() {
             flows.
           </Text>
 
+          {/** Restoring in-flight (e.g. cold start). */}
+          {(isRestoring || status === 'reconnecting') && (
+            <View
+              style={[styles.accountRow, { paddingVertical: 12 }]}
+              accessible
+              accessibilityLabel={t('wallet.reconnect.restoring')}
+            >
+              <ActivityIndicator
+                color={colors.accent}
+                accessibilityLabel={t('common.loading')}
+              />
+              <Text style={[styles.accountKey, { color: colors.textSecondary, marginLeft: 10 }]}>
+                {t('wallet.reconnect.restoring')}
+              </Text>
+            </View>
+          )}
+
           {status === 'connected' && publicKey ? (
             <View style={[styles.accountRow, { paddingVertical: 10 }]}>
               <View style={styles.accountCopy}>
@@ -321,6 +359,49 @@ export default function ManageAccountsScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={[styles.removeButtonText, { color: colors.danger }]}>Disconnect</Text>
+              </TouchableOpacity>
+            </View>
+          ) : status === 'network_mismatch' ? (
+            <View accessible accessibilityLabel={t('wallet.network_mismatch.title')}>
+              <Text style={[styles.helperText, { color: colors.warning }]} accessible>
+                {t('wallet.network_mismatch.message', { network: environmentLabel })}
+              </Text>
+              {lastConnectedNetwork &&
+                lastConnectedNetwork !== environmentConfig.id && (
+                  <Text
+                    style={[styles.helperText, { color: colors.textSecondary }]}
+                    accessible
+                  >
+                    {t('wallet.network_mismatch.last_network_label', {
+                      network: lastConnectedNetwork,
+                    })}
+                  </Text>
+                )}
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: colors.warning }]}
+                onPress={reconnect}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={t('wallet.reconnect.button')}
+              >
+                <Ionicons name="refresh-outline" size={18} color="#ffffff" />
+                <Text style={styles.primaryButtonText}>{t('wallet.reconnect.button')}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : status === 'restore_failed' ? (
+            <View accessible accessibilityLabel={t('wallet.restore_failed.title')}>
+              <Text style={[styles.helperText, { color: colors.danger }]} accessible>
+                {t('wallet.restore_failed.message')}
+              </Text>
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: colors.success }]}
+                onPress={connect}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={t('wallet.restore_failed.button')}
+              >
+                <Ionicons name="wallet-outline" size={18} color="#ffffff" />
+                <Text style={styles.primaryButtonText}>{t('wallet.restore_failed.button')}</Text>
               </TouchableOpacity>
             </View>
           ) : (

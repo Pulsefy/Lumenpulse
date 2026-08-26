@@ -6,7 +6,7 @@ import logging
 import math
 import os
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 from collections import defaultdict
@@ -31,6 +31,15 @@ from .models import (
     AssetTrend,
     RoundAnomalySignal,
     MetadataDriftFinding,
+    EntityLinkingReview,
+    DailyOnchainKPISnapshot,
+)
+from .cohort_models import (
+    GrantRound,
+    ContributorRoundParticipation,
+    ContributorCohort,
+    CohortRetentionSummary,
+    RepeatContributorSummary,
 )
 from src.analytics.ner_service import NERService
 from src.analytics.onchain_entity_linker import (
@@ -59,13 +68,22 @@ class PostgresService:
         )
 
         try:
-            self.engine = create_engine(
-                self.database_url,
-                pool_pre_ping=True,  # Verify connections before using
-                pool_size=5,
-                max_overflow=10,
-                echo=False,  # Set to True for SQL query logging
-            )
+            if self.database_url.startswith("sqlite"):
+                from sqlalchemy.pool import StaticPool
+                self.engine = create_engine(
+                    self.database_url,
+                    connect_args={"check_same_thread": False},
+                    poolclass=StaticPool,
+                    echo=False,
+                )
+            else:
+                self.engine = create_engine(
+                    self.database_url,
+                    pool_pre_ping=True,  # Verify connections before using
+                    pool_size=5,
+                    max_overflow=10,
+                    echo=False,  # Set to True for SQL query logging
+                )
             self.SessionLocal = sessionmaker(
                 autocommit=False,
                 autoflush=False,
@@ -158,7 +176,32 @@ class PostgresService:
         article_data: Dict[str, Any],
     ) -> List[OnchainEntityLink]:
         """Link article content to default assets and current project views."""
-        linker = OnchainEntityLinker(self._project_candidates_from_session(session))
+        overrides = {}
+        article_id = article_data.get("id")
+        if article_id:
+            try:
+                reviewed_items = session.execute(
+                    select(EntityLinkingReview).where(
+                        and_(
+                            EntityLinkingReview.article_id == article_id,
+                            EntityLinkingReview.status.in_(["approved", "rejected", "corrected"])
+                        )
+                    )
+                ).scalars().all()
+                for item in reviewed_items:
+                    if item.status == "rejected":
+                        overrides[item.stable_entity_id] = "__REJECTED__"
+                    elif item.status == "corrected":
+                        overrides[item.stable_entity_id] = item.corrected_entity_id or "__REJECTED__"
+                    elif item.status == "approved":
+                        overrides[item.stable_entity_id] = item.stable_entity_id
+            except Exception as e:
+                logger.warning(f"Failed to fetch reviewed overrides: {e}")
+
+        linker = OnchainEntityLinker(
+            self._project_candidates_from_session(session),
+            overrides=overrides,
+        )
         return linker.link_article(article_data)
 
     def _sync_article_onchain_links(
@@ -190,6 +233,72 @@ class PostgresService:
                     contract_id=link.contract_id,
                 )
             )
+
+        self._upsert_review_queue_items(session, article, links)
+
+    def _upsert_review_queue_items(
+        self,
+        session: Session,
+        article: Article,
+        links: List[OnchainEntityLink],
+        confidence_threshold: float = 0.90,
+    ) -> None:
+        """
+        Upsert low-confidence entity linking cases into the review queue.
+        Guaranteed to be non-blocking.
+        """
+        try:
+            for link in links:
+                if link.confidence >= confidence_threshold:
+                    continue
+
+                evidence = {
+                    "title": article.title,
+                    "summary": article.summary,
+                    "matched_text": link.matched_text,
+                    "reason": f"Confidence {link.confidence:.2f} below threshold {confidence_threshold:.2f}",
+                }
+
+                content = article.content or ""
+                summary = article.summary or ""
+                text_to_search = content if content else summary
+                if link.matched_text and text_to_search:
+                    idx = text_to_search.lower().find(link.matched_text.lower())
+                    if idx != -1:
+                        start = max(0, idx - 100)
+                        end = min(len(text_to_search), idx + len(link.matched_text) + 100)
+                        evidence["context_snippet"] = text_to_search[start:end]
+
+                existing = session.execute(
+                    select(EntityLinkingReview).where(
+                        and_(
+                            EntityLinkingReview.article_id == article.article_id,
+                            EntityLinkingReview.stable_entity_id == link.stable_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+
+                if existing:
+                    if existing.status == "pending":
+                        existing.confidence = link.confidence
+                        existing.display_name = link.display_name
+                        existing.matched_text = link.matched_text
+                        existing.supporting_evidence = evidence
+                else:
+                    session.add(
+                        EntityLinkingReview(
+                            article_id=article.article_id,
+                            stable_entity_id=link.stable_id,
+                            entity_type=link.entity_type,
+                            display_name=link.display_name,
+                            matched_text=link.matched_text,
+                            confidence=link.confidence,
+                            supporting_evidence=evidence,
+                            status="pending",
+                        )
+                    )
+        except Exception as e:
+            logger.error(f"Non-blocking review queue logging failure: {e}", exc_info=True)
 
     @contextmanager
     def get_session(self):
@@ -2561,3 +2670,208 @@ class PostgresService:
         except SQLAlchemyError as e:
             logger.error(f"Failed to mark metadata drift finding as reviewed: {e}")
             return False
+
+    def get_review_queue(self, status: Optional[str] = None, limit: int = 100) -> List[EntityLinkingReview]:
+        """
+        Retrieve items from the entity linking review queue.
+        """
+        try:
+            with self.get_session() as session:
+                query = select(EntityLinkingReview)
+                if status is not None:
+                    query = query.where(EntityLinkingReview.status == status)
+                query = query.order_by(desc(EntityLinkingReview.created_at)).limit(limit)
+                return session.execute(query).scalars().all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve review queue: {e}")
+            return []
+
+    def update_review_status(self, review_id: int, status: str, corrected_entity_id: Optional[str] = None) -> bool:
+        """
+        Update the review status of a queue item.
+        """
+        if status not in ["approved", "rejected", "corrected", "pending"]:
+            logger.warning(f"Invalid review status: {status}")
+            return False
+
+        try:
+            with self.get_session() as session:
+                item = session.execute(
+                    select(EntityLinkingReview).where(EntityLinkingReview.id == review_id)
+                ).scalar_one_or_none()
+
+                if not item:
+                    logger.warning(f"Review queue item {review_id} not found")
+                    return False
+
+                item.status = status
+                item.corrected_entity_id = corrected_entity_id
+                item.reviewed_at = datetime.utcnow()
+                
+                session.flush()
+                
+                # Re-run entity linking on the associated article to immediately reflect changes
+                article = session.execute(
+                    select(Article).where(Article.article_id == item.article_id)
+                ).scalar_one_or_none()
+                if article:
+                    # Construct article_data dictionary
+                    article_data = {
+                        "id": article.article_id,
+                        "title": article.title,
+                        "summary": article.summary,
+                        "content": article.content,
+                        "detected_entities": article.detected_entities,
+                        "keywords": article.keywords,
+                        "categories": article.categories,
+                    }
+                    # This will re-link using updated overrides
+                    links = self._link_article_onchain_entities(session, article_data)
+                    self._sync_article_onchain_links(session, article, links)
+
+                logger.info(f"Updated review queue item {review_id} status to {status}")
+                return True
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to update review queue item: {e}")
+            return False
+
+    def get_reviewed_outcomes(self) -> List[Dict[str, Any]]:
+        """
+        Get all reviewed outcomes to feed future tuning/model workflows.
+        """
+        try:
+            with self.get_session() as session:
+                query = select(EntityLinkingReview).where(
+                    EntityLinkingReview.status.in_(["approved", "corrected", "rejected"])
+                )
+                rows = session.execute(query).scalars().all()
+                return [
+                    {
+                        "id": r.id,
+                        "article_id": r.article_id,
+                        "stable_entity_id": r.stable_entity_id,
+                        "entity_type": r.entity_type,
+                        "display_name": r.display_name,
+                        "matched_text": r.matched_text,
+                        "confidence": r.confidence,
+                        "status": r.status,
+                        "corrected_entity_id": r.corrected_entity_id,
+                        "supporting_evidence": r.supporting_evidence,
+                        "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
+                    }
+                    for r in rows
+                ]
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve reviewed outcomes: {e}")
+            return []
+
+    # Daily On-Chain KPI Snapshot Methods (#877)
+
+    def save_daily_onchain_kpi_snapshot(
+        self,
+        snapshot_data: Dict[str, Any],
+    ) -> Tuple[Optional[DailyOnchainKPISnapshot], bool]:
+        """
+        Save a daily on-chain KPI snapshot.
+        If a snapshot for the same snapshot_date and period already exists,
+        skips creation to prevent duplicates. Uses retry logic for resilience.
+
+        Args:
+            snapshot_data: Dictionary with snapshot metrics and date/period.
+
+        Returns:
+            Tuple of (DailyOnchainKPISnapshot, created_boolean)
+        """
+        snapshot_date = snapshot_data.get("snapshot_date")
+        period = snapshot_data.get("period", "daily")
+
+        if not snapshot_date:
+            snapshot_date = datetime.utcnow().strftime("%Y-%m-%d")
+
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(DailyOnchainKPISnapshot).where(
+                        and_(
+                            DailyOnchainKPISnapshot.snapshot_date == snapshot_date,
+                            DailyOnchainKPISnapshot.period == period,
+                        )
+                    )
+                ).scalar_one_or_none()
+
+                if existing:
+                    logger.info(
+                        f"Daily KPI snapshot for date={snapshot_date} period={period} already exists. Skipping duplicate."
+                    )
+                    return existing, False
+
+                snapshot = DailyOnchainKPISnapshot(
+                    snapshot_date=snapshot_date,
+                    period=period,
+                    tvl=float(snapshot_data.get("tvl", 0.0)),
+                    volume=float(snapshot_data.get("volume", 0.0)),
+                    active_rounds=int(snapshot_data.get("active_rounds", 0)),
+                    contribution_count=int(snapshot_data.get("contribution_count", 0)),
+                    unique_contributors=int(snapshot_data.get("unique_contributors", 0)),
+                    extra_data=snapshot_data.get("extra_data"),
+                )
+                session.add(snapshot)
+                session.flush()
+                logger.info(
+                    f"Saved new daily KPI snapshot for date={snapshot_date} period={period}: "
+                    f"TVL={snapshot.tvl}, Volume={snapshot.volume}, ActiveRounds={snapshot.active_rounds}, Contributions={snapshot.contribution_count}"
+                )
+                return snapshot, True
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save daily on-chain KPI snapshot: {e}")
+            return None, False
+
+    def get_daily_onchain_kpi_snapshots(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        period: str = "daily",
+        limit: int = 100,
+    ) -> List[DailyOnchainKPISnapshot]:
+        """
+        Retrieve historical daily on-chain KPI snapshots.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = select(DailyOnchainKPISnapshot).where(
+                    DailyOnchainKPISnapshot.period == period
+                )
+                if start_date:
+                    stmt = stmt.where(DailyOnchainKPISnapshot.snapshot_date >= start_date)
+                if end_date:
+                    stmt = stmt.where(DailyOnchainKPISnapshot.snapshot_date <= end_date)
+
+                stmt = stmt.order_by(desc(DailyOnchainKPISnapshot.snapshot_date)).limit(limit)
+                return session.execute(stmt).scalars().all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve daily on-chain KPI snapshots: {e}")
+            return []
+
+    def get_latest_daily_onchain_kpi_snapshot(
+        self,
+        period: str = "daily",
+    ) -> Optional[DailyOnchainKPISnapshot]:
+        """
+        Retrieve the most recent daily on-chain KPI snapshot.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(DailyOnchainKPISnapshot)
+                    .where(DailyOnchainKPISnapshot.period == period)
+                    .order_by(desc(DailyOnchainKPISnapshot.snapshot_date))
+                    .limit(1)
+                )
+                return session.execute(stmt).scalar_one_or_none()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve latest daily on-chain KPI snapshot: {e}")
+            return None
+

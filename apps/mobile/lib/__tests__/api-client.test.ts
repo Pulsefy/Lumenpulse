@@ -1,118 +1,63 @@
-/**
- * API Client Manual Tests
- *
- * Simple verification functions to test API client functionality
- * Run these manually in your app or add Jest/testing library later
- */
-
 import { ApiClient } from '../api-client';
 
-/**
- * Test: Verify client has base URL
- */
-export function testClientHasBaseUrl(): boolean {
-  const client = new ApiClient();
-  const baseUrl = client.getBaseUrl();
+describe('ApiClient', () => {
+  const originalFetch = global.fetch;
 
-  console.log('Base URL:', baseUrl);
-  return typeof baseUrl === 'string' && baseUrl.length > 0;
-}
-
-/**
- * Test: Verify auth token can be set and cleared
- */
-export function testAuthToken(): boolean {
-  const client = new ApiClient();
-  const token = 'test-token-123';
-
-  try {
-    client.setAuthToken(token);
-    console.log('✓ Auth token set successfully');
-
-    client.setAuthToken(null);
-    console.log('✓ Auth token cleared successfully');
-
-    return true;
-  } catch (error) {
-    console.error('✗ Auth token test failed:', error);
-    return false;
-  }
-}
-
-/**
- * Test: Verify all HTTP methods exist
- */
-export function testHttpMethods(): boolean {
-  const client = new ApiClient();
-
-  const methods = ['get', 'post', 'put', 'patch', 'delete'];
-  const results = methods.map((method) => {
-    const exists = typeof (client as any)[method] === 'function';
-    console.log(`${exists ? '✓' : '✗'} ${method.toUpperCase()} method exists`);
-    return exists;
+  beforeEach(() => {
+    global.fetch = jest.fn() as typeof fetch;
   });
 
-  return results.every((result) => result === true);
-}
+  afterAll(() => {
+    global.fetch = originalFetch;
+  });
 
-/**
- * Test: Verify response shape on mock success
- */
-export async function testSuccessResponseShape(): Promise<boolean> {
-  // This would need a mock server or actual backend to test properly
-  // For now, just verify the structure
-  console.log('Note: Success response test requires running backend');
-  return true;
-}
+  it('uses a non-empty base URL and allows token updates', () => {
+    const client = new ApiClient();
 
-/**
- * Test: Verify response shape on mock error
- */
-export async function testErrorResponseShape(): Promise<boolean> {
-  // This would need a mock server or actual backend to test properly
-  // For now, just verify the structure
-  console.log('Note: Error response test requires running backend');
-  return true;
-}
+    expect(typeof client.getBaseUrl()).toBe('string');
+    expect(client.getBaseUrl().length).toBeGreaterThan(0);
 
-/**
- * Run all tests
- */
-export async function runAllTests(): Promise<void> {
-  console.log('=== API Client Tests ===\n');
+    client.setAuthToken('abc');
+    expect(client.getBaseUrl()).toContain('http');
+  });
 
-  console.log('1. Testing base URL...');
-  const test1 = testClientHasBaseUrl();
-  console.log(test1 ? '✓ PASS\n' : '✗ FAIL\n');
+  it('supports the standard HTTP methods', () => {
+    const client = new ApiClient();
 
-  console.log('2. Testing auth token...');
-  const test2 = testAuthToken();
-  console.log(test2 ? '✓ PASS\n' : '✗ FAIL\n');
+    expect(typeof client.get).toBe('function');
+    expect(typeof client.post).toBe('function');
+    expect(typeof client.put).toBe('function');
+    expect(typeof client.patch).toBe('function');
+    expect(typeof client.delete).toBe('function');
+  });
 
-  console.log('3. Testing HTTP methods...');
-  const test3 = testHttpMethods();
-  console.log(test3 ? '✓ PASS\n' : '✗ FAIL\n');
+  it('normalizes unsuccessful responses into a consistent error shape', async () => {
+    const client = new ApiClient();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      json: jest.fn().mockResolvedValue({ message: 'Token expired', error: 'Unauthorized' }),
+    });
 
-  console.log('4. Testing success response shape...');
-  const test4 = await testSuccessResponseShape();
-  console.log(test4 ? '✓ PASS\n' : '✗ FAIL\n');
+    const result = await client.get('/secure');
 
-  console.log('5. Testing error response shape...');
-  const test5 = await testErrorResponseShape();
-  console.log(test5 ? '✓ PASS\n' : '✗ FAIL\n');
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toBe('Token expired');
+    expect(result.error?.statusCode).toBe(401);
+  });
 
-  const allPassed = [test1, test2, test3, test4, test5].every((t) => t === true);
-  console.log(allPassed ? '=== ALL TESTS PASSED ===' : '=== SOME TESTS FAILED ===');
-}
+  it('returns a successful payload when the request resolves', async () => {
+    const client = new ApiClient();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({ ok: true }),
+    });
 
-// Example usage in a React component:
-/*
-import { runAllTests } from '@/lib/__tests__/api-client.test';
+    const result = await client.get<{ ok: boolean }>('/health');
 
-// In your component
-useEffect(() => {
-  if (__DEV__) {
-    runAllTests();
-  }
-}, []);
-*/
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ ok: true });
+  });
+});

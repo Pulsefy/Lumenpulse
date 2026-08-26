@@ -6,9 +6,12 @@ mod storage;
 
 use errors::PricingAdapterError;
 use soroban_sdk::{contract, contractimpl, Address, Env};
-use storage::{DataKey, LEDGER_BUMP, LEDGER_THRESHOLD};
+use storage::DataKey;
 
 pub const BASE_DECIMALS: u32 = 7;
+/// Default staleness window (seconds) used when no admin-configured value
+/// has been set via `set_staleness_window`.
+pub const DEFAULT_MAX_PRICE_AGE: u64 = 3600;
 
 #[contract]
 pub struct PricingAdapterContract;
@@ -60,7 +63,7 @@ impl PricingAdapterContract {
             .set(&decimals_key, &asset_decimals);
         env.storage()
             .persistent()
-            .extend_ttl(&decimals_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            .set(&DataKey::AssetDecimals(asset.clone()), &asset_decimals);
 
         let event = events::PriceUpdatedEvent {
             admin,
@@ -71,18 +74,45 @@ impl PricingAdapterContract {
         Ok(())
     }
 
-    /// Get the current configured price of an asset
+    /// Get the current configured price of an asset. Rejects deterministically
+    /// if the price has been explicitly invalidated or has aged past the
+    /// configured staleness window — this is the entry point consumers
+    /// (including `normalize_amount`, which calls this internally) rely on
+    /// to reject unsafe prices.
     pub fn get_price(env: Env, asset: Address) -> Result<i128, PricingAdapterError> {
-        let key = DataKey::AssetPrice(asset);
-        if env.storage().persistent().has(&key) {
-            env.storage()
-                .persistent()
-                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
         env.storage()
             .persistent()
-            .get(&key)
+            .get(&DataKey::AssetPrice(asset))
             .ok_or(PricingAdapterError::PriceNotFound)
+    }
+
+    fn price_state(env: &Env, asset: &Address) -> PriceState {
+        let invalidated: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AssetPriceInvalidated(asset.clone()))
+            .unwrap_or(false);
+        if invalidated {
+            return PriceState::Invalidated;
+        }
+
+        let timestamp: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AssetPriceTimestamp(asset.clone()))
+            .unwrap_or(0);
+        let max_age: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MaxPriceAge)
+            .unwrap_or(DEFAULT_MAX_PRICE_AGE);
+        let age = env.ledger().timestamp().saturating_sub(timestamp);
+
+        if age > max_age {
+            PriceState::Stale
+        } else {
+            PriceState::Fresh
+        }
     }
 
     /// Get the decimals configured for an asset (defaults to 7)

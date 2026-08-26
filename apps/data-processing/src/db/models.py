@@ -683,3 +683,90 @@ class RoundAnomalySignal(Base):
             f"type={self.anomaly_type}, severity={self.severity_score:.2f}, "
             f"reviewed={self.reviewed})>"
         )
+
+
+class EntityLinkingReview(Base):
+    """
+    Human-in-the-loop review queue for low-confidence entity linking and attribution.
+    """
+
+    __tablename__ = "entity_linking_review_queue"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    article_id = Column(String(255), nullable=False, index=True)
+    stable_entity_id = Column(String(255), nullable=False, index=True)
+    entity_type = Column(String(50), nullable=False, index=True)
+    display_name = Column(String(255), nullable=False)
+    matched_text = Column(String(255), nullable=False)
+    confidence = Column(Float, nullable=False)
+    supporting_evidence = Column(JSON, nullable=True)  # Context snippet, reason, candidates
+    status = Column(String(50), default="pending", nullable=False, index=True)  # pending, approved, rejected, corrected
+    corrected_entity_id = Column(String(255), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_entity_review_queue_article_entity",
+            "article_id",
+            "stable_entity_id",
+            unique=True,
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<EntityLinkingReview(id={self.id}, article_id='{self.article_id}', "
+            f"stable_entity_id='{self.stable_entity_id}', status='{self.status}')>"
+        )
+
+
+class DailyOnchainKPISnapshot(Base):
+    """
+    Stores daily aggregated snapshots of core on-chain KPIs
+    (TVL, volume, active rounds, contribution count, unique contributors)
+    for cheap and consistent trend analysis (#877).
+    """
+
+    __tablename__ = "daily_onchain_kpi_snapshots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    snapshot_date = Column(String(10), nullable=False)
+    period = Column(String(20), nullable=False, default="daily")
+    tvl = Column(Float, nullable=False, default=0.0)
+    volume = Column(Float, nullable=False, default=0.0)
+    active_rounds = Column(Integer, nullable=False, default=0)
+    contribution_count = Column(Integer, nullable=False, default=0)
+    unique_contributors = Column(Integer, nullable=False, default=0)
+    extra_data = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_daily_onchain_kpi_snapshots_date_period",
+            "snapshot_date",
+            "period",
+            unique=True,
+        ),
+        Index("idx_daily_onchain_kpi_snapshots_period", "period"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<DailyOnchainKPISnapshot(date='{self.snapshot_date}', period='{self.period}', "
+            f"tvl={self.tvl}, volume={self.volume}, active_rounds={self.active_rounds}, "
+            f"contribution_count={self.contribution_count})>"
+        )

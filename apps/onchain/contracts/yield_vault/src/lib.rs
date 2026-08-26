@@ -38,19 +38,46 @@ impl YieldVaultContract {
         Ok(())
     }
 
-    pub fn register_provider(
-        env: Env,
-        name: Symbol,
-        address: Address,
-        priority: u32,
-    ) -> Result<u32, YieldVaultError> {
+    /// Verifies that `caller` is the vault admin.
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), YieldVaultError> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
             .ok_or(YieldVaultError::NotInitialized)?;
 
-        admin.require_auth();
+        if *caller != admin {
+            return Err(YieldVaultError::Unauthorized);
+        }
+
+        caller.require_auth();
+
+        Ok(())
+    }
+
+    pub fn set_paused(env: Env, caller: Address, paused: bool) -> Result<(), YieldVaultError> {
+        Self::require_admin(&env, &caller)?;
+
+        env.storage().instance().set(&DataKey::Paused, &paused);
+
+        Ok(())
+    }
+
+    pub fn is_paused(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+    }
+
+    pub fn register_provider(
+        env: Env,
+        caller: Address,
+        name: Symbol,
+        address: Address,
+        priority: u32,
+    ) -> Result<u32, YieldVaultError> {
+        Self::require_admin(&env, &caller)?;
 
         let provider_count: u32 = env
             .storage()
@@ -97,6 +124,10 @@ impl YieldVaultContract {
         user: Address,
         request_id: BytesN<32>,
     ) -> Result<i128, YieldVaultError> {
+        if Self::is_paused(env.clone()) {
+            return Err(YieldVaultError::VaultPaused);
+        }
+
         if idempotency_guard::claim_request(&env, &request_id).is_err() {
             return Err(YieldVaultError::AlreadyExecuted);
         }
@@ -184,6 +215,10 @@ impl YieldVaultContract {
         user: Address,
         request_id: BytesN<32>,
     ) -> Result<i128, YieldVaultError> {
+        if Self::is_paused(env.clone()) {
+            return Err(YieldVaultError::VaultPaused);
+        }
+
         if idempotency_guard::claim_request(&env, &request_id).is_err() {
             return Err(YieldVaultError::AlreadyExecuted);
         }
@@ -285,6 +320,15 @@ impl YieldVaultContract {
             .persistent()
             .set(&DataKey::TotalAUM, &(total_aum - withdrawn));
 
+        // Return the underlying tokens to the user.
+        let asset_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Asset)
+            .ok_or(YieldVaultError::NotInitialized)?;
+        let token = TokenClient::new(&env, &asset_addr);
+        token.transfer(&env.current_contract_address(), &user, &withdrawn);
+
         events::WithdrawEvent {
             user: user.clone(),
             amount: withdrawn,
@@ -294,14 +338,12 @@ impl YieldVaultContract {
         Ok(withdrawn)
     }
 
-    pub fn harvest_yield(env: Env, provider_id: u32) -> Result<i128, YieldVaultError> {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .ok_or(YieldVaultError::NotInitialized)?;
-
-        admin.require_auth();
+    pub fn harvest_yield(
+        env: Env,
+        caller: Address,
+        provider_id: u32,
+    ) -> Result<i128, YieldVaultError> {
+        Self::require_admin(&env, &caller)?;
 
         let mut provider: YieldProvider = env
             .storage()
@@ -312,7 +354,8 @@ impl YieldVaultContract {
         let provider_client = YieldProviderClient::new(&env, &provider.address);
         let balance = provider_client.balance(&env.current_contract_address());
 
-        let yield_earned = balance - provider.total_deposited + provider.total_withdrawn;
+        let yield_earned = balance - provider.total_deposited + provider.total_withdrawn
+            - provider.total_yield_earned;
 
         if yield_earned > 0 {
             provider.total_yield_earned += yield_earned;
@@ -400,102 +443,4 @@ impl YieldVaultContract {
 }
 
 #[cfg(test)]
-mod test {
-    use super::*;
-    use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::token::StellarAssetClient;
-
-    #[contract]
-    struct MockYieldProvider;
-
-    #[contractimpl]
-    impl MockYieldProvider {
-        pub fn deposit(env: Env, from: Address, amount: i128) -> i128 {
-            let current: i128 = env.storage().persistent().get(&from).unwrap_or(0);
-            env.storage().persistent().set(&from, &(current + amount));
-            amount
-        }
-
-        pub fn withdraw(env: Env, to: Address, amount: i128) -> i128 {
-            let current: i128 = env.storage().persistent().get(&to).unwrap_or(0);
-            if current < amount {
-                panic!("insufficient balance in mock");
-            }
-            env.storage().persistent().set(&to, &(current - amount));
-            amount
-        }
-
-        pub fn balance(env: Env, address: Address) -> i128 {
-            env.storage().persistent().get(&address).unwrap_or(0)
-        }
-    }
-
-    fn request_id(env: &Env) -> BytesN<32> {
-        BytesN::from_array(env, &[0; 32])
-    }
-
-    #[test]
-    fn test_deposit_idempotency() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        let user = Address::generate(&env);
-        let token_admin = Address::generate(&env);
-
-        let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
-        let _token_client = TokenClient::new(&env, &token_id.address());
-        let token_admin_client = StellarAssetClient::new(&env, &token_id.address());
-
-        let vault_id = env.register(YieldVaultContract, ());
-        let vault_client = YieldVaultContractClient::new(&env, &vault_id);
-
-        let mock_id = env.register(MockYieldProvider, ());
-
-        vault_client.initialize(&admin, &token_id.address());
-
-        vault_client.register_provider(&Symbol::new(&env, "mock_provider"), &mock_id, &1);
-
-        let deposit_amount = 1000i128;
-        token_admin_client.mint(&user, &deposit_amount);
-
-        let result = vault_client.deposit(&deposit_amount, &user, &request_id(&env));
-        assert_eq!(result, deposit_amount);
-
-        let result = vault_client.try_deposit(&deposit_amount, &user, &request_id(&env));
-        assert_eq!(result, Err(Ok(YieldVaultError::AlreadyExecuted)));
-    }
-
-    #[test]
-    fn test_withdraw_idempotency() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        let user = Address::generate(&env);
-        let token_admin = Address::generate(&env);
-
-        let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
-        let _token_client = TokenClient::new(&env, &token_id.address());
-        let token_admin_client = StellarAssetClient::new(&env, &token_id.address());
-
-        let vault_id = env.register(YieldVaultContract, ());
-        let vault_client = YieldVaultContractClient::new(&env, &vault_id);
-
-        let mock_id = env.register(MockYieldProvider, ());
-
-        vault_client.initialize(&admin, &token_id.address());
-        vault_client.register_provider(&Symbol::new(&env, "mock_provider"), &mock_id, &1);
-
-        let deposit_amount = 1000i128;
-        token_admin_client.mint(&user, &deposit_amount);
-        vault_client.deposit(&deposit_amount, &user, &BytesN::from_array(&env, &[1; 32]));
-
-        let withdraw_amount = 500i128;
-        let result = vault_client.withdraw(&withdraw_amount, &user, &request_id(&env));
-        assert_eq!(result, withdraw_amount);
-
-        let result = vault_client.try_withdraw(&withdraw_amount, &user, &request_id(&env));
-        assert_eq!(result, Err(Ok(YieldVaultError::AlreadyExecuted)));
-    }
-}
+mod test;

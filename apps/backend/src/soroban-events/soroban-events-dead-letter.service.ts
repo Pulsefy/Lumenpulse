@@ -82,6 +82,10 @@ export class SorobanEventsDeadLetterService {
         errorEntry,
       ];
       existingDLQ.updatedAt = new Date();
+      // A replay that fails becomes eligible for a subsequent, deliberate retry.
+      if (existingDLQ.status === DeadLetterStatus.REPLAYING) {
+        existingDLQ.status = DeadLetterStatus.PENDING;
+      }
 
       const saved = await this.dlqRepo.save(existingDLQ);
       this.logger.debug(
@@ -231,26 +235,7 @@ export class SorobanEventsDeadLetterService {
       );
     }
 
-    // Prevent excessive replay attempts (max 5)
-    const MAX_REPLAY_ATTEMPTS = 5;
-    if (dlq.replayCount >= MAX_REPLAY_ATTEMPTS) {
-      throw new BadRequestException(
-        `Event has exceeded maximum replay attempts (${MAX_REPLAY_ATTEMPTS})`,
-      );
-    }
-
-    // If the event was already successfully replayed, don't queue it again
-    // This ensures idempotency - replaying the same DLQ entry multiple times
-    // won't cause duplicate processing
     if (dlq.status === DeadLetterStatus.REPLAYED) {
-      this.logger.debug(
-        {
-          dlqId,
-          txHash: dlq.txHash,
-          replayCount: dlq.replayCount,
-        },
-        'Event already successfully replayed, skipping re-queue',
-      );
       return {
         message: 'Event already successfully replayed',
         jobId: `${dlq.txHash}:${dlq.eventIndex}`,
@@ -259,39 +244,86 @@ export class SorobanEventsDeadLetterService {
       };
     }
 
+    if (dlq.status === DeadLetterStatus.REPLAYING) {
+      return {
+        message: 'Event is already queued for replay',
+        jobId: `${dlq.txHash}:${dlq.eventIndex}`,
+        eventId: dlq.id,
+        replayCount: dlq.replayCount,
+      };
+    }
+
+    if (dlq.status === DeadLetterStatus.RESOLVED) {
+      throw new BadRequestException('Resolved events cannot be replayed');
+    }
+
+    // Claim the pending entry atomically so concurrent requests cannot enqueue duplicates.
+    const MAX_REPLAY_ATTEMPTS = 5;
+    const claim = await this.dlqRepo
+      .createQueryBuilder()
+      .update(SorobanEventDeadLetter)
+      .set({
+        status: DeadLetterStatus.REPLAYING,
+        replayCount: () => '"replay_count" + 1',
+        updatedAt: new Date(),
+      })
+      .where('id = :id', { id: dlqId })
+      .andWhere('status = :status', { status: DeadLetterStatus.PENDING })
+      .andWhere('replay_count < :maxAttempts', {
+        maxAttempts: MAX_REPLAY_ATTEMPTS,
+      })
+      .execute();
+
+    if (claim.affected !== 1) {
+      throw new BadRequestException(
+        `Event is no longer eligible for replay or has exceeded maximum replay attempts (${MAX_REPLAY_ATTEMPTS})`,
+      );
+    }
+    const claimedDlq = await this.dlqRepo.findOneByOrFail({ id: dlqId });
+
     // Reconstruct original event DTO for replay
     const eventDto: IngestSorobanEventDto = {
-      txHash: dlq.txHash,
-      eventIndex: dlq.eventIndex,
-      contractId: dlq.contractId ?? undefined,
-      eventType: dlq.eventType ?? undefined,
-      rawPayload: dlq.rawPayload,
-      ledgerSequence: dlq.ledgerSequence ?? undefined,
+      txHash: claimedDlq.txHash,
+      eventIndex: claimedDlq.eventIndex,
+      contractId: claimedDlq.contractId ?? undefined,
+      eventType: claimedDlq.eventType ?? undefined,
+      rawPayload: claimedDlq.rawPayload,
+      ledgerSequence: claimedDlq.ledgerSequence ?? undefined,
     };
 
     // Queue for processing with high priority and tracked replay
-    const jobId = `${dlq.txHash}:${dlq.eventIndex}`;
-    await this.queue.add(PROCESS_EVENT_JOB, eventDto, {
-      jobId,
-      attempts: 1, // Single attempt for replay - don't retry from replay
-      priority: 10, // Higher priority for replayed events
-      removeOnComplete: true,
-      removeOnFail: false,
-    });
+    const jobId = `${claimedDlq.txHash}:${claimedDlq.eventIndex}`;
+    try {
+      await this.queue.add(PROCESS_EVENT_JOB, eventDto, {
+        jobId,
+        attempts: 1,
+        priority: 10,
+        removeOnComplete: true,
+        removeOnFail: false,
+      });
+    } catch (error) {
+      await this.dlqRepo
+        .createQueryBuilder()
+        .update(SorobanEventDeadLetter)
+        .set({
+          status: DeadLetterStatus.PENDING,
+          replayCount: () => 'GREATEST("replay_count" - 1, 0)',
+        })
+        .where('id = :id', { id: dlqId })
+        .execute();
+      throw error;
+    }
 
-    // Update DLQ entry to track replay
-    dlq.replayCount++;
-    dlq.maintainerNotes = reason
-      ? `${dlq.maintainerNotes || ''}\nReplay: ${reason}`
-      : dlq.maintainerNotes;
-    dlq.updatedAt = new Date();
-    await this.dlqRepo.save(dlq);
+    claimedDlq.maintainerNotes = reason
+      ? `${claimedDlq.maintainerNotes || ''}\nReplay: ${reason}`.trim()
+      : claimedDlq.maintainerNotes;
+    await this.dlqRepo.save(claimedDlq);
 
     this.logger.log(
       {
         dlqId,
-        txHash: dlq.txHash,
-        replayCount: dlq.replayCount,
+        txHash: claimedDlq.txHash,
+        replayCount: claimedDlq.replayCount,
         reason,
       },
       'Queued dead letter event for replay',
@@ -300,8 +332,8 @@ export class SorobanEventsDeadLetterService {
     return {
       message: 'Event queued for replay',
       jobId,
-      eventId: dlq.id,
-      replayCount: dlq.replayCount,
+      eventId: claimedDlq.id,
+      replayCount: claimedDlq.replayCount,
     };
   }
 

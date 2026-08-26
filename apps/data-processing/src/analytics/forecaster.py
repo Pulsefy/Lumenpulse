@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Predictive analytics: forecast market trends (Bullish/Bearish) for the next 24-48 hours
 using historical sentiment and volume data from analytics.jsonl.

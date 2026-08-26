@@ -21,4 +21,11 @@ pub enum ContributorError {
     BelowThreshold = 15,
     InvalidNonce = 16,
     InvalidSignature = 17,
+    AttestationNotActive = 18,
+    AttestationNotSuspended = 19,
+    AttestationAlreadyRevoked = 20,
+    /// The Contribution scope (register_contributor, gasless_register) is paused.
+    ContributionScopePaused = 21,
+    /// The Governance scope (multisig proposals and admin-gated mutations) is paused.
+    GovernanceScopePaused = 22,
 }

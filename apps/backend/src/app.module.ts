@@ -14,6 +14,7 @@ import { TestExceptionController } from './test-exception.controller';
 import { SentimentModule } from './sentiment/sentiment.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { AppCacheModule } from './cache/cache.module';
+import { WarmCacheModule } from './cache/warm-cache.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
 import { StellarModule } from './stellar/stellar.module';
 import { PriceModule } from './price/price.module';
@@ -48,6 +49,7 @@ import { OutboxModule } from './outbox/outbox.module';
 import { VerificationModule } from './verification/verification.module';
 import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
+import { IdempotencyModule } from './idempotency/idempotency.module';
 import { DeprecationInterceptor } from './common/interceptors/deprecation.interceptor';
 import { SearchModule } from './search/search.module';
 import { ExportModule } from './export/export.module';
@@ -55,23 +57,37 @@ import { SignalsModule } from './signals/signals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppConfigModule } from './config/config.module';
 import { CrowdfundModule } from './crowdfund/crowdfund.module';
+import { CrowdfundSyncModule } from './crowdfund-sync/crowdfund-sync.module';
 import { ContributorRegistryModule } from './contributor-registry/contributor-registry.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
 import { SorobanEventsModule } from './soroban-events/soroban-events.module';
 import { TreasuryModule } from './treasury/treasury.module';
 import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
+import { VerificationRequestsModule } from './verification-requests/verification-requests.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { ContractAdminModule } from './contract-admin/contract-admin.module';
+import { ReviewMetricsModule } from './review-metrics/review-metrics.module';
+import { BotAuthModule } from './bot-auth/bot-auth.module';
+import { DemoBootstrapModule } from './demo-bootstrap/demo-bootstrap.module';
+import { ContributorFeedModule } from './contributor-feed/contributor-feed.module';
+import { ReadModelRebuildModule } from './read-model-rebuild';
+import { SuspiciousContributionModule } from './suspicious-contribution/suspicious-contribution.module';
+import { SnapshotsModule } from './snapshot/snapshot.module';
+import { ReconciliationModule } from './reconciliation/reconciliation.module';
+import { TransactionModule } from './transaction/transaction.module';
+import { PriceAlertModule } from './price-alert/price-alert.module';
 
 @Module({
   imports: [
+    // Global configuration
     ConfigModule.forRoot({
       isGlobal: true,
       ignoreEnvFile: true,
       load: [databaseConfig, stellarConfig],
     }),
 
+    // Database connection
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
@@ -84,8 +100,10 @@ import { ContractAdminModule } from './contract-admin/contract-admin.module';
       },
     }),
 
+    // Scheduling
     ScheduleModule.forRoot(),
 
+    // Rate limiting
     RateLimitModule,
 
     ThrottlerModule.forRootAsync({
@@ -94,13 +112,20 @@ import { ContractAdminModule } from './contract-admin/contract-admin.module';
       useFactory: (storageService: RateLimitStorageService) =>
         createThrottlerOptions(getRateLimitSettings(), storageService),
     }),
+
+    // File upload
     MulterModule.register({
       storage: memoryStorage(),
       limits: {
         fileSize: 5 * 1024 * 1024,
       },
     }),
+
+    // Cache modules
     AppCacheModule,
+    WarmCacheModule,
+
+    // Core modules
     MetricsModule,
     SentimentModule,
     PortfolioModule,
@@ -117,6 +142,7 @@ import { ContractAdminModule } from './contract-admin/contract-admin.module';
     ExchangeRatesModule,
     GrantsModule,
     VerificationModule,
+    VerificationRequestsModule,
     WatchlistModule,
     OutboxModule,
     ExportModule,
@@ -126,15 +152,63 @@ import { ContractAdminModule } from './contract-admin/contract-admin.module';
     ModerationModule,
     SearchModule,
     FeatureFlagsModule,
+
+    // Crowdfund modules
     CrowdfundModule,
+    CrowdfundSyncModule, // New: Crowdfund vault sync with DLQ support
+
+    // Registry modules
     ContributorRegistryModule,
+
+    // Configuration
     AppConfigModule,
+
+    // Audit
     AuditModule,
+
+    // Soroban event processing
     SorobanEventsModule,
+
+    // Treasury and vesting
     TreasuryModule,
     VestingWalletModule,
+
+    // Contracts
     ContractsModule,
     ContractAdminModule,
+
+    // Review metrics
+    ReviewMetricsModule,
+
+    // Bot auth
+    BotAuthModule,
+
+    // Demo bootstrap
+    DemoBootstrapModule,
+
+    // Contributor feed
+    ContributorFeedModule,
+
+    // Read model rebuild
+    ReadModelRebuildModule,
+
+    // Suspicious contribution detection
+    SuspiciousContributionModule,
+
+    // Snapshot generation
+    SnapshotsModule,
+
+    // Reconciliation
+    ReconciliationModule,
+
+    // Transaction handling
+    TransactionModule,
+
+    // Price alerts
+    PriceAlertModule,
+
+    // Idempotency for write endpoints
+    IdempotencyModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
@@ -160,6 +234,7 @@ import { ContractAdminModule } from './contract-admin/contract-admin.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // Apply request ID and logging middleware to all routes
     consumer.apply(RequestIdMiddleware, LoggerMiddleware).forRoutes('*');
   }
 }

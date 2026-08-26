@@ -16,6 +16,14 @@ from .models import (
     ProjectMilestone,
     NewsInsight,
     AssetTrend,
+    EntityLinkingReview,
+)
+from .cohort_models import (
+    GrantRound,
+    ContributorRoundParticipation,
+    ContributorCohort,
+    CohortRetentionSummary,
+    RepeatContributorSummary,
 )
 from .postgres_service import PostgresService
 
@@ -33,5 +41,11 @@ __all__ = [
     "ProjectMilestone",
     "NewsInsight",
     "AssetTrend",
+    "GrantRound",
+    "ContributorRoundParticipation",
+    "ContributorCohort",
+    "CohortRetentionSummary",
+    "RepeatContributorSummary",
+    "EntityLinkingReview",
     "PostgresService",
 ]

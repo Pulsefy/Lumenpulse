@@ -33,6 +33,58 @@ impl MatchingPoolContract {
         Ok(())
     }
 
+    // ── Granular pause scope guards ──────────────────────────────────────────
+
+    /// Returns `true` when the given scope is paused, `false` otherwise.
+    ///
+    /// A scope is paused when either:
+    ///  1. Its own `ScopePaused(scope)` key is `true`, **or**
+    ///  2. The legacy global `Paused` key is `true` (backward-compat).
+    fn is_scope_paused(env: &Env, scope: PauseScope) -> bool {
+        let global: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if global {
+            return true;
+        }
+        env.storage()
+            .instance()
+            .get(&DataKey::ScopePaused(scope))
+            .unwrap_or(false)
+    }
+
+    /// Guard for operations that write contributions or fund the pool.
+    fn require_contribution_not_paused(env: &Env) -> Result<(), MatchingPoolError> {
+        if Self::is_scope_paused(env, PauseScope::Contribution) {
+            Err(MatchingPoolError::ContributionScopePaused)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Guard for distribute_matching_funds.
+    fn require_payout_not_paused(env: &Env) -> Result<(), MatchingPoolError> {
+        if Self::is_scope_paused(env, PauseScope::Payout) {
+            Err(MatchingPoolError::PayoutScopePaused)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Guard for admin governance operations (round creation, finalization, …).
+    fn require_governance_not_paused(env: &Env) -> Result<(), MatchingPoolError> {
+        if Self::is_scope_paused(env, PauseScope::Governance) {
+            Err(MatchingPoolError::GovernanceScopePaused)
+        } else {
+            Ok(())
+        }
+    }
+
+    // Legacy helper kept so old callers still compile; internally it is
+    // replaced by the scoped helpers above.
+    #[allow(dead_code)]
     fn require_not_paused(env: &Env) -> Result<(), MatchingPoolError> {
         let paused: bool = env
             .storage()
@@ -62,7 +114,18 @@ impl MatchingPoolContract {
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
+        // Legacy global-pause starts false.
         env.storage().instance().set(&DataKey::Paused, &false);
+        // All granular scopes start unpaused.
+        env.storage()
+            .instance()
+            .set(&DataKey::ScopePaused(PauseScope::Contribution), &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::ScopePaused(PauseScope::Payout), &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::ScopePaused(PauseScope::Governance), &false);
         env.storage().instance().set(&DataKey::NextRoundId, &0u64);
         env.storage()
             .instance()
@@ -80,7 +143,7 @@ impl MatchingPoolContract {
         end_time: u64,
     ) -> Result<u64, MatchingPoolError> {
         Self::require_admin(&env, &admin)?;
-        Self::require_not_paused(&env)?;
+        Self::require_governance_not_paused(&env)?;
         if end_time <= start_time {
             return Err(MatchingPoolError::InvalidRoundDates);
         }
@@ -136,7 +199,7 @@ impl MatchingPoolContract {
         amount: i128,
     ) -> Result<(), MatchingPoolError> {
         Self::with_reentrancy_guard(&env, || {
-            Self::require_not_paused(&env)?;
+            Self::require_contribution_not_paused(&env)?;
             funder.require_auth();
             if amount <= 0 {
                 return Err(MatchingPoolError::InvalidAmount);
@@ -179,6 +242,7 @@ impl MatchingPoolContract {
         project_id: u64,
     ) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &admin)?;
+        Self::require_governance_not_paused(&env)?;
         let round: RoundData = env
             .storage()
             .persistent()
@@ -225,6 +289,7 @@ impl MatchingPoolContract {
         project_id: u64,
     ) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &admin)?;
+        Self::require_governance_not_paused(&env)?;
         let round: RoundData = env
             .storage()
             .persistent()
@@ -251,6 +316,42 @@ impl MatchingPoolContract {
         Ok(())
     }
 
+    /// Set (or update) the round-level contribution cap, i.e. the maximum a
+    /// single contributor may put into the round in total, summed across
+    /// every eligible project (admin only). A cap of 0 means uncapped.
+    /// Changing the cap only affects future contributions — it never claws
+    /// back or invalidates contributions already recorded.
+    pub fn set_round_cap(
+        env: Env,
+        admin: Address,
+        round_id: u64,
+        cap: i128,
+    ) -> Result<(), MatchingPoolError> {
+        Self::require_admin(&env, &admin)?;
+        Self::require_governance_not_paused(&env)?;
+        if cap < 0 {
+            return Err(MatchingPoolError::InvalidAmount);
+        }
+        let round: RoundData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        if round.is_finalized {
+            return Err(MatchingPoolError::RoundAlreadyFinalized);
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::RoundCap(round_id), &cap);
+        events::RoundCapUpdatedEvent {
+            admin,
+            round_id,
+            cap,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
     pub fn record_contribution(
         env: Env,
         round_id: u64,
@@ -258,7 +359,7 @@ impl MatchingPoolContract {
         contributor: Address,
         amount: i128,
     ) -> Result<(), MatchingPoolError> {
-        Self::require_not_paused(&env)?;
+        Self::require_contribution_not_paused(&env)?;
         if amount <= 0 {
             return Err(MatchingPoolError::InvalidAmount);
         }
@@ -282,6 +383,23 @@ impl MatchingPoolContract {
         {
             return Err(MatchingPoolError::ProjectNotEligible);
         }
+        let round_total_key = DataKey::ContributorRoundTotal(round_id, contributor.clone());
+        let prior_round_total: i128 = env
+            .storage()
+            .persistent()
+            .get(&round_total_key)
+            .unwrap_or(0);
+        let new_round_total = prior_round_total
+            .checked_add(amount)
+            .ok_or(MatchingPoolError::InvalidAmount)?;
+        let cap: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundCap(round_id))
+            .unwrap_or(0);
+        if cap > 0 && new_round_total > cap {
+            return Err(MatchingPoolError::ContributionCapExceeded);
+        }
         let contrib_key = DataKey::ContributorAmount(round_id, project_id, contributor.clone());
         let prev: i128 = env.storage().persistent().get(&contrib_key).unwrap_or(0);
         if prev == 0 {
@@ -301,6 +419,9 @@ impl MatchingPoolContract {
         env.storage()
             .persistent()
             .set(&total_key, &(total + amount));
+        env.storage()
+            .persistent()
+            .set(&round_total_key, &new_round_total);
         events::ContributionRecordedEvent {
             round_id,
             project_id,
@@ -318,7 +439,7 @@ impl MatchingPoolContract {
     ) -> Result<(), MatchingPoolError> {
         Self::with_reentrancy_guard(&env, || {
             Self::require_admin(&env, &admin)?;
-            Self::require_not_paused(&env)?;
+            Self::require_governance_not_paused(&env)?;
 
             let mut round: RoundData = env
                 .storage()
@@ -365,7 +486,7 @@ impl MatchingPoolContract {
     ) -> Result<i128, MatchingPoolError> {
         Self::with_reentrancy_guard(&env, || {
             Self::require_admin(&env, &admin)?;
-            Self::require_not_paused(&env)?;
+            Self::require_payout_not_paused(&env)?;
             let mut round: RoundData = env
                 .storage()
                 .persistent()
@@ -656,6 +777,37 @@ impl MatchingPoolContract {
             .unwrap_or(0))
     }
 
+    /// The round-level contribution cap (0 means uncapped).
+    pub fn get_round_cap(env: Env, round_id: u64) -> Result<i128, MatchingPoolError> {
+        env.storage()
+            .persistent()
+            .get::<_, RoundData>(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundCap(round_id))
+            .unwrap_or(0))
+    }
+
+    /// A contributor's cumulative recorded contributions to a round, summed
+    /// across every project in that round.
+    pub fn get_contributor_round_total(
+        env: Env,
+        round_id: u64,
+        contributor: Address,
+    ) -> Result<i128, MatchingPoolError> {
+        env.storage()
+            .persistent()
+            .get::<_, RoundData>(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::ContributorRoundTotal(round_id, contributor))
+            .unwrap_or(0))
+    }
+
     pub fn get_round_status(env: Env, round_id: u64) -> Result<Symbol, MatchingPoolError> {
         env.storage()
             .persistent()
@@ -686,16 +838,70 @@ impl MatchingPoolContract {
             .ok_or(MatchingPoolError::NotInitialized)
     }
 
+    // ── Granular pause / unpause ─────────────────────────────────────────────
+
+    /// Pause a specific subsystem scope. Admin-only.
+    ///
+    /// Read-only queries are never affected by any scope.
+    pub fn pause_scope(
+        env: Env,
+        admin: Address,
+        scope: PauseScope,
+    ) -> Result<(), MatchingPoolError> {
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::ScopePaused(scope), &true);
+        events::ScopePauseChangedEvent {
+            admin,
+            scope: scope as u32,
+            paused: true,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Unpause a specific subsystem scope. Admin-only.
+    pub fn unpause_scope(
+        env: Env,
+        admin: Address,
+        scope: PauseScope,
+    ) -> Result<(), MatchingPoolError> {
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::ScopePaused(scope), &false);
+        events::ScopePauseChangedEvent {
+            admin,
+            scope: scope as u32,
+            paused: false,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Legacy whole-contract pause (kept for backward-compatibility).
+    /// Prefer `pause_scope` for new integrations.
     pub fn pause(env: Env, admin: Address) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &true);
         Ok(())
     }
 
+    /// Legacy whole-contract unpause (kept for backward-compatibility).
+    /// Prefer `unpause_scope` for new integrations.
     pub fn unpause(env: Env, admin: Address) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &false);
         Ok(())
+    }
+
+    /// Read-only: returns `true` when a given scope is currently paused.
+    /// Never modifies state and is always callable regardless of pause status.
+    pub fn is_paused(env: Env, scope: PauseScope) -> bool {
+        Self::is_scope_paused(&env, scope)
     }
 
     pub fn set_admin(
@@ -704,6 +910,7 @@ impl MatchingPoolContract {
         new_admin: Address,
     ) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &current_admin)?;
+        Self::require_governance_not_paused(&env)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         Ok(())
     }
@@ -714,6 +921,7 @@ impl MatchingPoolContract {
         new_wasm_hash: BytesN<32>,
     ) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &caller)?;
+        Self::require_governance_not_paused(&env)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
     }
@@ -721,3 +929,5 @@ impl MatchingPoolContract {
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod tests;

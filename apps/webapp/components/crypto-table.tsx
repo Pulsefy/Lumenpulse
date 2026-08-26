@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { CryptoApiService, transformCryptoData, CryptoApiData } from "@/lib/api-services";
 import { WatchlistItemType } from "@/lib/watchlist-service";
-import { WatchlistProvider, useWatchlist } from "@/hooks/use-watchlist";
+import { useWatchlist } from "@/hooks/use-watchlist";
 
 interface CryptoData {
   id: number;
@@ -48,38 +48,6 @@ export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: 
       } catch (err) {
         console.error('Error fetching crypto data:', err);
         setError(err instanceof Error ? err.message : 'Failed to load cryptocurrency data');
-        
-        // Fallback to mock data if API fails
-        const mockCryptoData = [
-          {
-            id: 1,
-            name: "Bitcoin",
-            symbol: "BTC",
-            icon: "/crypto-icons/btc.png",
-            price: 84127.12,
-            change1h: 0.0,
-            change24h: 3.8,
-            change7d: -2.9,
-            volume24h: 29483607871,
-            marketCap: 1669278945761,
-            sparkline: [65, 59, 80, 81, 56, 55, 40, 60, 70, 45, 50, 55, 70, 75, 65],
-          },
-          {
-            id: 2,
-            name: "USD Coin",
-            symbol: "USDC",
-            icon: "/crypto-icons/usdc.png",
-            price: 1.0,
-            change1h: 0.0,
-            change24h: 0.01,
-            change7d: 0.0,
-            volume24h: 7654321098,
-            marketCap: 43210000000,
-            sparkline: [70, 65, 60, 65, 55, 40, 45, 60, 75, 60, 50, 55, 65, 70, 60],
-          },
-          // Add more mock data as needed...
-        ];
-        setCryptoData(mockCryptoData);
       } finally {
         setIsLoading(false);
       }
@@ -93,7 +61,8 @@ export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: 
   }, []);
 
   const toggleFavorite = async (crypto: CryptoData) => {
-    if (favorites.includes(crypto.id)) {
+    const isAdding = !favorites.includes(crypto.id);
+    if (!isAdding) {
       setFavorites(favorites.filter((favId) => favId !== crypto.id));
     } else {
       setFavorites([...favorites, crypto.id]);
@@ -109,7 +78,12 @@ export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: 
           imageUrl: crypto.icon,
         });
       } catch {
-        // Silently fail - local state still works
+        // Rollback local state
+        setFavorites((prev) => 
+          isAdding 
+            ? prev.filter((id) => id !== crypto.id) 
+            : [...prev, crypto.id]
+        );
       }
     }
   };
@@ -148,12 +122,7 @@ export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: 
         <h2 className="text-xl font-bold font-poppins text-white flex items-center gap-2">
           <span className="w-2 h-6 bg-blue-500 rounded-sm"></span>
           Cryptocurrency Market Cap
-          {error && (
-            <span className="text-sm text-yellow-400 ml-2 font-normal">
-              (Using cached data)
-            </span>
-          )}
-        </h2>
+          </h2>
       </div>
 
       {isLoading ? (

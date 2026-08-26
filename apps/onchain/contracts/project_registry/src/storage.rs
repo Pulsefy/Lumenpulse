@@ -10,6 +10,7 @@ pub enum VerificationStatus {
     Pending,
     Verified,
     Rejected,
+    Archived,
 }
 
 /// How voter weight is determined

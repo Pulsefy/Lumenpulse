@@ -20,5 +20,8 @@ import { LatencyBudgetHealthService } from './latency-budget.health.service';
   ],
   controllers: [HealthController],
   providers: [HealthService, ContractHealthService, LatencyBudgetHealthService],
+  // ContractHealthService is exported so ContractHealthSnapshotModule can
+  // inject it without creating a second instance.
+  exports: [ContractHealthService],
 })
 export class HealthModule {}

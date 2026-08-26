@@ -18,6 +18,7 @@ export enum VerificationStatus {
   Pending = 'PENDING',
   Verified = 'VERIFIED',
   Rejected = 'REJECTED',
+  Archived = 'ARCHIVED',
 }
 
 export enum SubmissionStatus {

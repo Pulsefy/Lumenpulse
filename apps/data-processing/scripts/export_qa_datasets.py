@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 """
-Export QA datasets (events, views, KPIs) for a Stellar ledger range.
+Ledger-Range Export Generator for Incident Debugging
+
+Exports raw payloads and normalized outputs for a specific Stellar ledger range
+when maintainers debug incidents. Safe for repeated use (idempotent, atomic
+writes, read-only queries).
+
+Raw payloads    -> events_<start>_<end>.json (raw contract events)
+Normalized      -> views_<start>_<end>.json (materialized views) +
+                   kpis_<start>_<end>.json  (computed KPIs)
+
+Accepts --start-ledger / --end-ledger inputs. Each JSON file uses a
+standard envelope (status, exported_at, start_ledger, end_ledger, dataset,
+count, records). See scripts/README_qa_export.md for file format and intended
+use.
 
 Usage:
     python scripts/export_qa_datasets.py --start-ledger 1000 --end-ledger 2000
@@ -49,6 +62,10 @@ def parse_args():
 def main():
     args = parse_args()
 
+    # Validate ledger inputs (also validated inside QAExporter for API use)
+    if args.start_ledger < 0 or args.end_ledger < 0:
+        logger.error("ledger numbers must be >= 0")
+        sys.exit(1)
     if args.start_ledger > args.end_ledger:
         logger.error("--start-ledger must be <= --end-ledger")
         sys.exit(1)

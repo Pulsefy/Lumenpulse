@@ -8,10 +8,15 @@ Operational guide for indexer lag and external source failure alerts in `apps/da
 |--------|--------|--------|
 | Horizon ledger freshness | `lumenpulse_indexer_lag_seconds{metric_name="stellar_ledger_lag"}` | Stellar Horizon latest ledger `closed_at` |
 | Pipeline analytics freshness | `lumenpulse_indexer_lag_seconds{metric_name="pipeline_analytics_lag"}` | Latest `analytics_records.created_at` in PostgreSQL |
+| Dataset freshness SLA | `lumenpulse_ingestion_dataset_freshness_seconds{dataset}` vs `lumenpulse_ingestion_dataset_freshness_target_seconds{dataset}` | Explicit dataset SLA table |
+| Dataset completeness SLA | `lumenpulse_ingestion_dataset_completeness_ratio{dataset}` vs `lumenpulse_ingestion_dataset_completeness_target_ratio{dataset}` | Explicit dataset SLA table |
 | External source health | `lumenpulse_source_health{source=...}` | Last fetch success (`1`) or failure (`0`) |
 | Source failures | `lumenpulse_source_failures_total{source,failure_type}` | News, Horizon, price feed fetch errors |
 
 Log alerts are emitted by logger `lumenpulse.ingestion_alerts` with prefix `INGESTION_ALERT`.
+
+The dataset-level SLA contract is committed in
+[INGESTION_DATASET_SLAS.md](INGESTION_DATASET_SLAS.md).
 
 ## Default thresholds
 
@@ -19,6 +24,10 @@ Log alerts are emitted by logger `lumenpulse.ingestion_alerts` with prefix `INGE
 |--------|---------|----------|
 | Stellar ledger lag | 60s | 300s |
 | Pipeline analytics lag | 1h | 2h |
+
+Dataset SLA targets are listed in `INGESTION_DATASET_SLAS.md` and can be
+overridden per dataset with `INGESTION_SLA_<DATASET>_FRESHNESS_SECONDS` and
+`INGESTION_SLA_<DATASET>_COMPLETENESS_RATIO`.
 
 Override with environment variables:
 
@@ -99,6 +108,22 @@ Prometheus metrics are exposed on the data-processing metrics port (default `909
 2. Check upstream rate limits or outages.
 3. Retry with `python src/main.py` or wait for the next scheduled pipeline run.
 4. Confirm `lumenpulse_source_health` returns to `1` after a successful fetch.
+
+## Alert: Dataset SLA breach
+
+**Symptoms**
+
+- Log: `Dataset SLA breach: <dataset>`
+- `lumenpulse_ingestion_dataset_sla_breach{dataset="...",sla_type="..."} == 1`
+- Prometheus alert `IngestionDatasetFreshnessSLABreach` or
+  `IngestionDatasetCompletenessSLABreach`
+
+**Remediation**
+
+1. Check the dataset row in `INGESTION_DATASET_SLAS.md` for its target and owner.
+2. Compare current freshness/completeness metrics with the target metrics.
+3. Re-run the relevant ingestion or quality-check job after restoring the source.
+4. If completeness is `-1`, fix the measurement path first; unknown completeness is a breach.
 
 ## Escalation
 

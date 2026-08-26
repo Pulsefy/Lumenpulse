@@ -99,6 +99,69 @@ groups:
           summary: 'High job failure rate'
           description: '{{ .Labels.queue_name }} has > 10% job failures (current: {{ $value | humanize }}/sec)'
 
+      # ==========================
+      # Reconciliation Drift Alerts
+      # ==========================
+
+      - alert: ReconciliationDriftWarning
+        expr: |
+          sum by (dataset) (
+            increase(lumenpulse_reconciliation_drift_total{severity="warning"}[10m])
+          ) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: 'Reconciliation drift warning'
+          description: '{{ .Labels.dataset }} has recorded warning-level drift breaches in the last 10 minutes'
+          runbook: 'document/RECONCILIATION_ALERTING_RUNBOOK.md'
+
+      - alert: ReconciliationDriftCritical
+        expr: |
+          sum by (dataset) (
+            increase(lumenpulse_reconciliation_drift_total{severity="critical"}[10m])
+          ) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: 'Critical reconciliation drift'
+          description: '{{ .Labels.dataset }} has recorded critical drift breaches in the last 10 minutes'
+          runbook: 'document/RECONCILIATION_ALERTING_RUNBOOK.md'
+
+      # ====================
+      # Ingestion Dataset SLA Alerts
+      # ====================
+
+      - alert: IngestionDatasetFreshnessSLABreach
+        expr: |
+          lumenpulse_ingestion_dataset_freshness_seconds
+            > on(dataset) lumenpulse_ingestion_dataset_freshness_target_seconds
+        for: 5m
+        labels:
+          severity: critical
+          service: data-processing
+        annotations:
+          summary: 'Ingestion dataset freshness SLA breach'
+          description: '{{ .Labels.dataset }} freshness is {{ $value | humanizeDuration }}, above its configured SLA target'
+          runbook: 'apps/data-processing/INGESTION_ALERTING_RUNBOOK.md'
+
+      - alert: IngestionDatasetCompletenessSLABreach
+        expr: |
+          lumenpulse_ingestion_dataset_completeness_ratio < 0
+            or lumenpulse_ingestion_dataset_completeness_ratio
+              < on(dataset) lumenpulse_ingestion_dataset_completeness_target_ratio
+        for: 5m
+        labels:
+          severity: critical
+          service: data-processing
+        annotations:
+          summary: 'Ingestion dataset completeness SLA breach'
+          description: '{{ .Labels.dataset }} completeness ratio is {{ $value | humanize }}, below its configured SLA target or unknown'
+          runbook: 'apps/data-processing/INGESTION_ALERTING_RUNBOOK.md'
+
       # ====================
       # Request Rate Alerts
       # ====================

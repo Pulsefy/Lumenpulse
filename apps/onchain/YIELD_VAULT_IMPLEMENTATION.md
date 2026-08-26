@@ -19,14 +19,13 @@ This document describes the implementation of a **Yield-bearing Vault System** t
 
 #### 2. **Mock Yield Providers**
 
-##### a. **Aave Lending Pool** (Mock Aave Protocol)
-- **Location**: `contracts/aave_lending_pool/src/lib.rs`
-- **Purpose**: Simulates Aave-style lending protocol
-- **Features**:
-  - Multiple reserve tokens
-  - Interest accrual on deposits
-  - Variable APY based on utilization
-  - aToken (interest-bearing token) mechanics
+##### a. **Aave-style Lending Provider** (external)
+
+> **Note**: The `aave_lending_pool` mock crate was retired from the repository. It was never a
+> workspace member, had no code-level integration with the protocol, targeted a pinned older SDK,
+> and did not implement borrow/repay/liquidation. Lending-provider integration is done against any
+> external contract implementing the `YieldProviderTrait` interface (see
+> [Protocol Integration Details](#protocol-integration-details)).
 
 ##### b. **Stable Swap Pool** (Mock Curve Protocol)
 - **Location**: `contracts/stable_swap_pool/src/lib.rs`
@@ -142,7 +141,10 @@ YieldVault.withdraw(
 
 ## Protocol Integration Details
 
-### Aave Lending Pool Integration
+### Aave-style Lending Pool Integration (external provider)
+
+> **Note**: No reference lending-pool contract ships in this repository anymore. The flow below
+> describes integrating any external Aave-like pool that implements `YieldProviderTrait`.
 
 **Key Concept**: Users deposit stablecoins and receive aTokens that accrue interest.
 
@@ -426,7 +428,6 @@ pub fn emit_yield_harvested(provider_id: u32, yield_earned: i128)
 
 ```
 YieldVault: TBD (after deployment)
-AaveLendingPool: TBD
 StableSwapPool: TBD
 LiquidityPool: TBD
 ```

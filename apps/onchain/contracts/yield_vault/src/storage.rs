@@ -39,4 +39,6 @@ pub enum DataKey {
     // Metrics tracking
     TotalAUM,
     TotalYieldHarvested,
+    // Emergency pause switch (bool)
+    Paused,
 }

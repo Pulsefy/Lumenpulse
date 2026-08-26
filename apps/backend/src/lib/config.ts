@@ -52,6 +52,7 @@ import { z } from 'zod';
  * - METRICS_ALLOWED_IPS
  * - USE_MOCK_TRANSACTIONS
  * - BOOTSTRAP_DEMO_DATA_ENABLED
+ * - FRIENDBOT_BOOTSTRAP_ENABLED
  * - LOGGING_ENABLED
  * - LOGGING_LEVEL
  * - LOGGING_INCLUDE_BODY
@@ -69,6 +70,7 @@ import { z } from 'zod';
  * - PORTFOLIO_SNAPSHOT_ATTEMPTS
  * - PORTFOLIO_SNAPSHOT_RETRY_DELAY_MS
  * - PORTFOLIO_SNAPSHOT_QUEUE_METRICS
+ * - OUTBOX_MAX_ATTEMPTS
  * - RATE_LIMIT_TRACK_BY_IP
  * - RATE_LIMIT_TRACK_BY_API_KEY
  * - RATE_LIMIT_API_KEY_HEADER
@@ -92,6 +94,10 @@ import { z } from 'zod';
  * - RATE_LIMIT_WATCHLIST_WRITE_LIMIT
  * - RATE_LIMIT_WATCHLIST_WRITE_TTL_MS
  * - RATE_LIMIT_WATCHLIST_WRITE_BLOCK_MS
+ * - IDEMPOTENCY_RETENTION_MS
+ * - IDEMPOTENCY_LEASE_MS
+ * - IDEMPOTENCY_CONCURRENCY_TIMEOUT_MS
+ * - IDEMPOTENCY_CLEANUP_CRON
  *
  * NEVER_SERVER:
  * - NEXT_PUBLIC_* (validated client-side only)
@@ -155,6 +161,7 @@ const RATE_LIMIT_DEFAULTS = {
     stellarRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    friendbotBootstrap: { limit: 5, ttl: 3_600_000, blockDuration: 3_600_000 },
   },
   staging: {
     global: { limit: 180, ttl: 60_000, blockDuration: 60_000 },
@@ -169,6 +176,7 @@ const RATE_LIMIT_DEFAULTS = {
     stellarRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    friendbotBootstrap: { limit: 3, ttl: 3_600_000, blockDuration: 3_600_000 },
   },
   production: {
     global: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
@@ -183,6 +191,7 @@ const RATE_LIMIT_DEFAULTS = {
     stellarRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
+    friendbotBootstrap: { limit: 2, ttl: 3_600_000, blockDuration: 3_600_000 },
   },
 } as const;
 
@@ -409,6 +418,22 @@ const envSchema = z
       .min(1)
       .optional(),
 
+    RATE_LIMIT_FRIENDBOT_BOOTSTRAP_LIMIT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .optional(),
+    RATE_LIMIT_FRIENDBOT_BOOTSTRAP_TTL_MS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .optional(),
+    RATE_LIMIT_FRIENDBOT_BOOTSTRAP_BLOCK_MS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .optional(),
+
     IP_ALLOWLIST: z.string().trim().optional(),
     IP_DENYLIST: z.string().trim().optional(),
 
@@ -448,6 +473,12 @@ const envSchema = z
     WEBHOOK_SECRET: z.string().trim().optional(),
     WEBHOOK_PROVIDERS: z.string().trim().optional(),
 
+    CONTRACT_ADMIN_API_KEY: z.string().trim().optional(),
+    CONTRACT_ADMIN_TRUSTED_CALLER_ENABLED: z.preprocess(
+      parseBoolean,
+      z.boolean().default(false),
+    ),
+
     SOROBAN_INGEST_SECRET: z.string().trim().optional(),
     SOROBAN_TIMESTAMP_TOLERANCE_MS: z.coerce
       .number()
@@ -463,6 +494,10 @@ const envSchema = z
       z.boolean().default(true),
     ),
     BOOTSTRAP_DEMO_DATA_ENABLED: z.preprocess(
+      parseBoolean,
+      z.boolean().default(false),
+    ),
+    FRIENDBOT_BOOTSTRAP_ENABLED: z.preprocess(
       parseBoolean,
       z.boolean().default(false),
     ),
@@ -503,6 +538,23 @@ const envSchema = z
       parseBoolean,
       z.boolean().default(false),
     ),
+
+    // Outbox relay — dispatch attempts before an event is dead-lettered.
+    OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(5),
+
+    // Idempotency keys (see apps/backend/src/idempotency)
+    IDEMPOTENCY_RETENTION_MS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(86_400_000),
+    IDEMPOTENCY_LEASE_MS: z.coerce.number().int().min(1).default(60_000),
+    IDEMPOTENCY_CONCURRENCY_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(30_000),
+    IDEMPOTENCY_CLEANUP_CRON: z.string().trim().default('0 3 * * *'),
   })
   .superRefine((values, context) => {
     if (values.NODE_ENV === 'production' && !values.CORS_ORIGIN) {
@@ -666,6 +718,17 @@ const resolvedRateLimit = {
       parsedEnv.RATE_LIMIT_ANALYTICS_READ_BLOCK_MS ??
       rateLimitDefaults.analyticsRead.blockDuration,
   },
+  friendbotBootstrap: {
+    limit:
+      parsedEnv.RATE_LIMIT_FRIENDBOT_BOOTSTRAP_LIMIT ??
+      rateLimitDefaults.friendbotBootstrap.limit,
+    ttl:
+      parsedEnv.RATE_LIMIT_FRIENDBOT_BOOTSTRAP_TTL_MS ??
+      rateLimitDefaults.friendbotBootstrap.ttl,
+    blockDuration:
+      parsedEnv.RATE_LIMIT_FRIENDBOT_BOOTSTRAP_BLOCK_MS ??
+      rateLimitDefaults.friendbotBootstrap.blockDuration,
+  },
 };
 
 const requiredConfigSummary = [
@@ -809,6 +872,18 @@ const optionalSummary = [
     'RATE_LIMIT_ANALYTICS_READ_BLOCK_MS',
     String(resolvedRateLimit.analyticsRead.blockDuration),
   ],
+  [
+    'RATE_LIMIT_FRIENDBOT_BOOTSTRAP_LIMIT',
+    String(resolvedRateLimit.friendbotBootstrap.limit),
+  ],
+  [
+    'RATE_LIMIT_FRIENDBOT_BOOTSTRAP_TTL_MS',
+    String(resolvedRateLimit.friendbotBootstrap.ttl),
+  ],
+  [
+    'RATE_LIMIT_FRIENDBOT_BOOTSTRAP_BLOCK_MS',
+    String(resolvedRateLimit.friendbotBootstrap.blockDuration),
+  ],
   ['IP_ALLOWLIST', parsedEnv.IP_ALLOWLIST ?? '(not set)'],
   ['IP_DENYLIST', parsedEnv.IP_DENYLIST ?? '(not set)'],
   ['STELLAR_NETWORK', parsedEnv.STELLAR_NETWORK],
@@ -858,6 +933,14 @@ const optionalSummary = [
   [
     'WEBHOOK_PROVIDERS',
     parsedEnv.WEBHOOK_PROVIDERS ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'CONTRACT_ADMIN_API_KEY',
+    parsedEnv.CONTRACT_ADMIN_API_KEY ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'CONTRACT_ADMIN_TRUSTED_CALLER_ENABLED',
+    String(parsedEnv.CONTRACT_ADMIN_TRUSTED_CALLER_ENABLED),
   ],
   [
     'SOROBAN_INGEST_SECRET',
@@ -918,6 +1001,14 @@ const optionalSummary = [
     'PORTFOLIO_SNAPSHOT_QUEUE_METRICS',
     String(parsedEnv.PORTFOLIO_SNAPSHOT_QUEUE_METRICS),
   ],
+  ['OUTBOX_MAX_ATTEMPTS', String(parsedEnv.OUTBOX_MAX_ATTEMPTS)],
+  ['IDEMPOTENCY_RETENTION_MS', String(parsedEnv.IDEMPOTENCY_RETENTION_MS)],
+  ['IDEMPOTENCY_LEASE_MS', String(parsedEnv.IDEMPOTENCY_LEASE_MS)],
+  [
+    'IDEMPOTENCY_CONCURRENCY_TIMEOUT_MS',
+    String(parsedEnv.IDEMPOTENCY_CONCURRENCY_TIMEOUT_MS),
+  ],
+  ['IDEMPOTENCY_CLEANUP_CRON', parsedEnv.IDEMPOTENCY_CLEANUP_CRON],
 ] as const;
 
 const wasDefaulted = (key: string): boolean => {
@@ -1037,6 +1128,10 @@ export const config = Object.freeze({
     webhookSecret: parsedEnv.WEBHOOK_SECRET,
     webhookProviders: parsedEnv.WEBHOOK_PROVIDERS,
     telegramBotToken: parsedEnv.TELEGRAM_BOT_TOKEN,
+    contractAdmin: parsedEnv.CONTRACT_ADMIN_API_KEY,
+  }),
+  contractAdmin: Object.freeze({
+    trustedCallerEnabled: parsedEnv.CONTRACT_ADMIN_TRUSTED_CALLER_ENABLED,
   }),
   soroban: Object.freeze({
     ingestSecret: parsedEnv.SOROBAN_INGEST_SECRET,
@@ -1071,6 +1166,7 @@ export const config = Object.freeze({
   featureFlags: Object.freeze({
     useMockTransactions: parsedEnv.USE_MOCK_TRANSACTIONS,
     bootstrapDemoData: parsedEnv.BOOTSTRAP_DEMO_DATA_ENABLED,
+    friendbotBootstrap: parsedEnv.FRIENDBOT_BOOTSTRAP_ENABLED,
   }),
   portfolioSnapshot: Object.freeze({
     concurrency: parsedEnv.PORTFOLIO_SNAPSHOT_CONCURRENCY,
@@ -1078,6 +1174,34 @@ export const config = Object.freeze({
     attempts: parsedEnv.PORTFOLIO_SNAPSHOT_ATTEMPTS,
     retryDelayMs: parsedEnv.PORTFOLIO_SNAPSHOT_RETRY_DELAY_MS,
     queueMetrics: parsedEnv.PORTFOLIO_SNAPSHOT_QUEUE_METRICS,
+  }),
+  outbox: Object.freeze({
+    /**
+     * Dispatch attempts before an outbox event is moved to the dead-letter
+     * queue and stops blocking the relay. Default 5.
+     */
+    maxAttempts: parsedEnv.OUTBOX_MAX_ATTEMPTS,
+  }),
+  idempotency: Object.freeze({
+    /**
+     * How long a completed `Idempotency-Key` response is replayed. Default 24h.
+     */
+    retentionMs: parsedEnv.IDEMPOTENCY_RETENTION_MS,
+    /**
+     * How long an in_progress claim is held before a retry can reclaim it.
+     * Default 60s.
+     */
+    leaseMs: parsedEnv.IDEMPOTENCY_LEASE_MS,
+    /**
+     * How long a concurrent request waits for the request that owns the key
+     * to finish. Default 30s.
+     */
+    concurrencyTimeoutMs: parsedEnv.IDEMPOTENCY_CONCURRENCY_TIMEOUT_MS,
+    /**
+     * Cron expression for the scheduled cleanup of expired records.
+     * Default: daily at 03:00 UTC.
+     */
+    cleanupCron: parsedEnv.IDEMPOTENCY_CLEANUP_CRON,
   }),
   rateLimit: Object.freeze({
     tracker: Object.freeze({
@@ -1146,6 +1270,11 @@ export const config = Object.freeze({
       limit: resolvedRateLimit.analyticsRead.limit,
       ttl: resolvedRateLimit.analyticsRead.ttl,
       blockDuration: resolvedRateLimit.analyticsRead.blockDuration,
+    }),
+    friendbotBootstrap: Object.freeze({
+      limit: resolvedRateLimit.friendbotBootstrap.limit,
+      ttl: resolvedRateLimit.friendbotBootstrap.ttl,
+      blockDuration: resolvedRateLimit.friendbotBootstrap.blockDuration,
     }),
   }),
   ipAccess: Object.freeze({

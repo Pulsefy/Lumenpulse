@@ -86,7 +86,7 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
   if (!data) return null;
 
   const color = statusColor(data.status);
-  const isPending = data.status === VerificationStatus.Pending;
+  const isPending = data.status === 'PENDING';
   const canVote = isPending && !!voterPublicKey && !hasVoted;
 
   return (
@@ -101,7 +101,9 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
               ? 'shield-checkmark'
               : data.status === 'REJECTED'
                 ? 'shield-outline'
-                : 'time-outline'
+                : data.status === 'ARCHIVED'
+                  ? 'archive-outline'
+                  : 'time-outline'
           }
           size={20}
           color={color}
@@ -128,6 +130,9 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
       {canVote && (
         <View style={styles.voteButtons}>
           <TouchableOpacity
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Verify project"
             style={[styles.voteBtn, { backgroundColor: '#10b981' + '22', borderColor: '#10b981' }]}
             onPress={() => void vote(true)}
             disabled={isVoting}
@@ -143,6 +148,9 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
             )}
           </TouchableOpacity>
           <TouchableOpacity
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Reject project"
             style={[styles.voteBtn, { backgroundColor: '#ef4444' + '22', borderColor: '#ef4444' }]}
             onPress={() => void vote(false)}
             disabled={isVoting}

@@ -63,6 +63,17 @@ export function getEnvironmentConfig(environment = activeEnvironment): Environme
   return environmentConfigs[environment];
 }
 
+/**
+ * Whether the testnet environment still has the minimum configuration
+ * required to build and submit a contribution (API base URL + Soroban RPC).
+ * Used by offline flows (e.g. contribution draft resume) to make sure a
+ * saved action can actually be completed against the network.
+ */
+export function isTestnetConfigReady(): boolean {
+  const testnet = environmentConfigs.testnet;
+  return Boolean(testnet.apiBaseUrl && testnet.sorobanRpcUrl);
+}
+
 export const config = {
   /**
    * API Configuration

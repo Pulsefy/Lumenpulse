@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Metadata Drift Detector (#882)
 

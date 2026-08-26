@@ -11,4 +11,6 @@ pub enum YieldVaultError {
     ProviderNotFound = 5,
     NoProvidersAvailable = 6,
     AlreadyExecuted = 7,
+    Unauthorized = 8,
+    VaultPaused = 9,
 }

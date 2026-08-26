@@ -24,4 +24,14 @@ pub enum TreasuryError {
     WrongProposalAction = 17,
     InvalidMultisigConfig = 18,
     TooManySigners = 19,
+    // ── Cliff / schedule preview errors ───────────────────────
+    /// Cliff time supplied for a stream was invalid: not yet at start_time,
+    /// or cliff_time + step would overflow u64.
+    InvalidCliffTime = 20,
+    /// A preview query received a zero step or step > max allowed.
+    InvalidScheduleStep = 21,
+    /// preview_schedule asked for too many entries (caps iteration cost).
+    TooManyInstallments = 22,
+    /// Total unreleased obligations across all streams exceed held balance.
+    Insolvent = 23,
 }

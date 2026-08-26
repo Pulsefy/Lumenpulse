@@ -5,8 +5,30 @@ This service handles compute-heavy tasks such as sentiment analysis and market t
 ## Project Structure
 
 - `src/`: Core logic and service implementation.
+- `src/lineage/`: Feature and KPI lineage manifest (`feature_lineage.yaml`).
 - `tests/`: Unit and integration tests.
 - `scripts/`: Helper scripts for data management and development.
+
+## Feature & KPI Lineage
+
+All ML features and derived KPIs are documented in the lineage manifest so
+contributors can trace how every number is computed, who owns it, and what
+it feeds into.
+
+**Quick links:**
+- Manifest file: [`src/lineage/feature_lineage.yaml`](src/lineage/feature_lineage.yaml)
+- Contributor guide: [`LINEAGE.md`](LINEAGE.md)
+
+```bash
+# Validate the manifest
+python scripts/validate_lineage.py
+
+# Print a human-readable summary
+python scripts/validate_lineage.py --summary
+
+# Inspect a single entry
+python scripts/validate_lineage.py --show market_health_score
+```
 
 ## Setup Instructions
 
@@ -59,6 +81,18 @@ The data processing service runs background jobs when started in `serve` mode.
 - `python src/main.py serve` starts the APScheduler-managed service.
 - The scheduler now includes a daily contributor reputation snapshot job that builds top-N contributor snapshots for each project and persists them for leaderboard / reputation queries.
 - Control the snapshot size with `REPUTATION_SNAPSHOT_TOP_N` in `.env` (default: `100`).
+
+## API Documentation & Contracts
+
+The FastAPI server exposes an OpenAPI document (Swagger UI) at `/docs` when running.
+
+For backend contributors (e.g. NestJS), the OpenAPI schema is explicitly exported as a committed artifact to ensure contract compatibility. 
+- **Artifact Location**: `apps/data-processing/openapi.json`
+- **Generation**: To regenerate the artifact, run:
+  ```bash
+  python scripts/export_openapi.py openapi.json
+  ```
+CI will fail if the committed `openapi.json` is stale relative to the code. Contract tests in the backend assert against this artifact.
 
 ## 6. Synthetic Data Generator
 
