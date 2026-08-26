@@ -86,7 +86,7 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
   if (!data) return null;
 
   const color = statusColor(data.status);
-  const isPending = data.status === VerificationStatus.Pending;
+  const isPending = data.status === 'PENDING';
   const canVote = isPending && !!voterPublicKey && !hasVoted;
 
   return (

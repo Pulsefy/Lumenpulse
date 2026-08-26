@@ -38,6 +38,11 @@ export class MetricsService implements OnModuleInit {
   private readonly horizonErrors: Counter<string>;
   private readonly horizonRequests: Counter<string>;
 
+  // Reconciliation monitoring //
+  private readonly reconciliationDriftCounter: Counter<string>;
+  private readonly reconciliationDriftDelta: Gauge<string>;
+  private readonly reconciliationThreshold: Gauge<string>;
+
   // Running totals for the rolling-average sentiment gauge
   private sentimentSum = 0;
   private sentimentCount = 0;
@@ -153,6 +158,27 @@ export class MetricsService implements OnModuleInit {
       name: 'horizon_http_requests_total',
       help: 'Total Horizon API requests by method',
       labelNames: ['method'] as const,
+      registers: [this.registry],
+    });
+
+    this.reconciliationDriftCounter = new Counter({
+      name: 'lumenpulse_reconciliation_drift_total',
+      help: 'Total reconciliation drift breaches by dataset and severity',
+      labelNames: ['dataset', 'severity'] as const,
+      registers: [this.registry],
+    });
+
+    this.reconciliationDriftDelta = new Gauge({
+      name: 'lumenpulse_reconciliation_drift_delta',
+      help: 'Latest reconciliation drift delta observed by dataset and severity',
+      labelNames: ['dataset', 'severity'] as const,
+      registers: [this.registry],
+    });
+
+    this.reconciliationThreshold = new Gauge({
+      name: 'lumenpulse_reconciliation_threshold',
+      help: 'Configured reconciliation drift threshold by dataset and severity',
+      labelNames: ['dataset', 'severity'] as const,
       registers: [this.registry],
     });
   }
@@ -321,6 +347,24 @@ export class MetricsService implements OnModuleInit {
    */
   recordHorizonError(method: string, statusCode: string): void {
     this.horizonErrors.inc({ method, status_code: statusCode });
+  }
+
+  recordReconciliationDrift(
+    dataset: string,
+    severity: 'warning' | 'critical',
+    delta: number,
+  ): void {
+    const labels = { dataset, severity };
+    this.reconciliationDriftCounter.inc(labels);
+    this.reconciliationDriftDelta.labels(labels).set(delta);
+  }
+
+  setReconciliationThreshold(
+    dataset: string,
+    severity: 'warning' | 'critical',
+    threshold: number,
+  ): void {
+    this.reconciliationThreshold.labels({ dataset, severity }).set(threshold);
   }
 
   //Dynamic metric helpers (legacy API)

@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
+from sklearn.model_selection import train_test_split
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 from src.ml.model_registry import (
@@ -42,6 +43,7 @@ _SLANG_LEXICON_PATH = Path(
 # Quality gates: minimum acceptable metrics before promotion
 _MIN_SENTIMENT_COVERAGE = float(os.getenv("MIN_SENTIMENT_COVERAGE", "0.0"))
 _MIN_PRICE_R2 = float(os.getenv("MIN_PRICE_R2", "-1.0"))  # permissive default
+_PROMOTION_MIN_DELTA = float(os.getenv("PROMOTION_MIN_DELTA", "0.0"))
 
 # Thread-safety: only one retraining run at a time
 _retrain_lock = threading.Lock()
@@ -155,12 +157,17 @@ def _build_price_predictor(
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
     seed: Optional[int] = None
-) -> Tuple[PricePredictor, Dict[str, Any], Dict[str, Any]]:
+) -> Tuple[
+    PricePredictor,
+    Dict[str, Any],
+    Dict[str, Any],
+    Tuple[pd.DataFrame, pd.Series],
+]:
     """
     Retrain the PricePredictor on fresh data.
 
     Returns:
-        (predictor, metrics_dict, model_metadata)
+        (predictor, metrics_dict, model_metadata, evaluation_set)
 
     ``model_metadata`` is the JSON-serialisable sidecar persisted alongside the
     model: the feature schema version/fingerprint it was trained on plus the
@@ -169,10 +176,11 @@ def _build_price_predictor(
     """
     df, query_bounds = _fetch_training_data(db_session, start_time, end_time, seed)
     predictor = PricePredictor(model_name="linear_regression")
+    training_set, evaluation_set = train_test_split(
+        df, test_size=0.2, random_state=42
+    )
+    metrics = predictor.fit(training_set, target_column="target")
     
-    # Use seed for model training if provided, otherwise default 42
-    random_state = seed if seed is not None else 42
-    metrics = predictor.fit(df, target_column="target", random_state=random_state)
     logger.info(f"PricePredictor retrained: {metrics}")
 
     # Record the schema version + a per-feature distribution baseline so serving
@@ -200,7 +208,15 @@ def _build_price_predictor(
         "row_count": len(df),
         "library_versions": library_versions,
     }
-    return predictor, metrics, metadata
+    return (
+        predictor,
+        metrics,
+        metadata,
+        (
+            evaluation_set.drop(columns=["target"]),
+            evaluation_set["target"],
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +307,12 @@ def run_retraining(
         # ── 2. Price predictor ──────────────────────────────────────────────
         logger.info("Step 2: Retraining price predictor …")
         with MODEL_RETRAINING_DURATION.labels(model_type="price_predictor").time():
-            price_model, price_metrics, price_metadata = _build_price_predictor(
+            (
+                price_model,
+                price_metrics,
+                price_metadata,
+                price_evaluation_set,
+            ) = _build_price_predictor(
                 db_session, start_time=start_time, end_time=end_time, seed=run_seed
             )
 
@@ -301,19 +322,39 @@ def run_retraining(
             p_version = save_model(
                 "price_predictor", price_model, metadata=price_metadata
             )
-            promote_model("price_predictor", p_version)
-            MODEL_RETRAINING_TOTAL.labels(model_type="price_predictor", status="success").inc()
-            result["models"]["price_predictor"] = {
-                "version": p_version,
-                "metrics": price_metrics,
-                "promoted": True,
-                "schema_version": price_metadata.get("schema_version"),
-                "schema_fingerprint": price_metadata.get("schema_fingerprint"),
-            }
-            logger.info(
-                f"PricePredictor promoted: {p_version} "
-                f"(schema v{price_metadata.get('schema_version')})"
+            promoted = promote_model(
+                "price_predictor",
+                p_version,
+                evaluation_set=price_evaluation_set,
+                metric="r2",
+                threshold=_MIN_PRICE_R2,
+                min_delta=_PROMOTION_MIN_DELTA,
+                force=force,
             )
+            if promoted:
+                MODEL_RETRAINING_TOTAL.labels(model_type="price_predictor", status="success").inc()
+                result["models"]["price_predictor"] = {
+                    "version": p_version,
+                    "metrics": price_metrics,
+                    "promoted": True,
+                    "schema_version": price_metadata.get("schema_version"),
+                    "schema_fingerprint": price_metadata.get("schema_fingerprint"),
+                }
+                logger.info(
+                    f"PricePredictor promoted: {p_version} "
+                    f"(schema v{price_metadata.get('schema_version')})"
+                )
+            else:
+                MODEL_RETRAINING_TOTAL.labels(model_type="price_predictor", status="failed").inc()
+                result["models"]["price_predictor"] = {
+                    "version": p_version,
+                    "metrics": price_metrics,
+                    "promoted": False,
+                    "reason": "promotion_evaluation_failed",
+                    "schema_version": price_metadata.get("schema_version"),
+                    "schema_fingerprint": price_metadata.get("schema_fingerprint"),
+                }
+                logger.warning("PricePredictor promotion refused: %s", p_version)
         else:
             MODEL_RETRAINING_TOTAL.labels(model_type="price_predictor", status="failed").inc()
             result["models"]["price_predictor"] = {

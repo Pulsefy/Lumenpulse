@@ -99,6 +99,38 @@ groups:
           summary: 'High job failure rate'
           description: '{{ .Labels.queue_name }} has > 10% job failures (current: {{ $value | humanize }}/sec)'
 
+      # ==========================
+      # Reconciliation Drift Alerts
+      # ==========================
+
+      - alert: ReconciliationDriftWarning
+        expr: |
+          sum by (dataset) (
+            increase(lumenpulse_reconciliation_drift_total{severity="warning"}[10m])
+          ) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: 'Reconciliation drift warning'
+          description: '{{ .Labels.dataset }} has recorded warning-level drift breaches in the last 10 minutes'
+          runbook: 'document/RECONCILIATION_ALERTING_RUNBOOK.md'
+
+      - alert: ReconciliationDriftCritical
+        expr: |
+          sum by (dataset) (
+            increase(lumenpulse_reconciliation_drift_total{severity="critical"}[10m])
+          ) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: 'Critical reconciliation drift'
+          description: '{{ .Labels.dataset }} has recorded critical drift breaches in the last 10 minutes'
+          runbook: 'document/RECONCILIATION_ALERTING_RUNBOOK.md'
+
       # ====================
       # Ingestion Dataset SLA Alerts
       # ====================

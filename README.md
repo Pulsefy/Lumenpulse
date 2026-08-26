@@ -25,6 +25,12 @@ For a step-by-step guide to running the complete LumenPulse stack locally—incl
 
 LumenPulse has migrated to Stellar/Soroban architecture. For details on changes from prior chain assumptions, completed migrations, and legacy cleanup, see [Stellar Migration Notes](document/STELLAR_MIGRATION_NOTES.md).
 
+## Architecture Decisions
+
+The repository keeps design rationale alongside implementation notes. The ADR log captures why key choices were made and which trade-offs were considered: [doc/adr/README.md](doc/adr/README.md).
+
+Related implementation summaries remain cross-referenced there so the historical write-ups and the decision records stay connected.
+
 ## Tech Stack
 ### Frontend
 - Next.js 15: App router, server components, and streaming.

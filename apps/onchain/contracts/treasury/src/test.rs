@@ -1570,3 +1570,65 @@ fn test_v1_streams_readable_through_v2_paths() {
     let claimed = client.claim(&beneficiary);
     assert_eq!(claimed, 500);
 }
+
+use proptest::prelude::*;
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(50))]
+    #[test]
+    fn test_solvency_invariant_holds_during_lifecycle(
+        amount in 100i128..10_000,
+        start_time in 1000u64..2000,
+        duration in 100u64..2000,
+        cliff_time in 0u64..3000,
+        claim_time in 1u64..3000,
+        claim_time_2 in 1u64..3000,
+    ) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let token_admin = Address::generate(&env);
+        let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+        let contract_id = env.register(TreasuryContract, ());
+        let client = TreasuryContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let beneficiary = Address::generate(&env);
+        let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
+        client.initialize(&admin, &token_id.address());
+
+        token_admin_client.mint(&admin, &20_000);
+        env.ledger().set_timestamp(start_time);
+
+        let valid_cliff = if cliff_time == 0 || (cliff_time >= start_time && cliff_time <= start_time + duration) {
+            cliff_time
+        } else {
+            0
+        };
+
+        client.allocate_budget_with_cliff(
+            &admin,
+            &beneficiary,
+            &amount,
+            &start_time,
+            &duration,
+            &valid_cliff,
+            &request_id(&env),
+        );
+
+        let (obs, bal) = client.get_financials();
+        assert!(obs <= bal);
+
+        env.ledger().set_timestamp(start_time + claim_time);
+        let _ = client.try_claim(&beneficiary);
+        let (obs, bal) = client.get_financials();
+        assert!(obs <= bal);
+
+        env.ledger().set_timestamp(start_time + claim_time_2);
+        let _ = client.try_claim(&beneficiary);
+        let (obs, bal) = client.get_financials();
+        assert!(obs <= bal);
+
+        let _ = client.try_cancel_stream(&admin, &beneficiary);
+        let (obs, bal) = client.get_financials();
+        assert!(obs <= bal);
+    }
+}

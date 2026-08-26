@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as Linking from 'expo-linking';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useLocalization } from '../src/context';
 import { useEnvironment } from './EnvironmentContext';
 import { storage, WalletNetworkTag, sanitizePublicKey } from '../lib/storage';
 import { WalletError } from '../lib/wallet/errors';
 import { getDefaultWalletAdapter } from '../lib/wallet/registry';
 import { WalletAdapter, WalletSigningResult, WalletSigningState } from '../lib/wallet/types';
+import config from '../lib/config';
 
 export type WalletStatus =
   | 'disconnected'
@@ -91,6 +92,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [lastRestoreOutcome, setLastRestoreOutcome] = useState<WalletRestoreOutcome | null>(null);
   const [signingState, setSigningState] = useState<WalletSigningState>('idle');
   const [lastSigningError, setLastSigningError] = useState<WalletError | null>(null);
+  const [activeAdapterId, setActiveAdapterId] = useState<string | null>(null);
   const { t } = useLocalization();
   const { environment, isInitialized: isEnvironmentReady } = useEnvironment();
   // Tracks whether a restore attempt has completed at least once so we
@@ -279,6 +281,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const ensureAdapter = useCallback(async () => {
     if (!activeAdapterRef.current) {
       activeAdapterRef.current = await getDefaultWalletAdapter();
+      setActiveAdapterId(activeAdapterRef.current.id);
     }
     return activeAdapterRef.current;
   }, []);
@@ -467,10 +470,36 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         signAndSubmitXdr,
       }}
     >
-      {children}
+      <View style={styles.providerContainer}>
+        {config.isDevelopment && activeAdapterId === 'mock' && (
+          <View style={styles.mockWalletBanner} accessible accessibilityRole="alert">
+            <Text style={styles.mockWalletBannerText}>
+              DEVELOPMENT ONLY: MOCK WALLET ACTIVE. TRANSACTIONS ARE NOT SIGNED.
+            </Text>
+          </View>
+        )}
+        {children}
+      </View>
     </WalletContext.Provider>
   );
 };
+
+const styles = StyleSheet.create({
+  providerContainer: {
+    flex: 1,
+  },
+  mockWalletBanner: {
+    backgroundColor: '#B91C1C',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  mockWalletBannerText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+});
 
 export const useWallet = () => {
   const context = useContext(WalletContext);

@@ -89,7 +89,7 @@ function AssetRow({
     <View
       style={[styles.assetRow, { borderBottomColor: colors.border }]}
       accessible
-      accessibilityRole="listitem"
+      accessibilityRole="button"
     >
       <View
         style={[styles.assetIcon, { backgroundColor: `${color}22` }]}
@@ -129,7 +129,7 @@ function RecentTransactionItem({
     <View
       style={[styles.assetRow, { borderBottomColor: colors.border }]}
       accessible
-      accessibilityRole="listitem"
+      accessibilityRole="button"
     >
       <Ionicons
         name={getTransactionIcon(tx.type) as any}

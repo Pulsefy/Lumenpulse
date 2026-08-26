@@ -14,7 +14,7 @@ import { WalletAdapter } from './types';
 export function createWalletAdapterRegistry(isDevelopment = config.isDevelopment): WalletAdapter[] {
   const adapters: WalletAdapter[] = [new Sep7WalletAdapter()];
 
-  if (isDevelopment) {
+  if (isDevelopment && (typeof __DEV__ === 'undefined' || __DEV__)) {
     adapters.push(new MockWalletAdapter(true));
   }
 

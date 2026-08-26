@@ -132,6 +132,19 @@ impl TreasuryContract {
         result
     }
 
+    fn get_total_obligations(env: &Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::TotalObligations)
+            .unwrap_or(0)
+    }
+
+    fn set_total_obligations(env: &Env, value: i128) {
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalObligations, &value);
+    }
+
     /// Load a stream for `beneficiary`, preferring V2 (cliff-aware) storage.
     fn read_stream(env: &Env, beneficiary: &Address) -> Result<StreamRecord, TreasuryError> {
         let v2_key = DataKey::StreamV2(beneficiary.clone());
@@ -377,6 +390,11 @@ impl TreasuryContract {
                 .get(&DataKey::Token)
                 .ok_or(TreasuryError::NotInitialized)?;
 
+            let old_unreleased = match Self::read_stream(&env, &beneficiary) {
+                Ok(s) => s.total_amount() - s.claimed_amount(),
+                Err(_) => 0,
+            };
+
             // If a V2 cliff stream previously existed for this beneficiary,
             // drop its storage row so the new V1 allocation is the active
             // one (preserves the legacy "latest allocation wins" semantic).
@@ -403,6 +421,14 @@ impl TreasuryContract {
 
             let token_client = token::TokenClient::new(&env, &token_addr);
             token_client.transfer(&admin, env.current_contract_address(), &amount);
+
+            let mut total_obs = Self::get_total_obligations(&env);
+            total_obs = total_obs - old_unreleased + amount;
+            Self::set_total_obligations(&env, total_obs);
+
+            if total_obs > token_client.balance(&env.current_contract_address()) {
+                return Err(TreasuryError::Insolvent);
+            }
 
             events::publish_stream_created(&env, beneficiary, amount, start_time, duration);
 
@@ -466,6 +492,11 @@ impl TreasuryContract {
                 }
             }
 
+            let old_unreleased = match Self::read_stream(&env, &beneficiary) {
+                Ok(s) => s.total_amount() - s.claimed_amount(),
+                Err(_) => 0,
+            };
+
             // If a legacy V1 stream previously existed for this
             // beneficiary, drop its storage row so the new V2 allocation
             // becomes the active one.
@@ -499,6 +530,14 @@ impl TreasuryContract {
 
             let token_client = token::TokenClient::new(&env, &token_addr);
             token_client.transfer(&admin, env.current_contract_address(), &amount);
+
+            let mut total_obs = Self::get_total_obligations(&env);
+            total_obs = total_obs - old_unreleased + amount;
+            Self::set_total_obligations(&env, total_obs);
+
+            if total_obs > token_client.balance(&env.current_contract_address()) {
+                return Err(TreasuryError::Insolvent);
+            }
 
             events::publish_cliff_stream_created(
                 &env,
@@ -547,6 +586,10 @@ impl TreasuryContract {
 
             let token_client = token::TokenClient::new(&env, &token_addr);
             token_client.transfer(&env.current_contract_address(), &beneficiary, &unlocked);
+
+            let mut total_obs = Self::get_total_obligations(&env);
+            total_obs -= unlocked;
+            Self::set_total_obligations(&env, total_obs);
 
             events::publish_tokens_claimed(&env, beneficiary.clone(), unlocked, remaining);
 
@@ -716,6 +759,19 @@ impl TreasuryContract {
             .ok_or(TreasuryError::NotInitialized)
     }
 
+    /// Read-only view exposing committed obligations versus available balance.
+    pub fn get_financials(env: Env) -> Result<(i128, i128), TreasuryError> {
+        let obs = Self::get_total_obligations(&env);
+        let token_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Token)
+            .ok_or(TreasuryError::NotInitialized)?;
+        let token_client = token::TokenClient::new(&env, &token_addr);
+        let bal = token_client.balance(&env.current_contract_address());
+        Ok((obs, bal))
+    }
+
     // ============================================
     // CANCELLATION & RECOVERY FUNCTIONS
     // ============================================
@@ -771,6 +827,10 @@ impl TreasuryContract {
 
         Self::delete_stream(&env, &beneficiary);
 
+        let mut total_obs = Self::get_total_obligations(&env);
+        total_obs -= remaining;
+        Self::set_total_obligations(&env, total_obs);
+
         Ok((total_unlocked, refundable))
     }
 
@@ -818,6 +878,10 @@ impl TreasuryContract {
         );
 
         Self::delete_stream(&env, &beneficiary);
+
+        let mut total_obs = Self::get_total_obligations(&env);
+        total_obs -= full_refund;
+        Self::set_total_obligations(&env, total_obs);
 
         Ok(full_refund)
     }

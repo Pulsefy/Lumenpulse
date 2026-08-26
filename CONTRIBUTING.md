@@ -38,6 +38,9 @@ git checkout -b docs/short-description
 - Prefer small, reviewable commits.
 - Add/update tests when behavior changes.
 - Update docs when behavior, setup, or usage changes.
+- Add or update an ADR when the change introduces or revises a significant architectural decision, platform boundary, operational pattern, or contract/governance approach.
+
+When an issue changes how services are split, how the backend integrates with Python or external systems, how on-chain state or upgradeability works, or what persistence/eventing pattern is used, the PR should include an ADR entry in [doc/adr/README.md](doc/adr/README.md) and link the related implementation summary or feature write-up.
 
 4. Run validation locally
 - Run the relevant lint/test commands for your area:

@@ -98,6 +98,10 @@ def _comparison_log_path(model_type: str) -> Path:
     return _shadow_dir(model_type) / "comparison_log.jsonl"
 
 
+def _promotion_log_path(model_type: str) -> Path:
+    return _model_dir(model_type) / "promotion_log.jsonl"
+
+
 def _metadata_path(model_type: str, version: str) -> Path:
     """Sidecar JSON holding non-pickled metadata for a saved model version."""
     return _model_dir(model_type) / f"{version}.meta.json"
@@ -224,7 +228,52 @@ def load_model(model_type: str, version: str = "current") -> Any:
     return obj
 
 
-def promote_model(model_type: str, version: str) -> None:
+def _score_model(model: Any, evaluation_set: Any, metric: str) -> float:
+    """Score a model on ``(features, target)`` or a frame with ``target``."""
+    if isinstance(evaluation_set, tuple):
+        features, target = evaluation_set
+    else:
+        if "target" not in evaluation_set.columns:
+            raise ValueError("Evaluation set must contain a 'target' column")
+        features = evaluation_set.drop(columns=["target"])
+        target = evaluation_set["target"]
+
+    predictions = model.predict(features)
+    actual = list(target)
+    predicted = list(predictions)
+    if not actual:
+        raise ValueError("Evaluation set is empty")
+    if len(actual) != len(predicted):
+        raise ValueError("Model predictions do not match evaluation targets")
+
+    if metric == "mse":
+        return sum((float(y) - float(pred)) ** 2 for y, pred in zip(actual, predicted)) / len(actual)
+    if metric == "accuracy":
+        return sum(y == pred for y, pred in zip(actual, predicted)) / len(actual)
+    if metric != "r2":
+        raise ValueError(f"Unsupported promotion metric: {metric}")
+
+    mean_target = sum(float(value) for value in actual) / len(actual)
+    total = sum((float(value) - mean_target) ** 2 for value in actual)
+    residual = sum((float(value) - float(pred)) ** 2 for value, pred in zip(actual, predicted))
+    return 0.0 if total == 0 else 1.0 - residual / total
+
+
+def _record_promotion_event(model_type: str, event: dict[str, Any]) -> None:
+    event = {"timestamp": datetime.now(timezone.utc).isoformat(), **event}
+    with open(_promotion_log_path(model_type), "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(event, default=str) + "\n")
+
+
+def promote_model(
+    model_type: str,
+    version: str,
+    evaluation_set: Any = None,
+    metric: str = "r2",
+    threshold: Optional[float] = None,
+    min_delta: Optional[float] = None,
+    force: bool = False,
+) -> bool:
     """
     Atomically promote a saved version to 'current' (zero-downtime swap).
 
@@ -235,12 +284,98 @@ def promote_model(model_type: str, version: str) -> None:
     Args:
         model_type: e.g. "sentiment" or "price_predictor"
         version:    The version to promote (must already be saved).
+        evaluation_set: Held-out ``(features, target)`` or a DataFrame with a
+            ``target`` column. When supplied, both candidate and incumbent are
+            scored before promotion.
+        metric:      Metric to score (``r2``, ``mse``, or ``accuracy``).
+        threshold:   Minimum candidate score. Defaults to ``PROMOTION_THRESHOLD``.
+        min_delta:   Required candidate improvement over incumbent. Defaults to
+            ``PROMOTION_MIN_DELTA``.
+        force:       Bypass evaluation gates and record an operator override.
+
+    Returns:
+        ``True`` when promoted, ``False`` when refused by an evaluation gate.
     """
     target = _version_path(model_type, version)
     if not target.exists():
         raise FileNotFoundError(
             f"Cannot promote {model_type}@{version}: file not found at {target}"
         )
+
+    if evaluation_set is not None:
+        candidate_metrics = None
+        incumbent_metrics = None
+        evaluation_error = None
+        try:
+            candidate = load_model(model_type, version)
+            candidate_score = _score_model(candidate, evaluation_set, metric)
+            candidate_metrics = {metric: candidate_score}
+            current_version = get_current_version(model_type)
+            if current_version and current_version != version:
+                incumbent_score = _score_model(
+                    get_live_model(model_type), evaluation_set, metric
+                )
+                incumbent_metrics = {metric: incumbent_score}
+        except Exception as exc:
+            if not force:
+                raise
+            evaluation_error = str(exc)
+            logger.warning(
+                "Forced promotion continuing after evaluation error: "
+                "type=%s version=%s error=%s",
+                model_type,
+                version,
+                exc,
+            )
+
+        configured_threshold = (
+            float(os.getenv("PROMOTION_THRESHOLD", "-inf"))
+            if threshold is None else threshold
+        )
+        configured_delta = (
+            float(os.getenv("PROMOTION_MIN_DELTA", "0.0"))
+            if min_delta is None else min_delta
+        )
+        higher_is_better = metric != "mse"
+        reasons = []
+        if not force and (
+            (higher_is_better and candidate_score < configured_threshold)
+            or (not higher_is_better and candidate_score > configured_threshold)
+        ):
+            reasons.append("threshold_failed")
+        if not force and incumbent_metrics:
+            incumbent_score = incumbent_metrics[metric]
+            regressed = (
+                candidate_score < incumbent_score + configured_delta
+                if higher_is_better
+                else candidate_score > incumbent_score - configured_delta
+            )
+            if regressed:
+                reasons.append("regressed_against_incumbent")
+        event = {
+            "model_type": model_type,
+            "version": version,
+            "metric": metric,
+            "candidate_metrics": candidate_metrics,
+            "incumbent_metrics": incumbent_metrics,
+        }
+        if evaluation_error:
+            event["evaluation_error"] = evaluation_error
+        if reasons and not force:
+            _record_promotion_event(
+                model_type, {**event, "status": "refused", "reasons": reasons}
+            )
+            logger.warning(
+                "Model promotion refused: type=%s version=%s reasons=%s metrics=%s",
+                model_type, version, reasons, event,
+            )
+            return False
+        if force:
+            _record_promotion_event(model_type, {**event, "status": "forced"})
+            logger.warning(
+                "Forced model promotion: type=%s version=%s metrics=%s",
+                model_type, version, event,
+            )
 
     sym = _symlink_path(model_type)
     tmp_sym = sym.with_suffix(".tmp")
@@ -265,6 +400,7 @@ def promote_model(model_type: str, version: str) -> None:
     # Cached inference results from the previous model version must not be
     # served after promotion, so evict every entry for this model type.
     _invalidate_cached_inference(model_type)
+    return True
 
 
 def _invalidate_cached_inference(model_type: str) -> None:

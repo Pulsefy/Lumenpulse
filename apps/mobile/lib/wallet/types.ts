@@ -26,6 +26,7 @@ export interface WalletSigningResult {
 export interface WalletConnectionResult {
   status: 'connected' | 'rejected' | 'failed';
   pubkey?: string;
+  error?: WalletError;
 }
 
 /**

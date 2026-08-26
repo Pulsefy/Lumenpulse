@@ -49,9 +49,17 @@ Lumenpulse Mobile is the cross-platform mobile client for the Lumenpulse ecosyst
 - `pnpm lint`: Run ESLint.
 - `pnpm tsc`: Run TypeScript compiler check.
 
+## Wallet Adapters
+
+Production builds use the SEP-0007 wallet adapter only. Development builds may
+also select the mock adapter when the SEP-0007 wallet is unavailable; the app
+shows a persistent warning while that adapter is active, and mock transactions
+are never real signatures.
+
 ## Validation
 
 - Secure session and wallet metadata validation steps live in [SECURE_STORAGE_VALIDATION.md](./SECURE_STORAGE_VALIDATION.md).
+- Coverage floor: the mobile Jest config enforces a minimum global coverage threshold as a baseline floor to raise over time. The current floor is intentionally set to the achieved level so the build stays green while we expand the test matrix.
 
 ## Architecture
 
