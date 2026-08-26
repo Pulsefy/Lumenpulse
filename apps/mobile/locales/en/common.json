@@ -358,7 +358,21 @@
       "no_notes": "Release metadata is currently unavailable.",
       "version_prefix": "Version {{version}}",
       "published": "Published: {{date}}",
-      "testing": "Testing..."
+      "testing": "Testing...",
+      "update_title": "Release Status",
+      "runtime_version": "Runtime Version",
+      "update_id": "Update ID",
+      "channel": "Channel",
+      "unavailable": "Unavailable",
+      "update_not_checked": "Update status has not been checked",
+      "update_checking": "Checking for an update...",
+      "update_available": "A newer update is available",
+      "update_current": "You are running the latest update",
+      "update_unavailable": "Update status is unavailable in this client",
+      "check_for_update": "Check for update",
+      "copy_diagnostics": "Copy diagnostics",
+      "diagnostics_title": "Diagnostics",
+      "diagnostics_copied": "Diagnostics copied"
     }
   },
   "transaction_receipt": {

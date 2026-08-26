@@ -1,4 +1,8 @@
-import { getReleaseMetadata, fallbackReleaseMetadata } from '../release-metadata';
+import {
+  fallbackReleaseMetadata,
+  formatReleaseDiagnostics,
+  getReleaseMetadata,
+} from '../release-metadata';
 
 describe('release metadata', () => {
   it('returns release metadata with the required shape', () => {
@@ -16,5 +20,20 @@ describe('release metadata', () => {
     expect(fallbackReleaseMetadata.releases[0].version).toBe('1.0.0');
     expect(Array.isArray(fallbackReleaseMetadata.releases[0].notes)).toBe(true);
     expect(fallbackReleaseMetadata.releases[0].notes.length).toBeGreaterThan(0);
+  });
+
+  it('formats only safe release fields for bug reports', () => {
+    const diagnostics = formatReleaseDiagnostics({
+      appVersion: '1.0.0',
+      runtimeVersion: 'runtime-1',
+      updateId: 'update-1',
+      channel: 'preview',
+      updateStatus: 'Latest update',
+      environment: 'Testnet',
+    });
+
+    expect(diagnostics).toContain('Runtime version: runtime-1');
+    expect(diagnostics).toContain('Update ID: update-1');
+    expect(diagnostics).not.toMatch(/wallet|token|secret|address/i);
   });
 });

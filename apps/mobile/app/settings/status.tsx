@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -9,14 +10,22 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
+import * as Updates from 'expo-updates';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { useLocalization } from '../../src/context';
 import { config } from '../../lib/config';
-import { getReleaseMetadata, ReleaseInfo } from '../../lib/release-metadata';
+import {
+  formatReleaseDiagnostics,
+  getReleaseMetadata,
+  ReleaseInfo,
+} from '../../lib/release-metadata';
 import axios from 'axios';
 
 type ConnectionStatus = 'idle' | 'testing' | 'online' | 'offline';
+type UpdateStatus = 'idle' | 'checking' | 'available' | 'current' | 'unavailable';
 
 export default function StatusScreen() {
   const router = useRouter();
@@ -25,6 +34,8 @@ export default function StatusScreen() {
   const [releaseNotes, setReleaseNotes] = useState<ReleaseInfo[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle');
   const [lastChecked, setLastChecked] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle');
+  const [copiedDiagnostics, setCopiedDiagnostics] = useState(false);
 
   useEffect(() => {
     // Load release notes using utility helper
@@ -90,6 +101,51 @@ export default function StatusScreen() {
       default:
         return t('common.retry');
     }
+  };
+
+  const configuredRuntimeVersion = Constants.expoConfig?.runtimeVersion;
+  const runtimeVersion =
+    typeof Updates.runtimeVersion === 'string'
+      ? Updates.runtimeVersion
+      : typeof configuredRuntimeVersion === 'string'
+        ? configuredRuntimeVersion
+        : t('settings.status_info.unavailable');
+  const updateId = Updates.updateId || t('settings.status_info.unavailable');
+  const channel = Updates.channel || t('settings.status_info.unavailable');
+  const updateStatusText = {
+    idle: t('settings.status_info.update_not_checked'),
+    checking: t('settings.status_info.update_checking'),
+    available: t('settings.status_info.update_available'),
+    current: t('settings.status_info.update_current'),
+    unavailable: t('settings.status_info.update_unavailable'),
+  }[updateStatus];
+
+  const handleCheckForUpdate = async () => {
+    if (updateStatus === 'checking') return;
+
+    setUpdateStatus('checking');
+    try {
+      const result = await Updates.checkForUpdateAsync();
+      setUpdateStatus(result.isAvailable ? 'available' : 'current');
+    } catch (error) {
+      console.warn('Update check failed:', error);
+      setUpdateStatus('unavailable');
+    }
+  };
+
+  const handleCopyDiagnostics = async () => {
+    const diagnostics = formatReleaseDiagnostics({
+      appVersion: Constants.nativeAppVersion || config.app.version || t('settings.status_info.unavailable'),
+      runtimeVersion,
+      updateId,
+      channel,
+      updateStatus: updateStatusText,
+      environment: environmentConfig.label,
+    });
+
+    await Clipboard.setStringAsync(diagnostics);
+    setCopiedDiagnostics(true);
+    Alert.alert(t('settings.status_info.diagnostics_title'), t('settings.status_info.diagnostics_copied'));
   };
 
   return (
@@ -230,6 +286,78 @@ export default function StatusScreen() {
               </View>
             </>
           ) : null}
+        </View>
+
+        <View
+          style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessible
+          accessibilityLabel="Release status and diagnostics card"
+        >
+          <View style={styles.cardHeader}>
+            <Ionicons name="cloud-download-outline" size={20} color={colors.accent} />
+            <Text style={[styles.cardTitle, { color: colors.text }]}>
+              {t('settings.status_info.update_title')}
+            </Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+              {t('settings.status_info.runtime_version')}
+            </Text>
+            <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={1}>
+              {runtimeVersion}
+            </Text>
+          </View>
+          <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+              {t('settings.status_info.update_id')}
+            </Text>
+            <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={1} ellipsizeMode="middle">
+              {updateId}
+            </Text>
+          </View>
+          <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+              {t('settings.status_info.channel')}
+            </Text>
+            <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={1}>
+              {channel}
+            </Text>
+          </View>
+          <Text style={[styles.updateStatus, { color: updateStatus === 'available' ? colors.warning : colors.textSecondary }]}>
+            {updateStatusText}
+          </Text>
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.actionButton, { borderColor: colors.accent }]}
+              onPress={handleCheckForUpdate}
+              disabled={updateStatus === 'checking'}
+              accessibilityRole="button"
+              accessibilityLabel={t('settings.status_info.check_for_update')}
+            >
+              {updateStatus === 'checking' ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <Ionicons name="refresh-outline" size={17} color={colors.accent} />
+              )}
+              <Text style={[styles.actionButtonText, { color: colors.accent }]}>
+                {t('settings.status_info.check_for_update')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: colors.accent, borderColor: colors.accent }]}
+              onPress={handleCopyDiagnostics}
+              accessibilityRole="button"
+              accessibilityLabel={t('settings.status_info.copy_diagnostics')}
+            >
+              <Ionicons name="copy-outline" size={17} color={colors.background} />
+              <Text style={[styles.actionButtonText, { color: colors.background }]}>
+                {copiedDiagnostics ? t('settings.status_info.diagnostics_copied') : t('settings.status_info.copy_diagnostics')}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Release Notes / Changelog Section */}
@@ -459,5 +587,31 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  updateStatus: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+  },
+  actionButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });

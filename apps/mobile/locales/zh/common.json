@@ -345,7 +345,21 @@
       "no_notes": "当前无法获取版本发布说明。",
       "version_prefix": "版本 {{version}}",
       "published": "发布日期: {{date}}",
-      "testing": "测试中..."
+      "testing": "测试中...",
+      "update_title": "版本状态",
+      "runtime_version": "运行时版本",
+      "update_id": "更新 ID",
+      "channel": "渠道",
+      "unavailable": "不可用",
+      "update_not_checked": "尚未检查更新状态",
+      "update_checking": "正在检查更新...",
+      "update_available": "有可用的新更新",
+      "update_current": "当前已是最新更新",
+      "update_unavailable": "此客户端无法获取更新状态",
+      "check_for_update": "检查更新",
+      "copy_diagnostics": "复制诊断信息",
+      "diagnostics_title": "诊断信息",
+      "diagnostics_copied": "诊断信息已复制"
     }
   },
   "errors": {

@@ -9,6 +9,15 @@ export interface ReleaseMetadata {
   releases: ReleaseInfo[];
 }
 
+export interface ReleaseDiagnostics {
+  appVersion: string;
+  runtimeVersion: string;
+  updateId: string;
+  channel: string;
+  updateStatus: string;
+  environment: string;
+}
+
 export const fallbackReleaseMetadata: ReleaseMetadata = {
   releases: [
     {
@@ -41,4 +50,16 @@ export function getReleaseMetadata(): ReleaseMetadata {
     console.warn('Unable to load release metadata, using fallback:', error);
   }
   return fallbackReleaseMetadata;
+}
+
+export function formatReleaseDiagnostics(diagnostics: ReleaseDiagnostics): string {
+  return [
+    'Lumenpulse diagnostics',
+    `App version: ${diagnostics.appVersion}`,
+    `Runtime version: ${diagnostics.runtimeVersion}`,
+    `Update ID: ${diagnostics.updateId}`,
+    `Channel: ${diagnostics.channel}`,
+    `Update status: ${diagnostics.updateStatus}`,
+    `Environment: ${diagnostics.environment}`,
+  ].join('\n');
 }
