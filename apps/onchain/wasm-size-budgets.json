@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "max_bytes": 65536,
+  "contracts": {
+    "contributor_registry": { "max_bytes": 65536 },
+    "crowdfund_vault": { "max_bytes": 65536 },
+    "feature_flags": { "max_bytes": 65536 },
+    "lumen_token": { "max_bytes": 65536 },
+    "lumenpulse-curation": { "max_bytes": 65536 },
+    "matching_pool": { "max_bytes": 65536 },
+    "pricing_adapter": { "max_bytes": 65536 },
+    "project_registry": { "max_bytes": 65536 },
+    "protocol_registry": { "max_bytes": 65536 },
+    "treasury": { "max_bytes": 65536 },
+    "upgradable-contract": { "max_bytes": 65536 },
+    "vesting-wallet": { "max_bytes": 65536 },
+    "yield_vault": { "max_bytes": 65536 }
+  }
+}

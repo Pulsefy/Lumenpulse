@@ -12,6 +12,10 @@ on:
       - 'apps/onchain/**'
       - 'apps/onchain/.ci-trigger'
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   onchain-checks:
     name: Test Suite
@@ -23,6 +27,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -43,6 +49,42 @@ jobs:
 
     - name: Build Contracts
       run: cargo build --target wasm32-unknown-unknown --release
+
+    - name: Check contract WASM sizes
+      id: wasm-size
+      run: |
+        python3 scripts/check-wasm-size.py \
+          --repo-root ../.. \
+          --report wasm-size-report.md \
+          --compare-ref "${{ github.event.pull_request.base.sha }}"
+
+    - name: Publish contract WASM size report
+      if: always() && github.event_name == 'pull_request' && hashFiles('apps/onchain/wasm-size-report.md') != ''
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- contract-wasm-size-report -->';
+          const body = `${marker}\n${fs.readFileSync('apps/onchain/wasm-size-report.md', 'utf8')}`;
+          const issue = context.issue;
+          const comments = await github.paginate(github.rest.issues.listComments, {
+            owner: issue.owner,
+            repo: issue.repo,
+            issue_number: issue.number,
+          });
+          const existing = comments.find(comment => comment.user.type === 'Bot' && comment.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({ owner: issue.owner, repo: issue.repo, comment_id: existing.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner: issue.owner, repo: issue.repo, issue_number: issue.number, body });
+          }
+
+    - name: Upload contract WASM size report
+      if: always() && hashFiles('apps/onchain/wasm-size-report.md') != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: contract-wasm-size-report
+        path: apps/onchain/wasm-size-report.md
 
     - name: Run tests
       if: env.SKIP_TESTS != 'true'
