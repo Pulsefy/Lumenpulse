@@ -4,11 +4,11 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum PricingAdapterError {
-    NotInitialized = 1,
-    AlreadyInitialized = 2,
-    Unauthorized = 3,
-    PriceNotFound = 4,
-    InvalidPrice = 5,
-    StalePrice = 6,
-    PriceInvalidated = 7,
+    NotInitialized = 1000,
+    AlreadyInitialized = 1001,
+    Unauthorized = 1002,
+    PriceNotFound = 1003,
+    InvalidPrice = 1004,
+    StalePrice = 1005,
+    PriceInvalidated = 1006,
 }

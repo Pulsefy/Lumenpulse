@@ -1524,7 +1524,7 @@ fn test_batch_payout_unauthorized() {
 }
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #11)")]
+#[should_panic(expected = "HostError: Error(Contract, #310)")]
 fn test_batch_payout_contract_paused() {
     let env = Env::default();
     env.mock_all_auths();
@@ -1615,7 +1615,7 @@ fn test_batch_payout_duplicate_request_id() {
 }
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #11)")]
+#[should_panic(expected = "HostError: Error(Contract, #310)")]
 fn test_create_project_pause() {
     let env = Env::default();
     env.mock_all_auths();
@@ -1680,7 +1680,7 @@ fn test_create_project_pause_unpause() {
 }
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #11)")]
+#[should_panic(expected = "HostError: Error(Contract, #310)")]
 fn test_deposit_pause() {
     let env = Env::default();
     env.mock_all_auths();
@@ -1746,7 +1746,7 @@ fn test_deposit_pause_unpause() {
 }
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #11)")]
+#[should_panic(expected = "HostError: Error(Contract, #310)")]
 fn test_distribute_match_pause() {
     let env = Env::default();
     env.mock_all_auths();
@@ -1972,7 +1972,7 @@ fn test_cancel_project_owner_can_cancel() {
 }
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #7)")]
+#[should_panic(expected = "HostError: Error(Contract, #306)")]
 fn test_cancel_project_cant_deposit() {
     let env = Env::default();
     env.mock_all_auths();
@@ -2057,7 +2057,7 @@ fn test_cancel_projects() {
 }
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #13)")]
+#[should_panic(expected = "HostError: Error(Contract, #312)")]
 fn test_cancel_project_failed() {
     let env = Env::default();
     env.mock_all_auths();

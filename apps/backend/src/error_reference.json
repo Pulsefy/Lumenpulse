@@ -1,0 +1,1949 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-08-26T05:43:56.746444Z",
+  "contracts": {
+    "contributor_registry": {
+      "enum_name": "ContributorError",
+      "range": [
+        100,
+        299
+      ],
+      "errors": {
+        "NotInitialized": {
+          "code": 100,
+          "message": "Not Initialized"
+        },
+        "AlreadyInitialized": {
+          "code": 101,
+          "message": "Already Initialized"
+        },
+        "Unauthorized": {
+          "code": 102,
+          "message": "Unauthorized"
+        },
+        "ContributorNotFound": {
+          "code": 103,
+          "message": "Contributor Not Found"
+        },
+        "ContributorAlreadyExists": {
+          "code": 104,
+          "message": "Contributor Already Exists"
+        },
+        "InvalidGitHubHandle": {
+          "code": 105,
+          "message": "Invalid Git Hub Handle"
+        },
+        "ReputationOverflow": {
+          "code": 106,
+          "message": "Reputation Overflow"
+        },
+        "GitHubHandleTaken": {
+          "code": 107,
+          "message": "Git Hub Handle Taken"
+        },
+        "InvalidMultisigConfig": {
+          "code": 108,
+          "message": "Invalid Multisig Config"
+        },
+        "TooManySigners": {
+          "code": 109,
+          "message": "Too Many Signers"
+        },
+        "ProposalNotFound": {
+          "code": 110,
+          "message": "Proposal Not Found"
+        },
+        "InvalidProposalStatus": {
+          "code": 111,
+          "message": "Invalid Proposal Status"
+        },
+        "ProposalExpired": {
+          "code": 112,
+          "message": "Proposal Expired"
+        },
+        "AlreadySigned": {
+          "code": 113,
+          "message": "Already Signed"
+        },
+        "BelowThreshold": {
+          "code": 114,
+          "message": "Below Threshold"
+        },
+        "InvalidNonce": {
+          "code": 115,
+          "message": "Invalid Nonce"
+        },
+        "InvalidSignature": {
+          "code": 116,
+          "message": "Invalid Signature"
+        },
+        "AttestationNotActive": {
+          "code": 117,
+          "message": "Attestation Not Active"
+        },
+        "AttestationNotSuspended": {
+          "code": 118,
+          "message": "Attestation Not Suspended"
+        },
+        "AttestationAlreadyRevoked": {
+          "code": 119,
+          "message": "Attestation Already Revoked"
+        },
+        "ContributionScopePaused": {
+          "code": 120,
+          "message": "Contribution Scope Paused"
+        },
+        "GovernanceScopePaused": {
+          "code": 121,
+          "message": "Governance Scope Paused"
+        }
+      }
+    },
+    "crowdfund_vault": {
+      "enum_name": "CrowdfundError",
+      "range": [
+        300,
+        499
+      ],
+      "errors": {
+        "NotInitialized": {
+          "code": 300,
+          "message": "Not Initialized"
+        },
+        "AlreadyInitialized": {
+          "code": 301,
+          "message": "Already Initialized"
+        },
+        "Unauthorized": {
+          "code": 302,
+          "message": "Unauthorized"
+        },
+        "ProjectNotFound": {
+          "code": 303,
+          "message": "Project Not Found"
+        },
+        "MilestoneNotApproved": {
+          "code": 304,
+          "message": "Milestone Not Approved"
+        },
+        "InsufficientBalance": {
+          "code": 305,
+          "message": "Insufficient Balance"
+        },
+        "ProjectNotActive": {
+          "code": 306,
+          "message": "Project Not Active"
+        },
+        "InvalidAmount": {
+          "code": 307,
+          "message": "Invalid Amount"
+        },
+        "AlreadyRegistered": {
+          "code": 308,
+          "message": "Already Registered"
+        },
+        "ContributorNotFound": {
+          "code": 309,
+          "message": "Contributor Not Found"
+        },
+        "ContractPaused": {
+          "code": 310,
+          "message": "Contract Paused"
+        },
+        "ProjectAlreadyCanceled": {
+          "code": 311,
+          "message": "Project Already Canceled"
+        },
+        "ProjectNotCancellable": {
+          "code": 312,
+          "message": "Project Not Cancellable"
+        },
+        "RefundFailed": {
+          "code": 313,
+          "message": "Refund Failed"
+        },
+        "ContractNotPaused": {
+          "code": 314,
+          "message": "Contract Not Paused"
+        },
+        "YieldProviderNotFound": {
+          "code": 315,
+          "message": "Yield Provider Not Found"
+        },
+        "VotingWindowNotStarted": {
+          "code": 316,
+          "message": "Voting Window Not Started"
+        },
+        "VotingWindowClosed": {
+          "code": 317,
+          "message": "Voting Window Closed"
+        },
+        "AlreadyVoted": {
+          "code": 318,
+          "message": "Already Voted"
+        },
+        "InsufficientContributionToVote": {
+          "code": 319,
+          "message": "Insufficient Contribution To Vote"
+        },
+        "MilestoneAlreadyApproved": {
+          "code": 320,
+          "message": "Milestone Already Approved"
+        },
+        "MilestoneAlreadyDisputed": {
+          "code": 321,
+          "message": "Milestone Already Disputed"
+        },
+        "MilestoneNotDisputed": {
+          "code": 322,
+          "message": "Milestone Not Disputed"
+        },
+        "MilestoneEscrowed": {
+          "code": 323,
+          "message": "Milestone Escrowed"
+        },
+        "InvalidRecipient": {
+          "code": 324,
+          "message": "Invalid Recipient"
+        },
+        "UnsupportedStorageVersion": {
+          "code": 325,
+          "message": "Unsupported Storage Version"
+        },
+        "MigrationRequired": {
+          "code": 326,
+          "message": "Migration Required"
+        },
+        "MilestoneExpired": {
+          "code": 327,
+          "message": "Milestone Expired"
+        },
+        "RefundWindowClosed": {
+          "code": 328,
+          "message": "Refund Window Closed"
+        },
+        "RefundWindowNotOpen": {
+          "code": 329,
+          "message": "Refund Window Not Open"
+        },
+        "Reentrancy": {
+          "code": 330,
+          "message": "Reentrancy"
+        },
+        "AlreadyExecuted": {
+          "code": 331,
+          "message": "Already Executed"
+        },
+        "EmergencyMigrationRequiresPause": {
+          "code": 332,
+          "message": "Emergency Migration Requires Pause"
+        },
+        "MigrationPlanAlreadyExists": {
+          "code": 333,
+          "message": "Migration Plan Already Exists"
+        },
+        "MigrationPlanNotFound": {
+          "code": 334,
+          "message": "Migration Plan Not Found"
+        },
+        "MigrationAlreadyExecuted": {
+          "code": 335,
+          "message": "Migration Already Executed"
+        },
+        "InvalidMigrationRecipient": {
+          "code": 336,
+          "message": "Invalid Migration Recipient"
+        },
+        "MigrationAmountExceedsBalance": {
+          "code": 337,
+          "message": "Migration Amount Exceeds Balance"
+        },
+        "MigrationPlanVetoed": {
+          "code": 338,
+          "message": "Migration Plan Vetoed"
+        }
+      }
+    },
+    "feature_flags": {
+      "enum_name": "FlagError",
+      "range": [
+        500,
+        599
+      ],
+      "errors": {
+        "NotInitialized": {
+          "code": 500,
+          "message": "Not Initialized"
+        },
+        "AlreadyInitialized": {
+          "code": 501,
+          "message": "Already Initialized"
+        },
+        "Unauthorized": {
+          "code": 502,
+          "message": "Unauthorized"
+        },
+        "ContractPaused": {
+          "code": 503,
+          "message": "Contract Paused"
+        }
+      }
+    },
+    "lumenpulse-curation": {
+      "enum_name": "CurationError",
+      "range": [
+        600,
+        699
+      ],
+      "errors": {
+        "AlreadyInitialized": {
+          "code": 600,
+          "message": "Already Initialized"
+        },
+        "NotInitialized": {
+          "code": 601,
+          "message": "Not Initialized"
+        },
+        "ProjectNotFound": {
+          "code": 602,
+          "message": "Project Not Found"
+        },
+        "VotingClosed": {
+          "code": 603,
+          "message": "Voting Closed"
+        },
+        "VotingWindowExpired": {
+          "code": 604,
+          "message": "Voting Window Expired"
+        },
+        "VotingWindowNotExpired": {
+          "code": 605,
+          "message": "Voting Window Not Expired"
+        },
+        "AlreadyVoted": {
+          "code": 606,
+          "message": "Already Voted"
+        },
+        "InsufficientReputation": {
+          "code": 607,
+          "message": "Insufficient Reputation"
+        },
+        "InvalidMetadata": {
+          "code": 608,
+          "message": "Invalid Metadata"
+        },
+        "Unauthorized": {
+          "code": 609,
+          "message": "Unauthorized"
+        }
+      }
+    },
+    "matching_pool": {
+      "enum_name": "MatchingPoolError",
+      "range": [
+        700,
+        899
+      ],
+      "errors": {
+        "NotInitialized": {
+          "code": 700,
+          "message": "Not Initialized"
+        },
+        "AlreadyInitialized": {
+          "code": 701,
+          "message": "Already Initialized"
+        },
+        "Unauthorized": {
+          "code": 702,
+          "message": "Unauthorized"
+        },
+        "RoundNotFound": {
+          "code": 703,
+          "message": "Round Not Found"
+        },
+        "RoundNotActive": {
+          "code": 704,
+          "message": "Round Not Active"
+        },
+        "RoundAlreadyFinalized": {
+          "code": 705,
+          "message": "Round Already Finalized"
+        },
+        "RoundNotFinalized": {
+          "code": 706,
+          "message": "Round Not Finalized"
+        },
+        "ProjectNotEligible": {
+          "code": 707,
+          "message": "Project Not Eligible"
+        },
+        "ProjectAlreadyEligible": {
+          "code": 708,
+          "message": "Project Already Eligible"
+        },
+        "InvalidAmount": {
+          "code": 709,
+          "message": "Invalid Amount"
+        },
+        "InsufficientPoolBalance": {
+          "code": 710,
+          "message": "Insufficient Pool Balance"
+        },
+        "NoEligibleProjects": {
+          "code": 711,
+          "message": "No Eligible Projects"
+        },
+        "RoundStillOpen": {
+          "code": 712,
+          "message": "Round Still Open"
+        },
+        "MatchAlreadyDistributed": {
+          "code": 713,
+          "message": "Match Already Distributed"
+        },
+        "InvalidRoundDates": {
+          "code": 714,
+          "message": "Invalid Round Dates"
+        },
+        "ContractPaused": {
+          "code": 715,
+          "message": "Contract Paused"
+        },
+        "Reentrancy": {
+          "code": 716,
+          "message": "Reentrancy"
+        },
+        "ContributionCapExceeded": {
+          "code": 717,
+          "message": "Contribution Cap Exceeded"
+        },
+        "ContributionScopePaused": {
+          "code": 718,
+          "message": "Contribution Scope Paused"
+        },
+        "PayoutScopePaused": {
+          "code": 719,
+          "message": "Payout Scope Paused"
+        },
+        "GovernanceScopePaused": {
+          "code": 720,
+          "message": "Governance Scope Paused"
+        }
+      }
+    },
+    "notification_broker": {
+      "enum_name": "NotificationBrokerError",
+      "range": [
+        900,
+        999
+      ],
+      "errors": {
+        "NotInitialized": {
+          "code": 900,
+          "message": "Not Initialized"
+        },
+        "AlreadyInitialized": {
+          "code": 901,
+          "message": "Already Initialized"
+        },
+        "SubscriptionNotFound": {
+          "code": 902,
+          "message": "Subscription Not Found"
+        },
+        "ReentrancyDetected": {
+          "code": 903,
+          "message": "Reentrancy Detected"
+        }
+      }
+    },
+    "pricing_adapter": {
+      "enum_name": "PricingAdapterError",
+      "range": [
+        1000,
+        1099
+      ],
+      "errors": {
+        "NotInitialized": {
+          "code": 1000,
+          "message": "Not Initialized"
+        },
+        "AlreadyInitialized": {
+          "code": 1001,
+          "message": "Already Initialized"
+        },
+        "Unauthorized": {
+          "code": 1002,
+          "message": "Unauthorized"
+        },
+        "PriceNotFound": {
+          "code": 1003,
+          "message": "Price Not Found"
+        },
+        "InvalidPrice": {
+          "code": 1004,
+          "message": "Invalid Price"
+        },
+        "StalePrice": {
+          "code": 1005,
+          "message": "Stale Price"
+        },
+        "PriceInvalidated": {
+          "code": 1006,
+          "message": "Price Invalidated"
+        }
+      }
+    },
+    "project_registry": {
+      "enum_name": "RegistryError",
+      "range": [
+        1100,
+        1199
+      ],
+      "errors": {
+        "NotInitialized": {
+          "code": 1100,
+          "message": "Not Initialized"
+        },
+        "AlreadyInitialized": {
+          "code": 1101,
+          "message": "Already Initialized"
+        },
+        "Unauthorized": {
+          "code": 1102,
+          "message": "Unauthorized"
+        },
+        "ProjectNotFound": {
+          "code": 1103,
+          "message": "Project Not Found"
+        },
+        "ProjectAlreadyRegistered": {
+          "code": 1104,
+          "message": "Project Already Registered"
+        },
+        "AlreadyVoted": {
+          "code": 1105,
+          "message": "Already Voted"
+        },
+        "VotingClosed": {
+          "code": 1106,
+          "message": "Voting Closed"
+        },
+        "InsufficientWeight": {
+          "code": 1107,
+          "message": "Insufficient Weight"
+        },
+        "InvalidThreshold": {
+          "code": 1108,
+          "message": "Invalid Threshold"
+        },
+        "ContractPaused": {
+          "code": 1109,
+          "message": "Contract Paused"
+        },
+        "ProjectAlreadyVerified": {
+          "code": 1110,
+          "message": "Project Already Verified"
+        },
+        "ProjectAlreadyRejected": {
+          "code": 1111,
+          "message": "Project Already Rejected"
+        }
+      }
+    },
+    "protocol_registry": {
+      "enum_name": "RegistryError",
+      "range": [
+        1200,
+        1299
+      ],
+      "errors": {
+        "NotInitialized": {
+          "code": 1200,
+          "message": "Not Initialized"
+        },
+        "AlreadyInitialized": {
+          "code": 1201,
+          "message": "Already Initialized"
+        },
+        "Unauthorized": {
+          "code": 1202,
+          "message": "Unauthorized"
+        },
+        "ModuleNotFound": {
+          "code": 1203,
+          "message": "Module Not Found"
+        },
+        "ModuleAlreadyRegistered": {
+          "code": 1204,
+          "message": "Module Already Registered"
+        },
+        "ModuleInactive": {
+          "code": 1205,
+          "message": "Module Inactive"
+        },
+        "ContractPaused": {
+          "code": 1206,
+          "message": "Contract Paused"
+        },
+        "VersionNotIncremented": {
+          "code": 1207,
+          "message": "Version Not Incremented"
+        }
+      }
+    },
+    "treasury": {
+      "enum_name": "TreasuryError",
+      "range": [
+        1300,
+        1499
+      ],
+      "errors": {
+        "NotInitialized": {
+          "code": 1300,
+          "message": "Not Initialized"
+        },
+        "AlreadyInitialized": {
+          "code": 1301,
+          "message": "Already Initialized"
+        },
+        "Unauthorized": {
+          "code": 1302,
+          "message": "Unauthorized"
+        },
+        "InvalidAmount": {
+          "code": 1303,
+          "message": "Invalid Amount"
+        },
+        "InvalidDuration": {
+          "code": 1304,
+          "message": "Invalid Duration"
+        },
+        "InvalidStartTime": {
+          "code": 1305,
+          "message": "Invalid Start Time"
+        },
+        "StreamNotFound": {
+          "code": 1306,
+          "message": "Stream Not Found"
+        },
+        "NothingToClaim": {
+          "code": 1307,
+          "message": "Nothing To Claim"
+        },
+        "Reentrancy": {
+          "code": 1308,
+          "message": "Reentrancy"
+        },
+        "AlreadyExecuted": {
+          "code": 1309,
+          "message": "Already Executed"
+        },
+        "SameBeneficiary": {
+          "code": 1310,
+          "message": "Same Beneficiary"
+        },
+        "ProposalNotFound": {
+          "code": 1311,
+          "message": "Proposal Not Found"
+        },
+        "ProposalNotApproved": {
+          "code": 1312,
+          "message": "Proposal Not Approved"
+        },
+        "ProposalAlreadySigned": {
+          "code": 1313,
+          "message": "Proposal Already Signed"
+        },
+        "ProposalExpired": {
+          "code": 1314,
+          "message": "Proposal Expired"
+        },
+        "ProposalNotActive": {
+          "code": 1315,
+          "message": "Proposal Not Active"
+        },
+        "WrongProposalAction": {
+          "code": 1316,
+          "message": "Wrong Proposal Action"
+        },
+        "InvalidMultisigConfig": {
+          "code": 1317,
+          "message": "Invalid Multisig Config"
+        },
+        "TooManySigners": {
+          "code": 1318,
+          "message": "Too Many Signers"
+        },
+        "InvalidCliffTime": {
+          "code": 1319,
+          "message": "Invalid Cliff Time"
+        },
+        "InvalidScheduleStep": {
+          "code": 1320,
+          "message": "Invalid Schedule Step"
+        },
+        "TooManyInstallments": {
+          "code": 1321,
+          "message": "Too Many Installments"
+        }
+      }
+    },
+    "upgradable-contract": {
+      "enum_name": "ContractError",
+      "range": [
+        1500,
+        1599
+      ],
+      "errors": {
+        "AlreadyInitialized": {
+          "code": 1500,
+          "message": "Already Initialized"
+        },
+        "Unauthorized": {
+          "code": 1501,
+          "message": "Unauthorized"
+        },
+        "NotInitialized": {
+          "code": 1502,
+          "message": "Not Initialized"
+        },
+        "OperationAlreadyQueued": {
+          "code": 1503,
+          "message": "Operation Already Queued"
+        },
+        "OperationNotFound": {
+          "code": 1504,
+          "message": "Operation Not Found"
+        },
+        "OperationNotReady": {
+          "code": 1505,
+          "message": "Operation Not Ready"
+        },
+        "OperationExpired": {
+          "code": 1506,
+          "message": "Operation Expired"
+        },
+        "InvalidDelay": {
+          "code": 1507,
+          "message": "Invalid Delay"
+        }
+      }
+    },
+    "vesting-wallet": {
+      "enum_name": "VestingError",
+      "range": [
+        1600,
+        1699
+      ],
+      "errors": {
+        "NotInitialized": {
+          "code": 1600,
+          "message": "Not Initialized"
+        },
+        "AlreadyInitialized": {
+          "code": 1601,
+          "message": "Already Initialized"
+        },
+        "Unauthorized": {
+          "code": 1602,
+          "message": "Unauthorized"
+        },
+        "VestingNotFound": {
+          "code": 1603,
+          "message": "Vesting Not Found"
+        },
+        "InvalidAmount": {
+          "code": 1604,
+          "message": "Invalid Amount"
+        },
+        "InvalidDuration": {
+          "code": 1605,
+          "message": "Invalid Duration"
+        },
+        "InvalidStartTime": {
+          "code": 1606,
+          "message": "Invalid Start Time"
+        },
+        "NothingToClaim": {
+          "code": 1607,
+          "message": "Nothing To Claim"
+        },
+        "InsufficientBalance": {
+          "code": 1608,
+          "message": "Insufficient Balance"
+        },
+        "Reentrancy": {
+          "code": 1609,
+          "message": "Reentrancy"
+        },
+        "DelegateNotAuthorized": {
+          "code": 1610,
+          "message": "Delegate Not Authorized"
+        }
+      }
+    },
+    "yield_vault": {
+      "enum_name": "YieldVaultError",
+      "range": [
+        1700,
+        1799
+      ],
+      "errors": {
+        "AlreadyInitialized": {
+          "code": 1700,
+          "message": "Already Initialized"
+        },
+        "NotInitialized": {
+          "code": 1701,
+          "message": "Not Initialized"
+        },
+        "InvalidAmount": {
+          "code": 1702,
+          "message": "Invalid Amount"
+        },
+        "InsufficientBalance": {
+          "code": 1703,
+          "message": "Insufficient Balance"
+        },
+        "ProviderNotFound": {
+          "code": 1704,
+          "message": "Provider Not Found"
+        },
+        "NoProvidersAvailable": {
+          "code": 1705,
+          "message": "No Providers Available"
+        },
+        "AlreadyExecuted": {
+          "code": 1706,
+          "message": "Already Executed"
+        },
+        "Unauthorized": {
+          "code": 1707,
+          "message": "Unauthorized"
+        },
+        "VaultPaused": {
+          "code": 1708,
+          "message": "Vault Paused"
+        }
+      }
+    }
+  },
+  "code_to_error": {
+    "100": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "101": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "102": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "Unauthorized",
+      "message": "Unauthorized"
+    },
+    "103": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "ContributorNotFound",
+      "message": "Contributor Not Found"
+    },
+    "104": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "ContributorAlreadyExists",
+      "message": "Contributor Already Exists"
+    },
+    "105": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "InvalidGitHubHandle",
+      "message": "Invalid Git Hub Handle"
+    },
+    "106": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "ReputationOverflow",
+      "message": "Reputation Overflow"
+    },
+    "107": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "GitHubHandleTaken",
+      "message": "Git Hub Handle Taken"
+    },
+    "108": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "InvalidMultisigConfig",
+      "message": "Invalid Multisig Config"
+    },
+    "109": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "TooManySigners",
+      "message": "Too Many Signers"
+    },
+    "110": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "ProposalNotFound",
+      "message": "Proposal Not Found"
+    },
+    "111": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "InvalidProposalStatus",
+      "message": "Invalid Proposal Status"
+    },
+    "112": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "ProposalExpired",
+      "message": "Proposal Expired"
+    },
+    "113": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "AlreadySigned",
+      "message": "Already Signed"
+    },
+    "114": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "BelowThreshold",
+      "message": "Below Threshold"
+    },
+    "115": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "InvalidNonce",
+      "message": "Invalid Nonce"
+    },
+    "116": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "InvalidSignature",
+      "message": "Invalid Signature"
+    },
+    "117": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "AttestationNotActive",
+      "message": "Attestation Not Active"
+    },
+    "118": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "AttestationNotSuspended",
+      "message": "Attestation Not Suspended"
+    },
+    "119": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "AttestationAlreadyRevoked",
+      "message": "Attestation Already Revoked"
+    },
+    "120": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "ContributionScopePaused",
+      "message": "Contribution Scope Paused"
+    },
+    "121": {
+      "contract": "contributor_registry",
+      "enum": "ContributorError",
+      "variant": "GovernanceScopePaused",
+      "message": "Governance Scope Paused"
+    },
+    "300": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "301": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "302": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "Unauthorized",
+      "message": "Unauthorized"
+    },
+    "303": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "ProjectNotFound",
+      "message": "Project Not Found"
+    },
+    "304": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "MilestoneNotApproved",
+      "message": "Milestone Not Approved"
+    },
+    "305": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "InsufficientBalance",
+      "message": "Insufficient Balance"
+    },
+    "306": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "ProjectNotActive",
+      "message": "Project Not Active"
+    },
+    "307": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "InvalidAmount",
+      "message": "Invalid Amount"
+    },
+    "308": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "AlreadyRegistered",
+      "message": "Already Registered"
+    },
+    "309": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "ContributorNotFound",
+      "message": "Contributor Not Found"
+    },
+    "310": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "ContractPaused",
+      "message": "Contract Paused"
+    },
+    "311": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "ProjectAlreadyCanceled",
+      "message": "Project Already Canceled"
+    },
+    "312": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "ProjectNotCancellable",
+      "message": "Project Not Cancellable"
+    },
+    "313": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "RefundFailed",
+      "message": "Refund Failed"
+    },
+    "314": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "ContractNotPaused",
+      "message": "Contract Not Paused"
+    },
+    "315": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "YieldProviderNotFound",
+      "message": "Yield Provider Not Found"
+    },
+    "316": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "VotingWindowNotStarted",
+      "message": "Voting Window Not Started"
+    },
+    "317": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "VotingWindowClosed",
+      "message": "Voting Window Closed"
+    },
+    "318": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "AlreadyVoted",
+      "message": "Already Voted"
+    },
+    "319": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "InsufficientContributionToVote",
+      "message": "Insufficient Contribution To Vote"
+    },
+    "320": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "MilestoneAlreadyApproved",
+      "message": "Milestone Already Approved"
+    },
+    "321": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "MilestoneAlreadyDisputed",
+      "message": "Milestone Already Disputed"
+    },
+    "322": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "MilestoneNotDisputed",
+      "message": "Milestone Not Disputed"
+    },
+    "323": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "MilestoneEscrowed",
+      "message": "Milestone Escrowed"
+    },
+    "324": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "InvalidRecipient",
+      "message": "Invalid Recipient"
+    },
+    "325": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "UnsupportedStorageVersion",
+      "message": "Unsupported Storage Version"
+    },
+    "326": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "MigrationRequired",
+      "message": "Migration Required"
+    },
+    "327": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "MilestoneExpired",
+      "message": "Milestone Expired"
+    },
+    "328": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "RefundWindowClosed",
+      "message": "Refund Window Closed"
+    },
+    "329": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "RefundWindowNotOpen",
+      "message": "Refund Window Not Open"
+    },
+    "330": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "Reentrancy",
+      "message": "Reentrancy"
+    },
+    "331": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "AlreadyExecuted",
+      "message": "Already Executed"
+    },
+    "332": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "EmergencyMigrationRequiresPause",
+      "message": "Emergency Migration Requires Pause"
+    },
+    "333": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "MigrationPlanAlreadyExists",
+      "message": "Migration Plan Already Exists"
+    },
+    "334": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "MigrationPlanNotFound",
+      "message": "Migration Plan Not Found"
+    },
+    "335": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "MigrationAlreadyExecuted",
+      "message": "Migration Already Executed"
+    },
+    "336": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "InvalidMigrationRecipient",
+      "message": "Invalid Migration Recipient"
+    },
+    "337": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "MigrationAmountExceedsBalance",
+      "message": "Migration Amount Exceeds Balance"
+    },
+    "338": {
+      "contract": "crowdfund_vault",
+      "enum": "CrowdfundError",
+      "variant": "MigrationPlanVetoed",
+      "message": "Migration Plan Vetoed"
+    },
+    "500": {
+      "contract": "feature_flags",
+      "enum": "FlagError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "501": {
+      "contract": "feature_flags",
+      "enum": "FlagError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "502": {
+      "contract": "feature_flags",
+      "enum": "FlagError",
+      "variant": "Unauthorized",
+      "message": "Unauthorized"
+    },
+    "503": {
+      "contract": "feature_flags",
+      "enum": "FlagError",
+      "variant": "ContractPaused",
+      "message": "Contract Paused"
+    },
+    "600": {
+      "contract": "lumenpulse-curation",
+      "enum": "CurationError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "601": {
+      "contract": "lumenpulse-curation",
+      "enum": "CurationError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "602": {
+      "contract": "lumenpulse-curation",
+      "enum": "CurationError",
+      "variant": "ProjectNotFound",
+      "message": "Project Not Found"
+    },
+    "603": {
+      "contract": "lumenpulse-curation",
+      "enum": "CurationError",
+      "variant": "VotingClosed",
+      "message": "Voting Closed"
+    },
+    "604": {
+      "contract": "lumenpulse-curation",
+      "enum": "CurationError",
+      "variant": "VotingWindowExpired",
+      "message": "Voting Window Expired"
+    },
+    "605": {
+      "contract": "lumenpulse-curation",
+      "enum": "CurationError",
+      "variant": "VotingWindowNotExpired",
+      "message": "Voting Window Not Expired"
+    },
+    "606": {
+      "contract": "lumenpulse-curation",
+      "enum": "CurationError",
+      "variant": "AlreadyVoted",
+      "message": "Already Voted"
+    },
+    "607": {
+      "contract": "lumenpulse-curation",
+      "enum": "CurationError",
+      "variant": "InsufficientReputation",
+      "message": "Insufficient Reputation"
+    },
+    "608": {
+      "contract": "lumenpulse-curation",
+      "enum": "CurationError",
+      "variant": "InvalidMetadata",
+      "message": "Invalid Metadata"
+    },
+    "609": {
+      "contract": "lumenpulse-curation",
+      "enum": "CurationError",
+      "variant": "Unauthorized",
+      "message": "Unauthorized"
+    },
+    "700": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "701": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "702": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "Unauthorized",
+      "message": "Unauthorized"
+    },
+    "703": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "RoundNotFound",
+      "message": "Round Not Found"
+    },
+    "704": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "RoundNotActive",
+      "message": "Round Not Active"
+    },
+    "705": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "RoundAlreadyFinalized",
+      "message": "Round Already Finalized"
+    },
+    "706": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "RoundNotFinalized",
+      "message": "Round Not Finalized"
+    },
+    "707": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "ProjectNotEligible",
+      "message": "Project Not Eligible"
+    },
+    "708": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "ProjectAlreadyEligible",
+      "message": "Project Already Eligible"
+    },
+    "709": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "InvalidAmount",
+      "message": "Invalid Amount"
+    },
+    "710": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "InsufficientPoolBalance",
+      "message": "Insufficient Pool Balance"
+    },
+    "711": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "NoEligibleProjects",
+      "message": "No Eligible Projects"
+    },
+    "712": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "RoundStillOpen",
+      "message": "Round Still Open"
+    },
+    "713": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "MatchAlreadyDistributed",
+      "message": "Match Already Distributed"
+    },
+    "714": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "InvalidRoundDates",
+      "message": "Invalid Round Dates"
+    },
+    "715": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "ContractPaused",
+      "message": "Contract Paused"
+    },
+    "716": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "Reentrancy",
+      "message": "Reentrancy"
+    },
+    "717": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "ContributionCapExceeded",
+      "message": "Contribution Cap Exceeded"
+    },
+    "718": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "ContributionScopePaused",
+      "message": "Contribution Scope Paused"
+    },
+    "719": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "PayoutScopePaused",
+      "message": "Payout Scope Paused"
+    },
+    "720": {
+      "contract": "matching_pool",
+      "enum": "MatchingPoolError",
+      "variant": "GovernanceScopePaused",
+      "message": "Governance Scope Paused"
+    },
+    "900": {
+      "contract": "notification_broker",
+      "enum": "NotificationBrokerError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "901": {
+      "contract": "notification_broker",
+      "enum": "NotificationBrokerError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "902": {
+      "contract": "notification_broker",
+      "enum": "NotificationBrokerError",
+      "variant": "SubscriptionNotFound",
+      "message": "Subscription Not Found"
+    },
+    "903": {
+      "contract": "notification_broker",
+      "enum": "NotificationBrokerError",
+      "variant": "ReentrancyDetected",
+      "message": "Reentrancy Detected"
+    },
+    "1000": {
+      "contract": "pricing_adapter",
+      "enum": "PricingAdapterError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "1001": {
+      "contract": "pricing_adapter",
+      "enum": "PricingAdapterError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "1002": {
+      "contract": "pricing_adapter",
+      "enum": "PricingAdapterError",
+      "variant": "Unauthorized",
+      "message": "Unauthorized"
+    },
+    "1003": {
+      "contract": "pricing_adapter",
+      "enum": "PricingAdapterError",
+      "variant": "PriceNotFound",
+      "message": "Price Not Found"
+    },
+    "1004": {
+      "contract": "pricing_adapter",
+      "enum": "PricingAdapterError",
+      "variant": "InvalidPrice",
+      "message": "Invalid Price"
+    },
+    "1005": {
+      "contract": "pricing_adapter",
+      "enum": "PricingAdapterError",
+      "variant": "StalePrice",
+      "message": "Stale Price"
+    },
+    "1006": {
+      "contract": "pricing_adapter",
+      "enum": "PricingAdapterError",
+      "variant": "PriceInvalidated",
+      "message": "Price Invalidated"
+    },
+    "1100": {
+      "contract": "project_registry",
+      "enum": "RegistryError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "1101": {
+      "contract": "project_registry",
+      "enum": "RegistryError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "1102": {
+      "contract": "project_registry",
+      "enum": "RegistryError",
+      "variant": "Unauthorized",
+      "message": "Unauthorized"
+    },
+    "1103": {
+      "contract": "project_registry",
+      "enum": "RegistryError",
+      "variant": "ProjectNotFound",
+      "message": "Project Not Found"
+    },
+    "1104": {
+      "contract": "project_registry",
+      "enum": "RegistryError",
+      "variant": "ProjectAlreadyRegistered",
+      "message": "Project Already Registered"
+    },
+    "1105": {
+      "contract": "project_registry",
+      "enum": "RegistryError",
+      "variant": "AlreadyVoted",
+      "message": "Already Voted"
+    },
+    "1106": {
+      "contract": "project_registry",
+      "enum": "RegistryError",
+      "variant": "VotingClosed",
+      "message": "Voting Closed"
+    },
+    "1107": {
+      "contract": "project_registry",
+      "enum": "RegistryError",
+      "variant": "InsufficientWeight",
+      "message": "Insufficient Weight"
+    },
+    "1108": {
+      "contract": "project_registry",
+      "enum": "RegistryError",
+      "variant": "InvalidThreshold",
+      "message": "Invalid Threshold"
+    },
+    "1109": {
+      "contract": "project_registry",
+      "enum": "RegistryError",
+      "variant": "ContractPaused",
+      "message": "Contract Paused"
+    },
+    "1110": {
+      "contract": "project_registry",
+      "enum": "RegistryError",
+      "variant": "ProjectAlreadyVerified",
+      "message": "Project Already Verified"
+    },
+    "1111": {
+      "contract": "project_registry",
+      "enum": "RegistryError",
+      "variant": "ProjectAlreadyRejected",
+      "message": "Project Already Rejected"
+    },
+    "1200": {
+      "contract": "protocol_registry",
+      "enum": "RegistryError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "1201": {
+      "contract": "protocol_registry",
+      "enum": "RegistryError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "1202": {
+      "contract": "protocol_registry",
+      "enum": "RegistryError",
+      "variant": "Unauthorized",
+      "message": "Unauthorized"
+    },
+    "1203": {
+      "contract": "protocol_registry",
+      "enum": "RegistryError",
+      "variant": "ModuleNotFound",
+      "message": "Module Not Found"
+    },
+    "1204": {
+      "contract": "protocol_registry",
+      "enum": "RegistryError",
+      "variant": "ModuleAlreadyRegistered",
+      "message": "Module Already Registered"
+    },
+    "1205": {
+      "contract": "protocol_registry",
+      "enum": "RegistryError",
+      "variant": "ModuleInactive",
+      "message": "Module Inactive"
+    },
+    "1206": {
+      "contract": "protocol_registry",
+      "enum": "RegistryError",
+      "variant": "ContractPaused",
+      "message": "Contract Paused"
+    },
+    "1207": {
+      "contract": "protocol_registry",
+      "enum": "RegistryError",
+      "variant": "VersionNotIncremented",
+      "message": "Version Not Incremented"
+    },
+    "1300": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "1301": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "1302": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "Unauthorized",
+      "message": "Unauthorized"
+    },
+    "1303": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "InvalidAmount",
+      "message": "Invalid Amount"
+    },
+    "1304": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "InvalidDuration",
+      "message": "Invalid Duration"
+    },
+    "1305": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "InvalidStartTime",
+      "message": "Invalid Start Time"
+    },
+    "1306": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "StreamNotFound",
+      "message": "Stream Not Found"
+    },
+    "1307": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "NothingToClaim",
+      "message": "Nothing To Claim"
+    },
+    "1308": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "Reentrancy",
+      "message": "Reentrancy"
+    },
+    "1309": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "AlreadyExecuted",
+      "message": "Already Executed"
+    },
+    "1310": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "SameBeneficiary",
+      "message": "Same Beneficiary"
+    },
+    "1311": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "ProposalNotFound",
+      "message": "Proposal Not Found"
+    },
+    "1312": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "ProposalNotApproved",
+      "message": "Proposal Not Approved"
+    },
+    "1313": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "ProposalAlreadySigned",
+      "message": "Proposal Already Signed"
+    },
+    "1314": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "ProposalExpired",
+      "message": "Proposal Expired"
+    },
+    "1315": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "ProposalNotActive",
+      "message": "Proposal Not Active"
+    },
+    "1316": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "WrongProposalAction",
+      "message": "Wrong Proposal Action"
+    },
+    "1317": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "InvalidMultisigConfig",
+      "message": "Invalid Multisig Config"
+    },
+    "1318": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "TooManySigners",
+      "message": "Too Many Signers"
+    },
+    "1319": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "InvalidCliffTime",
+      "message": "Invalid Cliff Time"
+    },
+    "1320": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "InvalidScheduleStep",
+      "message": "Invalid Schedule Step"
+    },
+    "1321": {
+      "contract": "treasury",
+      "enum": "TreasuryError",
+      "variant": "TooManyInstallments",
+      "message": "Too Many Installments"
+    },
+    "1500": {
+      "contract": "upgradable-contract",
+      "enum": "ContractError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "1501": {
+      "contract": "upgradable-contract",
+      "enum": "ContractError",
+      "variant": "Unauthorized",
+      "message": "Unauthorized"
+    },
+    "1502": {
+      "contract": "upgradable-contract",
+      "enum": "ContractError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "1503": {
+      "contract": "upgradable-contract",
+      "enum": "ContractError",
+      "variant": "OperationAlreadyQueued",
+      "message": "Operation Already Queued"
+    },
+    "1504": {
+      "contract": "upgradable-contract",
+      "enum": "ContractError",
+      "variant": "OperationNotFound",
+      "message": "Operation Not Found"
+    },
+    "1505": {
+      "contract": "upgradable-contract",
+      "enum": "ContractError",
+      "variant": "OperationNotReady",
+      "message": "Operation Not Ready"
+    },
+    "1506": {
+      "contract": "upgradable-contract",
+      "enum": "ContractError",
+      "variant": "OperationExpired",
+      "message": "Operation Expired"
+    },
+    "1507": {
+      "contract": "upgradable-contract",
+      "enum": "ContractError",
+      "variant": "InvalidDelay",
+      "message": "Invalid Delay"
+    },
+    "1600": {
+      "contract": "vesting-wallet",
+      "enum": "VestingError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "1601": {
+      "contract": "vesting-wallet",
+      "enum": "VestingError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "1602": {
+      "contract": "vesting-wallet",
+      "enum": "VestingError",
+      "variant": "Unauthorized",
+      "message": "Unauthorized"
+    },
+    "1603": {
+      "contract": "vesting-wallet",
+      "enum": "VestingError",
+      "variant": "VestingNotFound",
+      "message": "Vesting Not Found"
+    },
+    "1604": {
+      "contract": "vesting-wallet",
+      "enum": "VestingError",
+      "variant": "InvalidAmount",
+      "message": "Invalid Amount"
+    },
+    "1605": {
+      "contract": "vesting-wallet",
+      "enum": "VestingError",
+      "variant": "InvalidDuration",
+      "message": "Invalid Duration"
+    },
+    "1606": {
+      "contract": "vesting-wallet",
+      "enum": "VestingError",
+      "variant": "InvalidStartTime",
+      "message": "Invalid Start Time"
+    },
+    "1607": {
+      "contract": "vesting-wallet",
+      "enum": "VestingError",
+      "variant": "NothingToClaim",
+      "message": "Nothing To Claim"
+    },
+    "1608": {
+      "contract": "vesting-wallet",
+      "enum": "VestingError",
+      "variant": "InsufficientBalance",
+      "message": "Insufficient Balance"
+    },
+    "1609": {
+      "contract": "vesting-wallet",
+      "enum": "VestingError",
+      "variant": "Reentrancy",
+      "message": "Reentrancy"
+    },
+    "1610": {
+      "contract": "vesting-wallet",
+      "enum": "VestingError",
+      "variant": "DelegateNotAuthorized",
+      "message": "Delegate Not Authorized"
+    },
+    "1700": {
+      "contract": "yield_vault",
+      "enum": "YieldVaultError",
+      "variant": "AlreadyInitialized",
+      "message": "Already Initialized"
+    },
+    "1701": {
+      "contract": "yield_vault",
+      "enum": "YieldVaultError",
+      "variant": "NotInitialized",
+      "message": "Not Initialized"
+    },
+    "1702": {
+      "contract": "yield_vault",
+      "enum": "YieldVaultError",
+      "variant": "InvalidAmount",
+      "message": "Invalid Amount"
+    },
+    "1703": {
+      "contract": "yield_vault",
+      "enum": "YieldVaultError",
+      "variant": "InsufficientBalance",
+      "message": "Insufficient Balance"
+    },
+    "1704": {
+      "contract": "yield_vault",
+      "enum": "YieldVaultError",
+      "variant": "ProviderNotFound",
+      "message": "Provider Not Found"
+    },
+    "1705": {
+      "contract": "yield_vault",
+      "enum": "YieldVaultError",
+      "variant": "NoProvidersAvailable",
+      "message": "No Providers Available"
+    },
+    "1706": {
+      "contract": "yield_vault",
+      "enum": "YieldVaultError",
+      "variant": "AlreadyExecuted",
+      "message": "Already Executed"
+    },
+    "1707": {
+      "contract": "yield_vault",
+      "enum": "YieldVaultError",
+      "variant": "Unauthorized",
+      "message": "Unauthorized"
+    },
+    "1708": {
+      "contract": "yield_vault",
+      "enum": "YieldVaultError",
+      "variant": "VaultPaused",
+      "message": "Vault Paused"
+    }
+  },
+  "allocation_ranges": {
+    "contributor_registry": [
+      100,
+      299
+    ],
+    "crowdfund_vault": [
+      300,
+      499
+    ],
+    "feature_flags": [
+      500,
+      599
+    ],
+    "lumenpulse-curation": [
+      600,
+      699
+    ],
+    "matching_pool": [
+      700,
+      899
+    ],
+    "notification_broker": [
+      900,
+      999
+    ],
+    "pricing_adapter": [
+      1000,
+      1099
+    ],
+    "project_registry": [
+      1100,
+      1199
+    ],
+    "protocol_registry": [
+      1200,
+      1299
+    ],
+    "treasury": [
+      1300,
+      1499
+    ],
+    "upgradable-contract": [
+      1500,
+      1599
+    ],
+    "vesting-wallet": [
+      1600,
+      1699
+    ],
+    "yield_vault": [
+      1700,
+      1799
+    ]
+  }
+}
