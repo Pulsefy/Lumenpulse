@@ -359,6 +359,40 @@
       "version_prefix": "Version {{version}}",
       "published": "Published: {{date}}",
       "testing": "Testing..."
+    },
+    "data_privacy": {
+      "title": "Data & Privacy",
+      "description": "Review stored data, clear categories, and manage analytics preferences.",
+      "stored_data_section": "Stored Data",
+      "stored_data_desc": "Estimated sizes of locally cached content. Clearing data does not log you out.",
+      "privacy_section": "Analytics & Crash Reporting",
+      "categories": {
+        "api_cache": "API Cache",
+        "saved_news": "Saved Articles",
+        "watchlist": "Watchlist",
+        "contribution_drafts": "Contribution Drafts",
+        "analytics": "Analytics Preferences"
+      },
+      "clear": "Clear",
+      "clear_category": "Clear {{name}}",
+      "confirm_clear_title": "Clear Data",
+      "confirm_clear_message": "This will permanently delete all locally stored {{name}} data. This action cannot be undone.",
+      "clear_all": "Clear All Local Data",
+      "clear_all_hint": "Removes all cached data. Your account and wallet remain intact.",
+      "clear_all_caption": "Clearing data does not log you out. Auth tokens and your wallet are never removed.",
+      "confirm_clear_all_title": "Clear All Local Data?",
+      "confirm_clear_all_message": "This will delete all cached content, saved articles, your local watchlist, and contribution drafts. Your account login and linked wallet are not affected.",
+      "clear_all_success": "All local data has been cleared.",
+      "clear_partial_title": "Partially Cleared",
+      "clear_partial_message": "Some data could not be removed. Please try again.",
+      "clear_failed": "Could not clear the selected data. Please try again.",
+      "cleared_with_pending_title": "Cleared with Pending Changes",
+      "cleared_with_pending_message": "Some unsynchronised changes may have been discarded. Your account data on the server is not affected.",
+      "analytics_opt_out": "Opt Out of Analytics",
+      "analytics_opt_out_desc": "Stop sending anonymous usage events that help improve the app.",
+      "crash_opt_out": "Opt Out of Crash Reporting",
+      "crash_opt_out_desc": "Stop sending automatic crash reports. You can still report issues manually.",
+      "auth_note": "Auth tokens and wallet metadata are stored in your device's secure enclave and are never removed by any data-clear action."
     }
   },
   "transaction_receipt": {

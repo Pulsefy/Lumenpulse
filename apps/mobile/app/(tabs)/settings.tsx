@@ -198,6 +198,32 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.navRow}
             activeOpacity={0.75}
+            onPress={() => router.push('/settings/data-privacy')}
+            accessibilityRole="link"
+            accessibilityLabel={t('settings.data_privacy.title')}
+            accessibilityHint={t('settings.data_privacy.description')}
+          >
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="shield-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.data_privacy.title')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t('settings.data_privacy.description')}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <TouchableOpacity
+            style={styles.navRow}
+            activeOpacity={0.75}
             onPress={() => router.push('/settings/notification-settings')}
             accessibilityRole="link"
             accessibilityLabel={t('settings.notification_settings.title')}

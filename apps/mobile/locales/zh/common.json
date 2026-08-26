@@ -346,6 +346,40 @@
       "version_prefix": "版本 {{version}}",
       "published": "发布日期: {{date}}",
       "testing": "测试中..."
+    },
+    "data_privacy": {
+      "title": "数据与隐私",
+      "description": "查看本地存储数据、分类清除，并管理分析偏好设置。",
+      "stored_data_section": "已存储的数据",
+      "stored_data_desc": "本地缓存内容的估算大小。清除数据不会退出登录。",
+      "privacy_section": "分析与崩溃报告",
+      "categories": {
+        "api_cache": "API 缓存",
+        "saved_news": "已保存文章",
+        "watchlist": "自选列表",
+        "contribution_drafts": "贡献草稿",
+        "analytics": "分析偏好设置"
+      },
+      "clear": "清除",
+      "clear_category": "清除 {{name}}",
+      "confirm_clear_title": "清除数据",
+      "confirm_clear_message": "这将永久删除本地存储的所有 {{name}} 数据，此操作无法撤销。",
+      "clear_all": "清除所有本地数据",
+      "clear_all_hint": "移除所有缓存数据，您的账户和钱包不受影响。",
+      "clear_all_caption": "清除数据不会退出登录。认证令牌与钱包数据不会被删除。",
+      "confirm_clear_all_title": "清除所有本地数据？",
+      "confirm_clear_all_message": "这将删除所有缓存内容、已保存文章、本地自选列表和贡献草稿。您的账户登录和关联钱包不受影响。",
+      "clear_all_success": "所有本地数据已清除。",
+      "clear_partial_title": "部分清除",
+      "clear_partial_message": "部分数据无法移除，请重试。",
+      "clear_failed": "无法清除所选数据，请重试。",
+      "cleared_with_pending_title": "已清除（含待同步更改）",
+      "cleared_with_pending_message": "部分未同步的更改可能已被丢弃。服务器上的账户数据不受影响。",
+      "analytics_opt_out": "退出分析收集",
+      "analytics_opt_out_desc": "停止发送帮助改善应用的匿名使用数据。",
+      "crash_opt_out": "退出崩溃报告",
+      "crash_opt_out_desc": "停止自动发送崩溃报告。您仍可手动提交问题反馈。",
+      "auth_note": "认证令牌和钱包元数据存储在设备安全区中，任何数据清除操作均不会将其删除。"
     }
   },
   "errors": {
