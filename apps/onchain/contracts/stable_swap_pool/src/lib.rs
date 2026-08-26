@@ -39,7 +39,9 @@ impl StableSwapPoolContract {
         env.storage()
             .instance()
             .set(&DataKey::TokenB, &token_b);
-        env.storage().instance().bump(100, 100);
+        env.storage()
+            .instance()
+            .extend_ttl(storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
 
         events::PoolInitializedEvent {
             admin,

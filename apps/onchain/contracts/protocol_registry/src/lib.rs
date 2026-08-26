@@ -21,6 +21,9 @@ impl ProtocolRegistryContract {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(RegistryError::NotInitialized)?;
+        env.storage()
+            .instance()
+            .extend_ttl(storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
         if caller != &admin {
             return Err(RegistryError::Unauthorized);
         }
@@ -29,6 +32,9 @@ impl ProtocolRegistryContract {
     }
 
     fn require_not_paused(env: &Env) -> Result<(), RegistryError> {
+        env.storage()
+            .instance()
+            .extend_ttl(storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
         if env
             .storage()
             .instance()
@@ -51,6 +57,9 @@ impl ProtocolRegistryContract {
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage()
+            .instance()
+            .extend_ttl(storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
 
         events::InitializedEvent { admin }.publish(&env);
         Ok(())

@@ -5,7 +5,7 @@ mod storage;
 
 use soroban_sdk::{contract, contractimpl, Address, Env, Symbol, Vec, vec, Map};
 use soroban_sdk::token::TokenClient;
-use storage::DataKey;
+use storage::{DataKey, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 const STABLE_RATE: u32 = 500; // 5% annual in basis points
 const VARIABLE_RATE: u32 = 300; // 3% annual
@@ -27,7 +27,9 @@ impl AaveLendingPoolContract {
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().bump(100, 100);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         events::PoolInitializedEvent { admin }
             .publish(&env);
@@ -102,6 +104,30 @@ impl AaveLendingPoolContract {
             &env.ledger().timestamp(),
         );
 
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Reserve(asset.clone()), LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::ATokenSupply(asset.clone()), LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(
+                &DataKey::UserATokenBalance(on_behalf_of.clone(), asset.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
+        env.storage()
+            .persistent()
+            .extend_ttl(
+                &DataKey::UserDepositTimestamp(on_behalf_of.clone(), asset.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
+
         events::DepositEvent {
             user: on_behalf_of,
             asset,
@@ -174,6 +200,23 @@ impl AaveLendingPoolContract {
         // Transfer tokens to recipient
         let token = TokenClient::new(&env, &asset);
         token.transfer(&env.current_contract_address(), &to, &underlying);
+
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Reserve(asset.clone()), LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::ATokenSupply(asset.clone()), LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(
+                &DataKey::UserATokenBalance(user.clone(), asset.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
 
         events::WithdrawEvent {
             user,
@@ -264,6 +307,16 @@ impl AaveLendingPoolContract {
         env.storage()
             .persistent()
             .set(&DataKey::LastAccrualTime(asset), &current_time);
+
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Reserve(asset.clone()), LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::LastAccrualTime(asset), LEDGER_THRESHOLD, LEDGER_BUMP);
 
         events::InterestAccruedEvent {
             reserve: new_reserve,

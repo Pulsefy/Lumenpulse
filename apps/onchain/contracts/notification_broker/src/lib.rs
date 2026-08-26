@@ -36,7 +36,9 @@ impl NotificationBrokerContract {
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().bump(100, 100);
+        env.storage()
+            .instance()
+            .extend_ttl(storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
 
         release_reentrancy(&env)?;
 
@@ -87,7 +89,7 @@ impl NotificationBrokerContract {
         env.storage().persistent().set(&key, &subscription);
         env.storage()
             .persistent()
-            .bump(&key, 100, 1_000_000);
+            .extend_ttl(&key, storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
 
         // Add to listener's subscription list for easy enumeration
         let mut listeners_for_source: Vec<Address> = env

@@ -10,7 +10,7 @@ use math::{sqrt_scaled, unscale};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
-use storage::{DataKey, RoundData};
+use storage::{DataKey, RoundData, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 #[contract]
 pub struct MatchingPoolContract;
@@ -27,6 +27,9 @@ impl MatchingPoolContract {
             return Err(MatchingPoolError::Unauthorized);
         }
         caller.require_auth();
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(())
     }
 
@@ -61,6 +64,9 @@ impl MatchingPoolContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::NextRoundId, &0u64);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         events::InitializedEvent { admin }.publish(&env);
         Ok(())
     }

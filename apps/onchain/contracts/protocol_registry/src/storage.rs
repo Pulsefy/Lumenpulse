@@ -1,5 +1,8 @@
 use soroban_sdk::{contracttype, Address, Symbol};
 
+pub const LEDGER_THRESHOLD: u32 = 120_960;
+pub const LEDGER_BUMP: u32 = 518_400;
+
 /// A single protocol module registration entry.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]

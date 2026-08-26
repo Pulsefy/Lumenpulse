@@ -6,7 +6,7 @@ mod storage;
 
 use errors::PricingAdapterError;
 use soroban_sdk::{contract, contractimpl, Address, Env};
-use storage::DataKey;
+use storage::{DataKey, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 pub const BASE_DECIMALS: u32 = 7;
 
@@ -22,6 +22,9 @@ impl PricingAdapterContract {
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         let event = events::InitializedEvent { admin };
         event.publish(&env);
@@ -42,12 +45,22 @@ impl PricingAdapterContract {
             return Err(PricingAdapterError::InvalidPrice);
         }
 
+        let price_key = DataKey::AssetPrice(asset.clone());
+        let decimals_key = DataKey::AssetDecimals(asset.clone());
+
         env.storage()
             .persistent()
-            .set(&DataKey::AssetPrice(asset.clone()), &price);
+            .set(&price_key, &price);
         env.storage()
             .persistent()
-            .set(&DataKey::AssetDecimals(asset.clone()), &asset_decimals);
+            .extend_ttl(&price_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        env.storage()
+            .persistent()
+            .set(&decimals_key, &asset_decimals);
+        env.storage()
+            .persistent()
+            .extend_ttl(&decimals_key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
         let event = events::PriceUpdatedEvent {
             admin,
@@ -60,17 +73,29 @@ impl PricingAdapterContract {
 
     /// Get the current configured price of an asset
     pub fn get_price(env: Env, asset: Address) -> Result<i128, PricingAdapterError> {
+        let key = DataKey::AssetPrice(asset);
+        if env.storage().persistent().has(&key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
         env.storage()
             .persistent()
-            .get(&DataKey::AssetPrice(asset))
+            .get(&key)
             .ok_or(PricingAdapterError::PriceNotFound)
     }
 
     /// Get the decimals configured for an asset (defaults to 7)
     pub fn get_asset_decimals(env: Env, asset: Address) -> u32 {
+        let key = DataKey::AssetDecimals(asset);
+        if env.storage().persistent().has(&key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
         env.storage()
             .persistent()
-            .get(&DataKey::AssetDecimals(asset))
+            .get(&key)
             .unwrap_or(BASE_DECIMALS)
     }
 
@@ -105,6 +130,9 @@ impl PricingAdapterContract {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(PricingAdapterError::NotInitialized)?;
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         if caller != &admin {
             return Err(PricingAdapterError::Unauthorized);
         }

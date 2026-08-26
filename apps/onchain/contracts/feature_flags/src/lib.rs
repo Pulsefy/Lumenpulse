@@ -6,7 +6,7 @@ mod storage;
 
 use errors::FlagError;
 use soroban_sdk::{contract, contractimpl, Address, Env, Symbol, Vec};
-use storage::{DataKey, FlagEntry};
+use storage::{DataKey, FlagEntry, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 #[contract]
 pub struct FeatureFlagsContract;
@@ -23,6 +23,9 @@ impl FeatureFlagsContract {
             return Err(FlagError::Unauthorized);
         }
         caller.require_auth();
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(())
     }
 
@@ -46,6 +49,9 @@ impl FeatureFlagsContract {
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         events::InitializedEvent { admin }.publish(&env);
         Ok(())
@@ -67,9 +73,11 @@ impl FeatureFlagsContract {
             updated_at: env.ledger().timestamp(),
         };
 
+        let flag_key = DataKey::Flag(key.clone());
+        env.storage().persistent().set(&flag_key, &entry);
         env.storage()
             .persistent()
-            .set(&DataKey::Flag(key.clone()), &entry);
+            .extend_ttl(&flag_key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
         let mut list: Vec<Symbol> = env
             .storage()
@@ -83,6 +91,10 @@ impl FeatureFlagsContract {
             env.storage().instance().set(&DataKey::FlagList, &list);
         }
 
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
         events::FlagSetEvent {
             key,
             enabled,
@@ -94,18 +106,33 @@ impl FeatureFlagsContract {
     }
 
     pub fn is_enabled(env: Env, key: Symbol) -> bool {
-        env.storage()
-            .persistent()
-            .get::<_, FlagEntry>(&DataKey::Flag(key))
-            .map(|e| e.enabled)
-            .unwrap_or(false)
+        let flag_key = DataKey::Flag(key);
+        if let Some(entry) = env.storage().persistent().get::<_, FlagEntry>(&flag_key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&flag_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            entry.enabled
+        } else {
+            false
+        }
     }
 
     pub fn get_flag(env: Env, key: Symbol) -> Option<FlagEntry> {
-        env.storage().persistent().get(&DataKey::Flag(key))
+        let flag_key = DataKey::Flag(key);
+        if let Some(entry) = env.storage().persistent().get::<_, FlagEntry>(&flag_key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&flag_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            Some(entry)
+        } else {
+            None
+        }
     }
 
     pub fn list_flags(env: Env) -> Vec<FlagEntry> {
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         let keys: Vec<Symbol> = env
             .storage()
             .instance()
@@ -114,11 +141,11 @@ impl FeatureFlagsContract {
 
         let mut result: Vec<FlagEntry> = Vec::new(&env);
         for k in keys.iter() {
-            if let Some(entry) = env
-                .storage()
-                .persistent()
-                .get::<_, FlagEntry>(&DataKey::Flag(k))
-            {
+            let flag_key = DataKey::Flag(k.clone());
+            if let Some(entry) = env.storage().persistent().get::<_, FlagEntry>(&flag_key) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&flag_key, LEDGER_THRESHOLD, LEDGER_BUMP);
                 result.push_back(entry);
             }
         }
@@ -126,6 +153,9 @@ impl FeatureFlagsContract {
     }
 
     pub fn get_admin(env: Env) -> Result<Address, FlagError> {
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         env.storage()
             .instance()
             .get(&DataKey::Admin)
@@ -140,6 +170,9 @@ impl FeatureFlagsContract {
         Self::require_admin(&env, &current_admin)?;
 
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         events::AdminTransferredEvent {
             old_admin: current_admin,
@@ -153,12 +186,18 @@ impl FeatureFlagsContract {
     pub fn pause(env: Env, admin: Address) -> Result<(), FlagError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &true);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(())
     }
 
     pub fn unpause(env: Env, admin: Address) -> Result<(), FlagError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(())
     }
 }

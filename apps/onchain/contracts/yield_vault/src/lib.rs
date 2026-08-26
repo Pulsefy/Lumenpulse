@@ -29,7 +29,9 @@ impl YieldVaultContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Asset, &asset);
         env.storage().instance().set(&DataKey::ProviderCount, &0u32);
-        env.storage().instance().extend_ttl(100, 100);
+        env.storage()
+            .instance()
+            .extend_ttl(storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
 
         events::VaultInitializedEvent { admin, asset }.publish(&env);
 

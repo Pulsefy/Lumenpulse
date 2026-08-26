@@ -5,7 +5,7 @@ mod storage;
 
 use soroban_sdk::{contract, contractimpl, Address, Env, Symbol, Vec};
 use soroban_sdk::token::TokenClient;
-use storage::DataKey;
+use storage::{DataKey, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 const SWAP_FEE_BP: u32 = 30; // 0.3% swap fee in basis points (Uniswap v2 standard)
 
@@ -31,7 +31,9 @@ impl LiquidityPoolContract {
         env.storage()
             .instance()
             .set(&DataKey::Token1, &token_1);
-        env.storage().instance().bump(100, 100);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         events::PoolInitializedEvent {
             admin,
@@ -131,6 +133,26 @@ impl LiquidityPoolContract {
             &(user_lp + lp_tokens),
         );
 
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Reserve0, LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Reserve1, LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::LPSupply, LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(
+                &DataKey::UserLPBalance(env.invoker()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
+
         // Accrue fees to reserves (simulating LP fee sharing)
         Self::accrue_protocol_fees(&env);
 
@@ -221,6 +243,26 @@ impl LiquidityPoolContract {
         token_0.transfer(&env.current_contract_address(), &user, &out_0);
         token_1.transfer(&env.current_contract_address(), &user, &out_1);
 
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Reserve0, LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Reserve1, LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::LPSupply, LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(
+                &DataKey::UserLPBalance(user.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
+
         events::LiquidityRemovedEvent {
             user,
             lp_tokens: lp_amount,
@@ -287,6 +329,16 @@ impl LiquidityPoolContract {
         env.storage()
             .persistent()
             .set(&DataKey::Reserve1, &(reserve_1 - amount_out));
+
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Reserve0, LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Reserve1, LEDGER_THRESHOLD, LEDGER_BUMP);
 
         events::SwapEvent {
             user: env.invoker(),

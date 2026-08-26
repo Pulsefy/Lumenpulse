@@ -359,3 +359,54 @@ fn invariant_paused_contract_rejects_deposits() {
 
     std::println!("✅ Invariant: paused contract rejects deposits — PASSED");
 }
+
+#[test]
+fn test_storage_ttl_extension_past_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contributor = Address::generate(&env);
+    let project_owner = Address::generate(&env);
+
+    let token_id = env.register(LumenToken, ());
+    let vault_id = env.register(CrowdfundVaultContract, ());
+
+    let token_client = TokenClient::new(&env, &token_id);
+    let vault_client = VaultClient::new(&env, &vault_id);
+
+    token_client.initialize(
+        &admin,
+        &7u32,
+        &String::from_str(&env, "Lumen"),
+        &String::from_str(&env, "LUM"),
+    );
+
+    vault_client.initialize(&admin);
+
+    token_client.mint(&contributor, &10000i128);
+
+    let project_id = vault_client.create_project(
+        &project_owner,
+        &Symbol::new(&env, "TestTTL"),
+        &5000i128,
+        &token_id,
+    );
+
+    vault_client.deposit(&contributor, &project_id, &3000i128);
+
+    // Advance ledger sequence past the TTL threshold boundary (120,960 ledgers)
+    env.ledger().set_sequence_number(150_000);
+
+    // Verify contract instance and persistent storage entries are auto-extended and functional
+    let balance = vault_client.get_balance(&project_id);
+    assert_eq!(balance, 3000i128);
+
+    vault_client.approve_milestone(&admin, &project_id, &0u32);
+    vault_client.withdraw(&project_id, &0u32, &1000i128);
+
+    assert_eq!(vault_client.get_balance(&project_id), 2000i128);
+    assert_eq!(token_client.balance(&project_owner), 1000i128);
+
+    std::println!("✅ Storage TTL boundary advancement test — PASSED");
+}

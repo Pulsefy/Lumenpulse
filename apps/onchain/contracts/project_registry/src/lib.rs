@@ -22,6 +22,9 @@ impl ProjectRegistryContract {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(RegistryError::NotInitialized)?;
+        env.storage()
+            .instance()
+            .extend_ttl(storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
         if caller != &admin {
             return Err(RegistryError::Unauthorized);
         }
@@ -30,6 +33,9 @@ impl ProjectRegistryContract {
     }
 
     fn require_not_paused(env: &Env) -> Result<(), RegistryError> {
+        env.storage()
+            .instance()
+            .extend_ttl(storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
         if env
             .storage()
             .instance()
@@ -127,6 +133,9 @@ impl ProjectRegistryContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::Config, &config);
+        env.storage()
+            .instance()
+            .extend_ttl(storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
 
         events::InitializedEvent { admin }.publish(&env);
         Ok(())
@@ -145,10 +154,11 @@ impl ProjectRegistryContract {
         Self::require_not_paused(&env)?;
         owner.require_auth();
 
+        let key = DataKey::Project(project_id);
         if env
             .storage()
             .persistent()
-            .has(&DataKey::Project(project_id))
+            .has(&key)
         {
             return Err(RegistryError::ProjectAlreadyRegistered);
         }
@@ -166,7 +176,10 @@ impl ProjectRegistryContract {
 
         env.storage()
             .persistent()
-            .set(&DataKey::Project(project_id), &entry);
+            .set(&key, &entry);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
 
         events::ProjectRegisteredEvent {
             project_id,
