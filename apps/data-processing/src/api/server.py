@@ -107,6 +107,7 @@ from src.api.review_queue_routes import router as review_queue_router
 from src.api.ledger_cursor_routes import router as ledger_cursor_router
 from src.api.kpi_routes import router as kpi_router
 from src.api.account_operation_routes import router as account_operation_router
+from src.api.label_routes import router as label_router
 
 app.include_router(ingestion_quality_router)
 app.include_router(review_queue_router)
@@ -114,6 +115,7 @@ app.include_router(ledger_cursor_router)
 app.include_router(kpi_router)  # KPI routes for TVL and volume computation
 app.include_router(account_operation_router)  # Account operation ingestion
 app.include_router(rebuild_router)  # Rebuild routes for admin
+app.include_router(label_router)  # Human-labelled example store
 
 
 try:
@@ -239,6 +241,13 @@ async def root(request: Request) -> Dict[str, Any]:
             "GET /api/account-operations/status": "Get ingestion status (Admin only, requires X-API-Key header)",
             "POST /api/account-operations/reset-cursor": "Reset ingestion cursor (Admin only, requires X-API-Key header)",
             "GET /api/account-operations/operations": "Get account operations from database (Admin only, requires X-API-Key header)",
+            # Labelled example store endpoints
+            "GET /api/labels": "List human-labelled sentiment examples (requires X-API-Key header)",
+            "POST /api/labels": "Add a new labelled example (requires X-API-Key header)",
+            "GET /api/labels/stats": "Class distribution and split statistics (requires X-API-Key header)",
+            "GET /api/labels/{id}": "Get a single labelled example (requires X-API-Key header)",
+            "PUT /api/labels/{id}": "Correct/update an existing label (requires X-API-Key header)",
+            "DELETE /api/labels/{id}": "Delete a labelled example (requires X-API-Key header)",
         },
         "note": "Returns sentiment score between -1 (negative) and 1 (positive)",
         "security": "All endpoints except /health, /metrics, and /sentiment/legend require X-API-Key header",

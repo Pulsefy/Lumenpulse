@@ -8,6 +8,13 @@ versions the artifacts, and promotes them with zero downtime.
 Models:
   - sentiment   : VADER lexicon + custom crypto slang dictionary
   - price_predictor : scikit-learn LinearRegression pipeline
+
+Evaluation
+----------
+The sentiment model is evaluated against the human-labelled held-out eval
+split stored in ``data/labelled_examples.jsonl``.  Per-class precision,
+recall, and F1 are computed and appended to the retraining result so
+downstream alerting and CI quality gates have ground truth.
 """
 
 import os
@@ -15,7 +22,7 @@ import json
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
@@ -37,9 +44,16 @@ _SLANG_LEXICON_PATH = Path(
     os.getenv("CRYPTO_SLANG_LEXICON", "./data/crypto_slang_lexicon.json")
 )
 
+# Path to the human-labelled example store used for eval
+_LABELLED_EXAMPLES_PATH = Path(
+    os.getenv("LABELLED_EXAMPLES_PATH", "./data/labelled_examples.jsonl")
+)
+
 # Quality gates: minimum acceptable metrics before promotion
 _MIN_SENTIMENT_COVERAGE = float(os.getenv("MIN_SENTIMENT_COVERAGE", "0.0"))
 _MIN_PRICE_R2 = float(os.getenv("MIN_PRICE_R2", "-1.0"))  # permissive default
+# Minimum weighted-average F1 against the held-out eval set (0 = always pass)
+_MIN_SENTIMENT_F1 = float(os.getenv("MIN_SENTIMENT_F1", "0.0"))
 
 # Thread-safety: only one retraining run at a time
 _retrain_lock = threading.Lock()
@@ -92,6 +106,127 @@ def _build_sentiment_model() -> Tuple[SentimentIntensityAnalyzer, Dict[str, Any]
         "coverage_ratio": len(slang) / max(len(analyzer.lexicon), 1),
     }
     return analyzer, metrics
+
+
+# ---------------------------------------------------------------------------
+# Held-out evaluation
+# ---------------------------------------------------------------------------
+
+def _compound_to_label(compound: float) -> str:
+    """Map a VADER compound score to a canonical sentiment label."""
+    if compound >= 0.05:
+        return "positive"
+    if compound <= -0.05:
+        return "negative"
+    return "neutral"
+
+
+def _evaluate_sentiment_model(
+    analyzer: SentimentIntensityAnalyzer,
+) -> Dict[str, Any]:
+    """
+    Evaluate *analyzer* against the human-labelled held-out eval split.
+
+    Computes per-class precision, recall, F1, and a macro/weighted average.
+    Also returns per-example predictions so they can be audited.
+
+    Returns a metrics dict with structure::
+
+        {
+            "eval_examples": int,
+            "accuracy": float,
+            "precision": {"positive": float, "negative": float, "neutral": float,
+                          "macro": float, "weighted": float},
+            "recall":    { … same structure … },
+            "f1":        { … same structure … },
+            "class_counts": {"positive": int, …},
+        }
+
+    If the eval split is empty the function returns ``{"eval_examples": 0}``.
+    """
+    try:
+        from src.ml.labelled_example_store import LabelledExampleStore
+        store = LabelledExampleStore(_LABELLED_EXAMPLES_PATH)
+        _, eval_df = store.get_split()
+    except Exception as exc:
+        logger.warning("Could not load labelled example store for evaluation: %s", exc)
+        return {"eval_examples": 0, "error": str(exc)}
+
+    if eval_df.empty:
+        logger.warning("Eval split is empty — skipping ground-truth evaluation")
+        return {"eval_examples": 0}
+
+    labels_order = ["positive", "negative", "neutral"]
+    y_true: List[str] = []
+    y_pred: List[str] = []
+
+    for _, row in eval_df.iterrows():
+        text = str(row["text"])
+        true_label = str(row["label"])
+        scores = analyzer.polarity_scores(text)
+        pred_label = _compound_to_label(float(scores.get("compound", 0.0)))
+        y_true.append(true_label)
+        y_pred.append(pred_label)
+
+    # ── Compute per-class metrics manually (no sklearn dependency required) ──
+    metrics: Dict[str, Any] = {"eval_examples": len(y_true)}
+
+    class_counts = {lbl: y_true.count(lbl) for lbl in labels_order}
+    metrics["class_counts"] = class_counts
+
+    precision: Dict[str, float] = {}
+    recall: Dict[str, float] = {}
+    f1: Dict[str, float] = {}
+
+    for lbl in labels_order:
+        tp = sum(1 for t, p in zip(y_true, y_pred) if t == lbl and p == lbl)
+        fp = sum(1 for t, p in zip(y_true, y_pred) if t != lbl and p == lbl)
+        fn = sum(1 for t, p in zip(y_true, y_pred) if t == lbl and p != lbl)
+
+        prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1_score = (
+            2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0
+        )
+
+        precision[lbl] = round(prec, 4)
+        recall[lbl] = round(rec, 4)
+        f1[lbl] = round(f1_score, 4)
+
+    # Macro averages (unweighted)
+    precision["macro"] = round(sum(precision[l] for l in labels_order) / len(labels_order), 4)
+    recall["macro"] = round(sum(recall[l] for l in labels_order) / len(labels_order), 4)
+    f1["macro"] = round(sum(f1[l] for l in labels_order) / len(labels_order), 4)
+
+    # Weighted averages (by true class frequency)
+    total = len(y_true)
+    precision["weighted"] = round(
+        sum(precision[l] * class_counts[l] for l in labels_order) / total, 4
+    ) if total else 0.0
+    recall["weighted"] = round(
+        sum(recall[l] * class_counts[l] for l in labels_order) / total, 4
+    ) if total else 0.0
+    f1["weighted"] = round(
+        sum(f1[l] * class_counts[l] for l in labels_order) / total, 4
+    ) if total else 0.0
+
+    # Accuracy
+    correct = sum(1 for t, p in zip(y_true, y_pred) if t == p)
+    metrics["accuracy"] = round(correct / total, 4) if total else 0.0
+
+    metrics["precision"] = precision
+    metrics["recall"] = recall
+    metrics["f1"] = f1
+
+    logger.info(
+        "Sentiment eval — examples=%d  accuracy=%.4f  F1_weighted=%.4f  "
+        "F1_macro=%.4f",
+        len(y_true),
+        metrics["accuracy"],
+        f1["weighted"],
+        f1["macro"],
+    )
+    return metrics
 
 
 # ---------------------------------------------------------------------------
@@ -188,9 +323,23 @@ def run_retraining(
         with MODEL_RETRAINING_DURATION.labels(model_type="sentiment").time():
             sentiment_model, sentiment_metrics = _build_sentiment_model()
 
-        passes_sentiment_gate = (
-            force
-            or sentiment_metrics["coverage_ratio"] >= _MIN_SENTIMENT_COVERAGE
+        # ── 1a. Evaluate against held-out labelled examples ─────────────────
+        logger.info("Step 1a: Evaluating sentiment model against held-out eval split …")
+        eval_metrics = _evaluate_sentiment_model(sentiment_model)
+        sentiment_metrics["eval"] = eval_metrics
+
+        eval_f1_weighted = (
+            eval_metrics.get("f1", {}).get("weighted", 0.0)
+            if eval_metrics.get("eval_examples", 0) > 0
+            else None
+        )
+
+        passes_sentiment_gate = force or (
+            sentiment_metrics["coverage_ratio"] >= _MIN_SENTIMENT_COVERAGE
+            and (
+                eval_f1_weighted is None  # no eval data — allow pass
+                or eval_f1_weighted >= _MIN_SENTIMENT_F1
+            )
         )
 
         if passes_sentiment_gate:
@@ -202,7 +351,11 @@ def run_retraining(
                 "metrics": sentiment_metrics,
                 "promoted": True,
             }
-            logger.info(f"Sentiment model promoted: {s_version}")
+            logger.info(
+                "Sentiment model promoted: %s  (F1_weighted=%s)",
+                s_version,
+                eval_f1_weighted,
+            )
         else:
             MODEL_RETRAINING_TOTAL.labels(model_type="sentiment", status="failed").inc()
             result["models"]["sentiment"] = {
@@ -210,7 +363,13 @@ def run_retraining(
                 "promoted": False,
                 "reason": "quality_gate_failed",
             }
-            logger.warning("Sentiment model did NOT pass quality gate — skipping promotion")
+            logger.warning(
+                "Sentiment model did NOT pass quality gate — "
+                "coverage_ratio=%.4f  F1_weighted=%s  MIN_F1=%.4f",
+                sentiment_metrics["coverage_ratio"],
+                eval_f1_weighted,
+                _MIN_SENTIMENT_F1,
+            )
 
         # ── 2. Price predictor ──────────────────────────────────────────────
         logger.info("Step 2: Retraining price predictor …")
