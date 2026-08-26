@@ -1041,6 +1041,7 @@ class ForecastResponse(BaseModel):
     model_backend: str
     data_points_used: int
     generated_at: str
+    backtest_metrics: Dict[str, Any]
 
 
 @app.get("/analytics/forecast", response_model=ForecastResponse)
@@ -1052,7 +1053,9 @@ async def get_forecast(request: Request) -> ForecastResponse:
     Uses historical sentiment data from *analytics.jsonl* to train a
     SentimentForecaster (Prophet when installed, sklearn Ridge otherwise)
     and returns predicted health scores together with a Sentiment Velocity
-    value that measures how fast the market mood is changing.
+    value that measures how fast the market mood is changing. Confidence is
+    calibrated using the configured walk-forward backtest and includes the
+    model and naive baseline error metrics.
 
     Requires X-API-Key header.
     """

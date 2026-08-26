@@ -3273,6 +3273,11 @@
           "generated_at": {
             "type": "string",
             "title": "Generated At"
+          },
+          "backtest_metrics": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Backtest Metrics"
           }
         },
         "type": "object",
@@ -3286,7 +3291,8 @@
           "forecast_score_48h",
           "model_backend",
           "data_points_used",
-          "generated_at"
+          "generated_at",
+          "backtest_metrics"
         ],
         "title": "ForecastResponse"
       },

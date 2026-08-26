@@ -29,6 +29,9 @@ logger = setup_logger(__name__)
 # ── Constants ──────────────────────────────────────────────────────────────
 
 _DEFAULT_JSONL = Path(os.getenv("ANALYTICS_JSONL_PATH", "./data/analytics.jsonl"))
+_DEFAULT_BACKTEST_CONFIG = (
+    Path(__file__).resolve().parents[2] / "config" / "forecaster_backtest.json"
+)
 
 BULLISH_THRESHOLD = 0.2
 BEARISH_THRESHOLD = -0.2
@@ -54,6 +57,7 @@ class ForecastResult:
     model_backend: str            # "prophet" | "sklearn" | "heuristic"
     data_points_used: int
     generated_at: str
+    backtest_metrics: Dict[str, Any]
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -107,12 +111,151 @@ class SentimentForecaster:
 
     MODEL_TYPE = "sentiment_forecaster"
 
-    def __init__(self, jsonl_path: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        jsonl_path: Optional[Path] = None,
+        backtest_config_path: Optional[Path] = None,
+    ) -> None:
         self.jsonl_path: Path = Path(jsonl_path) if jsonl_path else _DEFAULT_JSONL
+        self.backtest_config_path = (
+            Path(backtest_config_path)
+            if backtest_config_path
+            else _DEFAULT_BACKTEST_CONFIG
+        )
         self._model_24h = None   # fitted model / Prophet instance
         self._model_48h = None   # separate ridge for 48 h (sklearn path)
         self._backend: str = "heuristic"
         self._is_trained: bool = False
+        self._backtest_metrics: Dict[str, Any] = {}
+
+    def load_backtest_config(self) -> Dict[str, Any]:
+        """Load the committed walk-forward evaluation configuration."""
+        with self.backtest_config_path.open(encoding="utf-8") as config_file:
+            config = json.load(config_file)
+        return {
+            "horizons_hours": [int(value) for value in config["horizons_hours"]],
+            "min_training_points": int(config["min_training_points"]),
+            "max_windows": int(config["max_windows"]),
+            "step": int(config["step"]),
+        }
+
+    def run_backtest(
+        self, df: pd.DataFrame, config: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Run a reproducible expanding-window backtest against historical data."""
+        settings = config or self.load_backtest_config()
+        horizons = [int(value) for value in settings["horizons_hours"]]
+        min_training_points = int(settings["min_training_points"])
+        max_windows = int(settings["max_windows"])
+        step = max(1, int(settings["step"]))
+        result: Dict[str, Any] = {
+            "config": {
+                "horizons_hours": horizons,
+                "min_training_points": min_training_points,
+                "max_windows": max_windows,
+                "step": step,
+            },
+            "horizons": {},
+        }
+
+        if df is None or len(df) == 0 or not horizons:
+            self._backtest_metrics = result
+            return result
+
+        ordered = df.sort_values("timestamp").reset_index(drop=True)
+        for horizon in horizons:
+            predictions: List[float] = []
+            actuals: List[float] = []
+            baselines: List[float] = []
+            origins = range(min_training_points, len(ordered))
+            eligible_origins = []
+            for origin in origins:
+                future_time = ordered["timestamp"].iloc[origin - 1] + pd.Timedelta(
+                    hours=horizon
+                )
+                future_index = ordered["timestamp"].searchsorted(future_time)
+                if future_index < len(ordered):
+                    eligible_origins.append((origin, future_index))
+            eligible_origins = eligible_origins[::step][-max_windows:]
+
+            for origin, future_index in eligible_origins:
+                training = ordered.iloc[:origin]
+                forecaster = SentimentForecaster()
+                forecaster._train_sklearn(training)
+                velocity = forecaster.compute_sentiment_velocity(training)
+                if forecaster._is_trained:
+                    score_24h, score_48h = forecaster._predict_sklearn(
+                        training, velocity
+                    )
+                    prediction = score_24h if horizon == 24 else score_48h
+                else:
+                    score_24h, score_48h = forecaster._predict_heuristic(
+                        training, velocity
+                    )
+                    prediction = score_24h if horizon == 24 else score_48h
+                predictions.append(float(prediction))
+                actuals.append(float(ordered["sentiment_score"].iloc[future_index]))
+                baselines.append(float(ordered["sentiment_score"].iloc[origin - 1]))
+
+            result["horizons"][str(horizon)] = self._summarize_backtest(
+                predictions, actuals, baselines
+            )
+
+        self._backtest_metrics = result
+        return result
+
+    @staticmethod
+    def _summarize_backtest(
+        predictions: List[float], actuals: List[float], baselines: List[float]
+    ) -> Dict[str, Any]:
+        """Summarize model and last-value naive errors for one horizon."""
+        if not actuals:
+            return {
+                "windows": 0,
+                "model": {"mae": None, "rmse": None, "mape": None},
+                "naive": {"mae": None, "rmse": None, "mape": None},
+                "improvement": None,
+            }
+
+        def metrics(values: List[float]) -> Dict[str, Optional[float]]:
+            errors = np.asarray(values) - np.asarray(actuals)
+            non_zero = np.asarray(actuals) != 0
+            mape = (
+                float(np.mean(np.abs(errors[non_zero] / np.asarray(actuals)[non_zero])))
+                if np.any(non_zero)
+                else None
+            )
+            return {
+                "mae": round(float(np.mean(np.abs(errors))), 6),
+                "rmse": round(float(np.sqrt(np.mean(errors ** 2))), 6),
+                "mape": round(mape, 6) if mape is not None else None,
+            }
+
+        model_metrics = metrics(predictions)
+        naive_metrics = metrics(baselines)
+        model_rmse = model_metrics["rmse"]
+        naive_rmse = naive_metrics["rmse"]
+        improvement = None
+        if model_rmse is not None and naive_rmse is not None:
+            improvement = (
+                1.0 if naive_rmse == 0 and model_rmse == 0
+                else 0.0 if naive_rmse == 0
+                else round(1.0 - model_rmse / naive_rmse, 6)
+            )
+        return {
+            "windows": len(actuals),
+            "model": model_metrics,
+            "naive": naive_metrics,
+            "improvement": improvement,
+        }
+
+    def _confidence_factor(self, horizon: int) -> float:
+        """Convert out-of-sample improvement into a bounded confidence factor."""
+        metrics = self._backtest_metrics.get("horizons", {}).get(str(horizon), {})
+        improvement = metrics.get("improvement")
+        if improvement is None:
+            return 0.3
+        return round(max(0.3, min(1.0, 0.5 + improvement / 2)), 3)
 
     # ── Data loading ──────────────────────────────────────────────────────
 
@@ -399,14 +542,19 @@ class SentimentForecaster:
         return ForecastResult(
             predicted_trend_24h=_classify_trend(score_24h),
             predicted_trend_48h=_classify_trend(score_48h),
-            confidence_24h=_confidence_from_score(score_24h),
-            confidence_48h=_confidence_from_score(score_48h),
+            confidence_24h=round(
+                _confidence_from_score(score_24h) * self._confidence_factor(24), 3
+            ),
+            confidence_48h=round(
+                _confidence_from_score(score_48h) * self._confidence_factor(48), 3
+            ),
             sentiment_velocity=velocity,
             forecast_score_24h=round(score_24h, 4),
             forecast_score_48h=round(score_48h, 4),
             model_backend=self._backend,
             data_points_used=n,
             generated_at=datetime.now(timezone.utc).isoformat(),
+            backtest_metrics=self._backtest_metrics,
         )
 
     def _predict_prophet(
@@ -503,6 +651,7 @@ class SentimentForecaster:
         Safe to call repeatedly — reuses an existing trained model.
         """
         df = self.load_history(jsonl_path)
+        self.run_backtest(df)
         if not self._is_trained:
             self.train(df)
         return self.predict(df)

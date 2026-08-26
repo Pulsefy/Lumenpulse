@@ -1,0 +1,6 @@
+{
+  "horizons_hours": [24, 48],
+  "min_training_points": 24,
+  "max_windows": 12,
+  "step": 1
+}
