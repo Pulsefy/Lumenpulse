@@ -7,16 +7,28 @@ import {
   HealthService,
   LumenpulseHealthReport,
 } from '../src/health/health.service';
+import { ContractHealthService } from '../src/health/contract-health.service';
+import { JobHealthService } from '../src/scheduler/job-health.service';
 
 describe('Health Check (e2e)', () => {
   let app: INestApplication;
   let healthService: { getHealthReport: jest.Mock };
+  let contractHealthService: { getContractHealthReport: jest.Mock };
+  let jobHealthService: { getJobsHealthReport: jest.Mock };
 
   const getHttpServer = (): Server => app.getHttpServer() as Server;
 
   beforeAll(async () => {
     healthService = {
       getHealthReport: jest.fn(),
+    };
+    contractHealthService = {
+      getContractHealthReport: jest.fn(),
+    };
+    jobHealthService = {
+      getJobsHealthReport: jest
+        .fn()
+        .mockResolvedValue({ status: 'healthy', checkedAt: new Date().toISOString(), jobs: [] }),
     };
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -25,6 +37,14 @@ describe('Health Check (e2e)', () => {
         {
           provide: HealthService,
           useValue: healthService,
+        },
+        {
+          provide: ContractHealthService,
+          useValue: contractHealthService,
+        },
+        {
+          provide: JobHealthService,
+          useValue: jobHealthService,
         },
       ],
     }).compile();
@@ -151,5 +171,55 @@ describe('Health Check (e2e)', () => {
     healthService.getHealthReport.mockResolvedValue(report);
 
     await request(getHttpServer()).get('/health').expect(503);
+  });
+
+  it('GET /health/jobs returns 200 when every scheduled job is healthy', async () => {
+    jobHealthService.getJobsHealthReport.mockResolvedValue({
+      status: 'healthy',
+      checkedAt: new Date().toISOString(),
+      jobs: [
+        {
+          jobName: 'reconciliation',
+          description: 'Drift reconciliation sweep',
+          expectedIntervalMs: 21600000,
+          staleAfterMs: 32400000,
+          state: 'ok',
+          lastStartedAt: new Date().toISOString(),
+          lastSuccessAt: new Date().toISOString(),
+          lastFailureAt: null,
+          lastDurationMs: 1200,
+          staleByMs: null,
+        },
+      ],
+    });
+
+    const response = await request(getHttpServer())
+      .get('/health/jobs')
+      .expect(200);
+
+    expect(response.body.status).toBe('healthy');
+  });
+
+  it('GET /health/jobs returns 503 when a scheduled job is stale', async () => {
+    jobHealthService.getJobsHealthReport.mockResolvedValue({
+      status: 'degraded',
+      checkedAt: new Date().toISOString(),
+      jobs: [
+        {
+          jobName: 'reconciliation',
+          description: 'Drift reconciliation sweep',
+          expectedIntervalMs: 21600000,
+          staleAfterMs: 32400000,
+          state: 'stale',
+          lastStartedAt: new Date().toISOString(),
+          lastSuccessAt: new Date().toISOString(),
+          lastFailureAt: null,
+          lastDurationMs: 1200,
+          staleByMs: 5000,
+        },
+      ],
+    });
+
+    await request(getHttpServer()).get('/health/jobs').expect(503);
   });
 });

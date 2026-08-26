@@ -2,12 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JobRun, JobRunStatus } from './entities/job-run.entity';
+import { MetricsService } from '../metrics/metrics.service';
 
 @Injectable()
 export class JobHistoryService {
   constructor(
     @InjectRepository(JobRun)
     private readonly repo: Repository<JobRun>,
+    private readonly metrics: MetricsService,
   ) {}
 
   /** Create a RUNNING record and return it so callers can update it later. */
@@ -29,6 +31,7 @@ export class JobHistoryService {
       durationMs: 0,
     });
     await this.repo.save(run);
+    this.metrics.recordScheduledJobRun(jobName, 'skipped', 0);
   }
 
   /** Mark an existing run as COMPLETED with an optional result payload. */
@@ -38,6 +41,7 @@ export class JobHistoryService {
     run.finishedAt = new Date();
     run.durationMs = run.finishedAt.getTime() - run.startedAt.getTime();
     await this.repo.save(run);
+    this.metrics.recordScheduledJobRun(run.jobName, 'completed', run.durationMs);
   }
 
   /** Mark an existing run as FAILED with an error message. */
@@ -47,6 +51,7 @@ export class JobHistoryService {
     run.finishedAt = new Date();
     run.durationMs = run.finishedAt.getTime() - run.startedAt.getTime();
     await this.repo.save(run);
+    this.metrics.recordScheduledJobRun(run.jobName, 'failed', run.durationMs);
   }
 
   /** Fetch the N most recent runs for a given job name. */
@@ -58,10 +63,26 @@ export class JobHistoryService {
     });
   }
 
-  /** Fetch the last run for a given job name. */
+  /** Fetch the last run for a given job name, regardless of outcome. */
   async getLastRun(jobName: string): Promise<JobRun | null> {
     return this.repo.findOne({
       where: { jobName },
+      order: { startedAt: 'DESC' },
+    });
+  }
+
+  /** Fetch the last COMPLETED run for a given job name. */
+  async getLastSuccessfulRun(jobName: string): Promise<JobRun | null> {
+    return this.repo.findOne({
+      where: { jobName, status: JobRunStatus.COMPLETED },
+      order: { startedAt: 'DESC' },
+    });
+  }
+
+  /** Fetch the last FAILED run for a given job name. */
+  async getLastFailedRun(jobName: string): Promise<JobRun | null> {
+    return this.repo.findOne({
+      where: { jobName, status: JobRunStatus.FAILED },
       order: { startedAt: 'DESC' },
     });
   }

@@ -48,6 +48,12 @@ export class MetricsService implements OnModuleInit {
   private readonly outboxAttempts: Counter<string>;
   private readonly outboxDeadLetterVolume: Gauge<string>;
 
+  // Scheduled job monitoring //
+  private readonly scheduledJobRunsCounter: Counter<string>;
+  private readonly scheduledJobDuration: Histogram<string>;
+  private readonly scheduledJobLastSuccessGauge: Gauge<string>;
+  private readonly scheduledJobLockContentionCounter: Counter<string>;
+
   // Running totals for the rolling-average sentiment gauge
   private sentimentSum = 0;
   private sentimentCount = 0;
@@ -203,6 +209,36 @@ export class MetricsService implements OnModuleInit {
     this.outboxDeadLetterVolume = new Gauge({
       name: 'lumenpulse_outbox_dead_letter_volume',
       help: 'Current number of outbox events in the dead-letter queue',
+      registers: [this.registry],
+    });
+
+    // Scheduled jobs //
+    this.scheduledJobRunsCounter = new Counter({
+      name: 'lumenpulse_scheduled_job_runs_total',
+      help: 'Total scheduled job runs by job name and outcome',
+      labelNames: ['job_name', 'status'] as const,
+      registers: [this.registry],
+    });
+
+    this.scheduledJobDuration = new Histogram({
+      name: 'lumenpulse_scheduled_job_duration_seconds',
+      help: 'Duration of scheduled job runs in seconds',
+      labelNames: ['job_name'] as const,
+      buckets: [0.1, 0.5, 1, 5, 15, 30, 60, 300, 900],
+      registers: [this.registry],
+    });
+
+    this.scheduledJobLastSuccessGauge = new Gauge({
+      name: 'lumenpulse_scheduled_job_last_success_timestamp_seconds',
+      help: 'Unix timestamp of the last successful run of a scheduled job',
+      labelNames: ['job_name'] as const,
+      registers: [this.registry],
+    });
+
+    this.scheduledJobLockContentionCounter = new Counter({
+      name: 'lumenpulse_scheduled_job_lock_contention_total',
+      help: 'Total times a scheduled job could not acquire its distributed lock because another instance held it',
+      labelNames: ['job_name'] as const,
       registers: [this.registry],
     });
   }
@@ -406,6 +442,34 @@ export class MetricsService implements OnModuleInit {
   /** Record the current number of dead-lettered outbox events. */
   setOutboxDeadLetterVolume(volume: number): void {
     this.outboxDeadLetterVolume.set(volume);
+  }
+
+  // Scheduled job instrumentation //
+
+  /**
+   * Record a finished scheduled job run.
+   *
+   * @param jobName      Logical job name, matching the scheduler's JOB_NAME
+   * @param status       "completed" | "failed" | "skipped"
+   * @param durationMs   Wall-clock duration of the run, when known
+   */
+  recordScheduledJobRun(
+    jobName: string,
+    status: 'completed' | 'failed' | 'skipped',
+    durationMs?: number,
+  ): void {
+    this.scheduledJobRunsCounter.inc({ job_name: jobName, status });
+    if (durationMs !== undefined) {
+      this.scheduledJobDuration.labels({ job_name: jobName }).observe(durationMs / 1000);
+    }
+    if (status === 'completed') {
+      this.scheduledJobLastSuccessGauge.set({ job_name: jobName }, Date.now() / 1000);
+    }
+  }
+
+  /** Increment when a scheduled job could not acquire its distributed lock. */
+  recordJobLockContention(jobName: string): void {
+    this.scheduledJobLockContentionCounter.inc({ job_name: jobName });
   }
 
   //Dynamic metric helpers (legacy API)

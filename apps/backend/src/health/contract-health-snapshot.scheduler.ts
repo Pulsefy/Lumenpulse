@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ContractHealthSnapshotService } from './contract-health-snapshot.service';
+import { JobHistoryService } from '../scheduler/job-history.service';
 
 const JOB_NAME = 'contract-health-snapshot';
 
@@ -13,8 +14,8 @@ const JOB_NAME = 'contract-health-snapshot';
  *
  * The scheduler deliberately does *not* acquire a DB-level job lock — the
  * snapshot operation is idempotent and quick, so duplicate runs within a
- * window are harmless.  If you integrate with JobLockService/JobHistoryService
- * (as the daily SnapshotScheduler does), import SchedulerModule and add them.
+ * window are harmless. It does record its run history via JobHistoryService
+ * so it still shows up in the unified `/health/jobs` view.
  */
 @Injectable()
 export class ContractHealthSnapshotScheduler {
@@ -22,6 +23,7 @@ export class ContractHealthSnapshotScheduler {
 
   constructor(
     private readonly snapshotService: ContractHealthSnapshotService,
+    private readonly jobHistory: JobHistoryService,
   ) {}
 
   /**
@@ -32,8 +34,15 @@ export class ContractHealthSnapshotScheduler {
   @Cron('0,30 * * * *', { timeZone: 'UTC', name: JOB_NAME })
   async handleScheduledCapture(): Promise<void> {
     this.logger.log('Scheduled contract-health snapshot triggered');
+    const run = await this.jobHistory.start(JOB_NAME);
     try {
       const snapshot = await this.snapshotService.captureSnapshot('scheduler');
+      await this.jobHistory.complete(run, {
+        snapshotId: snapshot.id,
+        overallStatus: snapshot.overallStatus,
+        reachable: snapshot.summary.reachable,
+        total: snapshot.summary.total,
+      });
       this.logger.log(
         `Snapshot ${snapshot.id} persisted — ` +
           `status=${snapshot.overallStatus}, ` +
@@ -41,6 +50,7 @@ export class ContractHealthSnapshotScheduler {
       );
     } catch (err) {
       // Log but do not rethrow — a failed capture must not crash the process.
+      await this.jobHistory.fail(run, err);
       this.logger.error(
         `Scheduled capture failed: ${(err as Error).message}`,
         (err as Error).stack,

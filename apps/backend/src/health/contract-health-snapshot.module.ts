@@ -6,6 +6,7 @@ import { ContractHealthSnapshotService } from './contract-health-snapshot.servic
 import { ContractHealthSnapshotScheduler } from './contract-health-snapshot.scheduler';
 import { ContractHealthSnapshotController } from './contract-health-snapshot.controller';
 import { HealthModule } from './health.module';
+import { SchedulerModule } from '../scheduler/scheduler.module';
 
 /**
  * Self-contained module for contract health snapshot persistence.
@@ -27,6 +28,7 @@ import { HealthModule } from './health.module';
     TypeOrmModule.forFeature([ContractHealthSnapshot]),
     // Import HealthModule to access the exported ContractHealthService.
     HealthModule,
+    SchedulerModule,
   ],
   controllers: [ContractHealthSnapshotController],
   providers: [

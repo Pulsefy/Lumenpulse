@@ -64,6 +64,10 @@ Every metric family exported on `/metrics` and its label set is inventoried belo
 | `lumenpulse_reconciliation_drift_total` | Counter | `dataset`, `severity` | ≤ 10 | Fixed dataset(s) × 2 severities (`warning`/`critical`) |
 | `lumenpulse_reconciliation_drift_delta` | Gauge | `dataset`, `severity` | ≤ 10 | Same fixed label set |
 | `lumenpulse_reconciliation_threshold` | Gauge | `dataset`, `severity` | ≤ 10 | Same fixed label set |
+| `lumenpulse_scheduled_job_runs_total` | Counter | `job_name`, `status` | ≤ 30 | Fixed job registry (`src/scheduler/job-registry.ts`) × 3 outcomes (`completed`/`failed`/`skipped`) |
+| `lumenpulse_scheduled_job_duration_seconds` | Histogram | `job_name` | ≤ 10 | Fixed job registry |
+| `lumenpulse_scheduled_job_last_success_timestamp_seconds` | Gauge | `job_name` | ≤ 10 | Fixed job registry |
+| `lumenpulse_scheduled_job_lock_contention_total` | Counter | `job_name` | ≤ 10 | Fixed job registry (only jobs that acquire a `JobLockService` advisory lock ever increment) |
 
 **Dynamic (legacy) helpers** — `getOrCreateGauge`, `getOrCreateCounter`, `getOrCreateHistogram` and the `incrementCounter`/`recordHistogram` shortcuts create metric families at runtime. All current call sites (`cache_hits_total`, `cache_misses_total`, `cache_fetch_duration_ms`, `warm_cache_preload_*`, `projects_*_errors_total`, `wallet_readiness_errors_total`) use **constant names and bounded label values** (e.g. `key_type` ∈ {`account_balance`, `account_operations`, `contract_read`, `stellar_assets`, `news`, `other`}, `route` = fixed registry names). Keep this property when adding new call sites: never pass user-supplied values (wallet addresses, contract IDs, article IDs) as labels.
 

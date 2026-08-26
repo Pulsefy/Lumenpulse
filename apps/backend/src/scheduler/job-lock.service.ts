@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { MetricsService } from '../metrics/metrics.service';
 
 /**
  * Distributed job locking via PostgreSQL advisory locks.
@@ -16,7 +17,10 @@ import { DataSource } from 'typeorm';
 export class JobLockService {
   private readonly logger = new Logger(JobLockService.name);
 
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(
+    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly metrics: MetricsService,
+  ) {}
 
   /**
    * Try to acquire an advisory lock for the given job name.
@@ -33,6 +37,7 @@ export class JobLockService {
       this.logger.warn(
         `Job "${jobName}" skipped — lock held by another instance`,
       );
+      this.metrics.recordJobLockContention(jobName);
     }
     return acquired;
   }

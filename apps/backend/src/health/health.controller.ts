@@ -9,6 +9,7 @@ import {
 import type { Response } from 'express';
 import { ContractHealthService } from './contract-health.service';
 import { HealthService } from './health.service';
+import { JobHealthService } from '../scheduler/job-health.service';
 
 @ApiTags('health')
 @Controller()
@@ -16,6 +17,7 @@ export class HealthController {
   constructor(
     private readonly healthService: HealthService,
     private readonly contractHealthService: ContractHealthService,
+    private readonly jobHealthService: JobHealthService,
   ) {}
 
   @Get('health')
@@ -83,5 +85,29 @@ export class HealthController {
     response.status(latencyReport.overallState === 'hard_down' ? 503 : 200);
 
     return latencyReport;
+  }
+
+  @Get('health/jobs')
+  @ApiOperation({
+    summary:
+      'Reports last start/success/failure and staleness for every scheduled job',
+    description:
+      'Surfaces any registered scheduled job that has not succeeded within ' +
+      'its expected interval (see src/scheduler/job-registry.ts). Returns ' +
+      'HTTP 200 when every job is within its expected interval and HTTP 503 ' +
+      'when any job is stale or has never run.',
+  })
+  @ApiOkResponse({
+    description: 'All scheduled jobs have succeeded within their expected interval.',
+  })
+  @ApiServiceUnavailableResponse({
+    description: 'At least one scheduled job is stale or has never succeeded.',
+  })
+  async getJobsHealth(@Res({ passthrough: true }) response: Response) {
+    const report = await this.jobHealthService.getJobsHealthReport();
+
+    response.status(report.status === 'degraded' ? 503 : 200);
+
+    return report;
   }
 }

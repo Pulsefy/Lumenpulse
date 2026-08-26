@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { IdempotencyService } from './idempotency.service';
 import { JobLockService } from '../scheduler/job-lock.service';
+import { JobHistoryService } from '../scheduler/job-history.service';
 import { config } from '../lib/config';
 
 const JOB_NAME = 'idempotency-cleanup';
@@ -25,18 +26,29 @@ export class IdempotencyScheduler {
   constructor(
     private readonly service: IdempotencyService,
     private readonly jobLock: JobLockService,
+    private readonly jobHistory: JobHistoryService,
   ) {}
 
   @Cron(config.idempotency.cleanupCron, { timeZone: 'UTC', name: JOB_NAME })
   async handleCleanup(): Promise<void> {
     const acquired = await this.jobLock.tryAcquire(JOB_NAME);
-    if (!acquired) return;
+    if (!acquired) {
+      await this.jobHistory.markSkipped(JOB_NAME);
+      return;
+    }
 
+    const run = await this.jobHistory.start(JOB_NAME);
     try {
       const deleted = await this.service.cleanupExpired();
       if (deleted > 0) {
         this.logger.log(`Cleaned up ${deleted} expired idempotency records`);
       }
+      await this.jobHistory.complete(run, { deleted });
+    } catch (err) {
+      await this.jobHistory.fail(run, err);
+      this.logger.error(
+        `Idempotency cleanup failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       await this.jobLock.release(JOB_NAME);
     }
