@@ -51,9 +51,7 @@ impl PricingAdapterContract {
         let price_key = DataKey::AssetPrice(asset.clone());
         let decimals_key = DataKey::AssetDecimals(asset.clone());
 
-        env.storage()
-            .persistent()
-            .set(&price_key, &price);
+        env.storage().persistent().set(&price_key, &price);
         env.storage()
             .persistent()
             .extend_ttl(&price_key, LEDGER_THRESHOLD, LEDGER_BUMP);

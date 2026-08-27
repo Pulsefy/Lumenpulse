@@ -160,11 +160,7 @@ impl ProjectRegistryContract {
         owner.require_auth();
 
         let key = DataKey::Project(project_id);
-        if env
-            .storage()
-            .persistent()
-            .has(&key)
-        {
+        if env.storage().persistent().has(&key) {
             return Err(RegistryError::ProjectAlreadyRegistered);
         }
 
@@ -179,12 +175,12 @@ impl ProjectRegistryContract {
             resolved_at: 0,
         };
 
-        env.storage()
-            .persistent()
-            .set(&key, &entry);
-        env.storage()
-            .persistent()
-            .extend_ttl(&key, storage::LEDGER_THRESHOLD, storage::LEDGER_BUMP);
+        env.storage().persistent().set(&key, &entry);
+        env.storage().persistent().extend_ttl(
+            &key,
+            storage::LEDGER_THRESHOLD,
+            storage::LEDGER_BUMP,
+        );
 
         events::ProjectRegisteredEvent {
             project_id,

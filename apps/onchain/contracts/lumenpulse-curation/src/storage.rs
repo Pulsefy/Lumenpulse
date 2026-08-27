@@ -125,9 +125,11 @@ pub fn save_proposal(env: &Env, project_id: u64, proposal: &ProposalState) {
 pub fn get_proposal(env: &Env, project_id: u64) -> Option<ProposalState> {
     let key = DataKey::Proposal(project_id);
     if let Some(prop) = env.storage().persistent().get(&key) {
-        env.storage()
-            .persistent()
-            .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &key,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
         Some(prop)
     } else {
         None
@@ -166,9 +168,11 @@ pub fn save_vote_record(env: &Env, project_id: u64, voter: &Address, record: &Vo
 pub fn get_vote_record(env: &Env, project_id: u64, voter: &Address) -> Option<VoteRecord> {
     let key = DataKey::VoteRecord(project_id, voter.clone());
     if let Some(record) = env.storage().persistent().get(&key) {
-        env.storage()
-            .persistent()
-            .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &key,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
         Some(record)
     } else {
         None
