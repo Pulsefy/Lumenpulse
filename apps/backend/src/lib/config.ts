@@ -1159,7 +1159,7 @@ export const config = Object.freeze({
     excludeRoutes: Object.freeze(
       splitCsv(parsedEnv.LOGGING_EXCLUDE_ROUTES).length > 0
         ? splitCsv(parsedEnv.LOGGING_EXCLUDE_ROUTES)
-        : ['/health', '/metrics'],
+        : ['/health', '/metrics', '/smoke'],
     ),
   }),
   aws: Object.freeze({

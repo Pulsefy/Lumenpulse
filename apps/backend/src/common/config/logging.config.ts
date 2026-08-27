@@ -57,7 +57,7 @@ export const defaultLoggingConfig: LoggingConfig = {
   includeResponse: false,
   includeIP: true,
   includeUserAgent: true,
-  excludeRoutes: ['/health', '/metrics'],
+  excludeRoutes: ['/health', '/metrics', '/smoke'],
 };
 
 /**

@@ -5,6 +5,13 @@ import {
   NetworkError,
   NotFoundError,
   StrKey,
+  Keypair,
+  Contract,
+  BASE_FEE,
+  Account,
+  TransactionBuilder,
+  rpc,
+  Networks,
 } from '@stellar/stellar-sdk';
 import { AccountBalancesDto, AssetBalanceDto } from './dto/balance.dto';
 import {
@@ -233,6 +240,71 @@ export class StellarService {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       this.logger.warn(`Horizon health check failed: ${errorMessage}`);
+      return false;
+    }
+  }
+
+  /**
+   * Lightweight Soroban reachability check for a deployed contract.
+   * Builds a no-op read (version) simulates against RPC without requiring
+   * the method to succeed. Returns true only when RPC + the contract ID are
+   * both resolvable (no network/404 errors).
+   */
+  async isContractReachable(contractId: string): Promise<boolean> {
+    if (!StrKey.isValidContract(contractId)) {
+      return false;
+    }
+    if (!this.config.sorobanRpcUrl) {
+      return false;
+    }
+    try {
+      const rpcServer = new rpc.Server(this.config.sorobanRpcUrl, {
+        timeout: Math.min(this.config.timeout, 8_000),
+        allowHttp: this.config.sorobanRpcUrl.startsWith('http://'),
+      });
+      const sourceKp = Keypair.fromSecret(this.config.serverSecret);
+      let sourceAccount;
+      try {
+        sourceAccount = await rpcServer.getAccount(sourceKp.publicKey());
+      } catch (err) {
+        this.logger.warn(
+          `smoke: source account ${sourceKp.publicKey()} unavailable for contract reachability: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        return false;
+      }
+      const networkPassphrase =
+        this.config.network === 'testnet'
+          ? Networks.TESTNET
+          : Networks.PUBLIC;
+      const tx = new TransactionBuilder(
+        new Account(sourceAccount.accountId(), sourceAccount.sequenceNumber()),
+        {
+          fee: BASE_FEE,
+          networkPassphrase,
+        },
+      )
+        .addOperation(new Contract(contractId).call('version'))
+        .setTimeout(30)
+        .build();
+      const sim = await rpcServer.simulateTransaction(tx);
+      if (rpc.Api.isSimulationError(sim)) {
+        const msg = String(sim.error ?? '').toLowerCase();
+        if (msg.includes('missing value') || msg.includes('not found')) {
+          return false;
+        }
+        // A method-not-found or auth simulation error is still reachable.
+        return true;
+      }
+      return true;
+    } catch (err) {
+      this.logger.warn(
+        `smoke: isContractReachable(${contractId.slice(
+          0,
+          8,
+        )}...) failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return false;
     }
   }

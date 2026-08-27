@@ -7,6 +7,7 @@ import { ContractHealthService } from './contract-health.service';
 import { HealthController } from './health.controller';
 import { HealthService } from './health.service';
 import { LatencyBudgetHealthService } from './latency-budget.health.service';
+import { SmokeService } from './smoke.service';
 
 @Module({
   imports: [
@@ -19,7 +20,12 @@ import { LatencyBudgetHealthService } from './latency-budget.health.service';
     StellarModule,
   ],
   controllers: [HealthController],
-  providers: [HealthService, ContractHealthService, LatencyBudgetHealthService],
+  providers: [
+    HealthService,
+    ContractHealthService,
+    LatencyBudgetHealthService,
+    SmokeService,
+  ],
   // ContractHealthService is exported so ContractHealthSnapshotModule can
   // inject it without creating a second instance.
   exports: [ContractHealthService],

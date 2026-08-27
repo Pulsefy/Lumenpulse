@@ -9,6 +9,8 @@ import {
 import type { Response } from 'express';
 import { ContractHealthService } from './contract-health.service';
 import { HealthService } from './health.service';
+import { Public } from '../auth/decorators/auth.decorators';
+import { SmokeReport, SmokeService } from './smoke.service';
 
 @ApiTags('health')
 @Controller()
@@ -16,6 +18,7 @@ export class HealthController {
   constructor(
     private readonly healthService: HealthService,
     private readonly contractHealthService: ContractHealthService,
+    private readonly smokeService: SmokeService,
   ) {}
 
   @Get('health')
@@ -83,5 +86,33 @@ export class HealthController {
     response.status(latencyReport.overallState === 'hard_down' ? 503 : 200);
 
     return latencyReport;
+  }
+
+  @Get('smoke')
+  @Public()
+  @ApiOperation({
+    summary:
+      'CI / Vercel deployment smoke endpoint. Verifies env config + contract reachability.',
+    description:
+      'Returns a single, machine-readable status confirming the backend and ' +
+      'its testnet dependencies are ready. Safe to expose publicly: it never ' +
+      'includes secrets or raw configuration values. Returns HTTP 200 when ' +
+      'ready or degraded and HTTP 503 when critical checks fail.',
+  })
+  @ApiOkResponse({
+    description:
+      'Backend is ready or only degraded. See `status` and `checks` for details.',
+  })
+  @ApiServiceUnavailableResponse({
+    description:
+      'Critical checks failed (required env, DB, or contracts). Deploy should block.',
+  })
+  async getSmoke(@Res({ passthrough: true }) response: Response): Promise<SmokeReport> {
+    const report = await this.smokeService.getSmokeReport();
+
+    response.status(report.status === 'not_ready' ? 503 : 200);
+    response.setHeader('X-Smoke-Status', report.status);
+
+    return report;
   }
 }
