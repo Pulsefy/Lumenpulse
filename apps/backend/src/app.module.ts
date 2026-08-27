@@ -45,6 +45,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { GrantsModule } from './grants/grants.module';
 import { HealthModule } from './health/health.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { VerificationModule } from './verification/verification.module';
 import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
@@ -137,6 +138,7 @@ import { PriceAlertModule } from './price-alert/price-alert.module';
     AuthModule,
     UsersModule,
     HealthModule,
+    SchedulerModule,
     QueueModule,
     StellarSyncModule,
     ExchangeRatesModule,

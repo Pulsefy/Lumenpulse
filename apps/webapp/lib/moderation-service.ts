@@ -7,7 +7,9 @@
 //   body: { targetType, targetId, reason, description? }
 //   -> 201 ContentReport | 400 (duplicate/validation) | 401 (unauthenticated)
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { clientConfig } from '@/lib/config';
+
+const API_BASE = clientConfig.apiUrl;
 
 /** Mirrors backend `ReportType`. "other" is used for surfaces (e.g. news) that
  *  don't have a dedicated target type yet. */

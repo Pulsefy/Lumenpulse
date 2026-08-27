@@ -6,7 +6,7 @@ export class CreateContentReports1770100000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create enum types
     await queryRunner.query(`
-      CREATE TYPE "content_reports_target_type_enum" AS ENUM('project', 'comment', 'user', 'other')
+      CREATE TYPE "content_reports_targetType_enum" AS ENUM('project', 'comment', 'user', 'other')
     `);
 
     await queryRunner.query(`
@@ -21,7 +21,7 @@ export class CreateContentReports1770100000000 implements MigrationInterface {
     await queryRunner.query(`
       CREATE TABLE "content_reports" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
-        "target_type" "content_reports_target_type_enum" NOT NULL,
+        "targetType" "content_reports_targetType_enum" NOT NULL,
         "target_id" character varying NOT NULL,
         "reason" "content_reports_reason_enum" NOT NULL,
         "description" text,
@@ -53,7 +53,7 @@ export class CreateContentReports1770100000000 implements MigrationInterface {
 
     // Create indexes for performance
     await queryRunner.query(`
-      CREATE INDEX "IDX_content_reports_target" ON "content_reports"("target_id", "target_type")
+      CREATE INDEX "IDX_content_reports_target" ON "content_reports"("target_id", "targetType")
     `);
 
     await queryRunner.query(`
@@ -85,6 +85,6 @@ export class CreateContentReports1770100000000 implements MigrationInterface {
     // Drop enum types
     await queryRunner.query(`DROP TYPE "content_reports_status_enum"`);
     await queryRunner.query(`DROP TYPE "content_reports_reason_enum"`);
-    await queryRunner.query(`DROP TYPE "content_reports_target_type_enum"`);
+    await queryRunner.query(`DROP TYPE "content_reports_targetType_enum"`);
   }
 }

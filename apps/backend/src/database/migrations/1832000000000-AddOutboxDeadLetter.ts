@@ -1,6 +1,11 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
+ * @acknowledge-destructive Drops and recreates the `outbox_events_status_enum`
+ * type to introduce the `dead_letter` status. The old type is dropped only
+ * after the column is cast to the new type, so no data is lost. Accepted by
+ * the backend team as a deliberate enum evolution.
+ *
  * Adds the `dead_letter` status and `deadLetterAt` column to the outbox.
  *
  * The enum is recreated (rather than `ALTER TYPE ... ADD VALUE`) so the

@@ -6,7 +6,9 @@ import { Users, ArrowRight } from "lucide-react";
 import { RoundDetail, RoundSummary } from "../components";
 import { DependencyStatusBanner } from "@/components/DependencyStatusBanner";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { clientConfig } from '@/lib/config';
+
+const API_BASE = clientConfig.apiUrl;
 
 interface GrantRoundDetailClientProps {
   roundId: string;

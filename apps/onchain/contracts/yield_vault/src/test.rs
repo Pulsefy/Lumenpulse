@@ -398,6 +398,24 @@ fn test_harvest_accumulates_across_rounds() {
 }
 
 #[test]
+fn test_reentrancy_guard_deposit_rejects_when_locked() {
+    let f = setup();
+
+    // Simulate reentrant lock state
+    f.env.as_contract(&f.vault, || {
+        f.env
+            .storage()
+            .instance()
+            .set(&Symbol::new(&f.env, "REENTRANT"), &true);
+    });
+
+    let result = f
+        .client
+        .try_deposit(&100i128, &f.user, &fresh_request_id(&f.env, 99));
+    assert_eq!(result, Err(Ok(YieldVaultError::Reentrancy)));
+}
+
+#[test]
 fn test_harvest_after_withdrawal_does_not_overcount() {
     let f = setup();
 

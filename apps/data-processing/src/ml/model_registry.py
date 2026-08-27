@@ -9,14 +9,14 @@ Directory layout:
     sentiment/
       v1.0.pkl
       v1.1.pkl
-      current -> v1.1.pkl   (symlink, updated atomically)
+    current.json          ({"version": "v1.1"}, updated atomically)
       shadow/               (shadow-mode directory)
         v1.2.pkl
-        shadow_current -> v1.2.pkl
+        shadow_current -> v1.2.pkl (shadow-mode symlink)
         comparison_log.jsonl
     price_predictor/
       v1.0.pkl
-      current -> v1.0.pkl
+    current.json          ({"version": "v1.0"})
 
 Shadow-mode deployment (Issue #1256):
   A candidate version can run alongside the live model. Both predictions
@@ -29,6 +29,7 @@ import json
 import os
 import pickle
 import shutil
+import tempfile
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -71,7 +72,11 @@ def _model_dir(model_type: str) -> Path:
     return d
 
 
-def _symlink_path(model_type: str) -> Path:
+def _current_pointer_path(model_type: str) -> Path:
+    return _model_dir(model_type) / "current.json"
+
+
+def _legacy_symlink_path(model_type: str) -> Path:
     return _model_dir(model_type) / "current"
 
 
@@ -105,6 +110,64 @@ def _promotion_log_path(model_type: str) -> Path:
 def _metadata_path(model_type: str, version: str) -> Path:
     """Sidecar JSON holding non-pickled metadata for a saved model version."""
     return _model_dir(model_type) / f"{version}.meta.json"
+
+
+def _read_current_version(model_type: str) -> Optional[str]:
+    """Read the live pointer, migrating a legacy ``current`` symlink."""
+    pointer = _current_pointer_path(model_type)
+    if pointer.exists():
+        try:
+            data = json.loads(pointer.read_text(encoding="utf-8"))
+            version = data.get("version")
+            if isinstance(version, str) and version:
+                return version
+        except (OSError, json.JSONDecodeError):
+            logger.warning("Invalid model registry pointer: %s", pointer)
+        return None
+
+    with _lock:
+        if pointer.exists():
+            return _read_current_version(model_type)
+        legacy = _legacy_symlink_path(model_type)
+        if not legacy.is_symlink():
+            return None
+        try:
+            version = legacy.resolve(strict=True).stem
+        except OSError:
+            return None
+
+        _write_current_version(model_type, version)
+        legacy.unlink()
+        logger.info(
+            "Migrated legacy model symlink: type=%s version=%s", model_type, version
+        )
+        return version
+
+
+def _write_current_version(model_type: str, version: str) -> None:
+    """Atomically persist the live model version in a JSON pointer."""
+    pointer = _current_pointer_path(model_type)
+    temporary_name = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=pointer.parent,
+            prefix=f".{pointer.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as fh:
+            temporary_name = fh.name
+            json.dump({"version": version}, fh, separators=(",", ":"))
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(temporary_name, pointer)
+    finally:
+        if temporary_name:
+            try:
+                os.unlink(temporary_name)
+            except FileNotFoundError:
+                pass
 
 
 def _next_version(model_type: str) -> str:
@@ -180,14 +243,13 @@ def load_metadata(
     Returns ``None`` when no metadata was recorded (e.g. a legacy model saved
     before metadata support, or the sentiment model which records none).
 
-    ``version="current"`` resolves the promoted symlink first so callers can
+    ``version="current"`` resolves the promoted pointer first so callers can
     ask for "whatever is live right now".
     """
     if version == "current":
-        sym = _symlink_path(model_type)
-        if not sym.exists():
+        version = _read_current_version(model_type)
+        if version is None:
             return None
-        version = sym.resolve().stem  # filename without .pkl
 
     meta_path = _metadata_path(model_type, version)
     if not meta_path.exists():
@@ -203,18 +265,18 @@ def load_model(model_type: str, version: str = "current") -> Any:
 
     Args:
         model_type: e.g. "sentiment" or "price_predictor"
-        version:    Specific version string or "current" (follows symlink).
+        version:    Specific version string or "current" (follows the pointer).
 
     Returns:
         The unpickled model object.
     """
     if version == "current":
-        sym = _symlink_path(model_type)
-        if not sym.exists():
+        version = _read_current_version(model_type)
+        if version is None:
             raise FileNotFoundError(
                 f"No current model for '{model_type}'. Run retraining first."
             )
-        path = sym.resolve()
+        path = _version_path(model_type, version)
     else:
         path = _version_path(model_type, version)
 
@@ -277,7 +339,7 @@ def promote_model(
     """
     Atomically promote a saved version to 'current' (zero-downtime swap).
 
-    The on-disk symlink is updated atomically via a rename, and the
+    The on-disk JSON pointer is updated atomically via a rename, and the
     in-memory hot model is swapped under the RLock so in-flight requests
     finish with the old model while new requests immediately use the new one.
 
@@ -377,14 +439,8 @@ def promote_model(
                 model_type, version, event,
             )
 
-    sym = _symlink_path(model_type)
-    tmp_sym = sym.with_suffix(".tmp")
-
-    # Atomic symlink swap (POSIX rename is atomic)
-    if tmp_sym.exists() or tmp_sym.is_symlink():
-        tmp_sym.unlink()
-    tmp_sym.symlink_to(target.name)
-    tmp_sym.rename(sym)
+    with _lock:
+        _write_current_version(model_type, version)
 
     # Hot-swap in memory
     new_model = load_model(model_type, version)
@@ -444,9 +500,9 @@ def get_live_model(model_type: str) -> Any:
     model = load_model(model_type, "current")
     with _lock:
         _live_models[model_type] = model
-        sym = _symlink_path(model_type)
-        if sym.exists():
-            _live_versions[model_type] = sym.resolve().stem  # filename without .pkl
+        current_version = _read_current_version(model_type)
+        if current_version is not None:
+            _live_versions[model_type] = current_version
     return model
 
 
@@ -465,10 +521,7 @@ def get_current_version(model_type: str) -> Optional[str]:
         if model_type in _live_versions:
             return _live_versions[model_type]
 
-    sym = _symlink_path(model_type)
-    if sym.exists():
-        return sym.resolve().stem
-    return None
+    return _read_current_version(model_type)
 
 
 def get_registry_status() -> dict[str, Any]:
@@ -961,10 +1014,9 @@ def load_model_card(model_type: str, version: str = "current") -> Optional[dict]
         Model card as dict, or None if not found.
     """
     if version == "current":
-        sym = _symlink_path(model_type)
-        if not sym.exists():
+        version = get_current_version(model_type)
+        if version is None:
             return None
-        version = sym.resolve().stem
 
     card_path = _model_dir(model_type) / f"{version}.card.json"
     if not card_path.exists():

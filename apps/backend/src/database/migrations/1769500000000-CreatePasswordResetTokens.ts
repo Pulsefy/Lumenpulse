@@ -27,11 +27,11 @@ export class CreatePasswordResetTokens1769500000000 implements MigrationInterfac
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `DROP INDEX "public"."IDX_password_reset_tokens_userId"`,
+      `DROP INDEX IF EXISTS "public"."IDX_password_reset_tokens_userId"`,
     );
     await queryRunner.query(
-      `DROP INDEX "public"."IDX_password_reset_tokens_tokenHash"`,
+      `DROP INDEX IF EXISTS "public"."IDX_password_reset_tokens_tokenHash"`,
     );
-    await queryRunner.query(`DROP TABLE "password_reset_tokens"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "password_reset_tokens"`);
   }
 }

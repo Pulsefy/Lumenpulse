@@ -22,6 +22,35 @@ from sqlalchemy.sql import func
 Base = declarative_base()
 
 
+class PredictionLog(Base):
+    """
+    Stores prediction requests and responses for auditability (Issue #1245)
+    """
+
+    __tablename__ = "prediction_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    request_id = Column(String(255), nullable=False, index=True)
+    model_type = Column(String(100), nullable=False, index=True)
+    model_version = Column(String(50), nullable=False, index=True)
+    input_hash = Column(String(255), nullable=False)
+    output = Column(JSON, nullable=False)
+    latency_ms = Column(Float, nullable=False)
+    raw_input = Column(Text, nullable=True)  # Populated only if config allows
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    __table_args__ = (
+        Index("idx_prediction_logs_model_version", "model_version"),
+        Index("idx_prediction_logs_created_at", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<PredictionLog(request_id={self.request_id}, model={self.model_type}:{self.model_version})>"
+
+
 class Article(Base):
     """
     Stores news articles with full content and metadata

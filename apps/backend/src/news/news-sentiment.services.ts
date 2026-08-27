@@ -7,6 +7,7 @@ import { NewsService } from './news.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { JobLockService } from '../scheduler/job-lock.service';
 import { JobHistoryService } from '../scheduler/job-history.service';
+import { config } from '../lib/config';
 
 const SENTIMENT_JOB_NAME = 'news-sentiment-update';
 
@@ -28,7 +29,9 @@ export class NewsSentimentService {
 
   async analyzeSentiment(text: string): Promise<number | null> {
     try {
-      const baseUrl = this.configService.get<string>('PYTHON_SERVICE_URL');
+      const baseUrl =
+        this.configService.get<string>('PYTHON_API_URL') ||
+        config.python.apiUrl;
       const response = await firstValueFrom<
         AxiosResponse<SentimentApiResponse>
       >(

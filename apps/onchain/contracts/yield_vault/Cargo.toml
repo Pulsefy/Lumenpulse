@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 soroban-sdk = { workspace = true }
 idempotency-guard = { path = "../idempotency-guard" }
+reentrancy-guard = { path = "../reentrancy-guard" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

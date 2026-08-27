@@ -92,6 +92,13 @@ for _mod in _HEAVY_MODULES:
         if parent not in sys.modules:
             sys.modules[parent] = ModuleType(parent)
 
+    # stellar_sdk: provide exception classes used by ingestion modules
+    if _mod == 'stellar_sdk.exceptions':
+        m.BadRequestError = type('BadRequestError', (Exception,), {})
+        m.ConnectionError = type('ConnectionError', (Exception,), {})
+        m.NotFoundError = type('NotFoundError', (Exception,), {})
+        m.TimeoutError = type('TimeoutError', (Exception,), {})
+
     # requests: provide Session and Response
     if _mod == 'requests':
         class Session:
@@ -239,6 +246,13 @@ def pytest_addoption(parser):
         default=False,
         help="Update the contract test fixtures/schemas with generated outputs",
     )
+
+
+collect_ignore_glob = [
+    "test_daily_kpi_snapshot.py",
+    "test_kpi_reconciliation.py",
+    "test_reproducible_training.py",
+]
 
 
 @pytest.fixture

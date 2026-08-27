@@ -20,6 +20,7 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     '^expo-constants$': '<rootDir>/lib/__tests__/mocks/expo-constants.ts',
+    '^expo-image$': '<rootDir>/lib/__tests__/mocks/expo-image.ts',
     '^expo-linking$': '<rootDir>/lib/__tests__/mocks/expo-linking.ts',
     '^expo-local-authentication$': '<rootDir>/lib/__tests__/mocks/expo-local-authentication.ts',
     '^expo-modules-core$': '<rootDir>/lib/__tests__/mocks/expo-modules-core.ts',

@@ -248,19 +248,17 @@ def load_model_card(model_type: str, version: str = "current") -> Optional[Model
     
     Args:
         model_type: e.g. "sentiment" or "price_predictor"
-        version: Specific version string or "current" (follows symlink).
+        version: Specific version string or "current" (follows the pointer).
     
     Returns:
         ModelCard object or None if not found.
     """
-    from model_registry import _symlink_path, _MODELS_ROOT
+    from model_registry import _MODELS_ROOT, get_current_version
     
     if version == "current":
-        sym = _symlink_path(model_type)
-        if not sym.exists():
+        version = get_current_version(model_type)
+        if version is None:
             return None
-        # Get the actual version from the symlink target
-        version = sym.resolve().stem
     
     card_path = _MODELS_ROOT / model_type / f"{version}.card.json"
     if not card_path.exists():

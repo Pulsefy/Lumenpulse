@@ -132,6 +132,50 @@ describe('MetricsService', () => {
     expect(output).toContain('lumenpulse_fetch_errors_total');
   });
 
+  // Scheduled-job metrics //
+
+  it('recordSchedulerJobOutcome() emits run counter, last-success gauge, and duration histogram', async () => {
+    const startedAt = new Date('2026-08-27T01:00:00.000Z');
+    service.recordSchedulerJobOutcome(
+      'reconciliation',
+      'completed',
+      120_000,
+      startedAt,
+    );
+    const output = await service.getMetrics();
+    expect(output).toContain('lumenpulse_scheduler_job_runs_total');
+    expect(output).toContain('lumenpulse_scheduler_job_duration_seconds');
+    expect(output).toMatch(
+      /lumenpulse_scheduler_job_last_success_timestamp_seconds\{job="reconciliation"\} 1\d{9}\.?\d*/,
+    );
+  });
+
+  it('recordSchedulerJobOutcome() sets the last-failure gauge for failed runs', async () => {
+    service.recordSchedulerJobOutcome(
+      'daily-snapshot',
+      'failed',
+      5000,
+      new Date('2026-08-27T02:00:00.000Z'),
+    );
+    const output = await service.getMetrics();
+    expect(output).toMatch(
+      /lumenpulse_scheduler_job_last_failure_timestamp_seconds\{job="daily-snapshot"\}/,
+    );
+  });
+
+  it('recordSchedulerLockContention() increments the contention counter per job', async () => {
+    service.recordSchedulerLockContention('reconciliation');
+    service.recordSchedulerLockContention('reconciliation');
+    service.recordSchedulerLockContention('daily-snapshot');
+    const output = await service.getMetrics();
+    expect(output).toMatch(
+      /lumenpulse_scheduler_lock_contention_total\{job="reconciliation"\} 2/,
+    );
+    expect(output).toMatch(
+      /lumenpulse_scheduler_lock_contention_total\{job="daily-snapshot"\} 1/,
+    );
+  });
+
   // Dynamic helpers //
 
   it('getOrCreateGauge() returns the same instance on repeated calls', () => {

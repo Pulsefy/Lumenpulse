@@ -33,6 +33,7 @@ from .models import (
     MetadataDriftFinding,
     EntityLinkingReview,
     DailyOnchainKPISnapshot,
+    PredictionLog,
 )
 from .cohort_models import (
     GrantRound,
@@ -2875,3 +2876,87 @@ class PostgresService:
             logger.error(f"Failed to retrieve latest daily on-chain KPI snapshot: {e}")
             return None
 
+
+    def log_prediction(
+        self,
+        request_id: str,
+        model_type: str,
+        model_version: str,
+        input_hash: str,
+        output: Dict[str, Any],
+        latency_ms: float,
+        raw_input: Optional[str] = None,
+    ) -> bool:
+        """
+        Log a prediction request for auditability (Issue #1245).
+        Failure to log must not raise an exception.
+        """
+        try:
+            with self.get_session() as session:
+                log_entry = PredictionLog(
+                    request_id=request_id,
+                    model_type=model_type,
+                    model_version=model_version,
+                    input_hash=input_hash,
+                    output=output,
+                    latency_ms=latency_ms,
+                    raw_input=raw_input,
+                )
+                session.add(log_entry)
+                session.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to log prediction (non-fatal): {e}")
+            return False
+
+    def cleanup_prediction_logs(self, retention_days: int = 30) -> int:
+        """
+        Clean up prediction logs older than retention_days.
+        """
+        try:
+            with self.get_session() as session:
+                cutoff = datetime.utcnow() - timedelta(days=retention_days)
+                result = session.execute(
+                    delete(PredictionLog).where(PredictionLog.created_at < cutoff)
+                )
+                session.commit()
+                return result.rowcount
+        except Exception as e:
+            logger.error(f"Failed to cleanup prediction logs: {e}")
+            return 0
+
+    def query_prediction_logs(
+        self,
+        model_version: str,
+        model_type: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """
+        Query prediction logs by model version to isolate suspect outputs.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = select(PredictionLog).where(PredictionLog.model_version == model_version)
+                if model_type:
+                    stmt = stmt.where(PredictionLog.model_type == model_type)
+                
+                stmt = stmt.order_by(desc(PredictionLog.created_at)).limit(limit).offset(offset)
+                logs = session.execute(stmt).scalars().all()
+                
+                return [
+                    {
+                        "request_id": log.request_id,
+                        "model_type": log.model_type,
+                        "model_version": log.model_version,
+                        "input_hash": log.input_hash,
+                        "output": log.output,
+                        "latency_ms": log.latency_ms,
+                        "raw_input": log.raw_input,
+                        "created_at": log.created_at.isoformat() if log.created_at else None,
+                    }
+                    for log in logs
+                ]
+        except Exception as e:
+            logger.error(f"Failed to query prediction logs: {e}")
+            return []

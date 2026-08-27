@@ -31,10 +31,18 @@ import { WalletReadinessBanner } from "@/components/WalletReadinessBanner";
 import { TransactionReceiptModal } from "@/components/TransactionReceiptModal";
 import { ReportButton } from "@/components/report/report-button";
 import { signTransaction } from "@stellar/freighter-api";
-import { Address, Contract, TransactionBuilder, nativeToScVal, rpc } from "@stellar/stellar-sdk";
+import {
+  Address,
+  Contract,
+  TransactionBuilder,
+  nativeToScVal,
+  rpc,
+} from "@stellar/stellar-sdk";
 import { useExplorerUrl } from "@/hooks/useExplorerUrl";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { clientConfig } from "@/lib/config";
+
+const API_BASE = clientConfig.apiUrl;
 
 // Types
 export interface ProjectMilestone {
@@ -73,6 +81,16 @@ export interface ProjectDetail {
   roadmap: ProjectMilestone[];
   createdAt: string;
 }
+
+type TransactionStatus =
+  | "idle"
+  | "building"
+  | "simulating"
+  | "signing"
+  | "submitting"
+  | "polling"
+  | "success"
+  | "error";
 
 export interface ProjectBalance {
   balance: string;
@@ -289,7 +307,11 @@ function MilestoneTimeline({ milestones }: { milestones: ProjectMilestone[] }) {
                       </div>
                     )}
                   </div>
-                  <StatusBadge status={isCompleted ? "COMPLETED" : isPast ? "PAUSED" : "ACTIVE"} />
+                  <StatusBadge
+                    status={
+                      isCompleted ? "COMPLETED" : isPast ? "PAUSED" : "ACTIVE"
+                    }
+                  />
                 </div>
               </div>
             </div>
@@ -300,7 +322,11 @@ function MilestoneTimeline({ milestones }: { milestones: ProjectMilestone[] }) {
   );
 }
 
-function ContributorList({ contributors }: { contributors: ProjectContributor[] }) {
+function ContributorList({
+  contributors,
+}: {
+  contributors: ProjectContributor[];
+}) {
   const [expanded, setExpanded] = useState(false);
   const displayCount = expanded ? contributors.length : 5;
 
@@ -313,7 +339,7 @@ function ContributorList({ contributors }: { contributors: ProjectContributor[] 
   }
 
   const sortedContributors = [...contributors].sort(
-    (a, b) => parseFloat(b.totalContributed) - parseFloat(a.totalContributed)
+    (a, b) => parseFloat(b.totalContributed) - parseFloat(a.totalContributed),
   );
 
   return (
@@ -330,9 +356,13 @@ function ContributorList({ contributors }: { contributors: ProjectContributor[] 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-xs text-white/80 truncate">
-                  {contributor.publicKey.slice(0, 6)}...{contributor.publicKey.slice(-6)}
+                  {contributor.publicKey.slice(0, 6)}...
+                  {contributor.publicKey.slice(-6)}
                 </span>
-                <CopyButton text={contributor.publicKey} label="contributor address" />
+                <CopyButton
+                  text={contributor.publicKey}
+                  label="contributor address"
+                />
               </div>
               <div className="flex items-center gap-3 mt-0.5 text-xs text-foreground/40">
                 <span>{contributor.contributionCount} contributions</span>
@@ -380,13 +410,16 @@ function ContributionForm({
   onContributionSuccess?: () => void;
 }) {
   const { config } = useStellarConfig();
-  const { publicKey, status: walletStatus, connect: connectWallet } = useStellarWallet();
+  const {
+    publicKey,
+    status: walletStatus,
+    connect: connectWallet,
+  } = useStellarWallet();
   const buildExplorerUrl = useExplorerUrl();
 
   const [amount, setAmount] = useState("");
-  const [txState, setTxState] = useState<
-    "idle" | "building" | "simulating" | "signing" | "submitting" | "polling" | "success" | "error"
-  >("idle");
+  const [txState, setTxState] = useState<TransactionStatus>("idle");
+
   const [txHash, setTxHash] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -430,7 +463,8 @@ function ContributionForm({
       }
 
       const amountRaw = BigInt(Math.round(parsedAmount * 10_000_000));
-      const rpcUrl = config.sorobanRpcUrl || "https://soroban-testnet.stellar.org";
+      const rpcUrl =
+        config.sorobanRpcUrl || "https://soroban-testnet.stellar.org";
       const networkPassphrase = config.networkPassphrase;
 
       const server = new rpc.Server(rpcUrl);
@@ -439,7 +473,7 @@ function ContributionForm({
         sourceAccount = await server.getAccount(publicKey);
       } catch {
         throw new Error(
-          "Failed to fetch account info from RPC. Make sure your account is active and funded on testnet."
+          "Failed to fetch account info from RPC. Make sure your account is active and funded on testnet.",
         );
       }
 
@@ -448,7 +482,7 @@ function ContributionForm({
         "deposit",
         Address.fromString(publicKey).toScVal(),
         nativeToScVal(BigInt(projectId), { type: "u64" }),
-        nativeToScVal(amountRaw, { type: "i128" })
+        nativeToScVal(amountRaw, { type: "i128" }),
       );
 
       const tx = new TransactionBuilder(sourceAccount, {
@@ -467,21 +501,30 @@ function ContributionForm({
 
       const preparedTx = rpc.assembleTransaction(tx, simulation).build();
       setTxState("signing");
-      const signingResult = await signTransaction(preparedTx.toXDR(), { networkPassphrase });
+      const signingResult = await signTransaction(preparedTx.toXDR(), {
+        networkPassphrase,
+      });
       if (signingResult.error) {
         throw new Error(`Signing failed: ${signingResult.error}`);
       }
 
-      const signedTx = TransactionBuilder.fromXDR(signingResult.signedTxXdr, networkPassphrase);
+      const signedTx = TransactionBuilder.fromXDR(
+        signingResult.signedTxXdr,
+        networkPassphrase,
+      );
       setTxState("submitting");
       const sendResponse = await server.sendTransaction(signedTx);
+
       if (sendResponse.status === "ERROR") {
-        throw new Error(`Submission failed: ${JSON.stringify(sendResponse.errorResult)}`);
+        throw new Error(
+          `Submission failed: ${JSON.stringify(sendResponse.errorResult)}`,
+        );
       }
 
-      setTxState("polling");
       const hash = sendResponse.hash;
       setTxHash(hash);
+
+      setTxState("polling");
       const deadline = Date.now() + 45000;
 
       while (Date.now() < deadline) {
@@ -492,11 +535,15 @@ function ContributionForm({
           return;
         }
         if (getResponse.status === rpc.Api.GetTransactionStatus.FAILED) {
-          throw new Error(`Transaction failed on-chain: ${hash}`);
+          setErrorMsg(`Transaction failed on-chain: ${hash}`);
+          return;
         }
         await new Promise((resolve) => setTimeout(resolve, 1500));
       }
-      throw new Error("Transaction timed out waiting for confirmation.");
+      setErrorMsg(
+        "The transaction was submitted, but confirmation was not received within 45 seconds.",
+      );
+      return;
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Failed to submit contribution.");
@@ -524,7 +571,10 @@ function ContributionForm({
           {txState === "idle" || txState === "error" ? (
             <>
               <div>
-                <label htmlFor="contribution-amount" className="block text-xs font-medium text-foreground/50 mb-1.5">
+                <label
+                  htmlFor="contribution-amount"
+                  className="block text-xs font-medium text-foreground/50 mb-1.5"
+                >
                   Amount (XLM)
                 </label>
                 <div className="flex gap-2">
@@ -543,7 +593,9 @@ function ContributionForm({
                     type="submit"
                     disabled={!isWalletReady}
                     aria-disabled={!isWalletReady}
-                    title={readiness.blocker ? readiness.blocker.guidance : undefined}
+                    title={
+                      readiness.blocker ? readiness.blocker.guidance : undefined
+                    }
                     className="px-6 py-2.5 bg-primary hover:bg-primary/95 disabled:opacity-50 disabled:cursor-not-allowed text-black text-sm font-bold rounded-lg transition-all whitespace-nowrap"
                   >
                     Contribute
@@ -637,7 +689,13 @@ function ContributionForm({
             setShowReceiptModal(open);
             if (!open && txState === "error") setTxState("idle");
           }}
-          status={txState === "success" ? "confirmed" : txState === "error" ? "error" : "pending"}
+          status={
+            txState === "success"
+              ? "confirmed"
+              : txState === "error"
+                ? "error"
+                : "pending"
+          }
           txHash={txHash}
           amount={amount}
           projectId={projectId}
@@ -647,13 +705,21 @@ function ContributionForm({
   );
 }
 
-function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry?: () => void;
+}) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
         <AlertCircle className="w-8 h-8 text-red-400" />
       </div>
-      <h3 className="text-lg font-semibold text-white/80">Unable to load project</h3>
+      <h3 className="text-lg font-semibold text-white/80">
+        Unable to load project
+      </h3>
       <p className="text-sm text-foreground/50 mt-2 max-w-md">{message}</p>
       {onRetry && (
         <button
@@ -690,12 +756,18 @@ function LoadingState() {
 }
 
 // Main Component
-export default function ProjectDetailClient({ projectId }: { projectId: number }) {
+export default function ProjectDetailClient({
+  projectId,
+}: {
+  projectId: number;
+}) {
   const router = useRouter();
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [balance, setBalance] = useState<ProjectBalance | null>(null);
   const [contributors, setContributors] = useState<ProjectContributor[]>([]);
-  const [myContributions, setMyContributions] = useState<ContributionRecord[]>([]);
+  const [myContributions, setMyContributions] = useState<ContributionRecord[]>(
+    [],
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -735,7 +807,7 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
       if (publicKey) {
         try {
           const myContribRes = await fetch(
-            `${API_BASE}/crowdfund/projects/${projectId}/contributions/${publicKey}`
+            `${API_BASE}/crowdfund/projects/${projectId}/contributions/${publicKey}`,
           );
           if (myContribRes.ok) {
             const myData = await myContribRes.json();
@@ -784,14 +856,20 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
       <div className="min-h-screen bg-background text-foreground">
         <section className="relative pt-24 pb-8 px-4">
           <div className="container mx-auto max-w-4xl">
-            <ErrorState message={error || "Project not found"} onRetry={fetchProjectData} />
+            <ErrorState
+              message={error || "Project not found"}
+              onRetry={fetchProjectData}
+            />
           </div>
         </section>
       </div>
     );
   }
 
-  const progressPercentage = getProgressPercentage(project.totalDeposited, project.targetAmount);
+  const progressPercentage = getProgressPercentage(
+    project.totalDeposited,
+    project.targetAmount,
+  );
   const isCompleted = project.onChainStatus === "COMPLETED";
   const isActive = project.isActive && project.onChainStatus === "ACTIVE";
   const canContribute = isActive && !isCompleted;
@@ -819,9 +897,14 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
                     ? "bg-primary/20 text-primary"
                     : "bg-white/5 text-foreground/40 hover:bg-white/10 hover:text-white"
                 }`}
-                aria-label={isSaved ? "Remove from watchlist" : "Add to watchlist"}
+                aria-label={
+                  isSaved ? "Remove from watchlist" : "Add to watchlist"
+                }
               >
-                <Bookmark className="w-4 h-4" fill={isSaved ? "currentColor" : "none"} />
+                <Bookmark
+                  className="w-4 h-4"
+                  fill={isSaved ? "currentColor" : "none"}
+                />
               </button>
               <ReportButton
                 targetType="project"
@@ -861,7 +944,10 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
                     <span className="font-mono text-xs">
                       {project.contractAddress.slice(0, 8)}...
                     </span>
-                    <CopyButton text={project.contractAddress} label="contract address" />
+                    <CopyButton
+                      text={project.contractAddress}
+                      label="contract address"
+                    />
                   </span>
                 )}
               </div>
@@ -886,7 +972,8 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
                     Funding Progress
                   </span>
                   <span className="text-sm font-bold">
-                    {formatXLM(project.totalDeposited)} / {formatXLM(project.targetAmount)} XLM
+                    {formatXLM(project.totalDeposited)} /{" "}
+                    {formatXLM(project.targetAmount)} XLM
                   </span>
                 </div>
                 <ProgressBar percentage={progressPercentage} />
@@ -898,12 +985,16 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
               <div className="flex items-center gap-4 text-sm">
                 <div className="text-center">
                   <p className="text-foreground/40 text-xs">Raised</p>
-                  <p className="font-bold text-primary">{formatXLM(project.totalDeposited)} XLM</p>
+                  <p className="font-bold text-primary">
+                    {formatXLM(project.totalDeposited)} XLM
+                  </p>
                 </div>
                 <div className="w-px h-10 bg-white/10" />
                 <div className="text-center">
                   <p className="text-foreground/40 text-xs">Withdrawn</p>
-                  <p className="font-bold text-foreground/60">{formatXLM(project.totalWithdrawn)} XLM</p>
+                  <p className="font-bold text-foreground/60">
+                    {formatXLM(project.totalWithdrawn)} XLM
+                  </p>
                 </div>
               </div>
             </div>
@@ -911,7 +1002,9 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
             {/* Contribution Form */}
             {canContribute && (
               <div className="mt-6 pt-6 border-t border-white/5">
-                <h3 className="text-sm font-semibold mb-4">Contribute to this project</h3>
+                <h3 className="text-sm font-semibold mb-4">
+                  Contribute to this project
+                </h3>
                 <ContributionForm
                   projectId={project.id}
                   projectName={project.name}
@@ -926,9 +1019,12 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
                 <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                   <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-emerald-400">Funding Complete!</p>
+                    <p className="text-sm font-medium text-emerald-400">
+                      Funding Complete!
+                    </p>
                     <p className="text-xs text-emerald-400/60">
-                      This project has reached its funding target. Thank you to all contributors!
+                      This project has reached its funding target. Thank you to
+                      all contributors!
                     </p>
                   </div>
                 </div>
@@ -940,7 +1036,9 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
             <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02] text-center">
               <p className="text-foreground/40 text-xs mb-1">Total Raised</p>
-              <p className="text-xl font-bold">{formatXLM(project.totalDeposited)} XLM</p>
+              <p className="text-xl font-bold">
+                {formatXLM(project.totalDeposited)} XLM
+              </p>
             </div>
             <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02] text-center">
               <p className="text-foreground/40 text-xs mb-1">Contributors</p>
@@ -949,7 +1047,8 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
             <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02] text-center">
               <p className="text-foreground/40 text-xs mb-1">Milestones</p>
               <p className="text-xl font-bold">
-                {project.roadmap.filter((m) => m.isCompleted).length} / {project.roadmap.length}
+                {project.roadmap.filter((m) => m.isCompleted).length} /{" "}
+                {project.roadmap.length}
               </p>
             </div>
           </div>
@@ -979,7 +1078,9 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
                       className="flex items-center justify-between p-3 rounded-lg border border-white/5 bg-white/[0.02]"
                     >
                       <div>
-                        <p className="text-sm font-medium">{formatXLM(contrib.amount)} XLM</p>
+                        <p className="text-sm font-medium">
+                          {formatXLM(contrib.amount)} XLM
+                        </p>
                         <p className="text-xs text-foreground/40">
                           {formatDateWithTime(contrib.timestamp)}
                         </p>
@@ -1008,7 +1109,8 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
                 <h3 className="text-lg font-semibold">Milestone Timeline</h3>
               </div>
               <span className="text-xs text-foreground/40">
-                {project.roadmap.filter((m) => m.isCompleted).length} of {project.roadmap.length} completed
+                {project.roadmap.filter((m) => m.isCompleted).length} of{" "}
+                {project.roadmap.length} completed
               </span>
             </div>
             <MilestoneTimeline milestones={project.roadmap} />
@@ -1044,7 +1146,9 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
           <div className="mt-6 flex items-center justify-between text-xs text-foreground/30 border-t border-white/5 pt-6">
             <div className="flex items-center gap-1">
               <Info className="w-3 h-3" />
-              <span>Last synced: {formatDateWithTime(project.lastSyncedAt)}</span>
+              <span>
+                Last synced: {formatDateWithTime(project.lastSyncedAt)}
+              </span>
             </div>
             <div className="flex items-center gap-4">
               <span>Project ID: #{project.id}</span>

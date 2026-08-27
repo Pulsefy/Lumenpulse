@@ -199,10 +199,21 @@ def _ingestion_quality_checks_job() -> None:
     try:
         run_ingestion_quality_checks(argv=None)
     except SystemExit:
-        # CLI may call sys.exit; ignore to keep scheduler alive.
         pass
-    except Exception as e:
-        logger.error(f"Ingestion quality checks failed: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error(f"Scheduled ingestion quality checks raised an exception: {exc}", exc_info=True)
+
+
+def _prediction_logs_cleanup_job() -> None:
+    """Clean up old prediction logs to enforce retention policy."""
+    logger.info("Scheduled prediction logs cleanup job triggered")
+    try:
+        retention_days = int(os.getenv("PREDICTION_LOG_RETENTION_DAYS", "30"))
+        db = PostgresService()
+        deleted = db.cleanup_prediction_logs(retention_days=retention_days)
+        logger.info(f"Cleaned up {deleted} old prediction logs.")
+    except Exception as exc:
+        logger.error(f"Scheduled prediction logs cleanup raised an exception: {exc}", exc_info=True)
 
 
 def _ingestion_alerting_job() -> None:
@@ -531,6 +542,16 @@ class AnalyticsScheduler:
                 trigger=IntervalTrigger(minutes=contract_lag_interval),
                 id="contract_ingestion_lag_metrics",
                 name="Per-Contract Ingestion Lag Metrics",
+                replace_existing=True,
+            )
+
+
+            # ── Prediction Logs Cleanup: daily at 02:00 UTC ──────
+            self.scheduler.add_job(
+                func=_prediction_logs_cleanup_job,
+                trigger=CronTrigger(hour=2, minute=0, timezone="UTC"),
+                id="prediction_logs_cleanup",
+                name="Prediction Logs Cleanup Scheduler",
                 replace_existing=True,
             )
 

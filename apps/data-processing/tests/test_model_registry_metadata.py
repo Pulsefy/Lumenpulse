@@ -2,6 +2,7 @@
 """Tests for the model-registry metadata sidecar (#1239)."""
 
 import importlib
+import json
 
 import pytest
 
@@ -53,8 +54,38 @@ def test_load_metadata_current_follows_promotion(registry):
 
 def test_load_metadata_current_none_when_nothing_promoted(registry):
     registry.save_model("price_predictor", {"m": 1}, metadata={"schema_version": "1.0"})
-    # no promote_model call -> no "current" symlink
+    # no promote_model call -> no current pointer
     assert registry.load_metadata("price_predictor", "current") is None
+
+
+def test_promotion_uses_pointer_without_symlink_support(registry, monkeypatch):
+    version = registry.save_model("price_predictor", {"m": 1})
+    monkeypatch.setattr(
+        registry.Path,
+        "symlink_to",
+        lambda *args: pytest.fail("symlink not supported"),
+    )
+
+    assert registry.promote_model("price_predictor", version)
+    pointer = registry._MODELS_ROOT / "price_predictor" / "current.json"
+    assert json.loads(pointer.read_text(encoding="utf-8"))["version"] == version
+    assert registry.get_current_version("price_predictor") == version
+    assert registry.get_live_model("price_predictor") == {"m": 1}
+
+
+def test_legacy_symlink_is_migrated_to_pointer(registry):
+    version = registry.save_model("price_predictor", {"m": 1})
+    model_dir = registry._MODELS_ROOT / "price_predictor"
+    legacy = model_dir / "current"
+    try:
+        legacy.symlink_to(f"{version}.pkl")
+    except OSError as exc:
+        pytest.skip(f"legacy symlink fixture unsupported: {exc}")
+
+    assert registry.get_current_version("price_predictor") == version
+    assert not legacy.exists()
+    pointer = model_dir / "current.json"
+    assert json.loads(pointer.read_text(encoding="utf-8"))["version"] == version
 
 
 def test_registry_status_includes_current_metadata(registry):

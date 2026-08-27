@@ -22,6 +22,7 @@ const MANAGED_KEYS = [
   'ENVIRONMENT',
   'CACHE_TTL_MS',
   'CORS_ORIGIN',
+  'PYTHON_API_URL',
 ] as const;
 
 const resetManagedEnv = (values: Record<string, string | undefined>) => {
@@ -233,6 +234,7 @@ describe('environment-specific loading', () => {
       NODE_ENV: 'production',
       ENVIRONMENT: 'production',
       CORS_ORIGIN: 'https://app.lumenpulse.io',
+      PYTHON_API_URL: 'https://data-processing.lumenpulse.io',
     });
 
     process.chdir(tempDir);
@@ -258,5 +260,87 @@ describe('environment-specific loading', () => {
     expect(warnSpy).toHaveBeenCalledWith(
       'WARNING: NODE_ENV/ENVIRONMENT not set. Defaulting to development.',
     );
+  });
+});
+
+describe('PYTHON_API_URL environment validation', () => {
+  const originalCwd = process.cwd();
+  let infoSpy: jest.SpyInstance;
+  let warnSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    infoSpy = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    process.chdir(originalCwd);
+  });
+
+  afterEach(() => {
+    infoSpy.mockRestore();
+    warnSpy.mockRestore();
+    process.chdir(originalCwd);
+  });
+
+  it('defaults to http://localhost:8000 in development when omitted', async () => {
+    resetManagedEnv({
+      ...REQUIRED_ENV,
+      NODE_ENV: 'development',
+      ENVIRONMENT: 'development',
+      PYTHON_API_URL: undefined,
+    });
+
+    const { config } = await importFreshConfigModule();
+    expect(config.python.apiUrl).toBe('http://localhost:8000');
+  });
+
+  it('defaults to http://localhost:8000 in test environment when omitted', async () => {
+    resetManagedEnv({
+      ...REQUIRED_ENV,
+      NODE_ENV: 'test',
+      ENVIRONMENT: 'test',
+      PYTHON_API_URL: undefined,
+    });
+
+    const { config } = await importFreshConfigModule();
+    expect(config.python.apiUrl).toBe('http://localhost:8000');
+  });
+
+  it('throws in production when PYTHON_API_URL is missing', async () => {
+    resetManagedEnv({
+      ...REQUIRED_ENV,
+      NODE_ENV: 'production',
+      ENVIRONMENT: 'production',
+      CORS_ORIGIN: 'https://app.lumenpulse.io',
+      PYTHON_API_URL: undefined,
+    });
+
+    await expect(importFreshConfigModule()).rejects.toThrow(
+      /PYTHON_API_URL must be set in non-development environments/i,
+    );
+  });
+
+  it('throws in staging when PYTHON_API_URL is missing', async () => {
+    resetManagedEnv({
+      ...REQUIRED_ENV,
+      NODE_ENV: 'staging',
+      ENVIRONMENT: 'staging',
+      PYTHON_API_URL: undefined,
+    });
+
+    await expect(importFreshConfigModule()).rejects.toThrow(
+      /PYTHON_API_URL must be set in non-development environments/i,
+    );
+  });
+
+  it('accepts custom PYTHON_API_URL in production when provided', async () => {
+    resetManagedEnv({
+      ...REQUIRED_ENV,
+      NODE_ENV: 'production',
+      ENVIRONMENT: 'production',
+      CORS_ORIGIN: 'https://app.lumenpulse.io',
+      PYTHON_API_URL: 'https://data-processing.lumenpulse.io',
+    });
+
+    const { config } = await importFreshConfigModule();
+    expect(config.python.apiUrl).toBe('https://data-processing.lumenpulse.io');
   });
 });

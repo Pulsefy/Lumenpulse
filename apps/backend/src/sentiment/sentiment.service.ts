@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import { AxiosError } from 'axios';
+import { config } from '../lib/config';
 
 export interface SentimentRequest {
   text: string;
@@ -70,11 +71,9 @@ export class SentimentService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    // Get Python API URL from environment or use default
-    this.pythonApiUrl = this.configService.get<string>(
-      'PYTHON_API_URL',
-      'http://localhost:8000',
-    );
+    // Get Python API URL from environment or configuration
+    this.pythonApiUrl =
+      this.configService.get<string>('PYTHON_API_URL') || config.python.apiUrl;
     this.logger.log(`Python API URL: ${this.pythonApiUrl}`);
   }
 

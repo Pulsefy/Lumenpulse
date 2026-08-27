@@ -1537,7 +1537,7 @@
     "/analyze": {
       "post": {
         "summary": "Analyze Text",
-        "description": "Analyze the sentiment of provided text.\n\nThis endpoint connects to your existing SentimentAnalyzer class\nand returns the compound_score as the sentiment value.\n\nArgs:\n    request: Contains the text to analyze and optional asset filter\n\nReturns:\n    sentiment: float between -1 and 1\n    asset_codes: List of asset codes found in text\n    sentiment_label: positive/negative/neutral",
+        "description": "Analyze the sentiment of provided text.",
         "operationId": "analyze_text_analyze_post",
         "requestBody": {
           "required": true,
@@ -1616,7 +1616,7 @@
     "/analyze-batch": {
       "post": {
         "summary": "Analyze Batch",
-        "description": "Batch analyze multiple texts with optional asset filter",
+        "description": "Batch analyze multiple texts with optional asset filter.\n\nBackpressure controls:\n- ``MAX_BATCH_SIZE`` (env ``BATCH_MAX_SIZE``, default 200): oversized\n  requests are rejected with 413.\n- ``MAX_CONCURRENT_BATCHES`` (env ``BATCH_MAX_CONCURRENT``, default 4):\n  concurrent batch work is bounded by an ``asyncio.Semaphore``.\n  Requests beyond the bound receive 429 with ``Retry-After``.\n- Per-item error isolation: individual item failures are returned as\n  error entries instead of failing the whole batch.\n- Synchronous sentiment analysis is offloaded to a\n  ``ThreadPoolExecutor`` so the event loop stays responsive for\n  ``/health`` and ``/metrics``.",
         "operationId": "analyze_batch_analyze_batch_post",
         "parameters": [
           {
@@ -2081,6 +2081,91 @@
                     "type": "string"
                   },
                   "title": "Response Shadow Clear Comparison Log Model Shadow Comparison Log Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/prediction-logs": {
+      "get": {
+        "summary": "Get Prediction Logs",
+        "description": "Query prediction logs by model version to isolate suspect outputs.\nRequires X-API-Key header.",
+        "operationId": "get_prediction_logs_model_prediction_logs_get",
+        "parameters": [
+          {
+            "name": "model_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Model version to filter by",
+              "title": "Model Version"
+            },
+            "description": "Model version to filter by"
+          },
+          {
+            "name": "model_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional model type",
+              "title": "Model Type"
+            },
+            "description": "Optional model type"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Prediction Logs Model Prediction Logs Get"
                 }
               }
             }

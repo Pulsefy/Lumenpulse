@@ -13,4 +13,5 @@ pub enum YieldVaultError {
     AlreadyExecuted = 7,
     Unauthorized = 8,
     VaultPaused = 9,
+    Reentrancy = 10,
 }

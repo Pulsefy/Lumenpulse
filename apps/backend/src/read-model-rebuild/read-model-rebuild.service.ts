@@ -23,6 +23,8 @@ import {
 import { JobLockService } from '../scheduler/job-lock.service';
 import { JobHistoryService } from '../scheduler/job-history.service';
 import { AdminAuditService } from '../admin-audit/admin-audit.service';
+import { ConfigService } from '@nestjs/config';
+import { config } from '../lib/config';
 
 interface RebuildResultResponse {
   totalItems?: number;
@@ -57,6 +59,8 @@ function getErrorDetails(error: unknown): ErrorDetails {
 export class ReadModelRebuildService {
   private readonly logger = new Logger(ReadModelRebuildService.name);
   private readonly REBUILD_VERSION = '1.0.0';
+  private readonly pythonApiUrl: string;
+  private readonly pythonApiKey: string;
 
   // Mapping of datasets to their data-processing endpoints
   private readonly datasetEndpoints: Record<RebuildDataset, string> = {
@@ -74,7 +78,15 @@ export class ReadModelRebuildService {
     private readonly jobLockService: JobLockService,
     private readonly jobHistoryService: JobHistoryService,
     private readonly adminAuditService: AdminAuditService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.pythonApiUrl =
+      this.configService.get<string>('PYTHON_API_URL') || config.python.apiUrl;
+    this.pythonApiKey =
+      this.configService.get<string>('PYTHON_API_KEY') ||
+      config.python.apiKey ||
+      '';
+  }
 
   /**
    * Trigger a rebuild for a specific dataset or contract domain
@@ -233,9 +245,7 @@ export class ReadModelRebuildService {
       }
 
       // Call data-processing service
-      const dataProcessingUrl =
-        process.env.DATA_PROCESSING_URL || 'http://localhost:8001';
-      const url = `${dataProcessingUrl}${endpoint}`;
+      const url = `${this.pythonApiUrl}${endpoint}`;
 
       // Update progress
       job.progressDetails = {
@@ -250,7 +260,7 @@ export class ReadModelRebuildService {
       const response = await firstValueFrom(
         this.httpService.post<RebuildResultResponse>(url, payload, {
           headers: {
-            'X-API-Key': process.env.DATA_PROCESSING_API_KEY || '',
+            ...(this.pythonApiKey ? { 'X-API-Key': this.pythonApiKey } : {}),
             'X-Correlation-ID': `rebuild-${job.id}`,
           },
           timeout: 300000, // 5 minutes
