@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { EntityAliasService } from '../entity-alias/entity-alias.service';
 import {
   ChartDataPointDto,
   ChartDataQueryDto,
@@ -23,29 +24,41 @@ interface DailyRow {
 export class AnalyticsService {
   private readonly logger = new Logger(AnalyticsService.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly aliasService: EntityAliasService,
+  ) {}
 
   async getChartData(query: ChartDataQueryDto): Promise<ChartDataPointDto[]> {
     const { interval, range, asset } = query;
     const since = this.getStartDate(range);
+
+    let resolvedAssets: string[] | null = null;
+    if (asset) {
+      const norm = this.aliasService.normalize(asset, 'asset');
+      const variants = this.aliasService.expand(norm.canonical, 'asset');
+      resolvedAssets = [...new Set(variants.map((v) => v.toLowerCase()))];
+      this.logger.log(
+        `Analytics asset "${asset}" normalized to "${norm.canonical}" (${resolvedAssets.length} variants)`,
+      );
+    }
 
     this.logger.log(
       `Fetching chart data: interval=${interval}, range=${range}, asset=${asset || 'global'}`,
     );
 
     if (interval === ChartInterval.ONE_HOUR) {
-      return this.getHourlyChartData(since, asset);
+      return this.getHourlyChartData(since, resolvedAssets);
     } else {
-      return this.getDailyChartData(since, asset);
+      return this.getDailyChartData(since, resolvedAssets);
     }
   }
 
   private async getHourlyChartData(
     since: Date,
-    asset?: string,
+    assets?: string[] | null,
   ): Promise<ChartDataPointDto[]> {
-    // news_insights table has analyzed_at and sentiment_score
-    // Group by hour using date_trunc
+    const useAssetFilter = assets && assets.length > 0;
     const sql = `
       SELECT 
         date_trunc('hour', analyzed_at) AS bucket,
@@ -53,14 +66,17 @@ export class AnalyticsService {
         COUNT(*)::int AS count
       FROM news_insights
       WHERE analyzed_at >= $1
-        AND ($2::text IS NULL OR primary_asset = $2)
+        AND (
+          ($2::text[] IS NULL OR array_length($2::text[], 1) IS NULL)
+          OR LOWER(primary_asset) = ANY($2::text[])
+        )
       GROUP BY bucket
       ORDER BY bucket ASC
     `;
 
     const results: HourlyRow[] = await this.dataSource.query(sql, [
       since,
-      asset || null,
+      useAssetFilter ? assets : null,
     ]);
 
     return results.map((row: HourlyRow) => ({
@@ -72,10 +88,9 @@ export class AnalyticsService {
 
   private async getDailyChartData(
     since: Date,
-    asset?: string,
+    assets?: string[] | null,
   ): Promise<ChartDataPointDto[]> {
-    // daily_snapshots table has snapshot_date, avg_sentiment, signal_count
-    // It already has a global row (asset_symbol IS NULL) for each day
+    const useAssetFilter = assets && assets.length > 0;
     const sql = `
       SELECT 
         snapshot_date AS bucket,
@@ -84,15 +99,19 @@ export class AnalyticsService {
       FROM daily_snapshots
       WHERE snapshot_date >= $1
         AND (
-          ($2::text IS NULL AND asset_symbol IS NULL) OR 
-          (asset_symbol = $2)
+          ($2::text[] IS NULL OR array_length($2::text[], 1) IS NULL)
+            AND asset_symbol IS NULL
+        )
+        OR (
+          ($2::text[] IS NOT NULL AND array_length($2::text[], 1) IS NOT NULL)
+            AND LOWER(asset_symbol) = ANY($2::text[])
         )
       ORDER BY bucket ASC
     `;
 
     const results: DailyRow[] = await this.dataSource.query(sql, [
       since,
-      asset || null,
+      useAssetFilter ? assets : null,
     ]);
 
     return results.map((row: DailyRow) => ({

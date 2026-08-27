@@ -77,6 +77,7 @@ import { SnapshotsModule } from './snapshot/snapshot.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { PriceAlertModule } from './price-alert/price-alert.module';
+import { EntityAliasModule } from './entity-alias/entity-alias.module';
 
 @Module({
   imports: [
@@ -206,6 +207,9 @@ import { PriceAlertModule } from './price-alert/price-alert.module';
 
     // Price alerts
     PriceAlertModule,
+
+    // Entity alias registry
+    EntityAliasModule,
 
     // Idempotency for write endpoints
     IdempotencyModule,

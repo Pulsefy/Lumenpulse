@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { News } from '../news/news.entity';
@@ -6,6 +6,7 @@ import { StellarService } from '../stellar/stellar.service';
 import { AssetDto } from '../stellar/dto/asset-discovery.dto';
 import { VerificationService } from '../verification/verification.service';
 import { ProjectVerificationDto } from '../verification/dto/verification.dto';
+import { EntityAliasService } from '../entity-alias/entity-alias.service';
 import { AssetSearchQueryDto } from './dto/asset-search.dto';
 import {
   ProjectSearchItemDto,
@@ -27,9 +28,12 @@ type CategoryRow = { value: string; count: number };
 
 @Injectable()
 export class SearchService {
+  private readonly logger = new Logger(SearchService.name);
+
   constructor(
     private readonly verificationService: VerificationService,
     private readonly stellarService: StellarService,
+    private readonly aliasService: EntityAliasService,
     @InjectRepository(News)
     private readonly newsRepository: Repository<News>,
   ) {}
@@ -43,6 +47,13 @@ export class SearchService {
       ? Number(normalizedQuery)
       : null;
 
+    const projectNameVariants = normalizedQuery
+      ? this.aliasService.expand(normalizedQuery, 'project')
+      : [];
+    const projectNameVariantsLower = projectNameVariants.map((v) =>
+      v.toLowerCase(),
+    );
+
     const projects = this.verificationService.listProjects(query.status);
 
     const filtered = projects
@@ -55,9 +66,14 @@ export class SearchService {
 
         if (queryId !== null && p.projectId === queryId) return true;
 
-        return p.name.toLowerCase().includes(normalizedQueryLower);
+        const nameLower = p.name.toLowerCase();
+        if (nameLower.includes(normalizedQueryLower)) return true;
+
+        return projectNameVariantsLower.some((variant) =>
+          nameLower.includes(variant),
+        );
       })
-      .map((p) => this.projectToScoredItem(p, normalizedQueryLower, queryId));
+      .map((p) => this.projectToScoredItem(p, normalizedQueryLower, queryId, projectNameVariantsLower));
 
     filtered.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
@@ -111,6 +127,13 @@ export class SearchService {
     const normalizedQueryLower = (query.q ?? query.assetCode ?? '')
       .trim()
       .toLowerCase();
+
+    const assetVariantsLower = normalizedQueryLower
+      ? this.aliasService
+          .expand(normalizedQueryLower, 'asset')
+          .map((v) => v.toLowerCase())
+      : [];
+
     const sort = query.sort ?? 'relevance';
 
     filtered = [...filtered].sort((a, b) => {
@@ -118,9 +141,17 @@ export class SearchService {
         const diff = (b.numAccounts ?? 0) - (a.numAccounts ?? 0);
         if (diff !== 0) return diff;
       } else if (normalizedQueryLower) {
-        const diff =
-          this.assetScore(b, normalizedQueryLower) -
-          this.assetScore(a, normalizedQueryLower);
+        const scoreA = this.assetScoreWithAliases(
+          a,
+          normalizedQueryLower,
+          assetVariantsLower,
+        );
+        const scoreB = this.assetScoreWithAliases(
+          b,
+          normalizedQueryLower,
+          assetVariantsLower,
+        );
+        const diff = scoreB - scoreA;
         if (diff !== 0) return diff;
       }
 
@@ -138,11 +169,34 @@ export class SearchService {
     const normalizedQuery = (query.q ?? '').trim().toLowerCase();
 
     const kind = query.kind ?? 'tag';
+    const canonicalLookup = new Map<string, { kind: 'tag' | 'category'; value: string; count: number }>();
+
+    const mergeOrAdd = (
+      row: { value: string; count: number },
+      rowKind: 'tag' | 'category',
+    ) => {
+      const result = this.aliasService.normalize(row.value, rowKind);
+      const key = `${rowKind}:${result.canonical.toLowerCase()}`;
+      const existing = canonicalLookup.get(key);
+      if (existing) {
+        existing.count += row.count;
+      } else {
+        canonicalLookup.set(key, {
+          kind: rowKind,
+          value: result.canonical,
+          count: row.count,
+        });
+      }
+    };
 
     if (kind === 'category') {
       const rows = await this.fetchCategories({ q: normalizedQuery, limit });
+      rows.forEach((r) => mergeOrAdd(r, 'category'));
+      const merged = [...canonicalLookup.values()].sort(
+        (a, b) => b.count - a.count || a.value.localeCompare(b.value),
+      );
       return {
-        items: rows.map((r) =>
+        items: merged.map((r) =>
           includeCounts
             ? { kind: 'category', value: r.value, count: r.count }
             : { kind: 'category', value: r.value },
@@ -151,8 +205,12 @@ export class SearchService {
     }
 
     const rows = await this.fetchTags({ q: normalizedQuery, limit });
+    rows.forEach((r) => mergeOrAdd(r, 'tag'));
+    const merged = [...canonicalLookup.values()].sort(
+      (a, b) => b.count - a.count || a.value.localeCompare(b.value),
+    );
     return {
-      items: rows.map((r) =>
+      items: merged.map((r) =>
         includeCounts
           ? ({
               kind: 'tag',
@@ -169,7 +227,21 @@ export class SearchService {
   ): Promise<EntityLinkingResponseDto> {
     const limitPerType = Math.min(query.limitPerType ?? 5, 20);
     const normalizedText = query.text.trim().toLowerCase();
-    const mentions = this.extractMentions(normalizedText);
+    const rawMentions = this.extractMentions(normalizedText);
+
+    const normalizedMentions = new Set<string>();
+    for (const m of rawMentions) {
+      const norm = this.aliasService.normalize(m);
+      normalizedMentions.add(norm.canonical.toLowerCase());
+      if (norm.matched) {
+        for (const variant of this.aliasService.expand(norm.canonical, norm.entityKind)) {
+          normalizedMentions.add(variant.toLowerCase());
+        }
+      } else {
+        normalizedMentions.add(m);
+      }
+    }
+    const mentions = [...normalizedMentions];
 
     const projectMatches = this.verificationService
       .listProjects()
@@ -234,8 +306,9 @@ export class SearchService {
     p: ProjectVerificationDto,
     qLower: string,
     queryId: number | null,
+    aliasVariantsLower: string[] = [],
   ): ProjectSearchItemDto {
-    const score = this.projectScore(p, qLower, queryId);
+    const score = this.projectScore(p, qLower, queryId, aliasVariantsLower);
     return { ...p, score };
   }
 
@@ -243,14 +316,26 @@ export class SearchService {
     p: ProjectVerificationDto,
     qLower: string,
     queryId: number | null,
+    aliasVariantsLower: string[] = [],
   ): number {
     if (!qLower) return 0;
     if (queryId !== null && p.projectId === queryId) return 100;
 
     const nameLower = p.name.toLowerCase();
     if (nameLower === qLower) return 95;
+
+    for (const variant of aliasVariantsLower) {
+      if (variant === qLower && nameLower.includes(variant)) return 92;
+      if (nameLower === variant) return 90;
+      if (nameLower.startsWith(variant)) return 82;
+    }
+
     if (nameLower.startsWith(qLower)) return 85;
     if (nameLower.includes(qLower)) return 70;
+
+    for (const variant of aliasVariantsLower) {
+      if (nameLower.includes(variant)) return 65;
+    }
     return 0;
   }
 
@@ -260,6 +345,23 @@ export class SearchService {
     if (code === qLower) return 100;
     if (code.startsWith(qLower)) return 80;
     if (code.includes(qLower)) return 60;
+    return 0;
+  }
+
+  private assetScoreWithAliases(
+    asset: AssetDto,
+    qLower: string,
+    variantsLower: string[],
+  ): number {
+    const base = this.assetScore(asset, qLower);
+    if (base > 0) return base;
+
+    const code = asset.assetCode?.toLowerCase?.() ?? '';
+    for (const variant of variantsLower) {
+      if (code === variant) return 95;
+      if (code.startsWith(variant)) return 75;
+      if (code.includes(variant)) return 55;
+    }
     return 0;
   }
 
