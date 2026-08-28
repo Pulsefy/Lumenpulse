@@ -51,7 +51,7 @@ export class SavedSearchesController {
     @Req() req: AuthenticatedRequest,
     @Body() dto: CreateSavedSearchDto,
   ): Promise<SavedSearch> {
-    const userId = req.user.id || req.user.sub;
+    const userId = (req.user.id || req.user.sub) as string;
     return this.savedSearchesService.create(userId, dto);
   }
 
@@ -65,7 +65,7 @@ export class SavedSearchesController {
     description: 'User saved searches',
   })
   async findAll(@Req() req: AuthenticatedRequest): Promise<SavedSearch[]> {
-    const userId = req.user.id || req.user.sub;
+    const userId = (req.user.id || req.user.sub) as string;
     return this.savedSearchesService.findAllForUser(userId);
   }
 
@@ -79,7 +79,7 @@ export class SavedSearchesController {
   @ApiResponse({ status: 204, description: 'Saved search deleted' })
   @ApiResponse({ status: 404, description: 'Saved search not found' })
   async remove(@Req() req: AuthenticatedRequest, @Param('id') id: string): Promise<void> {
-    const userId = req.user.id || req.user.sub;
+    const userId = (req.user.id || req.user.sub) as string;
     return this.savedSearchesService.remove(id, userId);
   }
 }
