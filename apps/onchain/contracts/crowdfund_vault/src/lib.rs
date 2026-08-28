@@ -15,12 +15,13 @@ use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentra
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env, IntoVal, Symbol,
+    contract, contractimpl, contracttype, Address, Env, IntoVal, Symbol, Vec, vec, BytesN, Val
 };
 use storage::{
     DataKey, EmergencyMigrationPlan, MigrationPlanStatus, MilestoneDispute, ProjectData,
     ProjectStorageSummary, ProtocolStats, RefundReceipt, LEDGER_BUMP, LEDGER_THRESHOLD,
 };
+use idempotency_guard::claim_request as idempotency_claim;
 
 const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
@@ -733,10 +734,11 @@ impl CrowdfundVaultContract {
                 nonce,
             };
             user.require_auth_for_args(
-                (
-                    soroban_sdk::Symbol::new(&env, "deposit_with_sig"),
-                    intent,
-                )
+                soroban_sdk::vec![
+                    &env,
+                    soroban_sdk::Symbol::new(&env, "deposit_with_sig").into_val(&env),
+                    intent.into_val(&env),
+                ]
             );
 
             let new_nonce = nonce + 1;
@@ -759,11 +761,13 @@ impl CrowdfundVaultContract {
         user: Address,
         project_id: u64,
         amount: i128,
+        request_id: soroban_sdk::BytesN<32>,
     ) -> Result<(), CrowdfundError> {
         Self::with_reentrancy_guard(&env, || {
             Self::require_current_storage_version(&env)?;
 
             user.require_auth();
+            idempotency_claim(&env, &request_id).map_err(|_| CrowdfundError::AlreadyExecuted)?;
             Self::deposit_internal(&env, &user, project_id, amount)
         })
     }
@@ -1554,10 +1558,11 @@ impl CrowdfundVaultContract {
             nonce,
         };
         contributor.require_auth_for_args(
-            (
-                soroban_sdk::Symbol::new(&env, "register_contributor_with_sig"),
-                intent,
-            )
+            soroban_sdk::vec![
+                &env,
+                soroban_sdk::Symbol::new(&env, "register_contributor_with_sig").into_val(&env),
+                intent.into_val(&env),
+            ]
         );
 
         let new_nonce = nonce + 1;

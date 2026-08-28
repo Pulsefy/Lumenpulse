@@ -43,6 +43,7 @@ pub enum DataKey {
     RefundClaimed(u64, Address), // (project_id, contributor) -> bool
     RegistrationNonce(Address),  // Address -> u64
     DepositNonce(Address),       // Address -> u64
+    DepositIdempotencyKey(u64, Address),
     // ── Emergency migration (issue #1047) ─────────────────────────────────────
     EmergencyMigrationPlan(u64), // project_id -> EmergencyMigrationPlan
 }

@@ -51,6 +51,7 @@ pub enum CrowdfundError {
     MigrationAmountExceedsBalance = 38,
     /// The migration plan was vetoed by a second admin; it cannot proceed.
     MigrationPlanVetoed = 39,
+    InvalidBatch = 40,
     /// The provided signature for a gasless meta-transaction is empty or invalid.
-    InvalidSignature = 40,
+    InvalidSignature = 41,
 }
