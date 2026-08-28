@@ -11,6 +11,7 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { FeatureFlag } from '../feature-flags/feature-flag.decorator';
 import { FeatureFlagGuard } from '../feature-flags/feature-flag.guard';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 @ApiTags('test')
 @Controller('test')
@@ -37,6 +38,7 @@ export class TestController {
     summary: 'Submit diagnostic data',
     description: 'Echos submitted payload back with a timestamp for testing.',
   })
+  @ApiIdempotencyHeader()
   @ApiResponse({
     status: 200,
     description: 'Data submitted successfully',
@@ -111,6 +113,7 @@ export class TestController {
     description: 'Diagnostic item ID',
     example: 'diag_123',
   })
+  @ApiIdempotencyHeader()
   @ApiResponse({
     status: 200,
     description: 'Data updated successfully',
@@ -143,6 +146,7 @@ export class TestController {
     description: 'Diagnostic item ID to delete',
     example: 'diag_123',
   })
+  @ApiIdempotencyHeader()
   @ApiResponse({
     status: 200,
     description: 'Data deleted successfully',

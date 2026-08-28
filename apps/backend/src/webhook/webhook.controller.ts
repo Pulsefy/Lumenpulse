@@ -16,6 +16,7 @@ import {
   WebhookVerificationGuard,
   WebhookProvider,
 } from './webhook-verification.guard';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 interface RawRequest {
   rawBody?: Buffer;
@@ -30,6 +31,7 @@ export class WebhookController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(WebhookVerificationGuard)
   @WebhookProvider('data-processing')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Receive data-processing intelligence events',
     description:

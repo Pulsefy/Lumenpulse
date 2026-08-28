@@ -25,6 +25,11 @@ export class AnalyticsController {
     type: ChartDataPointDto,
     isArray: true,
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid query parameters (interval, range, or asset)',
+  })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async getChartData(
     @Query() query: ChartDataQueryDto,
   ): Promise<ChartDataPointDto[]> {

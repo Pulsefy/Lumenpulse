@@ -19,6 +19,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { GrantsService } from './grants.service';
 import { getProjectReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 import {
   ApproveProjectDto,
   CreateRoundDto,
@@ -57,6 +58,7 @@ export class GrantsController {
     description: 'List of rounds retrieved successfully',
     type: [RoundDto],
   })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   listRounds() {
     return this.grantsService.listRounds();
   }
@@ -73,6 +75,7 @@ export class GrantsController {
     type: RoundDto,
   })
   @ApiResponse({ status: 404, description: 'Round not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   getRound(@Param('id', ParseIntPipe) id: number) {
     return this.grantsService.getRound(id);
   }
@@ -89,6 +92,7 @@ export class GrantsController {
     type: RoundSummaryDto,
   })
   @ApiResponse({ status: 404, description: 'Round not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   getRoundSummary(@Param('id', ParseIntPipe) id: number) {
     return this.grantsService.getRoundSummary(id);
   }
@@ -105,6 +109,7 @@ export class GrantsController {
     type: RoundExportDto,
   })
   @ApiResponse({ status: 404, description: 'Round not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   getRoundExport(@Param('id', ParseIntPipe) id: number) {
     return this.grantsService.getRoundExport(id);
   }
@@ -113,6 +118,7 @@ export class GrantsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN)
+  @ApiIdempotencyHeader()
   @UseInterceptors(AdminAuditInterceptor)
   @AuditBlockchainAction({ contractField: 'tokenAddress' })
   @ApiOperation({
@@ -127,6 +133,7 @@ export class GrantsController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   createRound(@Body() dto: CreateRoundDto) {
     return this.grantsService.createRound(dto);
   }
@@ -135,6 +142,7 @@ export class GrantsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN)
+  @ApiIdempotencyHeader()
   @UseInterceptors(AdminAuditInterceptor)
   @AuditBlockchainAction({ contractField: 'id' })
   @ApiOperation({
@@ -149,6 +157,7 @@ export class GrantsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   @ApiResponse({ status: 404, description: 'Round not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   finalizeRound(@Param('id', ParseIntPipe) id: number) {
     return this.grantsService.finalizeRound(id);
   }
@@ -159,6 +168,7 @@ export class GrantsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN)
+  @ApiIdempotencyHeader()
   @UseInterceptors(AdminAuditInterceptor)
   @AuditBlockchainAction({ contractField: 'funderPublicKey' })
   @ApiOperation({
@@ -173,6 +183,7 @@ export class GrantsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   @ApiResponse({ status: 404, description: 'Round not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   fundPool(@Body() dto: FundPoolDto) {
     return this.grantsService.fundPool(dto);
   }
@@ -183,6 +194,7 @@ export class GrantsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN, UserRole.REVIEWER)
+  @ApiIdempotencyHeader()
   @UseInterceptors(AdminAuditInterceptor)
   @AuditBlockchainAction({ contractField: 'roundId' })
   @ApiOperation({
@@ -197,6 +209,7 @@ export class GrantsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Round or project not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   approveProject(@Body() dto: ApproveProjectDto) {
     this.grantsService.approveProject(dto);
     return { success: true };
@@ -206,6 +219,7 @@ export class GrantsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN)
+  @ApiIdempotencyHeader()
   @UseInterceptors(AdminAuditInterceptor)
   @AuditBlockchainAction({ contractField: 'roundId' })
   @ApiOperation({
@@ -220,6 +234,7 @@ export class GrantsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   @ApiResponse({ status: 404, description: 'Round or project not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   removeProject(
     @Param('roundId', ParseIntPipe) roundId: number,
     @Param('projectId', ParseIntPipe) projectId: number,
@@ -231,6 +246,7 @@ export class GrantsController {
   // ΓöÇΓöÇ Contributions ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   @Post('contributions')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Record a contribution transaction',
     description:
@@ -241,6 +257,7 @@ export class GrantsController {
     description: 'Contribution recorded successfully',
   })
   @ApiResponse({ status: 400, description: 'Invalid round or project' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   recordContribution(@Body() dto: RecordContributionDto) {
     this.grantsService.recordContribution(dto);
     return { success: true };
@@ -252,6 +269,7 @@ export class GrantsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN)
+  @ApiIdempotencyHeader()
   @UseInterceptors(AdminAuditInterceptor)
   @AuditBlockchainAction({ contractField: 'roundId' })
   @ApiOperation({
@@ -266,6 +284,7 @@ export class GrantsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   @ApiResponse({ status: 404, description: 'Round not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   distribute(@Body() dto: DistributeDto) {
     return this.grantsService.distribute(dto);
   }

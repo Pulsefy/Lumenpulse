@@ -1,5 +1,5 @@
 import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum ChartInterval {
   ONE_HOUR = '1h',
@@ -39,7 +39,21 @@ export class ChartDataQueryDto {
 }
 
 export class ChartDataPointDto {
+  @ApiProperty({
+    description: 'Start of the bucket, in ISO-8601 format',
+    example: '2026-08-27T00:00:00.000Z',
+  })
   timestamp: string;
+
+  @ApiProperty({
+    description: 'Average sentiment score for the bucket',
+    example: 0.42,
+  })
   sentiment: number;
+
+  @ApiProperty({
+    description: 'Number of data points aggregated into the bucket',
+    example: 128,
+  })
   count: number;
 }

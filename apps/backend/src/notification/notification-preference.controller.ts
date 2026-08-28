@@ -25,9 +25,10 @@ import {
 } from './dto/notification-preference.dto';
 import { NotificationPreference } from './notification-preference.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 @ApiTags('notification-preferences')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
 @Controller('notification-preferences')
 export class NotificationPreferenceController {
@@ -37,6 +38,7 @@ export class NotificationPreferenceController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Create or update notification preferences',
     description:
@@ -47,6 +49,8 @@ export class NotificationPreferenceController {
     description: 'Preferences created/updated successfully',
     type: NotificationPreferenceResponseDto,
   })
+  @ApiResponse({ status: 400, description: 'Invalid preference payload' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async createOrUpdate(
     @Body() dto: CreateNotificationPreferenceDto,
   ): Promise<NotificationPreference> {
@@ -64,6 +68,7 @@ export class NotificationPreferenceController {
     description: 'User notification preferences',
     type: NotificationPreferenceResponseDto,
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Preferences not found' })
   async getPreferences(
     @Param('userId') userId: string,
@@ -83,6 +88,7 @@ export class NotificationPreferenceController {
     description: 'User notification preferences',
     type: NotificationPreferenceResponseDto,
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Preferences not found' })
   async getPreferencesByUserId(
     @Param('userId') userId: string,
@@ -91,6 +97,7 @@ export class NotificationPreferenceController {
   }
 
   @Put(':id')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Update notification preferences',
     description: 'Updates notification preferences by ID',
@@ -101,6 +108,8 @@ export class NotificationPreferenceController {
     description: 'Preferences updated successfully',
     type: NotificationPreferenceResponseDto,
   })
+  @ApiResponse({ status: 400, description: 'Invalid preference payload' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Preferences not found' })
   async update(
     @Param('id') id: string,
@@ -111,12 +120,14 @@ export class NotificationPreferenceController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Delete notification preferences',
     description: 'Deletes notification preferences (user will use defaults)',
   })
   @ApiParam({ name: 'id', description: 'Preference ID' })
   @ApiResponse({ status: 204, description: 'Preferences deleted' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Preferences not found' })
   async remove(@Param('id') id: string): Promise<void> {
     return this.preferenceService.remove(id);
@@ -143,6 +154,7 @@ export class NotificationPreferenceController {
       example: ['in_app', 'email'],
     },
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getEnabledChannelsForEvent(
     @Param('userId') userId: string,
     @Param('eventCategory') eventCategory: string,

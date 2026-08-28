@@ -1,6 +1,6 @@
 # Backend Contribution Guide
 
-This guide covers app-specific standards for `apps/backend`. The backend integrates with Stellar/Soroban. For migration details, see [Stellar Migration Notes](STELLAR_MIGRATION_NOTES.md).
+This guide covers app-specific standards for `apps/backend`. The backend integrates with Stellar/Soroban. For migration details, see [Stellar Migration Notes](STELLAR_MIGRATION_NOTES.md). For the committed OpenAPI spec artifact and how to regenerate it, see [OpenAPI Spec](../apps/backend/document/openapi-spec.md).
 
 ## Setup
 
@@ -23,6 +23,9 @@ npm run test:e2e
 
 # Run in watch mode
 npm run start:dev
+
+# Regenerate the committed OpenAPI spec after changing controllers/DTOs
+npm run openapi:generate
 ```
 
 ## Standards
@@ -50,3 +53,4 @@ To prevent accidental breaking changes to client-facing APIs, we use schema snap
 - **Intentional Updates**: If the API change is deliberate, update the snapshot by running `npm run test -- -u` inside `apps/backend` and commit the modified `.snap` file.
 - **Coverage**: Currently covers the `users` route group (`apps/backend/src/users/users-schema.spec.ts`).
 - **Extending Coverage**: To cover a new module, create a `<module>-schema.spec.ts` test that isolates the module's controller and snapshots its OpenAPI document, following the pattern in `users-schema.spec.ts`.
+- Controller/DTO changes include a regenerated `apps/backend/openapi/openapi.json` (`npm run openapi:generate`) — CI fails if it's stale.

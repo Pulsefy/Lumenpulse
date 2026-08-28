@@ -70,16 +70,20 @@ const DEFAULT_OPTIONS: Required<SorobanClientOptions> = {
 export class SorobanRpcClientService {
   private readonly logger = new Logger(SorobanRpcClientService.name);
   private readonly server: rpc.Server;
+  private readonly requestContextService: RequestContextService;
 
   // Prometheus metrics
   private readonly rpcLatency: Histogram;
   private readonly rpcErrors: Counter;
   private readonly rpcRequests: Counter;
+  private readonly registry?: Registry;
 
   constructor(
-    private readonly requestContextService: RequestContextService,
-    @Optional() private readonly registry?: Registry,
+    requestContextService: RequestContextService,
+    @Optional() registry?: Registry,
   ) {
+    this.requestContextService = requestContextService;
+    this.registry = registry;
     const rpcUrl =
       config.stellar.sorobanRpcUrl ??
       (config.stellar.network === 'mainnet'

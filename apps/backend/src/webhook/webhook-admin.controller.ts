@@ -22,7 +22,12 @@ import {
   UpdateWebhookProviderDto,
   WebhookProviderResponseDto,
 } from './dto/webhook-provider.dto';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
+// SECURITY NOTE: this controller has no auth guard (no JwtAuthGuard/RolesGuard)
+// despite managing webhook provider secrets/public keys. This is a pre-existing
+// gap tracked separately — documented here (and per-endpoint) as-is; adding a
+// guard is a behavior change outside the scope of this docs-only pass.
 @ApiTags('webhook-admin')
 @Controller('webhooks/admin/providers')
 export class WebhookAdminController {
@@ -95,9 +100,12 @@ export class WebhookAdminController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Register a new webhook provider',
-    description: 'Adds a new webhook provider configuration at runtime',
+    description:
+      'Adds a new webhook provider configuration at runtime. ' +
+      'NOTE: this endpoint currently has no auth guard applied — see module-level security caveat.',
   })
   @ApiResponse({
     status: 201,
@@ -158,9 +166,12 @@ export class WebhookAdminController {
   }
 
   @Put(':name')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Update webhook provider configuration',
-    description: 'Updates an existing webhook provider configuration',
+    description:
+      'Updates an existing webhook provider configuration. ' +
+      'NOTE: this endpoint currently has no auth guard applied — see module-level security caveat.',
   })
   @ApiParam({ name: 'name', description: 'Provider name' })
   @ApiResponse({
@@ -211,9 +222,12 @@ export class WebhookAdminController {
 
   @Delete(':name')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Remove a webhook provider',
-    description: 'Removes a webhook provider configuration',
+    description:
+      'Removes a webhook provider configuration (disables it at runtime). ' +
+      'NOTE: this endpoint currently has no auth guard applied — see module-level security caveat.',
   })
   @ApiParam({ name: 'name', description: 'Provider name' })
   @ApiResponse({ status: 204, description: 'Provider removed successfully' })

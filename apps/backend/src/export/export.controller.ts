@@ -25,6 +25,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles, UserRole } from '../auth/decorators/auth.decorators';
 import { CreateExportJobDto, ExportJobResponseDto } from './dto/export-job.dto';
 import { ExportStatus, ExportType } from './entities/export-job.entity';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 const ANALYTICS_TYPES = new Set<ExportType>([
   ExportType.ONCHAIN_ANALYTICS,
@@ -40,8 +41,19 @@ export class ExportController {
 
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Create an async export job' })
-  @ApiResponse({ status: 202, type: ExportJobResponseDto })
+  @ApiIdempotencyHeader()
+  @ApiOperation({
+    summary: 'Create an async export job',
+    description:
+      'Queues a new export job (e.g. portfolio history or tax transactions) for the current user. The job runs asynchronously; poll GET /exports/:id for status.',
+  })
+  @ApiResponse({
+    status: 202,
+    description: 'Export job accepted and queued',
+    type: ExportJobResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid export type' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({
     status: 403,
     description: 'Admin role required for analytics exports',
@@ -95,8 +107,17 @@ export class ExportController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List recent export jobs for the current user' })
-  @ApiResponse({ status: 200, type: [ExportJobResponseDto] })
+  @ApiOperation({
+    summary: 'List recent export jobs for the current user',
+    description:
+      'Retrieves the current user’s export jobs, most recent first.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Export jobs retrieved successfully',
+    type: [ExportJobResponseDto],
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async listJobs(
     @Request() req: { user: { id: string } },
   ): Promise<ExportJobResponseDto[]> {
@@ -112,7 +133,13 @@ export class ExportController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get export job status' })
-  @ApiResponse({ status: 200, type: ExportJobResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Export job retrieved successfully',
+    type: ExportJobResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Export job not found' })
   async getJob(
     @Param('id') id: string,
     @Request() req: { user: { id: string } },
@@ -129,7 +156,16 @@ export class ExportController {
 
   @Get(':id/download')
   @ApiOperation({ summary: 'Download the CSV for a completed export job' })
-  @ApiResponse({ status: 200, description: 'CSV file download' })
+  @ApiResponse({
+    status: 200,
+    description: 'CSV file download (Content-Type: text/csv)',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Export job not found, not owned by the current user, or not yet ready for download',
+  })
   async downloadJob(
     @Param('id') id: string,
     @Request() req: { user: { id: string } },

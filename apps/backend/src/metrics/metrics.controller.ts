@@ -41,7 +41,7 @@ export class MetricsController {
   @ApiOperation({
     summary: 'Get application metrics in Prometheus format',
     description:
-      'Returns metrics in Prometheus text format for scraping by monitoring tools like Prometheus',
+      'Returns metrics in Prometheus text format for scraping by monitoring tools like Prometheus. IP-allowlisted endpoint.',
   })
   @ApiResponse({
     status: 200,
@@ -90,7 +90,8 @@ export class MetricsController {
   @Get('json')
   @ApiOperation({
     summary: 'Get application metrics in JSON format',
-    description: 'Returns metrics as JSON for custom integrations',
+    description:
+      'Returns metrics as JSON for custom integrations. IP-allowlisted endpoint.',
   })
   @ApiResponse({
     status: 200,
@@ -124,11 +125,16 @@ export class MetricsController {
   @Get('health')
   @ApiOperation({
     summary: 'Get health status',
-    description: 'Returns the health status of the application',
+    description:
+      'Returns the health status of the application. IP-allowlisted endpoint.',
   })
   @ApiResponse({
     status: 200,
     description: 'Health status',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - IP not in allowlist and no valid JWT',
   })
   getHealth(): Record<string, unknown> {
     return {

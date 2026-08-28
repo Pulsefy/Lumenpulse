@@ -27,11 +27,17 @@ export class SignalsController {
   @Get('latest')
   @ApiOperation({
     summary: 'Get the latest risk and activity signals for the current user',
+    description:
+      'Computes and returns a deterministic set of holdings, activity, and risk signals for the authenticated user.',
   })
   @ApiResponse({
     status: 200,
     description: 'Latest deterministic signal summary for the current user',
     type: UserSignalsResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
   })
   async getLatestSignals(
     @Req() req: RequestWithUser,

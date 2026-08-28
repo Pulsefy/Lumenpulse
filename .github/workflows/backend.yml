@@ -19,6 +19,43 @@ jobs:
       run:
         working-directory: ./apps/backend
 
+    # Generating the OpenAPI spec boots the full Nest DI graph (TypeORM +
+    # Redis-backed cache/rate-limit modules), so the freshness check below
+    # needs real service containers, mirroring the root docker-compose.yml.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lumenpulse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: lumenpulse
+      JWT_SECRET: ci-openapi-spec-secret
+      STELLAR_SERVER_SECRET: SB6RIPM3GJQ7RP3Q6R5F3QIBYZHP4N27SGGCQ3R4LWA2ZKXZWQ3NU3G4
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -48,6 +85,12 @@ jobs:
 
     - name: Build
       run: npm run build
+
+    - name: Run database migrations
+      run: npm run migration:run
+
+    - name: Check committed OpenAPI spec is up to date
+      run: npm run openapi:check
 
   migration-safety:
     runs-on: ubuntu-latest

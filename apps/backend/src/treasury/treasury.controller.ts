@@ -24,6 +24,7 @@ import { ContractAdminGuard } from '../common/guards/contract-admin.guard';
 import { ContractAdminAuditService } from '../contract-admin/contract-admin-audit.service';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 import { AllocateBudgetDto } from './dto/allocate-budget.dto';
 import {
   AllocateBudgetResponseDto,
@@ -72,6 +73,7 @@ export class TreasuryController {
   @Roles(UserRole.ADMIN)
   @AuditBlockchainAction({ contractField: 'beneficiary' })
   @ApiBearerAuth('JWT-auth')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Allocate a treasury budget and start a stream (admin only)',
     description:

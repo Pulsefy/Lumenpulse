@@ -36,6 +36,14 @@ export class SearchController {
     description: 'Project search results',
     type: ProjectSearchResponseDto,
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid query parameters',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
+  })
   searchProjects(
     @Query() query: ProjectSearchQueryDto,
   ): ProjectSearchResponseDto {
@@ -53,6 +61,14 @@ export class SearchController {
     status: 200,
     description: 'Asset search results',
     type: AssetDiscoveryResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid query parameters',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
   })
   async searchAssets(
     @Query() query: AssetSearchQueryDto,
@@ -72,6 +88,14 @@ export class SearchController {
     description: 'Ecosystem entity results',
     type: EcosystemSearchResponseDto,
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid query parameters',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
+  })
   async searchEcosystem(
     @Query() query: EcosystemSearchQueryDto,
   ): Promise<EcosystemSearchResponseDto> {
@@ -89,6 +113,14 @@ export class SearchController {
     status: 200,
     description: 'Linked entities resolved from the input text',
     type: EntityLinkingResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid query parameters (e.g. missing required text field)',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
   })
   async linkEntities(
     @Query() query: EntityLinkingQueryDto,

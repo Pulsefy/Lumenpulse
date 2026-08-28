@@ -28,6 +28,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 // Unified Authenticated Request Interface
 interface RequestWithUser extends Request {
@@ -50,12 +51,14 @@ export class ModerationController {
   @Post('report')
   @UsePipes(new ValidationPipe())
   @HttpCode(HttpStatus.CREATED)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Submit a content report' })
   @ApiResponse({ status: 201, description: 'Report successfully created' })
   @ApiResponse({
     status: 400,
     description: 'Bad request - duplicate report or invalid data',
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async createReport(
     @Req() req: RequestWithUser,
     @Body() createReportDto: CreateReportDto,
@@ -66,6 +69,7 @@ export class ModerationController {
   @Get('my-reports')
   @ApiOperation({ summary: 'Get reports submitted by current user' })
   @ApiResponse({ status: 200, description: 'List of user reports' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getMyReports(
     @Req() req: RequestWithUser,
     @Query('page') page?: string,
@@ -88,6 +92,8 @@ export class ModerationController {
     status: 200,
     description: 'List of all reports with pagination',
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   async getModerationQueue(@Query() query: QueryReportsDto) {
     return this.moderationService.getReports(query);
   }
@@ -97,6 +103,8 @@ export class ModerationController {
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get moderation statistics (Admin only)' })
   @ApiResponse({ status: 200, description: 'Moderation queue statistics' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   async getModerationStats() {
     return this.moderationService.getModerationStats();
   }
@@ -106,6 +114,8 @@ export class ModerationController {
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get specific report details (Admin only)' })
   @ApiResponse({ status: 200, description: 'Report details' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   @ApiResponse({ status: 404, description: 'Report not found' })
   async getReport(@Param('id') id: string) {
     return this.moderationService.getReportById(id);
@@ -115,8 +125,12 @@ export class ModerationController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @UsePipes(new ValidationPipe())
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Update report status (Admin only)' })
   @ApiResponse({ status: 200, description: 'Report updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid update data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   @ApiResponse({ status: 404, description: 'Report not found' })
   async updateReport(
     @Req() req: RequestWithUser,

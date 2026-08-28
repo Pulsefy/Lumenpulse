@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 import {
   CreateVestingDto,
   CreateVestingWithMilestoneDto,
@@ -39,6 +40,7 @@ export class VestingWalletController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiBearerAuth('JWT-auth')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Create a vesting schedule (admin only)',
     description:
@@ -72,6 +74,7 @@ export class VestingWalletController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiBearerAuth('JWT-auth')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Create a milestone-linked vesting schedule (admin only)',
     description:

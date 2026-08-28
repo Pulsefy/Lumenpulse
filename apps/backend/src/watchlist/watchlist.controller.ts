@@ -22,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { WatchlistService } from './watchlist.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 import {
   AddToWatchlistDto,
   UpdateWatchlistDto,
@@ -72,6 +73,7 @@ export class WatchlistController {
   @Post()
   @Throttle(getWatchlistWriteThrottleOverride())
   @HttpCode(HttpStatus.CREATED)
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Add item to watchlist',
     description:
@@ -96,6 +98,7 @@ export class WatchlistController {
   @Post('toggle')
   @Throttle(getWatchlistWriteThrottleOverride())
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Toggle watchlist item',
     description:
@@ -123,6 +126,7 @@ export class WatchlistController {
 
   @Patch(':id')
   @Throttle(getWatchlistWriteThrottleOverride())
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Update watchlist item',
     description: "Update a watchlist item's notes, image, name, or sort order",
@@ -147,6 +151,7 @@ export class WatchlistController {
   @Delete(':id')
   @Throttle(getWatchlistWriteThrottleOverride())
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Remove item from watchlist',
     description:
@@ -166,6 +171,7 @@ export class WatchlistController {
 
   @Patch('reorder')
   @Throttle(getWatchlistWriteThrottleOverride())
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Reorder watchlist items',
     description:
