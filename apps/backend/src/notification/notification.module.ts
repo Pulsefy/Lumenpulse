@@ -10,6 +10,8 @@ import { NotificationService } from './notification.service';
 import { NotificationPreferenceService } from './notification-preference.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { NotificationFanoutService } from './notification-fanout.service';
+import { PushTokenService } from './push-token.service';
+import { PushTokenController } from './push-token.controller';
 import { NotificationPreferenceController } from './notification-preference.controller';
 import { NotificationFanoutController } from './notification-fanout.controller';
 import { ProfilingModule } from '../common/profiling/profiling.module';
@@ -31,13 +33,19 @@ import { ProfilingModule } from '../common/profiling/profiling.module';
     NotificationPreferenceService,
     NotificationDeliveryService,
     NotificationFanoutService,
+    PushTokenService,
   ],
   exports: [
     NotificationService,
     NotificationPreferenceService,
     NotificationDeliveryService,
     NotificationFanoutService,
+    PushTokenService,
   ],
-  controllers: [NotificationPreferenceController, NotificationFanoutController],
+  controllers: [
+    NotificationPreferenceController,
+    NotificationFanoutController,
+    PushTokenController,
+  ],
 })
 export class NotificationModule {}

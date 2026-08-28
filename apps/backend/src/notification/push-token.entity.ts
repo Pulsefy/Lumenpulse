@@ -19,6 +19,7 @@ export enum PushTokenPlatform {
 @Entity('push_tokens')
 @Index(['userId'])
 @Index(['token'], { unique: true })
+@Index(['deviceId', 'platform'], { unique: true })
 @Index(['isActive'])
 @Index(['userId', 'isActive'])
 export class PushToken {
@@ -30,6 +31,8 @@ export class PushToken {
 
   @Column({ type: 'varchar', length: 255 })
   token: string;
+  @Column({ type: 'varchar', length: 255 })
+  deviceId: string;
 
   @Column({
     type: 'enum',
@@ -39,7 +42,7 @@ export class PushToken {
   platform: PushTokenPlatform;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  deviceName: string;
+  deviceName: string | null;
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
