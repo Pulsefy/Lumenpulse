@@ -148,6 +148,69 @@ describe('AccessControlService', () => {
     });
   });
 
+  describe('verifyApiKey', () => {
+    it('should verify a valid API key', async () => {
+      configService.get.mockReturnValue('valid-admin-key');
+
+      const request = {
+        verificationType: VerificationType.API_KEY,
+        verificationData: {
+          apiKey: 'valid-admin-key',
+        },
+      };
+
+      const result = await service.verifyTrustedCaller(request);
+
+      expect(result.trusted).toBe(true);
+      expect(result.callerId).toBe('api-key:contract-admin');
+      expect(configService.get).toHaveBeenCalledWith('CONTRACT_ADMIN_API_KEY');
+    });
+
+    it('should reject an invalid API key', async () => {
+      configService.get.mockReturnValue('valid-admin-key');
+
+      const request = {
+        verificationType: VerificationType.API_KEY,
+        verificationData: {
+          apiKey: 'wrong-key',
+        },
+      };
+
+      const result = await service.verifyTrustedCaller(request);
+
+      expect(result.trusted).toBe(false);
+      expect(result.error).toBe('Invalid API key');
+    });
+
+    it('should reject when no API key is provided', async () => {
+      const request = {
+        verificationType: VerificationType.API_KEY,
+        verificationData: {},
+      };
+
+      const result = await service.verifyTrustedCaller(request);
+
+      expect(result.trusted).toBe(false);
+      expect(result.error).toBe('API key is required');
+    });
+
+    it('should reject when CONTRACT_ADMIN_API_KEY is not configured', async () => {
+      configService.get.mockReturnValue(undefined);
+
+      const request = {
+        verificationType: VerificationType.API_KEY,
+        verificationData: {
+          apiKey: 'any-key',
+        },
+      };
+
+      const result = await service.verifyTrustedCaller(request);
+
+      expect(result.trusted).toBe(false);
+      expect(result.error).toBe('API key verification not configured');
+    });
+  });
+
   describe('verifyTrustedCaller', () => {
     it('should verify webhook signatures', async () => {
       const mockVerificationResult = {

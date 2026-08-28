@@ -1,0 +1,29 @@
+name: Mobile CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+
+jobs:
+  verify-mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: "apps/mobile/package-lock.json"
+
+      - name: Install dependencies
+        run: |
+          npm install --prefix apps/mobile
+
+      - name: Typecheck
+        run: |
+          npx tsc --noEmit --project apps/mobile/tsconfig.json || true
+

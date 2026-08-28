@@ -9,7 +9,9 @@
     "web": "expo start --web",
     "lint": "eslint . --fix",
     "format": "prettier --write .",
-    "tsc": "tsc"
+    "tsc": "tsc",
+    "test": "jest --runInBand",
+    "test:coverage": "jest --coverage --runInBand"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -44,13 +46,16 @@
     "react-native-worklets-core": "^1.6.2"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "@types/react": "~19.1.0",
     "babel-preset-expo": "^54.0.10",
     "eslint": "^9.39.2",
     "eslint-config-expo": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
+    "jest": "^29.7.0",
     "prettier": "^3.8.0",
+    "ts-jest": "^29.1.5",
     "typescript": "~5.9.2"
   },
   "private": true

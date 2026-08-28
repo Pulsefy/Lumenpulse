@@ -5,9 +5,10 @@ import { WebhookVerificationService } from './webhook-verification.service';
 import { WebhookVerificationGuard } from './webhook-verification.guard';
 import { WebhookAdminController } from './webhook-admin.controller';
 import { NotificationModule } from '../notification/notification.module';
+import { MetricsModule } from '../metrics/metrics.module';
 
 @Module({
-  imports: [NotificationModule],
+  imports: [NotificationModule, MetricsModule],
   controllers: [WebhookController, WebhookAdminController],
   providers: [
     WebhookService,

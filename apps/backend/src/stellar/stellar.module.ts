@@ -11,6 +11,8 @@ import { AppConfigModule } from '../config/config.module';
 import { SorobanRpcClientService } from './services/soroban-rpc-client.service';
 import { HorizonClientService } from './services/horizon-client.service';
 import { MatchingPoolAdminController } from './controllers/matching-pool-admin.controller';
+import { TestnetBootstrapController } from './controllers/testnet-bootstrap.controller';
+import { TestnetBootstrapService } from './services/testnet-bootstrap.service';
 import { AppCacheModule } from '../cache/cache.module';
 
 @Module({
@@ -21,13 +23,18 @@ import { AppCacheModule } from '../cache/cache.module';
     AppConfigModule,
     AppCacheModule,
   ],
-  controllers: [StellarController, MatchingPoolAdminController],
+  controllers: [
+    StellarController,
+    MatchingPoolAdminController,
+    TestnetBootstrapController,
+  ],
   providers: [
     StellarService,
     SorobanRpcClientService,
     HorizonClientService,
     ContractRotationService,
     StellarContractRotationService,
+    TestnetBootstrapService,
   ],
   exports: [
     StellarService,
@@ -35,6 +42,7 @@ import { AppCacheModule } from '../cache/cache.module';
     HorizonClientService,
     ContractRotationService,
     StellarContractRotationService,
+    TestnetBootstrapService,
   ],
 })
 export class StellarModule {}

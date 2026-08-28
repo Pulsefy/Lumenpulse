@@ -7,6 +7,7 @@ import {
   Body,
   Query,
   UseGuards,
+  Req,
   Logger,
   HttpCode,
   HttpStatus,
@@ -29,7 +30,12 @@ import {
   ResolveDeadLetterResponseDto,
   DeadLetterStatsDto,
 } from './dto/dead-letter.dto';
-import { SorobanEventIngestionGuard } from './guards/soroban-event-ingestion.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/decorators/auth.decorators';
+import { User, UserRole } from '../users/entities/user.entity';
+import { AdminAuditService } from '../admin-audit/admin-audit.service';
+import { Request } from 'express';
 
 /**
  * Dead Letter Queue Controller
@@ -41,16 +47,20 @@ import { SorobanEventIngestionGuard } from './guards/soroban-event-ingestion.gua
  * - Mark events as resolved when no further action is needed
  * - Monitor DLQ statistics
  *
- * All endpoints require authentication (x-ingest-secret header)
+ * All endpoints require an authenticated administrator.
  */
 @ApiTags('soroban-events/dead-letter')
 @Controller('soroban-events/dead-letter')
-@UseGuards(SorobanEventIngestionGuard)
-@ApiBearerAuth('x-ingest-secret')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
+@ApiBearerAuth()
 export class SorobanEventsDeadLetterController {
   private readonly logger = new Logger(SorobanEventsDeadLetterController.name);
 
-  constructor(private readonly dlqService: SorobanEventsDeadLetterService) {}
+  constructor(
+    private readonly dlqService: SorobanEventsDeadLetterService,
+    private readonly auditService: AdminAuditService,
+  ) {}
 
   /**
    * List all dead letter queue events with filtering and pagination
@@ -78,7 +88,7 @@ export class SorobanEventsDeadLetterController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Unauthorized - Missing or invalid x-ingest-secret header',
+    description: 'Unauthorized',
   })
   async listFailedEvents(
     @Query() query: ListDeadLetterEventsQueryDto,
@@ -202,6 +212,7 @@ export class SorobanEventsDeadLetterController {
   async replayEvent(
     @Param('id') dlqId: string,
     @Body() dto: ReplayDeadLetterEventDto,
+    @Req() request: Request & { user: User },
   ): Promise<ReplayDeadLetterResponseDto> {
     this.logger.log(
       { dlqId, reason: dto.reason },
@@ -209,6 +220,13 @@ export class SorobanEventsDeadLetterController {
     );
 
     const result = await this.dlqService.replayEvent(dlqId, dto.reason);
+    await this.auditService.create({
+      actorId: request.user.id,
+      actorEmail: request.user.email,
+      endpoint: 'POST /soroban-events/dead-letter/:id/replay',
+      params: { dlqId, reason: dto.reason, jobId: result.jobId },
+      responseStatus: HttpStatus.ACCEPTED,
+    });
     return result;
   }
 

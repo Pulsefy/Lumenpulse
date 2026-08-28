@@ -8,10 +8,7 @@ import {
   IsObject,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import {
-  NotificationType,
-  NotificationSeverity,
-} from '../notification.entity';
+import { NotificationType, NotificationSeverity } from '../notification.entity';
 import { EventCategory } from '../../common/event-catalog';
 
 export class FanoutNotificationDto {

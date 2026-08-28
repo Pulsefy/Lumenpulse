@@ -23,7 +23,22 @@ export default function NotificationsScreen() {
             borderColor: item.read ? colors.cardBorder : 'transparent',
           },
         ]}
-        onPress={() => markAsRead(item.id)}
+        onPress={() => {
+          if (!item.read) {
+            markAsRead(item.id);
+          }
+          if (item.data) {
+            if (typeof item.data.screen === 'string') {
+              router.push(item.data.screen as any);
+            } else if (item.data.type === 'alert' && item.data.alertId) {
+              router.push(`/alerts/${item.data.alertId}` as any);
+            } else if (item.data.type === 'transaction' && item.data.transactionId) {
+              router.push(`/transactions/${item.data.transactionId}` as any);
+            } else if (item.data.url) {
+              router.push(item.data.url as any);
+            }
+          }
+        }}
         accessibilityLabel={`${item.title}. ${
           item.read ? t('notifications.read') : t('notifications.unread')
         }. ${t('notifications.mark_as_read')}`}
@@ -49,7 +64,7 @@ export default function NotificationsScreen() {
         </Text>
       </TouchableOpacity>
     ),
-    [colors, markAsRead, t],
+    [colors, markAsRead, t, router],
   );
 
   return (

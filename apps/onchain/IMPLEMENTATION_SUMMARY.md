@@ -61,16 +61,18 @@ Both tasks have been successfully implemented as smart contracts without backend
 
 #### Deliverables
 - [x] YieldVault contract (multi-provider wrapper)
-- [x] AaveLendingPool mock (interest-bearing protocol)
 - [x] StableSwapPool mock (stablecoin AMM - Curve-like)
 - [x] LiquidityPool mock (token AMM - Uniswap-like)
 - [x] Multi-provider allocation strategy
 - [x] Yield harvesting and tracking
 
+> **Note**: The `AaveLendingPool` mock crate was retired from the repository (never a workspace
+> member, no code integration). Aave-style providers are integrated externally via
+> `YieldProviderTrait`.
+
 #### Key Files
 - `contracts/yield_vault/src/lib.rs` - Main vault implementation
 - `contracts/yield_vault/src/storage.rs` - Data structures
-- `contracts/aave_lending_pool/src/lib.rs` - Mock Aave protocol
 - `contracts/stable_swap_pool/src/lib.rs` - Mock Curve protocol
 - `contracts/liquidity_pool/src/lib.rs` - Mock Uniswap protocol
 - **Documentation**: `YIELD_VAULT_IMPLEMENTATION.md`
@@ -446,7 +448,6 @@ The implementation is production-ready for:
 - `contracts/notification_broker/` - Central notification hub
 - `contracts/notification_interface/` - Receiver trait definition
 - `contracts/yield_vault/` - Multi-provider vault
-- `contracts/aave_lending_pool/` - Mock Aave protocol
 - `contracts/stable_swap_pool/` - Mock Curve protocol
 - `contracts/liquidity_pool/` - Mock Uniswap protocol
 

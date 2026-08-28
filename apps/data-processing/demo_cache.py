@@ -22,15 +22,17 @@ def demo_caching():
     print("Initializing SentimentAnalyzer...")
     analyzer = SentimentAnalyzer()
 
-    if analyzer.cache_manager:
+    if analyzer.cache:
         print("✓ CacheManager connected successfully")
-        print(
-            f"  - Connected to Redis at {analyzer.cache_manager.host}:{analyzer.cache_manager.port}"
-        )
-        print(f"  - TTL: {analyzer.cache_manager.ttl_seconds} seconds")
+        print(f"  - Connected to Redis at {analyzer.cache.host}:{analyzer.cache.port}")
+        print(f"  - TTL: {analyzer.cache.ttl_seconds} seconds")
+        print("  - Hit rate: ", end="")
+        hit_rate = analyzer.cache.hit_rate()
+        print(f"{hit_rate:.2%}" if hit_rate is not None else "n/a (no lookups yet)")
     else:
         print("⚠ CacheManager not available - running without caching")
         print("  - Install redis-py and start Redis server to enable caching")
+        print("  - Or set CACHE_ENABLED=false to disable caching explicitly")
 
     # Test text
     sample_text = "Bitcoin reaches new all-time high as institutional adoption accelerates and regulatory clarity improves market confidence."
@@ -81,15 +83,20 @@ def demo_caching():
     print("=" * 60)
 
     # Show cache statistics if available
-    if analyzer.cache_manager:
+    if analyzer.cache:
         print("\nCache Info:")
         try:
-            is_connected = analyzer.cache_manager.ping()
+            is_connected = analyzer.cache.ping()
             print(
                 f"  - Redis connection: {'✓ Connected' if is_connected else '✗ Disconnected'}"
             )
         except:
             print("  - Redis connection: ✗ Error checking connection")
+        hit_rate = analyzer.cache.hit_rate()
+        if hit_rate is not None:
+            print(f"  - Hit rate: {hit_rate:.2%}")
+        else:
+            print("  - Hit rate: n/a")
 
 
 def demo_cache_manager_directly():

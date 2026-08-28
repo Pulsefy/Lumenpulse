@@ -50,6 +50,12 @@ pub enum ProposalAction {
     /// `update_contributor` without a proposal id; this action is reserved for
     /// admin-managed corrections (e.g. typo fixes, handle migrations).
     UpdateProfile,
+    /// Suspend a contributor's attestation (temporary, reversible).
+    SuspendAttestation,
+    /// Revoke a contributor's attestation (permanent, terminal).
+    RevokeAttestation,
+    /// Restore a suspended attestation back to `Active`.
+    RestoreAttestation,
 }
 
 #[contracttype]

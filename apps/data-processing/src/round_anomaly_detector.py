@@ -39,9 +39,11 @@ class RoundAnomalySignal:
     timestamp: datetime = field(default_factory=datetime.utcnow)
     reviewed: bool = False
     review_notes: Optional[str] = None
+    contributing_signals: Optional[List[str]] = None  # Signals that contributed
+    confidence_level: Optional[str] = None  # high/medium/low
     
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "id": self.id,
             "round_id": self.round_id,
             "project_id": self.project_id,
@@ -54,6 +56,11 @@ class RoundAnomalySignal:
             "reviewed": self.reviewed,
             "review_notes": self.review_notes,
         }
+        if self.contributing_signals is not None:
+            result["contributing_signals"] = self.contributing_signals
+        if self.confidence_level is not None:
+            result["confidence_level"] = self.confidence_level
+        return result
 
 
 @dataclass
@@ -186,6 +193,15 @@ class RoundAnomalyDetector:
                 f"This may indicate sybil attacks or coordinated manipulation."
             )
             
+            # Determine contributing signals
+            contributing_signals = []
+            if concentration > self.concentration_threshold:
+                contributing_signals.append("concentration_ratio_exceeded")
+            if gini > self.gini_threshold:
+                contributing_signals.append("gini_coefficient_exceeded")
+            
+            confidence_level = "high" if severity > 0.7 else "medium"
+            
             return RoundAnomalySignal(
                 round_id=metrics.round_id,
                 anomaly_type=AnomalyType.CONCENTRATION_RISK,
@@ -198,6 +214,8 @@ class RoundAnomalyDetector:
                     "total_contributions": metrics.total_contributions,
                 },
                 threshold_used=self.concentration_threshold,
+                contributing_signals=contributing_signals,
+                confidence_level=confidence_level,
             )
         return None
     
@@ -224,6 +242,8 @@ class RoundAnomalyDetector:
                 f"This may undermine the quadratic funding mechanism."
             )
             
+            confidence_level = "high" if severity > 0.7 else "medium"
+            
             return RoundAnomalySignal(
                 round_id=metrics.round_id,
                 anomaly_type=AnomalyType.HIGH_SINGLE_CONTRIBUTION,
@@ -235,6 +255,8 @@ class RoundAnomalyDetector:
                     "total_contributions": metrics.total_contributions,
                 },
                 threshold_used=self.single_contribution_threshold,
+                contributing_signals=["single_contributor_dominance"],
+                confidence_level=confidence_level,
             )
         return None
     
@@ -259,6 +281,8 @@ class RoundAnomalyDetector:
                     f"This may indicate fake projects or lack of genuine interest."
                 )
                 
+                confidence_level = "high" if severity > 0.7 else "medium"
+                
                 signals.append(RoundAnomalySignal(
                     round_id=metrics.round_id,
                     project_id=project_id,
@@ -271,6 +295,8 @@ class RoundAnomalyDetector:
                         "threshold": self.min_contributors_per_project,
                     },
                     threshold_used=float(self.min_contributors_per_project),
+                    contributing_signals=["low_contributor_count"],
+                    confidence_level=confidence_level,
                 ))
         
         return signals
@@ -310,6 +336,8 @@ class RoundAnomalyDetector:
                 f"This may indicate coordinated activity or bot operations."
             )
             
+            confidence_level = "high" if severity > 0.7 else "medium"
+            
             return RoundAnomalySignal(
                 round_id=metrics.round_id,
                 anomaly_type=AnomalyType.UNUSUAL_TIMING,
@@ -322,6 +350,8 @@ class RoundAnomalyDetector:
                     "window_hours": self.timing_cluster_window_hours,
                 },
                 threshold_used=self.timing_cluster_threshold,
+                contributing_signals=["timing_cluster"],
+                confidence_level=confidence_level,
             )
         return None
     
@@ -361,6 +391,8 @@ class RoundAnomalyDetector:
                 f"This may indicate automated or coordinated contributions."
             )
             
+            confidence_level = "high" if severity > 0.7 else "medium"
+            
             signals.append(RoundAnomalySignal(
                 round_id=metrics.round_id,
                 anomaly_type=AnomalyType.SYBIL_SUSPICION,
@@ -372,6 +404,8 @@ class RoundAnomalyDetector:
                     "total_contributors": len(amounts),
                 },
                 threshold_used=0.3,
+                contributing_signals=["identical_contribution_amounts"],
+                confidence_level=confidence_level,
             ))
         
         return signals
@@ -417,6 +451,8 @@ class RoundAnomalyDetector:
                     f"This may indicate unfair matching or gaming of the QF mechanism."
                 )
                 
+                confidence_level = "high" if severity > 0.7 else "medium"
+                
                 signals.append(RoundAnomalySignal(
                     round_id=metrics.round_id,
                     project_id=project_id,
@@ -430,6 +466,8 @@ class RoundAnomalyDetector:
                         "contribution_amount": metrics.project_contributions.get(project_id, 0),
                     },
                     threshold_used=median_ratio * 5,
+                    contributing_signals=["disproportionate_match_ratio"],
+                    confidence_level=confidence_level,
                 ))
         
         return signals

@@ -54,7 +54,11 @@ export class NotificationFanoutController {
       'Retrieves suppression logs for debugging and observability. ' +
       'Shows why notifications were not delivered to specific users.',
   })
-  @ApiQuery({ name: 'userId', required: false, description: 'Filter by user ID' })
+  @ApiQuery({
+    name: 'userId',
+    required: false,
+    description: 'Filter by user ID',
+  })
   @ApiQuery({
     name: 'eventCategory',
     required: false,

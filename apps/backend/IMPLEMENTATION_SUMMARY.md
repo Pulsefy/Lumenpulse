@@ -238,7 +238,7 @@ async handleDataProcessingEvent(payload: DataProcessingWebhookDto) {
 13. `NOTIFICATION_PREFERENCES_API.md` - Notification docs
 14. `INTEGRATION_GUIDE.md` - Integration examples
 15. `.env.webhook-notification.example` - Environment config
-16. `migrations/add-notification-preferences-and-delivery-logs.sql` - DB migration
+16. `src/database/migrations/1840000000000-CreateNotificationPreferencesAndDeliveryLogs.ts` - DB migration
 
 ### Modified Files (4)
 
@@ -251,16 +251,11 @@ async handleDataProcessingEvent(payload: DataProcessingWebhookDto) {
 
 ## Database Migration
 
-Run the migration to create the new tables:
+The notification tables are created by tracked TypeORM migrations in
+`src/database/migrations`. Run pending migrations:
 
 ```bash
-psql -U your_user -d your_database -f src/migrations/add-notification-preferences-and-delivery-logs.sql
-```
-
-Or use TypeORM migrations (if preferred):
-
-```bash
-npm run typeorm migration:run
+npm run migration:run
 ```
 
 ---

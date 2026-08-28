@@ -22,6 +22,35 @@ from sqlalchemy.sql import func
 Base = declarative_base()
 
 
+class PredictionLog(Base):
+    """
+    Stores prediction requests and responses for auditability (Issue #1245)
+    """
+
+    __tablename__ = "prediction_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    request_id = Column(String(255), nullable=False, index=True)
+    model_type = Column(String(100), nullable=False, index=True)
+    model_version = Column(String(50), nullable=False, index=True)
+    input_hash = Column(String(255), nullable=False)
+    output = Column(JSON, nullable=False)
+    latency_ms = Column(Float, nullable=False)
+    raw_input = Column(Text, nullable=True)  # Populated only if config allows
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    __table_args__ = (
+        Index("idx_prediction_logs_model_version", "model_version"),
+        Index("idx_prediction_logs_created_at", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<PredictionLog(request_id={self.request_id}, model={self.model_type}:{self.model_version})>"
+
+
 class Article(Base):
     """
     Stores news articles with full content and metadata
@@ -725,3 +754,48 @@ class EntityLinkingReview(Base):
             f"stable_entity_id='{self.stable_entity_id}', status='{self.status}')>"
         )
 
+
+class DailyOnchainKPISnapshot(Base):
+    """
+    Stores daily aggregated snapshots of core on-chain KPIs
+    (TVL, volume, active rounds, contribution count, unique contributors)
+    for cheap and consistent trend analysis (#877).
+    """
+
+    __tablename__ = "daily_onchain_kpi_snapshots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    snapshot_date = Column(String(10), nullable=False)
+    period = Column(String(20), nullable=False, default="daily")
+    tvl = Column(Float, nullable=False, default=0.0)
+    volume = Column(Float, nullable=False, default=0.0)
+    active_rounds = Column(Integer, nullable=False, default=0)
+    contribution_count = Column(Integer, nullable=False, default=0)
+    unique_contributors = Column(Integer, nullable=False, default=0)
+    extra_data = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_daily_onchain_kpi_snapshots_date_period",
+            "snapshot_date",
+            "period",
+            unique=True,
+        ),
+        Index("idx_daily_onchain_kpi_snapshots_period", "period"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<DailyOnchainKPISnapshot(date='{self.snapshot_date}', period='{self.period}', "
+            f"tvl={self.tvl}, volume={self.volume}, active_rounds={self.active_rounds}, "
+            f"contribution_count={self.contribution_count})>"
+        )

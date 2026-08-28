@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { NotFoundException } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bullmq';
 import { GrantsService } from './grants.service';
+import { CONTRIBUTION_QUEUE } from '../suspicious-contribution/types';
 
 describe('GrantsService.getLeaderboard', () => {
   let service: GrantsService;
@@ -12,6 +14,10 @@ describe('GrantsService.getLeaderboard', () => {
       providers: [
         GrantsService,
         { provide: ConfigService, useValue: { get: jest.fn() } },
+        {
+          provide: getQueueToken(CONTRIBUTION_QUEUE),
+          useValue: { add: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 

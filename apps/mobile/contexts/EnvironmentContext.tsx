@@ -15,6 +15,12 @@ interface EnvironmentContextType {
   environmentConfig: EnvironmentConfig;
   setEnvironment: (environment: AppEnvironment) => Promise<void>;
   isMainnetConfigured: boolean;
+  /**
+   * True once the persisted environment has been read from AsyncStorage.
+   * Other providers (e.g. wallet session restore) should gate on this to
+   * avoid making decisions against the synchronous default value.
+   */
+  isInitialized: boolean;
 }
 
 const EnvironmentContext = createContext<EnvironmentContextType | undefined>(undefined);
@@ -33,6 +39,7 @@ export function useEnvironment() {
 
 export function EnvironmentProvider({ children }: { children: ReactNode }) {
   const [environment, setEnvironmentState] = useState<AppEnvironment>('testnet');
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     const loadEnvironment = async () => {
@@ -44,6 +51,7 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
         setActiveEnvironment('testnet');
         setEnvironmentState('testnet');
       }
+      setIsInitialized(true);
     };
 
     loadEnvironment();
@@ -61,8 +69,9 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
       environmentConfig: getEnvironmentConfig(environment),
       setEnvironment,
       isMainnetConfigured: isMainnetConfigReady,
+      isInitialized,
     }),
-    [environment],
+    [environment, isInitialized],
   );
 
   return <EnvironmentContext.Provider value={value}>{children}</EnvironmentContext.Provider>;

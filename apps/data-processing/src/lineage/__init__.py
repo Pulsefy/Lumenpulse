@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 src/lineage — Feature and KPI lineage manifest package.
 

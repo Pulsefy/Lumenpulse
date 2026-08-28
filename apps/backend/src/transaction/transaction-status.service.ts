@@ -42,6 +42,14 @@ export class TransactionStatusService {
       transactionHash: dto.transactionHash,
       callbackUrl: dto.callbackUrl,
       status: TransactionCallbackStatus.PENDING,
+      secretId: dto.secretId ?? null,
+      previousSecretId: dto.previousSecretId ?? null,
+      lastDeliveryStatus: null,
+      lastSignature: null,
+      lastResponseStatusCode: null,
+      lastDeliveredAt: null,
+      lastDeliveryError: null,
+      deliveryHistory: [],
     });
 
     return this.callbackRepository.save(callback);
@@ -134,33 +142,89 @@ export class TransactionStatusService {
       error: callback.lastError,
     };
 
-    const signature = this.webhookService.signPayload(payload);
+    const signatureHeaders = this.webhookService.buildSignatureHeaders(
+      payload,
+      {
+        secretId: callback.secretId ?? undefined,
+        previousSecretId: callback.previousSecretId ?? undefined,
+      },
+    );
+    const headers: Record<string, string | undefined> = {
+      ...signatureHeaders,
+      ...(callback.secretId
+        ? { 'X-Webhook-Secret-Id': callback.secretId }
+        : {}),
+      ...(callback.previousSecretId
+        ? { 'X-Webhook-Previous-Secret-Id': callback.previousSecretId }
+        : {}),
+    };
+    const signatureHeader = headers['X-Webhook-Signature'];
 
     try {
-      await firstValueFrom(
+      const response = await firstValueFrom(
         this.httpService.post(callback.callbackUrl, payload, {
           timeout: 5000,
-          headers: {
-            'X-Webhook-Signature': signature,
-          },
+          headers,
         }),
       );
 
       callback.status = TransactionCallbackStatus.NOTIFIED;
       callback.retryCount = 0;
+      callback.lastDeliveryStatus = 'delivered';
+      callback.lastSignature = signatureHeader ?? null;
+      callback.lastResponseStatusCode = response?.status ?? 200;
+      callback.lastDeliveredAt = new Date();
+      callback.lastDeliveryError = null;
+      const deliveryHistory: Array<Record<string, unknown>> = [
+        ...(callback.deliveryHistory ?? []),
+        {
+          at: new Date().toISOString(),
+          status: 'delivered',
+          signature: signatureHeader ?? null,
+          secretId: headers['X-Webhook-Secret-Id'] ?? null,
+          previousSecretId: headers['X-Webhook-Previous-Secret-Id'] ?? null,
+          responseStatusCode: response?.status ?? 200,
+        },
+      ];
+      callback.deliveryHistory = deliveryHistory;
       await this.callbackRepository.save(callback);
       this.logger.log(
         `Successfully notified callback for ${callback.transactionHash}`,
       );
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    } catch (error: unknown) {
+      const errorMsg = this.getErrorMessage(error);
       this.logger.error(
         `Failed to notify callback for ${callback.transactionHash}: ${errorMsg}`,
       );
       callback.retryCount += 1;
       callback.status = TransactionCallbackStatus.FAILED_TO_NOTIFY;
       callback.lastError = `Notification failed: ${errorMsg}`;
+      callback.lastDeliveryStatus = 'failed';
+      callback.lastSignature = signatureHeader ?? null;
+      callback.lastDeliveryError = errorMsg;
+      const deliveryHistory: Array<Record<string, unknown>> = [
+        ...(callback.deliveryHistory ?? []),
+        {
+          at: new Date().toISOString(),
+          status: 'failed',
+          signature: signatureHeader ?? null,
+          secretId: headers['X-Webhook-Secret-Id'] ?? null,
+          previousSecretId: headers['X-Webhook-Previous-Secret-Id'] ?? null,
+          error: errorMsg,
+        },
+      ];
+      callback.deliveryHistory = deliveryHistory;
       await this.callbackRepository.save(callback);
     }
+  }
+
+  private getErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    if (typeof error === 'string') {
+      return error;
+    }
+    return 'Unknown error';
   }
 }

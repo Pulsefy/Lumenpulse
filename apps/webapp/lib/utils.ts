@@ -21,8 +21,10 @@ export const formatNumber = (num: number) => {
 // Stellar explorer URL helpers
 // Override via NEXT_PUBLIC_STELLAR_EXPLORER_URL to switch explorer (e.g. stellar.expert, steexp.com).
 // Must be the base path before the /{network}/{type}/{id} segments.
+import { clientConfig } from '@/lib/config';
+
 const STELLAR_EXPLORER_BASE =
-  process.env.NEXT_PUBLIC_STELLAR_EXPLORER_URL ?? "https://stellar.expert/explorer";
+  clientConfig.stellarExplorerUrl;
 
 /** Destination types supported by the Stellar explorer. */
 export type ExplorerDestination = "tx" | "account" | "contract";

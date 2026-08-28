@@ -63,6 +63,7 @@
     "transactions": "交易",
     "news": "新闻",
     "settings": "设置",
+    "watchlist": "关注列表",
     "notifications": "通知",
     "manage_accounts": "管理账户",
     "notification_settings": "通知设置",
@@ -125,6 +126,34 @@
     "failed": "贡献失败",
     "transaction_hash": "交易哈希"
   },
+  "contribution_draft": {
+    "banner_title": "未完成的贡献",
+    "banner_body": "您已开始向 {{project}} 贡献 {{amount}} XLM。",
+    "saved_at": "保存于 {{date}}",
+    "resume": "继续",
+    "discard": "放弃",
+    "restored_notice": "已恢复草稿 —— 请核对金额，确认后即可提交。",
+    "stale_notice": "该草稿已过期，无法继续。",
+    "invalid_amount_notice": "该草稿的金额已无效，无法继续。",
+    "config_missing_notice": "测试网配置不可用，暂时无法继续该草稿。"
+  },
+  "report_modal": {
+    "title": "举报内容",
+    "category_label": "问题类型是什么？",
+    "reason_label": "补充说明（可选）",
+    "reason_placeholder": "添加有助于审核团队处理的详细信息",
+    "category_spam": "垃圾信息",
+    "category_fraud": "欺诈或诈骗",
+    "category_misleading": "误导性信息",
+    "category_inappropriate": "不当内容",
+    "category_copyright": "版权侵权",
+    "category_other": "其他",
+    "submit": "提交举报",
+    "submitting": "提交中...",
+    "success_title": "举报已提交",
+    "success_body": "感谢您的举报，我们的审核团队将进行审查。",
+    "generic_error": "举报提交失败，请重试。"
+  },
   "grants": {
     "title": "资助轮次",
     "description": "二次方资助 - 广泛的社区支持决定匹配金额",
@@ -155,7 +184,10 @@
     "of_pool": "占总池",
     "contributors": "位贡献者",
     "contributed": "已贡献",
-    "estimated_allocations": "预计分配"
+    "estimated_allocations": "预计分配",
+    "funding_progress": "筹资进度",
+    "milestones": "里程碑",
+    "no_eligible_projects": "该轮次尚未添加符合条件的项目。"
   },
   "news": {
     "title": "新闻",
@@ -173,6 +205,16 @@
     "no_notifications": "暂无通知",
     "notification_text": "价格提醒和账户活动将显示在此处。"
   },
+  "watchlist": {
+    "title": "关注列表",
+    "empty_title": "关注列表为空",
+    "empty_subtitle": "在发现标签页中星标资产以在此处跟踪",
+    "remove": "从关注列表移除",
+    "conflict_banner": "部分项目存在同步冲突。下拉刷新。",
+    "rollback_banner": "部分项目已恢复为服务器状态。下拉刷新。",
+    "syncing_banner": "变更将在恢复网络时同步。",
+    "last_synced": "上次同步: {{time}}"
+  },
   "discover": {
     "title": "发现",
     "search_placeholder": "按名称或代码搜索…",
@@ -184,7 +226,9 @@
     "price": "价格 / 24小时",
     "asset": "资产",
     "search_label": "搜索资产",
-    "asset_hint": "双击查看资产详情"
+    "asset_hint": "双击查看资产详情",
+    "add_to_watchlist": "添加到关注列表",
+    "remove_from_watchlist": "从关注列表移除"
   },
   "portfolio": {
     "title": "投资组合",
@@ -314,5 +358,54 @@
     "couldnt_load": "无法加载 {{item}}",
     "could_not_remove": "无法移除",
     "could_not_update": "无法更新"
+  },
+  "wallet": {
+    "connect": {
+      "title": "连接钱包",
+      "message": "在 {{network}} 连接 Stellar 钱包。这将打开您的钱包应用以授权连接。",
+      "continue_button": "打开钱包应用",
+      "error_title": "连接失败",
+      "error_message": "无法连接钱包。"
+    },
+    "reconnect": {
+      "title": "重新连接到 {{network}}",
+      "message": "在新的 {{network}} 网络上恢复已保存的钱包会话。请选择重新连接的方式。",
+      "button": "重新连接钱包",
+      "restoring": "正在恢复钱包会话\u2026"
+    },
+    "network_mismatch": {
+      "title": "网络已更改",
+      "message": "您保存的钱包属于其它网络。请重新连接 {{network}} 以继续。",
+      "last_network_label": "上次连接所在网络：{{network}}"
+    },
+    "restore_failed": {
+      "title": "钱包恢复失败",
+      "message": "我们无法安全地恢复保存的钱包。已清除过期的会话。",
+      "button": "重试"
+    },
+    "status": {
+      "disconnected": "未连接",
+      "connecting": "正在连接",
+      "reconnecting": "正在重新连接",
+      "connected": "已连接",
+      "network_mismatch": "需要重新连接",
+      "restore_failed": "恢复失败",
+      "rejected": "已拒绝"
+    },
+    "sign": {
+      "title": "签名交易",
+      "message": "一笔交易需要您的签名。这将打开您的钱包应用。",
+      "error_failed": "钱包报告签名失败。",
+      "error_unknown": "钱包返回了意外响应。",
+      "error_timeout": "钱包未在时间内响应，请重试。",
+      "error_concurrent": "已有签名请求正在进行中。"
+    },
+    "error": {
+      "not_available": "当前无法使用该钱包选项。",
+      "missing_wallet": "未找到 Stellar 钱包应用。请安装兼容的钱包后重试。",
+      "unsupported_device": "此设备无法打开钱包应用。",
+      "rejected": "钱包连接被拒绝。",
+      "unknown": "钱包出现未知问题，请重试。"
+    }
   }
 }

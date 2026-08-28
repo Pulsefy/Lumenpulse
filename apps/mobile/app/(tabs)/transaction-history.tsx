@@ -197,6 +197,11 @@ export default function TransactionHistoryScreen() {
         onRefresh={() => fetchTransactions(true)}
         loading={isLoading}
         onEndReached={handleLoadMore}
+        // Transaction rows have fixed height (icon 22 + padding 16*2 + border 1).
+        // Providing itemHeight unlocks the getItemLayout fast path in StandardList,
+        // eliminating per-item measurement on long transaction histories.
+        itemHeight={55}
+        estimatedItemSize={55}
         error={error}
         onRetry={() => fetchTransactions(true)}
         ListEmptyComponent={

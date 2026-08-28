@@ -4,16 +4,21 @@ mod errors;
 mod events;
 mod storage;
 
+use errors::ContractError;
 use events::{
     AdminChangedEvent, OperationCancelledEvent, OperationExecutedEvent, OperationQueuedEvent,
     UpgradedEvent,
 };
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
-use storage::{QueuedOperation, TimelockAction, LEDGER_BUMP, LEDGER_THRESHOLD, MIN_DELAY_SECONDS};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
+use storage::{
+    OperationStatus, QueuedOperation, TimelockAction, GRACE_PERIOD_SECONDS, LEDGER_BUMP,
+    LEDGER_THRESHOLD, MIN_DELAY_SECONDS,
+};
 
 #[contracttype]
 pub enum DataKey {
     Admin,
+    ProposedAdmin,
     Counter,
     NextOperationId,
     QueuedOperation(u32),
@@ -24,9 +29,33 @@ pub struct UpgradableContract;
 
 #[contractimpl]
 impl UpgradableContract {
-    pub fn init(env: Env, admin: Address) {
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), ContractError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ContractError::NotInitialized)?;
+        if caller != &admin {
+            return Err(ContractError::Unauthorized);
+        }
+        caller.require_auth();
+        Ok(())
+    }
+
+    fn operation_status(env: &Env, op: &QueuedOperation) -> OperationStatus {
+        let now = env.ledger().timestamp();
+        if now < op.execute_after {
+            OperationStatus::Pending
+        } else if now > op.expires_at {
+            OperationStatus::Expired
+        } else {
+            OperationStatus::Ready
+        }
+    }
+
+    pub fn init(env: Env, admin: Address) -> Result<(), ContractError> {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("already initialized");
+            return Err(ContractError::AlreadyInitialized);
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -36,20 +65,19 @@ impl UpgradableContract {
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        Ok(())
     }
 
-    /// Queue a sensitive admin action with a 24-hour delay.
-    pub fn queue_operation(env: Env, proposer: Address, action: TimelockAction) -> u32 {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("not initialized");
-
-        if proposer != admin {
-            panic!("unauthorized");
-        }
-        proposer.require_auth();
+    /// Queue a sensitive admin action (upgrade or admin rotation). Admin
+    /// only. The operation becomes executable after `MIN_DELAY_SECONDS` and
+    /// remains executable for `GRACE_PERIOD_SECONDS` after that — there is
+    /// no way to act on it sooner or later than this window.
+    pub fn queue_operation(
+        env: Env,
+        proposer: Address,
+        action: TimelockAction,
+    ) -> Result<u32, ContractError> {
+        Self::require_admin(&env, &proposer)?;
 
         let id: u32 = env
             .storage()
@@ -59,11 +87,13 @@ impl UpgradableContract {
 
         let now = env.ledger().timestamp();
         let execute_after = now + MIN_DELAY_SECONDS;
+        let expires_at = execute_after + GRACE_PERIOD_SECONDS;
 
         let op = QueuedOperation {
             proposer: proposer.clone(),
             action,
             execute_after,
+            expires_at,
             created_at: now,
         };
 
@@ -86,36 +116,46 @@ impl UpgradableContract {
         }
         .publish(&env);
 
-        id
+        Ok(id)
     }
 
     /// Inspect a queued operation by its ID.
-    pub fn get_operation(env: Env, operation_id: u32) -> QueuedOperation {
+    pub fn get_operation(env: Env, operation_id: u32) -> Result<QueuedOperation, ContractError> {
         env.storage()
             .persistent()
             .get(&DataKey::QueuedOperation(operation_id))
-            .expect("operation not found")
+            .ok_or(ContractError::OperationNotFound)
     }
 
-    /// Cancel a queued operation before it executes. Admin only.
-    pub fn cancel_operation(env: Env, canceller: Address, operation_id: u32) {
-        let admin: Address = env
+    /// Pending / Ready / Expired classification for a queued operation,
+    /// without triggering `execute_operation`'s rejection.
+    pub fn get_operation_status(
+        env: Env,
+        operation_id: u32,
+    ) -> Result<OperationStatus, ContractError> {
+        let op: QueuedOperation = env
             .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("not initialized");
+            .persistent()
+            .get(&DataKey::QueuedOperation(operation_id))
+            .ok_or(ContractError::OperationNotFound)?;
+        Ok(Self::operation_status(&env, &op))
+    }
 
-        if canceller != admin {
-            panic!("unauthorized");
-        }
-        canceller.require_auth();
+    /// Cancel a queued operation before (or after) it becomes executable.
+    /// Admin only.
+    pub fn cancel_operation(
+        env: Env,
+        canceller: Address,
+        operation_id: u32,
+    ) -> Result<(), ContractError> {
+        Self::require_admin(&env, &canceller)?;
 
         if !env
             .storage()
             .persistent()
             .has(&DataKey::QueuedOperation(operation_id))
         {
-            panic!("operation not found");
+            return Err(ContractError::OperationNotFound);
         }
 
         env.storage()
@@ -127,31 +167,35 @@ impl UpgradableContract {
             operation_id,
         }
         .publish(&env);
+
+        Ok(())
     }
 
-    /// Execute a queued operation after the delay has passed.
-    pub fn execute_operation(env: Env, executor: Address, operation_id: u32) {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("not initialized");
-
-        if executor != admin {
-            panic!("unauthorized");
-        }
-        executor.require_auth();
+    /// Execute a queued operation. Admin only. Rejects if the timelock delay
+    /// hasn't elapsed yet (`OperationNotReady`) or if the grace period has
+    /// elapsed (`OperationExpired`) — this is the only path by which an
+    /// upgrade or admin rotation can take effect; there is no instant
+    /// bypass.
+    pub fn execute_operation(
+        env: Env,
+        executor: Address,
+        operation_id: u32,
+    ) -> Result<(), ContractError> {
+        Self::require_admin(&env, &executor)?;
 
         let op: QueuedOperation = env
             .storage()
             .persistent()
             .get(&DataKey::QueuedOperation(operation_id))
-            .expect("operation not found");
+            .ok_or(ContractError::OperationNotFound)?;
+
+        match Self::operation_status(&env, &op) {
+            OperationStatus::Pending => return Err(ContractError::OperationNotReady),
+            OperationStatus::Expired => return Err(ContractError::OperationExpired),
+            OperationStatus::Ready => {}
+        }
 
         let now = env.ledger().timestamp();
-        if now < op.execute_after {
-            panic!("timelock not expired");
-        }
 
         env.storage()
             .persistent()
@@ -183,58 +227,15 @@ impl UpgradableContract {
             executed_at: now,
         }
         .publish(&env);
+
+        Ok(())
     }
 
-    /// Direct upgrade (kept for backward compatibility with existing tests).
-    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("not initialized");
-
-        if caller != admin {
-            panic!("unauthorized");
-        }
-        caller.require_auth();
-
-        env.deployer()
-            .update_current_contract_wasm(new_wasm_hash.clone());
-
-        UpgradedEvent {
-            admin: caller,
-            new_wasm_hash,
-        }
-        .publish(&env);
-    }
-
-    /// Direct admin transfer (kept for backward compatibility).
-    pub fn set_admin(env: Env, current_admin: Address, new_admin: Address) {
-        let stored_admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("not initialized");
-
-        if current_admin != stored_admin {
-            panic!("unauthorized");
-        }
-        current_admin.require_auth();
-
-        env.storage().instance().set(&DataKey::Admin, &new_admin);
-
-        AdminChangedEvent {
-            old_admin: current_admin,
-            new_admin,
-        }
-        .publish(&env);
-    }
-
-    pub fn get_admin(env: Env) -> Address {
+    pub fn get_admin(env: Env) -> Result<Address, ContractError> {
         env.storage()
             .instance()
             .get(&DataKey::Admin)
-            .expect("not initialized")
+            .ok_or(ContractError::NotInitialized)
     }
 
     pub fn increment(env: Env) -> u32 {
@@ -246,6 +247,49 @@ impl UpgradableContract {
 
     pub fn get_count(env: Env) -> u32 {
         env.storage().instance().get(&DataKey::Counter).unwrap_or(0)
+    }
+
+    pub fn propose_admin_rotation(
+        env: Env,
+        proposer: Address,
+        new_admin: Address,
+    ) -> Result<(), ContractError> {
+        Self::require_admin(&env, &proposer)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::ProposedAdmin, &new_admin);
+        Ok(())
+    }
+
+    pub fn accept_admin_rotation(env: Env, new_admin: Address) -> Result<(), ContractError> {
+        let proposed: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProposedAdmin)
+            .ok_or(ContractError::OperationNotFound)?;
+        if new_admin != proposed {
+            return Err(ContractError::Unauthorized);
+        }
+        new_admin.require_auth();
+        let old_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ContractError::NotInitialized)?;
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        env.storage().instance().remove(&DataKey::ProposedAdmin);
+        AdminChangedEvent {
+            old_admin,
+            new_admin,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    pub fn cancel_admin_rotation(env: Env, canceller: Address) -> Result<(), ContractError> {
+        Self::require_admin(&env, &canceller)?;
+        env.storage().instance().remove(&DataKey::ProposedAdmin);
+        Ok(())
     }
 
     pub fn version() -> u32 {

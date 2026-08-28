@@ -15,6 +15,8 @@ import { useLocalization } from '../../../src/context';
 import { CrowdfundProject, OnChainStatus } from '../../../lib/crowdfund';
 import { computeFundingProgress, formatTokenAmount } from '../../../lib/stellar';
 import { CachedApi } from '../../../lib/cached-api';
+import { ReportType } from '../../../lib/moderation';
+import ReportContentModal from '../../../components/ReportContentModal';
 
 // ── On-chain status chip ───────────────────────────────────────────────────
 
@@ -78,10 +80,12 @@ function ProjectCard({
   project,
   colors,
   onPress,
+  onReportPress,
 }: {
   project: CrowdfundProject;
   colors: ReturnType<typeof useTheme>['colors'];
   onPress: () => void;
+  onReportPress: () => void;
 }) {
   const progress = computeFundingProgress(project.totalDeposited, project.targetAmount);
   const status: OnChainStatus =
@@ -106,6 +110,16 @@ function ProjectCard({
           {project.name}
         </Text>
         <OnChainBadge status={status} colors={colors} />
+        <TouchableOpacity
+          style={styles.cardReportButton}
+          onPress={onReportPress}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={`Report ${project.name}`}
+        >
+          <Ionicons name="flag-outline" size={16} color={colors.textSecondary} />
+        </TouchableOpacity>
       </View>
 
       <ProgressBar progress={progress} accentColor={colors.accent} />
@@ -151,6 +165,7 @@ export default function ProjectsScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fromCache, setFromCache] = useState(false);
+  const [reportTarget, setReportTarget] = useState<CrowdfundProject | null>(null);
 
   const fetchProjects = useCallback(
     async (refresh = false) => {
@@ -300,6 +315,7 @@ export default function ProjectsScreen() {
             project={item}
             colors={colors}
             onPress={() => router.push(`/projects/${item.id}`)}
+            onReportPress={() => setReportTarget(item)}
           />
         )}
         ListEmptyComponent={
@@ -322,6 +338,16 @@ export default function ProjectsScreen() {
         accessibilityLabel="Projects list"
         accessibilityRole="list"
       />
+
+      {reportTarget && (
+        <ReportContentModal
+          visible={!!reportTarget}
+          targetType={ReportType.PROJECT}
+          targetId={String(reportTarget.id)}
+          targetLabel={reportTarget.name}
+          onClose={() => setReportTarget(null)}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -376,6 +402,9 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     flex: 1,
+  },
+  cardReportButton: {
+    padding: 2,
   },
 
   // On-chain status badge

@@ -1,3 +1,5 @@
+import { clientConfig } from '@/lib/config';
+
 // API service functions for cryptocurrency data
 
 export interface CryptoApiData {
@@ -16,27 +18,41 @@ export interface CryptoApiData {
   };
 }
 
-// CoinGecko API service (No API key needed)
+export interface MarketApiError {
+  code: string;
+  message: string;
+  upstreamStatus?: number;
+}
+
+export interface CryptoMarketResult {
+  data: CryptoApiData[];
+  cachedAt?: string;
+  stale?: boolean;
+  error?: MarketApiError;
+}
+
 export class CryptoApiService {
-  private static readonly BASE_URL = 'https://api.coingecko.com/api/v3';
-  
-  static async getTopCryptocurrencies(limit: number = 20): Promise<CryptoApiData[]> {
+  private static readonly PROXY_BASE = '/api/market';
+
+  static async getTopCryptocurrencies(limit: number = 20): Promise<CryptoMarketResult> {
     try {
       const response = await fetch(
-        `${this.BASE_URL}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${limit}&page=1&sparkline=true&price_change_percentage=1h,24h,7d`,
+        `${this.PROXY_BASE}?limit=${limit}`,
         {
-          headers: {
-            'Accept': 'application/json',
-          },
+          headers: { Accept: 'application/json' },
         }
       );
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+
+      const body = (await response.json()) as CryptoMarketResult;
+
+      if (!response.ok && !body?.data?.length) {
+        const msg =
+          body?.error?.message ||
+          `Proxy returned HTTP ${response.status}`;
+        throw new Error(msg);
       }
-      
-      const data = await response.json();
-      return data;
+
+      return body;
     } catch (error) {
       console.error('Error fetching cryptocurrency data:', error);
       throw new Error('Failed to fetch cryptocurrency data. Please try again later.');
@@ -67,7 +83,7 @@ export interface StellarBalance {
 }
 
 export class StellarApiService {
-  private static readonly BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  private static readonly BASE_URL = clientConfig.apiUrl;
 
   static async getAccountBalances(publicKey: string): Promise<{ balances: StellarBalance[] }> {
     try {
@@ -173,3 +189,344 @@ export class StellarApiService {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Portfolio API — interfaces mirroring backend DTOs
+// ---------------------------------------------------------------------------
+
+export interface AssetBalanceWithCurrency {
+  assetCode: string;
+  assetIssuer: string | null;
+  amount: string;
+  /** Value in the requested currency */
+  value: number;
+  valueUsd: number;
+}
+
+export interface PortfolioSummaryResponse {
+  /** Total portfolio value in the requested currency */
+  totalValue: string;
+  currency: string;
+  totalValueUsd: string;
+  assets: AssetBalanceWithCurrency[];
+  /** ISO timestamp of last recorded snapshot, or null for first-time users */
+  lastUpdated: string | null;
+  hasLinkedAccount: boolean;
+  exchangeRate: number;
+}
+
+export interface TimeWindowPerformance {
+  window: '24h' | '7d' | '30d';
+  hasData: boolean;
+  absolutePnl: number | null;
+  percentageChange: number | null;
+  currentValueUsd: number;
+  baselineValueUsd: number | null;
+  baselineDate: string | null;
+}
+
+export interface PortfolioPerformanceResponse {
+  userId: string;
+  currentValueUsd: number;
+  calculatedAt: string;
+  windows: TimeWindowPerformance[];
+}
+
+export interface AllocationAsset {
+  assetCode: string;
+  assetIssuer: string | null;
+  amount: string;
+  valueUsd: number;
+  percentage: number;
+}
+
+export class PortfolioApiService {
+  private static readonly BASE_URL =
+    clientConfig.apiUrl;
+
+  /** Read the JWT from the auth-token cookie (same pattern as StellarApiService). */
+  private static getAuthHeaders(): Record<string, string> {
+    if (typeof document === 'undefined') return { 'Content-Type': 'application/json' };
+    const match = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith('auth-token='));
+    const token = match?.split('=')[1];
+    return {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }
+
+  /**
+   * Returns true when an auth token cookie is present.
+   * Used by the hook to skip fetching for unauthenticated visitors.
+   */
+  static isAuthenticated(): boolean {
+    if (typeof document === 'undefined') return false;
+    return document.cookie.split('; ').some((row) => row.startsWith('auth-token='));
+  }
+
+  /**
+   * GET /portfolio/summary
+   * Latest portfolio snapshot with total value and per-asset balances.
+   */
+  static async getSummary(
+    currency = 'USD',
+    signal?: AbortSignal,
+  ): Promise<PortfolioSummaryResponse> {
+    const response = await fetch(
+      `${this.BASE_URL}/portfolio/summary?currency=${encodeURIComponent(currency)}`,
+      { headers: this.getAuthHeaders(), signal },
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as any).message || `Portfolio summary fetch failed (${response.status})`);
+    }
+    return response.json();
+  }
+
+  /**
+   * GET /portfolio/performance
+   * 24h / 7d / 30d performance windows with absolute and percentage PnL.
+   */
+  static async getPerformance(
+    signal?: AbortSignal,
+  ): Promise<PortfolioPerformanceResponse> {
+    const response = await fetch(`${this.BASE_URL}/portfolio/performance`, {
+      headers: this.getAuthHeaders(),
+      signal,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as any).message || `Portfolio performance fetch failed (${response.status})`);
+    }
+    return response.json();
+  }
+
+  /**
+   * GET /portfolio/allocation
+   * Asset allocation breakdown with percentage per asset.
+   */
+  static async getAllocation(
+    signal?: AbortSignal,
+  ): Promise<AllocationAsset[]> {
+    const response = await fetch(`${this.BASE_URL}/portfolio/allocation`, {
+      headers: this.getAuthHeaders(),
+      signal,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as any).message || `Portfolio allocation fetch failed (${response.status})`);
+    }
+    return response.json();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Project API — interfaces and methods for crowdfund projects
+// ---------------------------------------------------------------------------
+
+export interface ProjectMilestone {
+  id: string;
+  title: string;
+  description: string;
+  targetDate: string;
+  isCompleted: boolean;
+  completedAt?: string;
+  fundingReleaseAmount?: string;
+  fundingReleaseTx?: string;
+}
+
+export interface ProjectDetail {
+  id: number;
+  owner: string;
+  name: string;
+  description?: string;
+  bannerUrl?: string;
+  targetAmount: string;
+  tokenAddress: string;
+  contractAddress?: string;
+  totalDeposited: string;
+  totalWithdrawn: string;
+  isActive: boolean;
+  onChainStatus: "ACTIVE" | "COMPLETED" | "PAUSED" | "CANCELLED";
+  lastSyncedAt: string;
+  contributorCount: number;
+  roadmap: ProjectMilestone[];
+  createdAt: string;
+}
+
+export interface ProjectContributor {
+  publicKey: string;
+  totalContributed: string;
+  contributionCount: number;
+  lastContributionAt: string;
+}
+
+export interface ContributionRecord {
+  projectId: number;
+  contributor: string;
+  amount: string;
+  timestamp: string;
+  transactionHash: string;
+}
+
+export interface ProjectBalance {
+  balance: string;
+}
+
+export interface ProjectSummary {
+  id: number;
+  name: string;
+  description?: string;
+  targetAmount: string;
+  totalDeposited: string;
+  totalWithdrawn: string;
+  isActive: boolean;
+  onChainStatus: "ACTIVE" | "COMPLETED" | "PAUSED" | "CANCELLED";
+  contributorCount: number;
+  createdAt: string;
+}
+
+/**
+ * API service for interacting with crowdfund project endpoints
+ */
+export class ProjectApiService {
+  private static readonly BASE_URL = clientConfig.apiUrl;
+
+  /**
+   * Get all projects
+   */
+  static async getProjects(): Promise<ProjectSummary[]> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load projects: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get a single project by ID
+   */
+  static async getProject(id: number): Promise<ProjectDetail> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/${id}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Project not found');
+      }
+      throw new Error(`Failed to load project: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get project balance
+   */
+  static async getProjectBalance(id: number): Promise<ProjectBalance> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/${id}/balance`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load balance: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get project contributors
+   */
+  static async getProjectContributors(id: number): Promise<ProjectContributor[]> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/${id}/contributors`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load contributors: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get contributions for a specific user on a project
+   */
+  static async getMyContributions(id: number, publicKey: string): Promise<ContributionRecord[]> {
+    const response = await fetch(
+      `${this.BASE_URL}/crowdfund/projects/${id}/contributions/${publicKey}`,
+      { headers: { Accept: 'application/json' } }
+    );
+    if (!response.ok) {
+      if (response.status === 404) {
+        return [];
+      }
+      throw new Error(`Failed to load contributions: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get all contributions for a project
+   */
+  static async getProjectContributions(id: number): Promise<ContributionRecord[]> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/${id}/contributions`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load contributions: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get project by contract address
+   */
+  static async getProjectByContract(contractAddress: string): Promise<ProjectDetail> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/contract/${contractAddress}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Project not found for this contract');
+      }
+      throw new Error(`Failed to load project: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get project by token address
+   */
+  static async getProjectByToken(tokenAddress: string): Promise<ProjectDetail> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/token/${tokenAddress}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Project not found for this token');
+      }
+      throw new Error(`Failed to load project: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get project statistics
+   */
+  static async getProjectStats(id: number): Promise<{
+    totalContributors: number;
+    totalContributions: number;
+    averageContribution: string;
+    progressPercentage: number;
+    daysRemaining?: number;
+  }> {
+    const response = await fetch(`${this.BASE_URL}/crowdfund/projects/${id}/stats`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load project stats: ${response.statusText}`);
+    }
+    return response.json();
+  }
+}

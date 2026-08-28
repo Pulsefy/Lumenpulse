@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
+import { config } from '../lib/config';
 
 export interface RetrainResult {
   status: string;
@@ -29,11 +30,12 @@ export class ModelRetrainingService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    this.pythonApiUrl = this.configService.get<string>(
-      'PYTHON_API_URL',
-      'http://localhost:8000',
-    );
-    this.apiKey = this.configService.get<string>('PYTHON_API_KEY', '');
+    this.pythonApiUrl =
+      this.configService.get<string>('PYTHON_API_URL') || config.python.apiUrl;
+    this.apiKey =
+      this.configService.get<string>('PYTHON_API_KEY') ||
+      config.python.apiKey ||
+      '';
   }
 
   private get headers() {

@@ -38,6 +38,23 @@ export class MetricsService implements OnModuleInit {
   private readonly horizonErrors: Counter<string>;
   private readonly horizonRequests: Counter<string>;
 
+  // Reconciliation monitoring //
+  private readonly reconciliationDriftCounter: Counter<string>;
+  private readonly reconciliationDriftDelta: Gauge<string>;
+  private readonly reconciliationThreshold: Gauge<string>;
+
+  // Outbox relay monitoring //
+  private readonly outboxRelayLag: Gauge<string>;
+  private readonly outboxAttempts: Counter<string>;
+  private readonly outboxDeadLetterVolume: Gauge<string>;
+
+  // Scheduled-job monitoring //
+  private readonly schedulerJobRuns: Counter<string>;
+  private readonly schedulerJobLastSuccess: Gauge<string>;
+  private readonly schedulerJobLastFailure: Gauge<string>;
+  private readonly schedulerJobDuration: Histogram<string>;
+  private readonly schedulerLockContention: Counter<string>;
+
   // Running totals for the rolling-average sentiment gauge
   private sentimentSum = 0;
   private sentimentCount = 0;
@@ -153,6 +170,82 @@ export class MetricsService implements OnModuleInit {
       name: 'horizon_http_requests_total',
       help: 'Total Horizon API requests by method',
       labelNames: ['method'] as const,
+      registers: [this.registry],
+    });
+
+    this.reconciliationDriftCounter = new Counter({
+      name: 'lumenpulse_reconciliation_drift_total',
+      help: 'Total reconciliation drift breaches by dataset and severity',
+      labelNames: ['dataset', 'severity'] as const,
+      registers: [this.registry],
+    });
+
+    this.reconciliationDriftDelta = new Gauge({
+      name: 'lumenpulse_reconciliation_drift_delta',
+      help: 'Latest reconciliation drift delta observed by dataset and severity',
+      labelNames: ['dataset', 'severity'] as const,
+      registers: [this.registry],
+    });
+
+    this.reconciliationThreshold = new Gauge({
+      name: 'lumenpulse_reconciliation_threshold',
+      help: 'Configured reconciliation drift threshold by dataset and severity',
+      labelNames: ['dataset', 'severity'] as const,
+      registers: [this.registry],
+    });
+
+    this.outboxRelayLag = new Gauge({
+      name: 'lumenpulse_outbox_relay_lag_seconds',
+      help: 'Age in seconds of the oldest pending outbox event',
+      registers: [this.registry],
+    });
+
+    this.outboxAttempts = new Counter({
+      name: 'lumenpulse_outbox_attempts_total',
+      help: 'Outbox dispatch attempts by outcome',
+      labelNames: ['status'] as const,
+      registers: [this.registry],
+    });
+
+    this.outboxDeadLetterVolume = new Gauge({
+      name: 'lumenpulse_outbox_dead_letter_volume',
+      help: 'Current number of outbox events in the dead-letter queue',
+      registers: [this.registry],
+    });
+
+    this.schedulerJobRuns = new Counter({
+      name: 'lumenpulse_scheduler_job_runs_total',
+      help: 'Total scheduled-job runs by job and outcome status',
+      labelNames: ['job', 'status'] as const,
+      registers: [this.registry],
+    });
+
+    this.schedulerJobLastSuccess = new Gauge({
+      name: 'lumenpulse_scheduler_job_last_success_timestamp_seconds',
+      help: 'Unix timestamp of the last successful run, per scheduled job',
+      labelNames: ['job'] as const,
+      registers: [this.registry],
+    });
+
+    this.schedulerJobLastFailure = new Gauge({
+      name: 'lumenpulse_scheduler_job_last_failure_timestamp_seconds',
+      help: 'Unix timestamp of the last failed run, per scheduled job',
+      labelNames: ['job'] as const,
+      registers: [this.registry],
+    });
+
+    this.schedulerJobDuration = new Histogram({
+      name: 'lumenpulse_scheduler_job_duration_seconds',
+      help: 'Duration of completed scheduled-job runs, per job',
+      labelNames: ['job'] as const,
+      buckets: [1, 5, 10, 30, 60, 120, 300, 600, 1800, 3600],
+      registers: [this.registry],
+    });
+
+    this.schedulerLockContention = new Counter({
+      name: 'lumenpulse_scheduler_lock_contention_total',
+      help: 'Total advisory-lock acquisition failures, per scheduled job',
+      labelNames: ['job'] as const,
       registers: [this.registry],
     });
   }
@@ -323,7 +416,77 @@ export class MetricsService implements OnModuleInit {
     this.horizonErrors.inc({ method, status_code: statusCode });
   }
 
-  //Dynamic metric helpers (legacy API)
+  recordReconciliationDrift(
+    dataset: string,
+    severity: 'warning' | 'critical',
+    delta: number,
+  ): void {
+    const labels = { dataset, severity };
+    this.reconciliationDriftCounter.inc(labels);
+    this.reconciliationDriftDelta.labels(labels).set(delta);
+  }
+
+  setReconciliationThreshold(
+    dataset: string,
+    severity: 'warning' | 'critical',
+    threshold: number,
+  ): void {
+    this.reconciliationThreshold.labels({ dataset, severity }).set(threshold);
+  }
+
+  // Outbox relay instrumentation //
+
+  /** Record how old (in seconds) the oldest pending outbox event is. */
+  setOutboxRelayLagSeconds(lagSeconds: number): void {
+    this.outboxRelayLag.set(Math.max(0, lagSeconds));
+  }
+
+  /** Record a completed outbox dispatch attempt. */
+  recordOutboxAttempt(status: 'processed' | 'failed' | 'dead_letter'): void {
+    this.outboxAttempts.inc({ status });
+  }
+
+  /** Record the current number of dead-lettered outbox events. */
+  setOutboxDeadLetterVolume(volume: number): void {
+    this.outboxDeadLetterVolume.set(volume);
+  } // Scheduled-job instrumentation //
+
+  /**
+   * Record a scheduled-job run outcome.
+   *
+   * @param job        Logical job name, e.g. "reconciliation"
+   * @param status     "running" | "completed" | "failed" | "skipped"
+   * @param durationMs Wall-clock duration of the run (null while running)
+   * @param timestamp  When the outcome happened (startedAt for completed/failed)
+   */
+  recordSchedulerJobOutcome(
+    job: string,
+    status: 'running' | 'completed' | 'failed' | 'skipped',
+    durationMs: number | null,
+    timestamp: Date,
+  ): void {
+    this.schedulerJobRuns.inc({ job, status });
+
+    if (status === 'completed') {
+      this.schedulerJobLastSuccess
+        .labels({ job })
+        .set(timestamp.getTime() / 1000);
+      if (durationMs !== null) {
+        this.schedulerJobDuration.labels({ job }).observe(durationMs / 1000);
+      }
+    } else if (status === 'failed') {
+      this.schedulerJobLastFailure
+        .labels({ job })
+        .set(timestamp.getTime() / 1000);
+    }
+  }
+
+  /** Count a failed advisory-lock acquisition (another instance held the lock). */
+  recordSchedulerLockContention(job: string): void {
+    this.schedulerLockContention.inc({ job });
+  }
+
+  // Dynamic metric helpers (legacy API)
 
   getOrCreateGauge(
     name: string,

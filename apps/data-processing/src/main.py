@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Main entry point for the data processing pipeline with both single-run and scheduled modes.
 """

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Job scheduler module - schedules and manages background jobs
 """
@@ -198,10 +199,21 @@ def _ingestion_quality_checks_job() -> None:
     try:
         run_ingestion_quality_checks(argv=None)
     except SystemExit:
-        # CLI may call sys.exit; ignore to keep scheduler alive.
         pass
-    except Exception as e:
-        logger.error(f"Ingestion quality checks failed: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error(f"Scheduled ingestion quality checks raised an exception: {exc}", exc_info=True)
+
+
+def _prediction_logs_cleanup_job() -> None:
+    """Clean up old prediction logs to enforce retention policy."""
+    logger.info("Scheduled prediction logs cleanup job triggered")
+    try:
+        retention_days = int(os.getenv("PREDICTION_LOG_RETENTION_DAYS", "30"))
+        db = PostgresService()
+        deleted = db.cleanup_prediction_logs(retention_days=retention_days)
+        logger.info(f"Cleaned up {deleted} old prediction logs.")
+    except Exception as exc:
+        logger.error(f"Scheduled prediction logs cleanup raised an exception: {exc}", exc_info=True)
 
 
 def _ingestion_alerting_job() -> None:
@@ -210,12 +222,23 @@ def _ingestion_alerting_job() -> None:
         from src.ingestion.ingestion_alerting import run_ingestion_alerting_cycle
 
         result = run_ingestion_alerting_cycle()
+        suppressed = result.get("suppressed_alerts", [])
+        engine_stats = result.get("suppression_engine_stats", {})
         logger.info(
-            "Ingestion alerting cycle complete | healthy=%s | metrics=%d | lag_alerts=%d",
+            "Ingestion alerting cycle complete | healthy=%s | metrics=%d | "
+            "lag_alerts=%d | suppressed=%d | rules=%d",
             result.get("healthy"),
             len(result.get("metrics", [])),
             len(result.get("lag_alerts", [])),
+            len(suppressed),
+            len(engine_stats.get("rules", [])),
         )
+        if suppressed:
+            logger.info(
+                "ALERT_SUPPRESSION suppressed=%d aler-types=%s",
+                len(suppressed),
+                [s.get("alert_type") for s in suppressed[:5]],
+            )
     except Exception as exc:
         logger.error("Ingestion alerting job failed: %s", exc, exc_info=True)
 
@@ -297,6 +320,31 @@ def _metadata_drift_detector_job() -> None:
         logger.error(f"Metadata drift detector job failed: {exc}", exc_info=True)
 
 
+def _feature_drift_detection_job() -> None:
+    """Scheduled wrapper for FeatureDriftDetector (#1239).
+
+    Compares the current serving feature distribution against the training-time
+    baseline recorded with the live price-predictor model and raises an alert
+    through the existing alerting path when any feature drifts beyond the
+    configured PSI threshold (or the feature schema version/fingerprint no
+    longer matches). Read-only; errors are caught so the scheduler keeps running.
+    """
+    try:
+        from src.ml.feature_drift_detector import FeatureDriftDetector
+
+        detector = FeatureDriftDetector()
+        report = detector.detect()
+        logger.info(
+            "Feature drift detection: status=%s drifted=%s schema_mismatch=%s alerted=%s",
+            report.status,
+            report.drifted_features,
+            report.schema_mismatch,
+            report.alerted,
+        )
+    except Exception as exc:
+        logger.error(f"Feature drift detector job failed: {exc}", exc_info=True)
+
+
 def _kpi_reconciliation_job() -> None:
     """Scheduled wrapper for KPIReconciler (#1054).
 
@@ -311,6 +359,51 @@ def _kpi_reconciliation_job() -> None:
         )
     except Exception as exc:
         logger.error(f"KPI reconciliation job failed: {exc}", exc_info=True)
+
+
+def _daily_onchain_kpi_snapshot_job() -> None:
+    """Scheduled wrapper for DailyKPISnapshotGenerator (#877).
+
+    Persists daily snapshots of core on-chain KPIs (TVL, volume, active rounds,
+    contribution counts) to enable fast, consistent trend analysis and prevent duplicate entries.
+    """
+    try:
+        from src.analytics.daily_kpi_snapshot import DailyKPISnapshotGenerator
+
+        generator = DailyKPISnapshotGenerator()
+        result = generator.run_snapshot()
+        logger.info(
+            "Daily on-chain KPI snapshot job complete | status=%s | date=%s | tvl=%.2f | volume=%.2f | active_rounds=%d | contributions=%d",
+            result.get("status"),
+            result.get("date"),
+            result.get("tvl", 0.0),
+            result.get("volume", 0.0),
+            result.get("active_rounds", 0),
+            result.get("contribution_count", 0),
+        )
+    except Exception as exc:
+        logger.error(f"Daily on-chain KPI snapshot job failed: {exc}", exc_info=True)
+
+
+def _contract_lag_metrics_job() -> None:
+    """Scheduled wrapper for per-contract ingestion lag metrics.
+
+    Measures lag for registry, vault, matching_pool, treasury, and vesting
+    domains, publishes values to Prometheus, and emits structured log alerts
+    when thresholds are exceeded.
+    """
+    try:
+        from src.ingestion.contract_lag_metrics import run_contract_lag_cycle
+
+        result = run_contract_lag_cycle()
+        logger.info(
+            "Contract lag cycle complete | healthy=%s | snapshots=%d | lag_alerts=%d",
+            result.get("healthy"),
+            len(result.get("snapshots", [])),
+            len(result.get("lag_alerts", [])),
+        )
+    except Exception as exc:
+        logger.error("Contract lag metrics job failed: %s", exc, exc_info=True)
 
 
 class AnalyticsScheduler:
@@ -339,7 +432,7 @@ class AnalyticsScheduler:
             # ── Stellar ingestion quality checks: every hour ──────────
             # Low-noise: only fails CI/process when ingestion lag is critical.
             quality_job = self.scheduler.add_job(
-                func=self._ingestion_quality_checks_job,
+                func=_ingestion_quality_checks_job,
                 trigger=IntervalTrigger(hours=1),
                 id="stellar_ingestion_quality_checks_hourly",
                 name="Stellar Ingestion Quality Checks - Hourly",
@@ -410,12 +503,55 @@ class AnalyticsScheduler:
                 replace_existing=True,
             )
 
+            # ── Feature Drift Detection: every 6 hours (#1239) ───────────
+            feature_drift_interval = int(
+                os.getenv("FEATURE_DRIFT_INTERVAL_HOURS", "6")
+            )
+            self.scheduler.add_job(
+                func=_feature_drift_detection_job,
+                trigger=IntervalTrigger(hours=feature_drift_interval),
+                id="feature_drift_detection",
+                name="Training-vs-Serving Feature Drift Detection",
+                replace_existing=True,
+            )
+
             # ── KPI Reconciliation: every 6 hours (#1054) ───────────────
             self.scheduler.add_job(
                 func=_kpi_reconciliation_job,
                 trigger=IntervalTrigger(hours=6),
                 id="kpi_reconciliation",
                 name="KPI Reconciler against Live Contract Reads",
+                replace_existing=True,
+            )
+
+            # ── Daily On-Chain KPI Snapshot: daily at 00:05 UTC (#877) ──
+            self.scheduler.add_job(
+                func=_daily_onchain_kpi_snapshot_job,
+                trigger=CronTrigger(hour=0, minute=5, timezone="UTC"),
+                id="daily_onchain_kpi_snapshot",
+                name="Daily On-Chain KPI Snapshot Scheduler",
+                replace_existing=True,
+            )
+
+            # ── Per-contract ingestion lag metrics: every 5 minutes ──────
+            contract_lag_interval = int(
+                os.getenv("CONTRACT_LAG_INTERVAL_MINUTES", "5")
+            )
+            self.scheduler.add_job(
+                func=_contract_lag_metrics_job,
+                trigger=IntervalTrigger(minutes=contract_lag_interval),
+                id="contract_ingestion_lag_metrics",
+                name="Per-Contract Ingestion Lag Metrics",
+                replace_existing=True,
+            )
+
+
+            # ── Prediction Logs Cleanup: daily at 02:00 UTC ──────
+            self.scheduler.add_job(
+                func=_prediction_logs_cleanup_job,
+                trigger=CronTrigger(hour=2, minute=0, timezone="UTC"),
+                id="prediction_logs_cleanup",
+                name="Prediction Logs Cleanup Scheduler",
                 replace_existing=True,
             )
 

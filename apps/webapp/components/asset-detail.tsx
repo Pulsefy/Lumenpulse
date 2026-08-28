@@ -11,7 +11,7 @@ import {
   Globe,
   MessageSquare,
 } from "lucide-react";
-import { CryptoApiService, transformCryptoData } from "@/lib/api-services";
+import { CryptoApiService, transformCryptoData, CryptoMarketResult } from "@/lib/api-services";
 import { Asset } from "./stellar-balances-panel";
 import TransactionDetail from "./transaction-detail";
 
@@ -51,8 +51,8 @@ export default function AssetDetail({
       setLoading(true);
       try {
         // Fetch price data if available (mapping XLM or other codes)
-        const apiData = await CryptoApiService.getTopCryptocurrencies(50);
-        const transformed = apiData.map(transformCryptoData);
+        const result: CryptoMarketResult = await CryptoApiService.getTopCryptocurrencies(50);
+        const transformed = result.data.map(transformCryptoData);
         const matched = transformed.find(
           (c) => c.symbol.toLowerCase() === code.toLowerCase(),
         );

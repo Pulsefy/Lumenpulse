@@ -1,3 +1,5 @@
+import { clientConfig } from '@/lib/config';
+
 export const WatchlistItemType = {
   ASSET: 'asset',
   PROJECT: 'project',
@@ -48,7 +50,7 @@ export interface ToggleWatchlistResult {
 
 export class WatchlistApiService {
   private static readonly BASE_URL =
-    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    clientConfig.apiUrl;
 
   private static getAuthHeaders(): Record<string, string> {
     if (typeof document === 'undefined') return {};

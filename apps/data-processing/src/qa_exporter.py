@@ -1,8 +1,28 @@
 """
-QA Dataset Exporter
+QA Dataset Exporter — Ledger-Range Export Generator for Incident Debugging
 
-Exports raw events, materialized views, and KPIs for a given Stellar ledger range.
-Intended for QA engineers and contributor debugging.
+Exports raw payloads and normalized outputs for a specific Stellar ledger range
+so maintainers can debug incidents reproducibly.
+
+Intended use:
+  Maintainers run this tool during on-call / incident triage to capture a
+  deterministic snapshot of the ledger interval under investigation. The export
+  is safe for repeated use (idempotent, atomic writes) and is intended for
+  offline debugging, diffing across incidents, and handing to contributors for
+  reproduction. Do NOT use for production ETL; use the Soroban indexer /
+  backfill tooling for that.
+
+Raw payloads vs normalized outputs:
+  - Raw payloads  : ``events_<start>_<end>.json`` — untransformed contract
+    events as ingested (AnalyticsRecord where record_type='event' plus, when
+    available, ContractEvent rows with their raw_data/topics filtered by
+    ``ledger``). These are the source-of-truth payloads.
+  - Normalized outputs:
+      * ``views_<start>_<end>.json`` — materialized views (Article +
+        SocialPost sentiment aggregates + non-event AnalyticsRecords).
+      * ``kpis_<start>_<end>.json`` — computed KPIs / AssetTrend rows.
+    These represent the post-processing derived state for the same ledger
+    interval.
 
 Output format: JSON files written to output_dir/
   - events_<start>_<end>.json      : raw contract events (from AnalyticsRecord where record_type='event')
@@ -15,9 +35,19 @@ Each file has the envelope:
     "exported_at": "<ISO-8601>",
     "start_ledger": <int>,
     "end_ledger": <int>,
+    "dataset": "<events|views|kpis>",
     "count": <int>,
-    "records": [ ... ]
+    "records": [ ... ] | { articles: [...], social_posts: [...], analytics_records: [...] }
   }
+
+Safe for repeated use:
+  - Filenames are deterministic (ledger range) so re-running overwrites the
+    same files rather than duplicating data.
+  - Writes are atomic (write to ``.tmp`` then rename) so interrupted runs do
+    not leave partial JSON.
+  - Queries are read-only; no DB mutation occurs.
+  - Re-running a completed range yields byte-identical counts (idempotent)
+    unless underlying data changed.
 """
 
 import json
@@ -62,6 +92,14 @@ class QAExporter:
     ``extra_data->>'ledger'`` JSON field written by the ingestion pipeline.
     Articles and SocialPosts are included in the views export regardless of
     ledger (they carry no ledger field) when no ledger filter can be applied.
+
+    Raw vs normalized:
+      - Raw      -> ``export_events`` (untransformed contract events)
+      - Normalized -> ``export_views`` + ``export_kpis`` (materialized views
+        and computed KPIs). Together they cover the ledger-range export
+        generator requirement for incident debugging.
+
+    Safe for repeated use: see module docstring.
     """
 
     def __init__(
@@ -72,6 +110,17 @@ class QAExporter:
         database_url: Optional[str] = None,
     ):
         import os
+
+        # --- validation: Accepts start/end ledger inputs ---
+        try:
+            start_ledger = int(start_ledger)
+            end_ledger = int(end_ledger)
+        except (TypeError, ValueError):
+            raise ValueError("start_ledger and end_ledger must be integers")
+        if start_ledger < 0 or end_ledger < 0:
+            raise ValueError("ledger numbers must be >= 0")
+        if start_ledger > end_ledger:
+            raise ValueError("start_ledger must be <= end_ledger")
 
         self.start_ledger = start_ledger
         self.end_ledger = end_ledger
@@ -101,9 +150,16 @@ class QAExporter:
         }
 
     def _write(self, data: Dict, name: str) -> Path:
+        """
+        Atomic, idempotent write: write to a temp file then rename.
+        Safe for repeated use — re-running overwrites deterministically and
+        never leaves a partial file on interruption.
+        """
         path = self.output_dir / f"{name}_{self.start_ledger}_{self.end_ledger}.json"
-        with open(path, "w") as f:
+        tmp = path.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)
+        tmp.replace(path)
         return path
 
     def _ledger_filter(self, model):
@@ -165,6 +221,12 @@ class QAExporter:
         """
         Export materialized views: aggregated sentiment from Articles and
         SocialPosts, plus all non-event AnalyticsRecord rows.
+
+        Normalized output for the ledger range. AnalyticsRecords are filtered
+        by ledger when ``extra_data.ledger`` is present (via _ledger_filter);
+        Articles/SocialPosts have no ledger field and are exported as-is for
+        the range (deterministic snapshot). The query remains read-only and
+        re-running produces identical counts (idempotent).
         """
         with self.Session() as session:
             articles = session.execute(select(Article)).scalars().all()
@@ -173,6 +235,9 @@ class QAExporter:
             analytics_q = select(AnalyticsRecord).where(
                 AnalyticsRecord.record_type != "event"
             )
+            ledger_f = self._ledger_filter(AnalyticsRecord)
+            if ledger_f is not None:
+                analytics_q = analytics_q.where(ledger_f)
             analytics = session.execute(analytics_q).scalars().all()
 
             records = {
@@ -221,9 +286,21 @@ class QAExporter:
         return ExportResult("views", str(path), total, "completed")
 
     def export_kpis(self) -> ExportResult:
-        """Export KPIs from AssetTrend rows within the ledger range."""
+        """
+        Export KPIs from AssetTrend rows.
+
+        Normalized output. When AssetTrend rows carry ``extra_data.ledger``,
+        they are filtered to the requested ledger range; otherwise the full
+        set is exported (preserving backward-compatibility). Read-only and
+        safe for repeated use.
+        """
         with self.Session() as session:
-            rows = session.execute(select(AssetTrend)).scalars().all()
+            q = select(AssetTrend)
+            # AssetTrend has extra_data JSON; filter if ledger key exists
+            ledger_f = self._ledger_filter(AssetTrend)
+            if ledger_f is not None:
+                q = q.where(ledger_f)
+            rows = session.execute(q).scalars().all()
             records = [
                 {
                     "id": r.id,

@@ -10,6 +10,7 @@ export enum OutboxEventStatus {
   PENDING = 'pending',
   PROCESSED = 'processed',
   FAILED = 'failed',
+  DEAD_LETTER = 'dead_letter',
 }
 
 @Entity('outbox_events')
@@ -45,6 +46,10 @@ export class OutboxEvent {
   /** When the event was last processed (successfully or not) */
   @Column({ type: 'timestamptz', nullable: true })
   processedAt: Date | null;
+
+  /** When the event was moved to the dead-letter queue (poison message) */
+  @Column({ type: 'timestamptz', nullable: true })
+  deadLetterAt: Date | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
