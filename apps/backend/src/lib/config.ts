@@ -141,6 +141,24 @@ const splitCsv = (value: string | undefined): string[] => {
     .filter(Boolean);
 };
 
+/**
+ * Parse a port-like numeric environment variable.
+ *
+ * `z.coerce.number()` turns an unset/empty variable into `Number(undefined)` or
+ * `Number('')`, which yields `NaN` and fails validation with a cryptic
+ * "Expected number, received nan". That broke `migration:run` in CI, where
+ * `PORT` is intentionally left unset (it is irrelevant to migrations).
+ *
+ * Treat unset/empty as the provided fallback so the app boots, while still
+ * rejecting values that are present but genuinely non-numeric/out of range.
+ */
+const portField = (fallback: number) =>
+  z.preprocess(
+    (value) =>
+      value === undefined || value === null || value === '' ? fallback : value,
+    z.coerce.number().int().min(1).max(65535),
+  );
+
 const isNodeEnvironment = (value: string): value is NodeEnvironment =>
   value === 'development' ||
   value === 'test' ||
@@ -311,10 +329,10 @@ const envSchema = z
     NODE_ENV: z.enum(['development', 'test', 'staging', 'production']),
     ENVIRONMENT: z.string().min(1).default(runtime.environment),
 
-    PORT: z.coerce.number().int().min(1).max(65535),
+    PORT: portField(3000),
 
     DB_HOST: z.string().min(1),
-    DB_PORT: z.coerce.number().int().min(1).max(65535),
+    DB_PORT: portField(5432),
     DB_USERNAME: z.string().min(1),
     DB_PASSWORD: z.string().min(1), // SECRET — never log
     DB_DATABASE: z.string().min(1),
