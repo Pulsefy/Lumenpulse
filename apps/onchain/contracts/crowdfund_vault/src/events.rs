@@ -38,6 +38,17 @@ pub struct MilestoneApprovedEvent {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneDecisionEvent {
+    #[topic]
+    pub admin: Address,
+    #[topic]
+    pub project_id: u64,
+    pub milestone_id: u32,
+    pub approved: bool,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WithdrawEvent {
     #[topic]
     pub owner: Address,

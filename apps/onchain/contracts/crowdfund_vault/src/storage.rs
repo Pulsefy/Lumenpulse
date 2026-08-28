@@ -5,6 +5,7 @@ use soroban_sdk::{contracttype, Address, Symbol};
 // LEDGER_BUMP: the new TTL to set when extending (≈30 days at 5 s/ledger).
 pub const LEDGER_THRESHOLD: u32 = 100_000;
 pub const LEDGER_BUMP: u32 = 518_400;
+pub const MAX_MILESTONE_DECISION_BATCH_SIZE: u32 = 25;
 
 #[contracttype]
 #[derive(Clone)]
@@ -43,7 +44,13 @@ pub enum DataKey {
     RefundClaimed(u64, Address), // (project_id, contributor) -> bool
     RegistrationNonce(Address),  // Address -> u64
     DepositNonce(Address),       // Address -> u64
-    DepositIdempotencyKey(u64, Address),
+    // ── Idempotency guard (issue #1224) ──────────────────────────────────────
+    /// Idempotency receipt for a deposit operation.
+    /// Key: (project_id, contributor_address)
+    /// Value: true (present means the deposit was already executed)
+    /// Storage tier: Persistent — survives across ledgers for the TTL window
+    /// defined in the idempotency-guard crate (~14 days).
+    DepositIdempotencyKey(u64, Address), // (project_id, depositor) -> BytesN<32>
     // ── Emergency migration (issue #1047) ─────────────────────────────────────
     EmergencyMigrationPlan(u64), // project_id -> EmergencyMigrationPlan
 }
@@ -86,6 +93,22 @@ pub struct MilestoneDispute {
     pub challenger: Address,
     pub opened_at: u64,
     pub reason: Symbol,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneDecision {
+    pub project_id: u64,
+    pub milestone_id: u32,
+    pub approve: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneDecisionOutcome {
+    pub project_id: u64,
+    pub milestone_id: u32,
+    pub approved: bool,
 }
 
 #[contracttype]

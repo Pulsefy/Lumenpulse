@@ -61,6 +61,8 @@ impl YieldVaultContract {
 
         caller.require_auth();
 
+        env.storage().instance().extend_ttl(100, 100);
+
         Ok(())
     }
 

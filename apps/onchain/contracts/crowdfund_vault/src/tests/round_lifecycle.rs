@@ -22,7 +22,7 @@ use proptest::prelude::*;
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Ledger},
-    Address, Env,
+    Address, BytesN, Env,
 };
 
 const REFUND_WINDOW_SECONDS: u64 = 14 * 24 * 60 * 60;
@@ -56,7 +56,7 @@ mod contribute_phase {
             client.cancel_project(&owner, &project_id);
 
             token_admin.mint(&user, &amount);
-            let result = client.try_deposit(&user, &project_id, &amount);
+            let result = client.try_deposit(&user, &project_id, &amount, &BytesN::from_array(&env, &[76u8; 32]));
             prop_assert_eq!(
                 result,
                 Err(Ok(CrowdfundError::ProjectNotActive)),
@@ -404,7 +404,7 @@ mod close_phase {
             client.refund_contributors(&project_id, &owner);
 
             token_admin.mint(&user, &retry_amount);
-            let result = client.try_deposit(&user, &project_id, &retry_amount);
+            let result = client.try_deposit(&user, &project_id, &retry_amount, &BytesN::from_array(&env, &[77u8; 32]));
             prop_assert_eq!(
                 result,
                 Err(Ok(CrowdfundError::ProjectNotActive)),

@@ -121,6 +121,30 @@ export default function SettingsScreen() {
       return;
     }
 
+    // For mainnet, require explicit confirmation due to the critical nature
+    // of switching to production network with real funds
+    if (value === 'mainnet') {
+      Alert.alert(
+        t('settings.network.mainnet_confirmation_title'),
+        t('settings.network.mainnet_confirmation_message'),
+        [
+          {
+            text: t('common.cancel'),
+            style: 'cancel',
+          },
+          {
+            text: t('settings.network.mainnet_confirmation_confirm'),
+            onPress: async () => {
+              await setEnvironment(value);
+            },
+            style: 'destructive',
+          },
+        ],
+      );
+      return;
+    }
+
+    // Testnet switch doesn't require confirmation
     await setEnvironment(value);
   };
 

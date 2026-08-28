@@ -321,7 +321,10 @@
       "mainnet": "主网",
       "endpoint_not_configured": "端点未配置",
       "mainnet_unavailable": "主网不可用",
-      "mainnet_unavailable_message": "请先配置主网 API 和 Soroban RPC 端点再切换。"
+      "mainnet_unavailable_message": "请先配置主网 API 和 Soroban RPC 端点再切换。",
+      "mainnet_confirmation_title": "切换到主网？",
+      "mainnet_confirmation_message": "您即将切换到主网，其中真实资产处于风险中。所有缓存数据将被清除，您的钱包需要重新选择。此操作无法撤销。",
+      "mainnet_confirmation_confirm": "切换到主网"
     },
     "version": "版本",
     "environment": "环境",

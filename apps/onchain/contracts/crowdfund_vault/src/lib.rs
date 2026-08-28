@@ -9,19 +9,20 @@ mod treasury_interface;
 mod yield_provider;
 
 use errors::CrowdfundError;
+use idempotency_guard::claim_request as idempotency_claim;
 use math::{sqrt_scaled, unscale};
 use notification_interface::{Notification, NotificationReceiverClient};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env, IntoVal, Symbol, Vec, vec, BytesN, Val
+    contract, contractimpl, contracttype, Address, Env, IntoVal, Symbol, Vec, vec, BytesN
 };
 use storage::{
-    DataKey, EmergencyMigrationPlan, MigrationPlanStatus, MilestoneDispute, ProjectData,
-    ProjectStorageSummary, ProtocolStats, RefundReceipt, LEDGER_BUMP, LEDGER_THRESHOLD,
+    DataKey, EmergencyMigrationPlan, MigrationPlanStatus, MilestoneDecision,
+    MilestoneDecisionOutcome, MilestoneDispute, ProjectData, ProjectStorageSummary, ProtocolStats,
+    RefundReceipt, LEDGER_BUMP, LEDGER_THRESHOLD, MAX_MILESTONE_DECISION_BATCH_SIZE,
 };
-use idempotency_guard::claim_request as idempotency_claim;
 
 const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
@@ -755,19 +756,36 @@ impl CrowdfundVaultContract {
         })
     }
 
-    /// Deposit funds into a project
+    /// Deposit funds into a project.
+    ///
+    /// `request_id` is a caller-supplied 32-byte nonce that uniquely identifies
+    /// this deposit attempt.  The idempotency-guard stores a receipt for the
+    /// nonce so that a second submission with the *same* `request_id` is
+    /// rejected with `AlreadyExecuted` — protecting against double-spend from
+    /// network retries or frontend bugs.
+    ///
+    /// Callers MUST generate a fresh nonce per deposit (e.g. random bytes or a
+    /// deterministic hash of `(user, project_id, amount, timestamp)`).  Reusing
+    /// a nonce within the ~14-day TTL window will cause a rejection.
+    ///
+    /// # Storage cost
+    /// One persistent 32-byte key is written per unique `request_id`.
+    /// The key expires after ~14 days (241 920 ledgers at 5 s/ledger).
     pub fn deposit(
         env: Env,
         user: Address,
         project_id: u64,
         amount: i128,
-        request_id: soroban_sdk::BytesN<32>,
+        request_id: BytesN<32>,
     ) -> Result<(), CrowdfundError> {
         Self::with_reentrancy_guard(&env, || {
             Self::require_current_storage_version(&env)?;
 
             user.require_auth();
+            // ── Idempotency check (must come before any state mutation) ──────
+            // Reject duplicate submissions that carry an already-seen request_id.
             idempotency_claim(&env, &request_id).map_err(|_| CrowdfundError::AlreadyExecuted)?;
+
             Self::deposit_internal(&env, &user, project_id, amount)
         })
     }
@@ -1009,6 +1027,90 @@ impl CrowdfundVaultContract {
         .publish(&env);
 
         Ok(())
+    }
+
+    /// Apply a bounded set of admin milestone approvals/rejections.
+    ///
+    /// The batch is validated before any milestone state is mutated. Repeated
+    /// `(project_id, milestone_id)` pairs are rejected because the final state
+    /// would depend on payload ordering rather than one clear decision.
+    pub fn process_milestone_decisions(
+        env: Env,
+        admin: Address,
+        decisions: Vec<MilestoneDecision>,
+    ) -> Result<Vec<MilestoneDecisionOutcome>, CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+
+        let len = decisions.len();
+        if len == 0 || len > MAX_MILESTONE_DECISION_BATCH_SIZE {
+            return Err(CrowdfundError::InvalidBatch);
+        }
+
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            return Err(CrowdfundError::ContractPaused);
+        }
+
+        for i in 0..len {
+            let current = decisions.get(i).ok_or(CrowdfundError::InvalidBatch)?;
+
+            for j in (i + 1)..len {
+                let next = decisions.get(j).ok_or(CrowdfundError::InvalidBatch)?;
+                if current.project_id == next.project_id
+                    && current.milestone_id == next.milestone_id
+                {
+                    return Err(CrowdfundError::InvalidBatch);
+                }
+            }
+
+            let mut project: ProjectData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Project(current.project_id))
+                .ok_or(CrowdfundError::ProjectNotFound)?;
+            Self::fail_if_project_expired(&env, current.project_id, &mut project)?;
+        }
+
+        let mut outcomes = Vec::new(&env);
+        for decision in decisions.iter() {
+            let approved_key =
+                DataKey::MilestoneApproved(decision.project_id, decision.milestone_id);
+            let disputed_key =
+                DataKey::MilestoneDisputed(decision.project_id, decision.milestone_id);
+            let dispute_key = DataKey::MilestoneDispute(decision.project_id, decision.milestone_id);
+
+            env.storage()
+                .persistent()
+                .set(&approved_key, &decision.approve);
+            env.storage()
+                .persistent()
+                .extend_ttl(&approved_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            env.storage().persistent().set(&disputed_key, &false);
+            env.storage()
+                .persistent()
+                .extend_ttl(&disputed_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            env.storage().persistent().remove(&dispute_key);
+
+            events::MilestoneDecisionEvent {
+                admin: admin.clone(),
+                project_id: decision.project_id,
+                milestone_id: decision.milestone_id,
+                approved: decision.approve,
+            }
+            .publish(&env);
+
+            outcomes.push_back(MilestoneDecisionOutcome {
+                project_id: decision.project_id,
+                milestone_id: decision.milestone_id,
+                approved: decision.approve,
+            });
+        }
+
+        Ok(outcomes)
     }
 
     /// Start a vote for a milestone approval

@@ -65,6 +65,7 @@ Describe the impact, the expected downsides, and the operational follow-through.
 4. [ADR-0004: Split Soroban state by domain and contract boundary](./ADR-0004-soroban-state-split.md)
 5. [ADR-0005: Contract upgrade and timelock guardrail](./ADR-0005-contract-upgrade-timelock.md)
 6. [ADR-0006: Dead-letter queue and replayable event handling](./ADR-0006-dead-letter-queue.md)
+7. [ADR-0007: Idempotency guard — tests and adoption on `crowdfund_vault::deposit`](../../apps/onchain/doc/adr/ADR-0007-idempotency-guard.md)
 
 ## Related implementation summaries and feature write-ups
 

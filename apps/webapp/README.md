@@ -28,6 +28,18 @@ All environment variables are centralized in [`lib/config.ts`](lib/config.ts). T
 
 Validation happens at module load time with clear error messages for missing variables.
 
+## API Type Generation
+
+The webapp consumes shared TypeScript types generated from the backend OpenAPI contract. The generated output lives in `generated/` and is meant to be treated as a build artifact, not a hand-edited source file.
+
+```bash
+# Regenerate the shared types from apps/backend/openapi.json
+npm run generate:api-types
+
+# Fail CI if the committed generated file is stale
+npm run check:api-types
+```
+
 ## Development
 
 ```bash

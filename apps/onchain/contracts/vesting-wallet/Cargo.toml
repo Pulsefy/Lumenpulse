@@ -11,6 +11,7 @@ doctest = false
 [dependencies]
 soroban-sdk = { workspace = true }
 reentrancy-guard = { path = "../reentrancy-guard" }
+cross-contract-view = { path = "../cross-contract-view" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

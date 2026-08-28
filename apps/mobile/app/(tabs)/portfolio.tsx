@@ -28,6 +28,7 @@ import { CACHE_CONFIGS } from '../../lib/cache';
 import { useWalletAutoRefresh } from '../../hooks/useWalletAutoRefresh';
 import { storage } from '../../lib/storage';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
+import NetworkBadge from '../../components/NetworkBadge';
 
 const truncateKey = (value: string) => `${value.slice(0, 6)}...${value.slice(-6)}`;
 
@@ -409,6 +410,7 @@ export default function PortfolioScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <NetworkBadge />
       {isStale && (
         <View
           style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}

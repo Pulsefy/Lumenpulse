@@ -334,7 +334,10 @@
       "mainnet": "Mainnet",
       "endpoint_not_configured": "Endpoint not configured",
       "mainnet_unavailable": "Mainnet Unavailable",
-      "mainnet_unavailable_message": "Configure mainnet API and Soroban RPC endpoints before switching."
+      "mainnet_unavailable_message": "Configure mainnet API and Soroban RPC endpoints before switching.",
+      "mainnet_confirmation_title": "Switch to Mainnet?",
+      "mainnet_confirmation_message": "You are about to switch to the Mainnet where real assets are at stake. All cached data will be cleared and your wallet will require re-selection. This action cannot be undone.",
+      "mainnet_confirmation_confirm": "Switch to Mainnet"
     },
     "version": "Version",
     "environment": "Environment",

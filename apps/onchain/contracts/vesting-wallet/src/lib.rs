@@ -6,6 +6,7 @@ mod storage;
 mod token;
 mod vault_interface;
 
+use cross_contract_view::admin_helpers;
 use errors::VestingError;
 use events::{AdminChangedEvent, UpgradedEvent};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
@@ -135,23 +136,14 @@ impl VestingWalletContract {
         duration: u64,
         milestone_requirement: MilestoneRequirement,
     ) -> Result<(), VestingError> {
-        // Check if contract is initialized
-        let stored_admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .ok_or(VestingError::NotInitialized)?;
+        // Check if contract is initialized and verify admin using cross-contract view helper
+        admin_helpers::require_admin(&env, &admin, &DataKey::Admin).map_err(|e| match e {
+            cross_contract_view::ViewError::NotInitialized => VestingError::NotInitialized,
+            _ => VestingError::Unauthorized,
+        })?;
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
-
-        // Verify admin identity
-        if admin != stored_admin {
-            return Err(VestingError::Unauthorized);
-        }
-
-        // Require admin authorization
-        admin.require_auth();
 
         // Validate amount
         if amount <= 0 {
