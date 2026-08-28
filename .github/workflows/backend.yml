@@ -48,6 +48,7 @@ jobs:
 
     env:
       NODE_ENV: test
+      PORT: '3000'
       DB_HOST: localhost
       DB_PORT: '5432'
       DB_USERNAME: postgres
