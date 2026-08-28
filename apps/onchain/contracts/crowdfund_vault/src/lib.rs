@@ -24,6 +24,22 @@ const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
 const DEFAULT_REFUND_WINDOW_SECONDS: u64 = 14 * 24 * 60 * 60;
 
+#[soroban_sdk::contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContributionIntent {
+    pub user: Address,
+    pub project_id: u64,
+    pub amount: i128,
+    pub nonce: u64,
+}
+
+#[soroban_sdk::contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RegistrationIntent {
+    pub user: Address,
+    pub nonce: u64,
+}
+
 #[contract]
 pub struct CrowdfundVaultContract;
 
@@ -708,13 +724,16 @@ impl CrowdfundVaultContract {
             }
 
             let nonce = Self::deposit_nonce_of(&env, &user);
+            let intent = ContributionIntent {
+                user: user.clone(),
+                project_id,
+                amount,
+                nonce,
+            };
             user.require_auth_for_args(
                 (
                     soroban_sdk::Symbol::new(&env, "deposit_with_sig"),
-                    user.clone(),
-                    project_id,
-                    amount,
-                    nonce,
+                    intent,
                 )
                     .into_val(&env),
             );
@@ -1528,15 +1547,18 @@ impl CrowdfundVaultContract {
             return Err(CrowdfundError::InvalidSignature);
         }
 
-        let nonce = Self::register_nonce_of(&env, &contributor);
-        contributor.require_auth_for_args(
-            (
-                soroban_sdk::Symbol::new(&env, "register_contributor_with_sig"),
-                contributor.clone(),
+            let nonce = Self::register_nonce_of(&env, &contributor);
+            let intent = RegistrationIntent {
+                user: contributor.clone(),
                 nonce,
-            )
-                .into_val(&env),
-        );
+            };
+            contributor.require_auth_for_args(
+                (
+                    soroban_sdk::Symbol::new(&env, "register_contributor_with_sig"),
+                    intent,
+                )
+                    .into_val(&env),
+            );
 
         let new_nonce = nonce + 1;
         env.storage()
