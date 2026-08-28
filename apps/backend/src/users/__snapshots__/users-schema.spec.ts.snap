@@ -12,7 +12,7 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/User",
+                  "$ref": "#/components/schemas/UserAdminResponseDto",
                 },
                 "type": "array",
               },
@@ -20,13 +20,19 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
           },
           "description": "List of all users",
         },
+        "401": {
+          "description": "Unauthorized",
+        },
+        "403": {
+          "description": "Forbidden (admin only)",
+        },
       },
       "security": [
         {
           "JWT-auth": [],
         },
       ],
-      "summary": "Get all users",
+      "summary": "Get all users (admin only)",
       "tags": [
         "users",
       ],
@@ -38,7 +44,20 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
       "parameters": [],
       "responses": {
         "200": {
-          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileResponseDto",
+              },
+            },
+          },
+          "description": "Current user profile",
+        },
+        "401": {
+          "description": "Unauthorized",
+        },
+        "404": {
+          "description": "User not found",
         },
       },
       "security": [
@@ -53,7 +72,17 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
     },
     "patch": {
       "operationId": "UsersController_updateProfile",
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "Optional client-generated key that deduplicates retried requests. Replaying the same key with an identical request body returns the original cached response instead of repeating the operation.",
+          "in": "header",
+          "name": "Idempotency-Key",
+          "required": false,
+          "schema": {
+            "type": "string",
+          },
+        },
+      ],
       "requestBody": {
         "content": {
           "application/json": {
@@ -66,7 +95,29 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
       },
       "responses": {
         "200": {
-          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileResponseDto",
+              },
+            },
+          },
+          "description": "Profile updated successfully",
+        },
+        "400": {
+          "description": "Invalid profile payload",
+        },
+        "401": {
+          "description": "Unauthorized",
+        },
+        "404": {
+          "description": "User not found",
+        },
+        "409": {
+          "description": "A request with the same Idempotency-Key is already being processed.",
+        },
+        "422": {
+          "description": "The Idempotency-Key was already used with a different request body.",
         },
       },
       "security": [
@@ -98,6 +149,9 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
           },
           "description": "",
         },
+        "401": {
+          "description": "Unauthorized",
+        },
       },
       "security": [
         {
@@ -111,7 +165,17 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
     },
     "post": {
       "operationId": "UsersController_addStellarAccount",
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "Optional client-generated key that deduplicates retried requests. Replaying the same key with an identical request body returns the original cached response instead of repeating the operation.",
+          "in": "header",
+          "name": "Idempotency-Key",
+          "required": false,
+          "schema": {
+            "type": "string",
+          },
+        },
+      ],
       "requestBody": {
         "content": {
           "application/json": {
@@ -132,6 +196,18 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
             },
           },
           "description": "",
+        },
+        "400": {
+          "description": "Invalid Stellar account payload",
+        },
+        "401": {
+          "description": "Unauthorized",
+        },
+        "409": {
+          "description": "A request with the same Idempotency-Key is already being processed.",
+        },
+        "422": {
+          "description": "The Idempotency-Key was already used with a different request body.",
         },
       },
       "security": [
@@ -157,10 +233,31 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
             "type": "string",
           },
         },
+        {
+          "description": "Optional client-generated key that deduplicates retried requests. Replaying the same key with an identical request body returns the original cached response instead of repeating the operation.",
+          "in": "header",
+          "name": "Idempotency-Key",
+          "required": false,
+          "schema": {
+            "type": "string",
+          },
+        },
       ],
       "responses": {
         "204": {
-          "description": "",
+          "description": "Stellar account unlinked",
+        },
+        "401": {
+          "description": "Unauthorized",
+        },
+        "404": {
+          "description": "Stellar account not found",
+        },
+        "409": {
+          "description": "A request with the same Idempotency-Key is already being processed.",
+        },
+        "422": {
+          "description": "The Idempotency-Key was already used with a different request body.",
         },
       },
       "security": [
@@ -196,6 +293,12 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
           },
           "description": "",
         },
+        "401": {
+          "description": "Unauthorized",
+        },
+        "404": {
+          "description": "Stellar account not found",
+        },
       },
       "security": [
         {
@@ -220,6 +323,15 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
             "type": "string",
           },
         },
+        {
+          "description": "Optional client-generated key that deduplicates retried requests. Replaying the same key with an identical request body returns the original cached response instead of repeating the operation.",
+          "in": "header",
+          "name": "Idempotency-Key",
+          "required": false,
+          "schema": {
+            "type": "string",
+          },
+        },
       ],
       "requestBody": {
         "content": {
@@ -233,7 +345,29 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
       },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StellarAccountResponseDto",
+              },
+            },
+          },
           "description": "",
+        },
+        "400": {
+          "description": "Invalid label payload",
+        },
+        "401": {
+          "description": "Unauthorized",
+        },
+        "404": {
+          "description": "Stellar account not found",
+        },
+        "409": {
+          "description": "A request with the same Idempotency-Key is already being processed.",
+        },
+        "422": {
+          "description": "The Idempotency-Key was already used with a different request body.",
         },
       },
       "security": [
@@ -259,10 +393,31 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
             "type": "string",
           },
         },
+        {
+          "description": "Optional client-generated key that deduplicates retried requests. Replaying the same key with an identical request body returns the original cached response instead of repeating the operation.",
+          "in": "header",
+          "name": "Idempotency-Key",
+          "required": false,
+          "schema": {
+            "type": "string",
+          },
+        },
       ],
       "responses": {
         "200": {
-          "description": "",
+          "description": "Primary account updated",
+        },
+        "401": {
+          "description": "Unauthorized",
+        },
+        "404": {
+          "description": "Stellar account not found",
+        },
+        "409": {
+          "description": "A request with the same Idempotency-Key is already being processed.",
+        },
+        "422": {
+          "description": "The Idempotency-Key was already used with a different request body.",
         },
       },
       "security": [
@@ -281,9 +436,10 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
       "operationId": "UsersController_uploadAvatar",
       "parameters": [
         {
-          "in": "path",
-          "name": "id",
-          "required": true,
+          "description": "Optional client-generated key that deduplicates retried requests. Replaying the same key with an identical request body returns the original cached response instead of repeating the operation.",
+          "in": "header",
+          "name": "Idempotency-Key",
+          "required": false,
           "schema": {
             "type": "string",
           },
@@ -291,7 +447,19 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
       ],
       "responses": {
         "200": {
-          "description": "",
+          "description": "Profile image uploaded",
+        },
+        "400": {
+          "description": "Invalid or unsupported image file",
+        },
+        "401": {
+          "description": "Unauthorized",
+        },
+        "409": {
+          "description": "A request with the same Idempotency-Key is already being processed.",
+        },
+        "422": {
+          "description": "The Idempotency-Key was already used with a different request body.",
         },
       },
       "security": [
@@ -323,11 +491,17 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/User",
+                "$ref": "#/components/schemas/UserAdminResponseDto",
               },
             },
           },
           "description": "User found",
+        },
+        "401": {
+          "description": "Unauthorized",
+        },
+        "403": {
+          "description": "Forbidden (admin only)",
         },
         "404": {
           "description": "User not found",
@@ -338,7 +512,7 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
           "JWT-auth": [],
         },
       ],
-      "summary": "Get user by ID",
+      "summary": "Get user by ID (admin only)",
       "tags": [
         "users",
       ],
@@ -370,6 +544,63 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
     "required": [
       "publicKey",
       "signedChallenge",
+    ],
+    "type": "object",
+  },
+  "ProfileResponseDto": {
+    "properties": {
+      "avatarUrl": {
+        "description": "URL to user avatar image",
+        "type": "string",
+      },
+      "bio": {
+        "description": "User bio/description",
+        "type": "string",
+      },
+      "createdAt": {
+        "description": "When the user account was created",
+        "format": "date-time",
+        "type": "string",
+      },
+      "displayName": {
+        "description": "Display name shown in the UI",
+        "type": "string",
+      },
+      "email": {
+        "description": "User email address",
+        "type": "string",
+      },
+      "firstName": {
+        "description": "First name",
+        "type": "string",
+      },
+      "id": {
+        "description": "User ID",
+        "type": "string",
+      },
+      "lastName": {
+        "description": "Last name",
+        "type": "string",
+      },
+      "preferences": {
+        "description": "User notification/currency preferences",
+        "type": "object",
+      },
+      "stellarPublicKey": {
+        "description": "Primary linked Stellar public key",
+        "type": "string",
+      },
+      "updatedAt": {
+        "description": "When the user account was last updated",
+        "format": "date-time",
+        "type": "string",
+      },
+    },
+    "required": [
+      "id",
+      "email",
+      "createdAt",
+      "updatedAt",
     ],
     "type": "object",
   },
@@ -496,8 +727,83 @@ exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users A
     ],
     "type": "object",
   },
-  "User": {
-    "properties": {},
+  "UserAdminResponseDto": {
+    "properties": {
+      "avatarUrl": {
+        "description": "URL to user avatar image",
+        "nullable": true,
+        "type": "object",
+      },
+      "bio": {
+        "description": "User bio/description",
+        "nullable": true,
+        "type": "object",
+      },
+      "createdAt": {
+        "description": "When the user account was created",
+        "format": "date-time",
+        "type": "string",
+      },
+      "displayName": {
+        "description": "Display name shown in the UI",
+        "nullable": true,
+        "type": "object",
+      },
+      "email": {
+        "description": "User email address",
+        "nullable": true,
+        "type": "object",
+      },
+      "firstName": {
+        "description": "First name",
+        "nullable": true,
+        "type": "object",
+      },
+      "id": {
+        "description": "User ID",
+        "type": "string",
+      },
+      "lastName": {
+        "description": "Last name",
+        "nullable": true,
+        "type": "object",
+      },
+      "preferences": {
+        "description": "User notification/currency preferences",
+        "type": "object",
+      },
+      "role": {
+        "description": "User role",
+        "enum": [
+          "user",
+          "reviewer",
+          "admin",
+        ],
+        "type": "string",
+      },
+      "stellarPublicKey": {
+        "description": "Primary linked Stellar public key",
+        "nullable": true,
+        "type": "object",
+      },
+      "twoFactorEnabled": {
+        "description": "Whether two-factor authentication is enabled",
+        "type": "boolean",
+      },
+      "updatedAt": {
+        "description": "When the user account was last updated",
+        "format": "date-time",
+        "type": "string",
+      },
+    },
+    "required": [
+      "id",
+      "role",
+      "preferences",
+      "twoFactorEnabled",
+      "createdAt",
+      "updatedAt",
+    ],
     "type": "object",
   },
 }

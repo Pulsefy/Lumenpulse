@@ -293,7 +293,7 @@ export class UsersController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @UseInterceptors(FileInterceptor('avatar'))
   async uploadAvatar(
-    @Param('id') accountId: string,
+    @Req() req: RequestWithUser,
     @UploadedFile(
       new ParseFilePipe({
         validators: [
@@ -307,7 +307,7 @@ export class UsersController {
     )
     file: Buffer,
   ) {
-    return await this.usersService.updateUserProfilePicture(file, accountId);
+    return await this.usersService.updateUserProfilePicture(file, req.user.id);
   }
 
   @Post('me/accounts/:id/primary')
