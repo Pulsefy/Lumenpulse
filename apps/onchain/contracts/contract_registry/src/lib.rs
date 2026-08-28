@@ -97,9 +97,9 @@ impl ContractRegistry {
             .ok_or(RegistryError::ContractNotFound)
     }
 
-    pub fn list_contracts(_env: Env) -> Result<Vec<ContractInfo>, RegistryError> {
+    pub fn list_contracts(_env: Env) -> Result<soroban_sdk::Vec<ContractInfo>, RegistryError> {
         // Placeholder implementation – return empty vector.
-        Ok(Vec::new())
+        Ok(soroban_sdk::Vec::new(&_env))
     }
 }
 
