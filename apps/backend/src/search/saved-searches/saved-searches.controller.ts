@@ -17,10 +17,18 @@ import {
   ApiParam,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Request } from 'express';
 import { SavedSearchesService } from './saved-searches.service';
 import { CreateSavedSearchDto } from './create-saved-search.dto';
 import { SavedSearch } from './saved-search.entity';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+
+export interface AuthenticatedRequest extends Request {
+  user: {
+    id?: string;
+    sub?: string;
+  };
+}
 
 @ApiTags('saved-searches')
 @ApiBearerAuth()
@@ -40,7 +48,7 @@ export class SavedSearchesController {
     description: 'Saved search created successfully',
   })
   async create(
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Body() dto: CreateSavedSearchDto,
   ): Promise<SavedSearch> {
     const userId = req.user.id || req.user.sub;
@@ -56,7 +64,7 @@ export class SavedSearchesController {
     status: 200,
     description: 'User saved searches',
   })
-  async findAll(@Req() req: any): Promise<SavedSearch[]> {
+  async findAll(@Req() req: AuthenticatedRequest): Promise<SavedSearch[]> {
     const userId = req.user.id || req.user.sub;
     return this.savedSearchesService.findAllForUser(userId);
   }
@@ -70,7 +78,7 @@ export class SavedSearchesController {
   @ApiParam({ name: 'id', description: 'Saved search ID' })
   @ApiResponse({ status: 204, description: 'Saved search deleted' })
   @ApiResponse({ status: 404, description: 'Saved search not found' })
-  async remove(@Req() req: any, @Param('id') id: string): Promise<void> {
+  async remove(@Req() req: AuthenticatedRequest, @Param('id') id: string): Promise<void> {
     const userId = req.user.id || req.user.sub;
     return this.savedSearchesService.remove(id, userId);
   }
