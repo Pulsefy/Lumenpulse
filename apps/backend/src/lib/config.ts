@@ -38,6 +38,7 @@ import { z } from 'zod';
  * - STELLAR_TIMEOUT
  * - STELLAR_RETRY_ATTEMPTS
  * - STELLAR_RETRY_DELAY
+ * - SOROBAN_SIMULATION_TRACE_LEVEL
  * - STELLAR_CONTRACT_LUMEN_TOKEN
  * - STELLAR_CONTRACT_CROWDFUND_VAULT
  * - STELLAR_CONTRACT_PROJECT_REGISTRY
@@ -442,6 +443,9 @@ const envSchema = z
     STELLAR_TIMEOUT: z.coerce.number().int().min(1).default(30_000),
     STELLAR_RETRY_ATTEMPTS: z.coerce.number().int().min(0).default(3),
     STELLAR_RETRY_DELAY: z.coerce.number().int().min(0).default(1_000),
+    SOROBAN_SIMULATION_TRACE_LEVEL: z
+      .enum(['off', 'summary', 'verbose'])
+      .default('summary'),
     STELLAR_SERVER_SECRET: z.string().min(1), // SECRET — never log
     STELLAR_BALANCE_CACHE_TTL: z.coerce.number().int().min(1).default(30_000),
     STELLAR_OPERATIONS_CACHE_TTL: z.coerce
@@ -912,6 +916,10 @@ const optionalSummary = [
   ['STELLAR_RETRY_ATTEMPTS', String(parsedEnv.STELLAR_RETRY_ATTEMPTS)],
   ['STELLAR_RETRY_DELAY', String(parsedEnv.STELLAR_RETRY_DELAY)],
   [
+    'SOROBAN_SIMULATION_TRACE_LEVEL',
+    parsedEnv.SOROBAN_SIMULATION_TRACE_LEVEL,
+  ],
+  [
     'STELLAR_CONTRACT_LUMEN_TOKEN',
     parsedEnv.STELLAR_CONTRACT_LUMEN_TOKEN ?? '(not set)',
   ],
@@ -1116,6 +1124,7 @@ export const config = Object.freeze({
     timeout: parsedEnv.STELLAR_TIMEOUT,
     retryAttempts: parsedEnv.STELLAR_RETRY_ATTEMPTS,
     retryDelay: parsedEnv.STELLAR_RETRY_DELAY,
+    simulationTraceLevel: parsedEnv.SOROBAN_SIMULATION_TRACE_LEVEL,
     balanceCacheTTL: parsedEnv.STELLAR_BALANCE_CACHE_TTL,
     operationsCacheTTL: parsedEnv.STELLAR_OPERATIONS_CACHE_TTL,
     serverSecret: new SecretString(parsedEnv.STELLAR_SERVER_SECRET),
