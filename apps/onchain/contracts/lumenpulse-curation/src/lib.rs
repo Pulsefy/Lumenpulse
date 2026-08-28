@@ -5,6 +5,9 @@ mod events;
 mod storage;
 mod types;
 
+#[cfg(test)]
+mod test;
+
 pub use errors::CurationError;
 pub use types::{ProjectMetadata, ProjectStatus, ProposalState, VoteRecord};
 
