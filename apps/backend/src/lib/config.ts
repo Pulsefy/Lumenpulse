@@ -558,6 +558,15 @@ const envSchema = z
       .default(30_000),
     IDEMPOTENCY_CLEANUP_CRON: z.string().trim().default('0 3 * * *'),
 
+    // Audit log retention (see apps/backend/src/audit)
+    AUDIT_LOG_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+    ADMIN_AUDIT_LOG_RETENTION_DAYS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(365),
+    AUDIT_CLEANUP_CRON: z.string().trim().default('0 2 * * *'),
+
     SHUTDOWN_GRACE_PERIOD_MS: z.coerce
       .number()
       .int()
@@ -1032,6 +1041,15 @@ const optionalSummary = [
     String(parsedEnv.IDEMPOTENCY_CONCURRENCY_TIMEOUT_MS),
   ],
   ['IDEMPOTENCY_CLEANUP_CRON', parsedEnv.IDEMPOTENCY_CLEANUP_CRON],
+  [
+    'AUDIT_LOG_RETENTION_DAYS',
+    String(parsedEnv.AUDIT_LOG_RETENTION_DAYS),
+  ],
+  [
+    'ADMIN_AUDIT_LOG_RETENTION_DAYS',
+    String(parsedEnv.ADMIN_AUDIT_LOG_RETENTION_DAYS),
+  ],
+  ['AUDIT_CLEANUP_CRON', parsedEnv.AUDIT_CLEANUP_CRON],
 ] as const;
 
 const wasDefaulted = (key: string): boolean => {
@@ -1226,6 +1244,24 @@ export const config = Object.freeze({
      * Default: daily at 03:00 UTC.
      */
     cleanupCron: parsedEnv.IDEMPOTENCY_CLEANUP_CRON,
+  }),
+  audit: Object.freeze({
+    /**
+     * How many days to retain general audit_logs rows.
+     * Rows older than this are hard-deleted by the scheduled purge.
+     * Default: 90 days.
+     */
+    retentionDays: parsedEnv.AUDIT_LOG_RETENTION_DAYS,
+    /**
+     * How many days to retain admin_blockchain_audit_logs rows.
+     * Default: 365 days.
+     */
+    adminRetentionDays: parsedEnv.ADMIN_AUDIT_LOG_RETENTION_DAYS,
+    /**
+     * Cron expression for the scheduled audit log purge.
+     * Default: daily at 02:00 UTC (offset from idempotency cleanup at 03:00).
+     */
+    cleanupCron: parsedEnv.AUDIT_CLEANUP_CRON,
   }),
   rateLimit: Object.freeze({
     tracker: Object.freeze({
