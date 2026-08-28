@@ -14,7 +14,9 @@ use notification_interface::{Notification, NotificationReceiverClient};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, Address, Env, IntoVal, Symbol,
+};
 use storage::{
     DataKey, EmergencyMigrationPlan, MigrationPlanStatus, MilestoneDispute, ProjectData,
     ProjectStorageSummary, ProtocolStats, RefundReceipt, LEDGER_BUMP, LEDGER_THRESHOLD,
@@ -24,7 +26,7 @@ const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
 const DEFAULT_REFUND_WINDOW_SECONDS: u64 = 14 * 24 * 60 * 60;
 
-#[soroban_sdk::contracttype]
+#[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContributionIntent {
     pub user: Address,
@@ -33,7 +35,7 @@ pub struct ContributionIntent {
     pub nonce: u64,
 }
 
-#[soroban_sdk::contracttype]
+#[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RegistrationIntent {
     pub user: Address,
@@ -735,7 +737,6 @@ impl CrowdfundVaultContract {
                     soroban_sdk::Symbol::new(&env, "deposit_with_sig"),
                     intent,
                 )
-                    .into_val(&env),
             );
 
             let new_nonce = nonce + 1;
@@ -1557,7 +1558,6 @@ impl CrowdfundVaultContract {
                 soroban_sdk::Symbol::new(&env, "register_contributor_with_sig"),
                 intent,
             )
-                .into_val(&env),
         );
 
         let new_nonce = nonce + 1;
