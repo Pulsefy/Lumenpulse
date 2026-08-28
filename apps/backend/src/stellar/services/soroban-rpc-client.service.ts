@@ -214,6 +214,7 @@ export class SorobanRpcClientService {
           {
             requestId,
             method,
+            contract: opts?.contractId,
             attempt,
             maxRetries,
             retrying: isRetryable && !exhausted,

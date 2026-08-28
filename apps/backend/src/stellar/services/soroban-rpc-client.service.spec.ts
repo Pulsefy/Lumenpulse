@@ -1,8 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SorobanRpcClientService } from './soroban-rpc-client.service';
 import { RequestContextService } from '../../common/services/request-context.service';
-import { Logger } from '@nestjs/common';
-import { rpc } from '@stellar/stellar-sdk';
 
 describe('SorobanRpcClientService', () => {
   let service: SorobanRpcClientService;
