@@ -1547,18 +1547,18 @@ impl CrowdfundVaultContract {
             return Err(CrowdfundError::InvalidSignature);
         }
 
-            let nonce = Self::register_nonce_of(&env, &contributor);
-            let intent = RegistrationIntent {
-                user: contributor.clone(),
-                nonce,
-            };
-            contributor.require_auth_for_args(
-                (
-                    soroban_sdk::Symbol::new(&env, "register_contributor_with_sig"),
-                    intent,
-                )
-                    .into_val(&env),
-            );
+        let nonce = Self::register_nonce_of(&env, &contributor);
+        let intent = RegistrationIntent {
+            user: contributor.clone(),
+            nonce,
+        };
+        contributor.require_auth_for_args(
+            (
+                soroban_sdk::Symbol::new(&env, "register_contributor_with_sig"),
+                intent,
+            )
+                .into_val(&env),
+        );
 
         let new_nonce = nonce + 1;
         env.storage()
