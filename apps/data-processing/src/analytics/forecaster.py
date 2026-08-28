@@ -54,6 +54,7 @@ class ForecastResult:
     model_backend: str            # "prophet" | "sklearn" | "heuristic"
     data_points_used: int
     generated_at: str
+    backtest_confidence: float = 0.0  # 0.0 – 1.0, derived from walk-forward backtest
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -376,11 +377,17 @@ class SentimentForecaster:
 
     # ── Prediction ────────────────────────────────────────────────────────
 
-    def predict(self, df: pd.DataFrame) -> ForecastResult:
+    def predict(self, df: pd.DataFrame, backtest_confidence: float = 0.0) -> ForecastResult:
         """
         Return 24 h and 48 h market trend forecasts.
 
         Falls back gracefully when the model is not trained or data is sparse.
+
+        Args:
+            df: Historical data DataFrame.
+            backtest_confidence: Optional confidence score derived from a
+                walk-forward backtest (0.0–1.0). When provided it is attached
+                to the result so the API can surface forecast reliability.
         """
         velocity = self.compute_sentiment_velocity(df)
         n = len(df) if df is not None else 0
@@ -407,6 +414,7 @@ class SentimentForecaster:
             model_backend=self._backend,
             data_points_used=n,
             generated_at=datetime.now(timezone.utc).isoformat(),
+            backtest_confidence=round(float(backtest_confidence), 4),
         )
 
     def _predict_prophet(
@@ -501,8 +509,19 @@ class SentimentForecaster:
         One-call shortcut: load history → train (if needed) → predict.
 
         Safe to call repeatedly — reuses an existing trained model.
+
+        Also runs a walk-forward backtest to derive a confidence score
+        that reflects how well the forecaster has performed on historical
+        data.  The score is attached to the returned ``ForecastResult``.
         """
         df = self.load_history(jsonl_path)
         if not self._is_trained:
             self.train(df)
-        return self.predict(df)
+
+        # Run backtest to derive confidence
+        from src.analytics.backtest import run_backtest
+
+        bt_result = run_backtest(df, jsonl_path=jsonl_path)
+        backtest_confidence = bt_result.best_confidence()
+
+        return self.predict(df, backtest_confidence=backtest_confidence)
