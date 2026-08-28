@@ -1,6 +1,7 @@
-use soroban_sdk::{Address, Symbol, Vec};
+use soroban_sdk::{contracttype, Address, Symbol};
 
-#[derive(Clone)]
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContractInfo {
     pub key: Symbol,
     pub address: Address,
@@ -8,6 +9,8 @@ pub struct ContractInfo {
     pub environment: Symbol,
 }
 
+#[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Admin,
     Paused,
