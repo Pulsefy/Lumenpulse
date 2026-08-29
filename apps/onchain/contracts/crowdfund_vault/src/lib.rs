@@ -16,7 +16,7 @@ use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentra
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env, IntoVal, Symbol, Vec, vec, BytesN
+    contract, contractimpl, contracttype, vec, Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
 use storage::{
     DataKey, EmergencyMigrationPlan, MigrationPlanStatus, MilestoneDecision,
@@ -734,13 +734,11 @@ impl CrowdfundVaultContract {
                 amount,
                 nonce,
             };
-            user.require_auth_for_args(
-                soroban_sdk::vec![
-                    &env,
-                    soroban_sdk::Symbol::new(&env, "deposit_with_sig").into_val(&env),
-                    intent.into_val(&env),
-                ]
-            );
+            user.require_auth_for_args(soroban_sdk::vec![
+                &env,
+                soroban_sdk::Symbol::new(&env, "deposit_with_sig").into_val(&env),
+                intent.into_val(&env),
+            ]);
 
             let new_nonce = nonce + 1;
             env.storage()
@@ -1659,13 +1657,11 @@ impl CrowdfundVaultContract {
             user: contributor.clone(),
             nonce,
         };
-        contributor.require_auth_for_args(
-            soroban_sdk::vec![
-                &env,
-                soroban_sdk::Symbol::new(&env, "register_contributor_with_sig").into_val(&env),
-                intent.into_val(&env),
-            ]
-        );
+        contributor.require_auth_for_args(soroban_sdk::vec![
+            &env,
+            soroban_sdk::Symbol::new(&env, "register_contributor_with_sig").into_val(&env),
+            intent.into_val(&env),
+        ]);
 
         let new_nonce = nonce + 1;
         env.storage()
