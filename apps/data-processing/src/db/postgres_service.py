@@ -43,6 +43,7 @@ from .cohort_models import (
     CohortRetentionSummary,
     RepeatContributorSummary,
 )
+from src.analytics.entity_alias_registry import EntityAliasRegistry, get_registry
 from src.analytics.ner_service import NERService
 from src.analytics.onchain_entity_linker import (
     OnchainEntityCandidate,
@@ -92,18 +93,46 @@ class PostgresService:
                 expire_on_commit=False,
                 bind=self.engine,
             )
-            self.ner_service = NERService()
-            self.onchain_linker = OnchainEntityLinker()
+            self._alias_registry = get_registry()
+            self.ner_service = NERService(registry=self.alias_registry)
+            self.onchain_linker = OnchainEntityLinker(registry=self.alias_registry)
             logger.info("PostgreSQL service initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize PostgreSQL service: {e}")
             raise
 
+    @property
+    def alias_registry(self) -> EntityAliasRegistry:
+        """
+        Shared entity alias registry backing every normalization here.
+
+        Resolved lazily so instances built without ``__init__`` (tests wire a
+        SQLite engine up via ``__new__``) still normalize consistently instead
+        of raising.
+        """
+        registry = getattr(self, "_alias_registry", None)
+        if registry is None:
+            registry = get_registry()
+            self._alias_registry = registry
+        return registry
+
     def _ensure_detected_entities(self, article_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Populate detected_entities when absent using the NER service."""
+        """
+        Populate detected_entities when absent using the NER service.
+
+        Entities supplied by a fetcher are passed through the alias registry so
+        the stored ``detected_entities`` column is canonical regardless of
+        source: an upstream feed tagging ``["$XLM", "lumens"]`` is persisted as
+        ``["XLM"]``, which is what the entity filter in
+        :meth:`get_recent_articles` and the sentiment/attribution consumers
+        group on.
+        """
         normalized = dict(article_data)
         existing_entities = normalized.get("detected_entities")
         if isinstance(existing_entities, list) and existing_entities:
+            normalized["detected_entities"] = self.alias_registry.normalize_terms(
+                existing_entities
+            )
             return normalized
 
         normalized["detected_entities"] = (
@@ -203,6 +232,7 @@ class PostgresService:
         linker = OnchainEntityLinker(
             self._project_candidates_from_session(session),
             overrides=overrides,
+            registry=self.alias_registry,
         )
         return linker.link_article(article_data)
 
@@ -628,6 +658,39 @@ class PostgresService:
 
         return saved_count
 
+    def _filter_articles_by_entity(
+        self,
+        articles: List[Article],
+        entity: str,
+    ) -> List[Article]:
+        """
+        Keep articles mentioning ``entity``, matching on canonical identity.
+
+        The filter used to compare lowercased strings, so querying ``"lumens"``
+        or ``"$XLM"`` missed every article tagged ``"XLM"``. Both sides are now
+        resolved through the alias registry, so any registered spelling of an
+        entity retrieves the same articles. Unregistered terms fall back to the
+        previous case-insensitive string comparison.
+        """
+        target = (entity or "").strip()
+        if not target:
+            return list(articles)
+
+        canonical_target = self.alias_registry.canonical_id_for(target)
+        fallback_target = target.lower()
+
+        def mentions_entity(article: Article) -> bool:
+            for value in article.detected_entities or []:
+                text = str(value).strip()
+                if canonical_target is not None:
+                    if self.alias_registry.canonical_id_for(text) == canonical_target:
+                        return True
+                elif text.lower() == fallback_target:
+                    return True
+            return False
+
+        return [article for article in articles if mentions_entity(article)]
+
     def get_recent_articles(
         self,
         limit: int = 100,
@@ -662,15 +725,7 @@ class PostgresService:
 
                 results = session.execute(stmt).scalars().all()
                 if entity:
-                    target = entity.strip().lower()
-                    results = [
-                        article
-                        for article in results
-                        if any(
-                            str(value).strip().lower() == target
-                            for value in (article.detected_entities or [])
-                        )
-                    ][:limit]
+                    results = self._filter_articles_by_entity(results, entity)[:limit]
                 logger.debug(f"Retrieved {len(results)} articles")
                 return results
         except SQLAlchemyError as e:

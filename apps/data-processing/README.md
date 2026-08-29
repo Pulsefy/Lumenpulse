@@ -6,6 +6,8 @@ This service handles compute-heavy tasks such as sentiment analysis and market t
 
 - `src/`: Core logic and service implementation.
 - `src/lineage/`: Feature and KPI lineage manifest (`feature_lineage.yaml`).
+- `config/`: Editable pipeline data — alert suppression rules and the entity
+  alias registry (`entity_aliases.yaml`).
 - `tests/`: Unit and integration tests.
 - `scripts/`: Helper scripts for data management and development.
 
@@ -28,6 +30,29 @@ python scripts/validate_lineage.py --summary
 
 # Inspect a single entry
 python scripts/validate_lineage.py --show market_health_score
+```
+
+## Entity Alias Registry
+
+Projects, assets and ecosystem terms are normalized through a single alias
+registry, so `XLM`, `$XLM`, `lumens` and `Stellar Lumens` all resolve to one
+canonical entity across ingestion and analytics. Adding a spelling is a data
+change — no pipeline code to edit.
+
+**Quick links:**
+- Registry file: [`config/entity_aliases.yaml`](config/entity_aliases.yaml)
+- Contributor guide: [`ENTITY_ALIAS_REGISTRY.md`](ENTITY_ALIAS_REGISTRY.md)
+
+```bash
+# Validate the registry (what CI runs)
+python scripts/validate_entity_aliases.py --strict
+
+# Print every canonical entity and its aliases
+python scripts/validate_entity_aliases.py --summary
+
+# Check what a spelling resolves to, or what a sentence mentions
+python scripts/validate_entity_aliases.py --resolve '$xlm'
+python scripts/validate_entity_aliases.py --text 'Lumens rallied after the SDF grant'
 ```
 
 ## Setup Instructions

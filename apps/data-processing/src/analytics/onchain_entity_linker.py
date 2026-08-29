@@ -1,12 +1,20 @@
-"""Link article text to on-chain project and asset entities."""
+"""
+Link article text to on-chain project and asset entities.
+
+Asset link candidates come from the entity alias registry
+(``config/entity_aliases.yaml``, see :mod:`src.analytics.entity_alias_registry`)
+so a new spelling of an asset starts producing links after a YAML edit -- no
+change to this module. Project/contract candidates are still supplied by the
+caller from the materialized on-chain views.
+"""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
-from .keywords import TICKER_TO_PROJECT
+from .entity_alias_registry import EntityAliasRegistry, get_registry
 
 
 @dataclass(frozen=True)
@@ -54,24 +62,44 @@ class OnchainEntityLink:
 class OnchainEntityLinker:
     """Deterministic linker for testnet projects/assets mentioned in news."""
 
-    DEFAULT_ASSETS: Sequence[OnchainEntityCandidate] = tuple(
-        OnchainEntityCandidate(
-            stable_id=f"asset:{asset_code}",
-            entity_type="asset",
-            display_name=project_names[0],
-            aliases=tuple({asset_code, *project_names}),
-            asset_code=asset_code,
+    @staticmethod
+    def default_asset_candidates(
+        registry: Optional[EntityAliasRegistry] = None,
+    ) -> Tuple[OnchainEntityCandidate, ...]:
+        """
+        Asset candidates built from the alias registry.
+
+        The registry's ``canonical_id`` (``asset:XLM``) is the linker's
+        ``stable_id``, so canonical aliases and downstream link keys can never
+        drift apart.
+        """
+        registry = registry or get_registry()
+        return tuple(
+            OnchainEntityCandidate(
+                stable_id=entity.canonical_id,
+                entity_type=entity.entity_type,
+                display_name=entity.display_name,
+                aliases=entity.terms,
+                asset_code=entity.asset_code,
+            )
+            for entity in registry.entities_by_type("asset")
         )
-        for asset_code, project_names in sorted(TICKER_TO_PROJECT.items())
-    )
 
     def __init__(
         self,
         candidates: Optional[Sequence[OnchainEntityCandidate]] = None,
         overrides: Optional[Dict[str, str]] = None,
+        registry: Optional[EntityAliasRegistry] = None,
     ) -> None:
+        """
+        :param candidates: extra candidates (projects/contracts) from the caller.
+        :param overrides: stable_id -> review decision, see ``link_text``.
+        :param registry: alias registry override (defaults to the shared one).
+        """
+        self.registry = registry or get_registry()
         self.candidates = self._dedupe_candidates(
-            list(candidates or []) + list(self.DEFAULT_ASSETS)
+            list(candidates or [])
+            + list(self.default_asset_candidates(self.registry))
         )
         self.overrides = overrides or {}
 

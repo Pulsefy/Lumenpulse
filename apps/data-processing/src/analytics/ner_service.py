@@ -14,6 +14,11 @@ The underlying spaCy model is ``pinned and vendored`` so that:
 * A startup check verifies the expected model version is present and fails
   fast otherwise (see :func:`check_model_available` and the ``--check-models``
   CLI flag in ``src/main.py``).
+
+Entity *canonicalization* is driven by the alias registry
+(``config/entity_aliases.yaml``, see :mod:`src.analytics.entity_alias_registry`),
+so contributors can teach the service that "lumens" means Stellar without
+touching this module.
 """
 
 from __future__ import annotations
@@ -31,6 +36,7 @@ except ImportError:  # pragma: no cover - exercised in minimal test envs
     spacy = None
 
 from ..config.ner_config import NERConfig
+from .entity_alias_registry import EntityAliasRegistry, get_registry
 from .keywords import CRYPTO_PROJECT_MAP, KNOWN_TICKERS
 
 logger = logging.getLogger(__name__)
@@ -87,16 +93,35 @@ class MissingNERModelError(RuntimeError):
 class NERService:
     """Extract entities from news text for downstream filtering and tagging."""
 
+    #: Registry entity types mapped onto the spaCy labels this service emits.
+    _REGISTRY_TYPE_LABELS = {
+        "asset": "ASSET",
+        "project": "PROJECT",
+        "organization": "ORG",
+        "ecosystem": "PRODUCT",
+        "contributor": "PERSON",
+    }
+
     _PERSON_PATTERN = re.compile(
         r"\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+)\b"
     )
     _TICKER_PATTERN = re.compile(r"(?:\$)?\b([A-Z]{2,6})\b")
     _PERSON_PREFIX_EXCLUSIONS = {"The", "This", "That", "New"}
 
-    def __init__(self, cfg: Optional[NERConfig] = None) -> None:
+    def __init__(
+        self,
+        cfg: Optional[NERConfig] = None,
+        registry: Optional[EntityAliasRegistry] = None,
+    ) -> None:
+        """
+        :param cfg: NER config override (defaults to pinned committed defaults).
+        :param registry: alias registry override (defaults to the shared
+            process registry loaded from ``config/entity_aliases.yaml``).
+        """
         self._cfg = cfg or NERConfig.from_env()
+        self._registry = registry or get_registry()
         self._canonical_names = self._build_canonical_name_map()
-        self._known_tickers = {ticker.upper() for ticker in KNOWN_TICKERS}
+        self._known_tickers = self._build_known_tickers()
         self._nlp = self._initialize_pipeline()
 
     @property
@@ -105,6 +130,14 @@ class NERService:
         return self._cfg.model_version
 
     def _build_canonical_name_map(self) -> Dict[str, str]:
+        """
+        Map every known spelling to the label used when tagging text.
+
+        The legacy static map is the base layer; the alias registry is overlaid
+        on top because it is the maintained source of truth. Anything only the
+        legacy map knows about therefore keeps working, while a registry edit
+        takes effect immediately.
+        """
         canonical_names: Dict[str, str] = {}
 
         for key, values in CRYPTO_PROJECT_MAP.items():
@@ -116,7 +149,17 @@ class NERService:
             for value in values:
                 canonical_names[value.lower()] = value
 
+        canonical_names.update(self._registry.surface_form_map())
+
         return canonical_names
+
+    def _build_known_tickers(self) -> set:
+        """Legacy ticker list plus every asset code in the alias registry."""
+        tickers = {ticker.upper() for ticker in KNOWN_TICKERS}
+        for entity in self._registry.entities_by_type("asset"):
+            if entity.asset_code:
+                tickers.add(entity.asset_code.upper())
+        return tickers
 
     def _initialize_pipeline(self) -> Optional[Any]:
         if spacy is None:
@@ -174,6 +217,13 @@ class NERService:
             patterns.append({"label": "ASSET", "pattern": ticker})
             patterns.append({"label": "ASSET", "pattern": f"${ticker}"})
 
+        # Registry aliases are matched as phrases so multi-word spellings
+        # ("Stellar Development Foundation") survive tokenization.
+        for entity in self._registry:
+            label = self._REGISTRY_TYPE_LABELS.get(entity.entity_type, "PROJECT")
+            for term in entity.terms:
+                patterns.append({"label": label, "pattern": term})
+
         ruler.add_patterns(patterns)
 
         if "sentencizer" not in nlp.pipe_names:
@@ -193,6 +243,11 @@ class NERService:
         normalized_lookup = cleaned.lower()
         if normalized_lookup in self._canonical_names:
             return self._canonical_names[normalized_lookup]
+
+        # Catches spellings the flat map misses (punctuation, spacing, "$").
+        entity = self._registry.resolve(cleaned)
+        if entity is not None:
+            return entity.surface_form_for(cleaned)
 
         return cleaned
 

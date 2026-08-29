@@ -16,6 +16,12 @@ __all__ = [
     "AttributionTarget",
     "AttributionResult",
     "SignalBreakdown",
+    # Entity alias registry
+    "CanonicalEntity",
+    "EntityAliasRegistry",
+    "EntityMention",
+    "get_registry",
+    "reload_registry",
 ]
 
 
@@ -72,6 +78,29 @@ def __getattr__(name: str):
             "AttributionTarget": AttributionTarget,
             "AttributionResult": AttributionResult,
             "SignalBreakdown": SignalBreakdown,
+        }[name]
+
+    if name in {
+        "CanonicalEntity",
+        "EntityAliasRegistry",
+        "EntityMention",
+        "get_registry",
+        "reload_registry",
+    }:
+        from .entity_alias_registry import (
+            CanonicalEntity,
+            EntityAliasRegistry,
+            EntityMention,
+            get_registry,
+            reload_registry,
+        )
+
+        return {
+            "CanonicalEntity": CanonicalEntity,
+            "EntityAliasRegistry": EntityAliasRegistry,
+            "EntityMention": EntityMention,
+            "get_registry": get_registry,
+            "reload_registry": reload_registry,
         }[name]
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

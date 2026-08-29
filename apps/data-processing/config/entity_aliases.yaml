@@ -1,0 +1,220 @@
+# LumenPulse entity alias registry
+# =================================
+#
+# Single source of truth for mapping the many ways an entity is written in the
+# wild ("XLM", "$XLM", "lumens", "Stellar Lumens") onto ONE canonical entity.
+#
+# Consumed by:
+#   * src/analytics/entity_alias_registry.py  (loader + normalization API)
+#   * src/analytics/ner_service.py            (entity canonicalization)
+#   * src/analytics/keywords.py               (keyword extraction)
+#   * src/analytics/onchain_entity_linker.py  (default asset link candidates)
+#   * src/db/postgres_service.py              (article entity lookups)
+#
+# Contributor workflow
+# --------------------
+# 1. Add or edit an entry below -- no pipeline code changes required.
+# 2. Validate:  python scripts/validate_entity_aliases.py
+# 3. Open a PR. See ENTITY_ALIAS_REGISTRY.md for the full field reference.
+#
+# Field reference (short version)
+#   canonical_id  required, unique, "<type>:<slug>" -- the stable join key.
+#   entity_type   required, one of: asset | project | organization | ecosystem
+#   display_name  required, canonical human-readable label.
+#   asset_code    optional, ticker/asset code. For entity_type "asset" this is
+#                 the surface form used when tagging text (so "lumens" tags as
+#                 "XLM", not "Stellar").
+#   aliases       optional, every other spelling. Matching is case-insensitive
+#                 and ignores a leading "$", so list each spelling once.
+#   tags          optional, free-form grouping labels used by analytics filters.
+#   notes         optional, why an alias is here (helps future reviewers).
+#
+# Aliases must be unique across the whole file -- two entities claiming the
+# same alias is a validation error, not a silent last-one-wins.
+
+version: 1
+updated: "2026-08-29"
+
+entities:
+  # ---------------------------------------------------------------------------
+  # Stellar ecosystem
+  # ---------------------------------------------------------------------------
+  - canonical_id: asset:XLM
+    entity_type: asset
+    display_name: Stellar
+    asset_code: XLM
+    aliases:
+      - Stellar
+      - Stellar Lumens
+      - Stellar Network
+      - lumens
+      - lumen
+    tags: [stellar, layer1, native-asset]
+    notes: >
+      "lumen"/"lumens" are common in Stellar community writing and were
+      previously missed by the pipeline.
+
+  - canonical_id: project:soroban
+    entity_type: project
+    display_name: Soroban
+    asset_code: XLM
+    aliases:
+      - Soroban
+      - Soroban smart contracts
+    tags: [stellar, smart-contracts]
+
+  - canonical_id: organization:sdf
+    entity_type: organization
+    display_name: Stellar Development Foundation
+    asset_code: SDF
+    aliases:
+      - Stellar Development Foundation
+      - SDF
+    tags: [stellar, foundation]
+
+  # ---------------------------------------------------------------------------
+  # Major assets
+  # ---------------------------------------------------------------------------
+  - canonical_id: asset:BTC
+    entity_type: asset
+    display_name: Bitcoin
+    asset_code: BTC
+    aliases: [Bitcoin]
+    tags: [layer1]
+
+  - canonical_id: asset:ETH
+    entity_type: asset
+    display_name: Ethereum
+    asset_code: ETH
+    aliases: [Ethereum]
+    tags: [layer1, smart-contracts]
+
+  - canonical_id: asset:SOL
+    entity_type: asset
+    display_name: Solana
+    asset_code: SOL
+    aliases: [Solana]
+    tags: [layer1, smart-contracts]
+
+  - canonical_id: asset:XRP
+    entity_type: asset
+    display_name: Ripple
+    asset_code: XRP
+    aliases: [Ripple]
+    tags: [payments]
+
+  - canonical_id: asset:ADA
+    entity_type: asset
+    display_name: Cardano
+    asset_code: ADA
+    aliases: [Cardano]
+    tags: [layer1, smart-contracts]
+
+  - canonical_id: asset:DOT
+    entity_type: asset
+    display_name: Polkadot
+    asset_code: DOT
+    aliases: [Polkadot]
+    tags: [layer1, interoperability]
+
+  - canonical_id: asset:DOGE
+    entity_type: asset
+    display_name: Dogecoin
+    asset_code: DOGE
+    aliases: [Dogecoin]
+    tags: [meme]
+
+  - canonical_id: asset:LTC
+    entity_type: asset
+    display_name: Litecoin
+    asset_code: LTC
+    aliases: [Litecoin]
+    tags: [payments]
+
+  - canonical_id: asset:LINK
+    entity_type: asset
+    display_name: Chainlink
+    asset_code: LINK
+    aliases: [Chainlink]
+    tags: [oracle]
+
+  - canonical_id: asset:AVAX
+    entity_type: asset
+    display_name: Avalanche
+    asset_code: AVAX
+    aliases: [Avalanche]
+    tags: [layer1, smart-contracts]
+
+  - canonical_id: asset:MATIC
+    entity_type: asset
+    display_name: Polygon
+    asset_code: MATIC
+    aliases: [Polygon]
+    tags: [layer2]
+
+  - canonical_id: asset:ALGO
+    entity_type: asset
+    display_name: Algorand
+    asset_code: ALGO
+    aliases: [Algorand]
+    tags: [layer1]
+
+  - canonical_id: asset:ATOM
+    entity_type: asset
+    display_name: Cosmos
+    asset_code: ATOM
+    aliases: [Cosmos]
+    tags: [layer1, interoperability]
+
+  - canonical_id: asset:UNI
+    entity_type: asset
+    display_name: Uniswap
+    asset_code: UNI
+    aliases:
+      - Uniswap
+      - univ3
+      - Uniswap v3
+    tags: [defi, dex]
+
+  # ---------------------------------------------------------------------------
+  # Stablecoins
+  # ---------------------------------------------------------------------------
+  - canonical_id: asset:USDC
+    entity_type: asset
+    display_name: USDC
+    asset_code: USDC
+    aliases:
+      - USD Coin
+      - usdc
+    tags: [stablecoin]
+
+  - canonical_id: asset:USDT
+    entity_type: asset
+    display_name: Tether
+    asset_code: USDT
+    aliases:
+      - Tether
+      - Tether USD
+    tags: [stablecoin]
+
+  # ---------------------------------------------------------------------------
+  # Ecosystem terms (not tradeable assets, but worth normalizing)
+  # ---------------------------------------------------------------------------
+  - canonical_id: ecosystem:defi
+    entity_type: ecosystem
+    display_name: DeFi
+    aliases:
+      - DeFi
+      - decentralized finance
+      - decentralised finance
+    tags: [sector]
+
+  - canonical_id: ecosystem:nft
+    entity_type: ecosystem
+    display_name: NFT
+    aliases:
+      - NFT
+      - NFTs
+      - non-fungible token
+      - non-fungible tokens
+    tags: [sector]

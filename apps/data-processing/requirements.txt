@@ -23,6 +23,7 @@ slowapi>=0.1.9
 starlette>=0.27.0
 python-jose[cryptography]>=3.3.0
 spacy==3.7.4
+pyyaml>=6.0
 
 # Database
 asyncpg>=0.29.0

@@ -129,3 +129,90 @@ def test_build_and_retrieve_contributor_reputation_snapshots() -> None:
     assert len(top_snapshots) == 2
     assert top_snapshots[0].reputation_score >= top_snapshots[1].reputation_score
     assert {s.project_id for s in top_snapshots} == {project_id}
+
+
+# ---------------------------------------------------------------------------
+# Canonical aliases in the news article dataset (#1063)
+#
+# ``Article.detected_entities`` is the join column the sentiment, attribution
+# and API consumers filter on, so it is the dataset that benefits directly
+# from the alias registry: whatever spelling a fetcher supplies, one canonical
+# value is stored, and a query using any registered spelling finds it.
+# ---------------------------------------------------------------------------
+
+
+def test_fetcher_supplied_entities_are_canonicalized_on_write() -> None:
+    service = build_sqlite_service()
+
+    article = service.save_article(
+        {
+            "id": "article-alias-1",
+            "title": "Volume update",
+            "content": "Daily flows recap.",
+            "source": "test-source",
+            "published_at": datetime.utcnow(),
+            # Three spellings of one entity, as different feeds write it.
+            "detected_entities": ["$XLM", "lumens", "Stellar Lumens"],
+        }
+    )
+
+    assert article is not None
+    assert article.detected_entities == ["XLM"]
+
+
+def test_unregistered_entities_survive_canonicalization() -> None:
+    service = build_sqlite_service()
+
+    article = service.save_article(
+        {
+            "id": "article-alias-2",
+            "title": "Private round",
+            "content": "An unlisted company raised a round.",
+            "source": "test-source",
+            "published_at": datetime.utcnow(),
+            "detected_entities": ["Acme Holdings"],
+        }
+    )
+
+    assert article is not None
+    assert article.detected_entities == ["Acme Holdings"]
+
+
+def test_entity_lookup_matches_any_registered_alias() -> None:
+    service = build_sqlite_service()
+    service.save_article(
+        {
+            "id": "article-alias-3",
+            "title": "Lumens volume climbs",
+            "content": "Payment corridors saw more activity.",
+            "source": "test-source",
+            "published_at": datetime.utcnow(),
+            "detected_entities": ["XLM"],
+        }
+    )
+
+    # Every registered spelling retrieves the same article; before the alias
+    # registry only the exact stored string "XLM" matched.
+    for term in ["XLM", "$XLM", "xlm", "lumens", "Stellar", "Stellar Lumens"]:
+        found = service.get_recent_articles(limit=10, entity=term)
+        assert [a.id for a in found] == ["article-alias-3"], term
+
+    assert service.get_recent_articles(limit=10, entity="Bitcoin") == []
+
+
+def test_entity_lookup_still_matches_unregistered_terms_exactly() -> None:
+    service = build_sqlite_service()
+    service.save_article(
+        {
+            "id": "article-alias-4",
+            "title": "Private round",
+            "content": "An unlisted company raised a round.",
+            "source": "test-source",
+            "published_at": datetime.utcnow(),
+            "detected_entities": ["Acme Holdings"],
+        }
+    )
+
+    found = service.get_recent_articles(limit=10, entity="acme holdings")
+    assert [a.id for a in found] == ["article-alias-4"]
+    assert service.get_recent_articles(limit=10, entity="Acme") == []

@@ -3,10 +3,21 @@ Keyword extraction module for analytics.
 
 Extracts key entities (coins, protocols, people) from news content
 to tag and filter analytics.
+
+The dictionaries below are the *legacy* seed data. New and edited aliases
+belong in the entity alias registry (``config/entity_aliases.yaml``, see
+:mod:`src.analytics.entity_alias_registry`), which :class:`KeywordExtractor`
+consults in addition to these maps. The maps are kept because the registry
+falls back to them when the YAML cannot be read.
 """
 
+from __future__ import annotations
+
 import re
-from typing import List, Set
+from typing import TYPE_CHECKING, List, Optional, Set
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle only matters at runtime
+    from .entity_alias_registry import EntityAliasRegistry
 
 # Static dictionary of known crypto projects and their tickers
 CRYPTO_PROJECT_MAP: dict[str, List[str]] = {
@@ -209,8 +220,17 @@ class KeywordExtractor:
     to tag and filter analytics.
     """
 
-    def __init__(self):
-        """Initialize the keyword extractor with regex patterns."""
+    def __init__(self, registry: Optional["EntityAliasRegistry"] = None):
+        """
+        Initialize the keyword extractor with regex patterns.
+
+        :param registry: alias registry override (defaults to the shared
+            process registry). Imported lazily to avoid an import cycle --
+            the registry falls back to this module's seed maps.
+        """
+        from .entity_alias_registry import get_registry
+
+        self.registry = registry or get_registry()
         self.ticker_regex = re.compile(TICKER_PATTERN)
         # Create a sorted list of project names for longest-match-first matching
         self.project_names = sorted(CRYPTO_PROJECT_MAP.keys(), key=len, reverse=True)
@@ -235,6 +255,14 @@ class KeywordExtractor:
 
         # Use a set to avoid duplicates
         keywords: Set[str] = set()
+
+        # Registry aliases first: this is where contributors add new spellings,
+        # so a registry hit contributes both the canonical name and the asset
+        # code ("lumens" -> {"Stellar", "XLM"}).
+        for mention in self.registry.find_in_text(text):
+            keywords.add(mention.entity.display_name)
+            if mention.entity.asset_code and mention.entity.entity_type == "asset":
+                keywords.add(mention.entity.asset_code)
 
         # Extract project names (case insensitive matching)
         project_matches = self._project_pattern.findall(text)
@@ -274,6 +302,11 @@ class KeywordExtractor:
             return []
 
         tickers: Set[str] = set()
+
+        # Registry asset codes, including ones reached via a name alias.
+        for mention in self.registry.find_in_text(text):
+            if mention.entity.entity_type == "asset" and mention.entity.asset_code:
+                tickers.add(mention.entity.asset_code)
 
         # Extract tickers using regex
         ticker_matches = self.ticker_regex.findall(text)

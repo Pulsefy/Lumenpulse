@@ -42,6 +42,9 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
+    - name: Validate entity alias registry
+      run: python scripts/validate_entity_aliases.py --strict
+
     - name: Test with pytest
       if: env.SKIP_TESTS != 'true'
       # Checks if tests folder exists before running to prevent failure on empty repo
