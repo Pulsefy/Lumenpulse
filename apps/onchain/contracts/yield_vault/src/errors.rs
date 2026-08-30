@@ -4,14 +4,14 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum YieldVaultError {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    InvalidAmount = 3,
-    InsufficientBalance = 4,
-    ProviderNotFound = 5,
-    NoProvidersAvailable = 6,
-    AlreadyExecuted = 7,
-    Unauthorized = 8,
-    VaultPaused = 9,
-    Reentrancy = 10,
+    AlreadyInitialized = 2301,
+    NotInitialized = 2302,
+    InvalidAmount = 2303,
+    InsufficientBalance = 2304,
+    ProviderNotFound = 2305,
+    NoProvidersAvailable = 2306,
+    AlreadyExecuted = 2307,
+    Unauthorized = 2308,
+    VaultPaused = 2309,
+    Reentrancy = 2310,
 }

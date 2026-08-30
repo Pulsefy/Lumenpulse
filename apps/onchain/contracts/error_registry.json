@@ -1,0 +1,278 @@
+{
+  "version": 1,
+  "description": "Shared Soroban contract error code registry. Each contract occupies a non-overlapping range of 100 codes.",
+  "contracts": {
+    "contributor_registry": {
+      "enum": "ContributorError",
+      "range": [1001, 1099],
+      "errors": {
+        "1001": { "variant": "NotInitialized",           "message": "Contract is not initialized" },
+        "1002": { "variant": "AlreadyInitialized",       "message": "Contract is already initialized" },
+        "1003": { "variant": "Unauthorized",             "message": "Caller is not authorized" },
+        "1004": { "variant": "ContributorNotFound",      "message": "Contributor not found" },
+        "1005": { "variant": "ContributorAlreadyExists", "message": "Contributor already exists" },
+        "1006": { "variant": "InvalidGitHubHandle",      "message": "Invalid GitHub handle" },
+        "1007": { "variant": "ReputationOverflow",       "message": "Reputation value overflow" },
+        "1008": { "variant": "GitHubHandleTaken",        "message": "GitHub handle already taken" },
+        "1009": { "variant": "InvalidMultisigConfig",    "message": "Invalid multisig configuration" },
+        "1010": { "variant": "TooManySigners",           "message": "Too many signers in multisig" },
+        "1011": { "variant": "ProposalNotFound",         "message": "Proposal not found" },
+        "1012": { "variant": "InvalidProposalStatus",    "message": "Invalid proposal status" },
+        "1013": { "variant": "ProposalExpired",          "message": "Proposal has expired" },
+        "1014": { "variant": "AlreadySigned",            "message": "Already signed this proposal" },
+        "1015": { "variant": "BelowThreshold",           "message": "Approvals below required threshold" },
+        "1016": { "variant": "InvalidNonce",             "message": "Invalid nonce" },
+        "1017": { "variant": "InvalidSignature",         "message": "Invalid signature" },
+        "1018": { "variant": "AttestationNotActive",     "message": "Attestation is not active" },
+        "1019": { "variant": "AttestationNotSuspended",  "message": "Attestation is not suspended" },
+        "1020": { "variant": "AttestationAlreadyRevoked","message": "Attestation already revoked" },
+        "1021": { "variant": "ContributionScopePaused",  "message": "Contribution scope is paused" },
+        "1022": { "variant": "GovernanceScopePaused",    "message": "Governance scope is paused" }
+      }
+    },
+    "vesting-wallet": {
+      "enum": "VestingError",
+      "range": [1101, 1199],
+      "errors": {
+        "1101": { "variant": "NotInitialized",       "message": "Contract is not initialized" },
+        "1102": { "variant": "AlreadyInitialized",   "message": "Contract is already initialized" },
+        "1103": { "variant": "Unauthorized",         "message": "Caller is not authorized" },
+        "1104": { "variant": "VestingNotFound",      "message": "Vesting entry not found" },
+        "1105": { "variant": "InvalidAmount",        "message": "Invalid amount" },
+        "1106": { "variant": "InvalidDuration",      "message": "Invalid vesting duration" },
+        "1107": { "variant": "InvalidStartTime",     "message": "Invalid vesting start time" },
+        "1108": { "variant": "NothingToClaim",       "message": "Nothing available to claim" },
+        "1109": { "variant": "InsufficientBalance",  "message": "Insufficient balance" },
+        "1110": { "variant": "Reentrancy",           "message": "Reentrancy detected" },
+        "1111": { "variant": "DelegateNotAuthorized","message": "Delegate is not authorized" }
+      }
+    },
+    "project_registry": {
+      "enum": "RegistryError",
+      "range": [1201, 1299],
+      "errors": {
+        "1201": { "variant": "NotInitialized",           "message": "Contract is not initialized" },
+        "1202": { "variant": "AlreadyInitialized",       "message": "Contract is already initialized" },
+        "1203": { "variant": "Unauthorized",             "message": "Caller is not authorized" },
+        "1204": { "variant": "ProjectNotFound",          "message": "Project not found" },
+        "1205": { "variant": "ProjectAlreadyRegistered", "message": "Project already registered" },
+        "1206": { "variant": "AlreadyVoted",             "message": "Already voted on this project" },
+        "1207": { "variant": "VotingClosed",             "message": "Voting is closed" },
+        "1208": { "variant": "InsufficientWeight",       "message": "Insufficient voting weight" },
+        "1209": { "variant": "InvalidThreshold",         "message": "Invalid threshold" },
+        "1210": { "variant": "ContractPaused",           "message": "Contract is paused" },
+        "1211": { "variant": "ProjectAlreadyVerified",   "message": "Project already verified" },
+        "1212": { "variant": "ProjectAlreadyRejected",   "message": "Project already rejected" }
+      }
+    },
+    "treasury": {
+      "enum": "TreasuryError",
+      "range": [1301, 1399],
+      "errors": {
+        "1301": { "variant": "NotInitialized",       "message": "Contract is not initialized" },
+        "1302": { "variant": "AlreadyInitialized",   "message": "Contract is already initialized" },
+        "1303": { "variant": "Unauthorized",         "message": "Caller is not authorized" },
+        "1304": { "variant": "InvalidAmount",        "message": "Invalid amount" },
+        "1305": { "variant": "InvalidDuration",      "message": "Invalid stream duration" },
+        "1306": { "variant": "InvalidStartTime",     "message": "Invalid stream start time" },
+        "1307": { "variant": "StreamNotFound",       "message": "Stream not found" },
+        "1308": { "variant": "NothingToClaim",       "message": "Nothing available to claim" },
+        "1309": { "variant": "Reentrancy",           "message": "Reentrancy detected" },
+        "1310": { "variant": "AlreadyExecuted",      "message": "Action already executed" },
+        "1311": { "variant": "SameBeneficiary",      "message": "New beneficiary must differ from current" },
+        "1312": { "variant": "ProposalNotFound",     "message": "Proposal not found" },
+        "1313": { "variant": "ProposalNotApproved",  "message": "Proposal not approved" },
+        "1314": { "variant": "ProposalAlreadySigned","message": "Proposal already signed" },
+        "1315": { "variant": "ProposalExpired",      "message": "Proposal has expired" },
+        "1316": { "variant": "ProposalNotActive",    "message": "Proposal is not active" },
+        "1317": { "variant": "WrongProposalAction",  "message": "Wrong proposal action type" },
+        "1318": { "variant": "InvalidMultisigConfig","message": "Invalid multisig configuration" },
+        "1319": { "variant": "TooManySigners",       "message": "Too many signers in multisig" },
+        "1320": { "variant": "InvalidCliffTime",     "message": "Invalid cliff time" },
+        "1321": { "variant": "InvalidScheduleStep",  "message": "Invalid schedule step" },
+        "1322": { "variant": "TooManyInstallments",  "message": "Too many installments requested" },
+        "1323": { "variant": "Insolvent",            "message": "Treasury is insolvent" }
+      }
+    },
+    "crowdfund_vault": {
+      "enum": "CrowdfundError",
+      "range": [1401, 1499],
+      "errors": {
+        "1401": { "variant": "NotInitialized",                  "message": "Contract is not initialized" },
+        "1402": { "variant": "AlreadyInitialized",              "message": "Contract is already initialized" },
+        "1403": { "variant": "Unauthorized",                    "message": "Caller is not authorized" },
+        "1404": { "variant": "ProjectNotFound",                 "message": "Project not found" },
+        "1405": { "variant": "MilestoneNotApproved",            "message": "Milestone not approved" },
+        "1406": { "variant": "InsufficientBalance",             "message": "Insufficient balance" },
+        "1407": { "variant": "ProjectNotActive",                "message": "Project is not active" },
+        "1408": { "variant": "InvalidAmount",                   "message": "Invalid amount" },
+        "1409": { "variant": "AlreadyRegistered",               "message": "Already registered" },
+        "1410": { "variant": "ContributorNotFound",             "message": "Contributor not found" },
+        "1411": { "variant": "ContractPaused",                  "message": "Contract is paused" },
+        "1412": { "variant": "ProjectAlreadyCanceled",          "message": "Project already canceled" },
+        "1413": { "variant": "ProjectNotCancellable",           "message": "Project cannot be canceled" },
+        "1414": { "variant": "RefundFailed",                    "message": "Refund failed" },
+        "1415": { "variant": "ContractNotPaused",               "message": "Contract is not paused" },
+        "1416": { "variant": "YieldProviderNotFound",           "message": "Yield provider not found" },
+        "1417": { "variant": "VotingWindowNotStarted",          "message": "Voting window not started" },
+        "1418": { "variant": "VotingWindowClosed",              "message": "Voting window is closed" },
+        "1419": { "variant": "AlreadyVoted",                    "message": "Already voted" },
+        "1420": { "variant": "InsufficientContributionToVote",  "message": "Insufficient contribution to vote" },
+        "1421": { "variant": "MilestoneAlreadyApproved",        "message": "Milestone already approved" },
+        "1422": { "variant": "MilestoneAlreadyDisputed",        "message": "Milestone already disputed" },
+        "1423": { "variant": "MilestoneNotDisputed",            "message": "Milestone not disputed" },
+        "1424": { "variant": "MilestoneEscrowed",               "message": "Milestone funds are escrowed" },
+        "1425": { "variant": "InvalidRecipient",                "message": "Invalid recipient address" },
+        "1426": { "variant": "UnsupportedStorageVersion",       "message": "Unsupported storage version" },
+        "1427": { "variant": "MigrationRequired",               "message": "Migration required" },
+        "1428": { "variant": "MilestoneExpired",                "message": "Milestone has expired" },
+        "1429": { "variant": "RefundWindowClosed",              "message": "Refund window is closed" },
+        "1430": { "variant": "RefundWindowNotOpen",             "message": "Refund window is not open" },
+        "1431": { "variant": "Reentrancy",                      "message": "Reentrancy detected" },
+        "1432": { "variant": "AlreadyExecuted",                 "message": "Action already executed" },
+        "1433": { "variant": "EmergencyMigrationRequiresPause", "message": "Emergency migration requires contract to be paused" },
+        "1434": { "variant": "MigrationPlanAlreadyExists",      "message": "Migration plan already exists" },
+        "1435": { "variant": "MigrationPlanNotFound",           "message": "Migration plan not found" },
+        "1436": { "variant": "MigrationAlreadyExecuted",        "message": "Migration already executed" },
+        "1437": { "variant": "InvalidMigrationRecipient",       "message": "Invalid migration recipient" },
+        "1438": { "variant": "MigrationAmountExceedsBalance",   "message": "Migration amount exceeds balance" },
+        "1439": { "variant": "MigrationPlanVetoed",             "message": "Migration plan was vetoed" },
+        "1440": { "variant": "InvalidBatch",                    "message": "Invalid batch" }
+      }
+    },
+    "lumenpulse-curation": {
+      "enum": "CurationError",
+      "range": [1501, 1599],
+      "errors": {
+        "1501": { "variant": "AlreadyInitialized",      "message": "Contract is already initialized" },
+        "1502": { "variant": "NotInitialized",          "message": "Contract is not initialized" },
+        "1503": { "variant": "ProjectNotFound",         "message": "Project not found" },
+        "1504": { "variant": "VotingClosed",            "message": "Voting is closed" },
+        "1505": { "variant": "VotingWindowExpired",     "message": "Voting window has expired" },
+        "1506": { "variant": "VotingWindowNotExpired",  "message": "Voting window has not expired" },
+        "1507": { "variant": "AlreadyVoted",            "message": "Already voted" },
+        "1508": { "variant": "InsufficientReputation",  "message": "Insufficient reputation to vote" },
+        "1509": { "variant": "InvalidMetadata",         "message": "Invalid metadata" },
+        "1510": { "variant": "Unauthorized",            "message": "Caller is not authorized" }
+      }
+    },
+    "feature_flags": {
+      "enum": "FlagError",
+      "range": [1601, 1699],
+      "errors": {
+        "1601": { "variant": "NotInitialized",     "message": "Contract is not initialized" },
+        "1602": { "variant": "AlreadyInitialized", "message": "Contract is already initialized" },
+        "1603": { "variant": "Unauthorized",       "message": "Caller is not authorized" },
+        "1604": { "variant": "ContractPaused",     "message": "Contract is paused" }
+      }
+    },
+    "notification_broker": {
+      "enum": "NotificationBrokerError",
+      "range": [1701, 1799],
+      "errors": {
+        "1701": { "variant": "NotInitialized",       "message": "Contract is not initialized" },
+        "1702": { "variant": "AlreadyInitialized",   "message": "Contract is already initialized" },
+        "1703": { "variant": "SubscriptionNotFound", "message": "Subscription not found" },
+        "1704": { "variant": "ReentrancyDetected",   "message": "Reentrancy detected" }
+      }
+    },
+    "upgradable-contract": {
+      "enum": "ContractError",
+      "range": [1801, 1899],
+      "errors": {
+        "1801": { "variant": "AlreadyInitialized",      "message": "Contract is already initialized" },
+        "1802": { "variant": "Unauthorized",            "message": "Caller is not authorized" },
+        "1803": { "variant": "NotInitialized",          "message": "Contract is not initialized" },
+        "1804": { "variant": "OperationAlreadyQueued",  "message": "Operation already queued" },
+        "1805": { "variant": "OperationNotFound",       "message": "Operation not found" },
+        "1806": { "variant": "OperationNotReady",       "message": "Operation is not ready to execute" },
+        "1807": { "variant": "OperationExpired",        "message": "Operation has expired" },
+        "1808": { "variant": "InvalidDelay",            "message": "Invalid timelock delay" }
+      }
+    },
+    "cross-contract-view": {
+      "enum": "ViewError",
+      "range": [1901, 1999],
+      "errors": {
+        "1901": { "variant": "NotFound",               "message": "Data not found in storage" },
+        "1902": { "variant": "NotInitialized",         "message": "Contract not initialized" },
+        "1903": { "variant": "Unauthorized",           "message": "Caller is not authorized" },
+        "1904": { "variant": "InvalidContract",        "message": "Invalid or unregistered contract address" },
+        "1905": { "variant": "TypeMismatch",           "message": "Type conversion failed" },
+        "1906": { "variant": "StorageError",           "message": "Storage operation failed" },
+        "1907": { "variant": "TokenError",             "message": "Token operation failed" },
+        "1908": { "variant": "CrossContractCallFailed","message": "Cross-contract call failed" }
+      }
+    },
+    "pricing_adapter": {
+      "enum": "PricingAdapterError",
+      "range": [2001, 2099],
+      "errors": {
+        "2001": { "variant": "NotInitialized",    "message": "Contract is not initialized" },
+        "2002": { "variant": "AlreadyInitialized","message": "Contract is already initialized" },
+        "2003": { "variant": "Unauthorized",      "message": "Caller is not authorized" },
+        "2004": { "variant": "PriceNotFound",     "message": "Price not found" },
+        "2005": { "variant": "InvalidPrice",      "message": "Invalid price" },
+        "2006": { "variant": "StalePrice",        "message": "Price data is stale" },
+        "2007": { "variant": "PriceInvalidated",  "message": "Price has been invalidated" }
+      }
+    },
+    "matching_pool": {
+      "enum": "MatchingPoolError",
+      "range": [2101, 2199],
+      "errors": {
+        "2101": { "variant": "NotInitialized",           "message": "Contract is not initialized" },
+        "2102": { "variant": "AlreadyInitialized",       "message": "Contract is already initialized" },
+        "2103": { "variant": "Unauthorized",             "message": "Caller is not authorized" },
+        "2104": { "variant": "RoundNotFound",            "message": "Round not found" },
+        "2105": { "variant": "RoundNotActive",           "message": "Round is not active" },
+        "2106": { "variant": "RoundAlreadyFinalized",    "message": "Round already finalized" },
+        "2107": { "variant": "RoundNotFinalized",        "message": "Round not finalized" },
+        "2108": { "variant": "ProjectNotEligible",       "message": "Project is not eligible" },
+        "2109": { "variant": "ProjectAlreadyEligible",   "message": "Project already eligible" },
+        "2110": { "variant": "InvalidAmount",            "message": "Invalid amount" },
+        "2111": { "variant": "InsufficientPoolBalance",  "message": "Insufficient pool balance" },
+        "2112": { "variant": "NoEligibleProjects",       "message": "No eligible projects" },
+        "2113": { "variant": "RoundStillOpen",           "message": "Round is still open" },
+        "2114": { "variant": "MatchAlreadyDistributed",  "message": "Match already distributed" },
+        "2115": { "variant": "InvalidRoundDates",        "message": "Invalid round dates" },
+        "2116": { "variant": "ContractPaused",           "message": "Contract is paused" },
+        "2117": { "variant": "Reentrancy",               "message": "Reentrancy detected" },
+        "2118": { "variant": "ContributionCapExceeded",  "message": "Contribution cap exceeded" },
+        "2119": { "variant": "ContributionScopePaused",  "message": "Contribution scope is paused" },
+        "2120": { "variant": "PayoutScopePaused",        "message": "Payout scope is paused" },
+        "2121": { "variant": "GovernanceScopePaused",    "message": "Governance scope is paused" }
+      }
+    },
+    "protocol_registry": {
+      "enum": "RegistryError",
+      "range": [2201, 2299],
+      "errors": {
+        "2201": { "variant": "NotInitialized",          "message": "Contract is not initialized" },
+        "2202": { "variant": "AlreadyInitialized",      "message": "Contract is already initialized" },
+        "2203": { "variant": "Unauthorized",            "message": "Caller is not authorized" },
+        "2204": { "variant": "ModuleNotFound",          "message": "Module not found" },
+        "2205": { "variant": "ModuleAlreadyRegistered", "message": "Module already registered" },
+        "2206": { "variant": "ModuleInactive",          "message": "Module is inactive" },
+        "2207": { "variant": "ContractPaused",          "message": "Contract is paused" },
+        "2208": { "variant": "VersionNotIncremented",   "message": "Version must be incremented" }
+      }
+    },
+    "yield_vault": {
+      "enum": "YieldVaultError",
+      "range": [2301, 2399],
+      "errors": {
+        "2301": { "variant": "AlreadyInitialized",   "message": "Contract is already initialized" },
+        "2302": { "variant": "NotInitialized",       "message": "Contract is not initialized" },
+        "2303": { "variant": "InvalidAmount",        "message": "Invalid amount" },
+        "2304": { "variant": "InsufficientBalance",  "message": "Insufficient balance" },
+        "2305": { "variant": "ProviderNotFound",     "message": "Yield provider not found" },
+        "2306": { "variant": "NoProvidersAvailable", "message": "No yield providers available" },
+        "2307": { "variant": "AlreadyExecuted",      "message": "Action already executed" },
+        "2308": { "variant": "Unauthorized",         "message": "Caller is not authorized" },
+        "2309": { "variant": "VaultPaused",          "message": "Vault is paused" },
+        "2310": { "variant": "Reentrancy",           "message": "Reentrancy detected" }
+      }
+    }
+  }
+}
