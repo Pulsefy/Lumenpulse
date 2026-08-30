@@ -4,8 +4,8 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum FlagError {
-    NotInitialized = 1,
-    AlreadyInitialized = 2,
-    Unauthorized = 3,
-    ContractPaused = 4,
+    NotInitialized = 1601,
+    AlreadyInitialized = 1602,
+    Unauthorized = 1603,
+    ContractPaused = 1604,
 }
