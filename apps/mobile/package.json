@@ -9,6 +9,7 @@
     "web": "expo start --web",
     "lint": "eslint . --fix",
     "format": "prettier --write .",
+    "check:locales": "node scripts/check-locales.mjs",
     "tsc": "tsc",
     "test": "jest --runInBand",
     "test:coverage": "jest --coverage --runInBand"
@@ -48,7 +49,7 @@
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/react": "~19.1.0",
-    "babel-preset-expo": "^54.0.10",
+    "babel-preset-exo": "^54.0.10",
     "eslint": "^9.39.2",
     "eslint-config-expo": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
