@@ -16,97 +16,42 @@ Lumenpulse Mobile is the cross-platform mobile client for the Lumenpulse ecosyst
 
 ## Getting Started
 
-1. **Install Dependencies**:
-
+1. *Install Dependencies**:
    ```bash
    pnpm install
-   ```
-
-2. **Setup Environment**:
-
+   ```\
+2. *Setup Environment**:
    ```bash
    cp .env.example .env
-   ```
-
-3. **Start the Development Server**:
-
+   ```\
+3. *Start the Development Server**:
    ```bash
    pnpm start
-   ```
-
-4. **Run on Platforms**:
-   - Press `a` for Android Emulator.
-   - Press `i` for iOS Simulator.
-   - Press `w` for Web.
+   ```\
+4. *Run on Platforms**:
+   - Press \"a\" for Android Emulator.
+   - Press \"i\" for iOS Simulator.
+   - Press \"w\" for Web.
    - Scan the QR code with Expo Go to run on a physical device.
 
 ## Scripts
 
 - `pnpm start`: Start Expo dev server.
 - `pnpm android`: Open on Android.
-- `pnpm ios`: Open on iOS.
+- `pnpm ioc`: Open on iOS.
 - `pnpm web`: Open as a progressive web app.
 - `pnpm lint`: Run ESLint.
 - `pnpm tsc`: Run TypeScript compiler check.
+- `pnpm check:locales`: Verify locale completeness and detect hardcoded user-facing strings.
 
-## Wallet Adapters
+## Localization
 
-Production builds use the SEP-0007 wallet adapter only. Development builds may
-also select the mock adapter when the SEP-0007 wallet is unavailable; the app
-shows a persistent warning while that adapter is active, and mock transactions
-are never real signatures.
+The app uses `react-i18next` (`~i18next`) with resources located in `locales/`.
 
-## Validation
+To add a new locale:
 
-- Secure session and wallet metadata validation steps live in [SECURE_STORAGE_VALIDATION.md](./SECURE_STORAGE_VALIDATION.md).
-- Coverage floor: the mobile Jest config enforces a minimum global coverage threshold as a baseline floor to raise over time. The current floor is intentionally set to the achieved level so the build stays green while we expand the test matrix.
+1. Create `locales/<lang>.json` with the same nested structure as `en.json`.
+2. Import it in `i18n.ts` and add it to the `resources` object.
+3. Run `pnpm check:locales` to ensure your locale has complete coverage and that no user-facing strings are hardcoded in the UI</lang>codebase.
 
-## Architecture
-
-The app follows a modern Expo Router structure with the following key components:
-
-### Directory Structure
-
-- `app/` - Expo Router pages and navigation
-- `components/` - Reusable UI components
-- `contexts/` - React Context providers (Auth, etc.)
-- `lib/` - Core utilities and services
-  - `api-client.ts` - HTTP client with typed methods
-  - `api.ts` - Domain-specific API services
-  - `config.ts` - Environment configuration
-  - `storage.ts` - Secure storage utilities
-
-### API Client
-
-The app uses a centralized API client for all backend communication. See [lib/API_CLIENT_README.md](./lib/API_CLIENT_README.md) for detailed documentation.
-
-Quick example:
-
-```typescript
-import { apiClient } from '@/lib/api-client';
-import { authApi, healthApi } from '@/lib/api';
-
-// Health check
-const response = await healthApi.check();
-if (response.success) {
-  console.log('Backend is healthy:', response.data);
-}
-
-// Login
-const loginResponse = await authApi.login({
-  email: 'user@example.com',
-  password: 'password',
-});
-```
-
-Key features:
-
-- Typed HTTP methods (GET, POST, PUT, PATCH, DELETE)
-- Consistent error handling with normalized error shapes
-- Environment-based configuration (no hardcoded URLs)
-- Automatic auth token management
-- Request timeout and cancellation support
-
-### Styling
-
-Styling is handled via standard `StyleSheet` with a custom dark theme design system.
+The check fails if `zh`,> fr", "" "" or any other locale is missing a key found in `en.json`. It also scans the app for double-quotes using JSX text and reports untranslated strings.
