@@ -35,6 +35,8 @@ export interface SorobanClientOptions {
   timeoutMs?: number;
   maxRetries?: number;
   initialBackoffMs?: number;
+  contractId?: string;
+  method?: string;
 }
 
 type SimulationTraceLevel = 'off' | 'summary' | 'verbose';
@@ -135,7 +137,17 @@ export class SorobanRpcClientService {
     return this.withRetry('simulateTransaction', opts, async () => {
       const result = await this.server.simulateTransaction(tx);
       if (rpc.Api.isSimulationError(result)) {
-        this.logFailedSimulationTrace(tx, result);
+        const requestId = this.requestContextService.getRequestId();
+        this.logger.error(
+          {
+            requestId,
+            contract: opts?.contractId,
+            method: opts?.method,
+            error: result.error,
+          },
+          'Soroban contract simulation failed',
+        );
+
         throw new SorobanRpcError(
           SorobanErrorCode.SIMULATION_FAILED,
           `Simulation failed: ${result.error ?? 'Unknown error'}`,
@@ -227,6 +239,7 @@ export class SorobanRpcClientService {
           {
             requestId,
             method,
+            contract: opts?.contractId,
             attempt,
             maxRetries,
             retrying: isRetryable && !exhausted,
