@@ -40,3 +40,13 @@ npm run start:dev
 - Relevant docs are updated.
 - Security-facing API changes keep the standardized error contract aligned with `{ code, message, details, requestId }`.
 - Public endpoint changes document any rate-limit env vars and include throttling or validation coverage when behavior changes.
+
+## Schema Snapshotting
+
+To prevent accidental breaking changes to client-facing APIs, we use schema snapshotting. This ensures any changes to DTOs or endpoint paths are explicitly reviewed.
+
+- **Purpose**: Detect unintentional API contract drift during PRs.
+- **Run Locally**: Run `npm run test` inside `apps/backend`. It will fail with a diff if the schema changed.
+- **Intentional Updates**: If the API change is deliberate, update the snapshot by running `npm run test -- -u` inside `apps/backend` and commit the modified `.snap` file.
+- **Coverage**: Currently covers the `users` route group (`apps/backend/src/users/users-schema.spec.ts`).
+- **Extending Coverage**: To cover a new module, create a `<module>-schema.spec.ts` test that isolates the module's controller and snapshots its OpenAPI document, following the pattern in `users-schema.spec.ts`.

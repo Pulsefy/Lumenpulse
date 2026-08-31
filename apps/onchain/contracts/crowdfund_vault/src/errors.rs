@@ -36,4 +36,21 @@ pub enum CrowdfundError {
     RefundWindowNotOpen = 30,
     Reentrancy = 31,
     AlreadyExecuted = 32,
+    // ── Emergency migration (issue #1047) ─────────────────────────────────────
+    /// The contract is not in a paused state; emergency migration requires pause.
+    EmergencyMigrationRequiresPause = 33,
+    /// A migration plan has already been registered for this project.
+    MigrationPlanAlreadyExists = 34,
+    /// No migration plan was found for this project.
+    MigrationPlanNotFound = 35,
+    /// The migration plan has already been executed; it cannot be run twice.
+    MigrationAlreadyExecuted = 36,
+    /// The recipient address supplied for migration is invalid (e.g. the contract itself).
+    InvalidMigrationRecipient = 37,
+    /// The migration amount exceeds the project's current on-chain balance.
+    MigrationAmountExceedsBalance = 38,
+    /// The migration plan was vetoed by a second admin; it cannot proceed.
+    MigrationPlanVetoed = 39,
+    /// A submitted batch is empty, too large, or contains repeated milestone keys.
+    InvalidBatch = 40,
 }

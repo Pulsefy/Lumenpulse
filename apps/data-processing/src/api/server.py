@@ -1,8 +1,13 @@
+# -*- coding: utf-8 -*-
 """
 FastAPI server to expose sentiment analysis as an HTTP API
 for the Node.js backend to consume.
 """
 
+import asyncio
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException, Request, Response, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
@@ -17,6 +22,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from sentiment import SentimentAnalyzer
+from src.config.latency_budget import record_latency
 from src.utils.logger import setup_logger, correlation_id_ctx, generate_correlation_id
 from src.utils.metrics import API_FAILURES_TOTAL, generate_latest, CONTENT_TYPE_LATEST
 from src.security import (
@@ -26,12 +32,31 @@ from src.security import (
     get_rate_limit_decorator,
 )
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
-from src.ml.model_registry import get_registry_status
+from src.ml.model_registry import (
+    get_registry_status,
+    # Shadow-mode deployment (Issue #1256)
+    register_shadow,
+    unregister_shadow,
+    promote_shadow,
+    get_shadow_model,
+    get_shadow_version,
+    get_shadow_status,
+    get_all_shadow_status,
+    list_versions,
+    get_current_version,
+    generate_comparison_report,
+    read_comparison_log,
+    clear_comparison_log,
+    flush_all_comparisons,
+    get_live_model,
+)
 from src.analytics.correlation_engine import CorrelationEngine
 from src.db import PostgresService
 from src.ingestion.stellar_ingestion_checks import run_all_checks
 
 from src.analytics.sentiment_indicators import SentimentIndicatorMapper, get_legend as sentiment_legend
+from src.api.rebuild_routes import router as rebuild_router
+from src.api.sentiment_label_routes import router as sentiment_label_router
 
 _indicator_mapper = SentimentIndicatorMapper()
 
@@ -68,10 +93,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ---------------------------------------------------------------------------
+# Batch inference backpressure configuration (Issue #1240)
+# ---------------------------------------------------------------------------
+MAX_BATCH_SIZE = int(os.getenv("BATCH_MAX_SIZE", "200"))
+MAX_CONCURRENT_BATCHES = int(os.getenv("BATCH_MAX_CONCURRENT", "4"))
+_batch_semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+_batch_executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_BATCHES)
+
+
 @app.middleware("http")
 async def metrics_and_logging_middleware(request: Request, call_next):
     corr_id = request.headers.get("X-Correlation-ID", generate_correlation_id())
     correlation_id_ctx.set(corr_id)
+    start_time = time.monotonic()
     try:
         response = await call_next(request)
         if response.status_code >= 500:
@@ -82,13 +118,33 @@ async def metrics_and_logging_middleware(request: Request, call_next):
         API_FAILURES_TOTAL.labels(method=request.method, endpoint=request.url.path).inc()
         logger.error("Unhandled exception during request processing", exc_info=True)
         raise
+    finally:
+        # Enforce the documented per-endpoint inference latency budget:
+        # breaches are exported as Prometheus metrics for alerting.
+        record_latency(
+            path=request.url.path,
+            method=request.method,
+            duration_seconds=time.monotonic() - start_time,
+        )
+
 
 # Initialize your existing SentimentAnalyzer
 sentiment_analyzer = SentimentAnalyzer()
 
-# Ingestion quality check routes
+# Import and register routers
 from src.api.ingestion_quality_routes import router as ingestion_quality_router
+from src.api.review_queue_routes import router as review_queue_router
+from src.api.ledger_cursor_routes import router as ledger_cursor_router
+from src.api.kpi_routes import router as kpi_router
+from src.api.account_operation_routes import router as account_operation_router
+
 app.include_router(ingestion_quality_router)
+app.include_router(review_queue_router)
+app.include_router(ledger_cursor_router)
+app.include_router(kpi_router)  # KPI routes for TVL and volume computation
+app.include_router(account_operation_router)  # Account operation ingestion
+app.include_router(rebuild_router)  # Rebuild routes for admin
+app.include_router(sentiment_label_router)
 
 
 try:
@@ -96,6 +152,38 @@ try:
 except Exception as exc:
     postgres_service = None
     logger.warning("PostgreSQL service unavailable for /news endpoint: %s", exc)
+
+import hashlib
+from typing import Optional
+
+def _log_prediction(
+    request_id: str,
+    model_type: str,
+    model_version: str,
+    input_text: str,
+    output: Dict[str, Any],
+    latency_ms: float,
+):
+    """Log prediction to database using PostgresService."""
+    if not postgres_service:
+        return
+        
+    try:
+        store_raw_input = os.getenv("LOG_PREDICTION_RAW_INPUT", "false").lower() == "true"
+        raw_input = input_text if store_raw_input else None
+        input_hash = hashlib.sha256(input_text.encode("utf-8")).hexdigest()
+        
+        postgres_service.log_prediction(
+            request_id=request_id,
+            model_type=model_type,
+            model_version=model_version,
+            input_hash=input_hash,
+            output=output,
+            latency_ms=latency_ms,
+            raw_input=raw_input,
+        )
+    except Exception as e:
+        logger.error(f"Failed to log prediction (non-fatal) in helper: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +275,7 @@ async def metrics():
     """Expose Prometheus metrics"""
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
+
 @app.get("/")
 @limiter.limit("20/minute") if limiter else lambda x: x
 async def root(request: Request) -> Dict[str, Any]:
@@ -203,16 +292,37 @@ async def root(request: Request) -> Dict[str, Any]:
             "POST /analyze-batch": "Batch analyze multiple texts (requires X-API-Key header)",
             "GET /contributors/{contributor}/timeline": "Get contributor activity timeline from on-chain events (requires X-API-Key header)",
             "GET /sentiment/legend": "Get colour legend for sentiment indicators (no auth required)",
+            # KPI endpoints (Issue #734)
+            "GET /api/kpi/latest": "Get latest KPI snapshot (TVL, Volume) (requires X-API-Key header)",
+            "GET /api/kpi/series": "Get KPI time series data (requires X-API-Key header)",
+            "POST /api/kpi/recompute": "Trigger KPI recompute from events (Admin only, requires X-API-Key header)",
+            "POST /api/kpi/recompute-async": "Trigger async KPI recompute (Admin only, requires X-API-Key header)",
+            # Account operation endpoints (Issue #743)
+            "POST /api/account-operations/ingest": "Ingest account operations from Horizon (Admin only, requires X-API-Key header)",
+            "GET /api/account-operations/status": "Get ingestion status (Admin only, requires X-API-Key header)",
+            "POST /api/account-operations/reset-cursor": "Reset ingestion cursor (Admin only, requires X-API-Key header)",
+            "GET /api/account-operations/operations": "Get account operations from database (Admin only, requires X-API-Key header)",
+            # Model management endpoints
+            "POST /retrain": "Trigger manual model retraining (Admin only, requires X-API-Key header)",
+            "GET /model/status": "Get model registry status (Admin only, requires X-API-Key header)",
+            # Shadow-mode deployment (Issue #1256)
+            "POST /model/shadow/register": "Register a candidate model for shadow evaluation (Admin only)",
+            "POST /model/shadow/promote": "Promote shadow model to live (Admin only)",
+            "POST /model/shadow/unregister": "Remove shadow model without promoting (Admin only)",
+            "POST /model/rollback": "Rollback to a previous model version (Admin only)",
+            "GET /model/shadow/status": "Get shadow deployment status for all model types (Admin only)",
+            "GET /model/shadow/comparison-report": "Get comparison report for shadow vs live (Admin only)",
+            "GET /model/shadow/comparison-log": "Get raw comparison log entries (Admin only)",
+            "DELETE /model/shadow/comparison-log": "Clear comparison log for a model type (Admin only)",
         },
         "note": "Returns sentiment score between -1 (negative) and 1 (positive)",
-        "security": "All endpoints except /health and /metrics require X-API-Key header",
+        "security": "All endpoints except /health, /metrics, and /sentiment/legend require X-API-Key header",
     }
 
 
 @app.get("/health", response_model=HealthResponse)
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def health_check(request: Request) -> HealthResponse:
-
     """Health check endpoint for monitoring"""
     return HealthResponse(
         status="healthy",
@@ -340,18 +450,8 @@ async def get_contributor_activity_timeline(
 async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeResponse:
     """
     Analyze the sentiment of provided text.
-
-    This endpoint connects to your existing SentimentAnalyzer class
-    and returns the compound_score as the sentiment value.
-
-    Args:
-        request: Contains the text to analyze and optional asset filter
-
-    Returns:
-        sentiment: float between -1 and 1
-        asset_codes: List of asset codes found in text
-        sentiment_label: positive/negative/neutral
     """
+    start_time = time.monotonic()
     try:
         # Validate input
         if not body.text or not body.text.strip():
@@ -367,6 +467,20 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
 
         # Build visual indicator
         ind = _indicator_mapper.score_to_indicator(result.compound_score)
+
+        # Log prediction for auditability
+        _log_prediction(
+            request_id=correlation_id_ctx.get(generate_correlation_id()),
+            model_type="sentiment",
+            model_version=get_current_version("sentiment") or "1.0.0",
+            input_text=body.text,
+            output={
+                "sentiment": result.compound_score,
+                "asset_codes": result.asset_codes,
+                "sentiment_label": result.sentiment_label,
+            },
+            latency_ms=(time.monotonic() - start_time) * 1000,
+        )
 
         # Return enhanced response with asset information
         return AnalyzeResponse(
@@ -433,26 +547,120 @@ async def get_asset_analysis(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-# Optional: Batch analysis endpoint if needed
+# ---------------------------------------------------------------------------
+# Batch inference endpoint with backpressure (Issue #1240)
+# ---------------------------------------------------------------------------
 @app.post("/analyze-batch")
 @limiter.limit("10/minute") if limiter else lambda x: x
 async def analyze_batch(request: Request, texts: list[str], asset: Optional[str] = None) -> Dict[str, Any]:
-    """Batch analyze multiple texts with optional asset filter"""
-    try:
-        if not texts:
-            raise HTTPException(status_code=400, detail="Texts list cannot be empty")
+    """Batch analyze multiple texts with optional asset filter.
 
-        results = sentiment_analyzer.analyze_batch(texts, asset)
-        summary = sentiment_analyzer.get_sentiment_summary(results)
+    Backpressure controls:
+    - ``MAX_BATCH_SIZE`` (env ``BATCH_MAX_SIZE``, default 200): oversized
+      requests are rejected with 413.
+    - ``MAX_CONCURRENT_BATCHES`` (env ``BATCH_MAX_CONCURRENT``, default 4):
+      concurrent batch work is bounded by an ``asyncio.Semaphore``.
+      Requests beyond the bound receive 429 with ``Retry-After``.
+    - Per-item error isolation: individual item failures are returned as
+      error entries instead of failing the whole batch.
+    - Synchronous sentiment analysis is offloaded to a
+      ``ThreadPoolExecutor`` so the event loop stays responsive for
+      ``/health`` and ``/metrics``.
+    """
+    start_time = time.monotonic()
+
+    # --- 1. Validate batch size ------------------------------------------------
+    if not texts:
+        raise HTTPException(status_code=400, detail="Texts list cannot be empty")
+
+    if len(texts) > MAX_BATCH_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Batch size {len(texts)} exceeds maximum of {MAX_BATCH_SIZE}. "
+                "Please split your request into smaller batches."
+            ),
+        )
+
+    # --- 2. Acquire concurrency semaphore (backpressure) ----------------------
+    if _batch_semaphore.locked():
+        logger.warning(
+            "Batch concurrency limit reached (%d); rejecting request",
+            MAX_CONCURRENT_BATCHES,
+        )
+        raise HTTPException(
+            status_code=429,
+            detail="Server is at capacity. Please retry after a short delay.",
+            headers={"Retry-After": "5"},
+        )
+
+    async with _batch_semaphore:
+        # --- 3. Run CPU-bound work off the event loop --------------------------
+        loop = asyncio.get_running_loop()
+
+        def _run_batch() -> list:
+            return sentiment_analyzer.analyze_batch(texts, asset)
+
+        try:
+            results = await loop.run_in_executor(_batch_executor, _run_batch)
+        except Exception as e:
+            logger.error("Batch inference failed: %s", e, exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+        # --- 4. Per-item error isolation ---------------------------------------
+        item_results: list[Dict[str, Any]] = []
+        for idx, (text, result) in enumerate(zip(texts, results)):
+            try:
+                item_results.append({
+                    "index": idx,
+                    "text": text[:100],
+                    "status": "ok",
+                    **result.to_dict(),
+                })
+            except Exception as item_exc:
+                logger.warning("Item %d failed: %s", idx, item_exc)
+                item_results.append({
+                    "index": idx,
+                    "text": text[:100] if text else "",
+                    "status": "error",
+                    "error": str(item_exc),
+                })
+
+        # --- 5. Build response -------------------------------------------------
+        req_id = correlation_id_ctx.get(generate_correlation_id())
+        model_version = get_current_version("sentiment") or "1.0.0"
+        latency_ms = (time.monotonic() - start_time) * 1000
+
+        # Log each successful prediction
+        for item in item_results:
+            if item.get("status") == "ok":
+                _log_prediction(
+                    request_id=req_id,
+                    model_type="sentiment",
+                    model_version=model_version,
+                    input_text=item.get("text", ""),
+                    output={
+                        "sentiment": item.get("compound_score", 0),
+                        "asset_codes": item.get("asset_codes", []),
+                        "sentiment_label": item.get("sentiment_label", "neutral"),
+                    },
+                    latency_ms=latency_ms / len(texts),
+                )
+
+        # Recompute summary from successful items only
+        successful = [r for r in results if r is not None]
+        summary = sentiment_analyzer.get_sentiment_summary(successful) if successful else {}
 
         return {
-            "results": [r.to_dict() for r in results],
+            "results": item_results,
             "summary": summary,
-            "count": len(results),
+            "count": len(item_results),
+            "errors": sum(1 for r in item_results if r.get("status") == "error"),
             "asset_filter": asset,
+            "latency_ms": round(latency_ms, 2),
+            "concurrency_slots_remaining": MAX_CONCURRENT_BATCHES - _batch_semaphore._value,
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.get("/sentiment/legend")
@@ -560,8 +768,438 @@ async def model_status(request: Request) -> ModelStatusResponse:
 
 
 # ---------------------------------------------------------------------------
+# Shadow-Mode Model Deployment Endpoints (Issue #1256)
+# ---------------------------------------------------------------------------
+
+
+class ShadowRegisterRequest(BaseModel):
+    model_type: str  # e.g. "sentiment", "price_predictor"
+    version: str     # e.g. "v1.2"
+
+
+class ShadowRegisterResponse(BaseModel):
+    status: str
+    model_type: str
+    shadow_version: str
+    live_version: Optional[str] = None
+    message: str
+
+
+class ShadowPromoteRequest(BaseModel):
+    model_type: str
+
+
+class ShadowPromoteResponse(BaseModel):
+    status: str
+    model_type: str
+    new_live_version: str
+    message: str
+
+
+class ShadowUnregisterResponse(BaseModel):
+    status: str
+    model_type: str
+    message: str
+
+
+class ShadowStatusResponse(BaseModel):
+    model_type: str
+    shadow: Optional[Dict[str, Any]] = None
+    message: Optional[str] = None
+
+
+class AllShadowStatusResponse(BaseModel):
+    shadows: Dict[str, Any]
+
+
+class ComparisonReportResponse(BaseModel):
+    report: Optional[Dict[str, Any]] = None
+    message: Optional[str] = None
+
+
+class ComparisonLogResponse(BaseModel):
+    model_type: str
+    window_hours: int
+    entries: List[Dict[str, Any]]
+    total: int
+
+
+class RollbackRequest(BaseModel):
+    model_type: str
+    target_version: Optional[str] = None  # If omitted, rollback to previous version
+
+
+class RollbackResponse(BaseModel):
+    status: str
+    model_type: str
+    previous_version: Optional[str] = None
+    new_version: str
+    message: str
+
+
+@app.post("/model/shadow/register", response_model=ShadowRegisterResponse)
+@limiter.limit("10/minute") if limiter else lambda x: x
+async def shadow_register(
+    body: ShadowRegisterRequest,
+    request: Request,
+) -> ShadowRegisterResponse:
+    """
+    Register a saved model version to run in shadow mode.
+
+    The shadow model runs alongside the live model without affecting
+    responses.  Both predictions are logged for comparison.
+
+    Requires X-API-Key header.
+    """
+    live_version = get_current_version(body.model_type)
+    if body.version == live_version:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Shadow version ({body.version}) must differ from "
+                f"the current live version ({live_version})"
+            ),
+        )
+
+    available = list_versions(body.model_type)
+    if body.version not in available:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Version '{body.version}' not found for '{body.model_type}'. "
+                f"Available: {available}"
+            ),
+        )
+
+    register_shadow(body.model_type, body.version)
+
+    logger.info(
+        f"Shadow registered via API | type={body.model_type} "
+        f"version={body.version} | client_ip={request.client.host}"
+    )
+
+    return ShadowRegisterResponse(
+        status="registered",
+        model_type=body.model_type,
+        shadow_version=body.version,
+        live_version=live_version,
+        message=(
+            f"Shadow model '{body.model_type}@{body.version}' is now running "
+            f"alongside '{live_version}'. Predictions are being logged for comparison."
+        ),
+    )
+
+
+@app.post("/model/shadow/promote", response_model=ShadowPromoteResponse)
+@limiter.limit("10/minute") if limiter else lambda x: x
+async def shadow_promote(
+    body: ShadowPromoteRequest,
+    request: Request,
+) -> ShadowPromoteResponse:
+    """
+    Promote the shadow model to live with zero downtime.
+
+    The shadow version becomes the current live model atomically.
+    After promotion the shadow registration is cleared.
+
+    Promote-from-shadow is a single documented operation with implicit
+    roll-forward semantics.  To undo, call /model/rollback with the
+    previous version.
+
+    Requires X-API-Key header.
+    """
+    previous_live = get_current_version(body.model_type)
+    shadow = get_shadow_version(body.model_type)
+
+    if shadow is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No shadow model registered for '{body.model_type}'.",
+        )
+
+    promote_shadow(body.model_type)
+    new_live = get_current_version(body.model_type)
+
+    logger.info(
+        f"Shadow promoted via API | type={body.model_type} "
+        f"{previous_live} -> {new_live} | client_ip={request.client.host}"
+    )
+
+    return ShadowPromoteResponse(
+        status="promoted",
+        model_type=body.model_type,
+        new_live_version=new_live or shadow,
+        message=(
+            f"Shadow model '{body.model_type}@{shadow}' promoted to live "
+            f"(was '{previous_live}'). To rollback, POST /model/rollback "
+            f"with target_version='{previous_live}'."
+        ),
+    )
+
+
+@app.post("/model/shadow/unregister", response_model=ShadowUnregisterResponse)
+@limiter.limit("10/minute") if limiter else lambda x: x
+async def shadow_unregister(
+    body: ShadowPromoteRequest,
+    request: Request,
+) -> ShadowUnregisterResponse:
+    """
+    Remove a shadow model registration without promoting it (rollback).
+
+    The shadow model is discarded and the live model remains unchanged.
+
+    Requires X-API-Key header.
+    """
+    shadow = get_shadow_version(body.model_type)
+    if shadow is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No shadow model registered for '{body.model_type}'.",
+        )
+
+    unregister_shadow(body.model_type)
+
+    logger.info(
+        f"Shadow unregistered via API | type={body.model_type} "
+        f"was={shadow} | client_ip={request.client.host}"
+    )
+
+    return ShadowUnregisterResponse(
+        status="unregistered",
+        model_type=body.model_type,
+        message=(
+            f"Shadow model '{body.model_type}@{shadow}' unregistered. "
+            f"Live model unchanged."
+        ),
+    )
+
+
+@app.post("/model/rollback", response_model=RollbackResponse)
+@limiter.limit("10/minute") if limiter else lambda x: x
+async def model_rollback(
+    body: RollbackRequest,
+    request: Request,
+) -> RollbackResponse:
+    """
+    Rollback a model to a specified previous version.
+
+    If target_version is omitted, rolls back to the previous version
+    (sorted descending by semver).
+
+    This is the counterpart to promote_shadow: after promoting a shadow
+    to live, use this endpoint to revert if needed.
+
+    Requires X-API-Key header.
+    """
+    previous_live = get_current_version(body.model_type)
+    available = list_versions(body.model_type)
+
+    if len(available) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Only one version available for '{body.model_type}'. "
+                f"Cannot rollback."
+            ),
+        )
+
+    target = body.target_version
+    if target is None:
+        # Auto-select: the version just before current
+        if previous_live and previous_live in available:
+            idx = available.index(previous_live)
+            if idx > 0:
+                target = available[idx - 1]
+            else:
+                target = available[1] if len(available) > 1 else available[0]
+        else:
+            target = available[0]
+
+    if target == previous_live:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Target version '{target}' is already the current live version."
+            ),
+        )
+
+    if target not in available:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Target version '{target}' not found for '{body.model_type}'. "
+                f"Available: {available}"
+            ),
+        )
+
+    # Promote the targeted version
+    from src.ml.model_registry import promote_model
+    promote_model(body.model_type, target)
+
+    # Also clear any shadow so it doesn't conflict
+    if get_shadow_version(body.model_type):
+        unregister_shadow(body.model_type)
+
+    logger.info(
+        f"Model rolled back via API | type={body.model_type} "
+        f"{previous_live} -> {target} | client_ip={request.client.host}"
+    )
+
+    return RollbackResponse(
+        status="rolled_back",
+        model_type=body.model_type,
+        previous_version=previous_live,
+        new_version=target,
+        message=(
+            f"Model '{body.model_type}' rolled back from "
+            f"'{previous_live}' to '{target}'."
+        ),
+    )
+
+
+@app.get("/model/shadow/status", response_model=AllShadowStatusResponse)
+@limiter.limit("30/minute") if limiter else lambda x: x
+async def shadow_status(request: Request) -> AllShadowStatusResponse:
+    """
+    Return the current shadow deployment status for all model types.
+
+    Requires X-API-Key header.
+    """
+    return AllShadowStatusResponse(
+        shadows=get_all_shadow_status(),
+    )
+
+
+@app.get("/model/shadow/comparison-report", response_model=ComparisonReportResponse)
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def shadow_comparison_report(
+    request: Request,
+    model_type: str = Query(..., description="Model type, e.g. 'sentiment'"),
+    window_hours: int = Query(24, ge=1, le=720, description="Time window in hours (1–720)"),
+) -> ComparisonReportResponse:
+    """
+    Generate a comparison report between live and shadow model predictions.
+
+    The report summarizes:
+      - Agreement rate (exact match and directional agreement)
+      - Divergence patterns across time
+      - Latency overhead statistics
+      - Timeout occurrences
+      - A recommendation on whether to promote
+
+    Requires X-API-Key header.
+    """
+    try:
+        report = generate_comparison_report(
+            model_type=model_type,
+            window_hours=window_hours,
+        )
+    except Exception as exc:
+        logger.error(f"Comparison report generation failed: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate comparison report: {exc}",
+        )
+
+    if report is None:
+        return ComparisonReportResponse(
+            report=None,
+            message=(
+                f"No comparison data available for '{model_type}' "
+                f"within the last {window_hours} hours. "
+                f"Register a shadow model first with "
+                f"POST /model/shadow/register."
+            ),
+        )
+
+    return ComparisonReportResponse(report=report)
+
+
+@app.get("/model/shadow/comparison-log", response_model=ComparisonLogResponse)
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def shadow_comparison_log(
+    request: Request,
+    model_type: str = Query(..., description="Model type, e.g. 'sentiment'"),
+    window_hours: int = Query(24, ge=1, le=720, description="Time window in hours (1–720)"),
+    limit: int = Query(1000, ge=1, le=10000),
+) -> ComparisonLogResponse:
+    """
+    Retrieve raw comparison log entries between live and shadow predictions.
+
+    Returns the most recent entries first.
+
+    Requires X-API-Key header.
+    """
+    entries = read_comparison_log(
+        model_type=model_type,
+        window_hours=window_hours,
+        limit=limit,
+    )
+
+    return ComparisonLogResponse(
+        model_type=model_type,
+        window_hours=window_hours,
+        entries=entries,
+        total=len(entries),
+    )
+
+
+@app.delete("/model/shadow/comparison-log")
+@limiter.limit("5/minute") if limiter else lambda x: x
+async def shadow_clear_comparison_log(
+    request: Request,
+    model_type: str = Query(..., description="Model type, e.g. 'sentiment'"),
+) -> Dict[str, str]:
+    """
+    Clear comparison log for housekeeping.
+
+    Requires X-API-Key header.
+    """
+    clear_comparison_log(model_type)
+    logger.info(
+        f"Comparison log cleared via API | type={model_type} | "
+        f"client_ip={request.client.host}"
+    )
+    return {
+        "status": "cleared",
+        "model_type": model_type,
+        "message": f"Comparison log for '{model_type}' has been cleared.",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Predictive analytics endpoint (forecast market trends)
 # ---------------------------------------------------------------------------
+
+@app.get("/model/prediction-logs")
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def get_prediction_logs(
+    request: Request,
+    model_version: str = Query(..., description="Model version to filter by"),
+    model_type: Optional[str] = Query(None, description="Optional model type"),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+) -> Dict[str, Any]:
+    """
+    Query prediction logs by model version to isolate suspect outputs.
+    Requires X-API-Key header.
+    """
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+        
+    logs = postgres_service.query_prediction_logs(
+        model_version=model_version,
+        model_type=model_type,
+        limit=limit,
+        offset=offset,
+    )
+    
+    return {
+        "model_version": model_version,
+        "model_type": model_type,
+        "count": len(logs),
+        "logs": logs
+    }
 
 
 class ForecastResponse(BaseModel):
@@ -595,6 +1233,7 @@ async def get_forecast(request: Request) -> ForecastResponse:
     import asyncio
 
     logger.info(f"Forecast requested | client_ip={request.client.host}")
+    start_time = time.monotonic()
 
     def _run_forecast():
         from src.analytics.forecaster import SentimentForecaster
@@ -609,7 +1248,17 @@ async def get_forecast(request: Request) -> ForecastResponse:
         logger.error(f"Forecast failed: {exc}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Forecast error: {exc}")
 
-    return ForecastResponse(**result.to_dict())
+    output_dict = result.to_dict()
+    _log_prediction(
+        request_id=correlation_id_ctx.get(generate_correlation_id()),
+        model_type="forecast",
+        model_version=output_dict.get("model_backend", "1.0.0"),
+        input_text="no_input_get_request",
+        output=output_dict,
+        latency_ms=(time.monotonic() - start_time) * 1000,
+    )
+
+    return ForecastResponse(**output_dict)
 
 
 # ---------------------------------------------------------------------------
@@ -666,6 +1315,7 @@ async def analyze_correlation(
     Returns correlation scores (-1 to 1) and scatter plot data points.
     Requires X-API-Key header.
     """
+    start_time = time.monotonic()
     sentiment_list = [{"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data]
     price_list = (
         [{"timestamp": dp.timestamp, "value": dp.value} for dp in body.price_data]
@@ -691,6 +1341,15 @@ async def analyze_correlation(
         lag_hours=body.lag_hours,
     )
 
+    _log_prediction(
+        request_id=correlation_id_ctx.get(generate_correlation_id()),
+        model_type="correlation_analysis",
+        model_version="1.0.0",
+        input_text=body.json(),
+        output=result,
+        latency_ms=(time.monotonic() - start_time) * 1000,
+    )
+
     return CorrelationResponse(
         price_correlation=result.get("price_correlation"),
         volume_correlation=result.get("volume_correlation"),
@@ -710,6 +1369,7 @@ async def analyze_lag_correlation(
     Returns the best lag hours and correlation strength for predicting market changes.
     Requires X-API-Key header.
     """
+    start_time = time.monotonic()
     sentiment_list = [{"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data]
     metric_list = [{"timestamp": dp.timestamp, "value": dp.value} for dp in body.metric_data]
 
@@ -725,9 +1385,116 @@ async def analyze_lag_correlation(
         max_lag_hours=body.max_lag_hours,
     )
 
+    _log_prediction(
+        request_id=correlation_id_ctx.get(generate_correlation_id()),
+        model_type="lag_analysis",
+        model_version="1.0.0",
+        input_text=body.json(),
+        output=result,
+        latency_ms=(time.monotonic() - start_time) * 1000,
+    )
+
     return LagAnalysisResponse(
         best_lag_hours=result["best_lag_hours"],
         best_correlation=result["best_correlation"],
         lag_analysis=result["lag_analysis"],
         recommendation=result["recommendation"],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Daily On-Chain KPI Snapshot Endpoints (#877)
+# ---------------------------------------------------------------------------
+
+
+class DailyKPISnapshotResponse(BaseModel):
+    snapshot_date: str
+    period: str
+    tvl: float
+    volume: float
+    active_rounds: int
+    contribution_count: int
+    unique_contributors: int
+    extra_data: Optional[Dict[str, Any]] = None
+    created_at: Optional[str] = None
+
+
+class DailyKPISnapshotRunResponse(BaseModel):
+    status: str
+    message: str
+    date: str
+    period: str
+    tvl: float
+    volume: float
+    active_rounds: int
+    contribution_count: int
+    unique_contributors: int
+
+
+@app.get("/analytics/kpis/daily-snapshots", response_model=List[DailyKPISnapshotResponse])
+@limiter.limit("30/minute") if limiter else lambda x: x
+async def get_daily_kpi_snapshots(
+    request: Request,
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    period: str = Query("daily", description="Period type (default: daily)"),
+    limit: int = Query(100, ge=1, le=500),
+) -> List[DailyKPISnapshotResponse]:
+    """
+    Retrieve historical daily on-chain KPI snapshots.
+    Requires X-API-Key header.
+    """
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    snapshots = postgres_service.get_daily_onchain_kpi_snapshots(
+        start_date=start_date,
+        end_date=end_date,
+        period=period,
+        limit=limit,
+    )
+
+    return [
+        DailyKPISnapshotResponse(
+            snapshot_date=s.snapshot_date,
+            period=s.period,
+            tvl=s.tvl,
+            volume=s.volume,
+            active_rounds=s.active_rounds,
+            contribution_count=s.contribution_count,
+            unique_contributors=s.unique_contributors,
+            extra_data=s.extra_data,
+            created_at=s.created_at.isoformat() if s.created_at else None,
+        )
+        for s in snapshots
+    ]
+
+
+@app.post("/analytics/kpis/daily-snapshots/run", response_model=DailyKPISnapshotRunResponse)
+@limiter.limit("10/minute") if limiter else lambda x: x
+async def trigger_daily_kpi_snapshot(
+    request: Request,
+    target_date: Optional[str] = Query(None, description="Target date (YYYY-MM-DD)"),
+    period: str = Query("daily", description="Period identifier"),
+) -> DailyKPISnapshotRunResponse:
+    """
+    Trigger manual generation of a daily on-chain KPI snapshot.
+    Skips duplicate snapshot creation if a snapshot for target_date and period already exists.
+    Requires X-API-Key header.
+    """
+    from src.analytics.daily_kpi_snapshot import DailyKPISnapshotGenerator
+
+    generator = DailyKPISnapshotGenerator(db_service=postgres_service)
+    result = generator.run_snapshot(target_date=target_date, period=period)
+
+    return DailyKPISnapshotRunResponse(
+        status=result["status"],
+        message=result["message"],
+        date=result["date"],
+        period=result["period"],
+        tvl=result["tvl"],
+        volume=result["volume"],
+        active_rounds=result["active_rounds"],
+        contribution_count=result["contribution_count"],
+        unique_contributors=result["unique_contributors"],
     )

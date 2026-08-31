@@ -1,12 +1,10 @@
-"use client";
+import type { Metadata } from "next";
+import GrantRoundDetailClient from "./GrantRoundDetailClient";
+import type { RoundSummary } from "../components";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Clock, Users } from "lucide-react";
-import { RoundDetail, RoundSummary } from "../components";
-import { DependencyStatusBanner } from "@/components/DependencyStatusBanner";
+import { clientConfig } from '@/lib/config';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_BASE = clientConfig.apiUrl;
 
 interface GrantRoundDetailPageProps {
   params: {
@@ -14,82 +12,61 @@ interface GrantRoundDetailPageProps {
   };
 }
 
-export default function GrantRoundDetailPage({ params }: GrantRoundDetailPageProps) {
-  const [summary, setSummary] = useState<RoundSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+async function fetchRoundSummary(roundId: string): Promise<RoundSummary | null> {
+  try {
+    const response = await fetch(`${API_BASE}/grants/rounds/${roundId}/summary`, {
+      next: { revalidate: 60 },
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
 
-  useEffect(() => {
-    async function loadSummary() {
-      setIsLoading(true);
-      setError(null);
+export async function generateMetadata({ params }: GrantRoundDetailPageProps): Promise<Metadata> {
+  const summary = await fetchRoundSummary(params.id);
 
-      try {
-        const response = await fetch(`${API_BASE}/grants/rounds/${params.id}/summary`);
-        if (!response.ok) {
-          throw new Error(`Unable to load round details: ${response.statusText}`);
-        }
-        const data: RoundSummary = await response.json();
-        setSummary(data);
-      } catch (err: any) {
-        console.error(err);
-        setError(err?.message ?? "Failed to load round details.");
-      } finally {
-        setIsLoading(false);
-      }
-    }
+  const title = summary
+    ? `Grant Round: ${summary.round.name} - LumenPulse`
+    : `Grant Round #${params.id} - LumenPulse`;
 
-    loadSummary();
-  }, [params.id]);
+  const description = summary
+    ? `View details for "${summary.round.name}" — ${summary.projects.length} projects, ${formatPoolDisplay(summary.poolBalance)} XLM matching pool on LumenPulse quadratic funding.`
+    : `Explore grant round details, matching pool allocations, and project funding on LumenPulse.`;
 
-  return (
-    <div className="min-h-screen bg-background text-foreground">
-      <section className="relative pt-24 pb-8 px-4">
-        <div className="container mx-auto max-w-4xl">
-          <div className="flex items-center gap-3 mb-6">
-            <Users className="w-7 h-7 text-primary" />
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Grant Round Detail</h1>
-              <p className="text-foreground/50 text-base leading-relaxed">
-                View pool balance, allocation ranking, and project-level context for the selected round.
-              </p>
-            </div>
-          </div>
+  const ogImage = "/assets/lumenpulse-03.png";
 
-          {/* Network + dependency status banner: re-uses the same component
-              as the list view so the experience stays consistent between
-              browsing and drilling into a single round. */}
-          <div className="mt-2">
-            <DependencyStatusBanner />
-          </div>
-        </div>
-      </section>
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: `https://lumenpulse.app/grants/${params.id}`,
+      siteName: "LumenPulse",
+      images: [{ url: ogImage, width: 71, height: 71, alt: "LumenPulse" }],
+      locale: "en_US",
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogImage],
+      creator: "@lumenpulse",
+    },
+  };
+}
 
-      <section className="px-4 pb-20">
-        <div className="container mx-auto max-w-4xl">
-          {isLoading ? (
-            <div className="flex justify-center py-20">
-              <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            </div>
-          ) : error ? (
-            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-8 text-center">
-              <p className="text-red-400 text-sm mb-4">{error}</p>
-              <Link href="/grants" className="inline-flex items-center px-4 py-2 bg-primary text-black rounded-lg font-semibold hover:bg-primary/90 transition">
-                Back to grants
-              </Link>
-            </div>
-          ) : summary ? (
-            <RoundDetail summary={summary} />
-          ) : (
-            <div className="text-center py-20 text-foreground/40">
-              <p>No round detail available.</p>
-              <Link href="/grants" className="mt-4 inline-block text-primary underline">
-                Back to grants
-              </Link>
-            </div>
-          )}
-        </div>
-      </section>
-    </div>
-  );
+function formatPoolDisplay(raw: string): string {
+  const n = Number(raw) / 1e7;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(2)}K`;
+  return n.toFixed(2);
+}
+
+export default async function GrantRoundDetailPage({ params }: GrantRoundDetailPageProps) {
+  const summary = await fetchRoundSummary(params.id);
+  return <GrantRoundDetailClient roundId={params.id} initialData={summary} />;
 }

@@ -13,3 +13,4 @@ idempotency-guard = { path = "../idempotency-guard" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+proptest = "1.0"

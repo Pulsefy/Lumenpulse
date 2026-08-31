@@ -118,3 +118,49 @@ pub struct ContributorProfileChangedEvt {
     /// Proposal id when the change was admin-managed; 0 for self-service.
     pub proposal_id: u64,
 }
+
+/// Emitted when a contributor's attestation is suspended via multisig.
+#[contractevent]
+pub struct AttestationSuspendedEvent {
+    #[topic]
+    pub contributor: Address,
+    pub executor: Address,
+    pub proposal_id: u64,
+}
+
+/// Emitted when a contributor's attestation is revoked via multisig.
+/// Revocation is terminal — there is no corresponding "un-revoke" event.
+#[contractevent]
+pub struct AttestationRevokedEvent {
+    #[topic]
+    pub contributor: Address,
+    pub executor: Address,
+    pub proposal_id: u64,
+}
+
+/// Emitted when a previously suspended attestation is restored to `Active`.
+#[contractevent]
+pub struct AttestationRestoredEvent {
+    #[topic]
+    pub contributor: Address,
+    pub executor: Address,
+    pub proposal_id: u64,
+}
+
+/// Emitted whenever the pause state of a specific scope changes.
+///
+/// `scope` identifies which subsystem was affected:
+///  - `1` → Contribution (register_contributor, gasless_register)
+///  - `2` → Governance (multisig proposals, admin-gated mutations)
+///
+/// `paused` is the **new** state after the call.
+#[contractevent]
+pub struct ScopePauseChangedEvent {
+    #[topic]
+    pub admin: Address,
+    /// Numeric discriminant of `ContribPauseScope`.
+    pub scope: u32,
+    /// `true` = scope is now paused; `false` = scope is now unpaused.
+    pub paused: bool,
+    pub timestamp: u64,
+}

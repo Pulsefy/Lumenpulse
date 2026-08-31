@@ -20,12 +20,18 @@ from src.ingestion.ingestion_alerting import (
 
 
 @pytest.fixture(autouse=True)
-def reset_alerting_state():
+def reset_alerting_state(monkeypatch, tmp_path):
+    monkeypatch.setenv(
+        "ALERT_SUPPRESSION_STORE_PATH",
+        str(tmp_path / "ingestion_alerting_suppression.json"),
+    )
     alerting._recent_failures.clear()
     alerting._last_cycle_result.clear()
+    alerting.reset_suppression_engine()
     yield
     alerting._recent_failures.clear()
     alerting._last_cycle_result.clear()
+    alerting.reset_suppression_engine()
 
 
 def test_measure_stellar_ledger_lag_healthy():
@@ -117,3 +123,35 @@ def test_run_ingestion_alerting_cycle_with_mocks():
     assert result["healthy"] is True
     assert len(result["metrics"]) == 1
     assert result["metrics"][0]["metric_name"] == "stellar_ledger_lag"
+    assert result["dataset_sla_alerts"] == []
+    assert result["dataset_sla_measurements"][0]["dataset"] == "stellar_ledger_events"
+
+
+def test_run_ingestion_alerting_cycle_emits_dataset_sla_breach(monkeypatch, tmp_path):
+    monkeypatch.setenv(
+        "ALERT_SUPPRESSION_STORE_PATH",
+        str(tmp_path / "ingestion_alerting_sla.json"),
+    )
+    alerting.reset_suppression_engine()
+    fetcher = MagicMock()
+    closed_at = datetime.now(timezone.utc) - timedelta(seconds=700)
+
+    with patch(
+        "src.ingestion.ingestion_alerting._horizon_latest_ledger",
+        return_value={
+            "latest_ledger_sequence": 999,
+            "ledger_close_time": closed_at.isoformat(),
+        },
+    ), patch(
+        "src.ingestion.ingestion_alerting.measure_pipeline_analytics_lag",
+        return_value=None,
+    ):
+        result = run_ingestion_alerting_cycle(fetcher=fetcher)
+
+    assert result["healthy"] is False
+    assert result["dataset_sla_alerts"]
+    alert = result["dataset_sla_alerts"][0]
+    assert alert["alert_type"] == "dataset_sla_breach"
+    assert alert["dataset"] == "stellar_ledger_events"
+    assert alert["sla_type"] == "freshness"
+    assert alert["_suppression"]["rule_name"] == "dedup_dataset_sla_breach"

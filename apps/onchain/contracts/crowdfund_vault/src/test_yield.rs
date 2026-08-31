@@ -4,7 +4,7 @@ use soroban_sdk::{
     contract, contractimpl, symbol_short,
     testutils::Address as _,
     token::{StellarAssetClient, TokenClient},
-    Address, Env,
+    Address, BytesN, Env,
 };
 
 #[contract]
@@ -119,7 +119,12 @@ fn test_yield_investment_and_withdrawal() {
     );
 
     // Deposit funds
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(
+        &user,
+        &project_id,
+        &500_000,
+        &BytesN::from_array(&env, &[74u8; 32]),
+    );
 
     // Invest idle funds
     client.invest_idle_funds(&owner, &project_id, &300_000);
@@ -171,7 +176,12 @@ fn test_yield_refund_divests_automatically() {
     );
 
     // Deposit funds
-    client.deposit(&user, &project_id, &500_000);
+    client.deposit(
+        &user,
+        &project_id,
+        &500_000,
+        &BytesN::from_array(&env, &[75u8; 32]),
+    );
 
     // Invest ALL funds
     client.invest_idle_funds(&owner, &project_id, &500_000);

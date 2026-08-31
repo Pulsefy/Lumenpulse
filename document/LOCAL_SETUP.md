@@ -184,7 +184,6 @@ REDIS_URL=redis://localhost:6379
 STELLAR_NETWORK=testnet
 STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
 PYTHON_API_URL=http://localhost:8000
-PYTHON_SERVICE_URL=http://localhost:8000
 PYTHON_API_KEY=local-dev-key
 USE_MOCK_TRANSACTIONS=true
 CORS_ORIGIN=http://localhost:3000,http://localhost:3001,http://localhost:8081
@@ -378,6 +377,8 @@ soroban contract deploy \
 The deploy command prints a **contract ID**. Record it and add it to the canonical backend environment variable `STELLAR_CONTRACT_LUMEN_TOKEN` in `apps/backend/.env.local` or to the environment where the backend is configured. The backend then exposes this contract ID through its Stellar config API, which the web and mobile apps can consume for testnet usage.
 
 If you are using `scripts/.env`, keep the same contract ID there so the helper script, deployment outputs, and app environments stay aligned.
+
+For the full deployment sequence across all 19 contracts, dependency ordering, canonical manifest handling, smoke validation, and rollback playbooks, see **[document/CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md](CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md)**.
 
 To deploy all contracts at once using the monorepo helper script:
 

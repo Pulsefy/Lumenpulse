@@ -42,8 +42,9 @@ export interface UseDependencyHealthResult extends DependencyHealthReport {
 
 // ── Defaults ──────────────────────────────────────────────────────────────
 
-const DEFAULT_API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { clientConfig } from '@/lib/config';
+
+const DEFAULT_API_BASE = clientConfig.apiUrl;
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 8_000;
 // Only probe dependencies we already display in the UI; the backend may report

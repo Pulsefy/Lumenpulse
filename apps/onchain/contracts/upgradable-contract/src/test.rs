@@ -1,7 +1,8 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::storage::TimelockAction;
+use crate::errors::ContractError;
+use crate::storage::{OperationStatus, TimelockAction, GRACE_PERIOD_SECONDS, MIN_DELAY_SECONDS};
 use crate::{UpgradableContract, UpgradableContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Events, Ledger},
@@ -21,8 +22,13 @@ fn upload_wasm(env: &Env) -> BytesN<32> {
     env.deployer().upload_contract_wasm(bytes)
 }
 
+fn advance_to_ready(env: &Env) {
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + MIN_DELAY_SECONDS);
+}
+
 // ---------------------------------------------------------------------------
-// Existing tests (unchanged)
+// Basic lifecycle (unaffected by the timelock refactor)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -39,94 +45,16 @@ fn test_counter_persists() {
 }
 
 #[test]
-fn test_upgrade_succeeds_for_admin() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let contract_id = env.register(CONTRACT_WASM, ());
-    let client = UpgradableContractClient::new(&env, &contract_id);
-    client.init(&admin);
-    let new_wasm_hash = upload_wasm(&env);
-    client.upgrade(&admin, &new_wasm_hash);
-}
-
-#[test]
-fn test_upgrade_emits_event() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let contract_id = env.register(CONTRACT_WASM, ());
-    let client = UpgradableContractClient::new(&env, &contract_id);
-    client.init(&admin);
-    let new_wasm_hash = upload_wasm(&env);
-    let before = env.events().all().len();
-    client.upgrade(&admin, &new_wasm_hash);
-    assert!(env.events().all().len() > before);
-}
-
-#[test]
-#[should_panic]
-fn test_only_admin_can_upgrade() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let non_admin = Address::generate(&env);
-    let (_, client) = setup(&env);
-    client.init(&admin);
-    let dummy = BytesN::from_array(&env, &[0u8; 32]);
-    client.upgrade(&non_admin, &dummy);
-}
-
-#[test]
-#[should_panic(expected = "already initialized")]
 fn test_already_initialized() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let (_, client) = setup(&env);
     client.init(&admin);
-    client.init(&admin);
-}
-
-#[test]
-fn test_set_admin_transfers_role() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let new_admin = Address::generate(&env);
-    let (_, client) = setup(&env);
-    client.init(&admin);
-    assert_eq!(client.get_admin(), admin);
-    client.set_admin(&admin, &new_admin);
-    assert_eq!(client.get_admin(), new_admin);
-}
-
-#[test]
-fn test_set_admin_emits_event() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let new_admin = Address::generate(&env);
-    let contract_id = env.register(CONTRACT_WASM, ());
-    let client = UpgradableContractClient::new(&env, &contract_id);
-    client.init(&admin);
-    let before = env.events().all().len();
-    client.set_admin(&admin, &new_admin);
-    assert!(env.events().all().len() > before);
-}
-
-#[test]
-#[should_panic]
-fn test_old_admin_cannot_upgrade_after_rotation() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let new_admin = Address::generate(&env);
-    let (_, client) = setup(&env);
-    client.init(&admin);
-    client.set_admin(&admin, &new_admin);
-    let dummy = BytesN::from_array(&env, &[0u8; 32]);
-    client.upgrade(&admin, &dummy);
+    assert_eq!(
+        client.try_init(&admin),
+        Err(Ok(ContractError::AlreadyInitialized))
+    );
 }
 
 #[test]
@@ -161,7 +89,7 @@ fn test_ttl_extended_after_read_write() {
 }
 
 // ---------------------------------------------------------------------------
-// New timelock tests
+// Queue
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -194,6 +122,26 @@ fn test_queue_operation_emits_event() {
 }
 
 #[test]
+fn test_non_admin_cannot_queue() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    let action = TimelockAction::SetAdmin(attacker.clone());
+    assert_eq!(
+        client.try_queue_operation(&attacker, &action),
+        Err(Ok(ContractError::Unauthorized))
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Get / status
+// ---------------------------------------------------------------------------
+
+#[test]
 fn test_get_operation_returns_queued_op() {
     let env = Env::default();
     env.mock_all_auths();
@@ -207,7 +155,64 @@ fn test_get_operation_returns_queued_op() {
     let op = client.get_operation(&id);
 
     assert_eq!(op.proposer, admin);
+    assert_eq!(op.action, action);
+    assert_eq!(op.execute_after, op.created_at + MIN_DELAY_SECONDS);
+    assert_eq!(op.expires_at, op.execute_after + GRACE_PERIOD_SECONDS);
 }
+
+#[test]
+fn test_get_operation_nonexistent_returns_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    assert_eq!(
+        client.try_get_operation(&9_999u32),
+        Err(Ok(ContractError::OperationNotFound))
+    );
+}
+
+#[test]
+fn test_operation_status_transitions_pending_ready_expired() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    let action = TimelockAction::SetAdmin(new_admin);
+    let id = client.queue_operation(&admin, &action);
+
+    assert_eq!(client.get_operation_status(&id), OperationStatus::Pending);
+
+    advance_to_ready(&env);
+    assert_eq!(client.get_operation_status(&id), OperationStatus::Ready);
+
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + GRACE_PERIOD_SECONDS + 1);
+    assert_eq!(client.get_operation_status(&id), OperationStatus::Expired);
+}
+
+#[test]
+fn test_get_operation_status_nonexistent_returns_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    assert_eq!(
+        client.try_get_operation_status(&9_999u32),
+        Err(Ok(ContractError::OperationNotFound))
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Cancel
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_cancel_operation_removes_it() {
@@ -222,8 +227,10 @@ fn test_cancel_operation_removes_it() {
     let id = client.queue_operation(&admin, &action);
     client.cancel_operation(&admin, &id);
 
-    let next_id: u32 = 1;
-    assert_eq!(id + 1, next_id);
+    assert_eq!(
+        client.try_get_operation(&id),
+        Err(Ok(ContractError::OperationNotFound))
+    );
 }
 
 #[test]
@@ -235,16 +242,51 @@ fn test_cancel_operation_emits_event() {
     let (_, client) = setup(&env);
     client.init(&admin);
 
+    // `env.events().all()` reflects only the most recent invocation, so
+    // capture `before` prior to any call rather than between two calls.
+    let before = env.events().all().len();
     let action = TimelockAction::SetAdmin(new_admin);
     let id = client.queue_operation(&admin, &action);
     client.cancel_operation(&admin, &id);
 
-    assert!(!env.events().all().is_empty());
+    assert!(env.events().all().len() > before);
 }
 
 #[test]
-#[should_panic(expected = "timelock not expired")]
-fn test_execute_before_delay_panics() {
+fn test_cancel_operation_rejects_non_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    let action = TimelockAction::SetAdmin(new_admin);
+    let id = client.queue_operation(&admin, &action);
+
+    assert_eq!(
+        client.try_cancel_operation(&attacker, &id),
+        Err(Ok(ContractError::Unauthorized))
+    );
+}
+
+#[test]
+fn test_cancel_operation_nonexistent_returns_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    assert_eq!(
+        client.try_cancel_operation(&admin, &9_999u32),
+        Err(Ok(ContractError::OperationNotFound))
+    );
+}
+
+#[test]
+fn test_cancel_operation_works_after_expiry() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
@@ -255,7 +297,60 @@ fn test_execute_before_delay_panics() {
     let action = TimelockAction::SetAdmin(new_admin);
     let id = client.queue_operation(&admin, &action);
 
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + MIN_DELAY_SECONDS + GRACE_PERIOD_SECONDS + 1);
+
+    // Cancelling a stale, expired operation must still work — it's the only
+    // way to clean it up.
+    client.cancel_operation(&admin, &id);
+    assert_eq!(
+        client.try_get_operation(&id),
+        Err(Ok(ContractError::OperationNotFound))
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Execute — timing boundaries
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_execute_before_delay_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    let action = TimelockAction::SetAdmin(new_admin);
+    let id = client.queue_operation(&admin, &action);
+
+    // One second before the boundary.
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + MIN_DELAY_SECONDS - 1);
+
+    assert_eq!(
+        client.try_execute_operation(&admin, &id),
+        Err(Ok(ContractError::OperationNotReady))
+    );
+}
+
+#[test]
+fn test_execute_at_exact_delay_boundary_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    let action = TimelockAction::SetAdmin(new_admin.clone());
+    let id = client.queue_operation(&admin, &action);
+
+    advance_to_ready(&env);
     client.execute_operation(&admin, &id);
+
+    assert_eq!(client.get_admin(), new_admin);
 }
 
 #[test]
@@ -271,11 +366,51 @@ fn test_execute_after_delay_succeeds() {
     let id = client.queue_operation(&admin, &action);
 
     env.ledger()
-        .set_timestamp(env.ledger().timestamp() + 86_401);
+        .set_timestamp(env.ledger().timestamp() + MIN_DELAY_SECONDS + 1);
 
     client.execute_operation(&admin, &id);
 
     assert_eq!(client.get_admin(), new_admin);
+}
+
+#[test]
+fn test_execute_at_exact_expiry_boundary_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    let action = TimelockAction::SetAdmin(new_admin.clone());
+    let id = client.queue_operation(&admin, &action);
+
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + MIN_DELAY_SECONDS + GRACE_PERIOD_SECONDS);
+
+    client.execute_operation(&admin, &id);
+    assert_eq!(client.get_admin(), new_admin);
+}
+
+#[test]
+fn test_execute_one_second_past_expiry_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    let action = TimelockAction::SetAdmin(new_admin);
+    let id = client.queue_operation(&admin, &action);
+
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + MIN_DELAY_SECONDS + GRACE_PERIOD_SECONDS + 1);
+
+    assert_eq!(
+        client.try_execute_operation(&admin, &id),
+        Err(Ok(ContractError::OperationExpired))
+    );
 }
 
 #[test]
@@ -290,8 +425,7 @@ fn test_execute_emits_event() {
     let action = TimelockAction::SetAdmin(new_admin);
     let id = client.queue_operation(&admin, &action);
 
-    env.ledger()
-        .set_timestamp(env.ledger().timestamp() + 86_401);
+    advance_to_ready(&env);
 
     let before = env.events().all().len();
     client.execute_operation(&admin, &id);
@@ -299,15 +433,196 @@ fn test_execute_emits_event() {
 }
 
 #[test]
-#[should_panic]
-fn test_non_admin_cannot_queue() {
+fn test_execute_rejects_non_admin() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
     let attacker = Address::generate(&env);
     let (_, client) = setup(&env);
     client.init(&admin);
 
-    let action = TimelockAction::SetAdmin(attacker.clone());
-    client.queue_operation(&attacker, &action);
+    let action = TimelockAction::SetAdmin(new_admin);
+    let id = client.queue_operation(&admin, &action);
+    advance_to_ready(&env);
+
+    assert_eq!(
+        client.try_execute_operation(&attacker, &id),
+        Err(Ok(ContractError::Unauthorized))
+    );
+}
+
+#[test]
+fn test_execute_nonexistent_returns_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    assert_eq!(
+        client.try_execute_operation(&admin, &9_999u32),
+        Err(Ok(ContractError::OperationNotFound))
+    );
+}
+
+#[test]
+fn test_double_execute_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let contract_id = env.register(CONTRACT_WASM, ());
+    let client = UpgradableContractClient::new(&env, &contract_id);
+    client.init(&admin);
+
+    // Use an Upgrade (not SetAdmin) so the caller's own authority is
+    // unaffected by the first execution, isolating "already consumed"
+    // from "caller is no longer admin".
+    let new_wasm_hash = upload_wasm(&env);
+    let action = TimelockAction::Upgrade(new_wasm_hash);
+    let id = client.queue_operation(&admin, &action);
+    advance_to_ready(&env);
+
+    client.execute_operation(&admin, &id);
+
+    // The operation was consumed on first execution — a second attempt has
+    // nothing to execute.
+    assert_eq!(
+        client.try_execute_operation(&admin, &id),
+        Err(Ok(ContractError::OperationNotFound))
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Upgrade through the queue (the only way an upgrade can happen)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_upgrade_via_queue_succeeds_after_delay() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let contract_id = env.register(CONTRACT_WASM, ());
+    let client = UpgradableContractClient::new(&env, &contract_id);
+    client.init(&admin);
+
+    let new_wasm_hash = upload_wasm(&env);
+    let action = TimelockAction::Upgrade(new_wasm_hash);
+    let id = client.queue_operation(&admin, &action);
+
+    advance_to_ready(&env);
+
+    let before = env.events().all().len();
+    client.execute_operation(&admin, &id);
+    assert!(env.events().all().len() > before);
+
+    // The operation is consumed, matching the SetAdmin path.
+    assert_eq!(
+        client.try_get_operation(&id),
+        Err(Ok(ContractError::OperationNotFound))
+    );
+}
+
+#[test]
+fn test_upgrade_via_queue_rejected_before_delay() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let contract_id = env.register(CONTRACT_WASM, ());
+    let client = UpgradableContractClient::new(&env, &contract_id);
+    client.init(&admin);
+
+    let new_wasm_hash = upload_wasm(&env);
+    let action = TimelockAction::Upgrade(new_wasm_hash);
+    let id = client.queue_operation(&admin, &action);
+
+    assert_eq!(
+        client.try_execute_operation(&admin, &id),
+        Err(Ok(ContractError::OperationNotReady))
+    );
+}
+
+#[test]
+fn test_upgrade_via_queue_rejected_for_non_admin_proposer() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let contract_id = env.register(CONTRACT_WASM, ());
+    let client = UpgradableContractClient::new(&env, &contract_id);
+    client.init(&admin);
+
+    let new_wasm_hash = upload_wasm(&env);
+    let action = TimelockAction::Upgrade(new_wasm_hash);
+
+    assert_eq!(
+        client.try_queue_operation(&attacker, &action),
+        Err(Ok(ContractError::Unauthorized))
+    );
+}
+
+#[test]
+fn test_old_admin_cannot_execute_after_rotation() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let contract_id = env.register(CONTRACT_WASM, ());
+    let client = UpgradableContractClient::new(&env, &contract_id);
+    client.init(&admin);
+
+    // Rotate admin through the queue.
+    let rotate_id = client.queue_operation(&admin, &TimelockAction::SetAdmin(new_admin.clone()));
+    advance_to_ready(&env);
+    client.execute_operation(&admin, &rotate_id);
+    assert_eq!(client.get_admin(), new_admin);
+
+    // The old admin can no longer queue anything, including an upgrade.
+    let new_wasm_hash = upload_wasm(&env);
+    assert_eq!(
+        client.try_queue_operation(&admin, &TimelockAction::Upgrade(new_wasm_hash)),
+        Err(Ok(ContractError::Unauthorized))
+    );
+}
+
+#[test]
+fn test_two_step_admin_rotation_flow() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    // Unauthorized proposer fails
+    assert_eq!(
+        client.try_propose_admin_rotation(&attacker, &new_admin),
+        Err(Ok(ContractError::Unauthorized))
+    );
+
+    // Propose
+    client.propose_admin_rotation(&admin, &new_admin);
+
+    // Accept
+    client.accept_admin_rotation(&new_admin);
+    assert_eq!(client.get_admin(), new_admin);
+}
+
+#[test]
+fn test_admin_rotation_cancel() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    client.propose_admin_rotation(&admin, &new_admin);
+    client.cancel_admin_rotation(&admin);
+
+    assert_eq!(
+        client.try_accept_admin_rotation(&new_admin),
+        Err(Ok(ContractError::OperationNotFound))
+    );
 }

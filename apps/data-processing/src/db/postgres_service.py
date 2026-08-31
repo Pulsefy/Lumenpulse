@@ -6,7 +6,7 @@ import logging
 import math
 import os
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 from collections import defaultdict
@@ -22,6 +22,7 @@ from .models import (
     SocialPost,
     AnalyticsRecord,
     ContractEvent,
+    RawSorobanEvent,
     ProjectView,
     ProjectContributor,
     ProjectContributorReputationSnapshot,
@@ -30,6 +31,17 @@ from .models import (
     AssetTrend,
     RoundAnomalySignal,
     MetadataDriftFinding,
+    EntityLinkingReview,
+    DailyOnchainKPISnapshot,
+    PredictionLog,
+    SentimentLabel,
+)
+from .cohort_models import (
+    GrantRound,
+    ContributorRoundParticipation,
+    ContributorCohort,
+    CohortRetentionSummary,
+    RepeatContributorSummary,
 )
 from src.analytics.ner_service import NERService
 from src.analytics.onchain_entity_linker import (
@@ -58,13 +70,22 @@ class PostgresService:
         )
 
         try:
-            self.engine = create_engine(
-                self.database_url,
-                pool_pre_ping=True,  # Verify connections before using
-                pool_size=5,
-                max_overflow=10,
-                echo=False,  # Set to True for SQL query logging
-            )
+            if self.database_url.startswith("sqlite"):
+                from sqlalchemy.pool import StaticPool
+                self.engine = create_engine(
+                    self.database_url,
+                    connect_args={"check_same_thread": False},
+                    poolclass=StaticPool,
+                    echo=False,
+                )
+            else:
+                self.engine = create_engine(
+                    self.database_url,
+                    pool_pre_ping=True,  # Verify connections before using
+                    pool_size=5,
+                    max_overflow=10,
+                    echo=False,  # Set to True for SQL query logging
+                )
             self.SessionLocal = sessionmaker(
                 autocommit=False,
                 autoflush=False,
@@ -85,10 +106,12 @@ class PostgresService:
         if isinstance(existing_entities, list) and existing_entities:
             return normalized
 
-        normalized["detected_entities"] = self.ner_service.extract_entities_from_article(
-            title=normalized.get("title"),
-            summary=normalized.get("summary"),
-            content=normalized.get("content"),
+        normalized["detected_entities"] = (
+            self.ner_service.extract_entities_from_article(
+                title=normalized.get("title"),
+                summary=normalized.get("summary"),
+                content=normalized.get("content"),
+            )
         )
         return normalized
 
@@ -155,7 +178,32 @@ class PostgresService:
         article_data: Dict[str, Any],
     ) -> List[OnchainEntityLink]:
         """Link article content to default assets and current project views."""
-        linker = OnchainEntityLinker(self._project_candidates_from_session(session))
+        overrides = {}
+        article_id = article_data.get("id")
+        if article_id:
+            try:
+                reviewed_items = session.execute(
+                    select(EntityLinkingReview).where(
+                        and_(
+                            EntityLinkingReview.article_id == article_id,
+                            EntityLinkingReview.status.in_(["approved", "rejected", "corrected"])
+                        )
+                    )
+                ).scalars().all()
+                for item in reviewed_items:
+                    if item.status == "rejected":
+                        overrides[item.stable_entity_id] = "__REJECTED__"
+                    elif item.status == "corrected":
+                        overrides[item.stable_entity_id] = item.corrected_entity_id or "__REJECTED__"
+                    elif item.status == "approved":
+                        overrides[item.stable_entity_id] = item.stable_entity_id
+            except Exception as e:
+                logger.warning(f"Failed to fetch reviewed overrides: {e}")
+
+        linker = OnchainEntityLinker(
+            self._project_candidates_from_session(session),
+            overrides=overrides,
+        )
         return linker.link_article(article_data)
 
     def _sync_article_onchain_links(
@@ -187,6 +235,72 @@ class PostgresService:
                     contract_id=link.contract_id,
                 )
             )
+
+        self._upsert_review_queue_items(session, article, links)
+
+    def _upsert_review_queue_items(
+        self,
+        session: Session,
+        article: Article,
+        links: List[OnchainEntityLink],
+        confidence_threshold: float = 0.90,
+    ) -> None:
+        """
+        Upsert low-confidence entity linking cases into the review queue.
+        Guaranteed to be non-blocking.
+        """
+        try:
+            for link in links:
+                if link.confidence >= confidence_threshold:
+                    continue
+
+                evidence = {
+                    "title": article.title,
+                    "summary": article.summary,
+                    "matched_text": link.matched_text,
+                    "reason": f"Confidence {link.confidence:.2f} below threshold {confidence_threshold:.2f}",
+                }
+
+                content = article.content or ""
+                summary = article.summary or ""
+                text_to_search = content if content else summary
+                if link.matched_text and text_to_search:
+                    idx = text_to_search.lower().find(link.matched_text.lower())
+                    if idx != -1:
+                        start = max(0, idx - 100)
+                        end = min(len(text_to_search), idx + len(link.matched_text) + 100)
+                        evidence["context_snippet"] = text_to_search[start:end]
+
+                existing = session.execute(
+                    select(EntityLinkingReview).where(
+                        and_(
+                            EntityLinkingReview.article_id == article.article_id,
+                            EntityLinkingReview.stable_entity_id == link.stable_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+
+                if existing:
+                    if existing.status == "pending":
+                        existing.confidence = link.confidence
+                        existing.display_name = link.display_name
+                        existing.matched_text = link.matched_text
+                        existing.supporting_evidence = evidence
+                else:
+                    session.add(
+                        EntityLinkingReview(
+                            article_id=article.article_id,
+                            stable_entity_id=link.stable_id,
+                            entity_type=link.entity_type,
+                            display_name=link.display_name,
+                            matched_text=link.matched_text,
+                            confidence=link.confidence,
+                            supporting_evidence=evidence,
+                            status="pending",
+                        )
+                    )
+        except Exception as e:
+            logger.error(f"Non-blocking review queue logging failure: {e}", exc_info=True)
 
     @contextmanager
     def get_session(self):
@@ -229,14 +343,16 @@ class PostgresService:
             except OperationalError as e:
                 last_exception = e
                 if attempt < max_retries - 1:
-                    wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                    wait_time = retry_delay * (2**attempt)  # Exponential backoff
                     logger.warning(
                         f"Database operation failed (attempt {attempt + 1}/{max_retries}): {e}. "
                         f"Retrying in {wait_time:.1f}s..."
                     )
                     time.sleep(wait_time)
                 else:
-                    logger.error(f"Database operation failed after {max_retries} attempts: {e}")
+                    logger.error(
+                        f"Database operation failed after {max_retries} attempts: {e}"
+                    )
                     raise
             except SQLAlchemyError as e:
                 # Non-retryable errors
@@ -300,12 +416,16 @@ class PostgresService:
                     existing.summary = article_data.get("summary", existing.summary)
                     existing.source = article_data.get("source", existing.source)
                     existing.url = article_data.get("url", existing.url)
-                    existing.asset_codes = article_data.get("asset_codes", existing.asset_codes)
+                    existing.asset_codes = article_data.get(
+                        "asset_codes", existing.asset_codes
+                    )
                     existing.primary_asset = article_data.get(
                         "primary_asset",
                         existing.primary_asset,
                     )
-                    existing.categories = article_data.get("categories", existing.categories)
+                    existing.categories = article_data.get(
+                        "categories", existing.categories
+                    )
                     existing.keywords = article_data.get("keywords", existing.keywords)
                     existing.detected_entities = article_data.get(
                         "detected_entities",
@@ -313,15 +433,23 @@ class PostgresService:
                     )
                     self._sync_article_onchain_links(session, existing, links)
                     existing.language = article_data.get("language", existing.language)
-                    existing.published_at = article_data.get("published_at", existing.published_at)
-                    existing.fetched_at = article_data.get("fetched_at", existing.fetched_at)
+                    existing.published_at = article_data.get(
+                        "published_at", existing.published_at
+                    )
+                    existing.fetched_at = article_data.get(
+                        "fetched_at", existing.fetched_at
+                    )
 
                     if sentiment_result:
-                        existing.sentiment_score = sentiment_result.get("compound_score")
+                        existing.sentiment_score = sentiment_result.get(
+                            "compound_score"
+                        )
                         existing.positive_score = sentiment_result.get("positive")
                         existing.negative_score = sentiment_result.get("negative")
                         existing.neutral_score = sentiment_result.get("neutral")
-                        existing.sentiment_label = sentiment_result.get("sentiment_label")
+                        existing.sentiment_label = sentiment_result.get(
+                            "sentiment_label"
+                        )
                         existing.analyzed_at = datetime.utcnow()
 
                     session.flush()
@@ -353,7 +481,9 @@ class PostgresService:
                         article.positive_score = sentiment_result.get("positive")
                         article.negative_score = sentiment_result.get("negative")
                         article.neutral_score = sentiment_result.get("neutral")
-                        article.sentiment_label = sentiment_result.get("sentiment_label")
+                        article.sentiment_label = sentiment_result.get(
+                            "sentiment_label"
+                        )
                         article.analyzed_at = datetime.utcnow()
 
                     session.add(article)
@@ -388,49 +518,73 @@ class PostgresService:
             with self.get_session() as session:
                 for i, article_data in enumerate(articles_data):
                     article_data = self._ensure_detected_entities(article_data)
-                    sentiment_result = sentiment_results[i] if sentiment_results and i < len(sentiment_results) else None
+                    sentiment_result = (
+                        sentiment_results[i]
+                        if sentiment_results and i < len(sentiment_results)
+                        else None
+                    )
 
                     # Check if article already exists
                     existing = session.execute(
-                        select(Article).where(Article.article_id == article_data.get("id"))
+                        select(Article).where(
+                            Article.article_id == article_data.get("id")
+                        )
                     ).scalar_one_or_none()
 
                     if existing:
-                        links = self._link_article_onchain_entities(session, article_data)
+                        links = self._link_article_onchain_entities(
+                            session, article_data
+                        )
                         # Update existing article
                         existing.title = article_data.get("title", existing.title)
                         existing.content = article_data.get("content", existing.content)
                         existing.summary = article_data.get("summary", existing.summary)
                         existing.source = article_data.get("source", existing.source)
                         existing.url = article_data.get("url", existing.url)
-                        existing.asset_codes = article_data.get("asset_codes", existing.asset_codes)
+                        existing.asset_codes = article_data.get(
+                            "asset_codes", existing.asset_codes
+                        )
                         existing.primary_asset = article_data.get(
                             "primary_asset",
                             existing.primary_asset,
                         )
-                        existing.categories = article_data.get("categories", existing.categories)
-                        existing.keywords = article_data.get("keywords", existing.keywords)
+                        existing.categories = article_data.get(
+                            "categories", existing.categories
+                        )
+                        existing.keywords = article_data.get(
+                            "keywords", existing.keywords
+                        )
                         existing.detected_entities = article_data.get(
                             "detected_entities",
                             existing.detected_entities,
                         )
                         self._sync_article_onchain_links(session, existing, links)
-                        existing.language = article_data.get("language", existing.language)
+                        existing.language = article_data.get(
+                            "language", existing.language
+                        )
                         existing.published_at = article_data.get(
                             "published_at",
                             existing.published_at,
                         )
-                        existing.fetched_at = article_data.get("fetched_at", existing.fetched_at)
+                        existing.fetched_at = article_data.get(
+                            "fetched_at", existing.fetched_at
+                        )
 
                         if sentiment_result:
-                            existing.sentiment_score = sentiment_result.get("compound_score")
+                            existing.sentiment_score = sentiment_result.get(
+                                "compound_score"
+                            )
                             existing.positive_score = sentiment_result.get("positive")
                             existing.negative_score = sentiment_result.get("negative")
                             existing.neutral_score = sentiment_result.get("neutral")
-                            existing.sentiment_label = sentiment_result.get("sentiment_label")
+                            existing.sentiment_label = sentiment_result.get(
+                                "sentiment_label"
+                            )
                             existing.analyzed_at = datetime.utcnow()
                     else:
-                        links = self._link_article_onchain_entities(session, article_data)
+                        links = self._link_article_onchain_entities(
+                            session, article_data
+                        )
                         # Create new article
                         article = Article(
                             article_id=article_data.get("id"),
@@ -451,11 +605,15 @@ class PostgresService:
                         )
 
                         if sentiment_result:
-                            article.sentiment_score = sentiment_result.get("compound_score")
+                            article.sentiment_score = sentiment_result.get(
+                                "compound_score"
+                            )
                             article.positive_score = sentiment_result.get("positive")
                             article.negative_score = sentiment_result.get("negative")
                             article.neutral_score = sentiment_result.get("neutral")
-                            article.sentiment_label = sentiment_result.get("sentiment_label")
+                            article.sentiment_label = sentiment_result.get(
+                                "sentiment_label"
+                            )
                             article.analyzed_at = datetime.utcnow()
 
                         session.add(article)
@@ -537,7 +695,9 @@ class PostgresService:
                         ArticleOnchainEntityLink.stable_entity_id == stable_entity_id
                     )
                 if entity_type:
-                    stmt = stmt.where(ArticleOnchainEntityLink.entity_type == entity_type)
+                    stmt = stmt.where(
+                        ArticleOnchainEntityLink.entity_type == entity_type
+                    )
                 return session.execute(stmt).scalars().all()
         except SQLAlchemyError as e:
             logger.error(f"Failed to retrieve article on-chain links: {e}")
@@ -560,6 +720,7 @@ class PostgresService:
         Returns:
             SocialPost object if successful, None otherwise
         """
+
         def _save():
             with self.get_session() as session:
                 # Check if post already exists
@@ -575,19 +736,29 @@ class PostgresService:
                     existing.likes = post_data.get("likes", existing.likes)
                     existing.comments = post_data.get("comments", existing.comments)
                     existing.shares = post_data.get("shares", existing.shares)
-                    existing.asset_codes = post_data.get("asset_codes", existing.asset_codes)
-                    existing.primary_asset = post_data.get("primary_asset", existing.primary_asset)
+                    existing.asset_codes = post_data.get(
+                        "asset_codes", existing.asset_codes
+                    )
+                    existing.primary_asset = post_data.get(
+                        "primary_asset", existing.primary_asset
+                    )
                     existing.hashtags = post_data.get("hashtags", existing.hashtags)
                     existing.subreddit = post_data.get("subreddit", existing.subreddit)
                     existing.posted_at = post_data.get("posted_at", existing.posted_at)
-                    existing.fetched_at = post_data.get("fetched_at", existing.fetched_at)
+                    existing.fetched_at = post_data.get(
+                        "fetched_at", existing.fetched_at
+                    )
 
                     if sentiment_result:
-                        existing.sentiment_score = sentiment_result.get("compound_score")
+                        existing.sentiment_score = sentiment_result.get(
+                            "compound_score"
+                        )
                         existing.positive_score = sentiment_result.get("positive")
                         existing.negative_score = sentiment_result.get("negative")
                         existing.neutral_score = sentiment_result.get("neutral")
-                        existing.sentiment_label = sentiment_result.get("sentiment_label")
+                        existing.sentiment_label = sentiment_result.get(
+                            "sentiment_label"
+                        )
                         existing.analyzed_at = datetime.utcnow()
 
                     session.flush()
@@ -650,11 +821,17 @@ class PostgresService:
         try:
             with self.get_session() as session:
                 for i, post_data in enumerate(posts_data):
-                    sentiment_result = sentiment_results[i] if sentiment_results and i < len(sentiment_results) else None
+                    sentiment_result = (
+                        sentiment_results[i]
+                        if sentiment_results and i < len(sentiment_results)
+                        else None
+                    )
 
                     # Check if post already exists
                     existing = session.execute(
-                        select(SocialPost).where(SocialPost.post_id == post_data.get("id"))
+                        select(SocialPost).where(
+                            SocialPost.post_id == post_data.get("id")
+                        )
                     ).scalar_one_or_none()
 
                     if existing:
@@ -665,19 +842,33 @@ class PostgresService:
                         existing.likes = post_data.get("likes", existing.likes)
                         existing.comments = post_data.get("comments", existing.comments)
                         existing.shares = post_data.get("shares", existing.shares)
-                        existing.asset_codes = post_data.get("asset_codes", existing.asset_codes)
-                        existing.primary_asset = post_data.get("primary_asset", existing.primary_asset)
+                        existing.asset_codes = post_data.get(
+                            "asset_codes", existing.asset_codes
+                        )
+                        existing.primary_asset = post_data.get(
+                            "primary_asset", existing.primary_asset
+                        )
                         existing.hashtags = post_data.get("hashtags", existing.hashtags)
-                        existing.subreddit = post_data.get("subreddit", existing.subreddit)
-                        existing.posted_at = post_data.get("posted_at", existing.posted_at)
-                        existing.fetched_at = post_data.get("fetched_at", existing.fetched_at)
+                        existing.subreddit = post_data.get(
+                            "subreddit", existing.subreddit
+                        )
+                        existing.posted_at = post_data.get(
+                            "posted_at", existing.posted_at
+                        )
+                        existing.fetched_at = post_data.get(
+                            "fetched_at", existing.fetched_at
+                        )
 
                         if sentiment_result:
-                            existing.sentiment_score = sentiment_result.get("compound_score")
+                            existing.sentiment_score = sentiment_result.get(
+                                "compound_score"
+                            )
                             existing.positive_score = sentiment_result.get("positive")
                             existing.negative_score = sentiment_result.get("negative")
                             existing.neutral_score = sentiment_result.get("neutral")
-                            existing.sentiment_label = sentiment_result.get("sentiment_label")
+                            existing.sentiment_label = sentiment_result.get(
+                                "sentiment_label"
+                            )
                             existing.analyzed_at = datetime.utcnow()
                     else:
                         # Create new post
@@ -699,11 +890,15 @@ class PostgresService:
                         )
 
                         if sentiment_result:
-                            post.sentiment_score = sentiment_result.get("compound_score")
+                            post.sentiment_score = sentiment_result.get(
+                                "compound_score"
+                            )
                             post.positive_score = sentiment_result.get("positive")
                             post.negative_score = sentiment_result.get("negative")
                             post.neutral_score = sentiment_result.get("neutral")
-                            post.sentiment_label = sentiment_result.get("sentiment_label")
+                            post.sentiment_label = sentiment_result.get(
+                                "sentiment_label"
+                            )
                             post.analyzed_at = datetime.utcnow()
 
                         session.add(post)
@@ -790,6 +985,7 @@ class PostgresService:
         Returns:
             AnalyticsRecord object if successful, None otherwise
         """
+
         def _save():
             with self.get_session() as session:
                 record = AnalyticsRecord(
@@ -918,11 +1114,11 @@ class PostgresService:
         """
         Save a raw contract event and honor idempotency by contract_id/event_id.
         """
+
         def _save():
             with self.get_session() as session:
                 existing = session.execute(
-                    select(ContractEvent)
-                    .where(
+                    select(ContractEvent).where(
                         and_(
                             ContractEvent.contract_id == contract_id,
                             ContractEvent.event_id == event_id,
@@ -963,6 +1159,91 @@ class PostgresService:
             logger.error(f"Failed to save contract event: {e}")
             return None
 
+    def save_raw_soroban_event(
+        self,
+        contract_id: str,
+        event_id: str,
+        ledger: int,
+        raw_payload: Dict[str, Any],
+        source_rpc_url: Optional[str] = None,
+        paging_token: Optional[str] = None,
+        event_type: Optional[str] = None,
+    ) -> Optional[RawSorobanEvent]:
+        """
+        Save a raw Soroban event and honor idempotency by contract_id/event_id.
+        """
+
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(RawSorobanEvent).where(
+                        and_(
+                            RawSorobanEvent.contract_id == contract_id,
+                            RawSorobanEvent.event_id == event_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if existing:
+                    logger.debug(
+                        "Raw Soroban event already exists: %s/%s",
+                        contract_id,
+                        event_id,
+                    )
+                    return existing
+
+                event = RawSorobanEvent(
+                    contract_id=contract_id,
+                    event_id=event_id,
+                    ledger=ledger,
+                    raw_payload=raw_payload,
+                    source_rpc_url=source_rpc_url,
+                    paging_token=paging_token,
+                    event_type=event_type,
+                )
+
+                session.add(event)
+                session.flush()
+                logger.debug("Saved raw Soroban event: %s/%s", contract_id, event_id)
+                return event
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save raw Soroban event: {e}")
+            return None
+
+    def get_raw_soroban_events(
+        self,
+        contract_id: Optional[str] = None,
+        start_ledger: Optional[int] = None,
+        end_ledger: Optional[int] = None,
+        limit: int = 1000,
+    ) -> List[RawSorobanEvent]:
+        """
+        Retrieve raw Soroban events, optionally filtered by contract and ledger range.
+        Supports replay.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(RawSorobanEvent)
+                    .order_by(RawSorobanEvent.ledger.asc(), RawSorobanEvent.id.asc())
+                    .limit(limit)
+                )
+                if contract_id is not None:
+                    stmt = stmt.where(RawSorobanEvent.contract_id == contract_id)
+                if start_ledger is not None:
+                    stmt = stmt.where(RawSorobanEvent.ledger >= start_ledger)
+                if end_ledger is not None:
+                    stmt = stmt.where(RawSorobanEvent.ledger <= end_ledger)
+
+                results = session.execute(stmt).scalars().all()
+                logger.debug(f"Retrieved {len(results)} raw Soroban events")
+                return results
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve raw Soroban events: {e}")
+            return []
+
     def get_contract_events(
         self,
         project_id: Optional[int] = None,
@@ -975,7 +1256,11 @@ class PostgresService:
         """
         try:
             with self.get_session() as session:
-                stmt = select(ContractEvent).order_by(desc(ContractEvent.ledger)).limit(limit)
+                stmt = (
+                    select(ContractEvent)
+                    .order_by(desc(ContractEvent.ledger))
+                    .limit(limit)
+                )
                 if project_id is not None:
                     stmt = stmt.where(ContractEvent.project_id == project_id)
                 if contract_id is not None:
@@ -996,7 +1281,9 @@ class PostgresService:
         """
         try:
             with self.get_session() as session:
-                stmt = select(ContractEvent).where(ContractEvent.project_id == project_id)
+                stmt = select(ContractEvent).where(
+                    ContractEvent.project_id == project_id
+                )
                 events = session.execute(stmt).scalars().all()
 
                 total_amount = 0.0
@@ -1122,6 +1409,7 @@ class PostgresService:
         """
         Save or update a materialized project summary row.
         """
+
         def _save():
             with self.get_session() as session:
                 existing = session.execute(
@@ -1137,8 +1425,8 @@ class PostgresService:
                         existing.status = status
                     if add_total_contributions is not None:
                         existing.total_contributions = (
-                            (existing.total_contributions or 0.0) + add_total_contributions
-                        )
+                            existing.total_contributions or 0.0
+                        ) + add_total_contributions
                     if unique_contributors is not None:
                         existing.unique_contributors = unique_contributors
                     if funding_momentum_score is not None:
@@ -1189,7 +1477,11 @@ class PostgresService:
         """Retrieve materialized project views."""
         try:
             with self.get_session() as session:
-                stmt = select(ProjectView).order_by(desc(ProjectView.last_event_ledger)).limit(limit)
+                stmt = (
+                    select(ProjectView)
+                    .order_by(desc(ProjectView.last_event_ledger))
+                    .limit(limit)
+                )
                 if status is not None:
                     stmt = stmt.where(ProjectView.status == status)
                 results = session.execute(stmt).scalars().all()
@@ -1207,11 +1499,18 @@ class PostgresService:
         """Retrieve project views ordered by funding momentum score."""
         try:
             with self.get_session() as session:
-                stmt = select(ProjectView).order_by(desc(ProjectView.funding_momentum_score)).limit(limit)
+                stmt = (
+                    select(ProjectView)
+                    .order_by(desc(ProjectView.funding_momentum_score))
+                    .limit(limit)
+                )
                 if status is not None:
                     stmt = stmt.where(ProjectView.status == status)
                 results = session.execute(stmt).scalars().all()
-                logger.debug("Retrieved %d project views ranked by funding momentum", len(results))
+                logger.debug(
+                    "Retrieved %d project views ranked by funding momentum",
+                    len(results),
+                )
                 return results
         except SQLAlchemyError as e:
             logger.error(f"Failed to retrieve ranked project views: {e}")
@@ -1226,11 +1525,11 @@ class PostgresService:
         extra_data: Optional[Dict[str, Any]] = None,
     ) -> Optional[ProjectContributor]:
         """Save or update a contributor record for a project."""
+
         def _save():
             with self.get_session() as session:
                 existing = session.execute(
-                    select(ProjectContributor)
-                    .where(
+                    select(ProjectContributor).where(
                         and_(
                             ProjectContributor.project_id == project_id,
                             ProjectContributor.contributor == contributor,
@@ -1240,13 +1539,12 @@ class PostgresService:
 
                 if existing:
                     existing.total_contributed = (
-                        (existing.total_contributed or 0.0) + amount
-                    )
+                        existing.total_contributed or 0.0
+                    ) + amount
                     if ledger is not None:
                         existing.last_contribution_ledger = ledger
                         existing.first_contribution_ledger = (
-                            existing.first_contribution_ledger
-                            or ledger
+                            existing.first_contribution_ledger or ledger
                         )
                     existing.extra_data = extra_data or existing.extra_data
                     session.flush()
@@ -1299,7 +1597,9 @@ class PostgresService:
                     .limit(limit)
                 )
                 results = session.execute(stmt).scalars().all()
-                logger.debug(f"Retrieved {len(results)} contributors for project %s", project_id)
+                logger.debug(
+                    f"Retrieved {len(results)} contributors for project %s", project_id
+                )
                 return results
         except SQLAlchemyError as e:
             logger.error(f"Failed to retrieve project contributors: {e}")
@@ -1371,7 +1671,9 @@ class PostgresService:
                     if ascending
                     else ContractEvent.timestamp.desc().nulls_first()
                 )
-                stmt = stmt.order_by(order_clause, ContractEvent.ledger.asc()).limit(limit)
+                stmt = stmt.order_by(order_clause, ContractEvent.ledger.asc()).limit(
+                    limit
+                )
 
                 events = session.execute(stmt).scalars().all()
                 logger.debug(
@@ -1444,12 +1746,16 @@ class PostgresService:
 
         def _save():
             with self.get_session() as session:
-                contributors = session.execute(
-                    select(ProjectContributor)
-                    .where(ProjectContributor.project_id == project_id)
-                    .order_by(desc(ProjectContributor.total_contributed))
-                    .limit(top_n)
-                ).scalars().all()
+                contributors = (
+                    session.execute(
+                        select(ProjectContributor)
+                        .where(ProjectContributor.project_id == project_id)
+                        .order_by(desc(ProjectContributor.total_contributed))
+                        .limit(top_n)
+                    )
+                    .scalars()
+                    .all()
+                )
 
                 session.execute(
                     delete(ProjectContributorReputationSnapshot).where(
@@ -1486,7 +1792,9 @@ class PostgresService:
         try:
             return self._retry_operation(_save)
         except SQLAlchemyError as e:
-            logger.error(f"Failed to build project contributor reputation snapshot: {e}")
+            logger.error(
+                f"Failed to build project contributor reputation snapshot: {e}"
+            )
             return []
 
     def build_all_project_contributor_reputation_snapshots(
@@ -1536,7 +1844,9 @@ class PostgresService:
             with self.get_session() as session:
                 stmt = (
                     select(ProjectContributorReputationSnapshot)
-                    .where(ProjectContributorReputationSnapshot.project_id == project_id)
+                    .where(
+                        ProjectContributorReputationSnapshot.project_id == project_id
+                    )
                     .order_by(ProjectContributorReputationSnapshot.rank)
                     .limit(limit)
                 )
@@ -1560,7 +1870,9 @@ class PostgresService:
             with self.get_session() as session:
                 stmt = (
                     select(ProjectContributorReputationSnapshot)
-                    .order_by(desc(ProjectContributorReputationSnapshot.reputation_score))
+                    .order_by(
+                        desc(ProjectContributorReputationSnapshot.reputation_score)
+                    )
                     .limit(limit)
                 )
                 results = session.execute(stmt).scalars().all()
@@ -1570,7 +1882,9 @@ class PostgresService:
                 )
                 return results
         except SQLAlchemyError as e:
-            logger.error(f"Failed to retrieve top contributor reputation snapshots: {e}")
+            logger.error(
+                f"Failed to retrieve top contributor reputation snapshots: {e}"
+            )
             return []
 
     def save_project_milestone(
@@ -1583,11 +1897,11 @@ class PostgresService:
         extra_data: Optional[Dict[str, Any]] = None,
     ) -> Optional[ProjectMilestone]:
         """Save or update the current state of a project milestone."""
+
         def _save():
             with self.get_session() as session:
                 existing = session.execute(
-                    select(ProjectMilestone)
-                    .where(
+                    select(ProjectMilestone).where(
                         and_(
                             ProjectMilestone.project_id == project_id,
                             ProjectMilestone.milestone_id == milestone_id,
@@ -1638,7 +1952,9 @@ class PostgresService:
                     .limit(limit)
                 )
                 results = session.execute(stmt).scalars().all()
-                logger.debug(f"Retrieved {len(results)} milestones for project %s", project_id)
+                logger.debug(
+                    f"Retrieved {len(results)} milestones for project %s", project_id
+                )
                 return results
         except SQLAlchemyError as e:
             logger.error(f"Failed to retrieve project milestones: {e}")
@@ -1688,7 +2004,9 @@ class PostgresService:
             return None
 
     def save_news_insights_batch(
-        self, sentiment_results: List[Dict[str, Any]], articles_data: List[Dict[str, Any]] = None
+        self,
+        sentiment_results: List[Dict[str, Any]],
+        articles_data: List[Dict[str, Any]] = None,
     ) -> int:
         """
         Save multiple news insights in a batch
@@ -1704,11 +2022,17 @@ class PostgresService:
         try:
             with self.get_session() as session:
                 for i, result in enumerate(sentiment_results):
-                    article_data = articles_data[i] if articles_data and i < len(articles_data) else None
-                    
+                    article_data = (
+                        articles_data[i]
+                        if articles_data and i < len(articles_data)
+                        else None
+                    )
+
                     insight = NewsInsight(
                         article_id=article_data.get("id") if article_data else None,
-                        article_title=article_data.get("title") if article_data else None,
+                        article_title=(
+                            article_data.get("title") if article_data else None
+                        ),
                         article_url=article_data.get("url") if article_data else None,
                         source=article_data.get("source") if article_data else None,
                         sentiment_score=result["compound_score"],
@@ -1724,11 +2048,11 @@ class PostgresService:
                     )
                     session.add(insight)
                     saved_count += 1
-                
+
                 logger.info(f"Saved {saved_count} news insights")
         except SQLAlchemyError as e:
             logger.error(f"Failed to save news insights batch: {e}")
-        
+
         return saved_count
 
     def get_recent_news_insights(
@@ -1792,7 +2116,8 @@ class PostgresService:
                     current_value=trend_data["current_value"],
                     previous_value=trend_data["previous_value"],
                     change_percentage=trend_data["change_percentage"],
-                    extra_data=trend_data.get("extra_data") or trend_data.get("metadata"),
+                    extra_data=trend_data.get("extra_data")
+                    or trend_data.get("metadata"),
                 )
                 session.add(trend)
                 session.flush()
@@ -1829,15 +2154,16 @@ class PostgresService:
                         current_value=trend_data["current_value"],
                         previous_value=trend_data["previous_value"],
                         change_percentage=trend_data["change_percentage"],
-                        extra_data=trend_data.get("extra_data") or trend_data.get("metadata"),
+                        extra_data=trend_data.get("extra_data")
+                        or trend_data.get("metadata"),
                     )
                     session.add(trend)
                     saved_count += 1
-                
+
                 logger.info(f"Saved {saved_count} asset trends for {asset}")
         except SQLAlchemyError as e:
             logger.error(f"Failed to save asset trends batch: {e}")
-        
+
         return saved_count
 
     def get_recent_asset_trends(
@@ -1857,12 +2183,12 @@ class PostgresService:
         try:
             with self.get_session() as session:
                 stmt = select(AssetTrend).where(AssetTrend.asset == asset)
-                
+
                 if metric_name:
                     stmt = stmt.where(AssetTrend.metric_name == metric_name)
-                
+
                 stmt = stmt.order_by(desc(AssetTrend.timestamp)).limit(limit)
-                
+
                 results = session.execute(stmt).scalars().all()
                 logger.debug(f"Retrieved {len(results)} asset trends for {asset}")
                 return results
@@ -1883,11 +2209,17 @@ class PostgresService:
         try:
             with self.get_session() as session:
                 cutoff_time = datetime.utcnow() - timedelta(hours=hours)
-                
-                insights = session.execute(
-                    select(NewsInsight).where(NewsInsight.analyzed_at >= cutoff_time)
-                ).scalars().all()
-                
+
+                insights = (
+                    session.execute(
+                        select(NewsInsight).where(
+                            NewsInsight.analyzed_at >= cutoff_time
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+
                 if not insights:
                     return {
                         "total_articles": 0,
@@ -1896,13 +2228,13 @@ class PostgresService:
                         "negative_count": 0,
                         "neutral_count": 0,
                     }
-                
+
                 total = len(insights)
                 avg_sentiment = sum(i.sentiment_score for i in insights) / total
                 positive = sum(1 for i in insights if i.sentiment_label == "positive")
                 negative = sum(1 for i in insights if i.sentiment_label == "negative")
                 neutral = sum(1 for i in insights if i.sentiment_label == "neutral")
-                
+
                 return {
                     "total_articles": total,
                     "average_sentiment": round(avg_sentiment, 4),
@@ -1948,15 +2280,15 @@ class PostgresService:
                 session.add(signal)
                 session.flush()
                 session.refresh(signal)
-                logger.info(f"Saved round anomaly signal: round_id={signal.round_id}, type={signal.anomaly_type}")
+                logger.info(
+                    f"Saved round anomaly signal: round_id={signal.round_id}, type={signal.anomaly_type}"
+                )
                 return signal
         except SQLAlchemyError as e:
             logger.error(f"Failed to save round anomaly signal: {e}")
             return None
 
-    def save_round_anomaly_signals(
-        self, signals: List[Dict[str, Any]]
-    ) -> int:
+    def save_round_anomaly_signals(self, signals: List[Dict[str, Any]]) -> int:
         """
         Save multiple round anomaly signals in a batch.
 
@@ -2009,7 +2341,9 @@ class PostgresService:
                 if reviewed is not None:
                     query = query.where(RoundAnomalySignal.reviewed == reviewed)
                 if min_severity is not None:
-                    query = query.where(RoundAnomalySignal.severity_score >= min_severity)
+                    query = query.where(
+                        RoundAnomalySignal.severity_score >= min_severity
+                    )
 
                 query = query.order_by(desc(RoundAnomalySignal.timestamp)).limit(limit)
 
@@ -2018,7 +2352,9 @@ class PostgresService:
             logger.error(f"Failed to get round anomaly signals: {e}")
             return []
 
-    def get_unreviewed_anomaly_signals(self, limit: int = 50) -> List[RoundAnomalySignal]:
+    def get_unreviewed_anomaly_signals(
+        self, limit: int = 50
+    ) -> List[RoundAnomalySignal]:
         """
         Get unreviewed anomaly signals for maintainer review.
 
@@ -2062,15 +2398,15 @@ class PostgresService:
                 signal.reviewed_by = reviewed_by
                 signal.review_notes = review_notes
 
-                logger.info(f"Marked anomaly signal {signal_id} as reviewed by {reviewed_by}")
+                logger.info(
+                    f"Marked anomaly signal {signal_id} as reviewed by {reviewed_by}"
+                )
                 return True
         except SQLAlchemyError as e:
             logger.error(f"Failed to mark anomaly signal as reviewed: {e}")
             return False
 
-    def get_anomaly_statistics(
-        self, days: int = 30
-    ) -> Dict[str, Any]:
+    def get_anomaly_statistics(self, days: int = 30) -> Dict[str, Any]:
         """
         Get statistics about detected anomalies.
 
@@ -2084,11 +2420,15 @@ class PostgresService:
             with self.get_session() as session:
                 cutoff_time = datetime.utcnow() - timedelta(days=days)
 
-                signals = session.execute(
-                    select(RoundAnomalySignal).where(
-                        RoundAnomalySignal.timestamp >= cutoff_time
+                signals = (
+                    session.execute(
+                        select(RoundAnomalySignal).where(
+                            RoundAnomalySignal.timestamp >= cutoff_time
+                        )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
 
                 if not signals:
                     return {
@@ -2111,7 +2451,9 @@ class PostgresService:
                 return {
                     "total_signals": total,
                     "by_type": dict(by_type),
-                    "average_severity": round(total_severity / total, 3) if total > 0 else 0.0,
+                    "average_severity": (
+                        round(total_severity / total, 3) if total > 0 else 0.0
+                    ),
                     "unreviewed_count": unreviewed,
                     "reviewed_count": total - unreviewed,
                 }
@@ -2131,45 +2473,67 @@ class PostgresService:
         """
         try:
             cutoff_date = datetime.utcnow() - timedelta(days=days)
+            raw_retention_days = int(os.getenv("RAW_EVENT_RETENTION_DAYS", "90"))
+            raw_cutoff_date = datetime.utcnow() - timedelta(days=raw_retention_days)
+
             deleted_counts = {
                 "articles": 0,
                 "social_posts": 0,
                 "analytics_records": 0,
                 "news_insights": 0,
                 "asset_trends": 0,
+                "raw_soroban_events": 0,
             }
-            
+
             with self.get_session() as session:
                 # Delete old articles
-                articles_deleted = session.query(Article).filter(
-                    Article.created_at < cutoff_date
-                ).delete()
+                articles_deleted = (
+                    session.query(Article)
+                    .filter(Article.created_at < cutoff_date)
+                    .delete()
+                )
                 deleted_counts["articles"] = articles_deleted
-                
+
                 # Delete old social posts
-                posts_deleted = session.query(SocialPost).filter(
-                    SocialPost.created_at < cutoff_date
-                ).delete()
+                posts_deleted = (
+                    session.query(SocialPost)
+                    .filter(SocialPost.created_at < cutoff_date)
+                    .delete()
+                )
                 deleted_counts["social_posts"] = posts_deleted
-                
+
                 # Delete old analytics records
-                records_deleted = session.query(AnalyticsRecord).filter(
-                    AnalyticsRecord.created_at < cutoff_date
-                ).delete()
+                records_deleted = (
+                    session.query(AnalyticsRecord)
+                    .filter(AnalyticsRecord.created_at < cutoff_date)
+                    .delete()
+                )
                 deleted_counts["analytics_records"] = records_deleted
-                
+
                 # Delete old news insights (legacy)
-                news_deleted = session.query(NewsInsight).filter(
-                    NewsInsight.created_at < cutoff_date
-                ).delete()
+                news_deleted = (
+                    session.query(NewsInsight)
+                    .filter(NewsInsight.created_at < cutoff_date)
+                    .delete()
+                )
                 deleted_counts["news_insights"] = news_deleted
-                
+
                 # Delete old asset trends (legacy)
-                trends_deleted = session.query(AssetTrend).filter(
-                    AssetTrend.created_at < cutoff_date
-                ).delete()
+                trends_deleted = (
+                    session.query(AssetTrend)
+                    .filter(AssetTrend.created_at < cutoff_date)
+                    .delete()
+                )
                 deleted_counts["asset_trends"] = trends_deleted
-                
+
+                # Delete old raw Soroban events
+                raw_deleted = (
+                    session.query(RawSorobanEvent)
+                    .filter(RawSorobanEvent.created_at < raw_cutoff_date)
+                    .delete()
+                )
+                deleted_counts["raw_soroban_events"] = raw_deleted
+
                 logger.info(f"Cleaned up old data: {deleted_counts}")
                 return deleted_counts
         except SQLAlchemyError as e:
@@ -2198,6 +2562,7 @@ class PostgresService:
         Returns:
             MetadataDriftFinding object if successful, None otherwise
         """
+
         def _save():
             with self.get_session() as session:
                 finding = MetadataDriftFinding(
@@ -2222,9 +2587,7 @@ class PostgresService:
             logger.error(f"Failed to save metadata drift finding: {e}")
             return None
 
-    def save_metadata_drift_findings(
-        self, findings: List[Dict[str, Any]]
-    ) -> int:
+    def save_metadata_drift_findings(self, findings: List[Dict[str, Any]]) -> int:
         """
         Persist multiple metadata drift findings in a batch.
 
@@ -2268,7 +2631,9 @@ class PostgresService:
                 if reviewed is not None:
                     query = query.where(MetadataDriftFinding.reviewed == reviewed)
 
-                query = query.order_by(desc(MetadataDriftFinding.detected_at)).limit(limit)
+                query = query.order_by(desc(MetadataDriftFinding.detected_at)).limit(
+                    limit
+                )
                 return session.execute(query).scalars().all()
         except SQLAlchemyError as e:
             logger.error(f"Failed to get metadata drift findings: {e}")
@@ -2286,7 +2651,9 @@ class PostgresService:
         try:
             with self.get_session() as session:
                 finding = session.execute(
-                    select(MetadataDriftFinding).where(MetadataDriftFinding.id == finding_id)
+                    select(MetadataDriftFinding).where(
+                        MetadataDriftFinding.id == finding_id
+                    )
                 ).scalar_one_or_none()
 
                 if not finding:
@@ -2305,3 +2672,361 @@ class PostgresService:
         except SQLAlchemyError as e:
             logger.error(f"Failed to mark metadata drift finding as reviewed: {e}")
             return False
+
+    def get_review_queue(self, status: Optional[str] = None, limit: int = 100) -> List[EntityLinkingReview]:
+        """
+        Retrieve items from the entity linking review queue.
+        """
+        try:
+            with self.get_session() as session:
+                query = select(EntityLinkingReview)
+                if status is not None:
+                    query = query.where(EntityLinkingReview.status == status)
+                query = query.order_by(desc(EntityLinkingReview.created_at)).limit(limit)
+                return session.execute(query).scalars().all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve review queue: {e}")
+            return []
+
+    def update_review_status(self, review_id: int, status: str, corrected_entity_id: Optional[str] = None) -> bool:
+        """
+        Update the review status of a queue item.
+        """
+        if status not in ["approved", "rejected", "corrected", "pending"]:
+            logger.warning(f"Invalid review status: {status}")
+            return False
+
+        try:
+            with self.get_session() as session:
+                item = session.execute(
+                    select(EntityLinkingReview).where(EntityLinkingReview.id == review_id)
+                ).scalar_one_or_none()
+
+                if not item:
+                    logger.warning(f"Review queue item {review_id} not found")
+                    return False
+
+                item.status = status
+                item.corrected_entity_id = corrected_entity_id
+                item.reviewed_at = datetime.utcnow()
+                
+                session.flush()
+                
+                # Re-run entity linking on the associated article to immediately reflect changes
+                article = session.execute(
+                    select(Article).where(Article.article_id == item.article_id)
+                ).scalar_one_or_none()
+                if article:
+                    # Construct article_data dictionary
+                    article_data = {
+                        "id": article.article_id,
+                        "title": article.title,
+                        "summary": article.summary,
+                        "content": article.content,
+                        "detected_entities": article.detected_entities,
+                        "keywords": article.keywords,
+                        "categories": article.categories,
+                    }
+                    # This will re-link using updated overrides
+                    links = self._link_article_onchain_entities(session, article_data)
+                    self._sync_article_onchain_links(session, article, links)
+
+                logger.info(f"Updated review queue item {review_id} status to {status}")
+                return True
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to update review queue item: {e}")
+            return False
+
+    def get_reviewed_outcomes(self) -> List[Dict[str, Any]]:
+        """
+        Get all reviewed outcomes to feed future tuning/model workflows.
+        """
+        try:
+            with self.get_session() as session:
+                query = select(EntityLinkingReview).where(
+                    EntityLinkingReview.status.in_(["approved", "corrected", "rejected"])
+                )
+                rows = session.execute(query).scalars().all()
+                return [
+                    {
+                        "id": r.id,
+                        "article_id": r.article_id,
+                        "stable_entity_id": r.stable_entity_id,
+                        "entity_type": r.entity_type,
+                        "display_name": r.display_name,
+                        "matched_text": r.matched_text,
+                        "confidence": r.confidence,
+                        "status": r.status,
+                        "corrected_entity_id": r.corrected_entity_id,
+                        "supporting_evidence": r.supporting_evidence,
+                        "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
+                    }
+                    for r in rows
+                ]
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve reviewed outcomes: {e}")
+            return []
+
+    # Human-labelled sentiment examples (#1241)
+
+    @staticmethod
+    def _sentiment_label_dict(row: SentimentLabel) -> Dict[str, Any]:
+        return {
+            "id": row.id,
+            "text": row.text,
+            "label": row.label,
+            "labeller": row.labeller,
+            "timestamp": row.labelled_at.isoformat(),
+            "labelled_at": row.labelled_at.isoformat(),
+            "is_held_out": row.is_held_out,
+        }
+
+    def save_sentiment_label(
+        self,
+        text: str,
+        label: str,
+        labeller: str,
+        labelled_at: Optional[datetime] = None,
+        is_held_out: bool = False,
+    ) -> Optional[SentimentLabel]:
+        """Persist a labelled example; repeated text updates its ground truth."""
+        if not text or not text.strip() or label not in {"positive", "negative", "neutral"}:
+            raise ValueError("text is required and label must be positive, negative, or neutral")
+        if not labeller or not labeller.strip():
+            raise ValueError("labeller is required")
+        try:
+            with self.get_session() as session:
+                row = session.execute(
+                    select(SentimentLabel).where(SentimentLabel.text == text)
+                ).scalar_one_or_none()
+                values = {
+                    "label": label,
+                    "labeller": labeller.strip(),
+                    "labelled_at": labelled_at or datetime.utcnow(),
+                    "is_held_out": is_held_out,
+                }
+                if row is None:
+                    row = SentimentLabel(text=text.strip(), **values)
+                    session.add(row)
+                else:
+                    for key, value in values.items():
+                        setattr(row, key, value)
+                session.flush()
+                session.refresh(row)
+                return row
+        except SQLAlchemyError as exc:
+            logger.error("Failed to save sentiment label: %s", exc)
+            return None
+
+    def get_sentiment_labels(
+        self, held_out: Optional[bool] = None, limit: int = 1000
+    ) -> List[SentimentLabel]:
+        try:
+            with self.get_session() as session:
+                query = select(SentimentLabel).order_by(SentimentLabel.id.asc()).limit(limit)
+                if held_out is not None:
+                    query = query.where(SentimentLabel.is_held_out == held_out)
+                return session.execute(query).scalars().all()
+        except SQLAlchemyError as exc:
+            logger.error("Failed to retrieve sentiment labels: %s", exc)
+            return []
+
+    def get_sentiment_label_dicts(
+        self, held_out: Optional[bool] = None, limit: int = 1000
+    ) -> List[Dict[str, Any]]:
+        return [self._sentiment_label_dict(row) for row in self.get_sentiment_labels(held_out, limit)]
+
+    # Daily On-Chain KPI Snapshot Methods (#877)
+
+    def save_daily_onchain_kpi_snapshot(
+        self,
+        snapshot_data: Dict[str, Any],
+    ) -> Tuple[Optional[DailyOnchainKPISnapshot], bool]:
+        """
+        Save a daily on-chain KPI snapshot.
+        If a snapshot for the same snapshot_date and period already exists,
+        skips creation to prevent duplicates. Uses retry logic for resilience.
+
+        Args:
+            snapshot_data: Dictionary with snapshot metrics and date/period.
+
+        Returns:
+            Tuple of (DailyOnchainKPISnapshot, created_boolean)
+        """
+        snapshot_date = snapshot_data.get("snapshot_date")
+        period = snapshot_data.get("period", "daily")
+
+        if not snapshot_date:
+            snapshot_date = datetime.utcnow().strftime("%Y-%m-%d")
+
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(DailyOnchainKPISnapshot).where(
+                        and_(
+                            DailyOnchainKPISnapshot.snapshot_date == snapshot_date,
+                            DailyOnchainKPISnapshot.period == period,
+                        )
+                    )
+                ).scalar_one_or_none()
+
+                if existing:
+                    logger.info(
+                        f"Daily KPI snapshot for date={snapshot_date} period={period} already exists. Skipping duplicate."
+                    )
+                    return existing, False
+
+                snapshot = DailyOnchainKPISnapshot(
+                    snapshot_date=snapshot_date,
+                    period=period,
+                    tvl=float(snapshot_data.get("tvl", 0.0)),
+                    volume=float(snapshot_data.get("volume", 0.0)),
+                    active_rounds=int(snapshot_data.get("active_rounds", 0)),
+                    contribution_count=int(snapshot_data.get("contribution_count", 0)),
+                    unique_contributors=int(snapshot_data.get("unique_contributors", 0)),
+                    extra_data=snapshot_data.get("extra_data"),
+                )
+                session.add(snapshot)
+                session.flush()
+                logger.info(
+                    f"Saved new daily KPI snapshot for date={snapshot_date} period={period}: "
+                    f"TVL={snapshot.tvl}, Volume={snapshot.volume}, ActiveRounds={snapshot.active_rounds}, Contributions={snapshot.contribution_count}"
+                )
+                return snapshot, True
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to save daily on-chain KPI snapshot: {e}")
+            return None, False
+
+    def get_daily_onchain_kpi_snapshots(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        period: str = "daily",
+        limit: int = 100,
+    ) -> List[DailyOnchainKPISnapshot]:
+        """
+        Retrieve historical daily on-chain KPI snapshots.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = select(DailyOnchainKPISnapshot).where(
+                    DailyOnchainKPISnapshot.period == period
+                )
+                if start_date:
+                    stmt = stmt.where(DailyOnchainKPISnapshot.snapshot_date >= start_date)
+                if end_date:
+                    stmt = stmt.where(DailyOnchainKPISnapshot.snapshot_date <= end_date)
+
+                stmt = stmt.order_by(desc(DailyOnchainKPISnapshot.snapshot_date)).limit(limit)
+                return session.execute(stmt).scalars().all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve daily on-chain KPI snapshots: {e}")
+            return []
+
+    def get_latest_daily_onchain_kpi_snapshot(
+        self,
+        period: str = "daily",
+    ) -> Optional[DailyOnchainKPISnapshot]:
+        """
+        Retrieve the most recent daily on-chain KPI snapshot.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(DailyOnchainKPISnapshot)
+                    .where(DailyOnchainKPISnapshot.period == period)
+                    .order_by(desc(DailyOnchainKPISnapshot.snapshot_date))
+                    .limit(1)
+                )
+                return session.execute(stmt).scalar_one_or_none()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve latest daily on-chain KPI snapshot: {e}")
+            return None
+
+
+    def log_prediction(
+        self,
+        request_id: str,
+        model_type: str,
+        model_version: str,
+        input_hash: str,
+        output: Dict[str, Any],
+        latency_ms: float,
+        raw_input: Optional[str] = None,
+    ) -> bool:
+        """
+        Log a prediction request for auditability (Issue #1245).
+        Failure to log must not raise an exception.
+        """
+        try:
+            with self.get_session() as session:
+                log_entry = PredictionLog(
+                    request_id=request_id,
+                    model_type=model_type,
+                    model_version=model_version,
+                    input_hash=input_hash,
+                    output=output,
+                    latency_ms=latency_ms,
+                    raw_input=raw_input,
+                )
+                session.add(log_entry)
+                session.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to log prediction (non-fatal): {e}")
+            return False
+
+    def cleanup_prediction_logs(self, retention_days: int = 30) -> int:
+        """
+        Clean up prediction logs older than retention_days.
+        """
+        try:
+            with self.get_session() as session:
+                cutoff = datetime.utcnow() - timedelta(days=retention_days)
+                result = session.execute(
+                    delete(PredictionLog).where(PredictionLog.created_at < cutoff)
+                )
+                session.commit()
+                return result.rowcount
+        except Exception as e:
+            logger.error(f"Failed to cleanup prediction logs: {e}")
+            return 0
+
+    def query_prediction_logs(
+        self,
+        model_version: str,
+        model_type: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """
+        Query prediction logs by model version to isolate suspect outputs.
+        """
+        try:
+            with self.get_session() as session:
+                stmt = select(PredictionLog).where(PredictionLog.model_version == model_version)
+                if model_type:
+                    stmt = stmt.where(PredictionLog.model_type == model_type)
+                
+                stmt = stmt.order_by(desc(PredictionLog.created_at)).limit(limit).offset(offset)
+                logs = session.execute(stmt).scalars().all()
+                
+                return [
+                    {
+                        "request_id": log.request_id,
+                        "model_type": log.model_type,
+                        "model_version": log.model_version,
+                        "input_hash": log.input_hash,
+                        "output": log.output,
+                        "latency_ms": log.latency_ms,
+                        "raw_input": log.raw_input,
+                        "created_at": log.created_at.isoformat() if log.created_at else None,
+                    }
+                    for log in logs
+                ]
+        except Exception as e:
+            logger.error(f"Failed to query prediction logs: {e}")
+            return []

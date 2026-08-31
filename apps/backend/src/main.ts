@@ -10,6 +10,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   setupApp(app);
 
+  // Enable graceful shutdown hooks
+  app.enableShutdownHooks();
+
   // URI versioning: /v1/config/stellar, /v2/... etc.
   app.enableVersioning({ type: VersioningType.URI });
 
@@ -40,6 +43,15 @@ async function bootstrap() {
     .addTag('portfolio', 'Portfolio tracking and performance metrics')
     .addTag('stellar', 'Stellar blockchain integration')
     .addTag('search', 'Search and discovery endpoints')
+    .addTag(
+      'demo-bootstrap',
+      'Testnet demo data bootstrap endpoints (admin only, testnet only)',
+    )
+    .addTag('contributor-feed', 'Aggregated contributor activity feed')
+    .addTag(
+      'contributor-registry',
+      'On-chain contributor registration and reputation',
+    )
     .addServer('http://localhost:3000', 'Development')
     .addServer('https://api.lumenpulse.io', 'Production')
     .build();

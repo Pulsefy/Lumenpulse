@@ -63,9 +63,11 @@
     "transactions": "Transactions",
     "news": "News",
     "settings": "Settings",
+    "watchlist": "Watchlist",
     "notifications": "Notifications",
     "manage_accounts": "Manage Accounts",
     "notification_settings": "Notification Settings",
+    "contributor_profile": "Contributor Profile",
     "cache": "Cache"
   },
   "home": {
@@ -125,6 +127,34 @@
     "failed": "Contribution Failed",
     "transaction_hash": "Transaction Hash"
   },
+  "contribution_draft": {
+    "banner_title": "Unfinished contribution",
+    "banner_body": "You started contributing {{amount}} XLM to {{project}}.",
+    "saved_at": "Saved {{date}}",
+    "resume": "Resume",
+    "discard": "Discard",
+    "restored_notice": "Draft restored — review the amount and confirm when you're ready.",
+    "stale_notice": "This saved draft has expired and can no longer be resumed.",
+    "invalid_amount_notice": "This draft's amount is no longer valid and cannot be resumed.",
+    "config_missing_notice": "Testnet configuration is unavailable, so this draft can't be resumed right now."
+  },
+  "report_modal": {
+    "title": "Report Content",
+    "category_label": "What's the issue?",
+    "reason_label": "Additional details (optional)",
+    "reason_placeholder": "Add any context that could help our moderation team",
+    "category_spam": "Spam",
+    "category_fraud": "Fraud or scam",
+    "category_misleading": "Misleading info",
+    "category_inappropriate": "Inappropriate content",
+    "category_copyright": "Copyright violation",
+    "category_other": "Other",
+    "submit": "Submit Report",
+    "submitting": "Submitting...",
+    "success_title": "Report Submitted",
+    "success_body": "Thank you. Our moderation team will review this submission.",
+    "generic_error": "Failed to submit report. Please try again."
+  },
   "grants": {
     "title": "Grants Rounds",
     "description": "Quadratic funding — breadth of support determines matching",
@@ -155,7 +185,10 @@
     "of_pool": "of pool",
     "contributors": "contributors",
     "contributed": "contributed",
-    "estimated_allocations": "Estimated Allocations"
+    "estimated_allocations": "Estimated Allocations",
+    "funding_progress": "Funding progress",
+    "milestones": "Milestones",
+    "no_eligible_projects": "No eligible projects have been added to this round yet."
   },
   "news": {
     "title": "News",
@@ -177,6 +210,16 @@
     "read": "Read",
     "mark_as_read": "Tap to mark as read"
   },
+  "watchlist": {
+    "title": "Watchlist",
+    "empty_title": "Your watchlist is empty",
+    "empty_subtitle": "Star assets from the Discover tab to track them here",
+    "remove": "Remove from watchlist",
+    "conflict_banner": "Some items have sync conflicts. Pull to refresh.",
+    "rollback_banner": "Some items were reverted to server state. Pull to refresh.",
+    "syncing_banner": "Changes will sync when you're back online.",
+    "last_synced": "Last synced: {{time}}"
+  },
   "discover": {
     "title": "Discover",
     "search_placeholder": "Search by name or code…",
@@ -188,7 +231,9 @@
     "price": "Price / 24h",
     "asset": "Asset",
     "search_label": "Search assets",
-    "asset_hint": "Double tap to view asset details"
+    "asset_hint": "Double tap to view asset details",
+    "add_to_watchlist": "Add to watchlist",
+    "remove_from_watchlist": "Remove from watchlist"
   },
   "portfolio": {
     "title": "Portfolio",
@@ -218,6 +263,10 @@
   "settings": {
     "title": "Settings",
     "account_preferences": "Account & Preferences",
+    "contributor_profile": {
+      "title": "Contributor Profile & Verification",
+      "description": "View linked wallet status, verification progress, and key account details."
+    },
     "appearance": "Appearance",
     "app_info": "App Info",
     "manage_accounts": {
@@ -285,14 +334,121 @@
       "mainnet": "Mainnet",
       "endpoint_not_configured": "Endpoint not configured",
       "mainnet_unavailable": "Mainnet Unavailable",
-      "mainnet_unavailable_message": "Configure mainnet API and Soroban RPC endpoints before switching."
+      "mainnet_unavailable_message": "Configure mainnet API and Soroban RPC endpoints before switching.",
+      "mainnet_confirmation_title": "Switch to Mainnet?",
+      "mainnet_confirmation_message": "You are about to switch to the Mainnet where real assets are at stake. All cached data will be cleared and your wallet will require re-selection. This action cannot be undone.",
+      "mainnet_confirmation_confirm": "Switch to Mainnet"
     },
     "version": "Version",
     "environment": "Environment",
     "environment_production": "Production",
     "environment_contributor": "Contributor Build",
     "platform": "Platform",
-    "logout": "Log Out"
+    "logout": "Log Out",
+    "status_info": {
+      "title": "Status & Release Notes",
+      "description": "View environment details and recent changes",
+      "active_env": "Active Environment",
+      "api_url": "API Base URL",
+      "stellar_net": "Stellar Network",
+      "soroban_rpc": "Soroban RPC URL",
+      "contract_id": "Contract ID",
+      "network_status": "Network Connection",
+      "online": "Online",
+      "offline": "Offline",
+      "last_checked": "Last checked: {{time}}",
+      "notes_title": "Release Notes",
+      "no_notes": "Release metadata is currently unavailable.",
+      "version_prefix": "Version {{version}}",
+      "published": "Published: {{date}}",
+      "testing": "Testing..."
+    },
+    "cache": {
+      "title": "Cache & Storage",
+      "data_management": "Data Management",
+      "data_management_desc": "Pre-download data for offline use or free up storage by clearing cached content.",
+      "preload_data": "Preload Data",
+      "preload_data_desc": "Download the latest news, portfolio, and asset data for offline access.",
+      "clear_cache": "Clear All Cache",
+      "clear_cache_desc": "Remove all locally cached data. You will need a connection to reload content.",
+      "clear_cache_message": "This will remove all cached data including news, portfolio, and image cache. Are you sure?",
+      "cleared_successfully": "Cache cleared successfully.",
+      "preloaded_successfully": "Data preloaded successfully.",
+      "preload_failed": "Failed to preload data. Check your connection and try again.",
+      "clear_failed": "Failed to clear cache. Please try again.",
+      "image_cache": "Image Cache",
+      "image_cache_desc": "Remote images are cached to disk to avoid re-downloading on every visit. The cache is automatically trimmed when it exceeds the limit using a least-recently-used policy.",
+      "image_cache_used": "Used",
+      "image_cache_count": "Cached images",
+      "image_cache_limit": "Limit",
+      "clear_image_cache": "Clear Image Cache",
+      "clear_image_cache_desc": "Remove all cached images from disk. Images will be re-downloaded on next view.",
+      "clear_image_cache_message": "Remove all cached images? They will be re-fetched when needed.",
+      "image_cache_cleared": "Image cache cleared.",
+      "how_caching_works": "How Caching Works",
+      "caching_info": "LumenPulse stores recent news, portfolio snapshots, and asset prices locally so the app works without a connection. Images are cached separately on disk with a 50 MB limit and automatically evict least-recently-used entries when the limit is reached.",
+      "cache_status": "Network Status",
+      "online": "Online",
+      "offline": "Offline"
+    },
+    "data_privacy": {
+      "title": "Data & Privacy",
+      "description": "Review everything LumenPulse stores on this device, clear it by category or all at once, and choose what diagnostics you share.",
+      "stored_data": "Stored on this device",
+      "privacy_controls": "Privacy controls",
+      "total_stored": "Total stored",
+      "clear": "Clear",
+      "item_count_one": "{{count}} item",
+      "item_count_other": "{{count}} items",
+      "clear_category_title": "Clear {{category}}?",
+      "clear_category_message": "This removes all {{category}} stored on this device. It can be downloaded again when you are online.",
+      "category_cleared": "{{category}} cleared.",
+      "clear_failed": "Couldn't clear that data. Please try again.",
+      "clear_all_title": "Clear all local data",
+      "clear_all_message": "This removes cached content, saved news, watchlists, cached images, drafts, and diagnostics data from this device. You will stay signed in.",
+      "clear_all_hint": "You stay signed in, and any changes waiting to sync are kept.",
+      "clear_all_success": "All local data cleared. You are still signed in.",
+      "clear_all_partial_one": "Cleared most data, but {{count}} category couldn't be cleared. Please try again.",
+      "clear_all_partial_other": "Cleared most data, but {{count}} categories couldn't be cleared. Please try again.",
+      "queued_preserved_warning_one": "{{count}} change is still waiting to sync and will be kept.",
+      "queued_preserved_warning_other": "{{count}} changes are still waiting to sync and will be kept.",
+      "preference_save_failed": "Couldn't save that preference. Please try again.",
+      "preferences_survive_clear": "Your analytics and crash-reporting choices are kept when you clear data — clearing never opts you back in.",
+      "analytics": {
+        "title": "Usage analytics",
+        "description": "Share anonymous usage data to help improve the app. Turn this off to stop collection on this device."
+      },
+      "crash_reporting": {
+        "title": "Crash reporting",
+        "description": "Automatically report crashes and errors. Wallet addresses are always removed before a report is sent."
+      },
+      "categories": {
+        "cached_content": {
+          "title": "Cached content",
+          "description": "News, portfolio snapshots, projects, and asset prices kept for offline use."
+        },
+        "saved_news": {
+          "title": "Saved news",
+          "description": "Articles you bookmarked to read later."
+        },
+        "watchlists": {
+          "title": "Watchlists",
+          "description": "Your locally cached watchlist and its last sync time."
+        },
+        "image_cache": {
+          "title": "Cached images",
+          "description": "Remote images stored on disk so they don't re-download."
+        },
+        "drafts": {
+          "title": "Drafts",
+          "description": "An unfinished contribution saved so you can resume it."
+        },
+        "diagnostics": {
+          "title": "Diagnostics data",
+          "description": "Local analytics and diagnostics state collected on this device."
+        }
+      }
+    }
   },
   "transaction_receipt": {
     "title": "Transaction Receipt",
@@ -324,5 +480,85 @@
     "couldnt_load": "Couldn't load {{item}}",
     "could_not_remove": "Could not remove",
     "could_not_update": "Could not update"
+  },
+  "contributor_profile": {
+    "title": "Contributor Center",
+    "subtitle": "Identity, wallet status, and verification progress",
+    "identity_section": "Contributor Identity",
+    "wallet_section": "Linked Wallet Context",
+    "verification_section": "Verification & Review Progress",
+    "account_section": "Account & Platform Details",
+    "not_found_title": "No Contributor Profile Found",
+    "not_found_desc": "No on-chain contributor record or linked wallet was found for this account. Connect a wallet or register your identity to activate your profile.",
+    "no_wallet_title": "No Wallet Linked",
+    "no_wallet_desc": "Connect your Stellar wallet to view linked status and verification progress.",
+    "connect_wallet": "Connect Wallet",
+    "manage_wallets": "Manage Linked Wallets",
+    "register_identity": "Register Identity",
+    "copy_address": "Copy Public Key",
+    "address_copied": "Public key copied to clipboard",
+    "reputation_score": "Reputation Score",
+    "tier": "Tier",
+    "github_handle": "GitHub Handle",
+    "registered_date": "Registered Date",
+    "quorum_progress": "Quorum Approval Progress",
+    "quorum_votes": "{{votesFor}} / {{quorumThreshold}} Votes",
+    "verification_checklist": "Verification Requirements Checklist",
+    "status": {
+      "verified": "Lumenpulse Verified",
+      "pending": "Pending Verification Review",
+      "rejected": "Verification Rejected",
+      "archived": "Archived Identity",
+      "unregistered": "Unregistered Identity"
+    }
+  },
+  "wallet": {
+    "connect": {
+      "title": "Connect Wallet",
+      "message": "Connect a Stellar wallet to {{network}}. This will open your wallet app to authorize the connection.",
+      "continue_button": "Open Wallet App",
+      "error_title": "Connection Failed",
+      "error_message": "Could not connect the wallet."
+    },
+    "reconnect": {
+      "title": "Reconnect to {{network}}",
+      "message": "Restore your saved wallet session on the new {{network}} network. Choose how you want to reconnect.",
+      "button": "Reconnect Wallet",
+      "restoring": "Restoring wallet session\u2026"
+    },
+    "network_mismatch": {
+      "title": "Network Changed",
+      "message": "Your saved wallet was for a different network. Reconnect to {{network}} to continue.",
+      "last_network_label": "Last connected on {{network}}"
+    },
+    "restore_failed": {
+      "title": "Wallet Restore Failed",
+      "message": "We couldn't safely restore your saved wallet. The stale session has been cleared.",
+      "button": "Try Again"
+    },
+    "status": {
+      "disconnected": "Disconnected",
+      "connecting": "Connecting",
+      "reconnecting": "Reconnecting",
+      "connected": "Connected",
+      "network_mismatch": "Reconnect Required",
+      "restore_failed": "Restore Failed",
+      "rejected": "Rejected"
+    },
+    "sign": {
+      "title": "Sign Transaction",
+      "message": "A transaction requires your signature. This will open your wallet app.",
+      "error_failed": "The wallet reported a signing failure.",
+      "error_unknown": "Unexpected wallet response.",
+      "error_timeout": "Wallet did not respond in time. Please try again.",
+      "error_concurrent": "A signing request is already in progress."
+    },
+    "error": {
+      "not_available": "This wallet option is not available right now.",
+      "missing_wallet": "No Stellar wallet app found. Install a compatible wallet and try again.",
+      "unsupported_device": "This device cannot open the wallet app.",
+      "rejected": "Wallet connection was rejected.",
+      "unknown": "Something went wrong with the wallet. Please try again."
+    }
   }
 }

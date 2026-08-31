@@ -5,6 +5,7 @@ use soroban_sdk::{contracttype, Address, Symbol};
 // LEDGER_BUMP: the new TTL to set when extending (≈30 days at 5 s/ledger).
 pub const LEDGER_THRESHOLD: u32 = 100_000;
 pub const LEDGER_BUMP: u32 = 518_400;
+pub const MAX_MILESTONE_DECISION_BATCH_SIZE: u32 = 25;
 
 #[contracttype]
 #[derive(Clone)]
@@ -41,6 +42,15 @@ pub enum DataKey {
     RefundReceipt(u64, u64),     // (project_id, receipt_id) -> RefundReceipt
     RefundReceiptCount(u64),     // project_id -> u64
     RefundClaimed(u64, Address), // (project_id, contributor) -> bool
+    // ── Idempotency guard (issue #1224) ──────────────────────────────────────
+    /// Idempotency receipt for a deposit operation.
+    /// Key: (project_id, contributor_address)
+    /// Value: true (present means the deposit was already executed)
+    /// Storage tier: Persistent — survives across ledgers for the TTL window
+    /// defined in the idempotency-guard crate (~14 days).
+    DepositIdempotencyKey(u64, Address), // (project_id, depositor) -> BytesN<32>
+    // ── Emergency migration (issue #1047) ─────────────────────────────────────
+    EmergencyMigrationPlan(u64), // project_id -> EmergencyMigrationPlan
 }
 
 #[contracttype]
@@ -85,10 +95,72 @@ pub struct MilestoneDispute {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneDecision {
+    pub project_id: u64,
+    pub milestone_id: u32,
+    pub approve: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneDecisionOutcome {
+    pub project_id: u64,
+    pub milestone_id: u32,
+    pub approved: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RefundReceipt {
     pub project_id: u64,
     pub contributor: Address,
     pub amount: i128,
     pub reason: Symbol,
     pub timestamp: u64,
+}
+
+// ── Emergency migration types (issue #1047) ────────────────────────────────────
+
+/// Lifecycle state of a single emergency migration plan.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum MigrationPlanStatus {
+    /// Plan is registered and awaiting execution.
+    Pending = 0,
+    /// Plan has been successfully executed; funds have been moved.
+    Executed = 1,
+    /// Plan was vetoed by a second admin before execution.
+    Vetoed = 2,
+}
+
+/// An auditable emergency migration plan for a paused round.
+///
+/// A plan is created by the primary admin while the contract is paused.
+/// It describes exactly which project, how much, and where the stranded
+/// funds should go.  A second independent admin must NOT have vetoed it
+/// before `execute_emergency_migration` is called.
+///
+/// Storage tier: **Persistent** — must survive the pause + execution window.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EmergencyMigrationPlan {
+    /// The project whose stranded funds are being moved.
+    pub project_id: u64,
+    /// The amount to migrate (≤ project balance at registration time).
+    pub amount: i128,
+    /// Where the funds will be sent — typically a recovery multisig.
+    pub recipient: Address,
+    /// A short human-readable reason stored on-chain for auditors.
+    pub reason: Symbol,
+    /// Admin who created this plan.
+    pub proposed_by: Address,
+    /// Ledger timestamp when the plan was registered.
+    pub proposed_at: u64,
+    /// Current lifecycle state of this plan.
+    pub status: MigrationPlanStatus,
+    /// Ledger timestamp when the plan was executed or vetoed (0 if pending).
+    pub resolved_at: u64,
+    /// Admin who vetoed this plan (zero-address if not vetoed).
+    pub vetoed_by: Option<Address>,
 }

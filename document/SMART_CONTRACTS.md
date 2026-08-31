@@ -1,9 +1,9 @@
 # LumenPulse — Smart Contract Interface Reference
 
 > **Soroban SDK**: v23 · **Rust toolchain**: stable + `wasm32-unknown-unknown` target  
-> Source: [`apps/onchain/contracts/`](../apps/onchain/contracts/)
+> Source: [`apps/onchain/contracts/`](../apps/onchain/contracts/) · **Operations & Deployment Playbook**: [`document/CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md`](CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md)
 
-This document provides a complete technical reference for every public function (WASM entrypoint), emitted event, error code, and storage layout across all Soroban smart contracts in the LumenPulse workspace.
+This document provides a complete technical reference for every public function (WASM entrypoint), emitted event, error code, and storage layout across all Soroban smart contracts in the LumenPulse workspace. For operational deployment steps, canonical manifest management, and emergency rollback procedures, see the [Contract Deployment & Rollback Playbook](CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md).
 
 ---
 
@@ -290,6 +290,74 @@ A full-featured crowdfunding platform with milestone-gated withdrawals, quadrati
 
 ### 2.1 Public Functions
 
+#### Emergency Migration (Issue #1047)
+
+##### `propose_emergency_migration`
+```rust
+pub fn propose_emergency_migration(
+    env: Env,
+    admin: Address,
+    project_id: u64,
+    recipient: Address,
+    amount: i128,
+    reason: Symbol,
+) -> Result<(), CrowdfundError>
+```
+Register an emergency migration plan for a paused round with stranded funds. The contract **must** be paused before calling this — which prevents any new deposits from racing the migration window.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `admin` | `Address` | Must match the stored contract admin |
+| `project_id` | `u64` | The project with stranded funds |
+| `recipient` | `Address` | Destination address for migrated tokens (must not be the contract itself) |
+| `amount` | `i128` | Amount to migrate; must be > 0 and ≤ current project balance |
+| `reason` | `Symbol` | Short human-readable reason stored on-chain for auditors |
+
+**Returns**: `Ok(())`
+**Auth**: Requires admin authorization.
+**Requires**: Contract must be paused (`ContractPaused`).
+**Emits**: `EmrgMigrProposedEvent`
+**Errors**: `EmergencyMigrationRequiresPause`, `Unauthorized`, `ProjectNotFound`, `InvalidAmount`, `MigrationAmountExceedsBalance`, `InvalidMigrationRecipient`, `MigrationPlanAlreadyExists`
+
+---
+
+##### `veto_emergency_migration`
+```rust
+pub fn veto_emergency_migration(env: Env, admin: Address, project_id: u64) -> Result<(), CrowdfundError>
+```
+Permanently block a pending emergency migration plan. Once vetoed the plan status becomes `Vetoed` and can never be executed. A new plan may be proposed after a veto.
+
+**Auth**: Admin only.
+**Emits**: `EmrgMigrVetoedEvent`
+**Errors**: `Unauthorized`, `MigrationPlanNotFound`, `MigrationAlreadyExecuted`
+
+---
+
+##### `execute_emergency_migration`
+```rust
+pub fn execute_emergency_migration(env: Env, admin: Address, project_id: u64) -> Result<i128, CrowdfundError>
+```
+Execute a pending (non-vetoed) migration plan. Transfers exactly `plan.amount` tokens to `plan.recipient`, transitions the project to `CANCELED` (opening the contributor refund window), and decrements the TVL counter.
+
+**Returns**: `Ok(amount)` — the number of tokens transferred.
+**Auth**: Admin only. Contract must still be paused at execution time.
+**Emits**: `EmrgMigrExecutedEvent`, `ProjectCanceledEvent`
+**Errors**: `EmergencyMigrationRequiresPause`, `Unauthorized`, `MigrationPlanNotFound`, `MigrationAlreadyExecuted`, `MigrationPlanVetoed`, `ProjectNotFound`, `MigrationAmountExceedsBalance`
+
+---
+
+##### `get_emergency_migration_plan`
+```rust
+pub fn get_emergency_migration_plan(env: Env, project_id: u64) -> Result<EmergencyMigrationPlan, CrowdfundError>
+```
+Read the current migration plan for a project (read-only, no state mutations).
+
+**Returns**: `Ok(EmergencyMigrationPlan)`
+**Errors**: `MigrationPlanNotFound`, `ProjectNotFound`
+
+---
+
+
 #### Lifecycle
 
 ##### `initialize`
@@ -569,6 +637,9 @@ soroban contract invoke \
 | **`AdminChangedEvent`** | `old_admin: Address` | `new_admin: Address` | `set_admin` |
 | **`ProjectCanceledEvent`** | — | `project_id: u64`, `caller: Address` | `cancel_project` |
 | **`ContributionRefundedEvent`** | — | `project_id: u64`, `contributor: Address`, `amount: i128` | `refund_contributors` |
+| **`EmrgMigrProposedEvent`** | `proposed_by: Address`, `project_id: u64` | `amount: i128` | `propose_emergency_migration` |
+| **`EmrgMigrExecutedEvent`** | `executed_by: Address`, `project_id: u64` | `amount: i128` | `execute_emergency_migration` |
+| **`EmrgMigrVetoedEvent`** | `vetoed_by: Address`, `project_id: u64` | `vetoed_at: u64` | `veto_emergency_migration` |
 
 ### 2.3 Error Codes
 
@@ -589,6 +660,14 @@ pub enum CrowdfundError {
     ProjectNotCancellable  = 13,
     RefundFailed        = 14,
     ContractNotPaused   = 15,
+    // ── Emergency migration (issue #1047) ──────────────────────────────
+    EmergencyMigrationRequiresPause = 33, // contract must be paused
+    MigrationPlanAlreadyExists      = 34, // pending plan already registered
+    MigrationPlanNotFound           = 35, // no plan exists for this project
+    MigrationAlreadyExecuted        = 36, // plan already executed or veto already final
+    InvalidMigrationRecipient       = 37, // recipient is the contract itself
+    MigrationAmountExceedsBalance   = 38, // amount > project vault balance
+    MigrationPlanVetoed             = 39, // plan was vetoed; cannot execute
 }
 ```
 
@@ -609,6 +688,7 @@ pub enum CrowdfundError {
 | `MatchingPool(Address)` | Persistent | `i128` | Matching pool balance per token |
 | `RegisteredContributor(Address)` | Persistent | `bool` | Whether address is registered |
 | `Reputation(Address)` | Persistent | `i128` | Contributor reputation score |
+| `EmergencyMigrationPlan(u64)` | Persistent | `EmergencyMigrationPlan` | Migration plan per project (issue #1047) |
 
 **Custom Types**:
 

@@ -33,11 +33,35 @@ export class TransactionCallback {
   })
   status: TransactionCallbackStatus;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
+  secretId: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  previousSecretId: string | null;
+
+  @Column({ type: 'text', nullable: true })
   lastError: string;
 
-  @Column({ default: 0 })
+  @Column({ type: 'int', default: 0 })
   retryCount: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  lastDeliveryStatus: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  lastSignature: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  lastResponseStatusCode: number | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  lastDeliveredAt: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  lastDeliveryError: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  deliveryHistory: Array<Record<string, unknown>> | null;
 
   @CreateDateColumn()
   createdAt: Date;

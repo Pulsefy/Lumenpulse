@@ -87,11 +87,56 @@ A NestJS module at `apps/backend/src/feature-flags/` that provides DB-backed fla
 
 `isEnabled()` for an unknown key returns **`false`**. Flags are created with `enabled = false` by default.
 
+### Caching and performance
+
+`FeatureFlagsService` maintains a **short-TTL in-memory cache** (default: 30 s) keyed by flag name:
+
+- Warm on module start — all flags are loaded from PostgreSQL once at boot.
+- Subsequent evaluations return in-memory results without a DB round-trip.
+- On every `upsert` or `remove` the affected cache entry is **invalidated immediately** so the new state is visible on the very next call within the same process.
+- If a flag is not in the cache (new key, or TTL expired), one DB lookup is performed and the result is cached with a fresh TTL.
+
 ### Observability
 
 - Every `upsert` call logs the previous and new state via `Logger`.
 - The `changedBy` column records who last toggled the flag.
 - The `FeatureFlagResponseDto` exposes `changedBy` and timestamps in API responses.
+
+#### Prometheus metrics
+
+Three metrics are exported to the shared `MetricsService` registry and appear at `/metrics`:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `feature_flag_cache_hits_total` | Counter | Incremented whenever a flag evaluation is served from cache. |
+| `feature_flag_cache_misses_total` | Counter | Incremented whenever a cache miss forces a DB round-trip. |
+| `feature_flag_evaluation_duration_seconds` | Histogram | End-to-end wall-clock latency of every `isEnabled()` call. |
+
+**Cache hit rate** can be computed as:
+```
+feature_flag_cache_hits_total / (feature_flag_cache_hits_total + feature_flag_cache_misses_total)
+```
+
+### Audit history
+
+Every mutation to a feature flag is persisted as an immutable row in the `feature_flag_audit_logs` table via `FlagAuditLog` entity:
+
+| Column | Description |
+|--------|-------------|
+| `flagKey` | The flag that was mutated. |
+| `action` | `'upsert'` or `'remove'`. |
+| `previousEnabled` | Boolean state before the change; `null` for brand-new flags. |
+| `newEnabled` | Boolean state after the change; `null` for removals. |
+| `actor` | The `changedBy` identifier of the requester, or `null`. |
+| `changedAt` | UTC timestamp of the mutation (auto-set by TypeORM). |
+
+Audit history is retrievable via the admin endpoint:
+
+```
+GET /feature-flags/:key/history
+```
+
+Returns all audit entries for the specified key, ordered newest-first.
 
 ### API
 
@@ -142,3 +187,30 @@ When a gated feature is stable:
 4. Delete the flag from storage.
 
 Flags should **not** be used as permanent configuration switches on mainnet. Long-lived protocol configuration belongs in the `protocol_registry` contract.
+
+---
+
+## Authoritativeness: On-chain vs Backend
+
+The two layers are **independent** and serve different scopes:
+
+| Concern | Authoritative layer | Rationale |
+|---------|--------------------|-----------| 
+| **Smart-contract logic paths** | **On-chain (`feature_flags` contract)** | The Soroban contract stores the flag in ledger-persistent storage. Any contract that imports the `FeatureFlagsContractClient` queries it directly. The backend has no ability to alter ledger state. |
+| **API endpoints and service logic** | **Backend (`FeatureFlagsModule`)** | The NestJS module reads from PostgreSQL. The on-chain contract does not communicate with the backend. |
+
+### They do NOT sync automatically
+
+The two layers are deliberately decoupled:
+
+- Enabling a flag on-chain does **not** automatically enable it in the backend, and vice-versa.
+- Teams that need a feature gated in both layers must toggle both independently.
+- This is intentional: smart-contract deployments and API deployments have different release cadences and authorization requirements.
+
+### Which to use?
+
+| Gate target | Use |
+|-------------|-----|
+| Contract function (Rust / Soroban) | On-chain `feature_flags` contract |
+| HTTP route / NestJS service method | Backend `FeatureFlagsModule` |
+| Both a contract function and a backend endpoint | Both layers, toggled independently |

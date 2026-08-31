@@ -1,0 +1,5084 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Sentiment Analysis API",
+    "description": "Exposes sentiment analysis for Node.js backend integration",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/ingestion/contract-lag": {
+      "get": {
+        "summary": "Get Contract Lag",
+        "description": "Return current per-contract ingestion lag for all five domains.",
+        "operationId": "get_contract_lag_ingestion_contract_lag_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractLagResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingestion/contract-lag/run": {
+      "post": {
+        "summary": "Run Contract Lag",
+        "description": "Trigger an immediate per-contract lag measurement cycle.",
+        "operationId": "run_contract_lag_ingestion_contract_lag_run_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractLagResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingestion/quality/run": {
+      "post": {
+        "summary": "Run Ingestion Quality",
+        "operationId": "run_ingestion_quality_ingestion_quality_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestionQualityRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionQualityRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingestion/alerting/status": {
+      "get": {
+        "summary": "Get Ingestion Alerting Status",
+        "operationId": "get_ingestion_alerting_status_ingestion_alerting_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionAlertingStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingestion/alerting/run": {
+      "post": {
+        "summary": "Run Ingestion Alerting",
+        "operationId": "run_ingestion_alerting_ingestion_alerting_run_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionAlertingStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/review-queue": {
+      "get": {
+        "tags": [
+          "Review Queue"
+        ],
+        "summary": "Get Review Queue",
+        "description": "Retrieve items from the review queue with optional filters.",
+        "operationId": "get_review_queue_api_review_queue_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter queue by status (pending, approved, rejected, corrected)",
+              "title": "Status"
+            },
+            "description": "Filter queue by status (pending, approved, rejected, corrected)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReviewQueueItemResponse"
+                  },
+                  "title": "Response Get Review Queue Api Review Queue Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/review-queue/{review_id}": {
+      "post": {
+        "tags": [
+          "Review Queue"
+        ],
+        "summary": "Update Item Status",
+        "description": "Update status of a queue item (approve, reject, correct).",
+        "operationId": "update_item_status_api_review_queue__review_id__post",
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Review Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReviewStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/review-queue/export": {
+      "get": {
+        "tags": [
+          "Review Queue"
+        ],
+        "summary": "Export Review Queue",
+        "description": "Export the review queue as a structured response.",
+        "operationId": "export_review_queue_api_review_queue_export_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status before exporting",
+              "title": "Status"
+            },
+            "description": "Filter by status before exporting"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReviewQueueItemResponse"
+                  },
+                  "title": "Response Export Review Queue Api Review Queue Export Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/review-queue/outcomes": {
+      "get": {
+        "tags": [
+          "Review Queue"
+        ],
+        "summary": "Get Reviewed Outcomes",
+        "description": "Retrieve all reviewed outcomes (approved/corrected/rejected) for feedback tuning.",
+        "operationId": "get_reviewed_outcomes_api_review_queue_outcomes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response Get Reviewed Outcomes Api Review Queue Outcomes Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingestion/cursors": {
+      "get": {
+        "tags": [
+          "Ledger Cursors"
+        ],
+        "summary": "List all ledger cursor rows",
+        "description": "Return the full inventory of persistent ledger cursors.\n\nEach row represents one ingestion stream.  Use this endpoint to verify\nthat all expected streams are active and no stream is stuck in\n``\"failed\"`` or ``\"ingesting\"`` status longer than expected.",
+        "operationId": "list_cursors_ingestion_cursors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CursorListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingestion/cursors/{stream_id}": {
+      "get": {
+        "tags": [
+          "Ledger Cursors"
+        ],
+        "summary": "Get a single ledger cursor",
+        "description": "Return the cursor for a specific *stream_id*.\n\n``stream_id`` may contain slashes (e.g. ``contract/CXXX...YYY``); the\n``:path`` converter captures the full value.",
+        "operationId": "get_cursor_ingestion_cursors__stream_id__get",
+        "parameters": [
+          {
+            "name": "stream_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Stream Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CursorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingestion/cursors/{stream_id}/resume": {
+      "post": {
+        "tags": [
+          "Ledger Cursors"
+        ],
+        "summary": "Reset a failed cursor to idle",
+        "description": "Reset a ``\"failed\"`` cursor back to ``\"idle\"`` so the ingestion loop\nwill retry from the last safe ledger.\n\nThis endpoint is idempotent: calling it on a cursor that is already\n``\"idle\"`` is a no-op.\n\nThe response includes the ledger number ingestion will resume from so\nmaintainers can cross-check against Stellar explorer.",
+        "operationId": "resume_cursor_ingestion_cursors__stream_id__resume_post",
+        "parameters": [
+          {
+            "name": "stream_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Stream Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kpi/latest": {
+      "get": {
+        "tags": [
+          "kpi"
+        ],
+        "summary": "Get Latest Kpis",
+        "description": "Get the latest KPI snapshot.\n\nReturns:\n    Latest KPI values or 404 if no data available.",
+        "operationId": "get_latest_kpis_api_kpi_latest_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KPIResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kpi/series": {
+      "get": {
+        "tags": [
+          "kpi"
+        ],
+        "summary": "Get Kpi Series",
+        "description": "Get KPI time series data.\n\nArgs:\n    start_date: Start date (inclusive)\n    end_date: End date (inclusive)\n    period: Time period granularity\n\nReturns:\n    List of KPI snapshots over time.",
+        "operationId": "get_kpi_series_api_kpi_series_get",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start date in YYYY-MM-DD format",
+              "title": "Start Date"
+            },
+            "description": "Start date in YYYY-MM-DD format"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End date in YYYY-MM-DD format",
+              "title": "End Date"
+            },
+            "description": "End date in YYYY-MM-DD format"
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Period granularity (daily, hourly)",
+              "default": "daily",
+              "title": "Period"
+            },
+            "description": "Period granularity (daily, hourly)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KPISeriesResponse"
+                  },
+                  "title": "Response Get Kpi Series Api Kpi Series Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kpi/recompute": {
+      "post": {
+        "tags": [
+          "kpi"
+        ],
+        "summary": "Trigger Kpi Recompute",
+        "description": "Trigger KPI recomputation from events.\n\nAdmin-only endpoint for rebuilding KPI data when ingestion logic changes.",
+        "operationId": "trigger_kpi_recompute_api_kpi_recompute_post",
+        "parameters": [
+          {
+            "name": "contract_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Contract ID to recompute (uses default if not specified)",
+              "title": "Contract Id"
+            },
+            "description": "Contract ID to recompute (uses default if not specified)"
+          },
+          {
+            "name": "from_raw",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Recompute from raw events (slower but more accurate)",
+              "default": false,
+              "title": "From Raw"
+            },
+            "description": "Recompute from raw events (slower but more accurate)"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecomputeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kpi/recompute-async": {
+      "post": {
+        "tags": [
+          "kpi"
+        ],
+        "summary": "Trigger Kpi Recompute Async",
+        "description": "Trigger async KPI recomputation.\n\nAdmin-only endpoint for background recomputation.",
+        "operationId": "trigger_kpi_recompute_async_api_kpi_recompute_async_post",
+        "parameters": [
+          {
+            "name": "contract_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Contract ID to recompute (uses default if not specified)",
+              "title": "Contract Id"
+            },
+            "description": "Contract ID to recompute (uses default if not specified)"
+          },
+          {
+            "name": "from_raw",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Recompute from raw events (slower but more accurate)",
+              "default": false,
+              "title": "From Raw"
+            },
+            "description": "Recompute from raw events (slower but more accurate)"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecomputeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/account-operations/ingest": {
+      "post": {
+        "tags": [
+          "account-operations"
+        ],
+        "summary": "Trigger Ingestion",
+        "description": "Trigger ingestion of account operations.\n\nAdmin-only endpoint for backfill and incremental ingestion.\n\nArgs:\n    request: Ingestion parameters\n    \nReturns:\n    Ingestion statistics",
+        "operationId": "trigger_ingestion_api_account_operations_ingest_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/account-operations/status": {
+      "get": {
+        "tags": [
+          "account-operations"
+        ],
+        "summary": "Get Status",
+        "description": "Get ingestion status for an account.\n\nArgs:\n    account_id: Optional account ID\n    \nReturns:\n    Cursor status",
+        "operationId": "get_status_api_account_operations_status_get",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Account ID",
+              "title": "Account Id"
+            },
+            "description": "Account ID"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CursorStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/account-operations/reset-cursor": {
+      "post": {
+        "tags": [
+          "account-operations"
+        ],
+        "summary": "Reset Cursor",
+        "description": "Reset the ingestion cursor for an account.\n\nWarning: This will cause re-ingestion of operations.\n\nArgs:\n    request: Reset parameters\n    \nReturns:\n    Success status",
+        "operationId": "reset_cursor_api_account_operations_reset_cursor_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetCursorRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Reset Cursor Api Account Operations Reset Cursor Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/account-operations/operations": {
+      "get": {
+        "tags": [
+          "account-operations"
+        ],
+        "summary": "Get Operations",
+        "description": "Get account operations from the database.\n\nArgs:\n    account_id: Account ID\n    limit: Maximum number of operations\n    from_ledger: Starting ledger\n    to_ledger: Ending ledger\n    \nReturns:\n    List of operations",
+        "operationId": "get_operations_api_account_operations_operations_get",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Account ID",
+              "title": "Account Id"
+            },
+            "description": "Account ID"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "Maximum operations",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Maximum operations"
+          },
+          {
+            "name": "from_ledger",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Starting ledger",
+              "title": "From Ledger"
+            },
+            "description": "Starting ledger"
+          },
+          {
+            "name": "to_ledger",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ending ledger",
+              "title": "To Ledger"
+            },
+            "description": "Ending ledger"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OperationResponse"
+                  },
+                  "title": "Response Get Operations Api Account Operations Operations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rebuild/kpi-snapshots": {
+      "post": {
+        "tags": [
+          "rebuild"
+        ],
+        "summary": "Rebuild Kpi Snapshots",
+        "description": "Rebuild KPI snapshots from raw events.\n\nAdmin-only endpoint for rebuilding KPI data when ingestion logic changes.",
+        "operationId": "rebuild_kpi_snapshots_api_rebuild_kpi_snapshots_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rebuild/all": {
+      "post": {
+        "tags": [
+          "rebuild"
+        ],
+        "summary": "Rebuild All",
+        "description": "Rebuild all derived datasets.\n\nAdmin-only endpoint for full rebuild of all datasets.",
+        "operationId": "rebuild_all_api_rebuild_all_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rebuild/project-views": {
+      "post": {
+        "tags": [
+          "rebuild"
+        ],
+        "summary": "Rebuild Project Views",
+        "operationId": "rebuild_project_views_api_rebuild_project_views_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rebuild/contract-events": {
+      "post": {
+        "tags": [
+          "rebuild"
+        ],
+        "summary": "Rebuild Contract Events",
+        "operationId": "rebuild_contract_events_api_rebuild_contract_events_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rebuild/metrics": {
+      "post": {
+        "tags": [
+          "rebuild"
+        ],
+        "summary": "Rebuild Metrics",
+        "operationId": "rebuild_metrics_api_rebuild_metrics_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sentiment-labels": {
+      "post": {
+        "tags": [
+          "Sentiment Labels"
+        ],
+        "summary": "Submit Sentiment Label",
+        "description": "Submit a label or correct the existing label for identical text.",
+        "operationId": "submit_sentiment_label_api_sentiment_labels_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SentimentLabelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentimentLabelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Sentiment Labels"
+        ],
+        "summary": "List Sentiment Labels",
+        "operationId": "list_sentiment_labels_api_sentiment_labels_get",
+        "parameters": [
+          {
+            "name": "held_out",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Held Out"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1000,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SentimentLabelResponse"
+                  },
+                  "title": "Response List Sentiment Labels Api Sentiment Labels Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sentiment-labels/{label_id}": {
+      "put": {
+        "tags": [
+          "Sentiment Labels"
+        ],
+        "summary": "Correct Sentiment Label",
+        "description": "Correct a label by updating the canonical text record.",
+        "operationId": "correct_sentiment_label_api_sentiment_labels__label_id__put",
+        "parameters": [
+          {
+            "name": "label_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Label Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SentimentLabelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentimentLabelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Metrics",
+        "description": "Expose Prometheus metrics",
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "description": "Root endpoint with API information",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Root  Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Health check endpoint for monitoring",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/news": {
+      "get": {
+        "summary": "Get News",
+        "description": "Return recent articles with optional asset and entity filters.",
+        "operationId": "get_news_news_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 168,
+              "minimum": 1,
+              "default": 24,
+              "title": "Hours"
+            }
+          },
+          {
+            "name": "asset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional primary asset code filter",
+              "title": "Asset"
+            },
+            "description": "Optional primary asset code filter"
+          },
+          {
+            "name": "entity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional detected entity filter (example: Soroban)",
+              "title": "Entity"
+            },
+            "description": "Optional detected entity filter (example: Soroban)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NewsArticleResponse"
+                  },
+                  "title": "Response Get News News Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/contributors/{contributor}/timeline": {
+      "get": {
+        "summary": "Get Contributor Activity Timeline",
+        "description": "Return a contributor-centric timeline of raw on-chain activity.",
+        "operationId": "get_contributor_activity_timeline_contributors__contributor__timeline_get",
+        "parameters": [
+          {
+            "name": "contributor",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Contributor"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional project ID to scope the contributor timeline",
+              "title": "Project Id"
+            },
+            "description": "Optional project ID to scope the contributor timeline"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "ascending",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Order timeline ascending by timestamp if true, descending otherwise",
+              "default": true,
+              "title": "Ascending"
+            },
+            "description": "Order timeline ascending by timestamp if true, descending otherwise"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContributorActivityTimelineResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analyze": {
+      "post": {
+        "summary": "Analyze Text",
+        "description": "Analyze the sentiment of provided text.",
+        "operationId": "analyze_text_analyze_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Get Asset Analysis",
+        "description": "Get sentiment analysis for a specific asset.\n\nThis endpoint provides asset-specific sentiment analysis by filtering\nnews and social media content that mentions the specified asset.\n\nArgs:\n    asset: Asset code to analyze (e.g., XLM, USDC, BTC)\n\nReturns:\n    Asset-specific sentiment analysis with distribution statistics",
+        "operationId": "get_asset_analysis_analyze_get",
+        "parameters": [
+          {
+            "name": "asset",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Asset code (e.g., XLM, USDC, BTC)",
+              "title": "Asset"
+            },
+            "description": "Asset code (e.g., XLM, USDC, BTC)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetAnalysisResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analyze-batch": {
+      "post": {
+        "summary": "Analyze Batch",
+        "description": "Batch analyze multiple texts with optional asset filter.\n\nBackpressure controls:\n- ``MAX_BATCH_SIZE`` (env ``BATCH_MAX_SIZE``, default 200): oversized\n  requests are rejected with 413.\n- ``MAX_CONCURRENT_BATCHES`` (env ``BATCH_MAX_CONCURRENT``, default 4):\n  concurrent batch work is bounded by an ``asyncio.Semaphore``.\n  Requests beyond the bound receive 429 with ``Retry-After``.\n- Per-item error isolation: individual item failures are returned as\n  error entries instead of failing the whole batch.\n- Synchronous sentiment analysis is offloaded to a\n  ``ThreadPoolExecutor`` so the event loop stays responsive for\n  ``/health`` and ``/metrics``.",
+        "operationId": "analyze_batch_analyze_batch_post",
+        "parameters": [
+          {
+            "name": "asset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "title": "Texts"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Analyze Batch Analyze Batch Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sentiment/legend": {
+      "get": {
+        "summary": "Get Sentiment Legend",
+        "description": "Return the colour legend that frontend clients use to render\nsentiment badge tooltips.\n\nNo authentication required \u2014 purely informational.\n\nReturns a list of objects with keys:\n- color       : semantic name (\"green\" | \"red\" | \"gray\")\n- hex_color   : CSS hex value\n- label       : human-readable label (\"Bullish\" | \"Bearish\" | \"Neutral\")\n- description : tooltip copy\n- score_range : score boundary description",
+        "operationId": "get_sentiment_legend_sentiment_legend_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Sentiment Legend Sentiment Legend Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/retrain": {
+      "post": {
+        "summary": "Trigger Retraining",
+        "description": "Trigger an immediate model retraining run.\n\nRuns synchronously in a thread pool so the HTTP response is returned\nonly after retraining completes (or fails). For long-running production\nretrains, consider making this async with a task queue.\n\nRequires X-API-Key header.",
+        "operationId": "trigger_retraining_retrain_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetrainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetrainResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/status": {
+      "get": {
+        "summary": "Model Status",
+        "description": "Return the current model registry state and last retraining run metadata.\n\nRequires X-API-Key header.",
+        "operationId": "model_status_model_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/shadow/register": {
+      "post": {
+        "summary": "Shadow Register",
+        "description": "Register a saved model version to run in shadow mode.\n\nThe shadow model runs alongside the live model without affecting\nresponses.  Both predictions are logged for comparison.\n\nRequires X-API-Key header.",
+        "operationId": "shadow_register_model_shadow_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShadowRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShadowRegisterResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/shadow/promote": {
+      "post": {
+        "summary": "Shadow Promote",
+        "description": "Promote the shadow model to live with zero downtime.\n\nThe shadow version becomes the current live model atomically.\nAfter promotion the shadow registration is cleared.\n\nPromote-from-shadow is a single documented operation with implicit\nroll-forward semantics.  To undo, call /model/rollback with the\nprevious version.\n\nRequires X-API-Key header.",
+        "operationId": "shadow_promote_model_shadow_promote_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShadowPromoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShadowPromoteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/shadow/unregister": {
+      "post": {
+        "summary": "Shadow Unregister",
+        "description": "Remove a shadow model registration without promoting it (rollback).\n\nThe shadow model is discarded and the live model remains unchanged.\n\nRequires X-API-Key header.",
+        "operationId": "shadow_unregister_model_shadow_unregister_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShadowPromoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShadowUnregisterResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/rollback": {
+      "post": {
+        "summary": "Model Rollback",
+        "description": "Rollback a model to a specified previous version.\n\nIf target_version is omitted, rolls back to the previous version\n(sorted descending by semver).\n\nThis is the counterpart to promote_shadow: after promoting a shadow\nto live, use this endpoint to revert if needed.\n\nRequires X-API-Key header.",
+        "operationId": "model_rollback_model_rollback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollbackResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/shadow/status": {
+      "get": {
+        "summary": "Shadow Status",
+        "description": "Return the current shadow deployment status for all model types.\n\nRequires X-API-Key header.",
+        "operationId": "shadow_status_model_shadow_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllShadowStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/shadow/comparison-report": {
+      "get": {
+        "summary": "Shadow Comparison Report",
+        "description": "Generate a comparison report between live and shadow model predictions.\n\nThe report summarizes:\n  - Agreement rate (exact match and directional agreement)\n  - Divergence patterns across time\n  - Latency overhead statistics\n  - Timeout occurrences\n  - A recommendation on whether to promote\n\nRequires X-API-Key header.",
+        "operationId": "shadow_comparison_report_model_shadow_comparison_report_get",
+        "parameters": [
+          {
+            "name": "model_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Model type, e.g. 'sentiment'",
+              "title": "Model Type"
+            },
+            "description": "Model type, e.g. 'sentiment'"
+          },
+          {
+            "name": "window_hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 720,
+              "minimum": 1,
+              "description": "Time window in hours (1\u2013720)",
+              "default": 24,
+              "title": "Window Hours"
+            },
+            "description": "Time window in hours (1\u2013720)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComparisonReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/shadow/comparison-log": {
+      "get": {
+        "summary": "Shadow Comparison Log",
+        "description": "Retrieve raw comparison log entries between live and shadow predictions.\n\nReturns the most recent entries first.\n\nRequires X-API-Key header.",
+        "operationId": "shadow_comparison_log_model_shadow_comparison_log_get",
+        "parameters": [
+          {
+            "name": "model_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Model type, e.g. 'sentiment'",
+              "title": "Model Type"
+            },
+            "description": "Model type, e.g. 'sentiment'"
+          },
+          {
+            "name": "window_hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 720,
+              "minimum": 1,
+              "description": "Time window in hours (1\u2013720)",
+              "default": 24,
+              "title": "Window Hours"
+            },
+            "description": "Time window in hours (1\u2013720)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10000,
+              "minimum": 1,
+              "default": 1000,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComparisonLogResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Shadow Clear Comparison Log",
+        "description": "Clear comparison log for housekeeping.\n\nRequires X-API-Key header.",
+        "operationId": "shadow_clear_comparison_log_model_shadow_comparison_log_delete",
+        "parameters": [
+          {
+            "name": "model_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Model type, e.g. 'sentiment'",
+              "title": "Model Type"
+            },
+            "description": "Model type, e.g. 'sentiment'"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Shadow Clear Comparison Log Model Shadow Comparison Log Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/prediction-logs": {
+      "get": {
+        "summary": "Get Prediction Logs",
+        "description": "Query prediction logs by model version to isolate suspect outputs.\nRequires X-API-Key header.",
+        "operationId": "get_prediction_logs_model_prediction_logs_get",
+        "parameters": [
+          {
+            "name": "model_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Model version to filter by",
+              "title": "Model Version"
+            },
+            "description": "Model version to filter by"
+          },
+          {
+            "name": "model_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional model type",
+              "title": "Model Type"
+            },
+            "description": "Optional model type"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Prediction Logs Model Prediction Logs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/forecast": {
+      "get": {
+        "summary": "Get Forecast",
+        "description": "Predict market trends (Bullish / Bearish / Neutral) for the next 24-48 hours.\n\nUses historical sentiment data from *analytics.jsonl* to train a\nSentimentForecaster (Prophet when installed, sklearn Ridge otherwise)\nand returns predicted health scores together with a Sentiment Velocity\nvalue that measures how fast the market mood is changing.\n\nRequires X-API-Key header.",
+        "operationId": "get_forecast_analytics_forecast_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/correlation/analyze": {
+      "post": {
+        "summary": "Analyze Correlation",
+        "description": "Analyze correlation between sentiment and price/volume data.\n\nReturns correlation scores (-1 to 1) and scatter plot data points.\nRequires X-API-Key header.",
+        "operationId": "analyze_correlation_correlation_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrelationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/correlation/lag-analysis": {
+      "post": {
+        "summary": "Analyze Lag Correlation",
+        "description": "Analyze correlation across multiple time lags to find optimal lead time.\n\nReturns the best lag hours and correlation strength for predicting market changes.\nRequires X-API-Key header.",
+        "operationId": "analyze_lag_correlation_correlation_lag_analysis_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LagAnalysisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LagAnalysisResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/kpis/daily-snapshots": {
+      "get": {
+        "summary": "Get Daily Kpi Snapshots",
+        "description": "Retrieve historical daily on-chain KPI snapshots.\nRequires X-API-Key header.",
+        "operationId": "get_daily_kpi_snapshots_analytics_kpis_daily_snapshots_get",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start date (YYYY-MM-DD)",
+              "title": "Start Date"
+            },
+            "description": "Start date (YYYY-MM-DD)"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End date (YYYY-MM-DD)",
+              "title": "End Date"
+            },
+            "description": "End date (YYYY-MM-DD)"
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Period type (default: daily)",
+              "default": "daily",
+              "title": "Period"
+            },
+            "description": "Period type (default: daily)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DailyKPISnapshotResponse"
+                  },
+                  "title": "Response Get Daily Kpi Snapshots Analytics Kpis Daily Snapshots Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/kpis/daily-snapshots/run": {
+      "post": {
+        "summary": "Trigger Daily Kpi Snapshot",
+        "description": "Trigger manual generation of a daily on-chain KPI snapshot.\nSkips duplicate snapshot creation if a snapshot for target_date and period already exists.\nRequires X-API-Key header.",
+        "operationId": "trigger_daily_kpi_snapshot_analytics_kpis_daily_snapshots_run_post",
+        "parameters": [
+          {
+            "name": "target_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target date (YYYY-MM-DD)",
+              "title": "Target Date"
+            },
+            "description": "Target date (YYYY-MM-DD)"
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Period identifier",
+              "default": "daily",
+              "title": "Period"
+            },
+            "description": "Period identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyKPISnapshotRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "ActionResponse"
+      },
+      "AllShadowStatusResponse": {
+        "properties": {
+          "shadows": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Shadows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "shadows"
+        ],
+        "title": "AllShadowStatusResponse"
+      },
+      "AnalyzeRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "asset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "AnalyzeRequest"
+      },
+      "AnalyzeResponse": {
+        "properties": {
+          "sentiment": {
+            "type": "number",
+            "title": "Sentiment"
+          },
+          "asset_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Asset Codes",
+            "default": []
+          },
+          "sentiment_label": {
+            "type": "string",
+            "title": "Sentiment Label",
+            "default": ""
+          },
+          "indicator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SentimentIndicatorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "sentiment"
+        ],
+        "title": "AnalyzeResponse"
+      },
+      "AssetAnalysisResponse": {
+        "properties": {
+          "asset": {
+            "type": "string",
+            "title": "Asset"
+          },
+          "sentiment": {
+            "type": "number",
+            "title": "Sentiment"
+          },
+          "sentiment_label": {
+            "type": "string",
+            "title": "Sentiment Label"
+          },
+          "analysis_count": {
+            "type": "integer",
+            "title": "Analysis Count"
+          },
+          "asset_distribution": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Asset Distribution",
+            "default": {}
+          },
+          "sentiment_distribution": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Sentiment Distribution",
+            "default": {}
+          },
+          "indicator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SentimentIndicatorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset",
+          "sentiment",
+          "sentiment_label",
+          "analysis_count"
+        ],
+        "title": "AssetAnalysisResponse"
+      },
+      "ComparisonLogResponse": {
+        "properties": {
+          "model_type": {
+            "type": "string",
+            "title": "Model Type"
+          },
+          "window_hours": {
+            "type": "integer",
+            "title": "Window Hours"
+          },
+          "entries": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_type",
+          "window_hours",
+          "entries",
+          "total"
+        ],
+        "title": "ComparisonLogResponse"
+      },
+      "ComparisonReportResponse": {
+        "properties": {
+          "report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "title": "ComparisonReportResponse"
+      },
+      "ContractLagResponse": {
+        "properties": {
+          "checked_at": {
+            "type": "string",
+            "title": "Checked At"
+          },
+          "snapshots": {
+            "items": {
+              "$ref": "#/components/schemas/ContractLagSnapshotResponse"
+            },
+            "type": "array",
+            "title": "Snapshots",
+            "default": []
+          },
+          "lag_alerts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Lag Alerts",
+            "default": []
+          },
+          "healthy": {
+            "type": "boolean",
+            "title": "Healthy",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "checked_at"
+        ],
+        "title": "ContractLagResponse"
+      },
+      "ContractLagSnapshotResponse": {
+        "properties": {
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
+          },
+          "lag_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lag Seconds"
+          },
+          "latest_onchain_ts": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Onchain Ts"
+          },
+          "latest_processed_ts": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Processed Ts"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "warning_threshold_seconds": {
+            "type": "number",
+            "title": "Warning Threshold Seconds"
+          },
+          "critical_threshold_seconds": {
+            "type": "number",
+            "title": "Critical Threshold Seconds"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain",
+          "severity",
+          "warning_threshold_seconds",
+          "critical_threshold_seconds"
+        ],
+        "title": "ContractLagSnapshotResponse"
+      },
+      "ContributorActivityEventResponse": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "contract_id": {
+            "type": "string",
+            "title": "Contract Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "contributor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contributor"
+          },
+          "ledger": {
+            "type": "integer",
+            "title": "Ledger"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          },
+          "event_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Type"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "milestone_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Id"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "topics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Topics",
+            "default": []
+          },
+          "raw_data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "contract_id",
+          "ledger",
+          "category"
+        ],
+        "title": "ContributorActivityEventResponse"
+      },
+      "ContributorActivityTimelineResponse": {
+        "properties": {
+          "contributor": {
+            "type": "string",
+            "title": "Contributor"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ContributorActivityEventResponse"
+            },
+            "type": "array",
+            "title": "Events",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "contributor"
+        ],
+        "title": "ContributorActivityTimelineResponse"
+      },
+      "CorrelationDataPoint": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "score"
+        ],
+        "title": "CorrelationDataPoint"
+      },
+      "CorrelationRequest": {
+        "properties": {
+          "sentiment_data": {
+            "items": {
+              "$ref": "#/components/schemas/CorrelationDataPoint"
+            },
+            "type": "array",
+            "title": "Sentiment Data"
+          },
+          "price_data": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MetricDataPoint"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Data"
+          },
+          "volume_data": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MetricDataPoint"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Data"
+          },
+          "lag_hours": {
+            "type": "integer",
+            "title": "Lag Hours",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "sentiment_data"
+        ],
+        "title": "CorrelationRequest"
+      },
+      "CorrelationResponse": {
+        "properties": {
+          "price_correlation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Correlation"
+          },
+          "volume_correlation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Correlation"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "summary"
+        ],
+        "title": "CorrelationResponse"
+      },
+      "CursorListResponse": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "cursors": {
+            "items": {
+              "$ref": "#/components/schemas/CursorResponse"
+            },
+            "type": "array",
+            "title": "Cursors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "cursors"
+        ],
+        "title": "CursorListResponse"
+      },
+      "CursorResponse": {
+        "properties": {
+          "stream_id": {
+            "type": "string",
+            "title": "Stream Id"
+          },
+          "last_ingested_ledger": {
+            "type": "integer",
+            "title": "Last Ingested Ledger"
+          },
+          "safe_ledger": {
+            "type": "integer",
+            "title": "Safe Ledger"
+          },
+          "last_event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Event Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stream_id",
+          "last_ingested_ledger",
+          "safe_ledger",
+          "last_event_id",
+          "status",
+          "error_message",
+          "updated_at",
+          "created_at"
+        ],
+        "title": "CursorResponse"
+      },
+      "CursorStatusResponse": {
+        "properties": {
+          "stream_id": {
+            "type": "string",
+            "title": "Stream Id",
+            "description": "Stream ID"
+          },
+          "last_ingested_ledger": {
+            "type": "integer",
+            "title": "Last Ingested Ledger",
+            "description": "Last ingested ledger"
+          },
+          "safe_ledger": {
+            "type": "integer",
+            "title": "Safe Ledger",
+            "description": "Safe ledger for rollback"
+          },
+          "last_event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Event Id",
+            "description": "Last event ID"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Status (idle, ingesting, failed)"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message",
+            "description": "Error message if failed"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "Last update time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stream_id",
+          "last_ingested_ledger",
+          "safe_ledger",
+          "status"
+        ],
+        "title": "CursorStatusResponse",
+        "description": "Response model for cursor status."
+      },
+      "DailyKPISnapshotResponse": {
+        "properties": {
+          "snapshot_date": {
+            "type": "string",
+            "title": "Snapshot Date"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "tvl": {
+            "type": "number",
+            "title": "Tvl"
+          },
+          "volume": {
+            "type": "number",
+            "title": "Volume"
+          },
+          "active_rounds": {
+            "type": "integer",
+            "title": "Active Rounds"
+          },
+          "contribution_count": {
+            "type": "integer",
+            "title": "Contribution Count"
+          },
+          "unique_contributors": {
+            "type": "integer",
+            "title": "Unique Contributors"
+          },
+          "extra_data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Data"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "snapshot_date",
+          "period",
+          "tvl",
+          "volume",
+          "active_rounds",
+          "contribution_count",
+          "unique_contributors"
+        ],
+        "title": "DailyKPISnapshotResponse"
+      },
+      "DailyKPISnapshotRunResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "tvl": {
+            "type": "number",
+            "title": "Tvl"
+          },
+          "volume": {
+            "type": "number",
+            "title": "Volume"
+          },
+          "active_rounds": {
+            "type": "integer",
+            "title": "Active Rounds"
+          },
+          "contribution_count": {
+            "type": "integer",
+            "title": "Contribution Count"
+          },
+          "unique_contributors": {
+            "type": "integer",
+            "title": "Unique Contributors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message",
+          "date",
+          "period",
+          "tvl",
+          "volume",
+          "active_rounds",
+          "contribution_count",
+          "unique_contributors"
+        ],
+        "title": "DailyKPISnapshotRunResponse"
+      },
+      "ForecastResponse": {
+        "properties": {
+          "predicted_trend_24h": {
+            "type": "string",
+            "title": "Predicted Trend 24H"
+          },
+          "predicted_trend_48h": {
+            "type": "string",
+            "title": "Predicted Trend 48H"
+          },
+          "confidence_24h": {
+            "type": "number",
+            "title": "Confidence 24H"
+          },
+          "confidence_48h": {
+            "type": "number",
+            "title": "Confidence 48H"
+          },
+          "sentiment_velocity": {
+            "type": "number",
+            "title": "Sentiment Velocity"
+          },
+          "forecast_score_24h": {
+            "type": "number",
+            "title": "Forecast Score 24H"
+          },
+          "forecast_score_48h": {
+            "type": "number",
+            "title": "Forecast Score 48H"
+          },
+          "model_backend": {
+            "type": "string",
+            "title": "Model Backend"
+          },
+          "data_points_used": {
+            "type": "integer",
+            "title": "Data Points Used"
+          },
+          "generated_at": {
+            "type": "string",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "predicted_trend_24h",
+          "predicted_trend_48h",
+          "confidence_24h",
+          "confidence_48h",
+          "sentiment_velocity",
+          "forecast_score_24h",
+          "forecast_score_48h",
+          "model_backend",
+          "data_points_used",
+          "generated_at"
+        ],
+        "title": "ForecastResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "service": {
+            "type": "string",
+            "title": "Service"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "timestamp",
+          "service"
+        ],
+        "title": "HealthResponse"
+      },
+      "IngestionAlertingStatusResponse": {
+        "properties": {
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "metrics": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Metrics",
+            "default": []
+          },
+          "lag_alerts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Lag Alerts",
+            "default": []
+          },
+          "recent_source_failures": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Source Failures",
+            "default": []
+          },
+          "healthy": {
+            "type": "boolean",
+            "title": "Healthy",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "IngestionAlertingStatusResponse"
+      },
+      "IngestionQualityRunRequest": {
+        "properties": {
+          "network": {
+            "type": "string",
+            "title": "Network",
+            "default": "testnet"
+          },
+          "asset": {
+            "type": "string",
+            "title": "Asset",
+            "default": "XLM"
+          },
+          "ingestion_lag_seconds": {
+            "type": "integer",
+            "title": "Ingestion Lag Seconds",
+            "default": 300
+          },
+          "duplicate_window_hours": {
+            "type": "integer",
+            "title": "Duplicate Window Hours",
+            "default": 24
+          },
+          "drift_compare_window_hours": {
+            "type": "integer",
+            "title": "Drift Compare Window Hours",
+            "default": 24
+          },
+          "drift_ratio_threshold": {
+            "type": "number",
+            "title": "Drift Ratio Threshold",
+            "default": 0.05
+          },
+          "drift_hours": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drift Hours",
+            "default": "24,48"
+          },
+          "manual_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Run Id"
+          }
+        },
+        "type": "object",
+        "title": "IngestionQualityRunRequest"
+      },
+      "IngestionQualityRunResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version"
+          },
+          "generated_at": {
+            "type": "string",
+            "title": "Generated At"
+          },
+          "network": {
+            "type": "string",
+            "title": "Network"
+          },
+          "asset": {
+            "type": "string",
+            "title": "Asset"
+          },
+          "manual_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Run Id"
+          },
+          "thresholds": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Thresholds"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Summary"
+          },
+          "findings": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Findings"
+          },
+          "exit_code": {
+            "type": "integer",
+            "title": "Exit Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "schema_version",
+          "generated_at",
+          "network",
+          "asset",
+          "thresholds",
+          "summary",
+          "findings",
+          "exit_code"
+        ],
+        "title": "IngestionQualityRunResponse"
+      },
+      "IngestionRequest": {
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id",
+            "description": "Account ID to ingest operations for"
+          },
+          "from_ledger": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Ledger",
+            "description": "Starting ledger for backfill"
+          },
+          "to_ledger": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Ledger",
+            "description": "Ending ledger for backfill"
+          },
+          "max_operations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Operations",
+            "description": "Maximum operations to ingest"
+          }
+        },
+        "type": "object",
+        "title": "IngestionRequest",
+        "description": "Request model for triggering ingestion."
+      },
+      "IngestionResponse": {
+        "properties": {
+          "operations_processed": {
+            "type": "integer",
+            "title": "Operations Processed",
+            "description": "Total operations processed"
+          },
+          "operations_ingested": {
+            "type": "integer",
+            "title": "Operations Ingested",
+            "description": "New operations ingested"
+          },
+          "operations_duplicate": {
+            "type": "integer",
+            "title": "Operations Duplicate",
+            "description": "Duplicate operations skipped"
+          },
+          "operations_failed": {
+            "type": "integer",
+            "title": "Operations Failed",
+            "description": "Failed operations"
+          },
+          "start_ledger": {
+            "type": "integer",
+            "title": "Start Ledger",
+            "description": "Starting ledger"
+          },
+          "end_ledger": {
+            "type": "integer",
+            "title": "End Ledger",
+            "description": "Ending ledger"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time",
+            "description": "Start time"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time",
+            "description": "End time"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds",
+            "description": "Duration in seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operations_processed",
+          "operations_ingested",
+          "operations_duplicate",
+          "operations_failed",
+          "start_ledger",
+          "end_ledger"
+        ],
+        "title": "IngestionResponse",
+        "description": "Response model for ingestion results."
+      },
+      "KPIResponse": {
+        "properties": {
+          "tvl": {
+            "type": "number",
+            "title": "Tvl",
+            "description": "Total Value Locked"
+          },
+          "volume": {
+            "type": "number",
+            "title": "Volume",
+            "description": "Cumulative volume"
+          },
+          "active_rounds": {
+            "type": "integer",
+            "title": "Active Rounds",
+            "description": "Number of active funding rounds"
+          },
+          "contribution_count": {
+            "type": "integer",
+            "title": "Contribution Count",
+            "description": "Total number of contributions"
+          },
+          "unique_contributors": {
+            "type": "integer",
+            "title": "Unique Contributors",
+            "description": "Number of unique contributors"
+          },
+          "snapshot_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Date",
+            "description": "Date of snapshot"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "Last update timestamp"
+          },
+          "extra_data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Data",
+            "description": "Additional metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tvl",
+          "volume",
+          "active_rounds",
+          "contribution_count",
+          "unique_contributors"
+        ],
+        "title": "KPIResponse",
+        "description": "Response model for KPI data."
+      },
+      "KPISeriesResponse": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date",
+            "description": "Date of snapshot"
+          },
+          "tvl": {
+            "type": "number",
+            "title": "Tvl",
+            "description": "Total Value Locked"
+          },
+          "volume": {
+            "type": "number",
+            "title": "Volume",
+            "description": "Cumulative volume"
+          },
+          "active_rounds": {
+            "type": "integer",
+            "title": "Active Rounds",
+            "description": "Number of active funding rounds"
+          },
+          "contribution_count": {
+            "type": "integer",
+            "title": "Contribution Count",
+            "description": "Total number of contributions"
+          },
+          "unique_contributors": {
+            "type": "integer",
+            "title": "Unique Contributors",
+            "description": "Number of unique contributors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "tvl",
+          "volume",
+          "active_rounds",
+          "contribution_count",
+          "unique_contributors"
+        ],
+        "title": "KPISeriesResponse",
+        "description": "Response model for KPI time series."
+      },
+      "LagAnalysisRequest": {
+        "properties": {
+          "sentiment_data": {
+            "items": {
+              "$ref": "#/components/schemas/CorrelationDataPoint"
+            },
+            "type": "array",
+            "title": "Sentiment Data"
+          },
+          "metric_data": {
+            "items": {
+              "$ref": "#/components/schemas/MetricDataPoint"
+            },
+            "type": "array",
+            "title": "Metric Data"
+          },
+          "metric_type": {
+            "type": "string",
+            "title": "Metric Type",
+            "default": "volume"
+          },
+          "max_lag_hours": {
+            "type": "integer",
+            "title": "Max Lag Hours",
+            "default": 24
+          }
+        },
+        "type": "object",
+        "required": [
+          "sentiment_data",
+          "metric_data"
+        ],
+        "title": "LagAnalysisRequest"
+      },
+      "LagAnalysisResponse": {
+        "properties": {
+          "best_lag_hours": {
+            "type": "integer",
+            "title": "Best Lag Hours"
+          },
+          "best_correlation": {
+            "type": "number",
+            "title": "Best Correlation"
+          },
+          "lag_analysis": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Lag Analysis"
+          },
+          "recommendation": {
+            "type": "string",
+            "title": "Recommendation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "best_lag_hours",
+          "best_correlation",
+          "lag_analysis",
+          "recommendation"
+        ],
+        "title": "LagAnalysisResponse"
+      },
+      "MetricDataPoint": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "value"
+        ],
+        "title": "MetricDataPoint"
+      },
+      "ModelStatusResponse": {
+        "properties": {
+          "last_run": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Last Run"
+          },
+          "registry": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Registry"
+          }
+        },
+        "type": "object",
+        "required": [
+          "last_run",
+          "registry"
+        ],
+        "title": "ModelStatusResponse"
+      },
+      "NewsArticleResponse": {
+        "properties": {
+          "article_id": {
+            "type": "string",
+            "title": "Article Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "primary_asset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Asset"
+          },
+          "asset_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Asset Codes",
+            "default": []
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Categories",
+            "default": []
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords",
+            "default": []
+          },
+          "detected_entities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Detected Entities",
+            "default": []
+          },
+          "onchain_entity_links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Onchain Entity Links",
+            "default": []
+          },
+          "sentiment_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sentiment Score"
+          },
+          "sentiment_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sentiment Label"
+          },
+          "indicator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SentimentIndicatorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "article_id",
+          "title"
+        ],
+        "title": "NewsArticleResponse"
+      },
+      "OperationResponse": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id",
+            "description": "Operation ID"
+          },
+          "tx_id": {
+            "type": "string",
+            "title": "Tx Id",
+            "description": "Transaction ID"
+          },
+          "operation_type": {
+            "type": "string",
+            "title": "Operation Type",
+            "description": "Type of operation"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount",
+            "description": "Amount"
+          },
+          "asset_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Code",
+            "description": "Asset code"
+          },
+          "asset_issuer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Issuer",
+            "description": "Asset issuer"
+          },
+          "to_account": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Account",
+            "description": "Destination account"
+          },
+          "from_account": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Account",
+            "description": "Source account"
+          },
+          "ledger": {
+            "type": "integer",
+            "title": "Ledger",
+            "description": "Ledger sequence"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "Creation time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "tx_id",
+          "operation_type",
+          "ledger"
+        ],
+        "title": "OperationResponse",
+        "description": "Response model for account operation."
+      },
+      "RebuildRequest": {
+        "properties": {
+          "dataset": {
+            "type": "string",
+            "title": "Dataset",
+            "description": "Dataset to rebuild"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id",
+            "description": "Contract ID to scope rebuild"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "description": "Force rebuild even if in progress",
+            "default": false
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key",
+            "description": "Idempotency key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset"
+        ],
+        "title": "RebuildRequest",
+        "description": "Request model for triggering a rebuild."
+      },
+      "RebuildResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Status of rebuild"
+          },
+          "totalItems": {
+            "type": "integer",
+            "title": "Totalitems",
+            "description": "Total items processed",
+            "default": 0
+          },
+          "processedItems": {
+            "type": "integer",
+            "title": "Processeditems",
+            "description": "Items successfully processed",
+            "default": 0
+          },
+          "failedItems": {
+            "type": "integer",
+            "title": "Faileditems",
+            "description": "Items that failed",
+            "default": 0
+          },
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details",
+            "description": "Additional details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "RebuildResponse",
+        "description": "Response model for rebuild results."
+      },
+      "RecomputeResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Whether recompute was triggered successfully"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Status message"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id",
+            "description": "Task ID for async jobs"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result",
+            "description": "Recompute results if sync"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "RecomputeResponse",
+        "description": "Response model for recompute trigger."
+      },
+      "ResetCursorRequest": {
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id",
+            "description": "Account ID"
+          },
+          "ledger": {
+            "type": "integer",
+            "title": "Ledger",
+            "description": "Ledger to reset to",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ResetCursorRequest",
+        "description": "Request model for resetting cursor."
+      },
+      "ResumeResponse": {
+        "properties": {
+          "stream_id": {
+            "type": "string",
+            "title": "Stream Id"
+          },
+          "resumed_from_ledger": {
+            "type": "integer",
+            "title": "Resumed From Ledger"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stream_id",
+          "resumed_from_ledger",
+          "message"
+        ],
+        "title": "ResumeResponse"
+      },
+      "RetrainRequest": {
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "RetrainRequest"
+      },
+      "RetrainResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "models": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Models",
+            "default": {}
+          },
+          "registry": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Registry",
+            "default": {}
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "RetrainResponse"
+      },
+      "ReviewQueueItemResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "article_id": {
+            "type": "string",
+            "title": "Article Id"
+          },
+          "stable_entity_id": {
+            "type": "string",
+            "title": "Stable Entity Id"
+          },
+          "entity_type": {
+            "type": "string",
+            "title": "Entity Type"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "matched_text": {
+            "type": "string",
+            "title": "Matched Text"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "supporting_evidence": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supporting Evidence"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "corrected_entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corrected Entity Id"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "article_id",
+          "stable_entity_id",
+          "entity_type",
+          "display_name",
+          "matched_text",
+          "confidence",
+          "status",
+          "created_at"
+        ],
+        "title": "ReviewQueueItemResponse"
+      },
+      "RollbackRequest": {
+        "properties": {
+          "model_type": {
+            "type": "string",
+            "title": "Model Type"
+          },
+          "target_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_type"
+        ],
+        "title": "RollbackRequest"
+      },
+      "RollbackResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "model_type": {
+            "type": "string",
+            "title": "Model Type"
+          },
+          "previous_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Version"
+          },
+          "new_version": {
+            "type": "string",
+            "title": "New Version"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "model_type",
+          "new_version",
+          "message"
+        ],
+        "title": "RollbackResponse"
+      },
+      "SentimentIndicatorResponse": {
+        "properties": {
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "color": {
+            "type": "string",
+            "title": "Color"
+          },
+          "hex_color": {
+            "type": "string",
+            "title": "Hex Color"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "display_text": {
+            "type": "string",
+            "title": "Display Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "color",
+          "hex_color",
+          "label",
+          "display_text"
+        ],
+        "title": "SentimentIndicatorResponse",
+        "description": "Visual indicator fields attached to every sentiment-bearing response."
+      },
+      "SentimentLabelRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Text"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "labeller": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Labeller"
+          },
+          "is_held_out": {
+            "type": "boolean",
+            "title": "Is Held Out",
+            "default": false
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "label",
+          "labeller"
+        ],
+        "title": "SentimentLabelRequest"
+      },
+      "SentimentLabelResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "labeller": {
+            "type": "string",
+            "title": "Labeller"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "is_held_out": {
+            "type": "boolean",
+            "title": "Is Held Out"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "label",
+          "labeller",
+          "timestamp",
+          "is_held_out"
+        ],
+        "title": "SentimentLabelResponse"
+      },
+      "ShadowPromoteRequest": {
+        "properties": {
+          "model_type": {
+            "type": "string",
+            "title": "Model Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_type"
+        ],
+        "title": "ShadowPromoteRequest"
+      },
+      "ShadowPromoteResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "model_type": {
+            "type": "string",
+            "title": "Model Type"
+          },
+          "new_live_version": {
+            "type": "string",
+            "title": "New Live Version"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "model_type",
+          "new_live_version",
+          "message"
+        ],
+        "title": "ShadowPromoteResponse"
+      },
+      "ShadowRegisterRequest": {
+        "properties": {
+          "model_type": {
+            "type": "string",
+            "title": "Model Type"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_type",
+          "version"
+        ],
+        "title": "ShadowRegisterRequest"
+      },
+      "ShadowRegisterResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "model_type": {
+            "type": "string",
+            "title": "Model Type"
+          },
+          "shadow_version": {
+            "type": "string",
+            "title": "Shadow Version"
+          },
+          "live_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Version"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "model_type",
+          "shadow_version",
+          "message"
+        ],
+        "title": "ShadowRegisterResponse"
+      },
+      "ShadowUnregisterResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "model_type": {
+            "type": "string",
+            "title": "Model Type"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "model_type",
+          "message"
+        ],
+        "title": "ShadowUnregisterResponse"
+      },
+      "UpdateReviewStatusRequest": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Must be approved, rejected, corrected, or pending"
+          },
+          "corrected_entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corrected Entity Id",
+            "description": "Optional stable entity ID if status is 'corrected'"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "UpdateReviewStatusRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

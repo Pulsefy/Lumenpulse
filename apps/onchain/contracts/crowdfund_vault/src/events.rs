@@ -38,6 +38,17 @@ pub struct MilestoneApprovedEvent {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneDecisionEvent {
+    #[topic]
+    pub admin: Address,
+    #[topic]
+    pub project_id: u64,
+    pub milestone_id: u32,
+    pub approved: bool,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WithdrawEvent {
     #[topic]
     pub owner: Address,
@@ -211,4 +222,53 @@ pub struct StorageMigratedEvent {
     #[topic]
     pub admin: Address,
     pub storage_version: u32,
+}
+
+// ── Emergency migration events (issue #1047) ──────────────────────────────────
+
+/// Emitted when an admin registers an emergency migration plan for a paused round.
+/// Off-chain monitors should alert on this event for governance review.
+///
+/// Data kept to two fields to stay within Soroban's contractevent data-field limit.
+/// The full plan (including recipient, reason, and proposed_at) can be read from
+/// on-chain storage via `get_emergency_migration_plan`.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EmrgMigrProposedEvent {
+    /// Admin who registered the plan.
+    #[topic]
+    pub proposed_by: Address,
+    /// Project with stranded funds.
+    #[topic]
+    pub project_id: u64,
+    /// Amount to be migrated (as proposed).
+    pub amount: i128,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EmrgMigrExecutedEvent {
+    /// Admin who executed the plan.
+    #[topic]
+    pub executed_by: Address,
+    /// Project from which funds were migrated.
+    #[topic]
+    pub project_id: u64,
+    /// Exact amount transferred to the recipient.
+    pub amount: i128,
+}
+
+/// Emitted when an admin vetoes a pending emergency migration plan.
+/// A vetoed plan can never be executed.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EmergencyMigrationVetoedEvent {
+    /// Admin who issued the veto.
+    #[topic]
+    pub vetoed_by: Address,
+    /// The project for which the plan was vetoed.
+    #[topic]
+    pub project_id: u64,
+    /// Ledger timestamp of the veto.
+    pub vetoed_at: u64,
 }

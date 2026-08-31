@@ -1,11 +1,14 @@
 "use client";
 
-import { TrendingUp, TrendingDown, Star } from "lucide-react";
+import { TrendingUp, TrendingDown, Star, Coins, AlertTriangle } from "lucide-react";
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { CryptoApiService, transformCryptoData, CryptoApiData } from "@/lib/api-services";
+import { CryptoApiService, transformCryptoData, CryptoMarketResult } from "@/lib/api-services";
 import { WatchlistItemType } from "@/lib/watchlist-service";
-import { WatchlistProvider, useWatchlist } from "@/hooks/use-watchlist";
+import { useWatchlist } from "@/hooks/use-watchlist";
+import { ListSkeleton } from "@/components/ui/list-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ListError } from "@/components/ui/list-error";
 
 interface CryptoData {
   id: number;
@@ -30,6 +33,8 @@ export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: 
   const [cryptoData, setCryptoData] = useState<CryptoData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isStale, setIsStale] = useState<boolean>(false);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<number[]>([]);
   const watchlist = useWatchlist();
   const toggleItem = showWatchlistToggle ? watchlist.toggleItem : async () => ({ added: false });
@@ -42,44 +47,24 @@ export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: 
       setError(null);
       
       try {
-        const apiData = await CryptoApiService.getTopCryptocurrencies(20);
-        const transformedData = apiData.map(transformCryptoData);
+        const result: CryptoMarketResult = await CryptoApiService.getTopCryptocurrencies(20);
+        const transformedData = result.data.map(transformCryptoData);
         setCryptoData(transformedData);
+        setIsStale(Boolean(result.stale));
+        setCachedAt(result.cachedAt ?? null);
+        if (result.error && transformedData.length === 0) {
+          setError(result.error.message);
+        } else if (result.error) {
+          setError(result.error.message);
+        }
       } catch (err) {
         console.error('Error fetching crypto data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load cryptocurrency data');
-        
-        // Fallback to mock data if API fails
-        const mockCryptoData = [
-          {
-            id: 1,
-            name: "Bitcoin",
-            symbol: "BTC",
-            icon: "/crypto-icons/btc.png",
-            price: 84127.12,
-            change1h: 0.0,
-            change24h: 3.8,
-            change7d: -2.9,
-            volume24h: 29483607871,
-            marketCap: 1669278945761,
-            sparkline: [65, 59, 80, 81, 56, 55, 40, 60, 70, 45, 50, 55, 70, 75, 65],
-          },
-          {
-            id: 2,
-            name: "USD Coin",
-            symbol: "USDC",
-            icon: "/crypto-icons/usdc.png",
-            price: 1.0,
-            change1h: 0.0,
-            change24h: 0.01,
-            change7d: 0.0,
-            volume24h: 7654321098,
-            marketCap: 43210000000,
-            sparkline: [70, 65, 60, 65, 55, 40, 45, 60, 75, 60, 50, 55, 65, 70, 60],
-          },
-          // Add more mock data as needed...
-        ];
-        setCryptoData(mockCryptoData);
+        if (cryptoData.length === 0) {
+          setError(err instanceof Error ? err.message : 'Failed to load cryptocurrency data');
+        } else {
+          setIsStale(true);
+          setError(err instanceof Error ? err.message : 'Showing stale data — refresh failed');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -93,7 +78,8 @@ export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: 
   }, []);
 
   const toggleFavorite = async (crypto: CryptoData) => {
-    if (favorites.includes(crypto.id)) {
+    const isAdding = !favorites.includes(crypto.id);
+    if (!isAdding) {
       setFavorites(favorites.filter((favId) => favId !== crypto.id));
     } else {
       setFavorites([...favorites, crypto.id]);
@@ -109,7 +95,12 @@ export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: 
           imageUrl: crypto.icon,
         });
       } catch {
-        // Silently fail - local state still works
+        // Rollback local state
+        setFavorites((prev) => 
+          isAdding 
+            ? prev.filter((id) => id !== crypto.id) 
+            : [...prev, crypto.id]
+        );
       }
     }
   };
@@ -142,43 +133,59 @@ export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: 
     );
   };
 
+  const hasData = cryptoData.length > 0;
+  const showDegradedBanner = hasData && (isStale || error);
+
   return (
     <div className="bg-black/40 backdrop-blur-sm border border-white/10 rounded-xl p-4 mb-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold font-poppins text-white flex items-center gap-2">
-          <span className="w-2 h-6 bg-blue-500 rounded-sm"></span>
-          Cryptocurrency Market Cap
-          {error && (
-            <span className="text-sm text-yellow-400 ml-2 font-normal">
-              (Using cached data)
+      <div className="flex flex-col gap-2 mb-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-bold font-poppins text-white flex items-center gap-2">
+            <span className="w-2 h-6 bg-blue-500 rounded-sm"></span>
+            Cryptocurrency Market Cap
+          </h2>
+          {cachedAt && (
+            <span className="text-xs text-gray-500">
+              Updated {new Date(cachedAt).toLocaleTimeString()}
             </span>
           )}
-        </h2>
+        </div>
+        {showDegradedBanner && (
+          <div
+            className={
+              'flex items-center gap-2 px-3 py-2 rounded-md text-sm ' +
+              (isStale
+                ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
+                : 'bg-red-500/10 text-red-400 border border-red-500/20')
+            }
+          >
+            <AlertTriangle size={14} />
+            <span>
+              {isStale
+                ? 'Showing cached data — live refresh unavailable'
+                : error}
+            </span>
+          </div>
+        )}
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-pulse flex space-x-4">
-            <div className="rounded-full bg-white/10 h-12 w-12"></div>
-            <div className="flex-1 space-y-4 py-1">
-              <div className="h-4 bg-white/10 rounded w-3/4"></div>
-              <div className="space-y-2">
-                <div className="h-4 bg-white/10 rounded"></div>
-                <div className="h-4 bg-white/10 rounded w-5/6"></div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ListSkeleton count={8} rowHeight={72} />
       ) : error && cryptoData.length === 0 ? (
-        <div className="text-center text-red-500 py-8">
-          {error}
-          <button
-            className="block mx-auto mt-4 px-4 py-2 bg-primary/20 text-white rounded-lg hover:bg-primary/30 transition-colors"
-            onClick={() => window.location.reload()}
-          >
-            Retry
-          </button>
-        </div>
+        <ListError
+          message={error}
+          onRetry={() => window.location.reload()}
+        />
+      ) : cryptoData.length === 0 ? (
+        <EmptyState
+          icon={Coins}
+          title="No cryptocurrency data"
+          description="Unable to load market data. Please try again later."
+          action={{
+            label: "Reload page",
+            onClick: () => window.location.reload(),
+          }}
+        />
       ) : (
         <div
           className="overflow-x-auto max-h-[600px] overflow-y-auto"

@@ -42,27 +42,27 @@ export class AddTestnetOnchainQueryIndexes1780148000000 implements MigrationInte
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      DROP INDEX CONCURRENTLY IF EXISTS "public"."IDX_materialized_snapshots_source_snapshot"
+      DROP INDEX IF EXISTS "public"."IDX_materialized_snapshots_source_snapshot"
     `);
 
     await queryRunner.query(`
-      DROP INDEX CONCURRENTLY IF EXISTS "public"."IDX_materialized_snapshots_updated_at"
+      DROP INDEX IF EXISTS "public"."IDX_materialized_snapshots_updated_at"
     `);
 
     await queryRunner.query(`
-      DROP INDEX CONCURRENTLY IF EXISTS "public"."IDX_portfolio_snapshots_user_created_at_desc"
+      DROP INDEX IF EXISTS "public"."IDX_portfolio_snapshots_user_created_at_desc"
     `);
 
     await queryRunner.query(`
-      DROP INDEX CONCURRENTLY IF EXISTS "public"."IDX_soroban_events_processed_at"
+      DROP INDEX IF EXISTS "public"."IDX_soroban_events_processed_at"
     `);
 
     await queryRunner.query(`
-      DROP INDEX CONCURRENTLY IF EXISTS "public"."IDX_soroban_events_status_created_at"
+      DROP INDEX IF EXISTS "public"."IDX_soroban_events_status_created_at"
     `);
 
     await queryRunner.query(`
-      DROP INDEX CONCURRENTLY IF EXISTS "public"."IDX_soroban_events_contract_type_created_at"
+      DROP INDEX IF EXISTS "public"."IDX_soroban_events_contract_type_created_at"
     `);
   }
 }

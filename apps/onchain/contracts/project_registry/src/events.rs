@@ -65,6 +65,34 @@ pub struct ProjectRejectedEvent {
     pub votes_against: i128,
 }
 
+/// Emitted when a project is archived for historical or registry-delist purposes.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectArchivedEvent {
+    /// The address of the admin performing the archival.
+    #[topic]
+    pub admin: Address,
+    /// The unique identifier of the archived project.
+    #[topic]
+    pub project_id: u64,
+    /// The timestamp at which the archival was applied.
+    pub archived_at: u64,
+}
+
+/// Emitted when a project is delisted from the active registry view.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectDelistedEvent {
+    /// The address of the admin performing the delist.
+    #[topic]
+    pub admin: Address,
+    /// The unique identifier of the delisted project.
+    #[topic]
+    pub project_id: u64,
+    /// The timestamp at which the delist was applied.
+    pub delisted_at: u64,
+}
+
 /// Emitted when an admin overrides the verification status of a project.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trophy, Users, Coins, Info, ArrowRight, Wallet, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import { clientConfig } from "@/lib/config";
 
 interface ContributionInsightsWidgetProps {
   publicKey: string | null;
@@ -31,7 +32,7 @@ export default function ContributionInsightsWidget({ publicKey }: ContributionIn
   const [ecosystemMetrics, setEcosystemMetrics] = useState<EcosystemMetrics | null>(null);
   const [userMetrics, setUserMetrics] = useState<UserMetrics | null>(null);
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+  const API_BASE = clientConfig.apiUrl;
 
   useEffect(() => {
     async function fetchData() {

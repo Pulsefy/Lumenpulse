@@ -15,13 +15,16 @@ import {
 import { useWatchlist } from "@/hooks/use-watchlist";
 import { WatchlistItem, WatchlistItemType } from "@/lib/watchlist-service";
 import Image from "next/image";
+import { ListSkeleton } from "@/components/ui/list-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ListError } from "@/components/ui/list-error";
 
 interface WatchlistPanelProps {
   onSelectAsset?: (asset: { code: string; issuer?: string }) => void;
 }
 
 export default function WatchlistPanel({ onSelectAsset }: WatchlistPanelProps) {
-  const { items, total, isLoading, error, removeItem, refresh } = useWatchlist();
+  const { items, total, isLoading, isSyncing, error, removeItem, refresh } = useWatchlist();
   const [filterType, setFilterType] = useState<WatchlistItemType | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -64,9 +67,7 @@ export default function WatchlistPanel({ onSelectAsset }: WatchlistPanelProps) {
   if (isLoading) {
     return (
       <div className="bg-black/40 backdrop-blur-sm border border-white/10 rounded-xl p-4">
-        <div className="flex justify-center items-center h-48">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500" />
-        </div>
+        <ListSkeleton count={5} />
       </div>
     );
   }
@@ -82,12 +83,20 @@ export default function WatchlistPanel({ onSelectAsset }: WatchlistPanelProps) {
             ({total} {total === 1 ? "item" : "items"})
           </span>
         </h2>
-        <button
-          onClick={refresh}
-          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {isSyncing && (
+            <span className="text-xs text-gray-400 flex items-center gap-1">
+              <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-gray-400" />
+              Syncing...
+            </span>
+          )}
+          <button
+            onClick={refresh}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Search and Filter */}
@@ -129,26 +138,26 @@ export default function WatchlistPanel({ onSelectAsset }: WatchlistPanelProps) {
 
       {/* Error */}
       {error && (
-        <div className="text-red-400 text-sm mb-3 p-2 bg-red-500/10 rounded-lg">
-          {error}
+        <div className="mb-3">
+          <ListError message={error} onRetry={refresh} />
         </div>
       )}
 
       {/* Items List */}
       {filteredItems.length === 0 ? (
-        <div className="text-center py-8">
-          <Star size={32} className="text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">
-            {searchQuery || filterType !== "all"
-              ? "No items match your filters"
-              : "Your watchlist is empty"}
-          </p>
-          <p className="text-gray-500 text-xs mt-1">
-            {searchQuery || filterType !== "all"
-              ? "Try adjusting your search or filters"
-              : "Star assets or projects to add them here"}
-          </p>
-        </div>
+        <EmptyState
+          icon={Star}
+          title={searchQuery || filterType !== "all"
+            ? "No matching items"
+            : "Your watchlist is empty"}
+          description={searchQuery || filterType !== "all"
+            ? "Try adjusting your search or filters"
+            : "Star assets or projects to add them here"}
+          action={!searchQuery && filterType === "all" ? {
+            label: "Browse assets",
+            onClick: () => {},
+          } : undefined}
+        />
       ) : (
         <div className="space-y-1 max-h-[500px] overflow-y-auto" style={{ scrollbarWidth: "none" }}>
           <style jsx>{`
@@ -165,7 +174,7 @@ export default function WatchlistPanel({ onSelectAsset }: WatchlistPanelProps) {
                   issuer: item.assetIssuer || undefined,
                 })
               }
-              className="group flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5"
+              className={`group flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5 ${item.id.startsWith('temp-') ? 'opacity-50 pointer-events-none' : ''}`}
             >
               {/* Drag Handle */}
               <GripVertical

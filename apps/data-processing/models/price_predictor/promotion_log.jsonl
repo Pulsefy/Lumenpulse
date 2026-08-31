@@ -1,0 +1,2 @@
+{"timestamp": "2026-08-28T21:39:31.184852+00:00", "model_type": "price_predictor", "version": "v1.0", "metric": "r2", "candidate_metrics": {"r2": -0.15887372033805658}, "incumbent_metrics": null, "status": "forced"}
+{"timestamp": "2026-08-28T21:39:38.763548+00:00", "model_type": "price_predictor", "version": "v1.1", "metric": "r2", "candidate_metrics": {"r2": -0.15887372033805658}, "incumbent_metrics": {"r2": -0.15887372033805658}, "status": "forced"}
