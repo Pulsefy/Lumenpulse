@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindManyOptions, Between } from 'typeorm';
 import { AdminBlockchainAuditLog } from './entities/admin-blockchain-audit-log.entity';
+import { AuditLog } from '../audit/entities/audit-log.entity';
+import { ExportAuditLogsDto } from './dto/export-audit-logs.dto';
 
 /** Fields that must be redacted before persistence */
 const SENSITIVE_KEYS = new Set([
@@ -17,6 +19,9 @@ const SENSITIVE_KEYS = new Set([
   'seed',
   'mnemonic',
 ]);
+
+/** Hard cap on rows returned by the export endpoint. */
+export const MAX_EXPORT_ROWS = 10_000;
 
 export interface CreateAuditLogDto {
   actorId: string;
@@ -37,6 +42,15 @@ export interface QueryAuditLogsDto {
   limit?: number;
 }
 
+export interface ExportAuditResultDto {
+  exportedAt: string;
+  dateRange: { from: string; to: string };
+  auditLogs: AuditLog[];
+  adminBlockchainAuditLogs: AdminBlockchainAuditLog[];
+  /** True when either result set was truncated at MAX_EXPORT_ROWS. */
+  truncated: boolean;
+}
+
 @Injectable()
 export class AdminAuditService {
   private readonly logger = new Logger(AdminAuditService.name);
@@ -44,6 +58,8 @@ export class AdminAuditService {
   constructor(
     @InjectRepository(AdminBlockchainAuditLog)
     private readonly repo: Repository<AdminBlockchainAuditLog>,
+    @InjectRepository(AuditLog)
+    private readonly auditLogRepo: Repository<AuditLog>,
   ) {}
 
   /**
@@ -114,5 +130,53 @@ export class AdminAuditService {
     });
 
     return { data, total };
+  }
+
+  /**
+   * Export audit records from both tables for the given date range.
+   *
+   * Both result sets are individually capped at MAX_EXPORT_ROWS. When the cap
+   * is hit the `truncated` flag is set to true so callers can surface a
+   * warning to the admin.
+   *
+   * Optional `actorId` and `endpoint` filters apply to the
+   * admin_blockchain_audit_logs table only (those fields do not exist on
+   * audit_logs).
+   */
+  async export(dto: ExportAuditLogsDto): Promise<ExportAuditResultDto> {
+    const from = new Date(dto.from);
+    const to = new Date(dto.to);
+
+    // --- audit_logs (general) ---
+    const auditLogs = await this.auditLogRepo.find({
+      where: { createdAt: Between(from, to) },
+      order: { createdAt: 'DESC' },
+      take: MAX_EXPORT_ROWS,
+    });
+
+    // --- admin_blockchain_audit_logs ---
+    const adminWhere: FindManyOptions<AdminBlockchainAuditLog>['where'] = {
+      createdAt: Between(from, to),
+    };
+    if (dto.actorId)
+      (adminWhere as Record<string, unknown>).actorId = dto.actorId;
+    if (dto.endpoint)
+      (adminWhere as Record<string, unknown>).endpoint = dto.endpoint;
+
+    const adminAuditLogs = await this.repo.find({
+      where: adminWhere,
+      order: { createdAt: 'DESC' },
+      take: MAX_EXPORT_ROWS,
+    });
+
+    return {
+      exportedAt: new Date().toISOString(),
+      dateRange: { from: dto.from, to: dto.to },
+      auditLogs,
+      adminBlockchainAuditLogs: adminAuditLogs,
+      truncated:
+        auditLogs.length === MAX_EXPORT_ROWS ||
+        adminAuditLogs.length === MAX_EXPORT_ROWS,
+    };
   }
 }
