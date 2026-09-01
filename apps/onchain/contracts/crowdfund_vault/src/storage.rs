@@ -42,6 +42,8 @@ pub enum DataKey {
     RefundReceipt(u64, u64),     // (project_id, receipt_id) -> RefundReceipt
     RefundReceiptCount(u64),     // project_id -> u64
     RefundClaimed(u64, Address), // (project_id, contributor) -> bool
+    RegistrationNonce(Address),  // Address -> u64
+    DepositNonce(Address),       // Address -> u64
     // ── Idempotency guard (issue #1224) ──────────────────────────────────────
     /// Idempotency receipt for a deposit operation.
     /// Key: (project_id, contributor_address)

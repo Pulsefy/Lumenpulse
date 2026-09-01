@@ -53,4 +53,6 @@ pub enum CrowdfundError {
     MigrationPlanVetoed = 39,
     /// A submitted batch is empty, too large, or contains repeated milestone keys.
     InvalidBatch = 40,
+    /// The provided signature for a gasless meta-transaction is empty or invalid.
+    InvalidSignature = 41,
 }

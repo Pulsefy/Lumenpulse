@@ -15,7 +15,9 @@ use notification_interface::{Notification, NotificationReceiverClient};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, vec, Address, BytesN, Env, IntoVal, Symbol, Vec,
+};
 use storage::{
     DataKey, EmergencyMigrationPlan, MigrationPlanStatus, MilestoneDecision,
     MilestoneDecisionOutcome, MilestoneDispute, ProjectData, ProjectStorageSummary, ProtocolStats,
@@ -26,11 +28,49 @@ const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
 const DEFAULT_REFUND_WINDOW_SECONDS: u64 = 14 * 24 * 60 * 60;
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContributionIntent {
+    pub user: Address,
+    pub project_id: u64,
+    pub amount: i128,
+    pub nonce: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RegistrationIntent {
+    pub user: Address,
+    pub nonce: u64,
+}
+
 #[contract]
 pub struct CrowdfundVaultContract;
 
 #[contractimpl]
 impl CrowdfundVaultContract {
+    fn deposit_nonce_of(env: &Env, user: &Address) -> u64 {
+        let key = DataKey::DepositNonce(user.clone());
+        let nonce = env.storage().persistent().get(&key).unwrap_or(0);
+        if env.storage().persistent().has(&key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        nonce
+    }
+
+    fn register_nonce_of(env: &Env, user: &Address) -> u64 {
+        let key = DataKey::RegistrationNonce(user.clone());
+        let nonce = env.storage().persistent().get(&key).unwrap_or(0);
+        if env.storage().persistent().has(&key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        nonce
+    }
+
     fn get_admin_address(env: &Env) -> Result<Address, CrowdfundError> {
         env.storage()
             .instance()
@@ -672,6 +712,48 @@ impl CrowdfundVaultContract {
         })
     }
 
+    /// Deposit funds into a project
+    pub fn deposit_with_sig(
+        env: Env,
+        user: Address,
+        project_id: u64,
+        amount: i128,
+        signature: soroban_sdk::Bytes,
+    ) -> Result<(), CrowdfundError> {
+        Self::with_reentrancy_guard(&env, || {
+            Self::require_current_storage_version(&env)?;
+
+            if signature.is_empty() {
+                return Err(CrowdfundError::InvalidSignature);
+            }
+
+            let nonce = Self::deposit_nonce_of(&env, &user);
+            let intent = ContributionIntent {
+                user: user.clone(),
+                project_id,
+                amount,
+                nonce,
+            };
+            user.require_auth_for_args(soroban_sdk::vec![
+                &env,
+                soroban_sdk::Symbol::new(&env, "deposit_with_sig").into_val(&env),
+                intent.into_val(&env),
+            ]);
+
+            let new_nonce = nonce + 1;
+            env.storage()
+                .persistent()
+                .set(&DataKey::DepositNonce(user.clone()), &new_nonce);
+            env.storage().persistent().extend_ttl(
+                &DataKey::DepositNonce(user.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
+
+            Self::deposit_internal(&env, &user, project_id, amount)
+        })
+    }
+
     /// Deposit funds into a project.
     ///
     /// `request_id` is a caller-supplied 32-byte nonce that uniquely identifies
@@ -698,137 +780,143 @@ impl CrowdfundVaultContract {
             Self::require_current_storage_version(&env)?;
 
             user.require_auth();
-
             // ── Idempotency check (must come before any state mutation) ──────
             // Reject duplicate submissions that carry an already-seen request_id.
             idempotency_claim(&env, &request_id).map_err(|_| CrowdfundError::AlreadyExecuted)?;
 
-            let is_paused: bool = env
+            Self::deposit_internal(&env, &user, project_id, amount)
+        })
+    }
+
+    fn deposit_internal(
+        env: &Env,
+        user: &Address,
+        project_id: u64,
+        amount: i128,
+    ) -> Result<(), CrowdfundError> {
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            return Err(CrowdfundError::ContractPaused);
+        }
+
+        if amount <= 0 {
+            return Err(CrowdfundError::InvalidAmount);
+        }
+
+        let mut project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        Self::fail_if_project_expired(env, project_id, &mut project)?;
+
+        if !project.is_active {
+            return Err(CrowdfundError::ProjectNotActive);
+        }
+
+        let contract_address = env.current_contract_address();
+        let user_balance = token::balance(env, &project.token_address, &user);
+
+        let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+        let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&balance_key, &(current_balance + amount));
+        env.storage()
+            .persistent()
+            .extend_ttl(&balance_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        let contribution_key = DataKey::Contribution(project_id, user.clone());
+        let current_contribution: i128 = env
+            .storage()
+            .persistent()
+            .get(&contribution_key)
+            .unwrap_or(0);
+
+        if current_contribution == 0 {
+            let contributor_count_key = DataKey::ContributorCount(project_id);
+            let contributor_count: u32 = env
                 .storage()
-                .instance()
-                .get(&DataKey::Paused)
-                .unwrap_or(false);
-            if is_paused {
-                return Err(CrowdfundError::ContractPaused);
-            }
-
-            if amount <= 0 {
-                return Err(CrowdfundError::InvalidAmount);
-            }
-
-            let mut project: ProjectData = env
-                .storage()
                 .persistent()
-                .get(&DataKey::Project(project_id))
-                .ok_or(CrowdfundError::ProjectNotFound)?;
-
-            Self::fail_if_project_expired(&env, project_id, &mut project)?;
-
-            if !project.is_active {
-                return Err(CrowdfundError::ProjectNotActive);
-            }
-
-            let contract_address = env.current_contract_address();
-            let user_balance = token::balance(&env, &project.token_address, &user);
-
-            let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
-            let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
-            env.storage()
-                .persistent()
-                .set(&balance_key, &(current_balance + amount));
-            env.storage()
-                .persistent()
-                .extend_ttl(&balance_key, LEDGER_THRESHOLD, LEDGER_BUMP);
-
-            let contribution_key = DataKey::Contribution(project_id, user.clone());
-            let current_contribution: i128 = env
-                .storage()
-                .persistent()
-                .get(&contribution_key)
+                .get(&contributor_count_key)
                 .unwrap_or(0);
 
-            if current_contribution == 0 {
-                let contributor_count_key = DataKey::ContributorCount(project_id);
-                let contributor_count: u32 = env
-                    .storage()
-                    .persistent()
-                    .get(&contributor_count_key)
-                    .unwrap_or(0);
-
-                let contrib_idx_key = DataKey::Contributor(project_id, contributor_count);
-                env.storage().persistent().set(&contrib_idx_key, &user);
-                env.storage().persistent().extend_ttl(
-                    &contrib_idx_key,
-                    LEDGER_THRESHOLD,
-                    LEDGER_BUMP,
-                );
-
-                env.storage()
-                    .persistent()
-                    .set(&contributor_count_key, &(contributor_count + 1));
-                env.storage().persistent().extend_ttl(
-                    &contributor_count_key,
-                    LEDGER_THRESHOLD,
-                    LEDGER_BUMP,
-                );
-            }
+            let contrib_idx_key = DataKey::Contributor(project_id, contributor_count);
+            env.storage().persistent().set(&contrib_idx_key, &user);
+            env.storage()
+                .persistent()
+                .extend_ttl(&contrib_idx_key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
             env.storage()
                 .persistent()
-                .set(&contribution_key, &(current_contribution + amount));
-            env.storage()
-                .persistent()
-                .extend_ttl(&contribution_key, LEDGER_THRESHOLD, LEDGER_BUMP);
-
-            project.total_deposited += amount;
-            env.storage()
-                .persistent()
-                .set(&DataKey::Project(project_id), &project);
+                .set(&contributor_count_key, &(contributor_count + 1));
             env.storage().persistent().extend_ttl(
-                &DataKey::Project(project_id),
+                &contributor_count_key,
                 LEDGER_THRESHOLD,
                 LEDGER_BUMP,
             );
+        }
 
-            let mut stats: ProtocolStats = env
-                .storage()
-                .instance()
-                .get(&DataKey::ProtocolStats)
-                .unwrap_or(ProtocolStats {
-                    tvl: 0,
-                    cumulative_volume: 0,
-                });
-            stats.tvl += amount;
-            stats.cumulative_volume += amount;
-            env.storage()
-                .instance()
-                .set(&DataKey::ProtocolStats, &stats);
+        env.storage()
+            .persistent()
+            .set(&contribution_key, &(current_contribution + amount));
+        env.storage()
+            .persistent()
+            .extend_ttl(&contribution_key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
-            if user_balance >= amount {
-                token::transfer(
-                    &env,
-                    &project.token_address,
-                    &user,
-                    &contract_address,
-                    &amount,
-                );
-            }
+        project.total_deposited += amount;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Project(project_id), &project);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Project(project_id),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
 
-            events::DepositEvent {
-                user: user.clone(),
-                project_id,
-                amount,
-            }
-            .publish(&env);
+        let mut stats: ProtocolStats = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProtocolStats)
+            .unwrap_or(ProtocolStats {
+                tvl: 0,
+                cumulative_volume: 0,
+            });
+        stats.tvl += amount;
+        stats.cumulative_volume += amount;
+        env.storage()
+            .instance()
+            .set(&DataKey::ProtocolStats, &stats);
 
-            Self::notify_subscribers(
-                &env,
-                Symbol::new(&env, "deposit"),
-                (user, project_id, amount).to_xdr(&env),
+        if user_balance >= amount {
+            token::transfer(
+                env,
+                &project.token_address,
+                &user,
+                &contract_address,
+                &amount,
             );
+        }
 
-            Ok(())
-        })
+        events::DepositEvent {
+            user: user.clone(),
+            project_id,
+            amount,
+        }
+        .publish(env);
+
+        Self::notify_subscribers(
+            env,
+            Symbol::new(env, "deposit"),
+            (user.clone(), project_id, amount).to_xdr(env),
+        );
+
+        Ok(())
     }
 
     /// Add a notification subscriber (admin only)
@@ -1553,11 +1641,52 @@ impl CrowdfundVaultContract {
     }
 
     /// Register a new contributor
+    pub fn register_contributor_with_sig(
+        env: Env,
+        contributor: Address,
+        signature: soroban_sdk::Bytes,
+    ) -> Result<(), CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+
+        if signature.is_empty() {
+            return Err(CrowdfundError::InvalidSignature);
+        }
+
+        let nonce = Self::register_nonce_of(&env, &contributor);
+        let intent = RegistrationIntent {
+            user: contributor.clone(),
+            nonce,
+        };
+        contributor.require_auth_for_args(soroban_sdk::vec![
+            &env,
+            soroban_sdk::Symbol::new(&env, "register_contributor_with_sig").into_val(&env),
+            intent.into_val(&env),
+        ]);
+
+        let new_nonce = nonce + 1;
+        env.storage()
+            .persistent()
+            .set(&DataKey::RegistrationNonce(contributor.clone()), &new_nonce);
+        env.storage().persistent().extend_ttl(
+            &DataKey::RegistrationNonce(contributor.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        Self::register_contributor_internal(&env, &contributor)
+    }
+
+    /// Register a new contributor
     pub fn register_contributor(env: Env, contributor: Address) -> Result<(), CrowdfundError> {
         Self::require_current_storage_version(&env)?;
-        // Require contributor authorization
         contributor.require_auth();
+        Self::register_contributor_internal(&env, &contributor)
+    }
 
+    fn register_contributor_internal(
+        env: &Env,
+        contributor: &Address,
+    ) -> Result<(), CrowdfundError> {
         // Check if already registered
         if env
             .storage()
@@ -1588,7 +1717,10 @@ impl CrowdfundVaultContract {
         );
 
         // Emit registration event
-        events::ContributorRegisteredEvent { contributor }.publish(&env);
+        events::ContributorRegisteredEvent {
+            contributor: contributor.clone(),
+        }
+        .publish(env);
 
         Ok(())
     }
