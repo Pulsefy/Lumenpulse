@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ThrottlerGuard, ThrottlerLimitDetail } from '@nestjs/throttler';
 import { ErrorCode } from '../enums/error-code.enum';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { config } from '../../lib/config';
 import * as net from 'net';
 
@@ -75,6 +75,25 @@ export class RateLimitGuard extends ThrottlerGuard {
   ): Promise<void> {
     void context;
     await Promise.resolve();
+
+    // Set standard rate limit headers on the response when available
+    try {
+      const response = context.switchToHttp().getResponse<Response>();
+      const ttlSeconds = Math.ceil(throttlerLimitDetail.ttl / 1000);
+      const retryAfter = Math.max(
+        Number(throttlerLimitDetail.timeToBlockExpire) || 0,
+        0,
+      );
+
+      if (response && typeof response.setHeader === 'function') {
+        response.setHeader('Retry-After', String(retryAfter));
+        response.setHeader('X-RateLimit-Limit', String(throttlerLimitDetail.limit));
+        response.setHeader('X-RateLimit-Remaining', '0');
+        response.setHeader('X-RateLimit-Reset', String(ttlSeconds));
+      }
+    } catch {
+      // Ignore header errors and continue to throw the exception
+    }
 
     throw new HttpException(
       {
