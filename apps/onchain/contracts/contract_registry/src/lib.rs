@@ -93,9 +93,10 @@ impl ContractRegistry {
     }
 
     pub fn get_contract(env: Env, key: Symbol) -> Result<ContractInfo, RegistryError> {
-        env.storage().persistent()
+        let contract: ContractInfo = env.storage().persistent()
             .get(&DataKey::Contract(key))
-            .ok_or(RegistryError::ContractNotFound)
+            .ok_or(RegistryError::ContractNotFound)?;
+        Ok(contract)
     }
 
     pub fn list_contracts(_env: Env) -> Result<soroban_sdk::Vec<ContractInfo>, RegistryError> {
