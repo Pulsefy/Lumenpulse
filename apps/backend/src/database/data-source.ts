@@ -1,14 +1,14 @@
 import { DataSource } from 'typeorm';
-import { config } from '../lib/config';
+import { dbConfig } from './db-env';
 
 export default new DataSource({
   type: 'postgres',
-  host: config.database.host,
-  port: config.database.port,
-  username: config.database.username,
+  host: dbConfig.host,
+  port: dbConfig.port,
+  username: dbConfig.username,
   // TypeORM expects a plain credential string for the connection handshake.
-  password: config.database.password.reveal(),
-  database: config.database.database,
+  password: dbConfig.password,
+  database: dbConfig.database,
 
   entities: ['dist/**/*.entity.js', 'src/**/*.entity.ts'],
 

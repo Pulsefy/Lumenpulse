@@ -36,6 +36,7 @@ import { StellarAccountResponseDto } from './dto/stellar-account-response.dto';
 import { UpdateStellarAccountLabelDto } from './dto/update-stellar-account-label.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileResponseDto } from './dto/profile-response.dto';
+import { UserAdminResponseDto } from './dto/user-admin-response.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
@@ -43,6 +44,7 @@ import { UserRole } from './entities/user.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SharpPipe } from '../common/pipes/sharp.pipe';
 import { AuditLogAction } from '../audit/decorators/audit-log.decorator';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 // Unified Authenticated Request Interface
 interface RequestWithUser extends Request {
@@ -110,26 +112,50 @@ export class UsersController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Get all users' })
-  @ApiResponse({ status: 200, description: 'List of all users', type: [User] })
-  async findAll(): Promise<User[]> {
-    return this.usersService.findAll();
+  @ApiOperation({ summary: 'Get all users (admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all users',
+    type: [UserAdminResponseDto],
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
+  async findAll(): Promise<UserAdminResponseDto[]> {
+    const users = await this.usersService.findAll();
+    return users.map((user) => new UserAdminResponseDto(user));
   }
 
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Get user by ID' })
-  @ApiResponse({ status: 200, description: 'User found', type: User })
+  @ApiOperation({ summary: 'Get user by ID (admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'User found',
+    type: UserAdminResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async findById(@Param('id') id: string): Promise<User | null> {
-    return this.usersService.findById(id);
+  async findById(@Param('id') id: string): Promise<UserAdminResponseDto> {
+    const user = await this.usersService.findById(id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return new UserAdminResponseDto(user);
   }
 
   // --- PROFILE MANAGEMENT (From Upstream) ---
 
   @Get('me')
   @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({
+    status: 200,
+    description: 'Current user profile',
+    type: ProfileResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   async getProfile(@Req() req: RequestWithUser): Promise<ProfileResponseDto> {
     const userId = req.user.id;
     const user = await this.usersService.findById(userId);
@@ -143,7 +169,16 @@ export class UsersController {
 
   @Patch('me')
   @UsePipes(new ValidationPipe())
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Update current user profile' })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile updated successfully',
+    type: ProfileResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid profile payload' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   async updateProfile(
     @Req() req: RequestWithUser,
     @Body() updateProfileDto: UpdateProfileDto,
@@ -182,8 +217,11 @@ export class UsersController {
 
   @Post('me/accounts')
   @AuditLogAction('account_linking')
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Link a new Stellar account to user profile' })
   @ApiResponse({ status: 201, type: StellarAccountResponseDto })
+  @ApiResponse({ status: 400, description: 'Invalid Stellar account payload' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async addStellarAccount(
     @Req() req: RequestWithUser,
     @Body() dto: LinkStellarAccountDto,
@@ -194,6 +232,7 @@ export class UsersController {
   @Get('me/accounts')
   @ApiOperation({ summary: 'Get all linked Stellar accounts for current user' })
   @ApiResponse({ status: 200, type: [StellarAccountResponseDto] })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getMyStellarAccounts(
     @Req() req: RequestWithUser,
   ): Promise<StellarAccountResponseDto[]> {
@@ -203,6 +242,8 @@ export class UsersController {
   @Get('me/accounts/:id')
   @ApiOperation({ summary: 'Get a specific Stellar account for current user' })
   @ApiResponse({ status: 200, type: StellarAccountResponseDto })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Stellar account not found' })
   async getMyStellarAccount(
     @Req() req: RequestWithUser,
     @Param('id') accountId: string,
@@ -212,7 +253,11 @@ export class UsersController {
 
   @Delete('me/accounts/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Unlink a Stellar account from current user' })
+  @ApiResponse({ status: 204, description: 'Stellar account unlinked' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Stellar account not found' })
   async removeMyStellarAccount(
     @Req() req: RequestWithUser,
     @Param('id') accountId: string,
@@ -221,7 +266,12 @@ export class UsersController {
   }
 
   @Patch('me/accounts/:id/label')
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Update account label for current user' })
+  @ApiResponse({ status: 200, type: StellarAccountResponseDto })
+  @ApiResponse({ status: 400, description: 'Invalid label payload' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Stellar account not found' })
   async updateMyStellarAccountLabel(
     @Req() req: RequestWithUser,
     @Param('id') accountId: string,
@@ -236,10 +286,14 @@ export class UsersController {
 
   @Patch('me/avatar')
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Upload user profile image' })
+  @ApiResponse({ status: 200, description: 'Profile image uploaded' })
+  @ApiResponse({ status: 400, description: 'Invalid or unsupported image file' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @UseInterceptors(FileInterceptor('avatar'))
   async uploadAvatar(
-    @Param('id') accountId: string,
+    @Req() req: RequestWithUser,
     @UploadedFile(
       new ParseFilePipe({
         validators: [
@@ -253,12 +307,16 @@ export class UsersController {
     )
     file: Buffer,
   ) {
-    return await this.usersService.updateUserProfilePicture(file, accountId);
+    return await this.usersService.updateUserProfilePicture(file, req.user.id);
   }
 
   @Post('me/accounts/:id/primary')
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Set as primary account for current user' })
+  @ApiResponse({ status: 200, description: 'Primary account updated' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Stellar account not found' })
   async setMyPrimaryAccount(
     @Req() req: RequestWithUser,
     @Param('id') accountId: string,

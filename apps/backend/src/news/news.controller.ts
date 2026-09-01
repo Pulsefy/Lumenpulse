@@ -59,6 +59,7 @@ export class NewsController {
     description: 'Filter by article category',
   })
   @ApiResponse({ status: 200, type: NewsArticlesResponseDto })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async getLatestArticles(
     @Query('limit') limit?: string,
     @Query('lang') lang?: string,
@@ -110,6 +111,11 @@ export class NewsController {
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'lang', required: false, type: String, example: 'EN' })
   @ApiResponse({ status: 200, type: NewsSearchResponseDto })
+  @ApiResponse({
+    status: 400,
+    description: 'Search string or source key is missing',
+  })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async searchArticles(
     @Query('q') searchString: string,
     @Query('source') sourceKey: string,
@@ -133,6 +139,7 @@ export class NewsController {
     enum: ['ACTIVE', 'INACTIVE', 'ALL'],
   })
   @ApiResponse({ status: 200, type: NewsCategoriesResponseDto })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async getCategories(
     @Query('status') status?: 'ACTIVE' | 'INACTIVE' | 'ALL',
   ): Promise<NewsCategoriesResponseDto> {
@@ -157,6 +164,7 @@ export class NewsController {
       },
     },
   })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async sentimentSummary() {
     return this.newsService.getSentimentSummary();
   }
@@ -172,6 +180,11 @@ export class NewsController {
   })
   @ApiQuery({ name: 'guid', required: true, type: String })
   @ApiResponse({ status: 200, type: SingleArticleResponseDto })
+  @ApiResponse({
+    status: 400,
+    description: 'Source key or GUID is missing',
+  })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async getArticle(
     @Query('source_key') sourceKey: string,
     @Query('guid') guid: string,
@@ -185,6 +198,7 @@ export class NewsController {
   @ApiParam({ name: 'symbol', type: String, example: 'BTC' })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
   @ApiResponse({ status: 200, type: NewsArticlesResponseDto })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async getArticlesByCoin(
     @Param('symbol') symbol: string,
     @Query('limit') limit?: string,

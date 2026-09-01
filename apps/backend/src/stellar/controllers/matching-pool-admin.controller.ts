@@ -26,6 +26,7 @@ import { ContractAdminGuard } from '../../common/guards/contract-admin.guard';
 import { ContractAdminAuditService } from '../../contract-admin/contract-admin-audit.service';
 import { Roles, UserRole } from '../../auth/decorators/auth.decorators';
 import { AuditBlockchainAction } from '../../admin-audit/decorators/audit-blockchain-action.decorator';
+import { ApiIdempotencyHeader } from '../../common/decorators/api-idempotency.decorator';
 import { Request as ExpressRequest } from 'express';
 
 // Define a minimal user interface for type safety
@@ -40,8 +41,8 @@ interface AuthenticatedRequest extends ExpressRequest {
   user?: RequestUser;
 }
 
-@ApiTags('Admin — Matching Pool')
-@ApiBearerAuth()
+@ApiTags('admin-matching-pool')
+@ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, ContractAdminGuard)
 @Roles(UserRole.ADMIN)
 @Controller('admin/matching-pool')
@@ -55,9 +56,11 @@ export class MatchingPoolAdminController {
 
   @Post('rounds')
   @HttpCode(HttpStatus.CREATED)
+  @ApiIdempotencyHeader()
   @AuditBlockchainAction({ contractField: 'matchingFunds' })
   @ApiOperation({ summary: 'Create a new matching round on-chain' })
   @ApiResponse({ status: 201, type: RoundResponseDto })
+  @ApiResponse({ status: 400, description: 'Invalid round payload' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async createRound(
@@ -89,11 +92,14 @@ export class MatchingPoolAdminController {
 
   @Post('rounds/:roundId/approve-project')
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @AuditBlockchainAction({ contractField: 'projectAddress' })
   @ApiOperation({ summary: 'Approve a project for a matching round' })
   @ApiResponse({ status: 200, type: RoundResponseDto })
+  @ApiResponse({ status: 400, description: 'Invalid approval payload' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Round not found' })
   async approveProject(
     @Param('roundId') roundId: string,
     @Body() dto: ApproveProjectDto,

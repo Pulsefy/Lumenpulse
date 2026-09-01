@@ -24,7 +24,9 @@
     "migration:run": "npm run typeorm migration:run -- -d src/database/data-source.ts",
     "migration:revert": "npm run typeorm migration:revert -- -d src/database/data-source.ts",
     "migration:check": "ts-node scripts/check-migrations.ts",
-    "migration:verify": "ts-node scripts/verify-migrations-schema.ts"
+    "migration:verify": "ts-node scripts/verify-migrations-schema.ts",
+    "openapi:generate": "ts-node -r tsconfig-paths/register -r ./test/setup-env.ts scripts/generate-openapi-spec.ts",
+    "openapi:check": "npm run openapi:generate && git diff --exit-code -- openapi/openapi.json"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1019.0",

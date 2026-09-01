@@ -19,6 +19,7 @@ import {
   HealthResponse,
 } from './sentiment/sentiment.service';
 import { config } from './lib/config';
+import { ApiIdempotencyHeader } from './common/decorators/api-idempotency.decorator';
 
 // DTO for sentiment analysis
 class AnalyzeDto {
@@ -249,6 +250,7 @@ export class TestExceptionController {
     description:
       'Submits text to the Python data service to calculate polarity scores.',
   })
+  @ApiIdempotencyHeader()
   @ApiResponse({
     status: 200,
     description: 'Sentiment calculated successfully',
@@ -300,6 +302,7 @@ export class TestExceptionController {
     description:
       'Runs multiple hardcoded test phrases to verify sentiment classifications.',
   })
+  @ApiIdempotencyHeader()
   @ApiResponse({
     status: 200,
     description: 'Test suite ran successfully',

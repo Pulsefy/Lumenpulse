@@ -36,6 +36,7 @@ import {
   getPortfolioReadThrottleOverride,
   getPortfolioWriteThrottleOverride,
 } from '../common/rate-limit/rate-limit.config';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 @ApiTags('portfolio')
 @ApiBearerAuth('JWT-auth')
@@ -63,6 +64,7 @@ export class PortfolioController {
     type: PortfolioSummaryWithCurrencyResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async getPortfolioSummary(
     @Request() req: any,
     @Query() query: GetPortfolioSummaryQueryDto,
@@ -121,6 +123,7 @@ export class PortfolioController {
     type: PortfolioHistoryResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async getPortfolioHistory(
     @Request() req: any,
     @Query() query: GetPortfolioHistoryDto,
@@ -137,6 +140,7 @@ export class PortfolioController {
   @Post('snapshot')
   @Throttle(getPortfolioWriteThrottleOverride())
   @HttpCode(HttpStatus.CREATED)
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Create portfolio snapshot',
     description:
@@ -163,6 +167,7 @@ export class PortfolioController {
     },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async createSnapshot(@Request() req: any) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const userId = req.user.sub as string;
@@ -180,6 +185,7 @@ export class PortfolioController {
   @Post('snapshots/trigger')
   @Throttle(getPortfolioWriteThrottleOverride())
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Trigger snapshot creation for all users (Admin)',
     description:
@@ -191,6 +197,7 @@ export class PortfolioController {
     type: TriggerSnapshotBatchResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async triggerSnapshotCreation() {
     const result = await this.portfolioService.triggerSnapshotCreation();
     return {
@@ -253,6 +260,7 @@ export class PortfolioController {
     type: PortfolioPerformanceResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async getPortfolioPerformance(
     @Request() req: any,
   ): Promise<PortfolioPerformanceResponseDto> {
@@ -273,6 +281,7 @@ export class PortfolioController {
     description: 'Asset allocation retrieved successfully',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async getAssetAllocation(@Request() req: any) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const userId = req.user.sub as string;

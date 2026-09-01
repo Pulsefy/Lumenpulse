@@ -21,6 +21,7 @@ import { IngestSorobanEventResponseDto } from './dto/ingest-soroban-event-respon
 import { SorobanEventsService } from './soroban-events.service';
 import { SorobanEventIngestionGuard } from './guards/soroban-event-ingestion.guard';
 import { VerifiedWebhookRequest } from './interfaces/soroban-webhook.interface';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 type RequestWithVerification = Request & {
   requestId?: string;
@@ -55,6 +56,7 @@ export class SorobanEventsController {
     description: 'Soroban event details to ingest for processing',
     type: IngestSorobanEventDto,
   })
+  @ApiIdempotencyHeader()
   @ApiResponse({
     status: 202,
     description:

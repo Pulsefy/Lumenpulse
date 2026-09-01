@@ -38,6 +38,7 @@ import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
 import { AuditBlockchainAction } from '../admin-audit/decorators/audit-blockchain-action.decorator';
 import { AdminAuditInterceptor } from '../admin-audit/interceptors/admin-audit.interceptor';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 @ApiTags('verification')
 @Controller('verification')
@@ -65,6 +66,7 @@ export class VerificationController {
   @Roles(UserRole.ADMIN)
   @UseInterceptors(AdminAuditInterceptor)
   @AuditBlockchainAction({})
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Update verification registry config',
     description:
@@ -74,6 +76,10 @@ export class VerificationController {
     status: 200,
     description: 'Registry configuration updated successfully',
     type: RegistryConfigDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'quorumThreshold must be >= 1',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   updateConfig(@Body() dto: UpdateConfigDto) {
@@ -138,6 +144,7 @@ export class VerificationController {
   @Roles(UserRole.ADMIN)
   @UseInterceptors(AdminAuditInterceptor)
   @AuditBlockchainAction({ contractField: 'ownerPublicKey' })
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Register a project for verification',
     description:
@@ -148,13 +155,14 @@ export class VerificationController {
     description: 'Project registered successfully',
     type: ProjectVerificationDto,
   })
+  @ApiResponse({ status: 400, description: 'Project already registered' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 409, description: 'Project already registered' })
   registerProject(@Body() dto: RegisterProjectDto) {
     return this.svc.registerProject(dto);
   }
 
   @Post('vote')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Cast a verification vote',
     description:
@@ -165,8 +173,16 @@ export class VerificationController {
     description: 'Vote cast and tallied successfully',
     type: VoteResultDto,
   })
-  @ApiResponse({ status: 400, description: 'Invalid project or voter key' })
-  @ApiResponse({ status: 409, description: 'Voter already voted' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Project is no longer accepting votes, or this voter has already voted on it',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Voter weight is below the configured minimum',
+  })
+  @ApiResponse({ status: 404, description: 'Project not found' })
   castVote(@Body() dto: CastVoteDto) {
     return this.svc.castVote(dto);
   }
@@ -177,6 +193,7 @@ export class VerificationController {
   @Roles(UserRole.ADMIN)
   @UseInterceptors(AdminAuditInterceptor)
   @AuditBlockchainAction({ contractField: 'projectId' })
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Override project verification status',
     description:
@@ -212,9 +229,11 @@ export class VerificationController {
   @Get('submissions/:id')
   @ApiOperation({
     summary: 'Get project submission details',
+    description: 'Retrieves a single project submission record by its ID.',
   })
   @ApiResponse({
     status: 200,
+    description: 'Submission record retrieved successfully',
     type: ProjectSubmissionDto,
   })
   @ApiResponse({ status: 404, description: 'Submission not found' })
@@ -225,6 +244,7 @@ export class VerificationController {
   @Post('submissions')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Save submission draft',
     description:
@@ -235,6 +255,11 @@ export class VerificationController {
     description: 'Submission draft saved',
     type: ProjectSubmissionDto,
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Submission is already published and cannot be edited',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   upsertSubmission(@Body() dto: UpsertSubmissionDto) {
     return this.svc.upsertSubmission(dto);
   }
@@ -242,9 +267,23 @@ export class VerificationController {
   @Post('submissions/:id/submit')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Submit draft for review',
+    description:
+      'Moves a submission from draft (or changes-requested) into the review state.',
   })
+  @ApiResponse({
+    status: 201,
+    description: 'Submission moved to review',
+    type: ProjectSubmissionDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Submission is already published or already in review',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Submission not found' })
   submitForReview(@Param('id', ParseIntPipe) id: number) {
     return this.svc.submitForReview(id);
   }
@@ -252,9 +291,23 @@ export class VerificationController {
   @Post('submissions/:id/request-changes')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Request changes on submission',
+    description:
+      'Reviewer/admin action that moves an in-review submission back to changes-requested.',
   })
+  @ApiResponse({
+    status: 201,
+    description: 'Submission returned to changes-requested state',
+    type: ProjectSubmissionDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Submission must be in review to request changes',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Submission not found' })
   requestChanges(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: SubmissionActionDto,
@@ -265,9 +318,23 @@ export class VerificationController {
   @Post('submissions/:id/approve')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Approve submission for publishing',
+    description:
+      'Reviewer/admin action that moves an in-review submission to approved.',
   })
+  @ApiResponse({
+    status: 201,
+    description: 'Submission approved',
+    type: ProjectSubmissionDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Submission must be in review to approve',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Submission not found' })
   approveSubmission(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: SubmissionActionDto,
@@ -278,9 +345,23 @@ export class VerificationController {
   @Post('submissions/:id/publish')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Publish approved submission',
+    description:
+      'Reviewer/admin action that moves an approved submission to published.',
   })
+  @ApiResponse({
+    status: 201,
+    description: 'Submission published',
+    type: ProjectSubmissionDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Submission must be approved before publishing',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Submission not found' })
   publishSubmission(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: SubmissionActionDto,

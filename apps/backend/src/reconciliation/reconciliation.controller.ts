@@ -22,6 +22,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../users/entities/user.entity';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 @ApiTags('reconciliation')
 @ApiBearerAuth('JWT-auth')
@@ -33,6 +34,7 @@ export class ReconciliationController {
 
   @Post('run')
   @HttpCode(HttpStatus.ACCEPTED)
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Manually trigger a reconciliation job (admin only)',
   })
@@ -41,6 +43,8 @@ export class ReconciliationController {
     description: 'Reconciliation job started',
     type: ReconciliationJob,
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   async triggerReconciliation(): Promise<ReconciliationJob> {
     return this.reconciliationService.runReconciliation('manual');
   }
@@ -53,6 +57,8 @@ export class ReconciliationController {
     description: 'List of reconciliation jobs',
     type: [ReconciliationJob],
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   async listJobs(@Query('limit') limit?: number): Promise<ReconciliationJob[]> {
     return this.reconciliationService.getRecentJobs(limit ? Number(limit) : 20);
   }
@@ -66,6 +72,8 @@ export class ReconciliationController {
     description: 'Reconciliation job details',
     type: ReconciliationJob,
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   @ApiResponse({ status: 404, description: 'Job not found' })
   async getJob(@Param('id') id: string): Promise<ReconciliationJob> {
     const job = await this.reconciliationService.getJobById(id);

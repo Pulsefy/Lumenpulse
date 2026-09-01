@@ -57,6 +57,10 @@ export class AuditController {
       },
     },
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid limit or offset (must be numeric)',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   async getAuditLogs(

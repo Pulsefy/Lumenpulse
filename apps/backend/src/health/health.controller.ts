@@ -29,7 +29,11 @@ export class HealthController {
 
   @Get('health')
   @HealthCheck()
-  @ApiOperation({ summary: 'Returns API health and dependency status' })
+  @ApiOperation({
+    summary: 'Returns API health and dependency status',
+    description:
+      'Runs configured Terminus health indicators (e.g. database, cache) and returns their aggregated status. Unauthenticated.',
+  })
   @ApiOkResponse({
     description:
       'Returns a healthy or degraded response when the API is available.',

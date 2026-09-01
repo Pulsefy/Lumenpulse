@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 import {
   ModelRetrainingService,
   RetrainResult,
@@ -107,6 +108,7 @@ export class ModelRetrainingController {
    */
   @Post('retrain')
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Trigger model retraining (admin only)',
     description:

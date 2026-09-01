@@ -15,6 +15,7 @@ import {
 } from '@nestjs/swagger';
 import { TelegramBotService } from './telegram-bot.service';
 import { TelegramAlertType } from './telegram-subscription.entity';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 class SendAlertDto {
   @ApiProperty({
@@ -52,6 +53,7 @@ export class TelegramBotController {
     description:
       'Broadcasts a price, news, or security alert to all active chats subscribed to that category.',
   })
+  @ApiIdempotencyHeader()
   @ApiResponse({
     status: 200,
     description: 'Broadcast completed successfully',
@@ -61,6 +63,10 @@ export class TelegramBotController {
         message: { type: 'string', example: 'Broadcast sent' },
       },
     },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid alertType or missing message',
   })
   async broadcast(@Body() dto: SendAlertDto) {
     await this.telegramBotService.broadcastAlert(dto.alertType, dto.message);

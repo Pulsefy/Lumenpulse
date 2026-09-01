@@ -49,6 +49,7 @@ import {
   ActiveSessionsResponseDto,
   RevokeSessionResponseDto,
 } from './dto/session.dto';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -62,7 +63,9 @@ export class AuthController {
   @Post('login')
   @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Login with email and password' })
+  @ApiResponse({ status: 429, description: 'Too many login attempts' })
   @ApiResponse({
     status: 200,
     description: 'Login successful',
@@ -110,6 +113,7 @@ export class AuthController {
   @Post('register')
   @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.CREATED)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Register a new user account' })
   @ApiResponse({
     status: 201,
@@ -123,6 +127,7 @@ export class AuthController {
     },
   })
   @ApiResponse({ status: 400, description: 'Email already exists' })
+  @ApiResponse({ status: 429, description: 'Too many registration attempts' })
   async register(@Body() body: RegisterDto) {
     const existingUser = await this.usersService.findByEmail(body.email);
     if (existingUser) {
@@ -144,6 +149,7 @@ export class AuthController {
   @Post('forgot-password')
   @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Request a password reset token' })
   @ApiResponse({
     status: 200,
@@ -154,6 +160,7 @@ export class AuthController {
       },
     },
   })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async forgotPassword(@Body() body: ForgotPasswordDto) {
     return this.authService.forgotPassword(body.email);
   }
@@ -161,6 +168,7 @@ export class AuthController {
   @Post('reset-password')
   @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Reset password using a one-time token' })
   @ApiResponse({
     status: 200,
@@ -175,6 +183,7 @@ export class AuthController {
     status: 400,
     description: 'Invalid, expired, or already-used token',
   })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   @AuditLogAction('password_change')
   async resetPassword(@Body() body: ResetPasswordDto) {
     return this.authService.resetPassword(body.token, body.newPassword);
@@ -183,6 +192,7 @@ export class AuthController {
   @Post('refresh')
   @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
   @ApiResponse({
     status: 200,
@@ -198,6 +208,7 @@ export class AuthController {
     status: 401,
     description: 'Invalid or expired refresh token',
   })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async refreshToken(
     @Body() body: RefreshTokenDto,
     @Request() req: ExpressRequest,
@@ -212,6 +223,7 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Logout user and invalidate refresh token' })
   @ApiResponse({
     status: 200,
@@ -229,11 +241,14 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('logout-all')
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Logout from all devices' })
   @ApiResponse({
     status: 200,
     description: 'Logout from all devices successful',
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async logoutAll(@Request() req: { user: { sub: string } }) {
     return this.authService.logoutAll(req.user.sub);
   }
@@ -313,6 +328,7 @@ export class AuthController {
 
   @Post('verify')
   @Throttle(getAuthThrottleOverride())
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Verify signed challenge and issue JWT' })
   @ApiResponse({
     status: 200,
@@ -329,6 +345,7 @@ export class AuthController {
     status: 401,
     description: 'Invalid signature or expired challenge',
   })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async verifyChallenge(@Body() verifyChallengeDto: VerifyChallengeDto) {
     try {
       this.logger.log(
@@ -361,12 +378,14 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('sessions')
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get active sessions for current user' })
   @ApiResponse({
     status: 200,
     description: 'Active sessions retrieved successfully',
     type: ActiveSessionsResponseDto,
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getActiveSessions(@Request() req: { user: { id: string } }) {
     const sessions = await this.authService.getActiveSessions(req.user.id);
     return sessions;
@@ -375,12 +394,15 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('sessions/:id/revoke')
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Revoke a specific session' })
   @ApiResponse({
     status: 200,
     description: 'Session revoked successfully',
     type: RevokeSessionResponseDto,
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Session not found' })
   async revokeSession(
     @Request() req: { user: { id: string } },
@@ -392,6 +414,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('2fa/generate')
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Generate 2FA secret and QR code' })
   @ApiResponse({
     status: 200,
@@ -404,6 +427,7 @@ export class AuthController {
     },
   })
   @ApiResponse({ status: 400, description: '2FA already enabled' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiBearerAuth('JWT-auth')
   async generateTwoFactorSecret(@Request() req: { user: { id: string } }) {
     return this.authService.generateTwoFactorSecret(req.user.id);
@@ -412,6 +436,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('2fa/enable')
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Enable 2FA with TOTP token' })
   @ApiResponse({
     status: 200,
@@ -434,6 +459,7 @@ export class AuthController {
   @Post('2fa/verify')
   @Throttle(getAuthThrottleOverride())
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Verify 2FA token during login' })
   @ApiResponse({
     status: 200,
@@ -449,6 +475,7 @@ export class AuthController {
     status: 401,
     description: 'Invalid credentials or TOTP token',
   })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async verifyTwoFactor(@Body() body: TwoFactorVerifyDto) {
     const user = await this.authService.validateUser(body.email, body.password);
     if (!user) {
@@ -474,6 +501,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('2fa/disable')
   @HttpCode(HttpStatus.OK)
+  @ApiIdempotencyHeader()
   @ApiOperation({ summary: 'Disable 2FA' })
   @ApiResponse({
     status: 200,

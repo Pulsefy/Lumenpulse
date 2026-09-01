@@ -49,6 +49,7 @@ import {
 } from './dto/rotate-contract-ids.dto';
 import { StellarContractRotationService } from './services/stellar-contract-rotation.service';
 import { ContractRotationService } from './services/contract-rotation.service';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 @ApiTags('stellar')
 @Controller('stellar')
@@ -83,12 +84,24 @@ export class StellarController {
     type: AccountBalancesDto,
   })
   @ApiResponse({
+    status: 400,
+    description: 'Invalid Stellar public key format',
+  })
+  @ApiResponse({
     status: 404,
     description: 'Account not found',
   })
   @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
+  })
+  @ApiResponse({
     status: 500,
     description: 'Internal server error',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'Horizon API is unavailable',
   })
   async getAccountBalances(
     @Param('publicKey') publicKey: string,
@@ -102,16 +115,41 @@ export class StellarController {
   @ApiOperation({
     summary: 'Get account transactions',
     description:
-      'Fetches recent transaction history for a given Stellar public key',
+      'Fetches recent operations for a given Stellar public key directly from the Horizon API.',
   })
   @ApiParam({
     name: 'publicKey',
     description: 'Stellar account public key',
     example: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
   })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of operations to return (default: 10)',
+    example: 10,
+  })
   @ApiResponse({
     status: 200,
-    description: 'Account transactions retrieved successfully',
+    description:
+      'Account operations retrieved successfully. The response is the raw array of Horizon operation records ' +
+      '(shape varies by operation type, e.g. payment, create_account, path_payment_strict_send) and is not a ' +
+      'fixed schema.',
+    schema: {
+      type: 'array',
+      items: { type: 'object' },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid Stellar public key format',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'Horizon API is unavailable',
   })
   async getAccountTransactions(
     @Param('publicKey') publicKey: string,
@@ -138,6 +176,10 @@ export class StellarController {
         network: { type: 'string' },
       },
     },
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
   })
   @ApiResponse({
     status: 503,
@@ -201,6 +243,7 @@ export class StellarController {
   })
   @ApiResponse({ status: 400, description: 'Invalid public key' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   @ApiResponse({ status: 503, description: 'Horizon API unavailable' })
   async getTransactions(
     @Query('publicKey') publicKey: string,
@@ -246,6 +289,10 @@ export class StellarController {
     description: 'Bad request - invalid query parameters',
   })
   @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
+  })
+  @ApiResponse({
     status: 503,
     description: 'Horizon API is unavailable',
   })
@@ -272,6 +319,7 @@ export class StellarController {
     description:
       'Pre-flight validation of contract IDs. Checks that contracts are reachable and callable without making any changes. Useful for verifying new IDs before rotation.',
   })
+  @ApiIdempotencyHeader()
   @ApiResponse({
     status: 200,
     description: 'Validation completed',
@@ -288,6 +336,10 @@ export class StellarController {
   @ApiResponse({
     status: 403,
     description: 'Forbidden (admin only)',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
   })
   @ApiResponse({
     status: 500,
@@ -329,6 +381,7 @@ export class StellarController {
       'All updates are atomic - validation of all contracts must pass before any changes are made. ' +
       'Creates an audit log entry recording who, when, and what was changed.',
   })
+  @ApiIdempotencyHeader()
   @ApiResponse({
     status: 200,
     description: 'Contracts rotated successfully',
@@ -345,6 +398,10 @@ export class StellarController {
   @ApiResponse({
     status: 403,
     description: 'Forbidden (admin only)',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
   })
   @ApiResponse({
     status: 500,

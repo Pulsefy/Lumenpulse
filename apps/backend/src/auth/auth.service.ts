@@ -1,11 +1,11 @@
 import {
   Injectable,
+  Inject,
+  forwardRef,
   Logger,
   UnauthorizedException,
   BadRequestException,
   NotFoundException,
-  Inject,
-  forwardRef,
   OnModuleDestroy,
 } from '@nestjs/common';
 import { UsersService } from '../users/users.service';

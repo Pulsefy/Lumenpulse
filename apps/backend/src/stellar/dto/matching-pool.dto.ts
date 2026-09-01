@@ -44,8 +44,15 @@ export class ApproveProjectDto {
 }
 
 export class RoundResponseDto {
+  @ApiProperty({ description: 'Identifier of the matching round' })
   roundId: string;
+
+  @ApiProperty({ description: 'Stellar transaction hash for the operation' })
   txHash: string;
+
+  @ApiProperty({ description: 'Current status of the round' })
   status: string;
+
+  @ApiProperty({ description: 'Timestamp the round record was created' })
   createdAt: Date;
 }

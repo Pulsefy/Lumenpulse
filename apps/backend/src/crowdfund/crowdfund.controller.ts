@@ -25,11 +25,13 @@ import {
   CrowdfundProjectDto,
   ContributorDto,
   ContributionResponseDto,
+  ContributionRecordDto,
 } from './dto/crowdfund.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles, UserRole } from '../auth/decorators/auth.decorators';
 import { config } from '../lib/config';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 @ApiTags('crowdfund')
 @Controller('crowdfund')
@@ -49,6 +51,7 @@ export class CrowdfundController {
     description: 'List of projects retrieved successfully',
     type: [CrowdfundProjectDto],
   })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   listProjects() {
     return this.svc.listProjects();
   }
@@ -65,6 +68,7 @@ export class CrowdfundController {
     type: CrowdfundProjectDto,
   })
   @ApiResponse({ status: 404, description: 'Project not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   getProject(@Param('id', ParseIntPipe) id: number) {
     return this.svc.getProject(id);
   }
@@ -72,6 +76,7 @@ export class CrowdfundController {
   @Post('projects')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Create a new project',
     description: 'Creates a project listing. Requires authentication.',
@@ -81,7 +86,9 @@ export class CrowdfundController {
     description: 'Project created successfully',
     type: CrowdfundProjectDto,
   })
+  @ApiResponse({ status: 400, description: 'Invalid project payload' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   createProject(@Body() dto: CreateProjectDto) {
     return this.svc.createProject(dto);
   }
@@ -89,6 +96,7 @@ export class CrowdfundController {
   // ── Contributions ──────────────────────────────────────────────────────────
 
   @Post('contribute')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Contribute to a project',
     description: 'Submit a contribution transaction to support a project.',
@@ -98,6 +106,13 @@ export class CrowdfundController {
     description: 'Contribution processed successfully',
     type: ContributionResponseDto,
   })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Invalid contribution (e.g. non-positive amount or project not accepting contributions)',
+  })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   contribute(@Body() dto: ContributeDto) {
     return this.svc.contribute(dto);
   }
@@ -143,6 +158,7 @@ export class CrowdfundController {
     type: [ContributorDto],
   })
   @ApiResponse({ status: 404, description: 'Project not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   getContributors(@Param('id', ParseIntPipe) id: number) {
     return this.svc.getContributors(id);
   }
@@ -158,13 +174,16 @@ export class CrowdfundController {
     description: 'Balance info retrieved successfully',
     schema: {
       properties: {
-        totalDeposited: { type: 'string', example: '15000' },
-        totalWithdrawn: { type: 'string', example: '0' },
-        balance: { type: 'string', example: '15000' },
+        balance: {
+          type: 'string',
+          description: 'Net balance (total deposited minus total withdrawn)',
+          example: '15000',
+        },
       },
     },
   })
   @ApiResponse({ status: 404, description: 'Project not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   getBalance(@Param('id', ParseIntPipe) id: number) {
     return this.svc.getProjectBalance(id);
   }
@@ -180,9 +199,11 @@ export class CrowdfundController {
   @ApiResponse({
     status: 200,
     description: 'Contributions list retrieved successfully',
+    type: [ContributionRecordDto],
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Project not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   getMyContributions(
     @Param('id', ParseIntPipe) id: number,
     @Query('publicKey') publicKey: string,

@@ -6,6 +6,7 @@ import {
   FeatureFlagResponseDto,
   FlagAuditLogResponseDto,
 } from './dto/feature-flag.dto';
+import { ApiIdempotencyHeader } from '../common/decorators/api-idempotency.decorator';
 
 @ApiTags('feature-flags')
 @Controller('feature-flags')
@@ -86,16 +87,19 @@ export class FeatureFlagsController {
   }
 
   @Post()
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Create or update feature flag configuration',
     description:
-      'Creates a new feature flag or modifies the active state of an existing one.',
+      'Creates a new feature flag or modifies the active state of an existing one. ' +
+      'NOTE: this endpoint currently has no authentication/authorization guard applied.',
   })
   @ApiResponse({
     status: 200,
     description: 'Feature flag upserted successfully',
     type: FeatureFlagResponseDto,
   })
+  @ApiResponse({ status: 400, description: 'Invalid feature flag payload' })
   upsert(@Body() body: UpsertFeatureFlagDto) {
     return this.flags.upsert(
       body.key,
@@ -106,9 +110,12 @@ export class FeatureFlagsController {
   }
 
   @Delete(':key')
+  @ApiIdempotencyHeader()
   @ApiOperation({
     summary: 'Delete feature flag',
-    description: 'Removes a feature flag from the system configuration.',
+    description:
+      'Removes a feature flag from the system configuration. ' +
+      'NOTE: this endpoint currently has no authentication/authorization guard applied.',
   })
   @ApiResponse({
     status: 200,
