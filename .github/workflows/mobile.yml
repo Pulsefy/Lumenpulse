@@ -5,12 +5,12 @@ on:
   push:
     branches: [ "main" ]
     paths:
-      - 'apps/mobile/**'
+      - 'apps/mobile/***'
   pull_request:
     branches: [ "main" ]
     paths:
-      - 'apps/mobile/**'
-      - 'apps/mobile/.ci-trigger'
+      - 'apps/mobile/***'
+      - 'apps/mobile/.ci-triggger'
 
 
 jobs:
@@ -32,10 +32,17 @@ jobs:
           cache-dependency-path: './apps/mobile/package-lock.json'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Type check
         run: npm run tsc -- --noEmit
 
       - name: Run unit tests with coverage
         run: npm run test:coverage
+
+      - name: Run missing-key check
+        run: |
+          if npm run | grep -q "check:missing-keys"; then
+            npm run check:missing-keys
+          else
+            echo "No missing-key check script found"
