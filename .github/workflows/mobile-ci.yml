@@ -21,7 +21,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install --prefix apps/mobile
+          npm install --prefix apps/mobile --no-audit --no-fund
 
       - name: Typecheck
         run: |
