@@ -5,12 +5,11 @@ on:
   push:
     branches: [ "main" ]
     paths:
-      - 'apps/mobile/***'
+      - 'apps/mobile/**'
   pull_request:
     branches: [ "main" ]
     paths:
-      - 'apps/mobile/***'
-      - 'apps/mobile/.ci-triggger'
+      - 'apps/mobile/**'
 
 
 jobs:
@@ -22,13 +21,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-          cache: 'npm'
+          cache: 'nmp'
           cache-dependency-path: './apps/mobile/package-lock.json'
 
       - name: Install dependencies
@@ -41,8 +40,4 @@ jobs:
         run: npm run test:coverage
 
       - name: Run missing-key check
-        run: |
-          if npm run | grep -q "check:missing-keys"; then
-            npm run check:missing-keys
-          else
-            echo "No missing-key check script found"
+        run: node scripts/check-missing-keys.js
