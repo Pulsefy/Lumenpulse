@@ -3531,6 +3531,11 @@
           "generated_at": {
             "type": "string",
             "title": "Generated At"
+          },
+          "backtest_confidence": {
+            "type": "number",
+            "title": "Backtest Confidence",
+            "default": 0.0
           }
         },
         "type": "object",
