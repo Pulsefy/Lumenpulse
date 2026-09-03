@@ -103,3 +103,24 @@ fn test_update_contract_not_found() {
     let result = client.try_update_contract(&admin, &key, &addr, &1u32, &env_meta);
     assert_eq!(result, Err(Ok(RegistryError::ContractNotFound)));
 }
+
+#[test]
+fn test_list_contracts() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = setup_test(&env);
+    client.initialize(&admin);
+
+    let key1 = Symbol::new(&env, "vault");
+    let key2 = Symbol::new(&env, "pool");
+    let addr1 = Address::generate(&env);
+    let addr2 = Address::generate(&env);
+    let env_meta = Symbol::new(&env, "testnet");
+
+    client.register_contract(&admin, &key1, &addr1, &1u32, &env_meta);
+    client.register_contract(&admin, &key2, &addr2, &1u32, &env_meta);
+
+    let list = client.list_contracts();
+    assert_eq!(list.len(), 2);
+}
