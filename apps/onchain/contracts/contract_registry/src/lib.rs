@@ -108,7 +108,7 @@ impl ContractRegistry {
             key: key.clone(),
             address,
             version,
-            environment: env_meta,
+            environment: env_meta.clone(),
         };
         env.storage().persistent().set(&DataKey::Contract(key.clone()), &info);
         events::ContractUpdatedEvent {
