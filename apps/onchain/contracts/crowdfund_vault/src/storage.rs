@@ -5,6 +5,7 @@ use soroban_sdk::{contracttype, Address, Symbol};
 // LEDGER_BUMP: the new TTL to set when extending (≈30 days at 5 s/ledger).
 pub const LEDGER_THRESHOLD: u32 = 100_000;
 pub const LEDGER_BUMP: u32 = 518_400;
+pub const MAX_MILESTONE_DECISION_BATCH_SIZE: u32 = 25;
 
 #[contracttype]
 #[derive(Clone)]
@@ -90,6 +91,22 @@ pub struct MilestoneDispute {
     pub challenger: Address,
     pub opened_at: u64,
     pub reason: Symbol,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneDecision {
+    pub project_id: u64,
+    pub milestone_id: u32,
+    pub approve: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneDecisionOutcome {
+    pub project_id: u64,
+    pub milestone_id: u32,
+    pub approved: bool,
 }
 
 #[contracttype]

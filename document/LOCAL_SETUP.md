@@ -378,6 +378,8 @@ The deploy command prints a **contract ID**. Record it and add it to the canonic
 
 If you are using `scripts/.env`, keep the same contract ID there so the helper script, deployment outputs, and app environments stay aligned.
 
+For the full deployment sequence across all 19 contracts, dependency ordering, canonical manifest handling, smoke validation, and rollback playbooks, see **[document/CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md](CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md)**.
+
 To deploy all contracts at once using the monorepo helper script:
 
 ```bash

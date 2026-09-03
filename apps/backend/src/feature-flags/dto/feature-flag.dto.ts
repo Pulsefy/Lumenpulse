@@ -52,3 +52,45 @@ export class FeatureFlagResponseDto {
   })
   changedBy?: string | null;
 }
+
+export class FlagAuditLogResponseDto {
+  @ApiProperty({ description: 'Audit record ID (UUID)' })
+  id: string;
+
+  @ApiProperty({
+    description: 'The feature-flag key that was mutated',
+    example: 'new-onboarding-flow',
+  })
+  flagKey: string;
+
+  @ApiProperty({
+    description: "Action performed: 'upsert' | 'remove'",
+    example: 'upsert',
+  })
+  action: 'upsert' | 'remove';
+
+  @ApiPropertyOptional({
+    description: "Flag's enabled state before this mutation (null if new flag)",
+    example: false,
+  })
+  previousEnabled: boolean | null;
+
+  @ApiPropertyOptional({
+    description:
+      "Flag's enabled state after this mutation (null for removals)",
+    example: true,
+  })
+  newEnabled: boolean | null;
+
+  @ApiPropertyOptional({
+    description: 'Actor who requested the change',
+    example: 'admin@lumenpulse.com',
+  })
+  actor: string | null;
+
+  @ApiProperty({
+    description: 'Timestamp when the mutation was applied',
+    example: '2024-06-01T12:00:00.000Z',
+  })
+  changedAt: Date;
+}

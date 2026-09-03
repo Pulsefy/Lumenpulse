@@ -7,33 +7,15 @@
  *  - /grants/rounds + /grants/rounds/:id/export (contribution aggregates)
  */
 
+import type { components } from '@/generated/openapi-types';
 import { clientConfig } from '@/lib/config';
 
 const API_BASE = clientConfig.apiUrl;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export interface ContributorActivity {
-  id: string;
-  activityType:
-    | "contributor_registered"
-    | "grant_contribution"
-    | "reputation_change";
-  contributorAddress: string;
-  githubHandle?: string;
-  timestamp: string;
-  summary: string;
-  metadata?: Record<string, unknown>;
-}
-
-export interface ContributorFeedResponse {
-  items: ContributorActivity[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-  isSparseContributor: boolean;
-}
+export type ContributorActivity = components['schemas']['FeedActivityItemDto'];
+export type ContributorFeedResponse = components['schemas']['ContributorFeedResponseDto'];
 
 export interface ContributorProfile {
   address: string;

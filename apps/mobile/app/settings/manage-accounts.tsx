@@ -21,6 +21,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
 import { useWallet } from '../../contexts/WalletContext';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
+import { useNotifications } from '../../contexts/NotificationsContext';
 
 const STELLAR_PUBLIC_KEY_REGEX = /\bG[A-Z2-7]{55}\b/;
 
@@ -44,6 +45,7 @@ const extractPublicKey = (payload: string): string | null => {
 export default function ManageAccountsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { retryRegistration } = useNotifications();
   const { t } = useLocalization();
   const [accounts, setAccounts] = useState<LinkedStellarAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -174,6 +176,8 @@ export default function ManageAccountsScreen() {
     // state so screens that read useWallet() (e.g. contributor profile)
     // reflect the newly linked account immediately.
     await adoptLinkedAccount(publicKey, environmentConfig.id);
+    // Re-register so the backend associates this device with the current account session.
+    void retryRegistration();
     Alert.alert(
       t('settings.manage_accounts.account_linked'),
       `${truncateKey(publicKey)} ${t('settings.manage_accounts.account_linked_message')}`,
@@ -194,7 +198,7 @@ export default function ManageAccountsScreen() {
           onPress: () => {
             void (async () => {
               const isConfirmed = await requireBiometricConfirmation(
-                'Confirm your identity to remove account'
+                'Confirm your identity to remove account',
               );
               if (!isConfirmed) return;
 
@@ -335,10 +339,7 @@ export default function ManageAccountsScreen() {
               accessible
               accessibilityLabel={t('wallet.reconnect.restoring')}
             >
-              <ActivityIndicator
-                color={colors.accent}
-                accessibilityLabel={t('common.loading')}
-              />
+              <ActivityIndicator color={colors.accent} accessibilityLabel={t('common.loading')} />
               <Text style={[styles.accountKey, { color: colors.textSecondary, marginLeft: 10 }]}>
                 {t('wallet.reconnect.restoring')}
               </Text>
@@ -366,17 +367,13 @@ export default function ManageAccountsScreen() {
               <Text style={[styles.helperText, { color: colors.warning }]} accessible>
                 {t('wallet.network_mismatch.message', { network: environmentLabel })}
               </Text>
-              {lastConnectedNetwork &&
-                lastConnectedNetwork !== environmentConfig.id && (
-                  <Text
-                    style={[styles.helperText, { color: colors.textSecondary }]}
-                    accessible
-                  >
-                    {t('wallet.network_mismatch.last_network_label', {
-                      network: lastConnectedNetwork,
-                    })}
-                  </Text>
-                )}
+              {lastConnectedNetwork && lastConnectedNetwork !== environmentConfig.id && (
+                <Text style={[styles.helperText, { color: colors.textSecondary }]} accessible>
+                  {t('wallet.network_mismatch.last_network_label', {
+                    network: lastConnectedNetwork,
+                  })}
+                </Text>
+              )}
               <TouchableOpacity
                 style={[styles.primaryButton, { backgroundColor: colors.warning }]}
                 onPress={reconnect}

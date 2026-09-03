@@ -321,7 +321,10 @@
       "mainnet": "主网",
       "endpoint_not_configured": "端点未配置",
       "mainnet_unavailable": "主网不可用",
-      "mainnet_unavailable_message": "请先配置主网 API 和 Soroban RPC 端点再切换。"
+      "mainnet_unavailable_message": "请先配置主网 API 和 Soroban RPC 端点再切换。",
+      "mainnet_confirmation_title": "切换到主网？",
+      "mainnet_confirmation_message": "您即将切换到主网，其中真实资产处于风险中。所有缓存数据将被清除，您的钱包需要重新选择。此操作无法撤销。",
+      "mainnet_confirmation_confirm": "切换到主网"
     },
     "version": "版本",
     "environment": "环境",
@@ -346,6 +349,61 @@
       "version_prefix": "版本 {{version}}",
       "published": "发布日期: {{date}}",
       "testing": "测试中..."
+    },
+    "data_privacy": {
+      "title": "数据与隐私",
+      "description": "查看 LumenPulse 存储在本设备上的所有数据，按类别或一次性清除，并选择要分享的诊断信息。",
+      "stored_data": "存储在本设备",
+      "privacy_controls": "隐私设置",
+      "total_stored": "存储总量",
+      "clear": "清除",
+      "item_count_other": "{{count}} 项",
+      "clear_category_title": "清除{{category}}？",
+      "clear_category_message": "这将删除本设备上存储的所有{{category}}。联网后可重新下载。",
+      "category_cleared": "已清除{{category}}。",
+      "clear_failed": "无法清除该数据，请重试。",
+      "clear_all_title": "清除所有本地数据",
+      "clear_all_message": "这将从本设备删除缓存内容、已保存的新闻、自选列表、缓存图片、草稿和诊断数据。您仍将保持登录状态。",
+      "clear_all_hint": "您将保持登录状态，等待同步的更改也会保留。",
+      "clear_all_success": "已清除所有本地数据，您仍处于登录状态。",
+      "clear_all_partial_other": "已清除大部分数据，但有 {{count}} 个类别未能清除，请重试。",
+      "queued_preserved_warning_other": "仍有 {{count}} 项更改等待同步，将予以保留。",
+      "preference_save_failed": "无法保存该偏好设置，请重试。",
+      "preferences_survive_clear": "清除数据时会保留您的分析和崩溃报告选择 — 清除操作绝不会重新开启它们。",
+      "analytics": {
+        "title": "使用分析",
+        "description": "分享匿名使用数据以帮助改进应用。关闭后将停止在本设备上收集。"
+      },
+      "crash_reporting": {
+        "title": "崩溃报告",
+        "description": "自动报告崩溃和错误。发送报告前始终会移除钱包地址。"
+      },
+      "categories": {
+        "cached_content": {
+          "title": "缓存内容",
+          "description": "为离线使用而保存的新闻、投资组合快照、项目和资产价格。"
+        },
+        "saved_news": {
+          "title": "已保存的新闻",
+          "description": "您收藏以便稍后阅读的文章。"
+        },
+        "watchlists": {
+          "title": "自选列表",
+          "description": "本地缓存的自选列表及其上次同步时间。"
+        },
+        "image_cache": {
+          "title": "缓存图片",
+          "description": "存储在磁盘上的远程图片，避免重复下载。"
+        },
+        "drafts": {
+          "title": "草稿",
+          "description": "已保存的未完成贡献，可稍后继续。"
+        },
+        "diagnostics": {
+          "title": "诊断数据",
+          "description": "本设备上收集的本地分析和诊断状态。"
+        }
+      }
     }
   },
   "errors": {

@@ -152,3 +152,8 @@ cython_debug/
 
 # Benchmark results
 benchmark-results/
+
+# Vendored spaCy NER model artifact (baked into the image at build time).
+# Keep the README but ignore the downloaded model files.
+models/ner/*
+!models/ner/README.md

@@ -1,19 +1,83 @@
 # LumenPulse — Smart Contract Interface Reference
 
 > **Soroban SDK**: v23 · **Rust toolchain**: stable + `wasm32-unknown-unknown` target  
-> Source: [`apps/onchain/contracts/`](../apps/onchain/contracts/)
+> Source: [`apps/onchain/contracts/`](../apps/onchain/contracts/) · **Operations & Deployment Playbook**: [`document/CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md`](CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md)
 
-This document provides a complete technical reference for every public function (WASM entrypoint), emitted event, error code, and storage layout across all Soroban smart contracts in the LumenPulse workspace.
+This document provides a complete technical reference for every public function (WASM entrypoint), emitted event, error code, and storage layout across all Soroban smart contracts in the LumenPulse workspace. For operational deployment steps, canonical manifest management, and emergency rollback procedures, see the [Contract Deployment & Rollback Playbook](CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md).
 
 ---
 
 ## Table of Contents
 
+0. [Version Introspection](#0-version-introspection)
 1. [LumenToken](#1-lumentoken)
 2. [CrowdfundVault](#2-crowdfundvault)
 3. [ContributorRegistry](#3-contributorregistry)
 4. [VestingWallet](#4-vestingwallet)
 5. [UpgradableContract](#5-upgradablecontract)
+
+---
+
+## 0. Version Introspection
+
+**Crate**: [`version-interface`](../apps/onchain/contracts/version-interface/) · **Trait**: `VersionedContract` · **Generated client**: `VersionedClient`  
+**Source**: [`contracts/version-interface/src/lib.rs`](../apps/onchain/contracts/version-interface/src/lib.rs)
+
+Issue #1046 introduced a standardized, on-chain version introspection interface so clients and operators can query a deployed contract's semantic version directly — instead of relying only on off-chain deployment manifests.
+
+### 0.1 `ContractVersion` — response format
+
+```rust
+pub struct ContractVersion {
+    pub major: u32,
+    pub minor: u32,
+    pub patch: u32,
+}
+```
+
+This is a stable SemVer-style triple:
+
+| Field | Bumped when |
+|-------|-------------|
+| `major` | The storage layout or interface changes in a way that is **not** backward compatible — clients/operators must treat this as a different contract surface. |
+| `minor` | A backward-compatible addition (new entrypoint, new optional behavior). |
+| `patch` | A backward-compatible fix with no interface or storage change. |
+
+`ContractVersion` also derives `Ord`/`PartialOrd` for straightforward comparison, and exposes:
+
+```rust
+pub fn is_compatible_with(&self, other: &ContractVersion) -> bool
+```
+
+Two versions are compatible when they share the same `major` (for a pre-1.0 `0.x` line, `minor` is treated as breaking too, since that line carries no stability guarantee). This is the method backend config validation and release tooling should use to decide whether a newly deployed contract is safe to talk to, rather than comparing fields by hand.
+
+### 0.2 `VersionedContract` — interface
+
+```rust
+pub trait VersionedContract {
+    fn contract_version(env: Env) -> ContractVersion;
+}
+```
+
+Any contract that implements this trait exposes a `contract_version` entrypoint with this exact signature — implementers declare `impl VersionedContract for ...`, so a signature change is a compile-time break across the whole workspace, and the crate's conformance suite exercises every implementer end to end through the trait-generated `VersionedClient`.
+
+### 0.3 Implementing contracts
+
+| Contract | `contract_version()` |
+|----------|-----------------------|
+| `LumenToken` | `1.0.0` |
+| `CrowdfundVaultContract` | `1.0.0` |
+| `ContributorRegistryContract` | `1.0.0` |
+| `VestingWalletContract` | `1.0.0` |
+| `UpgradableContract` | `1.0.0` (also keeps the pre-existing `version() -> u32` entrypoint for backward compatibility — prefer `contract_version` for new integrations) |
+
+Example (Soroban CLI):
+
+```bash
+soroban contract invoke \
+  --id <CONTRACT_ID> \
+  --fn contract_version
+```
 
 ---
 
@@ -248,6 +312,16 @@ Upgrade the contract WASM. Emits [`UpgradedEvent`](#14-events).
 
 **Returns**: `()`  
 **Auth**: Requires admin authorization. **Panics** if `caller != admin`.
+
+---
+
+#### `contract_version`
+```rust
+pub fn contract_version(env: Env) -> ContractVersion
+```
+Implements [`VersionedContract`](#0-version-introspection) (issue #1046).
+
+**Returns**: `ContractVersion { major: 1, minor: 0, patch: 0 }`
 
 ---
 
@@ -586,6 +660,7 @@ Adjust a contributor's reputation score.
 | `is_milestone_approved` | `(env, project_id: u64) -> Result<bool, CrowdfundError>` | Milestone approval status |
 | `get_project_status` | `(env, project_id: u64) -> Result<Symbol, CrowdfundError>` | `"ACTIVE"` or `"CANCELED"` |
 | `require_not_paused` | `(env) -> bool` | Current pause state |
+| `contract_version` | `(env) -> ContractVersion` | Implements [`VersionedContract`](#0-version-introspection) (issue #1046); returns `{ major: 1, minor: 0, patch: 0 }` |
 
 ---
 
@@ -798,6 +873,7 @@ Transfer the admin role.
 | `get_contributor` | `(env, address: Address) -> Result<ContributorData, ContributorError>` | Full contributor profile |
 | `get_contributor_by_github` | `(env, github_handle: String) -> Result<ContributorData, ContributorError>` | Lookup by GitHub handle |
 | `get_reputation` | `(env, contributor: Address) -> Result<u64, ContributorError>` | Reputation score |
+| `contract_version` | `(env) -> ContractVersion` | Implements [`VersionedContract`](#0-version-introspection) (issue #1046); returns `{ major: 1, minor: 0, patch: 0 }` |
 
 ---
 
@@ -916,6 +992,7 @@ Claim available vested tokens. Calculates the linearly vested amount based on el
 | `get_vesting` | `(env, beneficiary: Address) -> Result<VestingData, VestingError>` | Full vesting schedule data |
 | `get_claimable` | `(env, beneficiary: Address) -> Result<i128, VestingError>` | Currently claimable amount (view) |
 | `get_available_amount` | `(env, beneficiary: Address) -> Result<i128, VestingError>` | Alias for `get_claimable` |
+| `contract_version` | `(env) -> ContractVersion` | Implements [`VersionedContract`](#0-version-introspection) (issue #1046); returns `{ major: 1, minor: 0, patch: 0 }` |
 
 ---
 
@@ -1055,7 +1132,19 @@ pub fn get_count(env: Env) -> u32
 ```rust
 pub fn version() -> u32
 ```
+Legacy single-integer version identifier, kept for backward compatibility with existing callers. Prefer `contract_version` (below) for new integrations.
+
 **Returns**: `u32` — the contract version identifier (currently `1`).
+
+---
+
+#### `contract_version`
+```rust
+pub fn contract_version(env: Env) -> ContractVersion
+```
+Implements [`VersionedContract`](#0-version-introspection) (issue #1046).
+
+**Returns**: `ContractVersion { major: 1, minor: 0, patch: 0 }`
 
 ---
 

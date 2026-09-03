@@ -74,6 +74,47 @@ export function isTestnetConfigReady(): boolean {
   return Boolean(testnet.apiBaseUrl && testnet.sorobanRpcUrl);
 }
 
+/**
+ * Validates that required API endpoints are properly configured.
+ * In release builds, this prevents accidentally shipping with localhost
+ * defaults or unset URLs that could cause silent data mismatches.
+ *
+ * @throws Error in release builds if critical endpoints are missing or use localhost
+ */
+export function validateEnvironmentConfig(): void {
+  const isRelease = config.isProduction;
+
+  // In release builds, validate that we don't have unsafe defaults
+  if (isRelease) {
+    // Check mainnet has valid URLs (not localhost, not empty)
+    const mainnetConfig = environmentConfigs.mainnet;
+    if (!mainnetConfig.apiBaseUrl || mainnetConfig.apiBaseUrl.includes('localhost')) {
+      throw new Error(
+        `FATAL: Mainnet API URL is not properly configured. ` +
+          `Set EXPO_PUBLIC_MAINNET_API_URL to a valid production endpoint. ` +
+          `Current value: "${mainnetConfig.apiBaseUrl}"`
+      );
+    }
+
+    if (!mainnetConfig.sorobanRpcUrl || mainnetConfig.sorobanRpcUrl.includes('localhost')) {
+      throw new Error(
+        `FATAL: Mainnet Soroban RPC URL is not properly configured. ` +
+          `Set EXPO_PUBLIC_MAINNET_SOROBAN_RPC_URL to a valid production endpoint. ` +
+          `Current value: "${mainnetConfig.sorobanRpcUrl}"`
+      );
+    }
+
+    // Check testnet doesn't default to localhost (it should have explicit config)
+    const testnetConfig = environmentConfigs.testnet;
+    if (testnetConfig.apiBaseUrl === 'http://localhost:3000') {
+      throw new Error(
+        `FATAL: Testnet API URL defaulted to localhost. ` +
+          `Set EXPO_PUBLIC_TESTNET_API_URL or EXPO_PUBLIC_API_URL to a valid endpoint.`
+      );
+    }
+  }
+}
+
 export const config = {
   /**
    * API Configuration

@@ -26,22 +26,44 @@ Active cargo workspace members (these are what `cargo build` / CI compile):
 | `feature_flags` | On-chain feature flag toggles |
 
 Not built by the workspace:
-- `contracts/tests/` — cross-contract integration test suite (explicitly excluded in the root
-  `Cargo.toml`)
+- `contracts/tests/` — cross-contract integration test suite (explicitly excluded in the root `Cargo.toml`)
 - Legacy prototype crates that were never workspace members and are pending separate decisions:
-  `contracts/stable_swap_pool/`, `contracts/liquidity_pool/`,
-  `contracts/notification_broker/`
+  `contracts/stable_swap_pool/`, `contracts/liquidity_pool/`, `contracts/notification_broker/`
+
+## Testnet manifest schema
+
+The backend reads the testnet manifest from `apps/onchain/testnet-manifest.json` and seeds it through the deployment service in `apps/backend/src/contracts/deployment-manifest.service.ts`. The API DTO in `apps/backend/src/contracts/dto/deployment-manifest.dto.ts` expects a top-level object shaped like this:
+
+```json
+{
+  "network": "testnet",
+  "rpc_url": "https://soroban-testnet.stellar.org:443",
+  "admin_address": "G...",
+  "contracts": {
+    "contributor_registry": {
+      "id": "C...",
+      "wasm_hash": "64-hex-char-wasm-hash"
+    },
+    "feature_flags": {
+      "reason": "Not deployed on testnet: ..."
+    }
+  }
+}
+```
+
+Rules enforced by CI:
+- Each deployed contract record must include a valid Soroban contract ID (`id` / `contract_id`) matching `^C[0-9A-Z]{55}$`.
+- Each deployed contract record must include a WASM hash (`wasm_hash` / `wasmHash`) matching `^[A-Fa-f0-9]{64}$`.
+- Contracts that are intentionally not deployed must still be listed with a non-empty `reason` field instead of being omitted.
+- The validator script is `apps/onchain/scripts/validate-manifest.js` and is executed by GitHub Actions in `.github/workflows/onchain.yml`.
+
+This is the contract metadata contract used by the backend: `contracts` is a map keyed by contract name, and the service persists the entire JSON under the `contracts` field without rewriting the schema.
+
+For end-to-end deployment workflows, topological contract ordering, smoke verification, and emergency halt procedures, consult the [Contract Deployment & Rollback Playbook](../../document/CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md).
 
 ### Retired contracts
 
-- **`aave_lending_pool`** — removed from the repository. Decision rationale: it was never a cargo
-  workspace member (absent from both the `members` list and `Cargo.lock`, so it never affected
-  workspace build time), it had zero code-level integration anywhere in the repo (no path
-  dependencies, not referenced by any Rust code, deploy scripts, or the testnet manifest), it
-  pinned an older `soroban-sdk 21` while the workspace standard is SDK 23, and it only implemented
-  deposit/withdraw/interest accrual with no borrow/repay/liquidation paths. Its "mock Aave"
-  narrative lives on purely as documentation of how to integrate an external lending provider via
-  `YieldProviderTrait` (see `YIELD_VAULT_IMPLEMENTATION.md`).
+- **`aave_lending_pool`** — removed from the repository. Decision rationale: it was never a cargo workspace member, it had zero integration in the repo, it pinned an older `soroban-sdk 21`, and it only implemented a prototype lending flow rather than the current protocol stack. Its “mock Aave” narrative remains as documentation of how to integrate an external lending provider via `YieldProviderTrait` (see `YIELD_VAULT_IMPLEMENTATION.md`).
 
 ## 🚀 Quick Start
 

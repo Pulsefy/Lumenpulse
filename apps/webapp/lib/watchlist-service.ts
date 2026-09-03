@@ -1,3 +1,4 @@
+import type { components } from '@/generated/openapi-types';
 import { clientConfig } from '@/lib/config';
 
 export const WatchlistItemType = {
@@ -5,48 +6,16 @@ export const WatchlistItemType = {
   PROJECT: 'project',
 } as const;
 
-export type WatchlistItemType = (typeof WatchlistItemType)[keyof typeof WatchlistItemType];
+export type WatchlistItemType = components['schemas']['WatchlistItemType'];
 
-export interface WatchlistItem {
-  id: string;
-  userId: string;
-  symbol: string;
-  name: string | null;
-  type: WatchlistItemType;
-  assetIssuer: string | null;
-  imageUrl: string | null;
-  notes: string | null;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface WatchlistResponse {
-  items: WatchlistItem[];
-  total: number;
-}
-
-export interface AddToWatchlistPayload {
-  symbol: string;
-  name?: string;
-  type: WatchlistItemType;
-  assetIssuer?: string;
-  imageUrl?: string;
-  notes?: string;
-  sortOrder?: number;
-}
-
-export interface UpdateWatchlistPayload {
-  name?: string;
-  imageUrl?: string;
-  notes?: string;
-  sortOrder?: number;
-}
-
-export interface ToggleWatchlistResult {
+export type WatchlistItem = components['schemas']['WatchlistItemResponseDto'];
+export type WatchlistResponse = components['schemas']['WatchlistResponseDto'];
+export type AddToWatchlistPayload = components['schemas']['AddToWatchlistDto'];
+export type UpdateWatchlistPayload = components['schemas']['UpdateWatchlistDto'];
+export type ToggleWatchlistResult = {
   added: boolean;
   item?: WatchlistItem;
-}
+};
 
 export class WatchlistApiService {
   private static readonly BASE_URL =

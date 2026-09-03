@@ -14,6 +14,7 @@ import { MatchingPoolAdminController } from './controllers/matching-pool-admin.c
 import { TestnetBootstrapController } from './controllers/testnet-bootstrap.controller';
 import { TestnetBootstrapService } from './services/testnet-bootstrap.service';
 import { AppCacheModule } from '../cache/cache.module';
+import { BootstrapRunsModule } from '../bootstrap-runs/bootstrap-runs.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AppCacheModule } from '../cache/cache.module';
     AuditModule,
     AppConfigModule,
     AppCacheModule,
+    BootstrapRunsModule,
   ],
   controllers: [
     StellarController,

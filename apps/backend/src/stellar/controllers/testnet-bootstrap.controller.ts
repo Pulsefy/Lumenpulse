@@ -101,6 +101,6 @@ export class TestnetBootstrapController {
       `Admin ${user.id} requesting testnet bootstrap for ${dto.publicKey}`,
     );
 
-    return this.bootstrapService.fundTestnetAccount(dto.publicKey);
+    return this.bootstrapService.fundTestnetAccount(dto.publicKey, user.id);
   }
 }

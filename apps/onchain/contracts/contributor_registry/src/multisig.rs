@@ -2,7 +2,8 @@ use soroban_sdk::{contracttype, Address, Env, Vec};
 
 use crate::errors::ContributorError;
 use crate::events::{
-    ProposalCancelledEvent, ProposalCreatedEvent, ProposalExecutedEvent, SignatureCollectedEvent,
+    ProposalCancelledEvent, ProposalCreatedEvent, ProposalExecutedEvent, ProposalExpiredEvent,
+    SignatureCollectedEvent,
 };
 use crate::storage::DataKey;
 
@@ -329,6 +330,12 @@ pub(crate) fn expire(env: &Env, proposal_id: u64) -> Result<(), ContributorError
     env.storage()
         .instance()
         .set(&DataKey::Proposal(proposal_id), &proposal);
+
+    ProposalExpiredEvent {
+        proposal_id,
+        expired_at: env.ledger().timestamp(),
+    }
+    .publish(env);
 
     Ok(())
 }

@@ -386,17 +386,51 @@ def main():
     if len(sys.argv) > 1:
         command = sys.argv[1].lower()
 
-        if command == "run":
+        if command == "check-models":
+            # Verifies the pinned NER model (and other baked artifacts) are
+            # present at the expected version, failing fast on mismatch. Used
+            # as a container startup readiness gate.
+            from src.analytics.ner_service import check_model_available
+
+            logger.info("Checking pinned NER model availability...")
+            try:
+                check_model_available()
+            except Exception as exc:
+                logger.error("Model startup check failed: %s", exc)
+                print(f"❌ Model check failed: {exc}")
+                return {
+                    "success": False,
+                    "checks": {"ner_model": False},
+                    "error": str(exc),
+                }
+            logger.info("Pinned NER model check passed.")
+            print("✓ Pinned NER model present and matches the pinned version.")
+            return {"success": True, "checks": {"ner_model": True}}
+
+        if command == "serve":
+            # Run the startup model gate before starting the scheduler so the
+            # service fails fast instead of running with a broken/unpinned model.
+            from src.analytics.ner_service import check_model_available
+
+            try:
+                check_model_available()
+            except Exception as exc:
+                logger.error(
+                    "Pinned NER model gate failed at startup; aborting: %s", exc
+                )
+                print(f"❌ {exc}")
+                return {"success": False, "error": str(exc)}
+
+            start_scheduler()
+        elif command == "run":
             # Run pipeline once and exit
             return run_data_pipeline()
-        elif command == "serve":
-            # Start scheduled service
-            start_scheduler()
         elif command == "help":
             print("Usage:")
-            print("  python pipeline.py run     - Run pipeline once")
-            print("  python pipeline.py serve   - Start scheduled service")
-            print("  python pipeline.py help    - Show this help")
+            print("  python pipeline.py run          - Run pipeline once")
+            print("  python pipeline.py serve        - Start scheduled service")
+            print("  python pipeline.py check-models - Verify pinned model artifacts")
+            print("  python pipeline.py help         - Show this help")
             return {"help": True}
         else:
             print(f"Unknown command: {command}")

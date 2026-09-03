@@ -77,4 +77,10 @@ RUN mkdir -p /app/logs /app/models /app/data /app/.cache/huggingface \
 
 USER appuser
 
+# Vendor the pinned spaCy NER model at build time (not container start). The
+# script installs the exact pinned wheel and copies it into /app/models/ner so
+# the runtime has zero outbound network dependency for model resolution.
+# Fails the build if the pinned model cannot be fetched.
+RUN python scripts/fetch_ner_model.py && python scripts/fetch_ner_model.py --check-only
+
 CMD ["python", "src/main.py"]

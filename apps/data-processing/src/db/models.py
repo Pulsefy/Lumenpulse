@@ -2,6 +2,7 @@
 Database models for analytics data persistence
 """
 
+import uuid
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import (
@@ -755,6 +756,26 @@ class EntityLinkingReview(Base):
         )
 
 
+class SentimentLabel(Base):
+    """Human-labelled sentiment example used for evaluation and retraining."""
+
+    __tablename__ = "sentiment_labels"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    text = Column(Text, nullable=False)
+    label = Column(String(20), nullable=False, index=True)
+    labeller = Column(String(255), nullable=False)
+    labelled_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    is_held_out = Column(Boolean, nullable=False, default=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ux_sentiment_labels_text", "text", unique=True),
+        Index("idx_sentiment_labels_evaluation_split", "is_held_out", "label"),
+    )
+
+
 class DailyOnchainKPISnapshot(Base):
     """
     Stores daily aggregated snapshots of core on-chain KPIs
@@ -799,3 +820,44 @@ class DailyOnchainKPISnapshot(Base):
             f"tvl={self.tvl}, volume={self.volume}, active_rounds={self.active_rounds}, "
             f"contribution_count={self.contribution_count})>"
         )
+
+
+class AnalyticsJob(Base):
+    """
+    Tracks long-running analytics operations (retraining, correlation analysis,
+    daily KPI snapshots) submitted to the async job queue (#1248), so a caller
+    gets a job identifier immediately and can poll for the outcome instead of
+    blocking on the request.
+    """
+
+    __tablename__ = "analytics_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(
+        String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4())
+    )
+    job_type = Column(String(50), nullable=False, index=True)
+    # queued | running | succeeded | failed
+    status = Column(String(20), nullable=False, default="queued", index=True)
+    # Set to "<job_type>:<idempotency_hash>" while queued/running, and cleared
+    # to NULL on completion so a fresh submission can run again later. The
+    # unique index on this column is what collapses concurrent duplicates.
+    dedupe_key = Column(String(255), nullable=True, unique=True, index=True)
+    params = Column(JSON, nullable=True)
+    result = Column(JSON, nullable=True)
+    error = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    def __repr__(self):
+        return f"<AnalyticsJob(job_id='{self.job_id}', type='{self.job_type}', status='{self.status}')>"

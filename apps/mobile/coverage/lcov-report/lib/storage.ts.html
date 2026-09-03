@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">41.73% </span>
+                <span class="strong">41.08% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>53/127</span>
+                <span class='fraction'>53/129</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">51.61% </span>
+                <span class="strong">48.48% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>16/31</span>
+                <span class='fraction'>16/33</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">40.8% </span>
+                <span class="strong">40.15% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>51/125</span>
+                <span class='fraction'>51/127</span>
             </div>
         
             
@@ -430,7 +430,17 @@
 <a name='L365'></a><a href='#L365'>365</a>
 <a name='L366'></a><a href='#L366'>366</a>
 <a name='L367'></a><a href='#L367'>367</a>
-<a name='L368'></a><a href='#L368'>368</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">2x</span>
+<a name='L368'></a><a href='#L368'>368</a>
+<a name='L369'></a><a href='#L369'>369</a>
+<a name='L370'></a><a href='#L370'>370</a>
+<a name='L371'></a><a href='#L371'>371</a>
+<a name='L372'></a><a href='#L372'>372</a>
+<a name='L373'></a><a href='#L373'>373</a>
+<a name='L374'></a><a href='#L374'>374</a>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -442,6 +452,7 @@
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -497,6 +508,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -744,6 +756,14 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -816,6 +836,7 @@ export interface WalletAccountMetadata {
   id: string;
   publicKey: string;
   label?: string | null;
+  isPrimary?: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -859,6 +880,7 @@ const sanitizeWalletAccounts = (accounts: WalletAccountMetadata[]): WalletAccoun
       id: account.id,
       publicKey: account.publicKey,
       label: account.label ?? <span class="branch-1 cbranch-no" title="branch not covered" >null,</span>
+      isPrimary: Boolean(account.isPrimary),
       isActive: account.isActive,
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,
@@ -1117,6 +1139,14 @@ export const storage = {
 <span class="cstat-no" title="statement not covered" >    await this.clearAuthState();</span>
   },
 &nbsp;
+<span class="fstat-no" title="function not covered" >  async </span>rotateStorageKey() {
+<span class="cstat-no" title="statement not covered" >    await this.clearAuthState();</span>
+  },
+&nbsp;
+<span class="fstat-no" title="function not covered" >  async </span>invalidateOnSessionEnd() {
+<span class="cstat-no" title="statement not covered" >    await this.clearAuthState();</span>
+  },
+&nbsp;
   /**
    * Persists the in-progress contribution draft so an interrupted
    * contribution can be resumed after the app restarts. Only one draft is
@@ -1171,7 +1201,7 @@ export const storage = {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-08-25T20:18:55.258Z
+                at 2026-08-28T18:38:26.785Z
             </div>
         <script src="../prettify.js"></script>
         <script>

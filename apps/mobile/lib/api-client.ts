@@ -232,6 +232,17 @@ class ApiClient {
   async delete<T>(endpoint: string, config?: RequestConfig): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { method: 'DELETE' }, config);
   }
+
+  /**
+   * DELETE request with a JSON body.
+   */
+  async deleteWithBody<T>(
+    endpoint: string,
+    body: unknown,
+    config?: RequestConfig,
+  ): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'DELETE', body: JSON.stringify(body) }, config);
+  }
 }
 
 // Export singleton instance

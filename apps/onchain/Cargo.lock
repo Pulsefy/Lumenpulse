@@ -292,6 +292,7 @@ version = "0.0.0"
 dependencies = [
  "notification_interface",
  "soroban-sdk",
+ "version-interface",
 ]
 
 [[package]]
@@ -321,6 +322,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "cross-contract-view"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "crowdfund_vault"
 version = "0.0.0"
 dependencies = [
@@ -329,6 +337,7 @@ dependencies = [
  "proptest",
  "reentrancy-guard",
  "soroban-sdk",
+ "version-interface",
 ]
 
 [[package]]
@@ -990,6 +999,7 @@ name = "lumen_token"
 version = "0.1.0"
 dependencies = [
  "soroban-sdk",
+ "version-interface",
 ]
 
 [[package]]
@@ -1940,6 +1950,14 @@ name = "upgradable-contract"
 version = "0.1.0"
 dependencies = [
  "soroban-sdk",
+ "version-interface",
+]
+
+[[package]]
+name = "version-interface"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]
@@ -1952,9 +1970,11 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 name = "vesting-wallet"
 version = "0.0.0"
 dependencies = [
+ "cross-contract-view",
  "crowdfund_vault",
  "reentrancy-guard",
  "soroban-sdk",
+ "version-interface",
 ]
 
 [[package]]
@@ -2283,6 +2303,7 @@ dependencies = [
 name = "yield-vault"
 version = "0.1.0"
 dependencies = [
+ "cross-contract-view",
  "idempotency-guard",
  "reentrancy-guard",
  "soroban-sdk",

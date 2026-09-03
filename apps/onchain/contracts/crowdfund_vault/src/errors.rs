@@ -51,4 +51,6 @@ pub enum CrowdfundError {
     MigrationAmountExceedsBalance = 38,
     /// The migration plan was vetoed by a second admin; it cannot proceed.
     MigrationPlanVetoed = 39,
+    /// A submitted batch is empty, too large, or contains repeated milestone keys.
+    InvalidBatch = 40,
 }

@@ -14,6 +14,8 @@ import { SorobanEventsDeadLetterService } from './soroban-events-dead-letter.ser
 import { SorobanEventsDeadLetterController } from './soroban-events-dead-letter.controller';
 import { SorobanEventIngestionGuard } from './guards/soroban-event-ingestion.guard';
 import { SorobanEventIndexerService } from './soroban-event-indexer.service';
+import { SorobanEventReplayService } from './soroban-event-replay.service';
+import { SorobanEventReplayController } from './soroban-event-replay.controller';
 import { ProjectRegistryEntity } from '../database/entities/project-registry.entity';
 import { StellarModule } from '../stellar/stellar.module';
 import { SchedulerModule } from '../scheduler/scheduler.module';
@@ -32,13 +34,14 @@ import { AdminAuditModule } from '../admin-audit/admin-audit.module';
     SchedulerModule,
     AdminAuditModule,
   ],
-  controllers: [SorobanEventsController, SorobanEventsDeadLetterController],
+  controllers: [SorobanEventsController, SorobanEventsDeadLetterController, SorobanEventReplayController],
   providers: [
     SorobanEventsService,
     SorobanEventsProcessor,
     SorobanEventsDeadLetterService,
     SorobanEventIngestionGuard,
     SorobanEventIndexerService,
+    SorobanEventReplayService,
   ],
   exports: [SorobanEventIndexerService],
 })

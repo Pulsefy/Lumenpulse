@@ -8,7 +8,7 @@ use errors::YieldVaultError;
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractclient, contractimpl, Address, BytesN, Env, Symbol};
-use storage::{DataKey, YieldProvider};
+use storage::{DataKey, YieldProvider, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 #[contractclient(name = "YieldProviderClient")]
 pub trait YieldProviderTrait {
@@ -32,6 +32,27 @@ impl YieldVaultContract {
         result
     }
 
+    /// Extends the shared instance-storage TTL (covers `Admin`, `Asset`,
+    /// `ProviderCount`, `TotalAUM`, `TotalYieldHarvested`, `Paused` together,
+    /// since instance TTL is one bucket per contract).
+    fn touch_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+    }
+
+    /// Extends `key`'s persistent-storage TTL if it exists. Safe to call
+    /// unconditionally after a read or write — a `.set()` guarantees the key
+    /// exists, and reads that default via `unwrap_or` may target a key that
+    /// was never written yet, which `extend_ttl` would otherwise panic on.
+    fn touch_persistent(env: &Env, key: &DataKey) {
+        if env.storage().persistent().has(key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+    }
+
     pub fn initialize(env: Env, admin: Address, asset: Address) -> Result<(), YieldVaultError> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(YieldVaultError::AlreadyInitialized);
@@ -40,7 +61,7 @@ impl YieldVaultContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Asset, &asset);
         env.storage().instance().set(&DataKey::ProviderCount, &0u32);
-        env.storage().instance().extend_ttl(100, 100);
+        Self::touch_instance(&env);
 
         events::VaultInitializedEvent { admin, asset }.publish(&env);
 
@@ -61,6 +82,8 @@ impl YieldVaultContract {
 
         caller.require_auth();
 
+        Self::touch_instance(env);
+
         Ok(())
     }
 
@@ -69,10 +92,31 @@ impl YieldVaultContract {
 
         env.storage().instance().set(&DataKey::Paused, &paused);
 
+        let timestamp = env.ledger().timestamp();
+        if paused {
+            events::ContractPauseEvent {
+                admin: caller,
+                paused,
+                timestamp,
+            }
+            .publish(&env);
+        } else {
+            events::ContractUnpauseEvent {
+                admin: caller,
+                paused,
+                timestamp,
+            }
+            .publish(&env);
+        }
+
         Ok(())
     }
 
+    /// Also used internally by `deposit`/`withdraw` as their first storage
+    /// touch, so the instance TTL (Admin/Asset/ProviderCount/Paused/…) gets
+    /// renewed on every user-facing call, not just admin writes.
     pub fn is_paused(env: Env) -> bool {
+        Self::touch_instance(&env);
         env.storage()
             .instance()
             .get(&DataKey::Paused)
@@ -110,6 +154,7 @@ impl YieldVaultContract {
         env.storage()
             .persistent()
             .set(&DataKey::Provider(provider_id), &provider);
+        Self::touch_persistent(&env, &DataKey::Provider(provider_id));
 
         let new_count = provider_count + 1;
         env.storage()
@@ -173,6 +218,7 @@ impl YieldVaultContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::Provider(best_provider), &updated_provider);
+            Self::touch_persistent(&env, &DataKey::Provider(best_provider));
 
             let user_balance: i128 = env
                 .storage()
@@ -184,6 +230,7 @@ impl YieldVaultContract {
                 &DataKey::UserBalance(user.clone()),
                 &(user_balance + amount),
             );
+            Self::touch_persistent(&env, &DataKey::UserBalance(user.clone()));
 
             let user_allocation: i128 = env
                 .storage()
@@ -198,6 +245,10 @@ impl YieldVaultContract {
                 &DataKey::UserProviderAllocation(user.clone(), best_provider),
                 &(user_allocation + amount),
             );
+            Self::touch_persistent(
+                &env,
+                &DataKey::UserProviderAllocation(user.clone(), best_provider),
+            );
 
             let total_aum: i128 = env
                 .storage()
@@ -208,6 +259,7 @@ impl YieldVaultContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::TotalAUM, &(total_aum + amount));
+            Self::touch_persistent(&env, &DataKey::TotalAUM);
 
             events::DepositEvent {
                 user: user.clone(),
@@ -293,12 +345,17 @@ impl YieldVaultContract {
                     env.storage()
                         .persistent()
                         .set(&DataKey::Provider(provider_id), &updated_provider);
+                    Self::touch_persistent(&env, &DataKey::Provider(provider_id));
 
                     let new_allocation = allocation - to_withdraw;
                     if new_allocation > 0 {
                         env.storage().persistent().set(
                             &DataKey::UserProviderAllocation(user.clone(), provider_id),
                             &new_allocation,
+                        );
+                        Self::touch_persistent(
+                            &env,
+                            &DataKey::UserProviderAllocation(user.clone(), provider_id),
                         );
                     } else {
                         env.storage()
@@ -316,6 +373,7 @@ impl YieldVaultContract {
                 env.storage()
                     .persistent()
                     .set(&DataKey::UserBalance(user.clone()), &new_balance);
+                Self::touch_persistent(&env, &DataKey::UserBalance(user.clone()));
             } else {
                 env.storage()
                     .persistent()
@@ -331,6 +389,7 @@ impl YieldVaultContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::TotalAUM, &(total_aum - withdrawn));
+            Self::touch_persistent(&env, &DataKey::TotalAUM);
 
             // Return the underlying tokens to the user.
             let asset_addr: Address = env
@@ -376,6 +435,7 @@ impl YieldVaultContract {
                 env.storage()
                     .persistent()
                     .set(&DataKey::Provider(provider_id), &provider);
+                Self::touch_persistent(&env, &DataKey::Provider(provider_id));
 
                 let total_yield: i128 = env
                     .storage()
@@ -386,6 +446,7 @@ impl YieldVaultContract {
                 env.storage()
                     .persistent()
                     .set(&DataKey::TotalYieldHarvested, &(total_yield + yield_earned));
+                Self::touch_persistent(&env, &DataKey::TotalYieldHarvested);
             }
 
             events::YieldHarvestedEvent {
@@ -399,31 +460,40 @@ impl YieldVaultContract {
     }
 
     pub fn balance_of(env: Env, user: Address) -> i128 {
-        env.storage()
-            .persistent()
-            .get(&DataKey::UserBalance(user))
-            .unwrap_or(0)
+        let key = DataKey::UserBalance(user);
+        let balance = env.storage().persistent().get(&key).unwrap_or(0);
+        Self::touch_persistent(&env, &key);
+        balance
     }
 
     pub fn get_total_aum(env: Env) -> i128 {
-        env.storage()
+        let total = env
+            .storage()
             .persistent()
             .get(&DataKey::TotalAUM)
-            .unwrap_or(0)
+            .unwrap_or(0);
+        Self::touch_persistent(&env, &DataKey::TotalAUM);
+        total
     }
 
     pub fn get_total_yield_harvested(env: Env) -> i128 {
-        env.storage()
+        let total = env
+            .storage()
             .persistent()
             .get(&DataKey::TotalYieldHarvested)
-            .unwrap_or(0)
+            .unwrap_or(0);
+        Self::touch_persistent(&env, &DataKey::TotalYieldHarvested);
+        total
     }
 
     pub fn get_provider(env: Env, provider_id: u32) -> Result<YieldProvider, YieldVaultError> {
-        env.storage()
+        let provider = env
+            .storage()
             .persistent()
             .get(&DataKey::Provider(provider_id))
-            .ok_or(YieldVaultError::ProviderNotFound)
+            .ok_or(YieldVaultError::ProviderNotFound)?;
+        Self::touch_persistent(&env, &DataKey::Provider(provider_id));
+        Ok(provider)
     }
 
     fn find_best_provider(env: &Env) -> Result<u32, YieldVaultError> {

@@ -662,7 +662,13 @@ impl TreasuryContract {
         new_admin: Address,
     ) -> Result<(), TreasuryError> {
         consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
+        let old_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(TreasuryError::NotInitialized)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+        events::publish_admin_changed(&env, old_admin, new_admin);
         Ok(())
     }
 
@@ -724,7 +730,10 @@ impl TreasuryContract {
         threshold: u32,
     ) -> Result<(), TreasuryError> {
         consume_approval(&env, &executor, proposal_id, &ProposalAction::SetAdmin)?;
-        multisig_replace_config(&env, signers, threshold)
+        let signer_count = signers.len();
+        multisig_replace_config(&env, signers, threshold)?;
+        events::publish_multisig_configured(&env, executor, threshold, signer_count);
+        Ok(())
     }
 
     /// View currently unlocked amount (matches legacy V1 semantics; V2 with
@@ -819,10 +828,12 @@ impl TreasuryContract {
             token_client.transfer(&contract_address, &beneficiary, &refundable);
         }
 
-        #[allow(deprecated)]
-        env.events().publish(
-            (soroban_sdk::String::from_str(&env, "stream_cancelled"),),
-            (&beneficiary, total_unlocked, refundable, current_time),
+        events::publish_stream_cancelled(
+            &env,
+            beneficiary.clone(),
+            total_unlocked,
+            refundable,
+            current_time,
         );
 
         Self::delete_stream(&env, &beneficiary);
@@ -871,11 +882,7 @@ impl TreasuryContract {
             token_client.transfer(&contract_address, &beneficiary, &full_refund);
         }
 
-        #[allow(deprecated)]
-        env.events().publish(
-            (soroban_sdk::String::from_str(&env, "emergency_stop"),),
-            (&beneficiary, reason, full_refund),
-        );
+        events::publish_emergency_stop(&env, beneficiary.clone(), reason, full_refund);
 
         Self::delete_stream(&env, &beneficiary);
 

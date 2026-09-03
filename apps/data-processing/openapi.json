@@ -1300,6 +1300,270 @@
         }
       }
     },
+    "/api/sentiment-labels": {
+      "post": {
+        "tags": [
+          "Sentiment Labels"
+        ],
+        "summary": "Submit Sentiment Label",
+        "description": "Submit a label or correct the existing label for identical text.",
+        "operationId": "submit_sentiment_label_api_sentiment_labels_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SentimentLabelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentimentLabelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Sentiment Labels"
+        ],
+        "summary": "List Sentiment Labels",
+        "operationId": "list_sentiment_labels_api_sentiment_labels_get",
+        "parameters": [
+          {
+            "name": "held_out",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Held Out"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1000,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SentimentLabelResponse"
+                  },
+                  "title": "Response List Sentiment Labels Api Sentiment Labels Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sentiment-labels/{label_id}": {
+      "put": {
+        "tags": [
+          "Sentiment Labels"
+        ],
+        "summary": "Correct Sentiment Label",
+        "description": "Correct a label by updating the canonical text record.",
+        "operationId": "correct_sentiment_label_api_sentiment_labels__label_id__put",
+        "parameters": [
+          {
+            "name": "label_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Label Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SentimentLabelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentimentLabelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lineage": {
+      "get": {
+        "tags": [
+          "Lineage"
+        ],
+        "summary": "List every registered feature and KPI dataset",
+        "description": "Return every ``id`` registered in the lineage manifest, so callers know\nwhat's valid to pass to ``GET /api/lineage/{feature_id}``.",
+        "operationId": "list_lineage_entries_api_lineage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineageListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lineage/{feature_id}": {
+      "get": {
+        "tags": [
+          "Lineage"
+        ],
+        "summary": "Get the upstream/downstream lineage graph for a feature or KPI",
+        "description": "Return the full upstream and downstream lineage for ``feature_id``,\nread live from ``feature_lineage.yaml``.\n\n* **upstream** \u2014 every source, feature, and KPI (transitively) feeding\n  this node, terminating in raw ingestion files where the manifest\n  doesn't track a further manifest entry.\n* **downstream** \u2014 every feature, KPI, and consuming API endpoint\n  (transitively) fed by this node.\n\nEach node carries its source system, transformation (formula or\ndescription), and owning module/team so a KPI can be traced back to\n\"what produced this and who owns it\" without opening the YAML.",
+        "operationId": "get_feature_lineage_api_lineage__feature_id__get",
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineageGraphResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Get Job Status",
+        "description": "Report the status of a job submitted to the async analytics job queue.\n\nRequires X-API-Key header.",
+        "operationId": "get_job_status_api_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/metrics": {
       "get": {
         "summary": "Metrics",
@@ -1700,7 +1964,7 @@
     "/retrain": {
       "post": {
         "summary": "Trigger Retraining",
-        "description": "Trigger an immediate model retraining run.\n\nRuns synchronously in a thread pool so the HTTP response is returned\nonly after retraining completes (or fails). For long-running production\nretrains, consider making this async with a task queue.\n\nRequires X-API-Key header.",
+        "description": "Submit a model retraining run to the async job queue and return\nimmediately with a job identifier. Poll GET /api/jobs/{job_id} for the\noutcome \u2014 retraining only ever runs one at a time, so a submission made\nwhile one is already in flight is collapsed onto that job.\n\nRequires X-API-Key header.",
         "operationId": "trigger_retraining_retrain_post",
         "requestBody": {
           "content": {
@@ -1713,12 +1977,12 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RetrainResponse"
+                  "$ref": "#/components/schemas/JobSubmitResponse"
                 }
               }
             }
@@ -2205,7 +2469,7 @@
     "/correlation/analyze": {
       "post": {
         "summary": "Analyze Correlation",
-        "description": "Analyze correlation between sentiment and price/volume data.\n\nReturns correlation scores (-1 to 1) and scatter plot data points.\nRequires X-API-Key header.",
+        "description": "Submit a correlation analysis between sentiment and price/volume data to\nthe async job queue and return immediately with a job identifier.\n\nPoll GET /api/jobs/{job_id} for the result: price_correlation,\nvolume_correlation, and summary (correlation scores -1 to 1 and scatter\nplot data points). Requires X-API-Key header.",
         "operationId": "analyze_correlation_correlation_analyze_post",
         "requestBody": {
           "content": {
@@ -2218,12 +2482,12 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CorrelationResponse"
+                  "$ref": "#/components/schemas/JobSubmitResponse"
                 }
               }
             }
@@ -2244,7 +2508,7 @@
     "/correlation/lag-analysis": {
       "post": {
         "summary": "Analyze Lag Correlation",
-        "description": "Analyze correlation across multiple time lags to find optimal lead time.\n\nReturns the best lag hours and correlation strength for predicting market changes.\nRequires X-API-Key header.",
+        "description": "Submit a lagged correlation analysis to the async job queue and return\nimmediately with a job identifier.\n\nPoll GET /api/jobs/{job_id} for the result: best_lag_hours,\nbest_correlation, lag_analysis, and recommendation. Requires X-API-Key\nheader.",
         "operationId": "analyze_lag_correlation_correlation_lag_analysis_post",
         "requestBody": {
           "content": {
@@ -2257,12 +2521,12 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LagAnalysisResponse"
+                  "$ref": "#/components/schemas/JobSubmitResponse"
                 }
               }
             }
@@ -2378,7 +2642,7 @@
     "/analytics/kpis/daily-snapshots/run": {
       "post": {
         "summary": "Trigger Daily Kpi Snapshot",
-        "description": "Trigger manual generation of a daily on-chain KPI snapshot.\nSkips duplicate snapshot creation if a snapshot for target_date and period already exists.\nRequires X-API-Key header.",
+        "description": "Submit generation of a daily on-chain KPI snapshot to the async job\nqueue and return immediately with a job identifier. Poll\nGET /api/jobs/{job_id} for the result. Concurrent submissions for the\nsame target_date/period are collapsed onto one job; the generator itself\nstill skips duplicate snapshot creation if one already exists.\n\nRequires X-API-Key header.",
         "operationId": "trigger_daily_kpi_snapshot_analytics_kpis_daily_snapshots_run_post",
         "parameters": [
           {
@@ -2413,12 +2677,12 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DailyKPISnapshotRunResponse"
+                  "$ref": "#/components/schemas/JobSubmitResponse"
                 }
               }
             }
@@ -2994,44 +3258,6 @@
         ],
         "title": "CorrelationRequest"
       },
-      "CorrelationResponse": {
-        "properties": {
-          "price_correlation": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Correlation"
-          },
-          "volume_correlation": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Volume Correlation"
-          },
-          "summary": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Summary"
-          }
-        },
-        "type": "object",
-        "required": [
-          "summary"
-        ],
-        "title": "CorrelationResponse"
-      },
       "CursorListResponse": {
         "properties": {
           "count": {
@@ -3263,59 +3489,6 @@
           "unique_contributors"
         ],
         "title": "DailyKPISnapshotResponse"
-      },
-      "DailyKPISnapshotRunResponse": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          },
-          "date": {
-            "type": "string",
-            "title": "Date"
-          },
-          "period": {
-            "type": "string",
-            "title": "Period"
-          },
-          "tvl": {
-            "type": "number",
-            "title": "Tvl"
-          },
-          "volume": {
-            "type": "number",
-            "title": "Volume"
-          },
-          "active_rounds": {
-            "type": "integer",
-            "title": "Active Rounds"
-          },
-          "contribution_count": {
-            "type": "integer",
-            "title": "Contribution Count"
-          },
-          "unique_contributors": {
-            "type": "integer",
-            "title": "Unique Contributors"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status",
-          "message",
-          "date",
-          "period",
-          "tvl",
-          "volume",
-          "active_rounds",
-          "contribution_count",
-          "unique_contributors"
-        ],
-        "title": "DailyKPISnapshotRunResponse"
       },
       "ForecastResponse": {
         "properties": {
@@ -3720,6 +3893,126 @@
         "title": "IngestionResponse",
         "description": "Response model for ingestion results."
       },
+      "JobStatusResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "job_type": {
+            "type": "string",
+            "title": "Job Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "job_type",
+          "status"
+        ],
+        "title": "JobStatusResponse"
+      },
+      "JobSubmitResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "job_type": {
+            "type": "string",
+            "title": "Job Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "job_type",
+          "status",
+          "created"
+        ],
+        "title": "JobSubmitResponse",
+        "description": "Returned immediately by long-running analytics endpoints (#1248)."
+      },
       "KPIResponse": {
         "properties": {
           "tvl": {
@@ -3875,37 +4168,270 @@
         ],
         "title": "LagAnalysisRequest"
       },
-      "LagAnalysisResponse": {
+      "LineageEdgeResponse": {
         "properties": {
-          "best_lag_hours": {
-            "type": "integer",
-            "title": "Best Lag Hours"
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Manifest entry id, or the raw external ref"
           },
-          "best_correlation": {
-            "type": "number",
-            "title": "Best Correlation"
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "'ml_feature_set' | 'kpi_dataset' | 'external_source' (a raw file/module/API reference that isn't itself a manifest entry)"
           },
-          "lag_analysis": {
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "source_system": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "type": "string"
             },
             "type": "array",
-            "title": "Lag Analysis"
+            "title": "Source System",
+            "description": "Where this node's data originates \u2014 source table(s) or source file, or the raw reference itself for external sources."
           },
-          "recommendation": {
-            "type": "string",
-            "title": "Recommendation"
+          "transformation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transformation",
+            "description": "Formula, or description, describing how this node is produced."
+          },
+          "owning_module": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owning Module",
+            "description": "Manifest 'module' value."
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner",
+            "description": "Owning team/individual (email or @handle)."
+          },
+          "distance": {
+            "type": "integer",
+            "title": "Distance",
+            "description": "Hop count from the queried feature/dataset."
           }
         },
         "type": "object",
         "required": [
-          "best_lag_hours",
-          "best_correlation",
-          "lag_analysis",
-          "recommendation"
+          "id",
+          "kind",
+          "display_name",
+          "distance"
         ],
-        "title": "LagAnalysisResponse"
+        "title": "LineageEdgeResponse"
+      },
+      "LineageEntrySummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "display_name"
+        ],
+        "title": "LineageEntrySummary"
+      },
+      "LineageGraphResponse": {
+        "properties": {
+          "feature_id": {
+            "type": "string",
+            "title": "Feature Id"
+          },
+          "node": {
+            "$ref": "#/components/schemas/LineageNodeResponse"
+          },
+          "upstream": {
+            "items": {
+              "$ref": "#/components/schemas/LineageEdgeResponse"
+            },
+            "type": "array",
+            "title": "Upstream",
+            "description": "Everything that feeds this node, transitively."
+          },
+          "downstream": {
+            "items": {
+              "$ref": "#/components/schemas/LineageEdgeResponse"
+            },
+            "type": "array",
+            "title": "Downstream",
+            "description": "Everything this node feeds, transitively."
+          },
+          "manifest_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature_id",
+          "node"
+        ],
+        "title": "LineageGraphResponse"
+      },
+      "LineageListResponse": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/LineageEntrySummary"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "entries"
+        ],
+        "title": "LineageListResponse"
+      },
+      "LineageNodeResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Manifest entry id, or the raw external ref"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "'ml_feature_set' | 'kpi_dataset' | 'external_source' (a raw file/module/API reference that isn't itself a manifest entry)"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "source_system": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source System",
+            "description": "Where this node's data originates \u2014 source table(s) or source file, or the raw reference itself for external sources."
+          },
+          "transformation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transformation",
+            "description": "Formula, or description, describing how this node is produced."
+          },
+          "owning_module": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owning Module",
+            "description": "Manifest 'module' value."
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner",
+            "description": "Owning team/individual (email or @handle)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "display_name"
+        ],
+        "title": "LineageNodeResponse"
       },
       "MetricDataPoint": {
         "properties": {
@@ -4403,75 +4929,6 @@
         "type": "object",
         "title": "RetrainRequest"
       },
-      "RetrainResponse": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
-          },
-          "finished_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Finished At"
-          },
-          "duration_seconds": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Duration Seconds"
-          },
-          "models": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Models",
-            "default": {}
-          },
-          "registry": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Registry",
-            "default": {}
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "title": "RetrainResponse"
-      },
       "ReviewQueueItemResponse": {
         "properties": {
           "id": {
@@ -4655,6 +5112,86 @@
         ],
         "title": "SentimentIndicatorResponse",
         "description": "Visual indicator fields attached to every sentiment-bearing response."
+      },
+      "SentimentLabelRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Text"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "labeller": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Labeller"
+          },
+          "is_held_out": {
+            "type": "boolean",
+            "title": "Is Held Out",
+            "default": false
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "label",
+          "labeller"
+        ],
+        "title": "SentimentLabelRequest"
+      },
+      "SentimentLabelResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "labeller": {
+            "type": "string",
+            "title": "Labeller"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "is_held_out": {
+            "type": "boolean",
+            "title": "Is Held Out"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "label",
+          "labeller",
+          "timestamp",
+          "is_held_out"
+        ],
+        "title": "SentimentLabelResponse"
       },
       "ShadowPromoteRequest": {
         "properties": {

@@ -334,7 +334,10 @@
       "mainnet": "Mainnet",
       "endpoint_not_configured": "Endpoint not configured",
       "mainnet_unavailable": "Mainnet Unavailable",
-      "mainnet_unavailable_message": "Configure mainnet API and Soroban RPC endpoints before switching."
+      "mainnet_unavailable_message": "Configure mainnet API and Soroban RPC endpoints before switching.",
+      "mainnet_confirmation_title": "Switch to Mainnet?",
+      "mainnet_confirmation_message": "You are about to switch to the Mainnet where real assets are at stake. All cached data will be cleared and your wallet will require re-selection. This action cannot be undone.",
+      "mainnet_confirmation_confirm": "Switch to Mainnet"
     },
     "version": "Version",
     "environment": "Environment",
@@ -387,6 +390,64 @@
       "cache_status": "Network Status",
       "online": "Online",
       "offline": "Offline"
+    },
+    "data_privacy": {
+      "title": "Data & Privacy",
+      "description": "Review everything LumenPulse stores on this device, clear it by category or all at once, and choose what diagnostics you share.",
+      "stored_data": "Stored on this device",
+      "privacy_controls": "Privacy controls",
+      "total_stored": "Total stored",
+      "clear": "Clear",
+      "item_count_one": "{{count}} item",
+      "item_count_other": "{{count}} items",
+      "clear_category_title": "Clear {{category}}?",
+      "clear_category_message": "This removes all {{category}} stored on this device. It can be downloaded again when you are online.",
+      "category_cleared": "{{category}} cleared.",
+      "clear_failed": "Couldn't clear that data. Please try again.",
+      "clear_all_title": "Clear all local data",
+      "clear_all_message": "This removes cached content, saved news, watchlists, cached images, drafts, and diagnostics data from this device. You will stay signed in.",
+      "clear_all_hint": "You stay signed in, and any changes waiting to sync are kept.",
+      "clear_all_success": "All local data cleared. You are still signed in.",
+      "clear_all_partial_one": "Cleared most data, but {{count}} category couldn't be cleared. Please try again.",
+      "clear_all_partial_other": "Cleared most data, but {{count}} categories couldn't be cleared. Please try again.",
+      "queued_preserved_warning_one": "{{count}} change is still waiting to sync and will be kept.",
+      "queued_preserved_warning_other": "{{count}} changes are still waiting to sync and will be kept.",
+      "preference_save_failed": "Couldn't save that preference. Please try again.",
+      "preferences_survive_clear": "Your analytics and crash-reporting choices are kept when you clear data — clearing never opts you back in.",
+      "analytics": {
+        "title": "Usage analytics",
+        "description": "Share anonymous usage data to help improve the app. Turn this off to stop collection on this device."
+      },
+      "crash_reporting": {
+        "title": "Crash reporting",
+        "description": "Automatically report crashes and errors. Wallet addresses are always removed before a report is sent."
+      },
+      "categories": {
+        "cached_content": {
+          "title": "Cached content",
+          "description": "News, portfolio snapshots, projects, and asset prices kept for offline use."
+        },
+        "saved_news": {
+          "title": "Saved news",
+          "description": "Articles you bookmarked to read later."
+        },
+        "watchlists": {
+          "title": "Watchlists",
+          "description": "Your locally cached watchlist and its last sync time."
+        },
+        "image_cache": {
+          "title": "Cached images",
+          "description": "Remote images stored on disk so they don't re-download."
+        },
+        "drafts": {
+          "title": "Drafts",
+          "description": "An unfinished contribution saved so you can resume it."
+        },
+        "diagnostics": {
+          "title": "Diagnostics data",
+          "description": "Local analytics and diagnostics state collected on this device."
+        }
+      }
     }
   },
   "transaction_receipt": {

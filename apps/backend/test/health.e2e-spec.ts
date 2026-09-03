@@ -2,21 +2,36 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { Server } from 'http';
 import request from 'supertest';
+import { ContractHealthService } from '../src/health/contract-health.service';
+import { DeploymentSmokeService } from '../src/health/deployment-smoke.service';
 import { HealthController } from '../src/health/health.controller';
 import {
   HealthService,
   LumenpulseHealthReport,
 } from '../src/health/health.service';
+import { ShutdownService } from '../src/health/shutdown.service';
 
 describe('Health Check (e2e)', () => {
   let app: INestApplication;
   let healthService: { getHealthReport: jest.Mock };
+  let contractHealthService: { getContractHealthReport: jest.Mock };
+  let deploymentSmokeService: { getSmokeReport: jest.Mock };
+  let shutdownService: { isShuttingDown: jest.Mock };
 
   const getHttpServer = (): Server => app.getHttpServer() as Server;
 
   beforeAll(async () => {
     healthService = {
       getHealthReport: jest.fn(),
+    };
+    contractHealthService = {
+      getContractHealthReport: jest.fn(),
+    };
+    deploymentSmokeService = {
+      getSmokeReport: jest.fn(),
+    };
+    shutdownService = {
+      isShuttingDown: jest.fn().mockReturnValue(false),
     };
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -25,6 +40,18 @@ describe('Health Check (e2e)', () => {
         {
           provide: HealthService,
           useValue: healthService,
+        },
+        {
+          provide: ContractHealthService,
+          useValue: contractHealthService,
+        },
+        {
+          provide: DeploymentSmokeService,
+          useValue: deploymentSmokeService,
+        },
+        {
+          provide: ShutdownService,
+          useValue: shutdownService,
         },
       ],
     }).compile();
@@ -151,5 +178,67 @@ describe('Health Check (e2e)', () => {
     healthService.getHealthReport.mockResolvedValue(report);
 
     await request(getHttpServer()).get('/health').expect(503);
+  });
+
+  describe('GET /health/smoke', () => {
+    const passingReport = {
+      status: 'pass',
+      ready: true,
+      checkedAt: '2026-08-29T00:00:00.000Z',
+      durationMs: 42,
+      network: 'testnet',
+      environment: 'test',
+      summary: { total: 2, passed: 2, warned: 0, failed: 0 },
+      checks: [
+        {
+          id: 'env.JWT_SECRET',
+          category: 'config',
+          status: 'pass',
+          message: 'JWT_SECRET is set',
+        },
+        {
+          id: 'contract.lumenToken',
+          category: 'contract',
+          status: 'pass',
+          message: 'lumenToken contract is reachable',
+        },
+      ],
+    };
+
+    it('returns 200 with a machine-readable report when everything is ready', async () => {
+      deploymentSmokeService.getSmokeReport.mockResolvedValue(passingReport);
+
+      const response = await request(getHttpServer())
+        .get('/health/smoke')
+        .expect(200)
+        .expect('Content-Type', /json/);
+
+      expect(response.body).toEqual(passingReport);
+    });
+
+    it('returns 200 when only non-blocking warnings were raised', async () => {
+      deploymentSmokeService.getSmokeReport.mockResolvedValue({
+        ...passingReport,
+        status: 'warn',
+        summary: { total: 2, passed: 1, warned: 1, failed: 0 },
+      });
+
+      await request(getHttpServer()).get('/health/smoke').expect(200);
+    });
+
+    it('returns 503 when a check failed', async () => {
+      deploymentSmokeService.getSmokeReport.mockResolvedValue({
+        ...passingReport,
+        status: 'fail',
+        ready: false,
+        summary: { total: 2, passed: 1, warned: 0, failed: 1 },
+      });
+
+      const response = await request(getHttpServer())
+        .get('/health/smoke')
+        .expect(503);
+
+      expect((response.body as { ready: boolean }).ready).toBe(false);
+    });
   });
 });

@@ -6,7 +6,9 @@ import {
   environmentConfigs,
   getEnvironmentConfig,
   setActiveEnvironment,
+  validateEnvironmentConfig,
 } from '../lib/config';
+import { CacheManager } from '../lib/cache';
 
 const STORAGE_KEY = '@lumenpulse_environment';
 
@@ -41,6 +43,23 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
   const [environment, setEnvironmentState] = useState<AppEnvironment>('testnet');
   const [isInitialized, setIsInitialized] = useState(false);
 
+  // Validate config at app startup (will throw in release builds if misconfigured)
+  useEffect(() => {
+    try {
+      validateEnvironmentConfig();
+    } catch (error) {
+      console.error('Configuration validation failed:', error);
+      // In a real app, you'd want to show an error screen or alert here
+      // For now, we log it and let the app continue in development
+      if (__DEV__) {
+        console.warn('Configuration validation skipped in development mode');
+      } else {
+        // In production, re-throw to crash the app and alert developer
+        throw error;
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const loadEnvironment = async () => {
       const savedEnvironment = await AsyncStorage.getItem(STORAGE_KEY);
@@ -58,6 +77,15 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setEnvironment = async (nextEnvironment: AppEnvironment) => {
+    if (nextEnvironment === environment) {
+      return;
+    }
+
+    // Clear all cached data when switching environments to prevent
+    // showing stale data from the previous network
+    const cacheManager = CacheManager.getInstance();
+    await cacheManager.clear();
+
     setActiveEnvironment(nextEnvironment);
     setEnvironmentState(nextEnvironment);
     await AsyncStorage.setItem(STORAGE_KEY, nextEnvironment);

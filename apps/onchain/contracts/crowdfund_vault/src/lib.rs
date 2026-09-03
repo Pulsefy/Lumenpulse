@@ -17,13 +17,19 @@ use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
 use storage::{
-    DataKey, EmergencyMigrationPlan, MigrationPlanStatus, MilestoneDispute, ProjectData,
-    ProjectStorageSummary, ProtocolStats, RefundReceipt, LEDGER_BUMP, LEDGER_THRESHOLD,
+    DataKey, EmergencyMigrationPlan, MigrationPlanStatus, MilestoneDecision,
+    MilestoneDecisionOutcome, MilestoneDispute, ProjectData, ProjectStorageSummary, ProtocolStats,
+    RefundReceipt, LEDGER_BUMP, LEDGER_THRESHOLD, MAX_MILESTONE_DECISION_BATCH_SIZE,
 };
+use version_interface::{ContractVersion, VersionedContract};
 
 const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
 const DEFAULT_REFUND_WINDOW_SECONDS: u64 = 14 * 24 * 60 * 60;
+
+/// Bumped on storage-layout or interface changes that break compatibility
+/// with prior deployments; see [`version_interface::ContractVersion`].
+const CONTRACT_VERSION: ContractVersion = ContractVersion::new(1, 0, 0);
 
 #[contract]
 pub struct CrowdfundVaultContract;
@@ -843,10 +849,15 @@ impl CrowdfundVaultContract {
             .get(&DataKey::Subscribers)
             .unwrap_or(vec![&env]);
         if !subscribers.contains(&subscriber) {
-            subscribers.push_back(subscriber);
+            subscribers.push_back(subscriber.clone());
             env.storage()
                 .instance()
                 .set(&DataKey::Subscribers, &subscribers);
+            events::SubscriberChangedEvent {
+                subscriber,
+                added: true,
+            }
+            .publish(&env);
         }
         Ok(())
     }
@@ -868,6 +879,11 @@ impl CrowdfundVaultContract {
             env.storage()
                 .instance()
                 .set(&DataKey::Subscribers, &subscribers);
+            events::SubscriberChangedEvent {
+                subscriber,
+                added: false,
+            }
+            .publish(&env);
         }
         Ok(())
     }
@@ -936,6 +952,90 @@ impl CrowdfundVaultContract {
         .publish(&env);
 
         Ok(())
+    }
+
+    /// Apply a bounded set of admin milestone approvals/rejections.
+    ///
+    /// The batch is validated before any milestone state is mutated. Repeated
+    /// `(project_id, milestone_id)` pairs are rejected because the final state
+    /// would depend on payload ordering rather than one clear decision.
+    pub fn process_milestone_decisions(
+        env: Env,
+        admin: Address,
+        decisions: Vec<MilestoneDecision>,
+    ) -> Result<Vec<MilestoneDecisionOutcome>, CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+
+        let len = decisions.len();
+        if len == 0 || len > MAX_MILESTONE_DECISION_BATCH_SIZE {
+            return Err(CrowdfundError::InvalidBatch);
+        }
+
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            return Err(CrowdfundError::ContractPaused);
+        }
+
+        for i in 0..len {
+            let current = decisions.get(i).ok_or(CrowdfundError::InvalidBatch)?;
+
+            for j in (i + 1)..len {
+                let next = decisions.get(j).ok_or(CrowdfundError::InvalidBatch)?;
+                if current.project_id == next.project_id
+                    && current.milestone_id == next.milestone_id
+                {
+                    return Err(CrowdfundError::InvalidBatch);
+                }
+            }
+
+            let mut project: ProjectData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Project(current.project_id))
+                .ok_or(CrowdfundError::ProjectNotFound)?;
+            Self::fail_if_project_expired(&env, current.project_id, &mut project)?;
+        }
+
+        let mut outcomes = Vec::new(&env);
+        for decision in decisions.iter() {
+            let approved_key =
+                DataKey::MilestoneApproved(decision.project_id, decision.milestone_id);
+            let disputed_key =
+                DataKey::MilestoneDisputed(decision.project_id, decision.milestone_id);
+            let dispute_key = DataKey::MilestoneDispute(decision.project_id, decision.milestone_id);
+
+            env.storage()
+                .persistent()
+                .set(&approved_key, &decision.approve);
+            env.storage()
+                .persistent()
+                .extend_ttl(&approved_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            env.storage().persistent().set(&disputed_key, &false);
+            env.storage()
+                .persistent()
+                .extend_ttl(&disputed_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            env.storage().persistent().remove(&dispute_key);
+
+            events::MilestoneDecisionEvent {
+                admin: admin.clone(),
+                project_id: decision.project_id,
+                milestone_id: decision.milestone_id,
+                approved: decision.approve,
+            }
+            .publish(&env);
+
+            outcomes.push_back(MilestoneDecisionOutcome {
+                project_id: decision.project_id,
+                milestone_id: decision.milestone_id,
+                approved: decision.approve,
+            });
+        }
+
+        Ok(outcomes)
     }
 
     /// Start a vote for a milestone approval
@@ -1356,6 +1456,14 @@ impl CrowdfundVaultContract {
                 &request_id,
             );
 
+            events::TreasuryAllocatedEvent {
+                project_id,
+                treasury: treasury_contract,
+                beneficiary: project.owner,
+                amount,
+            }
+            .publish(&env);
+
             Ok(())
         })
     }
@@ -1754,7 +1862,7 @@ impl CrowdfundVaultContract {
         }
 
         // Update matching pool balance
-        let pool_key = DataKey::MatchingPool(token_address);
+        let pool_key = DataKey::MatchingPool(token_address.clone());
         let current_pool: i128 = env.storage().persistent().get(&pool_key).unwrap_or(0);
         env.storage()
             .persistent()
@@ -1762,6 +1870,13 @@ impl CrowdfundVaultContract {
         env.storage()
             .persistent()
             .extend_ttl(&pool_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        events::PoolFundedEvent {
+            funder: admin,
+            token_address,
+            amount,
+        }
+        .publish(&env);
 
         Ok(())
     }
@@ -1791,6 +1906,13 @@ impl CrowdfundVaultContract {
 
             let contract_address = env.current_contract_address();
             token::transfer(&env, &token_address, &admin, &contract_address, &amount);
+
+            events::RewardPoolFundedEvent {
+                funder: admin,
+                token_address,
+                amount,
+            }
+            .publish(&env);
 
             Ok(())
         })
@@ -1916,6 +2038,12 @@ impl CrowdfundVaultContract {
                 .persistent()
                 .set(&DataKey::Project(project_id), &project);
 
+            events::MatchDistributedEvent {
+                project_id,
+                amount: match_after_fee,
+            }
+            .publish(&env);
+
             if fee_amount > 0 {
                 let contract_address = env.current_contract_address();
                 token::transfer(
@@ -2021,7 +2149,13 @@ impl CrowdfundVaultContract {
 
             for (recipient, amount) in recipients {
                 token::transfer(&env, &token_address, &contract_address, &recipient, &amount);
-                events::ContributorPayoutEvent { recipient, amount }.publish(&env);
+                events::ContributorPayoutEvent {
+                    recipient,
+                    request_id: request_id.clone(),
+                    token_address: token_address.clone(),
+                    amount,
+                }
+                .publish(&env);
             }
 
             Ok(())
@@ -2611,9 +2745,16 @@ impl CrowdfundVaultContract {
     ) -> Result<(), CrowdfundError> {
         Self::verify_admin(&env, &admin)?;
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::YieldProvider(token_address), &yield_provider);
+        env.storage().persistent().set(
+            &DataKey::YieldProvider(token_address.clone()),
+            &yield_provider,
+        );
+
+        events::YieldProviderSetEvent {
+            token_address,
+            yield_provider,
+        }
+        .publish(&env);
 
         Ok(())
     }
@@ -2716,6 +2857,8 @@ impl CrowdfundVaultContract {
         let yield_client = yield_provider::YieldProviderClient::new(env, &yield_provider_addr);
         yield_client.deposit(&contract_address, &amount);
 
+        events::YieldInvestedEvent { project_id, amount }.publish(env);
+
         Ok(())
     }
 
@@ -2752,7 +2895,16 @@ impl CrowdfundVaultContract {
         let yield_client = yield_provider::YieldProviderClient::new(env, &yield_provider_addr);
         yield_client.withdraw(&contract_address, &amount);
 
+        events::YieldDivestedEvent { project_id, amount }.publish(env);
+
         Ok(())
+    }
+}
+
+#[contractimpl]
+impl VersionedContract for CrowdfundVaultContract {
+    fn contract_version(_env: Env) -> ContractVersion {
+        CONTRACT_VERSION
     }
 }
 

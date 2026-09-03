@@ -1,3 +1,4 @@
+import type { components } from '@/generated/openapi-types';
 import { clientConfig } from '@/lib/config';
 
 // API service functions for cryptocurrency data
@@ -193,26 +194,8 @@ export class StellarApiService {
 // Portfolio API — interfaces mirroring backend DTOs
 // ---------------------------------------------------------------------------
 
-export interface AssetBalanceWithCurrency {
-  assetCode: string;
-  assetIssuer: string | null;
-  amount: string;
-  /** Value in the requested currency */
-  value: number;
-  valueUsd: number;
-}
-
-export interface PortfolioSummaryResponse {
-  /** Total portfolio value in the requested currency */
-  totalValue: string;
-  currency: string;
-  totalValueUsd: string;
-  assets: AssetBalanceWithCurrency[];
-  /** ISO timestamp of last recorded snapshot, or null for first-time users */
-  lastUpdated: string | null;
-  hasLinkedAccount: boolean;
-  exchangeRate: number;
-}
+export type AssetBalanceWithCurrency = components['schemas']['AssetBalanceWithCurrency'];
+export type PortfolioSummaryResponse = components['schemas']['PortfolioSummaryResponseDto'];
 
 export interface TimeWindowPerformance {
   window: '24h' | '7d' | '30d';

@@ -17,6 +17,7 @@ from .models import (
     NewsInsight,
     AssetTrend,
     EntityLinkingReview,
+    SentimentLabel,
 )
 from .cohort_models import (
     GrantRound,
@@ -47,5 +48,6 @@ __all__ = [
     "CohortRetentionSummary",
     "RepeatContributorSummary",
     "EntityLinkingReview",
+    "SentimentLabel",
     "PostgresService",
 ]

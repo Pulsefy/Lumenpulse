@@ -7,25 +7,14 @@
 //   body: { targetType, targetId, reason, description? }
 //   -> 201 ContentReport | 400 (duplicate/validation) | 401 (unauthenticated)
 
+import type { components } from '@/generated/openapi-types';
 import { clientConfig } from '@/lib/config';
 
 const API_BASE = clientConfig.apiUrl;
 
-/** Mirrors backend `ReportType`. "other" is used for surfaces (e.g. news) that
- *  don't have a dedicated target type yet. */
-export type ReportTargetType = "project" | "comment" | "user" | "other";
-
-/** Mirrors backend `ReportReason`. */
-export type ReportReason =
-  | "spam"
-  | "inappropriate_content"
-  | "fraud"
-  | "misleading_info"
-  | "copyright_violation"
-  | "other";
-
-/** Mirrors backend `ReportStatus`. */
-export type ReportStatus = "pending" | "under_review" | "resolved" | "dismissed";
+export type ReportTargetType = components['schemas']['CreateReportDto']['targetType'];
+export type ReportReason = components['schemas']['CreateReportDto']['reason'];
+export type ReportStatus = components['schemas']['ContentReport']['status'];
 
 export const REPORT_REASON_OPTIONS: { value: ReportReason; label: string }[] = [
   { value: "spam", label: "Spam" },
@@ -38,22 +27,8 @@ export const REPORT_REASON_OPTIONS: { value: ReportReason; label: string }[] = [
 
 export const REPORT_DESCRIPTION_MAX_LENGTH = 1000;
 
-export interface SubmitReportInput {
-  targetType: ReportTargetType;
-  targetId: string;
-  reason: ReportReason;
-  description?: string;
-}
-
-export interface ContentReport {
-  id: string;
-  targetType: ReportTargetType;
-  targetId: string;
-  reason: ReportReason;
-  description?: string;
-  status: ReportStatus;
-  createdAt: string;
-}
+export type SubmitReportInput = components['schemas']['CreateReportDto'];
+export type ContentReport = components['schemas']['ContentReport'];
 
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };

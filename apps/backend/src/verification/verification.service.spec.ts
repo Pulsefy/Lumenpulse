@@ -12,8 +12,13 @@ import {
   WeightMode,
 } from './dto/verification.dto';
 
+import { AuditService } from '../audit/audit.service';
+
 describe('VerificationService', () => {
   let svc: VerificationService;
+  const mockAuditService = {
+    log: jest.fn().mockResolvedValue({ id: 'audit-1' }),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -29,6 +34,10 @@ describe('VerificationService', () => {
               return def;
             },
           },
+        },
+        {
+          provide: AuditService,
+          useValue: mockAuditService,
         },
       ],
     }).compile();
@@ -150,6 +159,10 @@ describe('VerificationService', () => {
             },
           },
         },
+        {
+          provide: AuditService,
+          useValue: mockAuditService,
+        },
       ],
     });
 
@@ -194,6 +207,10 @@ describe('VerificationService', () => {
               return def;
             },
           },
+        },
+        {
+          provide: AuditService,
+          useValue: mockAuditService,
         },
       ],
     }).compile();
@@ -305,4 +322,40 @@ describe('VerificationService', () => {
       BadRequestException,
     );
   });
+
+  it('assigns reviewer and filters triage queue by reviewerId', async () => {
+    svc.upsertSubmission({
+      projectId: 101,
+      creatorPublicKey: 'GCREATOR',
+      title: 'Project 101',
+      content: 'Draft',
+    });
+    svc.submitForReview(101);
+
+    svc.upsertSubmission({
+      projectId: 102,
+      creatorPublicKey: 'GCREATOR',
+      title: 'Project 102',
+      content: 'Draft 2',
+    });
+    svc.submitForReview(102);
+
+    const assigned = await svc.assignReviewer(101, 'admin-user', 'reviewer-123');
+    expect(assigned.reviewerId).toBe('reviewer-123');
+    expect(mockAuditService.log).toHaveBeenCalledWith(
+      'assign_submission_reviewer',
+      'admin-user',
+      null,
+      expect.objectContaining({ projectId: 101, newReviewerId: 'reviewer-123' }),
+    );
+
+    const forReviewer = svc.listSubmissions(undefined, 'reviewer-123');
+    expect(forReviewer.length).toBe(1);
+    expect(forReviewer[0].projectId).toBe(101);
+
+    const unassigned = svc.listSubmissions(undefined, 'unassigned');
+    expect(unassigned.some((s) => s.projectId === 102)).toBe(true);
+    expect(unassigned.some((s) => s.projectId === 101)).toBe(false);
+  });
 });
+

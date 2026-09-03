@@ -12,6 +12,8 @@ import { UpdateReportDto } from './dto/update-report.dto';
 import { QueryReportsDto } from './dto/query-reports.dto';
 import { ModerationEventPublisherService } from './services/moderation-event-publisher.service';
 
+import { AuditService } from '../audit/audit.service';
+
 @Injectable()
 export class ModerationService {
   private readonly logger = new Logger(ModerationService.name);
@@ -20,6 +22,7 @@ export class ModerationService {
     @InjectRepository(ContentReport)
     private reportsRepository: Repository<ContentReport>,
     private readonly eventPublisher: ModerationEventPublisherService,
+    private readonly auditService: AuditService,
   ) {}
 
   /**
@@ -123,6 +126,16 @@ export class ModerationService {
       queryBuilder.andWhere('report.targetId = :targetId', {
         targetId: query.targetId,
       });
+    }
+
+    if (query.reviewerId !== undefined) {
+      if (query.reviewerId === 'unassigned') {
+        queryBuilder.andWhere('report.reviewerId IS NULL');
+      } else {
+        queryBuilder.andWhere('report.reviewerId = :reviewerId', {
+          reviewerId: query.reviewerId,
+        });
+      }
     }
 
     const [reports, total] = await queryBuilder.getManyAndCount();
@@ -238,6 +251,40 @@ export class ModerationService {
     };
 
     return mapping[status];
+  }
+
+  /**
+   * Assign a reviewer to a report
+   */
+  async assignReviewer(
+    id: string,
+    assignerId: string,
+    reviewerId?: string,
+  ): Promise<ContentReport> {
+    const report = await this.getReportById(id);
+    const previousReviewerId = report.reviewerId;
+
+    if (report.status !== ReportStatus.PENDING && report.status !== ReportStatus.UNDER_REVIEW) {
+      throw new BadRequestException(
+        `Cannot assign reviewer to report in status ${report.status}`,
+      );
+    }
+
+    report.reviewerId = reviewerId || undefined;
+    const updatedReport = await this.reportsRepository.save(report);
+
+    this.logger.log(
+      `Report ${id} reviewer updated to ${reviewerId || 'unassigned'} by ${assignerId}`,
+    );
+
+    await this.auditService.log(
+      'assign_moderation_report_reviewer',
+      assignerId,
+      null,
+      { reportId: id, previousReviewerId, newReviewerId: reviewerId || null }
+    );
+
+    return updatedReport;
   }
 
   /**

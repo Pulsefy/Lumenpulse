@@ -1,6 +1,21 @@
 use super::*;
-use soroban_sdk::testutils::{Address as _, Ledger};
-use soroban_sdk::{token, vec, Address, BytesN, Env, String};
+use soroban_sdk::testutils::{Address as _, Events, Ledger};
+use soroban_sdk::{token, vec, Address, BytesN, Env, IntoVal, String};
+
+/// Asserts that some event emitted by `contract_id` in the most recent
+/// invocation tree (`env.events().all()` reflects only that, not an
+/// accumulated history) has `topic_name` as its first topic.
+fn assert_event_emitted(env: &Env, contract_id: &Address, topic_name: &str) {
+    let events = env.events().all();
+    let found = events.iter().any(|(cid, topics, _)| {
+        cid == *contract_id
+            && topics.get(0).is_some_and(|t| {
+                let sym: soroban_sdk::Symbol = t.into_val(env);
+                sym == soroban_sdk::Symbol::new(env, topic_name)
+            })
+    });
+    assert!(found, "expected event `{topic_name}` was not emitted");
+}
 
 fn request_id(env: &Env) -> BytesN<32> {
     BytesN::from_array(env, &[0; 32])
@@ -779,6 +794,42 @@ fn test_cancel_proposal_changes_status() {
     f.client.cancel_proposal(&f.signer_a, &pid);
     assert_eq!(
         f.client.get_proposal(&pid).status,
+        ProposalStatus::Cancelled
+    );
+}
+
+/// Regression test (issue #1226): `propose`/`sign`/`cancel` must each
+/// independently keep the instance TTL (which holds `MultisigConfig` and
+/// every in-flight `Proposal`) alive — not just `get_next_proposal_id`,
+/// which may go uncalled for long stretches while governance is still
+/// actively used.
+#[test]
+fn test_multisig_ttl_extended_across_propose_sign_cancel() {
+    let f = MultisigFixture::new();
+
+    let pid = f.client.propose(&f.signer_a, &ProposalAction::SetAdmin);
+    assert_eq!(f.client.get_proposal(&pid).status, ProposalStatus::Pending);
+
+    // Advance past the instance TTL threshold before signing — `sign` must
+    // still see `MultisigConfig` and the proposal it just bumped via
+    // `propose`'s own `get_config` call.
+    f.env
+        .ledger()
+        .set_sequence_number(crate::storage::LEDGER_THRESHOLD + 1);
+    f.client.sign_proposal(&f.signer_b, &pid);
+    assert_eq!(f.client.get_proposal(&pid).status, ProposalStatus::Approved);
+
+    // Advance past the threshold again before cancelling a second proposal —
+    // proves `sign`'s own bump (not just `propose`'s) kept things alive.
+    let pid2 = f
+        .client
+        .propose(&f.signer_a, &ProposalAction::RotateBeneficiary);
+    f.env
+        .ledger()
+        .set_sequence_number(2 * crate::storage::LEDGER_THRESHOLD + 2);
+    f.client.cancel_proposal(&f.signer_a, &pid2);
+    assert_eq!(
+        f.client.get_proposal(&pid2).status,
         ProposalStatus::Cancelled
     );
 }
@@ -1569,6 +1620,188 @@ fn test_v1_streams_readable_through_v2_paths() {
     // Claim path also works.
     let claimed = client.claim(&beneficiary);
     assert_eq!(claimed, 500);
+}
+
+// ── Event emission coverage (issue #1231) ───────────────────────────────
+
+#[test]
+fn test_configure_multisig_emits_multisig_configured_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin);
+    let contract_id = env.register(TreasuryContract, ());
+    let client = TreasuryContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &token_id.address());
+
+    let signer = Address::generate(&env);
+    let signers = vec![
+        &env,
+        Signer {
+            address: signer.clone(),
+            weight: 1,
+        },
+    ];
+
+    client.configure_multisig(&signers, &1);
+    assert_event_emitted(&env, &contract_id, "multisig_configured_event");
+}
+
+#[test]
+fn test_set_multisig_config_emits_multisig_configured_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin);
+    let contract_id = env.register(TreasuryContract, ());
+    let client = TreasuryContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &token_id.address());
+
+    let old_signer = Address::generate(&env);
+    let signers = vec![
+        &env,
+        Signer {
+            address: old_signer.clone(),
+            weight: 1,
+        },
+    ];
+    client.configure_multisig(&signers, &1);
+
+    let new_signer = Address::generate(&env);
+    let new_signers = vec![
+        &env,
+        Signer {
+            address: new_signer,
+            weight: 1,
+        },
+    ];
+
+    let pid = client.propose(&old_signer, &ProposalAction::SetAdmin);
+
+    client.set_multisig_config(&old_signer, &pid, &new_signers, &1);
+    assert_event_emitted(&env, &contract_id, "multisig_configured_event");
+}
+
+#[test]
+fn test_set_admin_via_multisig_emits_admin_changed_event() {
+    let f = MultisigFixture::new();
+
+    let pid = f.client.propose(&f.signer_a, &ProposalAction::SetAdmin);
+    f.client.sign_proposal(&f.signer_b, &pid);
+
+    f.client
+        .set_admin_via_multisig(&f.signer_a, &pid, &f.new_admin);
+    assert_event_emitted(&f.env, &f.client.address, "admin_changed_event");
+}
+
+#[test]
+fn test_expire_proposal_emits_proposal_expired_event() {
+    let f = MultisigFixture::new();
+
+    let pid = f.client.propose(&f.signer_a, &ProposalAction::SetAdmin);
+    f.client.sign_proposal(&f.signer_b, &pid);
+    assert_eq!(f.client.get_proposal(&pid).status, ProposalStatus::Approved);
+
+    f.env.ledger().set_timestamp(2_000 + PROPOSAL_TTL_SECS + 1);
+
+    f.client.expire_proposal(&pid);
+    // Check events before any further client calls — each top-level client
+    // invocation (even a read-only getter) resets what `env.events().all()`
+    // reflects to just that invocation's own events.
+    assert_event_emitted(&f.env, &f.client.address, "proposal_expired_event");
+    assert_eq!(f.client.get_proposal(&pid).status, ProposalStatus::Expired);
+}
+
+#[test]
+fn test_cancel_stream_emits_stream_cancelled_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let beneficiary = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    let token_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
+
+    let treasury_id = env.register(TreasuryContract, ());
+    let treasury_client = TreasuryContractClient::new(&env, &treasury_id);
+
+    treasury_client.initialize(&admin, &token_id.address());
+
+    let amount = 1000i128;
+    token_admin_client.mint(&admin, &amount);
+
+    let start_time = 1000u64;
+    let duration = 1000u64;
+    env.ledger().set_timestamp(start_time);
+
+    treasury_client.allocate_budget(
+        &admin,
+        &beneficiary,
+        &amount,
+        &start_time,
+        &duration,
+        &request_id(&env),
+    );
+
+    env.ledger().set_timestamp(start_time + 500);
+
+    let (claimed_total, refunded) = treasury_client.cancel_stream(&admin, &beneficiary);
+    assert_eq!(claimed_total, 500);
+    assert_eq!(refunded, 500);
+    assert_event_emitted(&env, &treasury_client.address, "stream_cancelled_event");
+}
+
+#[test]
+fn test_emergency_stop_emits_emergency_stop_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let beneficiary = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    let token_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
+
+    let treasury_id = env.register(TreasuryContract, ());
+    let treasury_client = TreasuryContractClient::new(&env, &treasury_id);
+
+    treasury_client.initialize(&admin, &token_id.address());
+
+    let amount = 1000i128;
+    token_admin_client.mint(&admin, &amount);
+
+    let start_time = 1000u64;
+    let duration = 1000u64;
+    env.ledger().set_timestamp(start_time);
+
+    treasury_client.allocate_budget(
+        &admin,
+        &beneficiary,
+        &amount,
+        &start_time,
+        &duration,
+        &request_id(&env),
+    );
+
+    env.ledger().set_timestamp(start_time + 500);
+
+    let refunded = treasury_client.emergency_stop(
+        &admin,
+        &beneficiary,
+        &String::from_str(&env, "Security breach"),
+    );
+    // `emergency_stop` refunds the full unclaimed remainder (total - claimed),
+    // not just the unvested portion — nothing was claimed here, so the full
+    // 1000 comes back regardless of how much vesting time has elapsed.
+    assert_eq!(refunded, 1000);
+    assert_event_emitted(&env, &treasury_client.address, "emergency_stop_event");
 }
 
 use proptest::prelude::*;

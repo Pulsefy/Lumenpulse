@@ -30,6 +30,7 @@ from src.ml.model_registry import (
 from src.ml.price_predictor import PricePredictor
 from src.ml.feature_schema import current_feature_schema, schema_metadata
 from src.ml.feature_drift_detector import compute_distribution_baseline
+from src.ml.sentiment_evaluation import classification_metrics, seed_sentiment_labels
 from src.utils.logger import setup_logger
 from src.utils.metrics import JOBS_RUN_TOTAL, MODEL_RETRAINING_TOTAL, MODEL_RETRAINING_DURATION
 
@@ -73,6 +74,19 @@ def _load_crypto_slang() -> Dict[str, float]:
 
     logger.info(f"Loaded {len(lexicon)} custom crypto-slang entries")
     return lexicon
+
+
+def _evaluate_sentiment_model(analyzer: SentimentIntensityAnalyzer, db_session=None) -> Dict[str, Any]:
+    """Evaluate sentiment against the persisted held-out human labels."""
+    if db_session is None:
+        return {"precision": 0.0, "recall": 0.0, "f1": 0.0, "accuracy": 0.0, "support": 0, "status": "no_store"}
+    rows = db_session.get_sentiment_label_dicts(held_out=True)
+    actual = [row["label"] for row in rows]
+    predicted = []
+    for row in rows:
+        compound = analyzer.polarity_scores(row["text"])["compound"]
+        predicted.append("positive" if compound >= 0.05 else "negative" if compound <= -0.05 else "neutral")
+    return {**classification_metrics(actual, predicted), "status": "evaluated"}
 
 
 def _build_sentiment_model() -> Tuple[SentimentIntensityAnalyzer, Dict[str, Any]]:
@@ -255,6 +269,8 @@ def run_retraining(
     }
 
     try:
+        if db_session is not None:
+            seed_sentiment_labels(db_session)
         # Determine run parameters from manifest or defaults
         run_seed = seed
         start_time = None
@@ -279,6 +295,7 @@ def run_retraining(
         logger.info("Step 1: Retraining sentiment model …")
         with MODEL_RETRAINING_DURATION.labels(model_type="sentiment").time():
             sentiment_model, sentiment_metrics = _build_sentiment_model()
+            sentiment_metrics["evaluation"] = _evaluate_sentiment_model(sentiment_model, db_session)
 
         passes_sentiment_gate = (
             force

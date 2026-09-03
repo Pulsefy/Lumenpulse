@@ -3,12 +3,14 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/lib'],
   testMatch: ['**/__tests__/**/*.test.ts'],
+  globals: {
+    __DEV__: true,
+  },
   collectCoverageFrom: [
     'lib/**/*.ts',
     '!lib/**/*.d.ts',
     '!lib/**/__tests__/**',
   ],
-  // Coverage floor: keep this at the observed green baseline and raise it over time.
   coverageThreshold: {
     global: {
       branches: 26,
@@ -30,5 +32,6 @@ module.exports = {
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }],
   },
+  setupFiles: ['<rootDir>/jest.setup.ts'],
   setupFilesAfterEnv: [],
 };

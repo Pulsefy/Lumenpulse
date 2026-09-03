@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { View } from 'react-native';
+import { applyPrivacyPreferences } from '../lib/privacy-preferences';
 import { AuthProvider } from '../contexts/AuthContext';
 import { DeepLinkProvider } from '../contexts/DeepLinkContext';
 import { EnvironmentProvider } from '../contexts/EnvironmentContext';
@@ -10,6 +12,12 @@ import NetworkBadge from '../components/NetworkBadge';
 import { LocalizationProvider } from '../src/context';
 
 export default function RootLayout() {
+  // Re-apply the stored analytics/crash-reporting opt-outs on every launch, so
+  // a choice made in Settings › Data & Privacy holds across sessions.
+  useEffect(() => {
+    void applyPrivacyPreferences();
+  }, []);
+
   return (
     <LocalizationProvider>
       <EnvironmentProvider>

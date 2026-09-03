@@ -1,0 +1,166 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LumenPulse API",
+    "version": "1.0.0",
+    "description": "Backend contract consumed by the LumenPulse frontend. This document is the source of truth for generated client typings."
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "WatchlistItemType": {
+        "type": "string",
+        "enum": ["asset", "project"],
+        "description": "Type of watchlist item."
+      },
+      "AddToWatchlistDto": {
+        "type": "object",
+        "required": ["symbol", "type"],
+        "properties": {
+          "symbol": { "type": "string", "maxLength": 50 },
+          "name": { "type": ["string", "null"], "maxLength": 255 },
+          "type": { "$ref": "#/components/schemas/WatchlistItemType" },
+          "assetIssuer": { "type": ["string", "null"], "maxLength": 56 },
+          "imageUrl": { "type": ["string", "null"], "format": "uri", "maxLength": 500 },
+          "notes": { "type": ["string", "null"] },
+          "sortOrder": { "type": ["integer", "null"], "minimum": 0 }
+        }
+      },
+      "UpdateWatchlistDto": {
+        "type": "object",
+        "properties": {
+          "name": { "type": ["string", "null"], "maxLength": 255 },
+          "imageUrl": { "type": ["string", "null"], "format": "uri", "maxLength": 500 },
+          "notes": { "type": ["string", "null"] },
+          "sortOrder": { "type": ["integer", "null"], "minimum": 0 }
+        }
+      },
+      "WatchlistItemResponseDto": {
+        "type": "object",
+        "required": ["id", "userId", "symbol", "name", "type", "assetIssuer", "imageUrl", "notes", "sortOrder", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "userId": { "type": "string" },
+          "symbol": { "type": "string" },
+          "name": { "type": ["string", "null"] },
+          "type": { "$ref": "#/components/schemas/WatchlistItemType" },
+          "assetIssuer": { "type": ["string", "null"] },
+          "imageUrl": { "type": ["string", "null"] },
+          "notes": { "type": ["string", "null"] },
+          "sortOrder": { "type": "integer" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "WatchlistResponseDto": {
+        "type": "object",
+        "required": ["items", "total"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WatchlistItemResponseDto" }
+          },
+          "total": { "type": "integer", "format": "int64" }
+        }
+      },
+      "ReportType": {
+        "type": "string",
+        "enum": ["project", "comment", "user", "other"],
+        "description": "Type of content being reported."
+      },
+      "ReportReason": {
+        "type": "string",
+        "enum": ["spam", "inappropriate_content", "fraud", "misleading_info", "copyright_violation", "other"],
+        "description": "Reason for the report."
+      },
+      "ReportStatus": {
+        "type": "string",
+        "enum": ["pending", "under_review", "resolved", "dismissed"],
+        "description": "Current status of the report."
+      },
+      "CreateReportDto": {
+        "type": "object",
+        "required": ["targetType", "targetId", "reason"],
+        "properties": {
+          "targetType": { "$ref": "#/components/schemas/ReportType" },
+          "targetId": { "type": "string" },
+          "reason": { "$ref": "#/components/schemas/ReportReason" },
+          "description": { "type": ["string", "null"] }
+        }
+      },
+      "ContentReport": {
+        "type": "object",
+        "required": ["id", "targetType", "targetId", "reason", "status", "createdAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "targetType": { "$ref": "#/components/schemas/ReportType" },
+          "targetId": { "type": "string" },
+          "reason": { "$ref": "#/components/schemas/ReportReason" },
+          "description": { "type": ["string", "null"] },
+          "status": { "$ref": "#/components/schemas/ReportStatus" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "FeedActivityType": {
+        "type": "string",
+        "enum": ["contributor_registered", "grant_contribution", "reputation_change"],
+        "description": "Type of activity in the contributor feed."
+      },
+      "FeedActivityItemDto": {
+        "type": "object",
+        "required": ["id", "activityType", "contributorAddress", "timestamp", "summary"],
+        "properties": {
+          "id": { "type": "string" },
+          "activityType": { "$ref": "#/components/schemas/FeedActivityType" },
+          "contributorAddress": { "type": "string" },
+          "githubHandle": { "type": ["string", "null"] },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "summary": { "type": "string" },
+          "metadata": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "ContributorFeedResponseDto": {
+        "type": "object",
+        "required": ["items", "total", "page", "limit", "totalPages", "isSparseContributor"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FeedActivityItemDto" }
+          },
+          "total": { "type": "integer", "format": "int64" },
+          "page": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "totalPages": { "type": "integer" },
+          "isSparseContributor": { "type": "boolean" }
+        }
+      },
+      "AssetBalanceWithCurrency": {
+        "type": "object",
+        "required": ["assetCode", "assetIssuer", "amount", "value", "valueUsd"],
+        "properties": {
+          "assetCode": { "type": "string" },
+          "assetIssuer": { "type": ["string", "null"] },
+          "amount": { "type": "string" },
+          "value": { "type": "number" },
+          "valueUsd": { "type": "number" }
+        }
+      },
+      "PortfolioSummaryResponseDto": {
+        "type": "object",
+        "required": ["totalValue", "currency", "totalValueUsd", "assets", "lastUpdated", "hasLinkedAccount", "exchangeRate"],
+        "properties": {
+          "totalValue": { "type": "string" },
+          "currency": { "type": "string" },
+          "totalValueUsd": { "type": "string" },
+          "assets": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AssetBalanceWithCurrency" }
+          },
+          "lastUpdated": { "type": ["string", "null"], "format": "date-time" },
+          "hasLinkedAccount": { "type": "boolean" },
+          "exchangeRate": { "type": "number" }
+        }
+      }
+    }
+  }
+}

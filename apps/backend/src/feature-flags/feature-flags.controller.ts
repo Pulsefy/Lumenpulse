@@ -4,6 +4,7 @@ import { FeatureFlagsService } from './feature-flags.service';
 import {
   UpsertFeatureFlagDto,
   FeatureFlagResponseDto,
+  FlagAuditLogResponseDto,
 } from './dto/feature-flag.dto';
 
 @ApiTags('feature-flags')
@@ -44,6 +45,29 @@ export class FeatureFlagsController {
   async check(@Param('key') key: string) {
     const enabled = await this.flags.isEnabled(key);
     return { key, enabled };
+  }
+
+  /**
+   * Admin endpoint — retrieve the full mutation history for a single flag.
+   *
+   * Returns all audit-log entries for the given key, newest-first.
+   * Each entry captures the actor, the previous enabled state, the new
+   * enabled state, and the timestamp.
+   */
+  @Get(':key/history')
+  @ApiOperation({
+    summary: 'Get flag change history (admin)',
+    description:
+      'Retrieve the full ordered audit log for a specific feature flag. ' +
+      'Records include actor, previous state, new state, and timestamp.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Flag audit history retrieved successfully',
+    type: [FlagAuditLogResponseDto],
+  })
+  history(@Param('key') key: string) {
+    return this.flags.getFlagHistory(key);
   }
 
   @Get(':key')

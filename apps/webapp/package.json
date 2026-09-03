@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest run",
+    "generate:api-types": "node scripts/generate-api-types.mjs",
+    "check:api-types": "node scripts/generate-api-types.mjs --check",
+    "test": "npm run check:api-types && vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
@@ -86,7 +88,9 @@
     "@testing-library/user-event": "^14.5.1",
     "@vitejs/plugin-react": "^4.2.1",
     "@vitest/ui": "^1.0.4",
+    "balanced-match": "^4.0.4",
     "jsdom": "^23.0.1",
+    "openapi-typescript": "^7.4.4",
     "vitest": "^1.0.4"
   }
 }

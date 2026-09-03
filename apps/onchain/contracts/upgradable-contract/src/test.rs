@@ -2,7 +2,9 @@
 extern crate std;
 
 use crate::errors::ContractError;
-use crate::storage::{OperationStatus, TimelockAction, GRACE_PERIOD_SECONDS, MIN_DELAY_SECONDS};
+use crate::storage::{
+    OperationStatus, TimelockAction, GRACE_PERIOD_SECONDS, LEDGER_THRESHOLD, MIN_DELAY_SECONDS,
+};
 use crate::{UpgradableContract, UpgradableContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Events, Ledger},
@@ -88,6 +90,44 @@ fn test_ttl_extended_after_read_write() {
     assert_eq!(client.get_count(), 2);
 }
 
+#[test]
+fn test_queued_operation_ttl_extended_on_read() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    let action = TimelockAction::SetAdmin(new_admin.clone());
+    let id = client.queue_operation(&admin, &action);
+
+    // First threshold crossing: a read (`get_operation`) should re-bump the
+    // QueuedOperation's own persistent TTL, not just the instance TTL.
+    env.ledger().set_sequence_number(LEDGER_THRESHOLD + 1);
+    let op = client.get_operation(&id);
+    assert_eq!(op.proposer, admin);
+    assert_eq!(op.action, action);
+
+    // Second threshold crossing: this only survives if the prior read
+    // actually extended the TTL rather than leaving it to expire.
+    env.ledger().set_sequence_number(2 * LEDGER_THRESHOLD + 2);
+    let op = client.get_operation(&id);
+    assert_eq!(op.proposer, admin);
+    assert_eq!(op.action, action);
+
+    // `get_operation_status` is the other read path touching this key —
+    // confirm it also keeps the entry alive across a further advance.
+    // (Ledger *timestamp* stays at 0 throughout — only *sequence number*
+    // advances here — so the timelock itself is still Pending; this is
+    // purely exercising storage-TTL survival, not timelock state.)
+    env.ledger().set_sequence_number(3 * LEDGER_THRESHOLD + 3);
+    assert_eq!(client.get_operation_status(&id), OperationStatus::Pending);
+    env.ledger().set_sequence_number(4 * LEDGER_THRESHOLD + 4);
+    let op = client.get_operation(&id);
+    assert_eq!(op.proposer, admin);
+}
+
 // ---------------------------------------------------------------------------
 // Queue
 // ---------------------------------------------------------------------------
@@ -115,10 +155,11 @@ fn test_queue_operation_emits_event() {
     let (_, client) = setup(&env);
     client.init(&admin);
 
-    let before = env.events().all().len();
     let action = TimelockAction::SetAdmin(new_admin);
     client.queue_operation(&admin, &action);
-    assert!(env.events().all().len() > before);
+    // `env.events().all()` reflects only the invocation tree of the most
+    // recent top-level client call, not an accumulated history.
+    assert!(!env.events().all().is_empty());
 }
 
 #[test]
@@ -242,14 +283,13 @@ fn test_cancel_operation_emits_event() {
     let (_, client) = setup(&env);
     client.init(&admin);
 
-    // `env.events().all()` reflects only the most recent invocation, so
-    // capture `before` prior to any call rather than between two calls.
-    let before = env.events().all().len();
     let action = TimelockAction::SetAdmin(new_admin);
     let id = client.queue_operation(&admin, &action);
     client.cancel_operation(&admin, &id);
 
-    assert!(env.events().all().len() > before);
+    // `env.events().all()` reflects only the invocation tree of the most
+    // recent top-level client call, not an accumulated history.
+    assert!(!env.events().all().is_empty());
 }
 
 #[test]
@@ -427,9 +467,10 @@ fn test_execute_emits_event() {
 
     advance_to_ready(&env);
 
-    let before = env.events().all().len();
     client.execute_operation(&admin, &id);
-    assert!(env.events().all().len() > before);
+    // `env.events().all()` reflects only the invocation tree of the most
+    // recent top-level client call, not an accumulated history.
+    assert!(!env.events().all().is_empty());
 }
 
 #[test]
@@ -512,9 +553,10 @@ fn test_upgrade_via_queue_succeeds_after_delay() {
 
     advance_to_ready(&env);
 
-    let before = env.events().all().len();
     client.execute_operation(&admin, &id);
-    assert!(env.events().all().len() > before);
+    // `env.events().all()` reflects only the invocation tree of the most
+    // recent top-level client call, not an accumulated history.
+    assert!(!env.events().all().is_empty());
 
     // The operation is consumed, matching the SetAdmin path.
     assert_eq!(
@@ -625,4 +667,60 @@ fn test_admin_rotation_cancel() {
         client.try_accept_admin_rotation(&new_admin),
         Err(Ok(ContractError::OperationNotFound))
     );
+}
+
+// ── Event emission coverage (issue #1231) ──────────────────────────────────
+
+#[test]
+fn test_propose_admin_rotation_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    client.propose_admin_rotation(&admin, &new_admin);
+    // `env.events().all()` reflects only the invocation tree of the most
+    // recent top-level client call, not an accumulated history.
+    assert!(!env.events().all().is_empty());
+}
+
+#[test]
+fn test_cancel_admin_rotation_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    client.propose_admin_rotation(&admin, &new_admin);
+    client.cancel_admin_rotation(&admin);
+    // `env.events().all()` reflects only the invocation tree of the most
+    // recent top-level client call, not an accumulated history.
+    assert!(!env.events().all().is_empty());
+}
+
+#[test]
+fn test_cancel_admin_rotation_without_proposal_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    assert_eq!(
+        client.try_cancel_admin_rotation(&admin),
+        Err(Ok(ContractError::OperationNotFound))
+    );
+}
+
+#[test]
+fn test_contract_version() {
+    use version_interface::ContractVersion;
+
+    let env = Env::default();
+    let (_, client) = setup(&env);
+    assert_eq!(client.contract_version(), ContractVersion::new(1, 0, 0));
 }

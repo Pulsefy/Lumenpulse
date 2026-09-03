@@ -7,7 +7,10 @@ mod storage;
 use errors::RegistryError;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal, Symbol};
-use storage::{DataKey, ProjectEntry, RegistryConfig, VerificationStatus, WeightMode};
+use storage::{
+    DataKey, ProjectEntry, RegistryConfig, VerificationStatus, WeightMode, LEDGER_BUMP,
+    LEDGER_THRESHOLD,
+};
 
 fn transition_to_archived(env: &Env, entry: &mut ProjectEntry) {
     entry.status = VerificationStatus::Archived;
@@ -21,6 +24,18 @@ pub struct ProjectRegistryContract;
 impl ProjectRegistryContract {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
+    /// Extends the shared instance-storage TTL (covers `Admin`, `Paused`,
+    /// `Config` at once). Called from both `require_admin` and
+    /// `require_not_paused` so that instance data stays alive as long as the
+    /// registry is receiving either admin writes or ordinary
+    /// register/vote traffic — not just admin writes, which may be rare
+    /// long after initial setup.
+    fn touch_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+    }
+
     fn require_admin(env: &Env, caller: &Address) -> Result<(), RegistryError> {
         let admin: Address = env
             .storage()
@@ -31,6 +46,7 @@ impl ProjectRegistryContract {
             return Err(RegistryError::Unauthorized);
         }
         caller.require_auth();
+        Self::touch_instance(env);
         Ok(())
     }
 
@@ -43,7 +59,17 @@ impl ProjectRegistryContract {
         {
             return Err(RegistryError::ContractPaused);
         }
+        Self::touch_instance(env);
         Ok(())
+    }
+
+    /// Extends the TTL of a project's persistent record.
+    fn touch_project(env: &Env, project_id: u64) {
+        env.storage().persistent().extend_ttl(
+            &DataKey::Project(project_id),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
     }
 
     /// Resolve voter weight based on the configured WeightMode.
@@ -172,6 +198,7 @@ impl ProjectRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Project(project_id), &entry);
+        Self::touch_project(&env, project_id);
 
         events::ProjectRegisteredEvent {
             project_id,
@@ -208,6 +235,7 @@ impl ProjectRegistryContract {
             .persistent()
             .get(&DataKey::Project(project_id))
             .ok_or(RegistryError::ProjectNotFound)?;
+        Self::touch_project(&env, project_id);
 
         // Only pending projects accept votes
         if entry.status != VerificationStatus::Pending {
@@ -236,7 +264,12 @@ impl ProjectRegistryContract {
         env.storage().persistent().set(&vote_key, &true);
         env.storage()
             .persistent()
-            .set(&DataKey::VoterWeight(project_id, voter.clone()), &weight);
+            .extend_ttl(&vote_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        let weight_key = DataKey::VoterWeight(project_id, voter.clone());
+        env.storage().persistent().set(&weight_key, &weight);
+        env.storage()
+            .persistent()
+            .extend_ttl(&weight_key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
         if support {
             entry.votes_for = entry.votes_for.saturating_add(weight);
@@ -277,6 +310,7 @@ impl ProjectRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Project(project_id), &entry);
+        Self::touch_project(&env, project_id);
 
         Ok(status)
     }
@@ -299,6 +333,7 @@ impl ProjectRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Project(project_id), &entry);
+        Self::touch_project(&env, project_id);
 
         events::ProjectArchivedEvent {
             admin,
@@ -326,6 +361,7 @@ impl ProjectRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Project(project_id), &entry);
+        Self::touch_project(&env, project_id);
 
         events::ProjectDelistedEvent {
             admin,
@@ -364,6 +400,7 @@ impl ProjectRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Project(project_id), &entry);
+        Self::touch_project(&env, project_id);
 
         events::VerificationOverriddenEvent {
             project_id,
@@ -378,45 +415,68 @@ impl ProjectRegistryContract {
     // ── Queries ───────────────────────────────────────────────────────────────
 
     pub fn get_project(env: Env, project_id: u64) -> Result<ProjectEntry, RegistryError> {
-        env.storage()
+        let entry = env
+            .storage()
             .persistent()
             .get(&DataKey::Project(project_id))
-            .ok_or(RegistryError::ProjectNotFound)
+            .ok_or(RegistryError::ProjectNotFound)?;
+        Self::touch_project(&env, project_id);
+        Ok(entry)
     }
 
     pub fn is_verified(env: Env, project_id: u64) -> bool {
-        env.storage()
+        let entry: Option<ProjectEntry> = env
+            .storage()
             .persistent()
-            .get::<_, ProjectEntry>(&DataKey::Project(project_id))
+            .get(&DataKey::Project(project_id));
+        if entry.is_some() {
+            Self::touch_project(&env, project_id);
+        }
+        entry
             .map(|e| e.status == VerificationStatus::Verified)
             .unwrap_or(false)
     }
 
     pub fn has_voted(env: Env, project_id: u64, voter: Address) -> bool {
-        env.storage()
-            .persistent()
-            .has(&DataKey::VoteCast(project_id, voter))
+        let key = DataKey::VoteCast(project_id, voter);
+        let voted = env.storage().persistent().has(&key);
+        if voted {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        voted
     }
 
     pub fn get_voter_weight(env: Env, project_id: u64, voter: Address) -> i128 {
-        env.storage()
-            .persistent()
-            .get(&DataKey::VoterWeight(project_id, voter))
-            .unwrap_or(0)
+        let key = DataKey::VoterWeight(project_id, voter);
+        let weight = env.storage().persistent().get(&key);
+        if weight.is_some() {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        weight.unwrap_or(0)
     }
 
     pub fn get_config(env: Env) -> Result<RegistryConfig, RegistryError> {
-        env.storage()
+        let config = env
+            .storage()
             .instance()
             .get(&DataKey::Config)
-            .ok_or(RegistryError::NotInitialized)
+            .ok_or(RegistryError::NotInitialized)?;
+        Self::touch_instance(&env);
+        Ok(config)
     }
 
     pub fn get_admin(env: Env) -> Result<Address, RegistryError> {
-        env.storage()
+        let admin = env
+            .storage()
             .instance()
             .get(&DataKey::Admin)
-            .ok_or(RegistryError::NotInitialized)
+            .ok_or(RegistryError::NotInitialized)?;
+        Self::touch_instance(&env);
+        Ok(admin)
     }
 
     // ── Admin controls ────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 use super::*;
+use crate::LEDGER_THRESHOLD;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Env,
@@ -301,4 +302,30 @@ fn test_custom_staleness_window_governs_get_price() {
         client.try_get_price(&asset),
         Err(Ok(PricingAdapterError::StalePrice))
     );
+}
+
+#[test]
+fn test_ttl_extended_across_read_and_write() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, asset) = setup(&env);
+
+    client.set_price(&admin, &asset, &10_000_000i128, &7u32);
+
+    // Advance past LEDGER_THRESHOLD once: a read should re-bump both the
+    // instance (Admin/MaxPriceAge) and the per-asset persistent keys.
+    env.ledger().set_sequence_number(LEDGER_THRESHOLD + 1);
+    assert_eq!(client.get_price(&asset), 10_000_000i128);
+    assert_eq!(client.get_asset_decimals(&asset), 7u32);
+
+    // Advance past LEDGER_THRESHOLD again — this only survives if the prior
+    // read actually extended the TTL rather than leaving it to expire.
+    env.ledger().set_sequence_number(2 * LEDGER_THRESHOLD + 2);
+    assert_eq!(client.get_price(&asset), 10_000_000i128);
+
+    // A write after a long gap must also succeed and keep protecting reads.
+    client.set_price(&admin, &asset, &20_000_000i128, &7u32);
+    env.ledger().set_sequence_number(3 * LEDGER_THRESHOLD + 3);
+    assert_eq!(client.get_price(&asset), 20_000_000i128);
+    assert_eq!(client.get_staleness_window(), DEFAULT_MAX_PRICE_AGE);
 }

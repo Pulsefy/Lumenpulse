@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AppCacheModule } from '../cache/cache.module';
 import { StellarModule } from '../stellar/stellar.module';
 import { ContractHealthService } from './contract-health.service';
+import { DeploymentSmokeService } from './deployment-smoke.service';
 import { HealthController } from './health.controller';
 import { HealthService } from './health.service';
 import { LatencyBudgetHealthService } from './latency-budget.health.service';
@@ -25,6 +26,7 @@ import { ShutdownService } from './shutdown.service';
   providers: [
     HealthService,
     ContractHealthService,
+    DeploymentSmokeService,
     LatencyBudgetHealthService,
     ShutdownService,
   ],
