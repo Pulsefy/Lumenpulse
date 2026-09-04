@@ -62,7 +62,7 @@ impl ContractRegistry {
         env_meta: Symbol,
     ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
-        
+
         let contract_key = DataKey::Contract(key.clone());
         if !env.storage().persistent().has(&contract_key) {
             let mut keys: Vec<Symbol> = env
@@ -81,7 +81,7 @@ impl ContractRegistry {
             environment: env_meta.clone(),
         };
         env.storage().persistent().set(&contract_key, &info);
-        
+
         events::ContractRegisteredEvent {
             key,
             address,
@@ -101,13 +101,13 @@ impl ContractRegistry {
         env_meta: Symbol,
     ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
-        
+
         let contract_key = DataKey::Contract(key.clone());
         // Ensure contract exists
         if !env.storage().persistent().has(&contract_key) {
             return Err(RegistryError::ContractNotFound);
         }
-        
+
         let info = ContractInfo {
             key: key.clone(),
             address,
@@ -115,7 +115,7 @@ impl ContractRegistry {
             environment: env_meta.clone(),
         };
         env.storage().persistent().set(&contract_key, &info);
-        
+
         events::ContractUpdatedEvent {
             key,
             version,
