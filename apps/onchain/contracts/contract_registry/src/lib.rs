@@ -128,7 +128,7 @@ impl ContractRegistry {
     pub fn get_contract(env: Env, key: Symbol) -> Result<ContractInfo, RegistryError> {
         env.storage()
             .persistent()
-            .get::<ContractInfo>(&DataKey::Contract(key))
+            .get(&DataKey::Contract(key))
             .ok_or(RegistryError::ContractNotFound)
     }
 
