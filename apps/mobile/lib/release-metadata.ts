@@ -9,6 +9,13 @@ export interface ReleaseMetadata {
   releases: ReleaseInfo[];
 }
 
+export interface UpdateInfo {
+  runtimeVersion: string | null;
+  updateId: string | null;
+  channel: string | null;
+  isEmbedded: boolean;
+}
+
 export const fallbackReleaseMetadata: ReleaseMetadata = {
   releases: [
     {
@@ -41,4 +48,23 @@ export function getReleaseMetadata(): ReleaseMetadata {
     console.warn('Unable to load release metadata, using fallback:', error);
   }
   return fallbackReleaseMetadata;
+}
+
+/**
+ * Retrieves the current OTA update information from expo-updates.
+ * Returns null values when no update metadata is available (e.g. in a development client).
+ */
+export function getUpdateInfo(): UpdateInfo {
+  try {
+    const Updates = require('expo-updates');
+    return {
+      runtimeVersion: Updates.runtimeVersion ?? null,
+      updateId: Updates.updateId ?? null,
+      channel: Updates.channel ?? null,
+      isEmbedded: Updates.isEmbeddedLaunch ?? false,
+    };
+  } catch (error) {
+    console.warn('Unable to load expo-updates, using fallback update info:', error);
+    return { runtimeVersion: null, updateId: null, channel: null, isEmbedded: false };
+  }
 }

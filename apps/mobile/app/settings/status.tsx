@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   SafeAreaView,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -14,6 +15,7 @@ import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { useLocalization } from '../../src/context';
 import { config } from '../../lib/config';
 import { getReleaseMetadata, ReleaseInfo } from '../../lib/release-metadata';
+import * as Updates from 'expo-updates';
 import axios from 'axios';
 
 type ConnectionStatus = 'idle' | 'testing' | 'online' | 'offline';
@@ -25,11 +27,21 @@ export default function StatusScreen() {
   const [releaseNotes, setReleaseNotes] = useState<ReleaseInfo[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle');
   const [lastChecked, setLastChecked] = useState<string | null>(null);
+  const [runtimeVersion, setRuntimeVersion] = useState<string>('N/A');
+  const [updateId, setUpdateId] = useState<string>('N/A');
+  const [channel, setChannel] = useState<string>('N/A');
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateChecked, setUpdateChecked] = useState(false);
+  const [checkingForUpdate, setCheckingForUpdate] = useState(false);
 
   useEffect(() => {
     // Load release notes using utility helper
     const data = getReleaseMetadata();
     setReleaseNotes(data.releases);
+    // Surface current update metadata from expo-updates (falls back to N/A in dev)
+    setRuntimeVersion(Updates.runtimeVersion ?? 'N/A');
+    setUpdateId(Updates.updateId ?? 'N/A');
+    setChannel(Updates.channel ?? 'N/A');
   }, []);
 
   const handleTestConnection = async () => {
@@ -64,6 +76,38 @@ export default function StatusScreen() {
     } finally {
       setLastChecked(new Date().toLocaleTimeString());
     }
+  };
+
+  const handleCheckForUpdate = async () => {
+    if (checkingForUpdate) return;
+    setCheckingForUpdate(true);
+    setUpdateChecked(false);
+    try {
+      const result = await Updates.checkForUpdateAsync();
+      setUpdateAvailable(result.isAvailable);
+    } catch (error) {
+      console.warn('Update check failed:', error);
+      setUpdateAvailable(false);
+    } finally {
+      setUpdateChecked(true);
+      setCheckingForUpdate(false);
+    }
+  };
+
+  const handleCopyDiagnostics = async () => {
+    const diagnostics = [
+      `${config.app.name} MVP — ${config.app.version} (${config.app.variant})`,
+      `Environment: ${environmentConfig.label} (${environment})`,
+      `API URL: ${environmentConfig.apiBaseUrl || 'Not configured'}`,
+      `Stellar Network: ${environmentConfig.stellarNetwork}`,
+      `Soroban RPC: ${environmentConfig.sorobanRpcUrl || 'Not configured'}`,
+      `Runtime Version: ${runtimeVersion}`,
+      `Update ID: ${updateId}`,
+      `Channel: ${channel}`,
+      `Update checked: ${updateChecked ? (updateAvailable ? 'available' : 'up-to-date') : 'never'}`,
+      `Last connection test: ${lastChecked || 'never'}`,
+    ].join('\n');
+    await Share.share({ message: diagnostics });
   };
 
   const getStatusColor = (status: ConnectionStatus) => {
@@ -279,6 +323,103 @@ export default function StatusScreen() {
               </View>
             ))
           )}
+        </View>
+
+        {/* Update Information Section */}
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="refresh-circle-outline" size={20} color={colors.accent} />
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Update Information</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Runtime Version</Text>
+            <Text style={[styles.detailValue, { color: colors.text }]}>{runtimeVersion}</Text>
+          </View>
+
+          <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
+
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Update ID</Text>
+            <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={1} ellipsizeMode="middle">
+              {updateId}
+            </Text>
+          </View>
+
+          <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
+
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Channel</Text>
+            <Text style={[styles.detailValue, { color: colors.text }]}>{channel}</Text>
+          </View>
+
+          <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
+
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Update</Text>
+            <Text
+              style={[
+                styles.detailValue,
+                {
+                  color: updateChecked
+                    ? updateAvailable
+                      ? colors.success
+                      : colors.textSecondary
+                    : colors.textSecondary,
+                },
+              ]}
+            >
+              {!updateChecked
+                ? 'Not checked'
+                : updateAvailable
+                  ? 'Update available'
+                  : 'Up to date'}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.testButton,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                marginTop: 16,
+              },
+            ]}
+            onPress={handleCheckForUpdate}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Check for updates"
+          >
+            {checkingForUpdate ? (
+              <ActivityIndicator size="small" color={colors.warning} />
+            ) : (
+              <Text style={[styles.testButtonText, { color: colors.text }]}>Check for Updates</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Diagnostics Section */}
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="copy-outline" size={20} color={colors.accent} />
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Copy Diagnostics</Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.testButton,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+            onPress={handleCopyDiagnostics}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Copy diagnostics"
+          >
+            <Text style={[styles.testButtonText, { color: colors.text }]}>Copy Diagnostics</Text>
+          </TouchableOpacity>
         </View>
 
         {/* App Meta Section */}
