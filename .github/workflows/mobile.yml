@@ -1,6 +1,5 @@
 name: Mobile CI
-
-n: 
+on:
   workflow_dispatch:
   push:
     branches: [ "main" ]
@@ -8,9 +7,8 @@ n:
       - 'apps/mobile/**'
   pull_request:
     branches: [ "main" ]
-    paths:
+    paths: 
       - 'apps/mobile/**'
-
 
 jobs:
   mobile-checks:
@@ -21,13 +19,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
-
+        uses: actions/checkout@v4
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-          cache: 'nbpm'
+          cache: 'nump'
           cache-dependency-path: './apps/mobile/package-lock.json'
 
       - name: Install dependencies
@@ -40,4 +37,5 @@ jobs:
         run: npm run test:coverage
 
       - name: Run missing-key check
-        run: node scripts/check-missing-keys.js 
+        run: node scripts/check-missing-keys.js
+
