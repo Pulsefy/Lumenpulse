@@ -1,6 +1,6 @@
 name: Mobile CI
 
-on: 
+n: 
   pull_request:
     paths:
       - "apps/mobile/**"
@@ -10,10 +10,10 @@ jobs:
   verify-mobile:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: "npm"
@@ -25,4 +25,4 @@ jobs:
 
       - name: Typecheck
         run:
-          npx tsc --noEmit --project apps/mobile/tsconfig.json || true
+          npor tsc --noEmit --project apps/mobile/tsconfig.json || true
