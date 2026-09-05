@@ -73,13 +73,39 @@ class PostgresService:
 
         try:
             if self.database_url.startswith("sqlite"):
-                from sqlalchemy.pool import StaticPool
-                self.engine = create_engine(
-                    self.database_url,
-                    connect_args={"check_same_thread": False},
-                    poolclass=StaticPool,
-                    echo=False,
+                from sqlalchemy import event
+                is_memory = (
+                    ":memory:" in self.database_url
+                    or self.database_url in ("sqlite://", "sqlite:///")
                 )
+                connect_args = {"check_same_thread": False, "timeout": 30.0}
+                if is_memory:
+                    from sqlalchemy.pool import StaticPool
+                    self.engine = create_engine(
+                        self.database_url,
+                        connect_args=connect_args,
+                        poolclass=StaticPool,
+                        echo=False,
+                    )
+                else:
+                    from sqlalchemy.pool import NullPool
+                    self.engine = create_engine(
+                        self.database_url,
+                        connect_args=connect_args,
+                        poolclass=NullPool,
+                        echo=False,
+                    )
+
+                @event.listens_for(self.engine, "connect")
+                def _set_sqlite_pragma(dbapi_connection, connection_record):
+                    cursor = dbapi_connection.cursor()
+                    try:
+                        cursor.execute("PRAGMA journal_mode=WAL")
+                        cursor.execute("PRAGMA busy_timeout=30000")
+                    except Exception:
+                        pass
+                    finally:
+                        cursor.close()
             else:
                 self.engine = create_engine(
                     self.database_url,
@@ -3053,15 +3079,49 @@ class PostgresService:
 
     def find_active_analytics_job(self, dedupe_key: str) -> Optional[Dict[str, Any]]:
         """Find a queued/running job with the given dedupe key, if any."""
-        try:
-            with self.get_session() as session:
-                job = session.execute(
-                    select(AnalyticsJob).where(AnalyticsJob.dedupe_key == dedupe_key)
-                ).scalar_one_or_none()
-                return self._analytics_job_dict(job) if job else None
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to look up active analytics job: {e}")
-            return None
+        for attempt in range(3):
+            try:
+                with self.get_session() as session:
+                    job = session.execute(
+                        select(AnalyticsJob).where(AnalyticsJob.dedupe_key == dedupe_key)
+                    ).scalar_one_or_none()
+                    return self._analytics_job_dict(job) if job else None
+            except OperationalError as e:
+                if attempt < 2:
+                    time.sleep(0.05 * (attempt + 1))
+                    continue
+                logger.error(f"Failed to look up active analytics job: {e}")
+                return None
+            except SQLAlchemyError as e:
+                logger.error(f"Failed to look up active analytics job: {e}")
+                return None
+
+    def find_recent_analytics_job(
+        self, job_type: str, max_age_seconds: int = 10
+    ) -> Optional[Dict[str, Any]]:
+        """Find a recent job of this type submitted within max_age_seconds, if any."""
+        cutoff = datetime.utcnow() - timedelta(seconds=max_age_seconds)
+        for attempt in range(3):
+            try:
+                with self.get_session() as session:
+                    job = session.execute(
+                        select(AnalyticsJob)
+                        .where(
+                            AnalyticsJob.job_type == job_type,
+                            AnalyticsJob.created_at >= cutoff,
+                        )
+                        .order_by(AnalyticsJob.created_at.desc())
+                    ).scalars().first()
+                    return self._analytics_job_dict(job) if job else None
+            except OperationalError as e:
+                if attempt < 2:
+                    time.sleep(0.05 * (attempt + 1))
+                    continue
+                logger.error(f"Failed to look up recent analytics job: {e}")
+                return None
+            except SQLAlchemyError as e:
+                logger.error(f"Failed to look up recent analytics job: {e}")
+                return None
 
     def create_analytics_job(
         self,
@@ -3084,7 +3144,7 @@ class PostgresService:
                     params=params,
                 )
                 session.add(job)
-                session.flush()
+                session.commit()
                 return self._analytics_job_dict(job)
         except IntegrityError:
             logger.info(f"Concurrent duplicate job submission collapsed: {dedupe_key}")
@@ -3094,15 +3154,22 @@ class PostgresService:
             return None
 
     def get_analytics_job(self, job_id: str) -> Optional[Dict[str, Any]]:
-        try:
-            with self.get_session() as session:
-                job = session.execute(
-                    select(AnalyticsJob).where(AnalyticsJob.job_id == job_id)
-                ).scalar_one_or_none()
-                return self._analytics_job_dict(job) if job else None
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to fetch analytics job {job_id}: {e}")
-            return None
+        for attempt in range(5):
+            try:
+                with self.get_session() as session:
+                    job = session.execute(
+                        select(AnalyticsJob).where(AnalyticsJob.job_id == job_id)
+                    ).scalar_one_or_none()
+                    return self._analytics_job_dict(job) if job else None
+            except OperationalError as e:
+                if attempt < 4:
+                    time.sleep(0.05 * (attempt + 1))
+                    continue
+                logger.error(f"Failed to fetch analytics job {job_id}: {e}")
+                return None
+            except SQLAlchemyError as e:
+                logger.error(f"Failed to fetch analytics job {job_id}: {e}")
+                return None
 
     def mark_analytics_job_running(self, job_id: str) -> None:
         try:
