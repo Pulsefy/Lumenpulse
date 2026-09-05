@@ -1,10 +1,10 @@
-name: Mobile CI
+name: Mobile Ci
 
-n:
+on:
   pull_request:
     paths:
       - "apps/mobile/**"
-      - ".github/workflows/mobile-ci.yaml"
+      - ".github/workflows/mobile-ci.yml"
 
 jobs:
   verify-mobile:
@@ -23,4 +23,4 @@ jobs:
         run: npm install --prefix apps/mobile --no-audit --no-fund
 
       - name: Typecheck and verify localization keys
-        run: cd apps/mobile && npx tsc --noEmit
+        run: cd apps/mobile && npx tsc --noEmit && node scripts/check-missing-keys.js
