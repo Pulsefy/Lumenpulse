@@ -95,7 +95,7 @@ export class TransactionStatusService {
           await this.callbackRepository.save(callback);
           await this.notifyCallback(callback, currentStatus);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         const errorMsg =
           error instanceof Error ? error.message : 'Unknown error';
         this.logger.error(
@@ -121,7 +121,7 @@ export class TransactionStatusService {
           callback.transactionHash,
         );
         await this.notifyCallback(callback, String(txResponse.status));
-      } catch (error) {
+      } catch (error: unknown) {
         const errorMsg =
           error instanceof Error ? error.message : 'Unknown error';
         this.logger.error(

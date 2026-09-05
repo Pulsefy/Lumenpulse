@@ -28,17 +28,19 @@ pub struct NotificationBrokerContract;
 impl NotificationBrokerContract {
     /// Initialize the broker with an admin
     pub fn initialize(env: Env, admin: Address) -> Result<(), NotificationBrokerError> {
-        let _guard = acquire_reentrancy(&env)?;
+        acquire_reentrancy(&env).map_err(|_| NotificationBrokerError::ReentrancyDetected)?;
 
         if env.storage().instance().has(&DataKey::Admin) {
-            release_reentrancy(&env)?;
+            release_reentrancy(&env);
             return Err(NotificationBrokerError::AlreadyInitialized);
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().bump(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
-        release_reentrancy(&env)?;
+        release_reentrancy(&env);
 
         events::InitializedEvent { admin }.publish(&env);
 
@@ -52,7 +54,9 @@ impl NotificationBrokerContract {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(NotificationBrokerError::NotInitialized)?;
-        env.storage().instance().bump(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(admin)
     }
 
@@ -66,13 +70,15 @@ impl NotificationBrokerContract {
         source: Address,
         event_type: Option<Symbol>,
     ) -> Result<(), NotificationBrokerError> {
-        let _guard = acquire_reentrancy(&env)?;
+        acquire_reentrancy(&env).map_err(|_| NotificationBrokerError::ReentrancyDetected)?;
 
         env.storage()
             .instance()
             .get::<_, Address>(&DataKey::Admin)
             .ok_or(NotificationBrokerError::NotInitialized)?;
-        env.storage().instance().bump(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         let subscription = ListenerSubscription {
             listener: listener.clone(),
@@ -86,7 +92,7 @@ impl NotificationBrokerContract {
         env.storage().persistent().set(&key, &subscription);
         env.storage()
             .persistent()
-            .bump(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
         // Add to listener's subscription list for easy enumeration
         let listeners_key = DataKey::ListenersForSource(source.clone());
@@ -96,17 +102,17 @@ impl NotificationBrokerContract {
             .get(&listeners_key)
             .unwrap_or(vec![&env]);
 
-        if !listeners_for_source.iter().any(|l| l == &listener) {
-            listeners_for_source.push_back(listener);
+        if !listeners_for_source.iter().any(|l| l == listener) {
+            listeners_for_source.push_back(listener.clone());
             env.storage()
                 .persistent()
                 .set(&listeners_key, &listeners_for_source);
         }
         env.storage()
             .persistent()
-            .bump(&listeners_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            .extend_ttl(&listeners_key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
-        release_reentrancy(&env)?;
+        release_reentrancy(&env);
 
         events::SubscriptionEvent {
             listener,
@@ -126,18 +132,18 @@ impl NotificationBrokerContract {
         source: Address,
         event_type: Option<Symbol>,
     ) -> Result<(), NotificationBrokerError> {
-        let _guard = acquire_reentrancy(&env)?;
+        acquire_reentrancy(&env).map_err(|_| NotificationBrokerError::ReentrancyDetected)?;
 
         let key = DataKey::Subscription(listener.clone(), source.clone(), event_type.clone());
 
         if !env.storage().persistent().has(&key) {
-            release_reentrancy(&env)?;
+            release_reentrancy(&env);
             return Err(NotificationBrokerError::SubscriptionNotFound);
         }
 
         env.storage().persistent().remove(&key);
 
-        release_reentrancy(&env)?;
+        release_reentrancy(&env);
 
         events::SubscriptionEvent {
             listener,
@@ -157,13 +163,15 @@ impl NotificationBrokerContract {
         source: Address,
         notification: Notification,
     ) -> Result<u32, NotificationBrokerError> {
-        let _guard = acquire_reentrancy(&env)?;
+        acquire_reentrancy(&env).map_err(|_| NotificationBrokerError::ReentrancyDetected)?;
 
         env.storage()
             .instance()
             .get::<_, Address>(&DataKey::Admin)
             .ok_or(NotificationBrokerError::NotInitialized)?;
-        env.storage().instance().bump(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         // Verify source is the caller
         source.require_auth();
@@ -178,7 +186,7 @@ impl NotificationBrokerContract {
         if env.storage().persistent().has(&listeners_key) {
             env.storage()
                 .persistent()
-                .bump(&listeners_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                .extend_ttl(&listeners_key, LEDGER_THRESHOLD, LEDGER_BUMP);
         }
 
         let mut notified_count = 0u32;
@@ -196,26 +204,28 @@ impl NotificationBrokerContract {
             let subscribed_to_all = env.storage().persistent().has(&any_type_key);
 
             if subscribed_to_event {
-                env.storage()
-                    .persistent()
-                    .bump(&event_type_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                env.storage().persistent().extend_ttl(
+                    &event_type_key,
+                    LEDGER_THRESHOLD,
+                    LEDGER_BUMP,
+                );
             }
             if subscribed_to_all {
                 env.storage()
                     .persistent()
-                    .bump(&any_type_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                    .extend_ttl(&any_type_key, LEDGER_THRESHOLD, LEDGER_BUMP);
             }
 
             if subscribed_to_event || subscribed_to_all {
                 // Call the listener's on_notify method
                 // If this fails, we continue to notify others (best-effort delivery)
-                let receiver = NotificationReceiverClient::new(&env, listener);
-                let _ = receiver.on_notify(&notification);
+                let receiver = NotificationReceiverClient::new(&env, &listener);
+                let _ = receiver.try_on_notify(&notification);
                 notified_count += 1;
             }
         }
 
-        release_reentrancy(&env)?;
+        release_reentrancy(&env);
 
         events::NotificationEmittedEvent {
             source,
@@ -239,7 +249,7 @@ impl NotificationBrokerContract {
         if exists {
             env.storage()
                 .persistent()
-                .bump(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
         }
         Ok(exists)
     }
@@ -254,7 +264,7 @@ impl NotificationBrokerContract {
         if env.storage().persistent().has(&key) {
             env.storage()
                 .persistent()
-                .bump(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
         }
         Ok(listeners)
     }

@@ -62,6 +62,12 @@ impl ContractRegistry {
         env_meta: Symbol,
     ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
+        let info = ContractInfo {
+            key: key.clone(),
+            address: address.clone(),
+            version,
+            environment: env_meta.clone(),
+        };
 
         let contract_key = DataKey::Contract(key.clone());
         if !env.storage().persistent().has(&contract_key) {
@@ -74,14 +80,7 @@ impl ContractRegistry {
             env.storage().instance().set(&DataKey::ContractKeys, &keys);
         }
 
-        let info = ContractInfo {
-            key: key.clone(),
-            address: address.clone(),
-            version,
-            environment: env_meta.clone(),
-        };
         env.storage().persistent().set(&contract_key, &info);
-
         events::ContractRegisteredEvent {
             key,
             address,
@@ -101,21 +100,23 @@ impl ContractRegistry {
         env_meta: Symbol,
     ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
-
-        let contract_key = DataKey::Contract(key.clone());
         // Ensure contract exists
-        if !env.storage().persistent().has(&contract_key) {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::Contract(key.clone()))
+        {
             return Err(RegistryError::ContractNotFound);
         }
-
         let info = ContractInfo {
             key: key.clone(),
             address,
             version,
             environment: env_meta.clone(),
         };
-        env.storage().persistent().set(&contract_key, &info);
-
+        env.storage()
+            .persistent()
+            .set(&DataKey::Contract(key.clone()), &info);
         events::ContractUpdatedEvent {
             key,
             version,
@@ -126,10 +127,12 @@ impl ContractRegistry {
     }
 
     pub fn get_contract(env: Env, key: Symbol) -> Result<ContractInfo, RegistryError> {
-        env.storage()
+        let contract: ContractInfo = env
+            .storage()
             .persistent()
             .get(&DataKey::Contract(key))
-            .ok_or(RegistryError::ContractNotFound)
+            .ok_or(RegistryError::ContractNotFound)?;
+        Ok(contract)
     }
 
     pub fn list_contracts(env: Env) -> Result<Vec<ContractInfo>, RegistryError> {

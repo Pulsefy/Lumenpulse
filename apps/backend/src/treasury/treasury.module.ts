@@ -6,6 +6,7 @@ import { TreasurySorobanClient } from './treasury-soroban.client';
 import { TreasuryBeneficiaryHistory } from './entities/treasury-beneficiary-history.entity';
 import { AdminBlockchainAuditLog } from '../admin-audit/entities/admin-blockchain-audit-log.entity';
 import { ContractAdminModule } from '../contract-admin/contract-admin.module';
+import { StellarModule } from '../stellar/stellar.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { ContractAdminModule } from '../contract-admin/contract-admin.module';
       AdminBlockchainAuditLog,
     ]),
     ContractAdminModule,
+    StellarModule,
   ],
   controllers: [TreasuryController],
   providers: [TreasuryService, TreasurySorobanClient],

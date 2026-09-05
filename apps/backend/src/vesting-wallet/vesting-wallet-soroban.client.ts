@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  Account,
   Address,
   Contract,
   Keypair,
@@ -14,7 +15,7 @@ import {
 import { config } from '../lib/config';
 import { BadRequestException } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
-import { SorobanRpcError } from '../stellar/services/soroban-rpc-client.service';
+import { SorobanRpcError, SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
 import {
   VestingWalletNotConfiguredException,
   VestingWalletRpcUnavailableException,
@@ -28,10 +29,6 @@ const NETWORK_PASSPHRASES = {
   mainnet: Networks.PUBLIC,
 } as const;
 
-const DEFAULT_SOROBAN_RPC_URLS = {
-  testnet: 'https://soroban-testnet.stellar.org',
-  mainnet: 'https://soroban.stellar.org',
-} as const;
 
 const TX_CONFIRMATION_TIMEOUT_MS = 30_000;
 const TX_POLL_INTERVAL_MS = 1_500;
@@ -60,26 +57,14 @@ export interface SubmittedTransaction {
 export class VestingWalletSorobanClient {
   private readonly logger = new Logger(VestingWalletSorobanClient.name);
 
+  constructor(private readonly sorobanRpc: SorobanRpcClientService) {}
+
   private getContractId(): string {
     const contractId = config.stellar.contracts.contributorRegistry;
     if (!contractId || !StrKey.isValidContract(contractId)) {
       throw new VestingWalletNotConfiguredException();
     }
     return contractId;
-  }
-
-  private getRpcUrl(): string {
-    return (
-      config.stellar.sorobanRpcUrl ??
-      DEFAULT_SOROBAN_RPC_URLS[config.stellar.network]
-    );
-  }
-
-  private createServer(): rpc.Server {
-    return new rpc.Server(this.getRpcUrl(), {
-      timeout: config.stellar.timeout,
-      allowHttp: config.stellar.sorobanRpcUrl?.startsWith('http://') ?? false,
-    });
   }
 
   private getNetworkPassphrase(): string {
@@ -105,10 +90,12 @@ export class VestingWalletSorobanClient {
     this.validateAddressOrThrow(params.beneficiary, 'beneficiary');
 
     const keypair = this.getAdminKeypair();
-    const server = this.createServer();
 
     try {
-      const sourceAccount = await server.getAccount(keypair.publicKey());
+      const sourceAccount = await this.sorobanRpc.getAccount(keypair.publicKey());
+      if (!(sourceAccount instanceof Account)) {
+        throw new Error('Failed to retrieve source account');
+      }
       const contract = new Contract(contractId);
 
       const operation = contract.call(
@@ -128,7 +115,7 @@ export class VestingWalletSorobanClient {
         .setTimeout(30)
         .build();
 
-      const simulation = await server.simulateTransaction(tx);
+      const simulation = await this.sorobanRpc.simulateTransaction(tx);
       if (rpc.Api.isSimulationError(simulation)) {
         const simError = simulation.error;
         throw toVestingWalletException(
@@ -140,8 +127,8 @@ export class VestingWalletSorobanClient {
       const prepared = rpc.assembleTransaction(tx, simulation).build();
       prepared.sign(keypair);
 
-      return await this.submitAndConfirm(server, prepared);
-    } catch (error) {
+      return await this.submitAndConfirm(prepared);
+    } catch (error: unknown) {
       throw this.normalizeError(error);
     }
   }
@@ -154,10 +141,13 @@ export class VestingWalletSorobanClient {
     this.validateAddressOrThrow(params.vaultContract, 'vaultContract');
 
     const keypair = this.getAdminKeypair();
-    const server = this.createServer();
+
 
     try {
-      const sourceAccount = await server.getAccount(keypair.publicKey());
+      const sourceAccount = await this.sorobanRpc.getAccount(keypair.publicKey());
+      if (!(sourceAccount instanceof Account)) {
+        throw new Error('Failed to retrieve source account');
+      }
       const contract = new Contract(contractId);
 
       const milestoneLinkScVal = xdr.ScVal.scvVec([
@@ -184,7 +174,7 @@ export class VestingWalletSorobanClient {
         .setTimeout(30)
         .build();
 
-      const simulation = await server.simulateTransaction(tx);
+      const simulation = await this.sorobanRpc.simulateTransaction(tx);
       if (rpc.Api.isSimulationError(simulation)) {
         const simError = simulation.error;
         throw toVestingWalletException(
@@ -196,8 +186,8 @@ export class VestingWalletSorobanClient {
       const prepared = rpc.assembleTransaction(tx, simulation).build();
       prepared.sign(keypair);
 
-      return await this.submitAndConfirm(server, prepared);
-    } catch (error) {
+      return await this.submitAndConfirm(prepared);
+    } catch (error: unknown) {
       throw this.normalizeError(error);
     }
   }
@@ -206,7 +196,7 @@ export class VestingWalletSorobanClient {
     const contractId = this.getContractId();
     this.validateAddressOrThrow(beneficiary, 'beneficiary');
 
-    const server = this.createServer();
+
 
     try {
       const ledgerKey = xdr.LedgerKey.contractData(
@@ -220,14 +210,14 @@ export class VestingWalletSorobanClient {
         }),
       );
 
-      const response = await server.getLedgerEntries(ledgerKey);
+      const response = await this.sorobanRpc.rawServer.getLedgerEntries(ledgerKey);
       if (response.entries.length === 0) {
         return null;
       }
 
       const scVal = response.entries[0].val.contractData().val();
       return this.decodeVestingData(scVal);
-    } catch (error) {
+    } catch (error: unknown) {
       throw this.normalizeError(error);
     }
   }
@@ -236,7 +226,7 @@ export class VestingWalletSorobanClient {
     const contractId = this.getContractId();
     this.validateAddressOrThrow(beneficiary, 'beneficiary');
 
-    const server = this.createServer();
+
 
     try {
       const contract = new Contract(contractId);
@@ -245,9 +235,12 @@ export class VestingWalletSorobanClient {
         Address.fromString(beneficiary).toScVal(),
       );
 
-      const sourceAccount = await server.getAccount(
+      const sourceAccount = await this.sorobanRpc.getAccount(
         this.getAdminKeypair().publicKey(),
       );
+      if (!(sourceAccount instanceof Account)) {
+        throw new Error('Failed to retrieve source account');
+      }
       const tx = new TransactionBuilder(sourceAccount, {
         fee: BASE_INCLUSION_FEE,
         networkPassphrase: this.getNetworkPassphrase(),
@@ -256,7 +249,7 @@ export class VestingWalletSorobanClient {
         .setTimeout(30)
         .build();
 
-      const simulation = await server.simulateTransaction(tx);
+      const simulation = await this.sorobanRpc.simulateTransaction(tx, { isReadOnly: true });
       if (rpc.Api.isSimulationError(simulation)) {
         const simError = simulation.error;
         throw toVestingWalletException(
@@ -265,9 +258,12 @@ export class VestingWalletSorobanClient {
         );
       }
 
-      const claimable = scValToNative(simulation.result!.retval) as bigint;
+      if (!simulation.result?.retval) {
+        throw new Error('Invalid simulation result');
+      }
+      const claimable = scValToNative(simulation.result.retval) as bigint;
       return claimable;
-    } catch (error) {
+    } catch (error: unknown) {
       throw this.normalizeError(error);
     }
   }
@@ -327,10 +323,9 @@ export class VestingWalletSorobanClient {
   }
 
   private async submitAndConfirm(
-    server: rpc.Server,
     transaction: ReturnType<TransactionBuilder['build']>,
   ): Promise<SubmittedTransaction> {
-    const sendResponse = await server.sendTransaction(transaction);
+    const sendResponse = await this.sorobanRpc.sendTransaction(transaction);
 
     if (sendResponse.status === 'ERROR') {
       throw new VestingWalletTransactionFailedException(
@@ -341,14 +336,14 @@ export class VestingWalletSorobanClient {
 
     const hash = sendResponse.hash;
     const deadline = Date.now() + TX_CONFIRMATION_TIMEOUT_MS;
-    let getResponse = await server.getTransaction(hash);
+    let getResponse = await this.sorobanRpc.getTransaction(hash);
 
     while (
       getResponse.status === rpc.Api.GetTransactionStatus.NOT_FOUND &&
       Date.now() < deadline
     ) {
       await this.sleep(TX_POLL_INTERVAL_MS);
-      getResponse = await server.getTransaction(hash);
+      getResponse = await this.sorobanRpc.getTransaction(hash);
     }
 
     if (getResponse.status === rpc.Api.GetTransactionStatus.SUCCESS) {

@@ -222,4 +222,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         return ErrorCode.SYS_INTERNAL_ERROR;
     }
   }
+
+  private logFailedSimulationTrace(tx: unknown, result: unknown): void {
+    // Log the failed simulation trace for debugging purposes
+    this.logger.error('Simulation trace failed', {
+      transaction: tx,
+      result: result,
+    });
+  }
 }
