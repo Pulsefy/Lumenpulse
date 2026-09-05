@@ -767,6 +767,7 @@ async def trigger_retraining(
         job_type="retrain",
         idempotency_payload={"singleton": True},
         work_fn=lambda: run_retraining(force=body.force),
+        dedupe_window_seconds=10,
     )
     return JobSubmitResponse(
         job_id=job["job_id"], job_type=job["job_type"], status=job["status"], created=created
