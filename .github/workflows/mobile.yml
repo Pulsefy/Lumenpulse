@@ -1,5 +1,4 @@
-name: Mobile CI
-
+name: Mobile Ci
 on:
   workflow_dispatch:
   push:
@@ -8,9 +7,8 @@ on:
       - 'apps/mobile/**'
   pull_request:
     branches: [ "main" ]
-    paths:
+    paths: 
       - 'apps/mobile/**'
-      - 'apps/mobile/.ci-trigger'
 
 jobs:
   mobile-checks:
@@ -22,7 +20,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -31,10 +28,13 @@ jobs:
           cache-dependency-path: './apps/mobile/package-lock.json'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Type check
-        run: npm run tsc -- --noEmit
+        run: npm run tsc -- noEmit
 
       - name: Run unit tests with coverage
         run: npm run test:coverage
+
+      - name: Run missing-key check
+        run: node scripts/check-missing-keys.js
