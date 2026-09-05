@@ -1,10 +1,10 @@
 name: Mobile CI
 
-n: 
+n:
   pull_request:
     paths:
       - "apps/mobile/**"
-      - ".github/workflows/mobile-ci.yml"
+      - ".github/workflows/mobile-ci.yaml"
 
 jobs:
   verify-mobile:
@@ -20,9 +20,7 @@ jobs:
           cache-dependency-path: "apps/mobile/package-lock.json"
 
       - name: Install dependencies
-        run:
-          npm install --prefix apps/mobile --no-audit --no-fund
+        run: npm install --prefix apps/mobile --no-audit --no-fund
 
-      - name: Typecheck
-        run:
-          npor tsc --noEmit --project apps/mobile/tsconfig.json || true
+      - name: Typecheck and verify localization keys
+        run: cd apps/mobile && npx tsc --noEmit
