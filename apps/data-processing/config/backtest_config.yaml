@@ -1,0 +1,26 @@
+# Backtesting harness configuration for the SentimentForecaster.
+#
+# This file is committed to the repository so that backtest results are
+# reproducible across environments.  Any change to this file will produce
+# a different ``config_hash`` in the backtest output, making it easy to
+# detect when results are not comparable.
+
+# Number of walk-forward windows to evaluate
+n_windows: 5
+
+# Fraction of data used for training in each window (remainder is the test gap)
+train_fraction: 0.7
+
+# Minimum number of data points required in a training slice
+min_train_points: 10
+
+# Forecast horizons to evaluate (hours)
+horizons:
+  - 24
+  - 48
+
+# Random seed for reproducibility
+seed: 42
+
+# Window size for sentiment velocity computation
+metric_window: 5

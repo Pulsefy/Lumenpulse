@@ -1235,6 +1235,7 @@ class ForecastResponse(BaseModel):
     model_backend: str
     data_points_used: int
     generated_at: str
+    backtest_confidence: float = 0.0
 
 
 @app.get("/analytics/forecast", response_model=ForecastResponse)
