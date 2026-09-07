@@ -44,6 +44,9 @@ def _poll_until_terminal(client, job_id, timeout=10.0):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         resp = client.get(f"/api/jobs/{job_id}", headers=_HEADERS)
+        if resp.status_code == 404:
+            time.sleep(0.05)
+            continue
         assert resp.status_code == 200
         body = resp.json()
         if body["status"] in ("succeeded", "failed"):
@@ -74,8 +77,12 @@ def test_retrain_submits_job_and_can_be_polled(client, monkeypatch):
 
 
 def test_concurrent_retrain_submissions_collapse(client, monkeypatch):
+    def fake_retrain(force=False):
+        time.sleep(0.05)
+        return {"status": "completed"}
+
     monkeypatch.setattr(
-        server_module, "run_retraining", lambda force=False: {"status": "completed"}
+        server_module, "run_retraining", fake_retrain
     )
 
     resp1 = client.post("/retrain", json={"force": False}, headers=_HEADERS)

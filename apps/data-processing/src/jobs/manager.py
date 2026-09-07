@@ -46,6 +46,7 @@ def submit_job(
     job_type: str,
     idempotency_payload: Dict[str, Any],
     work_fn: Callable[[], Dict[str, Any]],
+    dedupe_window_seconds: Optional[int] = None,
 ) -> Tuple[Dict[str, Any], bool]:
     """
     Submit a job for background execution.
@@ -66,6 +67,16 @@ def submit_job(
         )
         return existing, False
 
+    if dedupe_window_seconds and hasattr(db_service, "find_recent_analytics_job"):
+        recent = db_service.find_recent_analytics_job(
+            job_type=job_type, max_age_seconds=dedupe_window_seconds
+        )
+        if recent:
+            logger.info(
+                f"Collapsing duplicate {job_type} submission onto recent job {recent['job_id']}"
+            )
+            return recent, False
+
     job = db_service.create_analytics_job(
         job_type=job_type, dedupe_key=dedupe_key, params=idempotency_payload
     )
@@ -74,6 +85,12 @@ def submit_job(
         existing = db_service.find_active_analytics_job(dedupe_key)
         if existing:
             return existing, False
+        if dedupe_window_seconds and hasattr(db_service, "find_recent_analytics_job"):
+            recent = db_service.find_recent_analytics_job(
+                job_type=job_type, max_age_seconds=dedupe_window_seconds
+            )
+            if recent:
+                return recent, False
         raise RuntimeError(f"Failed to submit {job_type} job")
 
     _EXECUTOR.submit(_run_job, db_service, job["job_id"], work_fn)
