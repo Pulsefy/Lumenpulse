@@ -218,6 +218,15 @@ export function getTrackerId(
 
   const parts: string[] = [];
 
+  // Prefer an authenticated principal when available
+  const reqAny = request as any;
+  const user = reqAny.user as { id?: string; sub?: string; stellarPublicKey?: string } | undefined;
+  const principalId = user?.id || user?.sub || user?.stellarPublicKey || '';
+  if (principalId) {
+    parts.push(`principal:${principalId}`);
+    return parts.join('|');
+  }
+
   if (settings.tracker.useApiKey && apiKey) {
     parts.push(`api-key:${apiKey}`);
   }
