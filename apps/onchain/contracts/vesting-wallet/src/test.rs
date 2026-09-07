@@ -1052,3 +1052,14 @@ fn test_multiple_delegates_for_one_beneficiary() {
     assert!(delegates.contains(&delegate1));
     assert!(delegates.contains(&delegate2));
 }
+
+#[test]
+fn test_contract_version() {
+    use version_interface::ContractVersion;
+
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, ..) = setup_test(&env);
+
+    assert_eq!(client.contract_version(), ContractVersion::new(1, 0, 0));
+}

@@ -2,9 +2,9 @@ use crate::yield_provider::YieldProviderTrait;
 use crate::{CrowdfundVaultContract, CrowdfundVaultContractClient};
 use soroban_sdk::{
     contract, contractimpl, symbol_short,
-    testutils::Address as _,
+    testutils::{Address as _, Events},
     token::{StellarAssetClient, TokenClient},
-    Address, BytesN, Env,
+    Address, BytesN, Env, IntoVal,
 };
 
 #[contract]
@@ -198,4 +198,100 @@ fn test_yield_refund_divests_automatically() {
     // Verify user got their tokens back
     // User started with 10_000_000, deposited 500_000, should have 10_000_000 again.
     assert_eq!(token_client.balance(&user), 10_000_000);
+}
+
+// ── Event emission coverage (issue #1231) ──────────────────────────────────
+
+#[test]
+fn test_set_yield_provider_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _owner, _user, token_client, yield_id) = setup_yield_test(&env);
+    client.initialize(&admin);
+
+    client.set_yield_provider(&admin, &token_client.address, &yield_id);
+
+    // `env.events().all()` reflects only the invocation tree of the most
+    // recent top-level client call, so we assert against events fired by
+    // `set_yield_provider` directly rather than an accumulated total.
+    let events = env.events().all();
+    assert!(!events.is_empty());
+    let (_contract_id, topics, _data) = events.last().unwrap();
+    let topic: soroban_sdk::Symbol = topics.get(0).unwrap().into_val(&env);
+    assert_eq!(
+        topic,
+        soroban_sdk::Symbol::new(&env, "yield_provider_set_event")
+    );
+}
+
+#[test]
+fn test_invest_idle_funds_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client, yield_id) = setup_yield_test(&env);
+    client.initialize(&admin);
+    client.set_yield_provider(&admin, &token_client.address, &yield_id);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("YieldPrj"),
+        &1_000_000,
+        &token_client.address,
+    );
+    client.deposit(
+        &user,
+        &project_id,
+        &500_000,
+        &BytesN::from_array(&env, &[76u8; 32]),
+    );
+
+    client.invest_idle_funds(&owner, &project_id, &300_000);
+
+    let events = env.events().all();
+    assert!(!events.is_empty());
+    let (_contract_id, topics, _data) = events.last().unwrap();
+    let topic: soroban_sdk::Symbol = topics.get(0).unwrap().into_val(&env);
+    assert_eq!(
+        topic,
+        soroban_sdk::Symbol::new(&env, "yield_invested_event")
+    );
+}
+
+#[test]
+fn test_divest_funds_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client, yield_id) = setup_yield_test(&env);
+    client.initialize(&admin);
+    client.set_yield_provider(&admin, &token_client.address, &yield_id);
+
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("YieldPrj"),
+        &1_000_000,
+        &token_client.address,
+    );
+    client.deposit(
+        &user,
+        &project_id,
+        &500_000,
+        &BytesN::from_array(&env, &[77u8; 32]),
+    );
+    client.invest_idle_funds(&owner, &project_id, &300_000);
+
+    // Direct call to the public `divest_funds` entrypoint (as opposed to the
+    // auto-divest path exercised by `test_yield_investment_and_withdrawal`).
+    client.divest_funds(&owner, &project_id, &100_000);
+
+    let events = env.events().all();
+    assert!(!events.is_empty());
+    let (_contract_id, topics, _data) = events.last().unwrap();
+    let topic: soroban_sdk::Symbol = topics.get(0).unwrap().into_val(&env);
+    assert_eq!(
+        topic,
+        soroban_sdk::Symbol::new(&env, "yield_divested_event")
+    );
 }

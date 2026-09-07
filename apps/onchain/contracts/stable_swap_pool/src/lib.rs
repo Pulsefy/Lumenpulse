@@ -6,10 +6,10 @@ mod storage;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contracterror, contractimpl, Address, Env};
-use soroban_sdk::token::TokenClient;
-use storage::DataKey;
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
+use soroban_sdk::token::TokenClient;
+use soroban_sdk::{contract, contracterror, contractimpl, Address, Env, Symbol, Vec};
+use storage::{DataKey, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 const AMPLIFICATION_FACTOR: i128 = 100; // A parameter for stable swap bonding curve
 const SWAP_FEE_BP: u32 = 4; // 0.04% swap fee in basis points
@@ -47,6 +47,34 @@ impl StableSwapPoolContract {
         result
     }
 
+    /// Bumps the shared instance TTL (covers `Admin`/`TokenA`/`TokenB`
+    /// together, since instance storage has one TTL per contract).
+    fn bump_instance(env: &Env) {
+        env.storage().instance().bump(LEDGER_THRESHOLD, LEDGER_BUMP);
+    }
+
+    /// Bumps the per-key TTL of the pool-wide reserve/supply entries, for
+    /// whichever of them already exist (safe to call before any liquidity
+    /// has ever been added, when none of these keys exist yet).
+    fn bump_pool_ttl(env: &Env) {
+        for key in [DataKey::ReserveA, DataKey::ReserveB, DataKey::LPSupply] {
+            if env.storage().persistent().has(&key) {
+                env.storage()
+                    .persistent()
+                    .bump(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            }
+        }
+    }
+
+    /// Bumps the per-key TTL of a specific user's LP balance entry.
+    fn bump_user_lp_ttl(env: &Env, user: &Address) {
+        env.storage().persistent().bump(
+            &DataKey::UserLPBalance(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+    }
+
     /// Initialize pool with two stable tokens
     pub fn initialize(
         env: Env,
@@ -60,13 +88,9 @@ impl StableSwapPoolContract {
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::TokenA, &token_a);
-        env.storage()
-            .instance()
-            .set(&DataKey::TokenB, &token_b);
-        env.storage().instance().extend_ttl(100, 100);
+        env.storage().instance().set(&DataKey::TokenA, &token_a);
+        env.storage().instance().set(&DataKey::TokenB, &token_b);
+        Self::bump_instance(&env);
 
         events::PoolInitializedEvent {
             admin,
@@ -92,6 +116,8 @@ impl StableSwapPoolContract {
             if amount_a <= 0 || amount_b <= 0 {
                 return Err(StableSwapPoolError::InvalidAmount);
             }
+
+            Self::bump_instance(&env);
 
             let token_a_addr: Address = env
                 .storage()
@@ -175,6 +201,8 @@ impl StableSwapPoolContract {
                 &DataKey::UserLPBalance(user.clone()),
                 &(user_lp + lp_tokens),
             );
+            Self::bump_pool_ttl(&env);
+            Self::bump_user_lp_ttl(&env, &env.invoker());
 
             events::LiquidityAddedEvent {
                 user: user.clone(),
@@ -255,6 +283,8 @@ impl StableSwapPoolContract {
             &DataKey::UserLPBalance(user.clone()),
             &(user_lp - lp_amount),
         );
+        Self::bump_pool_ttl(&env);
+        Self::bump_user_lp_ttl(&env, &user);
 
         // Transfer tokens
         let token_a_addr: Address = env
@@ -285,7 +315,7 @@ impl StableSwapPoolContract {
         Ok((out_a, out_b))
     }
 
-    /// Swap tokens (A -> B or B -> A)
+     /// Swap tokens (A -> B or B -> A)
     pub fn swap(
         env: Env,
         user: Address,
@@ -297,6 +327,8 @@ impl StableSwapPoolContract {
         if amount_in <= 0 {
             return Err(StableSwapPoolError::InvalidAmount);
         }
+
+        Self::bump_instance(&env);
 
         let token_a_addr: Address = env
             .storage()
@@ -354,22 +386,15 @@ impl StableSwapPoolContract {
             if input_token == token_a_addr {
                 let new_ra = reserve_in + amount_in;
                 let new_rb = reserve_out - amount_out;
-                env.storage()
-                    .persistent()
-                    .set(&DataKey::ReserveA, &new_ra);
-                env.storage()
-                    .persistent()
-                    .set(&DataKey::ReserveB, &new_rb);
+                env.storage().persistent().set(&DataKey::ReserveA, &new_ra);
+                env.storage().persistent().set(&DataKey::ReserveB, &new_rb);
             } else {
                 let new_rb = reserve_in + amount_in;
                 let new_ra = reserve_out - amount_out;
-                env.storage()
-                    .persistent()
-                    .set(&DataKey::ReserveB, &new_rb);
-                env.storage()
-                    .persistent()
-                    .set(&DataKey::ReserveA, &new_ra);
+                env.storage().persistent().set(&DataKey::ReserveB, &new_rb);
+                env.storage().persistent().set(&DataKey::ReserveA, &new_ra);
             }
+            Self::bump_pool_ttl(&env);
 
             // Transfer output tokens to caller
             let token_out = TokenClient::new(&env, &output_token);
@@ -404,10 +429,14 @@ impl StableSwapPoolContract {
 
     /// Get LP token balance
     pub fn lp_balance(env: Env, user: Address) -> i128 {
-        env.storage()
-            .persistent()
-            .get(&DataKey::UserLPBalance(user))
-            .unwrap_or(0)
+        let key = DataKey::UserLPBalance(user);
+        let balance: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+        if env.storage().persistent().has(&key) {
+            env.storage()
+                .persistent()
+                .bump(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        balance
     }
 
     /// Get current reserves
@@ -422,6 +451,10 @@ impl StableSwapPoolContract {
             .persistent()
             .get(&DataKey::ReserveB)
             .unwrap_or(0);
+        Self::bump_pool_ttl(&env);
         (ra, rb)
     }
 }
+
+#[cfg(test)]
+mod test;

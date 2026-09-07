@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Param,
   Body,
   UseGuards,
   HttpCode,
@@ -21,8 +22,9 @@ import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
 import {
   ModelRetrainingService,
-  RetrainResult,
   ModelStatusResult,
+  JobSubmission,
+  JobStatus,
 } from './model-retraining.service';
 
 class TriggerRetrainDto {
@@ -33,45 +35,64 @@ class TriggerRetrainDto {
   force?: boolean;
 }
 
-class RetrainResultDto implements RetrainResult {
+class JobSubmissionDto implements JobSubmission {
   @ApiProperty({
-    description: 'Status message of the retrain trigger',
-    example: 'Retraining initiated',
+    description: 'Identifier of the submitted job; poll it for the outcome',
+    example: 'b3f1c2a4-...',
+  })
+  job_id: string;
+
+  @ApiProperty({ description: 'Type of job submitted', example: 'retrain' })
+  job_type: string;
+
+  @ApiProperty({
+    description:
+      'queued, or the status of an already in-flight job this submission collapsed onto',
+    example: 'queued',
   })
   status: string;
 
-  @ApiPropertyOptional({
-    description: 'Retraining started timestamp',
-    example: '2026-05-27T20:58:35Z',
+  @ApiProperty({
+    description:
+      'False when this collapsed onto an already in-flight duplicate',
+    example: true,
   })
-  started_at?: string;
+  created: boolean;
+}
+
+class JobStatusDto implements JobStatus {
+  @ApiProperty({ example: 'b3f1c2a4-...' })
+  job_id: string;
+
+  @ApiProperty({ example: 'retrain' })
+  job_type: string;
+
+  @ApiProperty({ example: 'succeeded' })
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+
+  @ApiPropertyOptional({ description: 'Submission parameters', example: {} })
+  params?: Record<string, unknown> | null;
 
   @ApiPropertyOptional({
-    description: 'Retraining finished timestamp',
-    example: '2026-05-27T20:59:35Z',
+    description: 'Result payload once the job has succeeded',
+    example: { status: 'completed', duration_seconds: 60.5 },
   })
-  finished_at?: string;
+  result?: Record<string, unknown> | null;
 
   @ApiPropertyOptional({
-    description: 'Retraining duration in seconds',
-    example: 60.5,
+    description: 'Error message if failed',
+    example: null,
   })
-  duration_seconds?: number;
+  error?: string | null;
 
-  @ApiPropertyOptional({
-    description: 'Summary of models generated',
-    example: { sentiment: 'v2' },
-  })
-  models?: Record<string, unknown>;
+  @ApiPropertyOptional({ example: '2026-05-27T20:58:35Z' })
+  created_at?: string | null;
 
-  @ApiPropertyOptional({
-    description: 'Summary of registry updates',
-    example: { active_version: 'v2' },
-  })
-  registry?: Record<string, unknown>;
+  @ApiPropertyOptional({ example: '2026-05-27T20:58:36Z' })
+  started_at?: string | null;
 
-  @ApiPropertyOptional({ description: 'Error message if failed', example: '' })
-  error?: string;
+  @ApiPropertyOptional({ example: '2026-05-27T20:59:35Z' })
+  finished_at?: string | null;
 }
 
 class ModelStatusResultDto implements ModelStatusResult {
@@ -102,27 +123,49 @@ export class ModelRetrainingController {
 
   /**
    * POST /admin/models/retrain
-   * Trigger an immediate model retraining run.
+   * Submit a model retraining run to the async job queue (#1248) and
+   * return immediately with a job identifier.
    * Body: { force?: boolean }
    */
   @Post('retrain')
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
-    summary: 'Trigger model retraining (admin only)',
+    summary: 'Submit a model retraining run (admin only)',
     description:
-      'Triggers a background task to retrain the sentiment analysis model.',
+      "Submits retraining to the data-processing service's async job queue and returns a job_id immediately. Poll GET /admin/models/retrain/:jobId for the outcome.",
   })
   @ApiResponse({
-    status: 200,
-    description: 'Model retraining triggered successfully',
-    type: RetrainResultDto,
+    status: 202,
+    description: 'Model retraining submitted',
+    type: JobSubmissionDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   async triggerRetrain(
     @Body() body: TriggerRetrainDto,
-  ): Promise<RetrainResult> {
+  ): Promise<JobSubmission> {
     return this.retrainingService.triggerRetraining(body.force ?? false);
+  }
+
+  /**
+   * GET /admin/models/retrain/:jobId
+   * Poll the status/result of a retraining job.
+   */
+  @Get('retrain/:jobId')
+  @ApiOperation({
+    summary: 'Get retraining job status (admin only)',
+    description:
+      'Reports queued/running/succeeded/failed for a job submitted via POST /admin/models/retrain.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Job status retrieved successfully',
+    type: JobStatusDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
+  async getRetrainJob(@Param('jobId') jobId: string): Promise<JobStatus> {
+    return this.retrainingService.getJobStatus(jobId);
   }
 
   /**

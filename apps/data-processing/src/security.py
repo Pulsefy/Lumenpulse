@@ -28,6 +28,8 @@ logger = setup_logger(__name__)
 class SecurityConfig:
     """Security configuration manager."""
     
+    api_key: str = ""
+    
     def __init__(self):
         # Load API keys configuration (JSON list)
         # Expected format: [{"id": "key1", "value": "abcd", "scopes": ["default"]}, ...]

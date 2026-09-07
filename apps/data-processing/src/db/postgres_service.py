@@ -6,14 +6,15 @@ import logging
 import math
 import os
 import time
+import uuid
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 from collections import defaultdict
 
-from sqlalchemy import create_engine, select, and_, desc, func, delete
+from sqlalchemy import create_engine, select, and_, desc, func, delete, update as sa_update
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
+from sqlalchemy.exc import SQLAlchemyError, OperationalError, IntegrityError
 
 from .models import (
     Base,
@@ -35,6 +36,7 @@ from .models import (
     DailyOnchainKPISnapshot,
     PredictionLog,
     SentimentLabel,
+    AnalyticsJob,
 )
 from .cohort_models import (
     GrantRound,
@@ -3030,3 +3032,143 @@ class PostgresService:
         except Exception as e:
             logger.error(f"Failed to query prediction logs: {e}")
             return []
+
+    # ------------------------------------------------------------------
+    # Async analytics job queue (#1248)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _analytics_job_dict(job: AnalyticsJob) -> Dict[str, Any]:
+        return {
+            "job_id": job.job_id,
+            "job_type": job.job_type,
+            "status": job.status,
+            "params": job.params,
+            "result": job.result,
+            "error": job.error,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+        }
+
+    def find_active_analytics_job(self, dedupe_key: str) -> Optional[Dict[str, Any]]:
+        """Find a queued/running job with the given dedupe key, if any."""
+        try:
+            with self.get_session() as session:
+                job = session.execute(
+                    select(AnalyticsJob).where(AnalyticsJob.dedupe_key == dedupe_key)
+                ).scalar_one_or_none()
+                return self._analytics_job_dict(job) if job else None
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to look up active analytics job: {e}")
+            return None
+
+    def create_analytics_job(
+        self,
+        job_type: str,
+        dedupe_key: str,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Create a new queued job. Returns None (instead of raising) if a
+        concurrent request already claimed the same dedupe_key, so the
+        caller can look up and return that job instead.
+        """
+        try:
+            with self.get_session() as session:
+                job = AnalyticsJob(
+                    job_id=str(uuid.uuid4()),
+                    job_type=job_type,
+                    status="queued",
+                    dedupe_key=dedupe_key,
+                    params=params,
+                )
+                session.add(job)
+                session.flush()
+                return self._analytics_job_dict(job)
+        except IntegrityError:
+            logger.info(f"Concurrent duplicate job submission collapsed: {dedupe_key}")
+            return None
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to create analytics job: {e}")
+            return None
+
+    def get_analytics_job(self, job_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            with self.get_session() as session:
+                job = session.execute(
+                    select(AnalyticsJob).where(AnalyticsJob.job_id == job_id)
+                ).scalar_one_or_none()
+                return self._analytics_job_dict(job) if job else None
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to fetch analytics job {job_id}: {e}")
+            return None
+
+    def mark_analytics_job_running(self, job_id: str) -> None:
+        try:
+            with self.get_session() as session:
+                session.execute(
+                    sa_update(AnalyticsJob)
+                    .where(AnalyticsJob.job_id == job_id)
+                    .values(status="running", started_at=datetime.utcnow())
+                )
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to mark analytics job {job_id} running: {e}")
+
+    def mark_analytics_job_succeeded(self, job_id: str, result: Dict[str, Any]) -> None:
+        try:
+            with self.get_session() as session:
+                session.execute(
+                    sa_update(AnalyticsJob)
+                    .where(AnalyticsJob.job_id == job_id)
+                    .values(
+                        status="succeeded",
+                        result=result,
+                        dedupe_key=None,
+                        finished_at=datetime.utcnow(),
+                    )
+                )
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to mark analytics job {job_id} succeeded: {e}")
+
+    def mark_analytics_job_failed(self, job_id: str, error: str) -> None:
+        try:
+            with self.get_session() as session:
+                session.execute(
+                    sa_update(AnalyticsJob)
+                    .where(AnalyticsJob.job_id == job_id)
+                    .values(
+                        status="failed",
+                        error=error,
+                        dedupe_key=None,
+                        finished_at=datetime.utcnow(),
+                    )
+                )
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to mark analytics job {job_id} failed: {e}")
+
+    def fail_orphaned_analytics_jobs(self, message: str) -> int:
+        """
+        Mark any job still in queued/running state as failed.
+
+        Called once on process startup: a queued/running row at that point
+        can only be leftover from a previous process that died mid-job
+        (in-process thread pools don't survive a restart), so its loss must
+        be surfaced rather than left silently stuck.
+        """
+        try:
+            with self.get_session() as session:
+                result = session.execute(
+                    sa_update(AnalyticsJob)
+                    .where(AnalyticsJob.status.in_(["queued", "running"]))
+                    .values(
+                        status="failed",
+                        error=message,
+                        dedupe_key=None,
+                        finished_at=datetime.utcnow(),
+                    )
+                )
+                return result.rowcount or 0
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to reconcile orphaned analytics jobs: {e}")
+            return 0

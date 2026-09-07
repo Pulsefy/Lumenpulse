@@ -506,3 +506,21 @@ fn conforms_to_notification_receiver_interface() {
     // on `on_notify` would fail to resolve this call.
     client.on_notify(&notification);
 }
+
+// Same conformance pattern for `VersionedContract` (issue #1046): the
+// contract uses `impl VersionedContract`, so a signature mismatch on
+// `contract_version` would fail to compile.
+use version_interface::{ContractVersion, VersionedClient, VersionedContract};
+
+fn assert_implements_versioned<T: VersionedContract>() {}
+
+#[test]
+fn conforms_to_versioned_interface() {
+    assert_implements_versioned::<ContributorRegistryContract>();
+
+    let env = Env::default();
+    let id = env.register(ContributorRegistryContract, ());
+    let client = VersionedClient::new(&env, &id);
+
+    assert_eq!(client.contract_version(), ContractVersion::new(1, 0, 0));
+}

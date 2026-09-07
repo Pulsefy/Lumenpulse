@@ -8,8 +8,16 @@ mod metadata;
 mod storage;
 mod test;
 
-use events::{AdminChangedEvent, BurnEvent, UpgradedEvent};
+use events::{
+    AccountStateChangedEvent, AdminChangedEvent, AllowanceChangedEvent, BurnEvent, MintEvent,
+    TransferEvent, UpgradedEvent,
+};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
+use version_interface::{ContractVersion, VersionedContract};
+
+/// Bumped on storage-layout or interface changes that break compatibility
+/// with prior deployments; see [`version_interface::ContractVersion`].
+const CONTRACT_VERSION: ContractVersion = ContractVersion::new(1, 0, 0);
 
 #[contract]
 pub struct LumenToken;
@@ -27,7 +35,8 @@ impl LumenToken {
     pub fn mint(e: Env, to: Address, amount: i128) {
         let admin = admin::read_administrator(&e);
         admin.require_auth();
-        balance::receive_balance(&e, to, amount);
+        balance::receive_balance(&e, to.clone(), amount);
+        MintEvent { to, amount }.publish(&e);
     }
 
     /// Transfer the admin role to `new_admin`. Emits [`AdminChangedEvent`].
@@ -45,13 +54,15 @@ impl LumenToken {
     pub fn freeze(e: Env, id: Address) {
         let admin = admin::read_administrator(&e);
         admin.require_auth();
-        balance::write_state(&e, id, true);
+        balance::write_state(&e, id.clone(), true);
+        AccountStateChangedEvent { id, frozen: true }.publish(&e);
     }
 
     pub fn unfreeze(e: Env, id: Address) {
         let admin = admin::read_administrator(&e);
         admin.require_auth();
-        balance::write_state(&e, id, false);
+        balance::write_state(&e, id.clone(), false);
+        AccountStateChangedEvent { id, frozen: false }.publish(&e);
     }
 
     pub fn allowance(e: Env, from: Address, spender: Address) -> i128 {
@@ -61,7 +72,14 @@ impl LumenToken {
     pub fn approve(e: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
         from.require_auth();
         balance::check_not_frozen(&e, &from);
-        allowance::write_allowance(&e, from, spender, amount, expiration_ledger);
+        allowance::write_allowance(&e, from.clone(), spender.clone(), amount, expiration_ledger);
+        AllowanceChangedEvent {
+            from,
+            spender,
+            amount,
+            expiration_ledger,
+        }
+        .publish(&e);
     }
 
     pub fn balance(e: Env, id: Address) -> i128 {
@@ -71,7 +89,8 @@ impl LumenToken {
     pub fn transfer(e: Env, from: Address, to: Address, amount: i128) {
         from.require_auth();
         balance::spend_balance(&e, from.clone(), amount);
-        balance::receive_balance(&e, to, amount);
+        balance::receive_balance(&e, to.clone(), amount);
+        TransferEvent { from, to, amount }.publish(&e);
     }
 
     pub fn transfer_from(e: Env, spender: Address, from: Address, to: Address, amount: i128) {
@@ -80,7 +99,8 @@ impl LumenToken {
 
         allowance::spend_allowance(&e, from.clone(), spender, amount);
         balance::spend_balance(&e, from.clone(), amount);
-        balance::receive_balance(&e, to, amount);
+        balance::receive_balance(&e, to.clone(), amount);
+        TransferEvent { from, to, amount }.publish(&e);
     }
 
     pub fn burn(e: Env, from: Address, amount: i128) {
@@ -126,5 +146,12 @@ impl LumenToken {
             new_wasm_hash,
         }
         .publish(&e);
+    }
+}
+
+#[contractimpl]
+impl VersionedContract for LumenToken {
+    fn contract_version(_env: Env) -> ContractVersion {
+        CONTRACT_VERSION
     }
 }

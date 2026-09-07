@@ -237,6 +237,88 @@ Triggers alerts via `alert_notifier` / `alertbot`.
 
 ---
 
+## Querying lineage over the API (#1254)
+
+The manifest is also queryable at runtime — useful when a KPI looks wrong
+and you need to trace it back to its inputs without opening the YAML, and
+the intended machine-readable source for the ownership map in issue #1073,
+"Documentation: Data contracts and ownership map between services".
+
+```
+GET /api/lineage                  — list every registered feature/dataset id
+GET /api/lineage/{feature_id}     — upstream/downstream lineage graph for one
+```
+
+Both require the standard `X-API-Key` header (see `src/security.py`); no
+other auth is applied. `feature_id` is the manifest entry's `id` — e.g.
+`market_health_score` or `price_predictor_features`.
+
+`GET /api/lineage/market_health_score` returns:
+
+```json
+{
+  "feature_id": "market_health_score",
+  "node": {
+    "id": "market_health_score",
+    "kind": "kpi_dataset",
+    "display_name": "Market Health Score",
+    "description": "...",
+    "source_system": ["src/analytics/market_analyzer.py"],
+    "transformation": "market_health_score = (sentiment_score × 0.7) + (tanh(volume_change) × 0.3)",
+    "owning_module": "data-processing",
+    "owner": "data-team@lumenpulse.io"
+  },
+  "upstream": [
+    { "id": "price_predictor_features", "kind": "ml_feature_set", "distance": 1, "...": "..." },
+    { "id": "sentiment_compound", "kind": "kpi_dataset", "distance": 1, "...": "..." },
+    { "id": "src/ingestion/stellar_fetcher.py::get_asset_volume", "kind": "external_source", "distance": 1, "...": "..." }
+  ],
+  "downstream": [
+    { "id": "market_forecast", "kind": "kpi_dataset", "distance": 1, "...": "..." },
+    { "id": "src/api/server.py (GET /api/market-analysis)", "kind": "external_source", "distance": 1, "...": "..." }
+  ],
+  "manifest_version": "1.1"
+}
+```
+
+Notes on the shape:
+
+- **`upstream`/`downstream` are transitive**, not just one hop — each node
+  carries a `distance` (hop count from the queried feature/dataset), so a
+  KPI's lineage traces all the way back to raw ingestion code even when
+  that requires walking through several intermediate features.
+- **Three node `kind`s**: `ml_feature_set` and `kpi_dataset` are manifest
+  entries; `external_source` is a raw file/module/API reference (e.g.
+  `src/ingestion/stellar_fetcher.py::get_asset_volume`) that the manifest
+  points at but doesn't itself define as a separate entry — these are the
+  graph's leaves.
+- **Per node**: `source_system` (source table(s) or source file),
+  `transformation` (the entry's `formula`, falling back to its
+  `description`), and `owning_module`/`owner` — this is what satisfies "who
+  do I ask about this" without a follow-up lookup.
+- The graph is built directly from `feature_lineage.yaml` on every
+  request — there is no separate index to fall out of sync. See
+  `src/lineage/graph.py` and `src/lineage/manifest.py` for the traversal
+  and reference-resolution logic.
+
+### The dotted cross-reference syntax
+
+Entries point at each other using `<section>.<entry_id>` or
+`<section>.<entry_id>.<feature_name>`, e.g.:
+
+```yaml
+inputs:
+  - name: sentiment_score
+    upstream: ml_feature_sets.price_predictor_features.sentiment_score
+```
+
+This is what the lineage endpoint (and Rule 8 of the validator, below)
+parse to build cross-entry edges. Anything that isn't a dotted reference
+into this manifest — a file path, a module path, an API route — is treated
+as a free-text **external source** leaf instead of a broken reference.
+
+---
+
 ## How to update the manifest
 
 ### Adding a new feature or KPI

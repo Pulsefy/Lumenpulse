@@ -1,5 +1,5 @@
 use crate::types::ProjectMetadata;
-use soroban_sdk::{contractevent, Address, Env, Symbol};
+use soroban_sdk::{contractevent, Address, Env, String};
 
 // ── Event Struct Definitions ────────────────────────────────────────────────
 
@@ -8,7 +8,7 @@ use soroban_sdk::{contractevent, Address, Env, Symbol};
 pub struct ProjectProposedEvent {
     pub project_id: u64,
     pub proposer: Address,
-    pub name: Symbol,
+    pub name: String,
 }
 
 #[contractevent]
@@ -46,24 +46,18 @@ pub fn emit_project_proposed(
     proposer: &Address,
     metadata: &ProjectMetadata,
 ) {
-    // 1. Create a stack buffer to unpack the host string characters (max 32 bytes for typical project names)
-    let mut buffer = [0u8; 32];
-
-    // 2. Copy the string contents into the stack array copy slot
-    metadata.name.copy_into_slice(&mut buffer);
-
-    // 3. Convert the populated buffer bytes slice into a native Rust string slice safely
-    let name_str = core::str::from_utf8(&buffer)
-        .unwrap_or("")
-        .trim_matches(char::from(0)); // Clean out unallocated trailing null bytes
-
-    // 4. Instantiation mapping via the valid native primitive string slice
-    let project_name_symbol = Symbol::new(env, name_str);
-
+    // Carry the name as-is (issue #1231): the previous implementation copied
+    // it into a fixed 32-byte buffer and converted it to a `Symbol`, which
+    // panicked for any name that wasn't exactly 32 bytes of
+    // `[A-Za-z0-9_]` — i.e. almost every realistic project name, since
+    // `ProjectMetadata::name` allows up to 100 arbitrary characters
+    // (spaces, punctuation). `propose_project`, this contract's primary
+    // entrypoint, could not complete for normal input. `String` has no such
+    // restriction and needs no lossy round-trip.
     ProjectProposedEvent {
         project_id,
         proposer: proposer.clone(),
-        name: project_name_symbol,
+        name: metadata.name.clone(),
     }
     .publish(env);
 }

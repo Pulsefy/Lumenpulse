@@ -443,6 +443,10 @@ const envSchema = z
     STELLAR_TIMEOUT: z.coerce.number().int().min(1).default(30_000),
     STELLAR_RETRY_ATTEMPTS: z.coerce.number().int().min(0).default(3),
     STELLAR_RETRY_DELAY: z.coerce.number().int().min(0).default(1_000),
+    SOROBAN_SIMULATION_CACHE_ENABLED: z.preprocess(
+      parseBoolean,
+      z.boolean().default(true),
+    ),
     SOROBAN_SIMULATION_TRACE_LEVEL: z
       .enum(['off', 'summary', 'verbose'])
       .default('summary'),
@@ -1124,6 +1128,7 @@ export const config = Object.freeze({
     timeout: parsedEnv.STELLAR_TIMEOUT,
     retryAttempts: parsedEnv.STELLAR_RETRY_ATTEMPTS,
     retryDelay: parsedEnv.STELLAR_RETRY_DELAY,
+    simulationCacheEnabled: parsedEnv.SOROBAN_SIMULATION_CACHE_ENABLED,
     simulationTraceLevel: parsedEnv.SOROBAN_SIMULATION_TRACE_LEVEL,
     balanceCacheTTL: parsedEnv.STELLAR_BALANCE_CACHE_TTL,
     operationsCacheTTL: parsedEnv.STELLAR_OPERATIONS_CACHE_TTL,

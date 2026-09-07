@@ -21,6 +21,7 @@ import {
   SubmissionStatus,
   UpsertSubmissionDto,
 } from './dto/verification.dto';
+import { AuditService } from '../audit/audit.service';
 
 interface ProjectRecord {
   projectId: number;
@@ -63,7 +64,10 @@ export class VerificationService {
   private submissions = new Map<number, ProjectSubmissionRecord>();
   private config: RegistryConfig;
 
-  constructor(private readonly configSvc: ConfigService) {
+  constructor(
+    private readonly configSvc: ConfigService,
+    private readonly auditService: AuditService,
+  ) {
     this.config = {
       quorumThreshold: Number(this.configSvc.get('VERIFICATION_QUORUM', '100')),
       weightMode: this.configSvc.get(
@@ -303,9 +307,14 @@ export class VerificationService {
     return this.toSubmissionDto(this.getSubmissionRecord(projectId));
   }
 
-  listSubmissions(status?: SubmissionStatus): ProjectSubmissionDto[] {
+  listSubmissions(status?: SubmissionStatus, reviewerId?: string): ProjectSubmissionDto[] {
     return [...this.submissions.values()]
       .filter((submission) => !status || submission.status === status)
+      .filter((submission) => {
+        if (reviewerId === undefined) return true;
+        if (reviewerId === 'unassigned') return !submission.reviewerId;
+        return submission.reviewerId === reviewerId;
+      })
       .map((submission) => this.toSubmissionDto(submission));
   }
 
@@ -378,6 +387,37 @@ export class VerificationService {
     submission.reviewerId = dto.actorId;
     submission.reviewNote = dto.note;
     submission.updatedAt = Math.floor(Date.now() / 1000);
+    return this.toSubmissionDto(submission);
+  }
+
+  async assignReviewer(
+    projectId: number,
+    assignerId: string,
+    reviewerId?: string,
+  ): Promise<ProjectSubmissionDto> {
+    const submission = this.getSubmissionRecord(projectId);
+    const previousReviewerId = submission.reviewerId;
+
+    if (submission.status === SubmissionStatus.Published) {
+      throw new BadRequestException(
+        `Cannot assign reviewer to published submission ${projectId}`,
+      );
+    }
+
+    submission.reviewerId = reviewerId;
+    submission.updatedAt = Math.floor(Date.now() / 1000);
+
+    this.logger.log(
+      `Submission ${projectId} reviewer updated to ${reviewerId || 'unassigned'} by ${assignerId}`,
+    );
+
+    await this.auditService.log(
+      'assign_submission_reviewer',
+      assignerId,
+      null,
+      { projectId, previousReviewerId, newReviewerId: reviewerId || null }
+    );
+
     return this.toSubmissionDto(submission);
   }
 

@@ -6,7 +6,7 @@ mod storage;
 
 use errors::PricingAdapterError;
 use soroban_sdk::{contract, contractimpl, Address, Env};
-use storage::{DataKey, PriceState};
+use storage::{DataKey, PriceState, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 pub const BASE_DECIMALS: u32 = 7;
 /// Default staleness window (seconds) used when no admin-configured value
@@ -25,6 +25,9 @@ impl PricingAdapterContract {
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         let event = events::InitializedEvent { admin };
         event.publish(&env);
@@ -60,6 +63,7 @@ impl PricingAdapterContract {
         env.storage()
             .persistent()
             .set(&DataKey::AssetPriceInvalidated(asset.clone()), &false);
+        Self::bump_asset_ttl(&env, &asset);
 
         let event = events::PriceUpdatedEvent {
             admin,
@@ -110,6 +114,7 @@ impl PricingAdapterContract {
         env.storage()
             .persistent()
             .set(&DataKey::AssetPriceInvalidated(asset.clone()), &true);
+        Self::bump_asset_ttl(&env, &asset);
 
         let event = events::PriceInvalidatedEvent { admin, asset };
         event.publish(&env);
@@ -126,6 +131,9 @@ impl PricingAdapterContract {
         env.storage()
             .instance()
             .set(&DataKey::MaxPriceAge, &max_age_seconds);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         let event = events::StalenessWindowUpdatedEvent {
             admin,
@@ -167,6 +175,15 @@ impl PricingAdapterContract {
     }
 
     fn price_state(env: &Env, asset: &Address) -> PriceState {
+        // Touches instance storage (`MaxPriceAge`, alongside `Admin`) on
+        // every price read, since this is the hottest read path in the
+        // contract and admin writes alone may be too infrequent to keep the
+        // instance TTL alive.
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        Self::bump_asset_ttl(env, asset);
+
         let invalidated: bool = env
             .storage()
             .persistent()
@@ -238,7 +255,26 @@ impl PricingAdapterContract {
             return Err(PricingAdapterError::Unauthorized);
         }
         caller.require_auth();
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(())
+    }
+
+    /// Extends the TTL of the four persistent keys that make up an asset's
+    /// price record (`AssetPrice`, `AssetDecimals`, `AssetPriceTimestamp`,
+    /// `AssetPriceInvalidated`) together, so they always expire as a unit.
+    fn bump_asset_ttl(env: &Env, asset: &Address) {
+        for key in [
+            DataKey::AssetPrice(asset.clone()),
+            DataKey::AssetDecimals(asset.clone()),
+            DataKey::AssetPriceTimestamp(asset.clone()),
+            DataKey::AssetPriceInvalidated(asset.clone()),
+        ] {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
     }
 }
 

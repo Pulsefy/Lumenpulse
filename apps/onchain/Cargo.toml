@@ -6,12 +6,14 @@ members = [
   "contracts/cross-contract-view",
   "contracts/lumen_token",
   "contracts/matching_pool",
+  "contracts/notification_broker",
   "contracts/notification_interface",
   "contracts/project_registry",
   "contracts/protocol_registry",
   "contracts/reentrancy-guard",
   "contracts/stable_swap_pool",
   "contracts/upgradable-contract",
+  "contracts/version-interface",
   "contracts/vesting-wallet",
   "contracts/lumenpulse-curation",
   "contracts/pricing_adapter",
@@ -19,6 +21,7 @@ members = [
   "contracts/idempotency-guard",
   "contracts/yield_vault",
   "contracts/feature_flags",
+  "contracts/contract_registry",
   "contracts/liquidity_pool"
 ]
 exclude = ["contracts/tests"]

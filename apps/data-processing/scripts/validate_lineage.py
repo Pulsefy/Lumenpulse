@@ -31,12 +31,17 @@ Validation rules
 6. ``owner`` values look like an email address or a GitHub handle (``@…``).
 7. (--check-files) Every ``source_file`` and ``model_file`` path resolves
    relative to the data-processing root.
+8. Every dotted cross-reference (e.g. ``kpi_datasets.sentiment_compound``
+   found in an ``upstream``/``downstream`` field) resolves to a feature or
+   dataset that still exists in the manifest — catches lineage left
+   dangling after a feature/KPI is renamed or removed (issue #1254).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -47,6 +52,16 @@ try:
 except ImportError:
     print("ERROR: PyYAML is not installed.  Run: pip install pyyaml", file=sys.stderr)
     sys.exit(1)
+
+# Add the data-processing root to sys.path so `src.lineage` is importable
+# regardless of the current working directory this script is invoked from.
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
+from src.lineage.manifest import (  # noqa: E402
+    parse_ref as _parse_ref,
+    ref_strings as _ref_strings,
+    resolve_ref as _resolve_ref,
+)
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +157,20 @@ def _collect_errors(
                 if fpath and not (root / fpath).exists():
                     errors.append(
                         f"[{section}/{entry_id}] {key} not found: '{fpath}'"
+                    )
+
+    # Rule 8 – dotted cross-references resolve to an existing feature/dataset
+    for section, entry in all_entries:
+        entry_id = entry.get("id", "<unknown>")
+        for field_name in ("upstream", "downstream"):
+            for raw in _ref_strings(entry, field_name):
+                ref = _parse_ref(raw)
+                if ref is None:
+                    continue  # free-text ref (file path, API route, …) — not our concern
+                if not _resolve_ref(manifest, ref):
+                    errors.append(
+                        f"[{section}/{entry_id}] {field_name} references "
+                        f"'{raw}', which no longer exists in the manifest."
                     )
 
     return errors

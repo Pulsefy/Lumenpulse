@@ -9,6 +9,7 @@ import { ReviewDecisionHistory } from './entities/review-decision-history.entity
 import { ModerationEventPublisherService } from './services/moderation-event-publisher.service';
 import { ReviewHistoryService } from './review-history.service';
 import { ReviewHistoryController } from './review-history.controller';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ReviewHistoryController } from './review-history.controller';
     BullModule.registerQueue({
       name: 'moderation-events',
     }),
+    AuditModule,
   ],
   providers: [
     ModerationService,

@@ -350,3 +350,6 @@ fn validate_metadata(m: &ProjectMetadata) -> Result<(), CurationError> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod test;

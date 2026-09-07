@@ -24,6 +24,7 @@ import { ModerationService } from './moderation.service';
 import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 import { QueryReportsDto } from './dto/query-reports.dto';
+import { AssignReviewerDto } from './dto/assign-reviewer.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
@@ -129,4 +130,24 @@ export class ModerationController {
       updateReportDto,
     );
   }
+
+  @Patch('queue/:id/assign')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @UsePipes(new ValidationPipe())
+  @ApiOperation({ summary: 'Assign a reviewer to a report (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Reviewer assigned successfully' })
+  @ApiResponse({ status: 404, description: 'Report not found' })
+  async assignReviewer(
+    @Req() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() assignReviewerDto: AssignReviewerDto,
+  ) {
+    return this.moderationService.assignReviewer(
+      id,
+      req.user.id,
+      assignReviewerDto.reviewerId,
+    );
+  }
 }
+
