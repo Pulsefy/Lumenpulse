@@ -4,13 +4,14 @@ import { Repository } from 'typeorm';
 import { NotificationService } from './notification.service';
 import { NotificationPreferenceService } from './notification-preference.service';
 import { NotificationChannel } from './notification-preference.entity';
-import { Notification } from './notification.entity';
+import { Notification, NotificationSeverity } from './notification.entity';
 import {
   NotificationDeliveryLog,
   DeliveryStatus,
 } from './notification-delivery-log.entity';
 import { PushToken } from './push-token.entity';
 import { QueryProfilerService } from '../common/profiling/query-profiler.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 /**
  * Notification Delivery Orchestration Service
@@ -19,6 +20,7 @@ import { QueryProfilerService } from '../common/profiling/query-profiler.service
 @Injectable()
 export class NotificationDeliveryService implements OnModuleInit {
   private readonly logger = new Logger(NotificationDeliveryService.name);
+  private readonly MAX_RETRIES = 3;
 
   constructor(
     private readonly notificationService: NotificationService,
@@ -28,6 +30,7 @@ export class NotificationDeliveryService implements OnModuleInit {
     @InjectRepository(PushToken)
     private readonly pushTokenRepository: Repository<PushToken>,
     private readonly profiler: QueryProfilerService,
+    private readonly metricsService: MetricsService,
   ) {}
 
   onModuleInit() {
@@ -46,6 +49,10 @@ export class NotificationDeliveryService implements OnModuleInit {
       async () => this.doDeliverToUser(notification, userId, eventCategory),
       { label: 'NotificationDeliveryService.deliverToUser', thresholdMs: 300 },
     );
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private async doDeliverToUser(
@@ -141,54 +148,126 @@ export class NotificationDeliveryService implements OnModuleInit {
       eventCategory: eventCategory ?? null,
       severity: notification.severity,
       retryCount: 0,
+      metadata: {},
     });
 
-    try {
-      switch (channel) {
-        case NotificationChannel.IN_APP:
-          await this.deliverInApp(notification, userId);
-          deliveryLog.status = DeliveryStatus.DELIVERED;
-          break;
+    let success = false;
+    let lastError: any;
 
-        case NotificationChannel.EMAIL:
-          await this.deliverEmail(notification, userId);
-          deliveryLog.status = DeliveryStatus.SENT;
-          break;
+    this.metricsService.incrementCounter('notification_delivery_attempts_total', { channel: channel as string });
 
-        case NotificationChannel.PUSH:
-          await this.deliverPush(notification, userId);
-          deliveryLog.status = DeliveryStatus.SENT;
-          break;
+    while (deliveryLog.retryCount <= this.MAX_RETRIES && !success) {
+      try {
+        switch (channel) {
+          case NotificationChannel.IN_APP:
+            await this.deliverInApp(notification, userId);
+            deliveryLog.status = DeliveryStatus.DELIVERED;
+            break;
 
-        case NotificationChannel.WEBHOOK:
-          await this.deliverWebhook(notification, userId);
-          deliveryLog.status = DeliveryStatus.SENT;
-          break;
+          case NotificationChannel.EMAIL:
+            await this.deliverEmail(notification, userId);
+            deliveryLog.status = DeliveryStatus.SENT;
+            break;
 
-        case NotificationChannel.SMS:
-          await this.deliverSMS(notification, userId);
-          deliveryLog.status = DeliveryStatus.SENT;
-          break;
+          case NotificationChannel.PUSH:
+            await this.deliverPush(notification, userId);
+            deliveryLog.status = DeliveryStatus.SENT;
+            break;
 
-        default:
-          deliveryLog.status = DeliveryStatus.FAILED;
-          deliveryLog.errorMessage = `Unknown channel: ${channel as string}`;
+          case NotificationChannel.WEBHOOK:
+            await this.deliverWebhook(notification, userId);
+            deliveryLog.status = DeliveryStatus.SENT;
+            break;
+
+          case NotificationChannel.SMS:
+            await this.deliverSMS(notification, userId);
+            deliveryLog.status = DeliveryStatus.SENT;
+            break;
+
+          default:
+            deliveryLog.status = DeliveryStatus.FAILED;
+            deliveryLog.errorMessage = `Unknown channel: ${channel as string}`;
+            const unknownError = new Error(deliveryLog.errorMessage);
+            (unknownError as any).isPermanent = true;
+            throw unknownError;
+        }
+
+        success = true;
+        this.metricsService.incrementCounter('notification_delivery_success_total', { channel: channel as string });
+      } catch (error) {
+        lastError = error;
+
+        // Check if error is permanent
+        const isPermanent = error instanceof Error && (error as any).isPermanent === true;
+
+        if (isPermanent || deliveryLog.retryCount >= this.MAX_RETRIES) {
+          break; // Exit retry loop for permanent failures or max retries reached
+        }
+
+        deliveryLog.retryCount++;
+        const backoffMs = Math.pow(2, deliveryLog.retryCount) * 1000;
+        this.logger.warn(`Delivery failed for ${channel}, retrying in ${backoffMs}ms... (Attempt ${deliveryLog.retryCount}/${this.MAX_RETRIES})`);
+        await this.sleep(backoffMs);
       }
-    } catch (error) {
+    }
+
+    if (!success) {
       deliveryLog.status = DeliveryStatus.FAILED;
-      deliveryLog.errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      deliveryLog.errorMessage = lastError instanceof Error ? lastError.message : 'Unknown error';
       deliveryLog.metadata = {
-        error: error instanceof Error ? error.stack : undefined,
+        ...((deliveryLog.metadata as object) || {}),
+        error: lastError instanceof Error ? lastError.stack : undefined,
+        isPermanentFailure: true,
+        failureReason: deliveryLog.errorMessage,
       };
 
       this.logger.error(
-        `Failed to deliver notification via ${channel} to user ${userId}`,
-        error,
+        `Failed to deliver notification via ${channel} to user ${userId}. Permanent failure recorded.`,
+        lastError,
       );
+      this.metricsService.incrementCounter('notification_delivery_permanent_failures_total', { channel: channel as string });
+
+      // Fallback for critical notifications
+      if (notification.severity === NotificationSeverity.CRITICAL) {
+        this.logger.log(`Attempting channel failover for critical notification ${notification.id}`);
+        await this.attemptChannelFailover(notification, userId, channel, eventCategory);
+      }
     }
 
     return this.deliveryLogRepository.save(deliveryLog);
+  }
+
+  /**
+   * Attempt failover to alternate channel for critical notifications
+   */
+  private async attemptChannelFailover(
+    notification: Notification,
+    userId: string,
+    failedChannel: NotificationChannel,
+    eventCategory?: string,
+  ): Promise<void> {
+    const fallbackChannel = failedChannel === NotificationChannel.PUSH 
+      ? NotificationChannel.EMAIL 
+      : (failedChannel === NotificationChannel.EMAIL ? NotificationChannel.SMS : null);
+
+    if (!fallbackChannel) {
+      this.logger.log(`No fallback channel defined for failed channel ${failedChannel}`);
+      return;
+    }
+
+    this.logger.log(`Failover channel selected: ${fallbackChannel} for notification ${notification.id}`);
+    
+    try {
+      if (fallbackChannel === NotificationChannel.EMAIL) {
+        await this.deliverEmail(notification, userId);
+      } else if (fallbackChannel === NotificationChannel.SMS) {
+        await this.deliverSMS(notification, userId);
+      }
+      this.logger.log(`Failover to ${fallbackChannel} succeeded`);
+      this.metricsService.incrementCounter('notification_delivery_failover_success_total', { channel: fallbackChannel as string });
+    } catch (err) {
+      this.logger.error(`Failover to ${fallbackChannel} failed`, err);
+    }
   }
 
   /**
@@ -213,12 +292,19 @@ export class NotificationDeliveryService implements OnModuleInit {
     notification: Notification,
     userId: string,
   ): Promise<void> {
-    // TODO: Implement email delivery
-    // This would integrate with an email service (e.g., SendGrid, AWS SES)
-    this.logger.log(
-      `Email notification ${notification.id} sent to user ${userId}`,
-    );
-    await Promise.resolve();
+    // TODO(#1021): Implement primary email delivery
+    // This would integrate with an email service (e.g., SendGrid)
+    try {
+      this.logger.log(
+        `Email notification ${notification.id} sent to user ${userId} via Primary Provider`,
+      );
+      await Promise.resolve();
+    } catch (error) {
+      this.logger.warn(`Primary email provider failed, failing over to secondary...`);
+      // TODO(#1021): Implement secondary email delivery
+      // This would integrate with a fallback email service (e.g., AWS SES)
+      this.logger.log(`Email notification ${notification.id} sent to user ${userId} via Secondary Provider`);
+    }
   }
 
   /**
@@ -237,10 +323,13 @@ export class NotificationDeliveryService implements OnModuleInit {
       this.logger.warn(
         `No active push tokens for user ${userId}, skipping push delivery`,
       );
-      return;
+      // We can mark this as a permanent failure so it doesn't keep retrying
+      const error = new Error('No active push tokens available');
+      (error as any).isPermanent = true;
+      throw error;
     }
 
-    // TODO: Implement push notification delivery
+    // TODO(#1022): Implement push notification delivery
     // This would integrate with FCM (Firebase Cloud Messaging) or APNs
     for (const token of tokens) {
       this.logger.log(
@@ -256,7 +345,7 @@ export class NotificationDeliveryService implements OnModuleInit {
     notification: Notification,
     userId: string,
   ): Promise<void> {
-    // TODO: Implement webhook delivery
+    // TODO(#1023): Implement webhook delivery
     // This would send an HTTP POST to a user-configured webhook URL
     this.logger.log(
       `Webhook notification ${notification.id} sent for user ${userId}`,
@@ -271,7 +360,7 @@ export class NotificationDeliveryService implements OnModuleInit {
     notification: Notification,
     userId: string,
   ): Promise<void> {
-    // TODO: Implement SMS delivery
+    // TODO(#1024): Implement SMS delivery
     // This would integrate with Twilio or similar SMS service
     this.logger.log(
       `SMS notification ${notification.id} sent to user ${userId}`,
@@ -331,7 +420,7 @@ export class NotificationDeliveryService implements OnModuleInit {
         delivery.errorMessage = null;
         await this.deliveryLogRepository.save(delivery);
 
-        // TODO: Re-queue for delivery
+        // TODO(#1025): Re-queue for delivery via background job processor
         retryCount++;
       } catch (error) {
         this.logger.error(`Failed to retry delivery ${delivery.id}`, error);
