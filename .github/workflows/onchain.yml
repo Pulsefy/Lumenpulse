@@ -77,7 +77,12 @@ jobs:
 
     - name: Remove base worktree
       if: always() && github.event_name == 'pull_request'
-      run: git worktree remove --force "$RUNNER_TEMP/lumenpulse-base"
+      run: |
+        if git -C "$RUNNER_TEMP/lumenpulse-base" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+          git worktree remove --force "$RUNNER_TEMP/lumenpulse-base"
+        else
+          echo "Base worktree not present; skipping cleanup."
+        fi
 
     - name: Run tests
       if: env.SKIP_TESTS != 'true'
