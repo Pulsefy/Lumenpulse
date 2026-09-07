@@ -36,4 +36,18 @@ export class AuditService {
   async delete(id: string): Promise<void> {
     await this.auditLogRepo.delete(id);
   }
+
+  /**
+   * Hard-delete all audit_logs rows whose createdAt is strictly older than
+   * the provided cutoff (exclusive boundary: createdAt < cutoff).
+   * Returns the number of deleted rows.
+   */
+  async deleteOlderThan(cutoff: Date): Promise<number> {
+    const result = await this.auditLogRepo
+      .createQueryBuilder()
+      .delete()
+      .where('createdAt < :cutoff', { cutoff })
+      .execute();
+    return result.affected ?? 0;
+  }
 }
