@@ -9,7 +9,6 @@ import { memoryStorage } from 'multer';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { TestExceptionController } from './test-exception.controller';
 
 import { SentimentModule } from './sentiment/sentiment.module';
 import { MetricsModule } from './metrics/metrics.module';
@@ -39,7 +38,6 @@ import {
   createThrottlerOptions,
   getRateLimitSettings,
 } from './common/rate-limit/rate-limit.config';
-import { TestController } from './test/test.controller';
 import { UploadModule } from './upload/upload.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -212,7 +210,7 @@ import { PriceAlertModule } from './price-alert/price-alert.module';
     // Idempotency for write endpoints
     IdempotencyModule,
   ],
-  controllers: [AppController, TestController, TestExceptionController],
+  controllers: [AppController],
   providers: [
     AppService,
     RequestContextService,
