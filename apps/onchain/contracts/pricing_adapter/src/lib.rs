@@ -5,13 +5,21 @@ mod events;
 mod storage;
 
 use errors::PricingAdapterError;
-use soroban_sdk::{contract, contractimpl, Address, Env};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Vec};
 use storage::{DataKey, PriceState, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 pub const BASE_DECIMALS: u32 = 7;
 /// Default staleness window (seconds) used when no admin-configured value
 /// has been set via `set_staleness_window`.
 pub const DEFAULT_MAX_PRICE_AGE: u64 = 3600;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct PriceData {
+    pub price: i128,
+    pub source: u32,
+    pub age: u64,
+}
 
 #[contract]
 pub struct PricingAdapterContract;
@@ -34,12 +42,31 @@ impl PricingAdapterContract {
         Ok(())
     }
 
-    /// Set the price for a specific asset. Price should be scaled by 10^7 (BASE_DECIMALS).
+    /// Set the ordered list of price sources for an asset
+    pub fn set_sources(
+        env: Env,
+        admin: Address,
+        asset: Address,
+        sources: Vec<u32>,
+    ) -> Result<(), PricingAdapterError> {
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::AssetSources(asset.clone()), &sources);
+        Self::bump_asset_ttl(&env, &asset);
+
+        let event = events::SourcesUpdatedEvent { admin, asset, sources };
+        event.publish(&env);
+        Ok(())
+    }
+
+    /// Set the price for a specific asset and source. Price should be scaled by 10^7 (BASE_DECIMALS).
     /// `asset_decimals` specifies the decimal places of the original asset token.
     pub fn set_price(
         env: Env,
         admin: Address,
         asset: Address,
+        source: u32,
         price: i128,
         asset_decimals: u32,
     ) -> Result<(), PricingAdapterError> {
@@ -50,73 +77,91 @@ impl PricingAdapterContract {
 
         env.storage()
             .persistent()
-            .set(&DataKey::AssetPrice(asset.clone()), &price);
+            .set(&DataKey::AssetPrice(asset.clone(), source), &price);
         env.storage()
             .persistent()
             .set(&DataKey::AssetDecimals(asset.clone()), &asset_decimals);
         env.storage().persistent().set(
-            &DataKey::AssetPriceTimestamp(asset.clone()),
+            &DataKey::AssetPriceTimestamp(asset.clone(), source),
             &env.ledger().timestamp(),
         );
         // A freshly admin-provided price always supersedes any prior
         // invalidation.
         env.storage()
             .persistent()
-            .set(&DataKey::AssetPriceInvalidated(asset.clone()), &false);
+            .set(&DataKey::AssetPriceInvalidated(asset.clone(), source), &false);
         Self::bump_asset_ttl(&env, &asset);
 
         let event = events::PriceUpdatedEvent {
             admin,
             asset,
+            source,
             price,
         };
         event.publish(&env);
         Ok(())
     }
 
-    /// Get the current configured price of an asset. Rejects deterministically
-    /// if the price has been explicitly invalidated or has aged past the
-    /// configured staleness window — this is the entry point consumers
-    /// (including `normalize_amount`, which calls this internally) rely on
-    /// to reject unsafe prices.
-    pub fn get_price(env: Env, asset: Address) -> Result<i128, PricingAdapterError> {
-        let price: i128 = env
+    /// Get the current configured price of an asset, falling back through
+    /// the configured sources if primary sources are stale or invalidated.
+    /// Selection rule: sources are checked in the exact order they were
+    /// provided to `set_sources`. The first source that is Fresh is returned.
+    /// If no sources are configured or all are stale/invalidated, reverts with `NoValidSource`.
+    pub fn get_price(env: Env, asset: Address) -> Result<PriceData, PricingAdapterError> {
+        let sources: Vec<u32> = env
             .storage()
             .persistent()
-            .get(&DataKey::AssetPrice(asset.clone()))
-            .ok_or(PricingAdapterError::PriceNotFound)?;
+            .get(&DataKey::AssetSources(asset.clone()))
+            .unwrap_or(Vec::new(&env));
 
-        match Self::price_state(&env, &asset) {
-            PriceState::Invalidated => return Err(PricingAdapterError::PriceInvalidated),
-            PriceState::Stale => return Err(PricingAdapterError::StalePrice),
-            PriceState::Fresh => {}
+        if sources.is_empty() {
+            return Err(PricingAdapterError::NoValidSource);
         }
 
-        Ok(price)
+        for source in sources.into_iter() {
+            if let Ok(state) = Self::get_price_state(env.clone(), asset.clone(), source) {
+                if state == PriceState::Fresh {
+                    let price: i128 = env
+                        .storage()
+                        .persistent()
+                        .get(&DataKey::AssetPrice(asset.clone(), source))
+                        .unwrap();
+                    let timestamp: u64 = Self::get_price_timestamp(env.clone(), asset.clone(), source).unwrap();
+                    let age = env.ledger().timestamp().saturating_sub(timestamp);
+                    return Ok(PriceData {
+                        price,
+                        source,
+                        age,
+                    });
+                }
+            }
+        }
+
+        Err(PricingAdapterError::NoValidSource)
     }
 
-    /// Explicitly flag an asset's currently stored price as invalid (admin
-    /// only), e.g. after detecting an oracle malfunction. The next
-    /// successful `set_price` call for the asset clears the flag.
+    /// Explicitly flag an asset's currently stored price for a specific source
+    /// as invalid (admin only), e.g. after detecting an oracle malfunction.
     pub fn invalidate_price(
         env: Env,
         admin: Address,
         asset: Address,
+        source: u32,
     ) -> Result<(), PricingAdapterError> {
         Self::require_admin(&env, &admin)?;
         if !env
             .storage()
             .persistent()
-            .has(&DataKey::AssetPrice(asset.clone()))
+            .has(&DataKey::AssetPrice(asset.clone(), source))
         {
             return Err(PricingAdapterError::PriceNotFound);
         }
         env.storage()
             .persistent()
-            .set(&DataKey::AssetPriceInvalidated(asset.clone()), &true);
+            .set(&DataKey::AssetPriceInvalidated(asset.clone(), source), &true);
         Self::bump_asset_ttl(&env, &asset);
 
-        let event = events::PriceInvalidatedEvent { admin, asset };
+        let event = events::PriceInvalidatedEvent { admin, asset, source };
         event.publish(&env);
         Ok(())
     }
@@ -152,29 +197,27 @@ impl PricingAdapterContract {
             .unwrap_or(DEFAULT_MAX_PRICE_AGE)
     }
 
-    /// Freshness classification of an asset's stored price, without
-    /// triggering `get_price`'s rejection — lets a consumer inspect state
-    /// before deciding whether to call `get_price`.
-    pub fn get_price_state(env: Env, asset: Address) -> Result<PriceState, PricingAdapterError> {
+    /// Freshness classification of an asset's stored price for a specific source.
+    pub fn get_price_state(env: Env, asset: Address, source: u32) -> Result<PriceState, PricingAdapterError> {
         if !env
             .storage()
             .persistent()
-            .has(&DataKey::AssetPrice(asset.clone()))
+            .has(&DataKey::AssetPrice(asset.clone(), source))
         {
             return Err(PricingAdapterError::PriceNotFound);
         }
-        Ok(Self::price_state(&env, &asset))
+        Ok(Self::price_state(&env, &asset, source))
     }
 
-    /// The ledger timestamp an asset's price was last set at.
-    pub fn get_price_timestamp(env: Env, asset: Address) -> Result<u64, PricingAdapterError> {
+    /// The ledger timestamp an asset's price was last set at for a specific source.
+    pub fn get_price_timestamp(env: Env, asset: Address, source: u32) -> Result<u64, PricingAdapterError> {
         env.storage()
             .persistent()
-            .get(&DataKey::AssetPriceTimestamp(asset))
+            .get(&DataKey::AssetPriceTimestamp(asset, source))
             .ok_or(PricingAdapterError::PriceNotFound)
     }
 
-    fn price_state(env: &Env, asset: &Address) -> PriceState {
+    fn price_state(env: &Env, asset: &Address, source: u32) -> PriceState {
         // Touches instance storage (`MaxPriceAge`, alongside `Admin`) on
         // every price read, since this is the hottest read path in the
         // contract and admin writes alone may be too infrequent to keep the
@@ -187,7 +230,7 @@ impl PricingAdapterContract {
         let invalidated: bool = env
             .storage()
             .persistent()
-            .get(&DataKey::AssetPriceInvalidated(asset.clone()))
+            .get(&DataKey::AssetPriceInvalidated(asset.clone(), source))
             .unwrap_or(false);
         if invalidated {
             return PriceState::Invalidated;
@@ -196,7 +239,7 @@ impl PricingAdapterContract {
         let timestamp: u64 = env
             .storage()
             .persistent()
-            .get(&DataKey::AssetPriceTimestamp(asset.clone()))
+            .get(&DataKey::AssetPriceTimestamp(asset.clone(), source))
             .unwrap_or(0);
         let max_age: u64 = env
             .storage()
@@ -230,7 +273,8 @@ impl PricingAdapterContract {
             return Ok(0);
         }
 
-        let price = Self::get_price(env.clone(), asset.clone())?;
+        let price_data = Self::get_price(env.clone(), asset.clone())?;
+        let price = price_data.price;
         let decimals = Self::get_asset_decimals(env.clone(), asset);
 
         // Normalized amount = (amount * price) / 10^asset_decimals
@@ -261,19 +305,39 @@ impl PricingAdapterContract {
         Ok(())
     }
 
-    /// Extends the TTL of the four persistent keys that make up an asset's
-    /// price record (`AssetPrice`, `AssetDecimals`, `AssetPriceTimestamp`,
-    /// `AssetPriceInvalidated`) together, so they always expire as a unit.
     fn bump_asset_ttl(env: &Env, asset: &Address) {
-        for key in [
-            DataKey::AssetPrice(asset.clone()),
-            DataKey::AssetDecimals(asset.clone()),
-            DataKey::AssetPriceTimestamp(asset.clone()),
-            DataKey::AssetPriceInvalidated(asset.clone()),
-        ] {
+        let sources_key = DataKey::AssetSources(asset.clone());
+        if env.storage().persistent().has(&sources_key) {
             env.storage()
                 .persistent()
-                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                .extend_ttl(&sources_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            
+            let sources: Vec<u32> = env
+                .storage()
+                .persistent()
+                .get(&sources_key)
+                .unwrap_or(Vec::new(env));
+            
+            for source in sources.into_iter() {
+                for key in [
+                    DataKey::AssetPrice(asset.clone(), source),
+                    DataKey::AssetPriceTimestamp(asset.clone(), source),
+                    DataKey::AssetPriceInvalidated(asset.clone(), source),
+                ] {
+                    if env.storage().persistent().has(&key) {
+                        env.storage()
+                            .persistent()
+                            .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                    }
+                }
+            }
+        }
+
+        let decimals_key = DataKey::AssetDecimals(asset.clone());
+        if env.storage().persistent().has(&decimals_key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&decimals_key, LEDGER_THRESHOLD, LEDGER_BUMP);
         }
     }
 }
