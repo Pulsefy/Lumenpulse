@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
@@ -12,6 +12,12 @@ import {
   SorobanEventStatus,
 } from './entities/soroban-event.entity';
 import { SorobanIndexerCursor } from './entities/soroban-indexer-cursor.entity';
+import { CacheService } from '../cache/cache.service';
+import {
+  CONTRACT_READ_PREFIX,
+  WARM_CACHE_KEY_GRANTS_LEADERBOARD,
+  WARM_CACHE_KEY_GRANTS_ROUNDS,
+} from '../cache/cache.constants';
 
 const JOB_NAME = 'soroban-event-indexer';
 const GLOBAL_CURSOR_KEY = '__global__';
@@ -35,6 +41,7 @@ export class SorobanEventIndexerService {
     private readonly eventRepo: Repository<SorobanEvent>,
     @InjectRepository(SorobanIndexerCursor)
     private readonly cursorRepo: Repository<SorobanIndexerCursor>,
+    @Optional() private readonly cacheService?: CacheService,
   ) {}
 
   /**
@@ -218,6 +225,72 @@ export class SorobanEventIndexerService {
       conflictPaths: ['txHash', 'eventIndex'],
       skipUpdateIfNoValuesChanged: true,
     });
+    await this.invalidateDerivedCaches(events);
+    this.rpcClient.invalidateSimulationCache();
+  }
+
+  /**
+   * The scheduled indexer stores raw event rows but does not enqueue the
+   * API-shaped PROCESS_EVENT_JOB. Invalidate derived read models here so the
+   * automatic ingestion path has the same cache boundary as manual events.
+   * Invalidations are intentionally conservative because the indexer stores
+   * the event value as encoded XDR and cannot always recover a subject key.
+   */
+  private async invalidateDerivedCaches(
+    events: rpc.Api.EventResponse[],
+  ): Promise<void> {
+    const cacheService = this.cacheService;
+    if (!cacheService) return;
+
+    const prefixes = new Set<string>();
+    const configuredProjectRegistryId =
+      process.env.STELLAR_CONTRACT_PROJECT_REGISTRY ??
+      process.env.PROJECT_REGISTRY_CONTRACT_ID;
+    for (const event of events) {
+      const eventType = (this.extractEventType(event) ?? '').toLowerCase();
+      const isContributorEvent =
+        eventType.includes('contributor') ||
+        eventType.includes('reputation') ||
+        eventType.includes('badge') ||
+        eventType.includes('attestation') ||
+        eventType.includes('registration') ||
+        eventType.includes('deregister') ||
+        eventType.includes('unregister') ||
+        eventType.includes('nonce') ||
+        eventType.includes('profile');
+      if (isContributorEvent) {
+        prefixes.add('contributor-registry:address:');
+        prefixes.add('contributor-registry:github:');
+        prefixes.add('contributor-registry:reputation:');
+        prefixes.add('contributor-registry:nonce:');
+      }
+
+      const isProjectOrVaultEvent =
+        eventType.includes('project') ||
+        eventType.includes('vault') ||
+        eventType.includes('contribution') ||
+        eventType.includes('milestone') ||
+        eventType.includes('refund') ||
+        eventType.includes('withdraw') ||
+        eventType.includes('deposit') ||
+        event.contractId?.address().toString() === configuredProjectRegistryId;
+      if (isProjectOrVaultEvent) prefixes.add(`${CONTRACT_READ_PREFIX}:`);
+
+      const isGrantEvent =
+        eventType.includes('round') ||
+        eventType.includes('pool_') ||
+        eventType.includes('match_');
+      if (isGrantEvent) {
+        prefixes.add(WARM_CACHE_KEY_GRANTS_ROUNDS);
+        prefixes.add(WARM_CACHE_KEY_GRANTS_LEADERBOARD);
+      }
+    }
+
+    const invalidations: Promise<void>[] = [];
+    for (const prefix of prefixes) {
+      invalidations.push(cacheService.invalidatePrefix(prefix));
+    }
+    await Promise.all(invalidations);
   }
 
   private async fetchLatestLedger(): Promise<number | null> {

@@ -136,7 +136,7 @@ export class PortfolioService {
         relations: ['stellarAccounts'],
       });
       const hasLinkedAccount =
-        user?.stellarAccounts && user.stellarAccounts.length > 0;
+        user?.stellarAccounts?.some((account) => account.isActive) ?? false;
 
       const allocation =
         this.materializedSnapshotService.computeAllocation(assetBalances);
@@ -150,11 +150,20 @@ export class PortfolioService {
         sourceSnapshotId: savedSnapshot.id,
       });
     } catch (error: unknown) {
-      // Log but don't fail the snapshot creation if materialization fails
+      // Do not leave an older fast-read row serving data from before this
+      // snapshot. Deleting is best effort; the scheduled repair pass retries
+      // any database failure.
       const message = error instanceof Error ? error.message : 'Unknown error';
       this.logger.warn(
         `Failed to update materialized snapshot for user ${userId}: ${message}`,
       );
+      try {
+        await this.materializedSnapshotService.deleteForUser(userId);
+      } catch (deleteError) {
+        this.logger.warn(
+          `Failed to evict stale materialized snapshot for user ${userId}: ${deleteError instanceof Error ? deleteError.message : 'Unknown error'}`,
+        );
+      }
     }
 
     return savedSnapshot;
@@ -228,7 +237,7 @@ export class PortfolioService {
     });
 
     const hasLinkedAccount =
-      user?.stellarAccounts && user.stellarAccounts.length > 0;
+      user?.stellarAccounts?.some((account) => account.isActive) ?? false;
 
     if (!hasLinkedAccount) {
       this.logger.log(`User ${userId} has no linked Stellar accounts`);
@@ -463,26 +472,22 @@ export class PortfolioService {
   async refreshMaterializedSnapshots(): Promise<void> {
     this.logger.log('Starting scheduled materialized snapshot refresh');
     try {
-      // Refresh materialized snapshots for users that have snapshots
-      // but no materialized row (migration gap or upsert failure)
-      const staleUsers: { userId: string }[] = await this.snapshotRepository
-        .createQueryBuilder('ps')
-        .select('ps.userId', 'userId')
-        .groupBy('ps.userId')
-        .having(
-          'ps.userId NOT IN (SELECT "userId" FROM portfolio_materialized_snapshots)',
-        )
-        .getRawMany();
+      // Refresh every user with source snapshots. Existing rows can be stale
+      // when a previous materialization failed, so selecting only missing
+      // rows would leave the fast-read path permanently outdated.
+      const usersWithSnapshots: { userId: string }[] =
+        await this.snapshotRepository
+          .createQueryBuilder('ps')
+          .select('ps.userId', 'userId')
+          .groupBy('ps.userId')
+          .getRawMany();
 
       let refreshed = 0;
-
-      // FIX (sequential N+1 → batched): process stale users concurrently
-      // with a concurrency cap of 10 to avoid overwhelming downstream
-      // services.  Previously this was a sequential `for` loop that awaited
-      // one user before starting the next.
+      // FIX (sequential N+1 → batched): process snapshot users concurrently
+      // with a concurrency cap of 10 to avoid overwhelming downstream services.
       const CONCURRENCY = 10;
-      for (let i = 0; i < staleUsers.length; i += CONCURRENCY) {
-        const batch = staleUsers.slice(i, i + CONCURRENCY);
+      for (let i = 0; i < usersWithSnapshots.length; i += CONCURRENCY) {
+        const batch = usersWithSnapshots.slice(i, i + CONCURRENCY);
         const results = await Promise.allSettled(
           batch.map(({ userId }) =>
             this.materializedSnapshotService.refreshForUser(userId),
@@ -498,7 +503,7 @@ export class PortfolioService {
                 ? result.reason.message
                 : 'Unknown error';
             this.logger.warn(
-              `Failed to refresh materialized snapshot for user ${batch[j]!.userId}: ${message}`,
+              `Failed to refresh materialized snapshot for user ${batch[j].userId}: ${message}`,
             );
           }
         }
@@ -655,13 +660,14 @@ export class PortfolioService {
 
     // FIX (N+1 → 1): batch-compute USD values for all aggregated assets in a
     // single price fetch instead of calling getAssetValueUsd() once per asset.
-    const allocationWithValue = await this.stellarBalanceService.getAssetValuesUsd(
-      Array.from(aggregatedBalances.values()).map((asset) => ({
-        assetCode: asset.assetCode,
-        assetIssuer: asset.assetIssuer,
-        amount: asset.amount.toString(),
-      })),
-    );
+    const allocationWithValue =
+      await this.stellarBalanceService.getAssetValuesUsd(
+        Array.from(aggregatedBalances.values()).map((asset) => ({
+          assetCode: asset.assetCode,
+          assetIssuer: asset.assetIssuer,
+          amount: asset.amount.toString(),
+        })),
+      );
 
     // Calculate total value from the results
     const totalValueUsd = allocationWithValue.reduce(

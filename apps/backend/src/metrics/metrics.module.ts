@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
+import { Registry } from 'prom-client';
 import { MetricsController } from './metrics.controller';
 import { MetricsService } from './metrics.service';
 import { MetricsInterceptor } from './metrics.interceptor';
@@ -28,11 +29,16 @@ import { MetricsInterceptor } from './metrics.interceptor';
   providers: [
     MetricsService,
     {
+      provide: Registry,
+      useFactory: (metrics: MetricsService) => metrics.registry,
+      inject: [MetricsService],
+    },
+    {
       provide: APP_INTERCEPTOR,
       useClass: MetricsInterceptor,
     },
   ],
   controllers: [MetricsController],
-  exports: [MetricsService],
+  exports: [MetricsService, Registry],
 })
 export class MetricsModule {}

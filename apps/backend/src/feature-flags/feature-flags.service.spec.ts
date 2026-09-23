@@ -32,15 +32,13 @@ describe('FeatureFlagsService', () => {
 
     auditRepo = {
       find: jest.fn().mockResolvedValue([]),
-      save: jest
-        .fn()
-        .mockImplementation((x: Partial<FlagAuditLog>) =>
-          Promise.resolve({
-            ...(x as object),
-            id: 'audit-uuid',
-            changedAt: new Date(),
-          } as FlagAuditLog),
-        ),
+      save: jest.fn().mockImplementation((x: Partial<FlagAuditLog>) =>
+        Promise.resolve({
+          ...(x as object),
+          id: 'audit-uuid',
+          changedAt: new Date(),
+        } as FlagAuditLog),
+      ),
       create: jest
         .fn()
         .mockImplementation((x: Partial<FlagAuditLog>) => x as FlagAuditLog),
@@ -97,16 +95,53 @@ describe('FeatureFlagsService', () => {
       expect(hitsCounter.inc).toHaveBeenCalledTimes(1);
     });
 
-    it('invalidates cache immediately on upsert', async () => {
-      // Pre-populate cache
-      await service.getFlag('flag.a');
+    it('reflects repeated writes through the cached read path', async () => {
+      // Populate the cache, then perform two sequential writes.
+      await service.getFlag('flag.repeated');
+      await service.upsert('flag.repeated', true);
+      expect((await service.getFlag('flag.repeated'))?.enabled).toBe(true);
 
-      // Upsert should overwrite the entry immediately
-      await service.upsert('flag.a', true);
+      await service.upsert('flag.repeated', false);
+      expect((await service.getFlag('flag.repeated'))?.enabled).toBe(false);
+    });
 
-      // Cache should now hold the saved value
-      const f = await service.getFlag('flag.a');
-      expect(f?.enabled).toBe(true);
+    it('does not let a pre-write miss overwrite a completed upsert', async () => {
+      const existing: FeatureFlag = {
+        id: 'flag-race',
+        key: 'flag.race',
+        enabled: false,
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      let releaseRead!: (value: FeatureFlag | null) => void;
+      let readStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        readStarted = resolve;
+      });
+      let findOneCalls = 0;
+      (repo.findOne as jest.Mock).mockImplementation(() => {
+        findOneCalls += 1;
+        if (findOneCalls === 1) {
+          readStarted();
+          return new Promise<FeatureFlag | null>((resolve) => {
+            releaseRead = resolve;
+          });
+        }
+        return Promise.resolve(existing);
+      });
+
+      const pendingRead = service.getFlag('flag.race');
+      await started;
+      await service.upsert('flag.race', true);
+      releaseRead(existing);
+      await pendingRead;
+
+      await expect(service.getFlag('flag.race')).resolves.toMatchObject({
+        enabled: true,
+      });
+      expect((repo.findOne as jest.Mock).mock.calls.length).toBe(3);
     });
 
     it('evicts the entry immediately on remove', async () => {

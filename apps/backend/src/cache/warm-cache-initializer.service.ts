@@ -2,11 +2,18 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { GrantsService } from '../grants/grants.service';
 import { WarmCacheRegistry } from './warm-cache.registry';
 import { ConfigService } from '@nestjs/config';
+import {
+  WARM_CACHE_KEY_DASHBOARD_SUMMARY,
+  WARM_CACHE_KEY_GRANTS_LEADERBOARD,
+  WARM_CACHE_KEY_GRANTS_ROUNDS,
+  buildWarmLeaderboardCacheKey,
+} from './cache.constants';
 
-// Cache-key constants (re-export so consumers can reference them without magic strings)
-export const WARM_CACHE_KEY_GRANTS_ROUNDS = 'warm:grants:rounds';
-export const WARM_CACHE_KEY_GRANTS_LEADERBOARD = 'warm:grants:leaderboard';
-export const WARM_CACHE_KEY_DASHBOARD_SUMMARY = 'warm:dashboard:summary';
+export {
+  WARM_CACHE_KEY_DASHBOARD_SUMMARY,
+  WARM_CACHE_KEY_GRANTS_LEADERBOARD,
+  WARM_CACHE_KEY_GRANTS_ROUNDS,
+};
 
 /**
  * WarmCacheInitializerService
@@ -48,32 +55,53 @@ export class WarmCacheInitializerService implements OnModuleInit {
     });
 
     // ── grants/leaderboard ─────────────────────────────────────────────────
-    this.registry.register({
-      name: 'grants:leaderboard',
-      cacheKey: WARM_CACHE_KEY_GRANTS_LEADERBOARD,
-      ttlMs: leaderboardTtl,
-      loader: () => {
-        this.logger.debug('Preloading grants/leaderboard…');
-        // Preload leaderboard for the most relevant round (active or latest)
-        const rounds = this.grantsService.listRounds();
-        const activeRound =
-          rounds.find((r) => r.status === 'ACTIVE') || rounds[0];
-        if (!activeRound)
-          return Promise.resolve({
-            entries: [],
-            totalCount: 0,
-            hasMore: false,
-            page: 1,
-            limit: 20,
-          });
-        return Promise.resolve(
-          this.grantsService.getLeaderboard({
-            roundId: activeRound.id,
-            limit: 20,
-          }),
-        );
-      },
-    });
+    // The physical key must include the round ID. A single base key would
+    // alias the default leaderboard of every round to the same response.
+    const initialRounds = this.grantsService.listRounds();
+    const initialRound =
+      initialRounds.find((round) => round.status === 'ACTIVE') ??
+      initialRounds[0];
+    if (initialRound) {
+      const leaderboardCacheKey = buildWarmLeaderboardCacheKey({
+        roundId: initialRound.id,
+        page: 1,
+        limit: 10,
+        topN: 10,
+      });
+
+      this.registry.register({
+        name: 'grants:leaderboard',
+        cacheKey: leaderboardCacheKey,
+        ttlMs: leaderboardTtl,
+        loader: () => {
+          this.logger.debug('Preloading grants/leaderboard…');
+          // Keep the preloader and the HTTP read path on the same round-specific
+          // key. If a new round is created later, the normal write invalidation
+          // makes the old warm entry unreachable and the next read fills its own
+          // round-specific key.
+          const rounds = this.grantsService.listRounds();
+          const activeRound = rounds.find(
+            (round) => round.id === initialRound.id,
+          );
+          if (!activeRound)
+            return Promise.resolve({
+              entries: [],
+              totalCount: 0,
+              hasMore: false,
+              page: 1,
+              limit: 20,
+            });
+          return Promise.resolve(
+            this.grantsService.getLeaderboard({
+              roundId: activeRound.id,
+              topN: 10,
+              page: 1,
+              limit: 10,
+            }),
+          );
+        },
+      });
+    }
 
     this.logger.log(
       `WarmCacheInitializerService: registered ${this.registry.getAll().length} route(s) for preloading.`,

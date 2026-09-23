@@ -82,7 +82,7 @@ export class TransactionService {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to fetch transactions: ${errorMessage}`);
-      return { transactions: [] };
+      throw error;
     }
   }
 

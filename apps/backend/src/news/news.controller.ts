@@ -14,9 +14,10 @@ import {
   ApiParam,
   ApiResponse,
 } from '@nestjs/swagger';
-import { CacheInterceptor, CacheKey, CacheTTL } from '@nestjs/cache-manager';
+import { CacheKey, CacheTTL } from '@nestjs/cache-manager';
 import { Throttle } from '@nestjs/throttler';
-import { NEWS_CACHE_KEY } from '../cache/cache.service';
+import { buildNewsCacheKey } from '../cache/cache.constants';
+import { ObservedCacheInterceptor } from '../cache/observed-cache.interceptor';
 import { getNewsReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
 import { NewsProviderService } from './news-provider.service';
 import { NewsService } from './news.service';
@@ -38,8 +39,24 @@ export class NewsController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(CacheInterceptor)
-  @CacheKey(NEWS_CACHE_KEY)
+  @UseInterceptors(ObservedCacheInterceptor)
+  @CacheKey((context) => {
+    const query =
+      context.switchToHttp().getRequest<{
+        query?: {
+          limit?: string;
+          lang?: string;
+          tag?: string;
+          category?: string;
+        };
+      }>().query ?? {};
+    return buildNewsCacheKey({
+      limit: query.limit,
+      lang: query.lang,
+      tag: query.tag,
+      category: query.category,
+    });
+  })
   @CacheTTL(300_000)
   @ApiOperation({ summary: 'Get latest crypto news articles' })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })

@@ -1,8 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PortfolioMaterializedSnapshot } from './entities/portfolio-materialized-snapshot.entity';
 import { PortfolioSnapshot } from './entities/portfolio-snapshot.entity';
+import { StellarAccount } from '../users/entities/stellar-account.entity';
+import { CACHE_NAMES } from '../cache/cache.constants';
+import { MetricsService } from '../metrics/metrics.service';
 
 export interface MaterializedSnapshotData {
   userId: string;
@@ -29,12 +32,18 @@ export interface MaterializedSnapshotData {
 @Injectable()
 export class MaterializedSnapshotService {
   private readonly logger = new Logger(MaterializedSnapshotService.name);
+  private readonly generations = new Map<string, number>();
+  private readonly maxTrackedGenerations = 10_000;
 
   constructor(
     @InjectRepository(PortfolioMaterializedSnapshot)
     private readonly materializedRepo: Repository<PortfolioMaterializedSnapshot>,
     @InjectRepository(PortfolioSnapshot)
     private readonly snapshotRepo: Repository<PortfolioSnapshot>,
+    @Optional()
+    @InjectRepository(StellarAccount)
+    private readonly stellarAccountRepo?: Repository<StellarAccount>,
+    @Optional() private readonly metricsService?: MetricsService,
   ) {}
 
   /**
@@ -49,21 +58,43 @@ export class MaterializedSnapshotService {
     this.logger.debug(
       `Upserting materialized snapshot for user ${data.userId}`,
     );
+    this.advanceGeneration(data.userId);
 
-    const existing = await this.materializedRepo.findOne({
-      where: { userId: data.userId },
-    });
+    try {
+      const existing = await this.materializedRepo.findOne({
+        where: { userId: data.userId },
+      });
 
-    if (existing) {
-      existing.totalValueUsd = data.totalValueUsd;
-      existing.assetBalances = data.assetBalances;
-      existing.assetAllocation =
-        data.assetAllocation ?? existing.assetAllocation;
-      existing.hasLinkedAccount = data.hasLinkedAccount;
-      existing.sourceSnapshotId = data.sourceSnapshotId;
-      return this.materializedRepo.save(existing);
+      const saved = existing
+        ? await this.updateExisting(existing, data)
+        : await this.createNew(data);
+      // Advance again after the database write so reads that began during the
+      // write cannot cache the pre-write row under the first generation.
+      this.advanceGeneration(data.userId);
+      this.markCacheFresh();
+      this.recordCacheInvalidation('success');
+      return saved;
+    } catch (error) {
+      this.recordCacheInvalidation('error');
+      throw error;
     }
+  }
 
+  private async updateExisting(
+    existing: PortfolioMaterializedSnapshot,
+    data: MaterializedSnapshotData,
+  ): Promise<PortfolioMaterializedSnapshot> {
+    existing.totalValueUsd = data.totalValueUsd;
+    existing.assetBalances = data.assetBalances;
+    existing.assetAllocation = data.assetAllocation ?? existing.assetAllocation;
+    existing.hasLinkedAccount = data.hasLinkedAccount;
+    existing.sourceSnapshotId = data.sourceSnapshotId;
+    return this.materializedRepo.save(existing);
+  }
+
+  private async createNew(
+    data: MaterializedSnapshotData,
+  ): Promise<PortfolioMaterializedSnapshot> {
     const materialized = this.materializedRepo.create({
       userId: data.userId,
       totalValueUsd: data.totalValueUsd,
@@ -84,9 +115,20 @@ export class MaterializedSnapshotService {
   async getForUser(
     userId: string,
   ): Promise<PortfolioMaterializedSnapshot | null> {
-    return this.materializedRepo.findOne({
-      where: { userId },
-    });
+    // Retry once when a same-user upsert/delete overlaps the database read.
+    // This closes the common read-after-write window without turning the
+    // materialized row into an in-memory cache.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const generation = this.getGeneration(userId);
+      const row = await this.materializedRepo.findOne({ where: { userId } });
+      if (generation !== this.getGeneration(userId)) continue;
+      this.recordRead(row, row?.updatedAt);
+      return row;
+    }
+
+    const row = await this.materializedRepo.findOne({ where: { userId } });
+    this.recordRead(row, row?.updatedAt);
+    return row;
   }
 
   /**
@@ -109,6 +151,17 @@ export class MaterializedSnapshotService {
       return false;
     }
 
+    const hasLinkedAccount = this.stellarAccountRepo
+      ? (await this.stellarAccountRepo.count({
+          where: { userId, isActive: true },
+        })) > 0
+      : true;
+
+    if (!hasLinkedAccount) {
+      await this.deleteForUser(userId);
+      return true;
+    }
+
     const allocation = this.computeAllocation(latestSnapshot.assetBalances);
 
     await this.upsertForUser({
@@ -116,7 +169,7 @@ export class MaterializedSnapshotService {
       totalValueUsd: latestSnapshot.totalValueUsd,
       assetBalances: latestSnapshot.assetBalances,
       assetAllocation: allocation,
-      hasLinkedAccount: true, // If they have a snapshot they had a linked account
+      hasLinkedAccount,
       sourceSnapshotId: latestSnapshot.id,
     });
 
@@ -128,7 +181,75 @@ export class MaterializedSnapshotService {
    * Used when a user is deleted or when a forced recompute is needed.
    */
   async deleteForUser(userId: string): Promise<void> {
-    await this.materializedRepo.delete({ userId });
+    this.advanceGeneration(userId);
+    try {
+      await this.materializedRepo.delete({ userId });
+      this.advanceGeneration(userId);
+      this.markCacheFresh();
+      this.recordCacheInvalidation('success');
+    } catch (error) {
+      this.recordCacheInvalidation('error');
+      throw error;
+    }
+  }
+
+  private getGeneration(userId: string): number {
+    return this.generations.get(userId) ?? 0;
+  }
+
+  private advanceGeneration(userId: string): void {
+    const nextGeneration = this.getGeneration(userId) + 1;
+    this.generations.delete(userId);
+    this.generations.set(userId, nextGeneration);
+    while (this.generations.size > this.maxTrackedGenerations) {
+      const oldest = this.generations.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.generations.delete(oldest);
+    }
+  }
+
+  private recordRead(
+    row: PortfolioMaterializedSnapshot | null,
+    updatedAt?: Date,
+  ): void {
+    if (!this.metricsService) return;
+    const updatedAtMs = updatedAt ? new Date(updatedAt).getTime() : Number.NaN;
+    const staleness = Number.isFinite(updatedAtMs)
+      ? Math.max(0, (Date.now() - updatedAtMs) / 1_000)
+      : 0;
+    this.safeMetrics(() =>
+      this.metricsService?.recordCacheRead(
+        CACHE_NAMES.PORTFOLIO_MATERIALIZED,
+        row ? 'hit' : 'miss',
+        staleness,
+      ),
+    );
+  }
+
+  private markCacheFresh(): void {
+    this.safeMetrics(() =>
+      this.metricsService?.setCacheStaleness(
+        CACHE_NAMES.PORTFOLIO_MATERIALIZED,
+        0,
+      ),
+    );
+  }
+
+  private recordCacheInvalidation(result: 'success' | 'error'): void {
+    this.safeMetrics(() =>
+      this.metricsService?.recordCacheInvalidation(
+        CACHE_NAMES.PORTFOLIO_MATERIALIZED,
+        result,
+      ),
+    );
+  }
+
+  private safeMetrics(action: () => void): void {
+    try {
+      action();
+    } catch {
+      // Telemetry must not make the materialized read model unavailable.
+    }
   }
 
   /**

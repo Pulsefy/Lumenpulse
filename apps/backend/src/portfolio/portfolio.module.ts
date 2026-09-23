@@ -23,7 +23,7 @@ import { PortfolioSnapshotWorker } from './queue/portfolio-snapshot.worker';
 import { ExchangeRatesModule } from '../exchange-rates/exchange-rates.module';
 import { StellarModule } from '../stellar/stellar.module';
 import { PriceModule } from '../price/price.module';
-import { MaterializedSnapshotService } from './materialized-snapshot.service';
+import { MaterializedSnapshotModule } from './materialized-snapshot.module';
 import { ProfilingModule } from '../common/profiling/profiling.module';
 import { PortfolioAnomaly } from './entities/portfolio-anomaly.entity';
 import { PortfolioAnomalyService } from './portfolio-anomaly.service';
@@ -43,12 +43,12 @@ import { PortfolioAnomalyController } from './portfolio-anomaly.controller';
     StellarModule,
     PriceModule,
     ProfilingModule,
+    MaterializedSnapshotModule,
   ],
   controllers: [PortfolioController, PortfolioAnomalyController],
   providers: [
     PortfolioService,
     PortfolioAnomalyService,
-    MaterializedSnapshotService,
     StellarBalanceService,
     PortfolioSnapshotProgressStore,
     PortfolioSnapshotQueueService,
@@ -83,7 +83,6 @@ import { PortfolioAnomalyController } from './portfolio-anomaly.controller';
   exports: [
     PortfolioService,
     PortfolioAnomalyService,
-    MaterializedSnapshotService,
     PortfolioSnapshotQueueService,
     TypeOrmModule,
   ],

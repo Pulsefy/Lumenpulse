@@ -4,13 +4,15 @@ import { Repository } from 'typeorm';
 import { FeatureFlag } from './feature-flag.entity';
 import { FlagAuditLog } from './entities/flag-audit-log.entity';
 import { MetricsService } from '../metrics/metrics.service';
+import { CACHE_NAMES, DEFAULT_TTLS } from '../cache/cache.constants';
 
 /** Short TTL (ms) for cached flag evaluations. */
-const CACHE_TTL_MS = 30_000; // 30 seconds
+const CACHE_TTL_MS = DEFAULT_TTLS.featureFlag;
 
 interface CacheEntry {
   value: FeatureFlag | null;
   expiresAt: number;
+  loadedAt: number;
 }
 
 @Injectable()
@@ -23,6 +25,8 @@ export class FeatureFlagsService implements OnModuleInit {
    * Entries are invalidated immediately on every write (upsert / remove).
    */
   private cache = new Map<string, CacheEntry>();
+  private readonly writeLocks = new Map<string, Promise<void>>();
+  private cacheGeneration = 0;
 
   // ── Prometheus metrics ────────────────────────────────────────────────────
 
@@ -65,12 +69,23 @@ export class FeatureFlagsService implements OnModuleInit {
 
   /** Warms the in-memory cache from DB. */
   async refreshCache() {
+    const generation = ++this.cacheGeneration;
     const all = await this.repo.find();
+    if (generation !== this.cacheGeneration) return;
     this.cache.clear();
     const now = Date.now();
     for (const f of all) {
-      this.cache.set(f.key, { value: f, expiresAt: now + CACHE_TTL_MS });
+      this.cache.set(f.key, {
+        value: { ...f },
+        expiresAt: now + CACHE_TTL_MS,
+        loadedAt: now,
+      });
     }
+    // Reads that began while the refresh query was in flight captured the
+    // generation from its start. Advance once more after publishing the new
+    // map so those reads cannot cache a pre-refresh value.
+    this.cacheGeneration += 1;
+    this.markCacheFresh();
     this.logger.log(`Loaded ${all.length} feature flags into cache`);
   }
 
@@ -90,13 +105,26 @@ export class FeatureFlagsService implements OnModuleInit {
 
     if (entry !== undefined && entry.expiresAt > now) {
       this.evalHits.inc();
+      this.recordCacheRead('hit', Math.max(0, (now - entry.loadedAt) / 1_000));
       return entry.value;
     }
 
-    // Cache miss or expired → fetch from DB
+    // Cache miss or expired → fetch from DB. Capture the generation before
+    // the asynchronous read so a write completing during the query cannot
+    // repopulate the cache with the pre-write value.
+    const generation = this.cacheGeneration;
     this.evalMisses.inc();
+    this.recordCacheRead('miss', 0);
     const f = await this.repo.findOne({ where: { key } });
-    this.cache.set(key, { value: f ?? null, expiresAt: now + CACHE_TTL_MS });
+    if (generation === this.cacheGeneration) {
+      const loadedAt = Date.now();
+      this.cache.set(key, {
+        value: f ? { ...f } : null,
+        expiresAt: loadedAt + CACHE_TTL_MS,
+        loadedAt,
+      });
+      this.markCacheFresh();
+    }
     return f ?? null;
   }
 
@@ -130,50 +158,61 @@ export class FeatureFlagsService implements OnModuleInit {
     conditions?: Record<string, unknown>,
     changedBy?: string,
   ) {
-    // Snapshot the previous enabled state as a primitive BEFORE we fetch the
-    // mutable entity.  If we kept a reference to the entity object, mutating
-    // f.enabled below would silently change `prevFlag.enabled` too (aliasing).
-    const prevFlag = await this.getFlag(key);
-    const previousEnabled: boolean | null = prevFlag?.enabled ?? null;
+    return this.withWriteLock(key, async () => {
+      // Snapshot the previous enabled state as a primitive BEFORE we fetch the
+      // mutable entity. If we kept a reference to the entity object, mutating
+      // f.enabled below would silently change `prevFlag.enabled` too (aliasing).
+      const prevFlag = await this.getFlag(key);
+      const previousEnabled: boolean | null = prevFlag?.enabled ?? null;
 
-    let f = await this.repo.findOne({ where: { key } });
-    if (!f) {
-      f = this.repo.create({
-        key,
-        enabled,
-        conditions: conditions ?? null,
-        changedBy: changedBy ?? null,
+      let f = await this.repo.findOne({ where: { key } });
+      if (!f) {
+        f = this.repo.create({
+          key,
+          enabled,
+          conditions: conditions ?? null,
+          changedBy: changedBy ?? null,
+        });
+      } else {
+        f.enabled = enabled;
+        f.conditions = conditions ?? null;
+        f.changedBy = changedBy ?? null;
+      }
+      const saved = await this.repo.save(f);
+      // Advance after the database write. Reads that began before the save
+      // captured the old generation and therefore cannot cache their result
+      // over this replacement.
+      this.cacheGeneration += 1;
+      this.recordCacheInvalidation('success');
+
+      // The write lock makes this replacement the only post-save cache write
+      // for the key. A later write therefore cannot be overwritten by an
+      // earlier, slower save.
+      const now = Date.now();
+      this.cache.set(saved.key, {
+        value: saved,
+        expiresAt: now + CACHE_TTL_MS,
+        loadedAt: now,
       });
-    } else {
-      f.enabled = enabled;
-      f.conditions = conditions ?? null;
-      f.changedBy = changedBy ?? null;
-    }
-    const saved = await this.repo.save(f);
+      this.markCacheFresh();
 
-    // Immediate cache invalidation — entry is repopulated with fresh TTL.
-    const now = Date.now();
-    this.cache.set(saved.key, {
-      value: saved,
-      expiresAt: now + CACHE_TTL_MS,
+      // Persist audit log entry.
+      const auditEntry = this.auditRepo.create({
+        flagKey: key,
+        action: 'upsert',
+        previousEnabled,
+        newEnabled: enabled,
+        actor: changedBy ?? null,
+      });
+      await this.auditRepo.save(auditEntry);
+
+      this.logger.log(
+        `Flag "${key}" changed: ${previousEnabled ?? 'N/A'} -> ${enabled}` +
+          (changedBy ? ` by ${changedBy}` : ''),
+      );
+
+      return saved;
     });
-
-    // Persist audit log entry.
-    const auditEntry = this.auditRepo.create({
-      flagKey: key,
-      action: 'upsert',
-      previousEnabled,
-      newEnabled: enabled,
-      actor: changedBy ?? null,
-    });
-    await this.auditRepo.save(auditEntry);
-
-    this.logger.log(
-      `Flag "${key}" changed: ${previousEnabled ?? 'N/A'} -> ${enabled}` +
-        (changedBy ? ` by ${changedBy}` : ''),
-    );
-
-    return saved;
   }
 
   /**
@@ -181,19 +220,85 @@ export class FeatureFlagsService implements OnModuleInit {
    * Records a 'remove' audit-log entry.
    */
   async remove(key: string): Promise<void> {
-    const prev = await this.getFlag(key);
-    await this.repo.delete({ key });
-    this.cache.delete(key);
+    await this.withWriteLock(key, async () => {
+      const prev = await this.getFlag(key);
+      await this.repo.delete({ key });
+      this.cacheGeneration += 1;
+      this.recordCacheInvalidation('success');
+      this.cache.delete(key);
+      this.markCacheFresh();
 
-    // Persist audit log entry.
-    const auditEntry = this.auditRepo.create({
-      flagKey: key,
-      action: 'remove',
-      previousEnabled: prev?.enabled ?? null,
-      newEnabled: null,
-      actor: null,
+      // Persist audit log entry.
+      const auditEntry = this.auditRepo.create({
+        flagKey: key,
+        action: 'remove',
+        previousEnabled: prev?.enabled ?? null,
+        newEnabled: null,
+        actor: null,
+      });
+      await this.auditRepo.save(auditEntry);
     });
-    await this.auditRepo.save(auditEntry);
+  }
+
+  private async withWriteLock<T>(
+    key: string,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.writeLocks.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.writeLocks.set(key, current);
+    await previous;
+    try {
+      return await action();
+    } finally {
+      release();
+      if (this.writeLocks.get(key) === current) this.writeLocks.delete(key);
+    }
+  }
+
+  private recordCacheRead(
+    result: 'hit' | 'miss',
+    stalenessSeconds: number,
+  ): void {
+    // Older unit-test doubles intentionally expose only the legacy metric
+    // helpers; keep those doubles compatible while using the new metric when
+    // the full service is available.
+    this.safeMetrics(() => {
+      if (typeof this.metrics.recordCacheRead === 'function') {
+        this.metrics.recordCacheRead(
+          CACHE_NAMES.FEATURE_FLAG,
+          result,
+          stalenessSeconds,
+        );
+      }
+    });
+  }
+
+  private markCacheFresh(): void {
+    this.safeMetrics(() => {
+      if (typeof this.metrics.setCacheStaleness === 'function') {
+        this.metrics.setCacheStaleness(CACHE_NAMES.FEATURE_FLAG, 0);
+      }
+    });
+  }
+
+  private recordCacheInvalidation(result: 'success' | 'error'): void {
+    this.safeMetrics(() => {
+      if (typeof this.metrics.recordCacheInvalidation === 'function') {
+        this.metrics.recordCacheInvalidation(CACHE_NAMES.FEATURE_FLAG, result);
+      }
+    });
+  }
+
+  private safeMetrics(action: () => void): void {
+    try {
+      action();
+    } catch {
+      // Telemetry must not make feature-flag evaluation or writes fail.
+    }
   }
 
   /**

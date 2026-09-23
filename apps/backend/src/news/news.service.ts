@@ -93,6 +93,7 @@ export class NewsService {
 
   async remove(id: string): Promise<void> {
     await this.newsRepository.delete(id);
+    await this.cacheService.invalidateNewsCache();
   }
 
   async findBySource(source: string): Promise<News[]> {
@@ -166,7 +167,10 @@ export class NewsService {
    * Creates a new article if it doesn't already exist (based on URL).
    * Returns the existing article if found, or the newly created article.
    */
-  async createOrIgnore(articleDto: NewsArticleDto): Promise<News | null> {
+  async createOrIgnore(
+    articleDto: NewsArticleDto,
+    invalidateCache = true,
+  ): Promise<News | null> {
     // Check if article already exists by URL
     const existingArticle = await this.findByUrl(articleDto.url);
     if (existingArticle) {
@@ -188,7 +192,9 @@ export class NewsService {
       category: articleDto.categories?.[0] ?? null,
     });
 
-    return this.newsRepository.save(article);
+    const saved = await this.newsRepository.save(article);
+    if (invalidateCache) await this.cacheService.invalidateNewsCache();
+    return saved;
   }
 
   /**
@@ -206,6 +212,7 @@ export class NewsService {
     }
 
     const run = await this.jobHistory.start(FETCH_JOB_NAME);
+    let cacheInvalidated = false;
     try {
       // Fetch latest articles from provider
       const response = await this.newsProviderService.getLatestArticles({
@@ -219,13 +226,18 @@ export class NewsService {
 
       // Process each article
       for (const articleDto of articles) {
-        const result = await this.createOrIgnore(articleDto);
+        const result = await this.createOrIgnore(articleDto, false);
         if (result) {
           newCount++;
         } else {
           skippedCount++;
         }
       }
+
+      // Invalidate once after the database batch. A cache failure must not
+      // prevent the remaining provider articles from being persisted.
+      await this.cacheService.invalidateNewsCache();
+      cacheInvalidated = true;
 
       await this.jobHistory.complete(run, {
         fetched: articles.length,
@@ -236,11 +248,16 @@ export class NewsService {
       this.logger.log(
         `News fetch completed. Fetched ${articles.length} articles, ${newCount} new, ${skippedCount} duplicates skipped.`,
       );
-
-      if (newCount > 0) {
-        await this.cacheService.invalidateNewsCache();
-      }
     } catch (error) {
+      if (!cacheInvalidated) {
+        try {
+          await this.cacheService.invalidateNewsCache();
+        } catch (invalidationError) {
+          this.logger.warn(
+            `News batch cache invalidation failed: ${invalidationError instanceof Error ? invalidationError.message : 'Unknown error'}`,
+          );
+        }
+      }
       await this.jobHistory.fail(run, error);
       this.logger.error(
         `Failed to fetch and save articles: ${error instanceof Error ? error.message : 'Unknown error'}`,

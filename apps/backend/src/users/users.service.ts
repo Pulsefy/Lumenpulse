@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  Optional,
   Inject,
   forwardRef,
 } from '@nestjs/common';
@@ -17,6 +18,7 @@ import { StellarAccountResponseDto } from './dto/stellar-account-response.dto';
 import { UpdateStellarAccountLabelDto } from './dto/update-stellar-account-label.dto';
 import { UploadService } from '../upload/upload.service';
 import { AuthService } from '../auth/auth.service';
+import { MaterializedSnapshotService } from '../portfolio/materialized-snapshot.service';
 import crypto from 'crypto';
 
 @Injectable()
@@ -32,6 +34,8 @@ export class UsersService {
     private uploadService: UploadService,
     @Inject(forwardRef(() => AuthService))
     private authService: AuthService,
+    @Optional()
+    private readonly materializedSnapshotService?: MaterializedSnapshotService,
   ) {}
 
   // --- BASIC CRUD ---
@@ -148,6 +152,7 @@ export class UsersService {
       user.stellarPublicKey = dto.publicKey;
       await this.usersRepository.save(user);
     }
+    await this.evictMaterializedSnapshot(userId);
 
     return this.mapToResponseDto(savedAccount);
   }
@@ -189,6 +194,7 @@ export class UsersService {
 
     account.isActive = false;
     await this.stellarAccountRepository.save(account);
+    await this.evictMaterializedSnapshot(userId);
   }
 
   async updateStellarAccountLabel(
@@ -226,6 +232,17 @@ export class UsersService {
 
     user.stellarPublicKey = account.publicKey;
     await this.usersRepository.save(user);
+  }
+
+  private async evictMaterializedSnapshot(userId: string): Promise<void> {
+    if (!this.materializedSnapshotService) return;
+    try {
+      await this.materializedSnapshotService.deleteForUser(userId);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to evict materialized portfolio snapshot for user ${userId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
   }
 
   private mapToResponseDto(account: StellarAccount): StellarAccountResponseDto {

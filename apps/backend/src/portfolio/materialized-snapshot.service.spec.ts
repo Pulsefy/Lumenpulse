@@ -176,6 +176,44 @@ describe('MaterializedSnapshotService', () => {
       expect(result).toBe(row);
     });
 
+    it('retries a read that overlaps a same-user replacement', async () => {
+      const oldRow = makeMaterializedRow({ totalValueUsd: '100.00' });
+      const staleRow = makeMaterializedRow({ totalValueUsd: '100.00' });
+      let releaseRead!: (row: PortfolioMaterializedSnapshot) => void;
+      let markReadStarted!: () => void;
+      const readStarted = new Promise<void>((resolve) => {
+        markReadStarted = resolve;
+      });
+      let findOneCalls = 0;
+      materializedRepo.findOne.mockImplementation(() => {
+        findOneCalls += 1;
+        if (findOneCalls === 1) {
+          markReadStarted();
+          return new Promise<PortfolioMaterializedSnapshot>((resolve) => {
+            releaseRead = resolve;
+          });
+        }
+        return Promise.resolve(oldRow);
+      });
+      materializedRepo.save.mockImplementation((row) =>
+        Promise.resolve(row as PortfolioMaterializedSnapshot),
+      );
+
+      const pending = service.getForUser(USER_ID);
+      await readStarted;
+      await service.upsertForUser({
+        userId: USER_ID,
+        totalValueUsd: '200.00',
+        assetBalances: makeAssetBalances(),
+        assetAllocation: null,
+        hasLinkedAccount: true,
+        sourceSnapshotId: 'new-snapshot',
+      });
+      releaseRead(staleRow);
+
+      await expect(pending).resolves.toMatchObject({ totalValueUsd: '200.00' });
+    });
+
     it('returns null when no materialized snapshot exists', async () => {
       materializedRepo.findOne.mockResolvedValue(null);
 

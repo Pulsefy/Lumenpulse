@@ -15,7 +15,7 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
+import { CacheKey, CacheTTL } from '@nestjs/cache-manager';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
@@ -49,6 +49,8 @@ import {
 } from './dto/rotate-contract-ids.dto';
 import { StellarContractRotationService } from './services/stellar-contract-rotation.service';
 import { ContractRotationService } from './services/contract-rotation.service';
+import { buildStellarHttpCacheKey } from '../cache/cache.constants';
+import { ObservedCacheInterceptor } from '../cache/observed-cache.interceptor';
 
 @ApiTags('stellar')
 @Controller('stellar')
@@ -65,7 +67,15 @@ export class StellarController {
 
   @Get('accounts/:publicKey/balances')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(CacheInterceptor)
+  @UseInterceptors(ObservedCacheInterceptor)
+  @CacheKey((context) => {
+    const request = context
+      .switchToHttp()
+      .getRequest<{ params?: { publicKey?: string } }>();
+    return buildStellarHttpCacheKey('balances', {
+      publicKey: request.params?.publicKey,
+    });
+  })
   @CacheTTL(30_000)
   @ApiOperation({
     summary: 'Get account balances',
@@ -165,7 +175,21 @@ export class StellarController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @UseInterceptors(CacheInterceptor)
+  @UseInterceptors(ObservedCacheInterceptor)
+  @CacheKey((context) => {
+    const request = context.switchToHttp().getRequest<{
+      query?: {
+        publicKey?: string;
+        limit?: string;
+        cursor?: string;
+      };
+    }>();
+    return buildStellarHttpCacheKey('transactions', {
+      publicKey: request.query?.publicKey,
+      limit: request.query?.limit,
+      cursor: request.query?.cursor,
+    });
+  })
   @CacheTTL(60_000)
   @ApiOperation({
     summary: 'Get transaction history for a Stellar account',
@@ -229,7 +253,14 @@ export class StellarController {
 
   @Get('assets')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(CacheInterceptor)
+  @UseInterceptors(ObservedCacheInterceptor)
+  @CacheKey((context) => {
+    const query =
+      context.switchToHttp().getRequest<{
+        query?: Record<string, string | undefined>;
+      }>().query ?? {};
+    return buildStellarHttpCacheKey('assets', query);
+  })
   @CacheTTL(600_000)
   @ApiOperation({
     summary: 'Discover Stellar assets',

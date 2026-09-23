@@ -274,6 +274,7 @@ describe('OutboxService', () => {
         lastError: 'boom',
         processedAt: null,
         deadLetterAt: new Date(),
+        createdAt: new Date(),
       } as OutboxEvent;
 
       repo.findOneBy.mockResolvedValue(event);
@@ -299,6 +300,7 @@ describe('OutboxService', () => {
         lastError: 'boom',
         processedAt: null,
         deadLetterAt: new Date(),
+        createdAt: new Date(),
       } as OutboxEvent;
 
       repo.findOneBy.mockResolvedValue(event);

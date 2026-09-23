@@ -168,7 +168,7 @@ describe('HorizonClientService', () => {
       );
     });
 
-    it('should return empty array on error', async () => {
+    it('should propagate errors instead of returning a cacheable empty result', async () => {
       mockFetch.mockReset();
 
       const mockResponse = {
@@ -179,9 +179,9 @@ describe('HorizonClientService', () => {
 
       mockFetch.mockResolvedValue(mockResponse);
 
-      const result = await service.getOperations('nonexistent');
-
-      expect(result).toEqual([]);
+      await expect(service.getOperations('nonexistent')).rejects.toThrow(
+        'Failed to fetch operations',
+      );
       expect(mockMetricsService.recordHorizonError).toHaveBeenCalledWith(
         'getOperations',
         '404',

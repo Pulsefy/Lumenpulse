@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Optional,
   Query,
   Post,
   UseGuards,
@@ -17,6 +18,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { ConfigService } from '@nestjs/config';
 import { GrantsService } from './grants.service';
 import { getProjectReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
 import {
@@ -37,12 +39,22 @@ import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
 import { AuditBlockchainAction } from '../admin-audit/decorators/audit-blockchain-action.decorator';
 import { AdminAuditInterceptor } from '../admin-audit/interceptors/admin-audit.interceptor';
+import {
+  DEFAULT_TTLS,
+  WARM_CACHE_KEY_GRANTS_ROUNDS,
+  buildWarmLeaderboardCacheKey,
+} from '../cache/cache.constants';
+import { CacheService } from '../cache/cache.service';
 
 @ApiTags('grants')
 @Controller('grants')
 @Throttle(getProjectReadThrottleOverride())
 export class GrantsController {
-  constructor(private readonly grantsService: GrantsService) {}
+  constructor(
+    private readonly grantsService: GrantsService,
+    private readonly cacheService: CacheService,
+    @Optional() private readonly configService?: ConfigService,
+  ) {}
 
   // ΓöÇΓöÇ Rounds ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
@@ -57,8 +69,12 @@ export class GrantsController {
     description: 'List of rounds retrieved successfully',
     type: [RoundDto],
   })
-  listRounds() {
-    return this.grantsService.listRounds();
+  async listRounds(): Promise<RoundDto[]> {
+    return this.cacheService.getOrSet(
+      WARM_CACHE_KEY_GRANTS_ROUNDS,
+      () => Promise.resolve(this.grantsService.listRounds()),
+      this.getWarmRoundsTtl(),
+    );
   }
 
   @Get('rounds/:id')
@@ -283,7 +299,38 @@ export class GrantsController {
     type: LeaderboardResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Round not found' })
-  getLeaderboard(@Query() query: LeaderboardQueryDto): LeaderboardResponseDto {
-    return this.grantsService.getLeaderboard(query);
+  async getLeaderboard(
+    @Query() query: LeaderboardQueryDto,
+  ): Promise<LeaderboardResponseDto> {
+    const cacheKey = buildWarmLeaderboardCacheKey({
+      roundId: query.roundId,
+      page: query.page,
+      limit: query.limit,
+      topN: query.topN,
+    });
+
+    return this.cacheService.getOrSet(
+      cacheKey,
+      () => Promise.resolve(this.grantsService.getLeaderboard(query)),
+      this.getWarmLeaderboardTtl(),
+    );
+  }
+
+  private getWarmRoundsTtl(): number {
+    return (
+      this.configService?.get<number>(
+        'WARM_CACHE_TTL_GRANTS_ROUNDS_MS',
+        DEFAULT_TTLS.warmGrantsRounds,
+      ) ?? DEFAULT_TTLS.warmGrantsRounds
+    );
+  }
+
+  private getWarmLeaderboardTtl(): number {
+    return (
+      this.configService?.get<number>(
+        'WARM_CACHE_TTL_GRANTS_LEADERBOARD_MS',
+        DEFAULT_TTLS.warmGrantsLeaderboard,
+      ) ?? DEFAULT_TTLS.warmGrantsLeaderboard
+    );
   }
 }

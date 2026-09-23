@@ -161,8 +161,17 @@ describe('CacheService', () => {
 
   describe('invalidateAccountOperations', () => {
     it('deletes operations cache entries for an account', async () => {
-      const mockKeys = ['key1', 'key2'];
-      mockCacheManager.store.client.keys.mockResolvedValue(mockKeys);
+      const mockKeys = [
+        `${STELLAR_ACCOUNT_OPERATIONS_PREFIX}:GA5Z...:10`,
+        `${STELLAR_ACCOUNT_OPERATIONS_PREFIX}:GA5Z...:10:cursor1`,
+      ];
+      mockCacheManager.store.client.keys.mockImplementation((pattern: string) =>
+        Promise.resolve(
+          pattern.startsWith(`${STELLAR_ACCOUNT_OPERATIONS_PREFIX}:`)
+            ? mockKeys
+            : [],
+        ),
+      );
       mockCacheManager.del.mockResolvedValue(undefined);
 
       await service.invalidateAccountOperations('GA5Z...');
@@ -170,6 +179,8 @@ describe('CacheService', () => {
       expect(mockCacheManager.store.client.keys).toHaveBeenCalledWith(
         expect.stringContaining('GA5Z...'),
       );
+      // The account invalidation boundary clears both the service-level page
+      // keys and the HTTP response representation.
       expect(mockCacheManager.del).toHaveBeenCalledTimes(2);
     });
   });
@@ -245,11 +256,13 @@ describe('CacheService', () => {
       expect(mockCacheManager.del).toHaveBeenCalledWith(NEWS_CACHE_KEY);
     });
 
-    it('does not throw when cache deletion fails', async () => {
+    it('surfaces cache deletion failures to the write boundary', async () => {
       mockCacheManager.del.mockRejectedValue(
         new Error('Redis connection lost'),
       );
-      await expect(service.invalidateNewsCache()).resolves.not.toThrow();
+      await expect(service.invalidateNewsCache()).rejects.toThrow(
+        'Redis connection lost',
+      );
     });
   });
 });

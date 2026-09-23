@@ -9,33 +9,69 @@ The LumenPulse backend now exposes application performance and health metrics th
 ### Metrics Collected
 
 #### HTTP Request Metrics
+
 - **`http_requests_total`** (Counter): Total number of HTTP requests by method, route, and status code
 - **`http_request_duration_seconds`** (Histogram): Request latency distribution with predefined buckets
 - **`http_errors_total`** (Counter): Total number of HTTP errors (4xx and 5xx responses)
 
 #### Job Queue Metrics (Optional)
+
 - **`job_queue_size`** (Gauge): Current size of scheduled jobs in queue
 - **`jobs_processed_total`** (Counter): Total processed jobs with success/failure status
 - **`jobs_failed_total`** (Counter): Total failed jobs by queue
 
 #### System Metrics
+
 - **Node.js Process Metrics**: Memory usage, CPU time, GC metrics, event loop lag
 - **Custom Metrics**: Applications can register additional custom gauges and counters
+
+#### Cache Metrics
+
+- **`cache_reads_total`** (Counter): Cache reads by bounded cache family and `hit`/`miss` result
+- **`cache_staleness_seconds`** (Gauge): Age of the source generation currently served by each cache family
+- **`cache_invalidations_total`** (Counter): Cache invalidation attempts by bounded family and result
+- **`cache_stale_servings_total`** (Counter): Hits observed after a newer invalidation generation
+- **`cache_fill_race_prevented_total`** (Counter): Fills discarded after a write invalidated an in-flight fetch
+- **`soroban_simulation_cache_hits_total` / `soroban_simulation_cache_misses_total`** (Counters): Read-only simulation cache results
+- **`soroban_simulation_cache_staleness_seconds`** (Gauge): Age of the ledger generation used by the cached simulation
+- **`soroban_ledger_cache_hits_total` / `soroban_ledger_cache_misses_total`** (Counters): Latest-ledger cache results
+- **`soroban_ledger_cache_staleness_seconds`** (Gauge): Age of the latest ledger fetch
+- **`portfolio_materialized`** is tracked through the bounded `cache_reads_total` and `cache_staleness_seconds` families for the persistent portfolio read model
+
+Cache metrics use a fixed cache-family label (for example `news`,
+`stellar_account_balance`, `feature_flag`, or `portfolio_materialized`), never
+a physical key. Soroban simulation and ledger caches expose their dedicated
+bounded counters/gauges on the same application registry. A per-cache hit rate
+for the shared cache families is therefore calculated with:
+
+```promql
+sum(rate(cache_reads_total{cache="news",result="hit"}[5m]))
+/
+sum(rate(cache_reads_total{cache="news"}[5m]))
+```
+
+`cache_staleness_seconds` is a family gauge sampled on reads. The cache facade
+tracks a physical key's local source-load timestamp and combines it with the
+latest invalidation boundary; a write therefore cannot reset an unrelated key's
+age. Values filled by another process have no local timestamp and are reported
+as zero until the next local fill. Soroban's simulation gauge uses the source
+ledger-load time, with the two-second ledger/simulation TTL as a hard bound.
 
 ### Intelligent Route Normalization
 
 The metrics system automatically normalizes routes to prevent metric cardinality explosion. Every path segment is classified as either **static** (kept as-is) or **dynamic** (collapsed onto the `:id` template):
 
-| Segment shape | Example | Becomes |
-| --- | --- | --- |
-| UUID (`8-4-4-4-12`) | `/users/550e8400-e29b-41d4-a716-446655440000` | `/users/:id` |
-| Numeric ID | `/users/42/posts/7` | `/users/:id/posts/:id` |
-| Stellar wallet address (`G…`, 56-char base32 StrKey) | `/v1/portfolio/accounts/GBXX…/summary` | `/v1/portfolio/accounts/:id/summary` |
-| Stellar contract ID (`C…`, 56-char base32 StrKey) | `/v1/contracts/capabilities/CCE…` | `/v1/contracts/capabilities/:id` |
-| Hex hash (64 chars) | `/transactions/0f2c…cafe` | `/transactions/:id` |
-| Any other long machine token (≥ 24 chars) | `/verification/submissions/eyJhbG…` | `/verification/submissions/:id` |
+| Segment shape                                        | Example                                       | Becomes                              |
+| ---------------------------------------------------- | --------------------------------------------- | ------------------------------------ |
+| UUID (`8-4-4-4-12`)                                  | `/users/550e8400-e29b-41d4-a716-446655440000` | `/users/:id`                         |
+| Numeric ID                                           | `/users/42/posts/7`                           | `/users/:id/posts/:id`               |
+| Stellar wallet address (`G…`, 56-char base32 StrKey) | `/v1/portfolio/accounts/GBXX…/summary`        | `/v1/portfolio/accounts/:id/summary` |
+| Stellar contract ID (`C…`, 56-char base32 StrKey)    | `/v1/contracts/capabilities/CCE…`             | `/v1/contracts/capabilities/:id`     |
+| Hex hash (64 chars)                                  | `/transactions/0f2c…cafe`                     | `/transactions/:id`                  |
+| Any other long machine token (≥ 24 chars)            | `/verification/submissions/eyJhbG…`           | `/verification/submissions/:id`      |
 
 Notes:
+
 - API version prefixes (`v1`, `v2`, …) are **preserved** so versioned routes stay distinguishable (`/v1/news` stays `/v1/news`).
 - Static segments such as `/news/coin/btc` or `/metrics/health` are never rewritten.
 - Query strings and trailing slashes are stripped.
@@ -45,38 +81,51 @@ Notes:
 
 Every metric family exported on `/metrics` and its label set is inventoried below. The **series ceiling** is the maximum number of distinct label combinations the family can realistically produce; it is bounded and does not scale with users, wallets, contracts, or articles.
 
-| Metric family | Type | Labels | Series ceiling | Rationale |
-| --- | --- | --- | --- | --- |
-| `http_requests_total` | Counter | `method`, `route`, `status` | ≤ 5 000 | Route is normalized to the route template (`:id` for dynamic segments); methods and status codes are small fixed sets |
-| `http_request_duration_seconds` | Histogram | `method`, `route`, `status` | ≤ 5 000 (× 8 histogram buckets) | Same bounded labels as above |
-| `http_errors_total` | Counter | `method`, `route`, `status` | ≤ 5 000 | Subset of `http_requests_total` (4xx/5xx only) |
-| `job_queue_size` | Gauge | `queue_name` | ≤ 10 | Known fixed queues (e.g. `portfolio-snapshot`) |
-| `jobs_processed_total` | Counter | `queue_name`, `status` | ≤ 20 | 2 statuses × known queues |
-| `jobs_failed_total` | Counter | `queue_name` | ≤ 10 | Known fixed queues |
-| `lumenpulse_articles_processed_total` | Counter | `source`, `status` | ≤ 100 | Fixed feed list × 3 statuses (`success`/`skipped`/`duplicate`) |
-| `lumenpulse_sentiment_score` | Gauge | `source` | ≤ 25 | Fixed feed list + `all` aggregate |
-| `lumenpulse_model_inference_duration_seconds` | Histogram | `model`, `task` | ≤ 10 | Small model registry × 2 tasks (`sentiment`/`anomaly`) |
-| `lumenpulse_anomalies_detected_total` | Counter | `type`, `severity` | ≤ 50 | Fixed anomaly-type enum × 4 severities |
-| `lumenpulse_fetch_errors_total` | Counter | `source`, `error_code` | ≤ 500 | Fixed feed list × a small set of error codes |
-| `horizon_http_latency_ms` | Histogram | `method`, `status` | ≤ 100 | Fixed Horizon method list × statuses |
-| `horizon_http_errors_total` | Counter | `method`, `status_code` | ≤ 100 | Fixed Horizon method list × status codes |
-| `horizon_http_requests_total` | Counter | `method` | ≤ 25 | Fixed Horizon method list |
-| `lumenpulse_reconciliation_drift_total` | Counter | `dataset`, `severity` | ≤ 10 | Fixed dataset(s) × 2 severities (`warning`/`critical`) |
-| `lumenpulse_reconciliation_drift_delta` | Gauge | `dataset`, `severity` | ≤ 10 | Same fixed label set |
-| `lumenpulse_reconciliation_threshold` | Gauge | `dataset`, `severity` | ≤ 10 | Same fixed label set |
+| Metric family                                 | Type      | Labels                      | Series ceiling                  | Rationale                                                                                                             |
+| --------------------------------------------- | --------- | --------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `http_requests_total`                         | Counter   | `method`, `route`, `status` | ≤ 5 000                         | Route is normalized to the route template (`:id` for dynamic segments); methods and status codes are small fixed sets |
+| `http_request_duration_seconds`               | Histogram | `method`, `route`, `status` | ≤ 5 000 (× 8 histogram buckets) | Same bounded labels as above                                                                                          |
+| `http_errors_total`                           | Counter   | `method`, `route`, `status` | ≤ 5 000                         | Subset of `http_requests_total` (4xx/5xx only)                                                                        |
+| `job_queue_size`                              | Gauge     | `queue_name`                | ≤ 10                            | Known fixed queues (e.g. `portfolio-snapshot`)                                                                        |
+| `jobs_processed_total`                        | Counter   | `queue_name`, `status`      | ≤ 20                            | 2 statuses × known queues                                                                                             |
+| `jobs_failed_total`                           | Counter   | `queue_name`                | ≤ 10                            | Known fixed queues                                                                                                    |
+| `lumenpulse_articles_processed_total`         | Counter   | `source`, `status`          | ≤ 100                           | Fixed feed list × 3 statuses (`success`/`skipped`/`duplicate`)                                                        |
+| `lumenpulse_sentiment_score`                  | Gauge     | `source`                    | ≤ 25                            | Fixed feed list + `all` aggregate                                                                                     |
+| `lumenpulse_model_inference_duration_seconds` | Histogram | `model`, `task`             | ≤ 10                            | Small model registry × 2 tasks (`sentiment`/`anomaly`)                                                                |
+| `lumenpulse_anomalies_detected_total`         | Counter   | `type`, `severity`          | ≤ 50                            | Fixed anomaly-type enum × 4 severities                                                                                |
+| `lumenpulse_fetch_errors_total`               | Counter   | `source`, `error_code`      | ≤ 500                           | Fixed feed list × a small set of error codes                                                                          |
+| `horizon_http_latency_ms`                     | Histogram | `method`, `status`          | ≤ 100                           | Fixed Horizon method list × statuses                                                                                  |
+| `horizon_http_errors_total`                   | Counter   | `method`, `status_code`     | ≤ 100                           | Fixed Horizon method list × status codes                                                                              |
+| `horizon_http_requests_total`                 | Counter   | `method`                    | ≤ 25                            | Fixed Horizon method list                                                                                             |
+| `lumenpulse_reconciliation_drift_total`       | Counter   | `dataset`, `severity`       | ≤ 10                            | Fixed dataset(s) × 2 severities (`warning`/`critical`)                                                                |
+| `lumenpulse_reconciliation_drift_delta`       | Gauge     | `dataset`, `severity`       | ≤ 10                            | Same fixed label set                                                                                                  |
+| `lumenpulse_reconciliation_threshold`         | Gauge     | `dataset`, `severity`       | ≤ 10                            | Same fixed label set                                                                                                  |
+| `cache_reads_total`                           | Counter   | `cache`, `result`           | ≤ 40                            | Fixed cache-family registry × hit/miss                                                                                |
+| `cache_staleness_seconds`                     | Gauge     | `cache`                     | ≤ 20                            | One series per cache family                                                                                           |
+| `cache_invalidations_total`                   | Counter   | `cache`, `result`           | ≤ 40                            | Fixed cache-family registry × success/error                                                                           |
+| `cache_stale_servings_total`                  | Counter   | `cache`                     | ≤ 20                            | Consistency guardrail; no physical keys                                                                               |
+| `cache_fill_race_prevented_total`             | Counter   | `cache`                     | ≤ 20                            | In-flight race guard; no physical keys                                                                                |
+| `soroban_ledger_cache_hits_total`             | Counter   | none                        | 1                               | Latest-ledger read-only cache                                                                                         |
+| `soroban_ledger_cache_misses_total`           | Counter   | none                        | 1                               | Latest-ledger read-only cache                                                                                         |
+| `soroban_ledger_cache_staleness_seconds`      | Gauge     | none                        | 1                               | Age of the latest ledger fetch                                                                                        |
+| `soroban_simulation_cache_hits_total`         | Counter   | none                        | 1                               | Read-only simulation cache                                                                                            |
+| `soroban_simulation_cache_misses_total`       | Counter   | none                        | 1                               | Read-only simulation cache                                                                                            |
+| `soroban_simulation_cache_staleness_seconds`  | Gauge     | none                        | 1                               | Age of the source ledger used by the cached simulation                                                                |
 
-**Dynamic (legacy) helpers** — `getOrCreateGauge`, `getOrCreateCounter`, `getOrCreateHistogram` and the `incrementCounter`/`recordHistogram` shortcuts create metric families at runtime. All current call sites (`cache_hits_total`, `cache_misses_total`, `cache_fetch_duration_ms`, `warm_cache_preload_*`, `projects_*_errors_total`, `wallet_readiness_errors_total`) use **constant names and bounded label values** (e.g. `key_type` ∈ {`account_balance`, `account_operations`, `contract_read`, `stellar_assets`, `news`, `other`}, `route` = fixed registry names). Keep this property when adding new call sites: never pass user-supplied values (wallet addresses, contract IDs, article IDs) as labels.
+**Dynamic (legacy) helpers** — `getOrCreateGauge`, `getOrCreateCounter`, `getOrCreateHistogram` and the `incrementCounter`/`recordHistogram` shortcuts create metric families at runtime. All current call sites (`cache_hits_total`, `cache_misses_total`, `cache_fetch_duration_ms`, `warm_cache_preload_*`, `feature_flag_cache_*`, `feature_flag_evaluation_duration_seconds`, `projects_*_errors_total`, `wallet_readiness_errors_total`) use **constant names and bounded label values** (e.g. `key_type` ∈ {`account_balance`, `account_operations`, `contract_read`, `stellar_assets`, `news`, `other`}, `route` = fixed registry names). Cache-family metrics use the same rule through the fixed `CacheName` registry. Keep this property when adding new call sites: never pass user-supplied values (wallet addresses, contract IDs, article IDs) as labels.
 
 **Scrape payload size guardrail** — the interceptor test suite (`metrics.interceptor.spec.ts`) records 5 000 requests carrying distinct wallet addresses, contract IDs, hex hashes and numeric IDs and asserts the normalized payload stays small (< 10% of the raw-path payload and ≤ 10 series for `http_requests_total`). Measured on CI: raw paths ≈ 2.9 MB → normalized ≈ 15.6 KB (**~99.5% reduction**).
 
 ## Endpoints
 
 ### GET /metrics
+
 Returns application metrics in **Prometheus text format** (default).
 
 **Content-Type**: `text/plain; version=0.0.4; charset=utf-8`
 
 **Example Response**:
+
 ```
 # HELP http_requests_total Total number of HTTP requests
 # TYPE http_requests_total counter
@@ -94,9 +143,11 @@ http_request_duration_seconds_count{method="GET",route="/api/users",status="200"
 ```
 
 ### GET /metrics?format=json
+
 Returns metrics in **JSON format**.
 
 **Example Response**:
+
 ```json
 {
   "http_requests_total": {
@@ -118,12 +169,15 @@ Returns metrics in **JSON format**.
 ```
 
 ### GET /metrics/json
+
 Alternative endpoint for JSON format.
 
 ### GET /metrics/health
+
 Returns basic health status (unprotected).
 
 **Example Response**:
+
 ```json
 {
   "status": "ok",
@@ -157,6 +211,7 @@ METRICS_ALLOWED_IPS=::1,2001:db8::/32
 ```
 
 **Example `.env` file**:
+
 ```env
 # For local development
 METRICS_ALLOWED_IPS=127.0.0.1,::1
@@ -176,16 +231,19 @@ curl -H "Authorization: Bearer <jwt_token>" http://localhost:3000/metrics
 ### Access Examples
 
 **From localhost**:
+
 ```bash
 curl http://localhost:3000/metrics
 ```
 
 **From remote server with IP allowlist**:
+
 ```bash
 curl http://backend-server:3000/metrics
 ```
 
 **With JWT authentication**:
+
 ```bash
 curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..." http://backend-server:3000/metrics
 ```
@@ -225,15 +283,15 @@ services:
   backend:
     image: lumenpulse-backend:latest
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       # Allow Prometheus service to access metrics
-      METRICS_ALLOWED_IPS: "127.0.0.1,prometheus:9090"
+      METRICS_ALLOWED_IPS: '127.0.0.1,prometheus:9090'
 
   prometheus:
     image: prom/prometheus:latest
     ports:
-      - "9090:9090"
+      - '9090:9090'
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     command:
@@ -270,26 +328,31 @@ docker run -d -p 3000:3000 grafana/grafana:latest
 Create a new dashboard with the following panels:
 
 **Panel 1: Request Rate**
+
 ```
 rate(http_requests_total[5m])
 ```
 
 **Panel 2: Error Rate**
+
 ```
 rate(http_errors_total[5m])
 ```
 
 **Panel 3: P95 Latency**
+
 ```
 histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
 ```
 
 **Panel 4: Total Requests**
+
 ```
 http_requests_total
 ```
 
 **Panel 5: Error Count**
+
 ```
 http_errors_total
 ```
@@ -364,8 +427,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High error rate detected"
-          description: "Error rate > 5% for last 5 minutes"
+          summary: 'High error rate detected'
+          description: 'Error rate > 5% for last 5 minutes'
 
       - alert: HighLatency
         expr: |
@@ -374,8 +437,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High latency detected"
-          description: "P95 latency > 1 second"
+          summary: 'High latency detected'
+          description: 'P95 latency > 1 second'
 
       - alert: QueueBacklog
         expr: job_queue_size > 1000
@@ -383,8 +446,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Job queue backlog"
-          description: "Queue size exceeds 1000 jobs"
+          summary: 'Job queue backlog'
+          description: 'Queue size exceeds 1000 jobs'
 ```
 
 ## Performance Considerations
@@ -398,7 +461,8 @@ groups:
 
 ### Metrics endpoint returns 403 Forbidden
 
-**Solution**: 
+**Solution**:
+
 1. Check `METRICS_ALLOWED_IPS` environment variable is set
 2. Verify your IP address matches the allowlist
 3. Or provide valid JWT token in Authorization header
@@ -408,6 +472,7 @@ groups:
 **Issue**: Too many unique label combinations causing memory bloat
 
 **Solution**:
+
 - The system automatically normalizes routes to prevent this
 - Avoid adding high-cardinality labels (user IDs, request IDs)
 - Use low-cardinality labels (status, method, route)
@@ -415,6 +480,7 @@ groups:
 ### Metrics not appearing
 
 **Solution**:
+
 1. Verify MetricsModule is imported in AppModule
 2. Check that requests are being made to the application
 3. Verify metrics endpoint is accessible: `curl http://localhost:3000/metrics`
@@ -435,19 +501,19 @@ export class MyService {
     const customGauge = this.metricsService.getOrCreateGauge(
       'my_custom_queue_size',
       'Size of my custom queue',
-      ['queue_name']
+      ['queue_name'],
     );
-    
+
     // Use the gauge
     customGauge.labels('priority-queue').set(42);
-    
+
     // Create custom counter
     const customCounter = this.metricsService.getOrCreateCounter(
       'my_custom_events',
       'Custom events processed',
-      ['event_type']
+      ['event_type'],
     );
-    
+
     // Use the counter
     customCounter.labels('user-signup').inc();
   }

@@ -4,6 +4,7 @@ import { config } from '../../lib/config';
 import { AuditService } from '../../audit/audit.service';
 import { ContractRotationService } from './contract-rotation.service';
 import { ConfigService } from '../../config/config.service';
+import { SorobanRpcClientService } from './soroban-rpc-client.service';
 import {
   RotateContractIdsResponseDto,
   ContractIdUpdateDto,
@@ -28,6 +29,7 @@ export class StellarContractRotationService {
     private readonly auditService: AuditService,
     private readonly contractRotationService: ContractRotationService,
     private readonly configService: ConfigService,
+    private readonly sorobanRpcClient: SorobanRpcClientService,
   ) {}
 
   /**
@@ -103,8 +105,10 @@ export class StellarContractRotationService {
         },
       );
 
-      // Invalidate config cache so clients get updated values
+      // Invalidate config/capability responses and all read-only simulations:
+      // both depend on the contract IDs being rotated.
       await this.configService.invalidateCache();
+      this.sorobanRpcClient.invalidateSimulationCache();
 
       return {
         message: 'Contracts rotated successfully',
@@ -117,6 +121,7 @@ export class StellarContractRotationService {
       try {
         this.configService.setStellarContractOverrides(previousValues);
         await this.configService.invalidateCache();
+        this.sorobanRpcClient.invalidateSimulationCache();
       } catch {
         // Log rollback failure to monitoring in real deployments; rethrow original
       }
@@ -170,7 +175,7 @@ export class StellarContractRotationService {
     contractNames: ContractName[],
   ): Record<string, string | null> {
     const previous: Record<string, string | null> = {};
-    const contracts = config.stellar.contracts as Record<
+    const contracts = this.configService.getStellarConfig().contracts as Record<
       ContractName,
       string | null
     >;
