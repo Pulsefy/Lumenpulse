@@ -152,4 +152,53 @@ describe('GlobalExceptionFilter', () => {
 
     process['env']['NODE_ENV'] = originalNodeEnv;
   });
+
+  it('exposes error message for generic Error in development/non-production mode', () => {
+    const originalNodeEnv = process['env']['NODE_ENV'];
+    process['env']['NODE_ENV'] = 'development';
+
+    filter.catch(new Error('Test general error message'), mockArgumentsHost);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      code: ErrorCode.SYS_INTERNAL_ERROR,
+      message: 'Test general error message',
+      requestId: 'req-123',
+    });
+
+    process['env']['NODE_ENV'] = originalNodeEnv;
+  });
+
+  it('handles BAD_REQUEST HttpException correctly', () => {
+    const exception = new HttpException(
+      'Test HTTP exception message',
+      HttpStatus.BAD_REQUEST,
+    );
+
+    filter.catch(exception, mockArgumentsHost);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      code: ErrorCode.SYS_BAD_REQUEST,
+      message: 'Test HTTP exception message',
+      details: undefined,
+      requestId: 'req-123',
+    });
+  });
+
+  it('handles unknown thrown non-Error object gracefully', () => {
+    filter.catch('string exception', mockArgumentsHost);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      code: ErrorCode.SYS_INTERNAL_ERROR,
+      message: 'Internal server error',
+      requestId: 'req-123',
+    });
+  });
 });
+
