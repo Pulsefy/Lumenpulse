@@ -3,10 +3,12 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { CacheService } from '../cache/cache.service';
 import {
   RoundDto,
   // ProjectQfDto,
@@ -57,6 +59,7 @@ export class GrantsService {
   constructor(
     private readonly config: ConfigService,
     @InjectQueue(CONTRIBUTION_QUEUE) private readonly suspiciousQueue: Queue,
+    @Optional() private readonly cacheService?: CacheService,
   ) {
     if (
       process.env.NODE_ENV !== 'production' &&
@@ -208,6 +211,7 @@ export class GrantsService {
       eligibleProjects: new Set(),
     };
     this.rounds.set(id, record);
+    this.cacheService?.invalidateWarmGrantsCachesSoon();
     this.logger.log(`Round ${id} created: ${dto.name}`);
     return this.toRoundDto(record);
   }
@@ -229,6 +233,7 @@ export class GrantsService {
     if (amount <= 0n) throw new BadRequestException('Amount must be positive');
 
     record.totalPool += amount;
+    this.cacheService?.invalidateWarmGrantsCachesSoon();
     this.logger.log(
       `Round ${dto.roundId} pool funded +${amount} by ${dto.funderPublicKey}`,
     );
@@ -249,6 +254,7 @@ export class GrantsService {
     if (!record.contributions.has(dto.projectId)) {
       record.contributions.set(dto.projectId, new Map());
     }
+    this.cacheService?.invalidateWarmGrantsCachesSoon();
     this.logger.log(
       `Project ${dto.projectId} approved for round ${dto.roundId}`,
     );
@@ -263,6 +269,7 @@ export class GrantsService {
       throw new NotFoundException('Project not eligible in this round');
     }
     record.eligibleProjects.delete(projectId);
+    this.cacheService?.invalidateWarmGrantsCachesSoon();
   }
 
   // ── Contribution recording ─────────────────────────────────────────────────
@@ -290,6 +297,7 @@ export class GrantsService {
     const prev = projectContribs.get(dto.contributorPublicKey) ?? 0n;
     projectContribs.set(dto.contributorPublicKey, prev + amount);
     record.contributions.set(dto.projectId, projectContribs);
+    this.cacheService?.invalidateWarmGrantsCachesSoon();
 
     this.logger.log(
       `Contribution recorded: round=${dto.roundId} project=${dto.projectId} contributor=${dto.contributorPublicKey} amount=${amount}`,
@@ -331,6 +339,7 @@ export class GrantsService {
       throw new BadRequestException('Round has not ended yet');
     }
     record.isFinalized = true;
+    this.cacheService?.invalidateWarmGrantsCachesSoon();
     this.logger.log(`Round ${roundId} finalized`);
     return this.toRoundDto(record);
   }
@@ -680,6 +689,7 @@ export class GrantsService {
 
     record.isDistributed = true;
     record.totalPool = 0n;
+    this.cacheService?.invalidateWarmGrantsCachesSoon();
 
     const totalDistributed = allocations
       .reduce((acc, a) => acc + BigInt(a.amount), 0n)

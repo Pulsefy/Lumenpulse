@@ -211,6 +211,9 @@ export class ContributorRegistryService {
     preparedTx.sign(relayer);
 
     const result = await this.sorobanRpcClient.sendTransaction(preparedTx);
+    // The relayer write changes all four representations of this contributor.
+    // Evict them immediately; a later read will fetch the current chain state.
+    await this.invalidateContributorCaches(dto.address, dto.githubHandle);
 
     this.logger.log(
       `Gasless registration submitted: address=${dto.address} handle=${dto.githubHandle} hash=${result.hash}`,
@@ -220,6 +223,22 @@ export class ContributorRegistryService {
       transactionHash: result.hash,
       status: result.status === 'PENDING' ? 'PENDING' : 'SUCCESS',
     };
+  }
+
+  /**
+   * Evict every cached representation of a contributor after a registration,
+   * profile update, reputation event, or nonce-changing write.
+   */
+  async invalidateContributorCaches(
+    address: string,
+    githubHandle?: string,
+    broad = false,
+  ): Promise<void> {
+    await this.cacheService.invalidateContributorCaches(
+      address,
+      githubHandle,
+      broad,
+    );
   }
 
   // ── Lookups ───────────────────────────────────────────────────────────────────
@@ -267,9 +286,9 @@ export class ContributorRegistryService {
 
   // ── Private mock implementations ──────────────────────────────────────────────
 
-  private mockRegister(
+  private async mockRegister(
     dto: RegisterContributorDto,
-  ): RegistrationXdrResponseDto {
+  ): Promise<RegistrationXdrResponseDto> {
     if (this.mockContributors.has(dto.address)) {
       throw new ConflictException(
         `Contributor ${dto.address} is already registered`,
@@ -288,6 +307,7 @@ export class ContributorRegistryService {
       registeredAt: new Date().toISOString(),
     });
     this.mockGithubIndex.set(dto.githubHandle.toLowerCase(), dto.address);
+    await this.invalidateContributorCaches(dto.address, dto.githubHandle);
 
     this.logger.log(
       `[mock] Registered contributor address=${dto.address} handle=${dto.githubHandle}`,
@@ -299,7 +319,9 @@ export class ContributorRegistryService {
     };
   }
 
-  private mockRegisterWithSig(dto: RegisterWithSigDto): SubmitResponseDto {
+  private async mockRegisterWithSig(
+    dto: RegisterWithSigDto,
+  ): Promise<SubmitResponseDto> {
     if (this.mockContributors.has(dto.address)) {
       throw new ConflictException(
         `Contributor ${dto.address} is already registered`,
@@ -320,6 +342,7 @@ export class ContributorRegistryService {
     });
     this.mockGithubIndex.set(dto.githubHandle.toLowerCase(), dto.address);
     this.mockNonces.set(dto.address, nonce + 1);
+    await this.invalidateContributorCaches(dto.address, dto.githubHandle);
 
     this.logger.log(
       `[mock] Gasless-registered contributor address=${dto.address} handle=${dto.githubHandle}`,
@@ -535,9 +558,16 @@ export class ContributorRegistryService {
       }
 
       return Number(scValToNative(simulation.result.retval) as bigint);
-    } catch {
-      // Not initialized or address has no nonce yet — safe default
-      return 0;
+    } catch (error) {
+      if (
+        error instanceof SorobanRpcError &&
+        error.code === SorobanErrorCode.SIMULATION_FAILED
+      ) {
+        // An uninitialized contributor has no nonce yet. Transport/RPC
+        // failures must propagate so they are not cached as a false zero.
+        return 0;
+      }
+      throw error;
     }
   }
 

@@ -10,6 +10,7 @@ import { AuthModule } from '../auth/auth.module';
 import { StellarService } from '../stellar/stellar.service';
 import { AppCacheModule } from '../cache/cache.module';
 import stellarConfig from '../stellar/config/stellar.config';
+import { MaterializedSnapshotModule } from '../portfolio/materialized-snapshot.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import stellarConfig from '../stellar/config/stellar.config';
     forwardRef(() => AuthModule),
     AppCacheModule,
     ConfigModule.forFeature(stellarConfig),
+    MaterializedSnapshotModule,
   ],
   providers: [UsersService, StellarService],
   controllers: [UsersController],

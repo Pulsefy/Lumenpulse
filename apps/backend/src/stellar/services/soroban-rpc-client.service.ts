@@ -8,9 +8,11 @@ import {
   Contract,
   Transaction,
 } from '@stellar/stellar-sdk';
-import { Counter, Histogram, Registry } from 'prom-client';
+import { Counter, Gauge, Histogram, Registry } from 'prom-client';
 import { config } from '../../lib/config';
 import { RequestContextService } from '../../common/services/request-context.service';
+import { MetricsService } from '../../metrics/metrics.service';
+import { CACHE_NAMES } from '../../cache/cache.constants';
 
 export enum SorobanErrorCode {
   TIMEOUT = 'SOROBAN_TIMEOUT',
@@ -62,6 +64,17 @@ interface SimulationSummary {
   };
 }
 
+interface SimulationCacheEntry {
+  response: rpc.Api.SimulateTransactionResponse;
+  cachedAt: number;
+  ledgerLoadedAt: number;
+  ledgerSequence: number;
+}
+
+const SIMULATION_CACHE_TTL_MS = 2_000;
+const MAX_SIMULATION_CACHE_ENTRIES = 256;
+const LEDGER_CACHE_TTL_MS = 2_000;
+
 const DEFAULT_OPTIONS: Required<SorobanClientOptions> = {
   timeoutMs: config.stellar.timeout ?? 30_000,
   maxRetries: 3,
@@ -79,9 +92,19 @@ export class SorobanRpcClientService {
   private readonly rpcErrors: Counter;
   private readonly rpcRequests: Counter;
 
+  // Read-only simulation cache metrics.  Labels are fixed and contain no
+  // contract IDs, function XDRs, or transaction data.
+  private readonly simulationCacheHits: Counter;
+  private readonly simulationCacheMisses: Counter;
+  private readonly simulationCacheStaleness: Gauge;
+  private readonly ledgerCacheHits: Counter;
+  private readonly ledgerCacheMisses: Counter;
+  private readonly ledgerCacheStaleness: Gauge;
+
   constructor(
     private readonly requestContextService: RequestContextService,
     @Optional() private readonly registry?: Registry,
+    @Optional() private readonly metricsService?: MetricsService,
   ) {
     const rpcUrl =
       config.stellar.sorobanRpcUrl ??
@@ -117,6 +140,37 @@ export class SorobanRpcClientService {
       labelNames: ['method'],
       registers: [reg],
     });
+
+    this.simulationCacheHits = new Counter({
+      name: 'soroban_simulation_cache_hits_total',
+      help: 'Read-only Soroban simulation cache hits',
+      registers: [reg],
+    });
+    this.simulationCacheMisses = new Counter({
+      name: 'soroban_simulation_cache_misses_total',
+      help: 'Read-only Soroban simulation cache misses',
+      registers: [reg],
+    });
+    this.simulationCacheStaleness = new Gauge({
+      name: 'soroban_simulation_cache_staleness_seconds',
+      help: 'Seconds since the cached simulation source ledger was loaded; bounded by the ledger/simulation TTL',
+      registers: [reg],
+    });
+    this.ledgerCacheHits = new Counter({
+      name: 'soroban_ledger_cache_hits_total',
+      help: 'Latest-ledger cache hits',
+      registers: [reg],
+    });
+    this.ledgerCacheMisses = new Counter({
+      name: 'soroban_ledger_cache_misses_total',
+      help: 'Latest-ledger cache misses',
+      registers: [reg],
+    });
+    this.ledgerCacheStaleness = new Gauge({
+      name: 'soroban_ledger_cache_staleness_seconds',
+      help: 'Seconds since the latest ledger was fetched from Soroban RPC',
+      registers: [reg],
+    });
   }
 
   /** Fetch an account from the RPC with retries */
@@ -130,20 +184,79 @@ export class SorobanRpcClientService {
     });
   }
 
-  private cachedLedger = { sequence: 0, expiresAt: 0 };
-  private readonly simulationCache = new Map<string, rpc.Api.SimulateTransactionResponse>();
+  private cachedLedger = { sequence: 0, expiresAt: 0, loadedAt: 0 };
+  private readonly simulationCache = new Map<string, SimulationCacheEntry>();
+  private simulationGeneration = 0;
+  private ledgerGeneration = 0;
 
   private async getLatestLedgerSequence(): Promise<number> {
     const now = Date.now();
     if (now < this.cachedLedger.expiresAt) {
+      const staleness = Math.max(0, (now - this.cachedLedger.loadedAt) / 1_000);
+      this.ledgerCacheHits.inc();
+      this.ledgerCacheStaleness.set(staleness);
+      this.recordSharedCacheRead(CACHE_NAMES.LEDGER, 'hit', staleness);
       return this.cachedLedger.sequence;
     }
-    const response = await this.server.getLatestLedger();
-    if (this.cachedLedger.sequence !== 0 && this.cachedLedger.sequence !== response.sequence) {
-      this.simulationCache.clear();
+
+    this.ledgerCacheMisses.inc();
+    this.recordSharedCacheRead(CACHE_NAMES.LEDGER, 'miss', 0);
+    let response: rpc.Api.GetLatestLedgerResponse | undefined;
+    let acceptedGeneration: number | undefined;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const generationAtStart = this.ledgerGeneration;
+      response = await this.server.getLatestLedger();
+      // A submission/rotation may have invalidated the ledger while the RPC
+      // request was in flight. Do not let that old response repopulate the
+      // cache; retry once against the new generation when possible.
+      if (generationAtStart !== this.ledgerGeneration) continue;
+      acceptedGeneration = generationAtStart;
+      break;
     }
-    this.cachedLedger = { sequence: response.sequence, expiresAt: now + 2000 };
+
+    // If writes continued throughout the bounded retry, do not let the
+    // caller use this response as a cache key. The surrounding simulation
+    // path treats this as an uncacheable load and calls the RPC directly.
+    if (!response || acceptedGeneration === undefined) {
+      throw new Error('Ledger changed while loading');
+    }
+    if (
+      this.cachedLedger.sequence !== 0 &&
+      this.cachedLedger.sequence !== response.sequence
+    ) {
+      this.clearSimulationEntries();
+    }
+    if (acceptedGeneration === this.ledgerGeneration) {
+      this.cachedLedger = {
+        sequence: response.sequence,
+        expiresAt: Date.now() + LEDGER_CACHE_TTL_MS,
+        loadedAt: Date.now(),
+      };
+      this.ledgerCacheStaleness.set(0);
+      this.setSharedCacheStaleness(CACHE_NAMES.LEDGER);
+    }
     return response.sequence;
+  }
+
+  /**
+   * Clear all read-only simulation state after a state-changing transaction,
+   * contract rotation, or an explicit operator invalidation.
+   */
+  invalidateSimulationCache(): void {
+    this.ledgerGeneration += 1;
+    this.clearSimulationEntries();
+    this.cachedLedger = { sequence: 0, expiresAt: 0, loadedAt: 0 };
+    this.simulationCacheStaleness.set(0);
+    this.ledgerCacheStaleness.set(0);
+    this.setSharedCacheStaleness(CACHE_NAMES.SIMULATION);
+    this.setSharedCacheStaleness(CACHE_NAMES.LEDGER);
+  }
+
+  private clearSimulationEntries(): void {
+    this.simulationGeneration += 1;
+    this.simulationCache.clear();
+    this.simulationCacheStaleness.set(0);
+    this.setSharedCacheStaleness(CACHE_NAMES.SIMULATION);
   }
 
   /** Simulate a transaction with retries */
@@ -160,30 +273,62 @@ export class SorobanRpcClientService {
     if (isReadOnly && cacheEnabled) {
       try {
         const record = this.asRecord(tx);
-        const operations = Array.isArray(record.operations) ? record.operations : [];
+        const operations = Array.isArray(record.operations)
+          ? record.operations
+          : [];
         if (operations.length === 1) {
           const op = this.asRecord(operations[0]);
           const hostFunction = op.func ?? op.hostFunction;
-          if (hostFunction && typeof hostFunction === 'object' && 'toXDR' in hostFunction) {
-            const funcXdr = (hostFunction as { toXDR: (encoding: string) => string }).toXDR('base64');
+          if (
+            hostFunction &&
+            typeof hostFunction === 'object' &&
+            'toXDR' in hostFunction
+          ) {
+            const funcXdr = (
+              hostFunction as { toXDR: (encoding: string) => string }
+            ).toXDR('base64');
             expectedLedgerSequence = await this.getLatestLedgerSequence();
-            cacheKey = `${funcXdr}_${expectedLedgerSequence}`;
+            cacheKey = `${this.getSimulationFingerprint(tx)}_${funcXdr}_${expectedLedgerSequence}`;
 
+            const now = Date.now();
             const cached = this.simulationCache.get(cacheKey);
-            if (cached) {
-              return cached;
+            if (cached && now - cached.cachedAt <= SIMULATION_CACHE_TTL_MS) {
+              // Refresh LRU position without changing the source version.
+              this.simulationCache.delete(cacheKey);
+              this.simulationCache.set(cacheKey, cached);
+              const staleness = Math.max(
+                0,
+                (Date.now() - cached.ledgerLoadedAt) / 1_000,
+              );
+              this.simulationCacheHits.inc();
+              this.simulationCacheStaleness.set(staleness);
+              this.recordSharedCacheRead(
+                CACHE_NAMES.SIMULATION,
+                'hit',
+                staleness,
+              );
+              return cached.response;
             }
+            if (cached) this.simulationCache.delete(cacheKey);
+            this.simulationCacheMisses.inc();
+            this.recordSharedCacheRead(CACHE_NAMES.SIMULATION, 'miss', 0);
           }
         }
       } catch (err: unknown) {
-        this.logger.debug(`Failed to compute simulation cache key: ${err instanceof Error ? err.message : String(err)}`);
+        this.logger.debug(
+          `Failed to compute simulation cache key: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 
+    const generationAtStart = cacheKey ? this.simulationGeneration : undefined;
+
     return this.withRetry('simulateTransaction', opts, async () => {
-      const result = await this.server.simulateTransaction(tx as Parameters<rpc.Server['simulateTransaction']>[0]);
+      const result = await this.server.simulateTransaction(
+        tx as Parameters<rpc.Server['simulateTransaction']>[0],
+      );
       if (rpc.Api.isSimulationError(result)) {
-        this.logFailedSimulationTrace(tx, result as rpc.Api.SimulateTransactionErrorResponse);
+        this.logFailedSimulationTrace(tx, result);
         throw new SorobanRpcError(
           SorobanErrorCode.SIMULATION_FAILED,
           `Simulation failed: ${result.error ?? 'Unknown error'}`,
@@ -191,8 +336,26 @@ export class SorobanRpcClientService {
         );
       }
 
-      if (cacheKey && result.latestLedger === expectedLedgerSequence) {
-        this.simulationCache.set(cacheKey, result);
+      if (
+        cacheKey &&
+        generationAtStart === this.simulationGeneration &&
+        result.latestLedger === expectedLedgerSequence
+      ) {
+        this.simulationCache.set(cacheKey, {
+          response: result,
+          cachedAt: Date.now(),
+          ledgerLoadedAt: this.cachedLedger.loadedAt,
+          ledgerSequence: expectedLedgerSequence,
+        });
+        while (this.simulationCache.size > MAX_SIMULATION_CACHE_ENTRIES) {
+          const oldestKey = this.simulationCache.keys().next().value as
+            | string
+            | undefined;
+          if (oldestKey === undefined) break;
+          this.simulationCache.delete(oldestKey);
+        }
+        this.simulationCacheStaleness.set(0);
+        this.setSharedCacheStaleness(CACHE_NAMES.SIMULATION);
       }
 
       return result;
@@ -205,14 +368,22 @@ export class SorobanRpcClientService {
     opts?: SorobanClientOptions,
   ): Promise<rpc.Api.SendTransactionResponse> {
     return this.withRetry('sendTransaction', opts, async () => {
-      const result = await this.server.sendTransaction(tx as Parameters<rpc.Server['sendTransaction']>[0]);
-      if (result.status === 'ERROR') {
-        throw new SorobanRpcError(
-          SorobanErrorCode.SUBMISSION_FAILED,
-          `Transaction submission failed: ${JSON.stringify(result.errorResult ?? 'Unknown')}`,
+      try {
+        const result = await this.server.sendTransaction(
+          tx as Parameters<rpc.Server['sendTransaction']>[0],
         );
+        if (result.status === 'ERROR') {
+          throw new SorobanRpcError(
+            SorobanErrorCode.SUBMISSION_FAILED,
+            `Transaction submission failed: ${JSON.stringify(result.errorResult ?? 'Unknown')}`,
+          );
+        }
+        return result;
+      } finally {
+        // A submission can change state even when the response is lost or
+        // reports an error. Clearing on every attempt is the safe direction.
+        this.invalidateSimulationCache();
       }
-      return result;
     });
   }
 
@@ -368,9 +539,7 @@ export class SorobanRpcClientService {
     this.logger.error(trace, 'Soroban simulation trace captured');
   }
 
-  private extractContractInvocation(
-    tx: unknown,
-  ): ContractInvocationSummary {
+  private extractContractInvocation(tx: unknown): ContractInvocationSummary {
     const record = this.asRecord(tx);
     const operations = Array.isArray(record.operations)
       ? record.operations
@@ -508,6 +677,46 @@ export class SorobanRpcClientService {
     }
 
     return summary;
+  }
+
+  private recordSharedCacheRead(
+    cache: string,
+    result: 'hit' | 'miss',
+    stalenessSeconds: number,
+  ): void {
+    try {
+      this.metricsService?.recordCacheRead(cache, result, stalenessSeconds);
+    } catch {
+      // Shared metrics must not affect the RPC client.
+    }
+  }
+
+  private setSharedCacheStaleness(cache: string): void {
+    try {
+      this.metricsService?.setCacheStaleness(cache, 0);
+    } catch {
+      // Shared metrics must not affect the RPC client.
+    }
+  }
+
+  private getSimulationFingerprint(tx: unknown): string {
+    if (typeof tx === 'string') return tx;
+    const candidate = this.asRecord(tx) as {
+      toXDR?: (encoding: string) => string;
+    };
+    if (typeof candidate.toXDR === 'function') {
+      try {
+        return candidate.toXDR('base64');
+      } catch {
+        // Fall through to a structural fingerprint for test doubles/SDK
+        // objects that expose an incomplete XDR method.
+      }
+    }
+    try {
+      return JSON.stringify(tx) ?? String(tx);
+    } catch {
+      return String(tx);
+    }
   }
 
   private asRecord(value: unknown): Record<string, unknown> {

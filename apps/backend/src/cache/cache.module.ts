@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CacheModule as NestCacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import Keyv from 'keyv';
-import KeyvRedis from '@keyv/redis';
+import { createKeyv } from '@keyv/redis';
 import { CacheService } from './cache.service';
 
 @Module({
@@ -13,12 +12,15 @@ import { CacheService } from './cache.service';
       useFactory: (configService: ConfigService) => {
         const host = configService.get<string>('REDIS_HOST', 'localhost');
         const port = configService.get<number>('REDIS_PORT', 6379);
+        const redisUrl = process.env.REDIS_URL ?? `redis://${host}:${port}`;
         const ttl = configService.get<number>('CACHE_TTL_MS', 300_000);
         return {
           stores: [
-            new Keyv({
-              store: new KeyvRedis(`redis://${host}:${port}`),
+            createKeyv(redisUrl, {
               namespace: 'lumenpulse',
+              // Invalidation must not be reported as successful when Redis
+              // silently converts a failed operation into false/undefined.
+              throwOnErrors: true,
             }),
           ],
           ttl,

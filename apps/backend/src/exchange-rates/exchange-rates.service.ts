@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { CacheService } from '../cache/cache.service';
+import {
+  DEFAULT_TTLS,
+  EXCHANGE_RATE_CACHE_PREFIX,
+} from '../cache/cache.constants';
 
 export type SupportedCurrency = 'USD' | 'EUR' | 'GBP' | 'NGN' | 'XLM';
 
@@ -13,8 +17,7 @@ interface ExchangeRateResponse {
 @Injectable()
 export class ExchangeRatesService {
   private readonly logger = new Logger(ExchangeRatesService.name);
-  private readonly EXCHANGE_RATE_CACHE_PREFIX = 'exchange-rates';
-  private readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+  private readonly CACHE_TTL_MS = DEFAULT_TTLS.exchangeRate;
 
   private readonly supportedCurrencies: SupportedCurrency[] = [
     'USD',
@@ -36,34 +39,31 @@ export class ExchangeRatesService {
     fromCurrency: string,
     toCurrency: string,
   ): Promise<number> {
-    if (fromCurrency === toCurrency) {
+    const normalizedFrom = fromCurrency.toUpperCase();
+    const normalizedTo = toCurrency.toUpperCase();
+    if (normalizedFrom === normalizedTo) {
       return 1;
     }
 
-    const cacheKey = `${this.EXCHANGE_RATE_CACHE_PREFIX}:${fromCurrency}_${toCurrency}`;
+    const cacheKey = `${EXCHANGE_RATE_CACHE_PREFIX}:${normalizedFrom}_${normalizedTo}`;
 
-    // Check cache first
-    const cached = await this.cacheService.get<number>(cacheKey);
-    if (cached !== undefined) {
-      return cached;
-    }
-
-    try {
-      // Use CoinGecko free API for cryptocurrency and fiat exchange rates
-      const rate = await this.fetchFromCoinGecko(fromCurrency, toCurrency);
-
-      // Cache the result
-      await this.cacheService.set(cacheKey, rate, this.CACHE_TTL_MS);
-
-      return rate;
-    } catch (error) {
-      this.logger.error(
-        `Failed to fetch exchange rate ${fromCurrency}/${toCurrency}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-      throw new Error(
-        `Unable to fetch exchange rate for ${fromCurrency}/${toCurrency}`,
-      );
-    }
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        try {
+          // Use CoinGecko free API for cryptocurrency and fiat exchange rates.
+          return await this.fetchFromCoinGecko(normalizedFrom, normalizedTo);
+        } catch (error) {
+          this.logger.error(
+            `Failed to fetch exchange rate ${normalizedFrom}/${normalizedTo}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+          throw new Error(
+            `Unable to fetch exchange rate for ${normalizedFrom}/${normalizedTo}`,
+          );
+        }
+      },
+      this.CACHE_TTL_MS,
+    );
   }
 
   /**

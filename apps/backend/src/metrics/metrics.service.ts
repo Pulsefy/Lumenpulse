@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { asCacheName } from '../cache/cache.constants';
 import {
   Counter,
   Histogram,
@@ -54,6 +55,15 @@ export class MetricsService implements OnModuleInit {
   private readonly schedulerJobLastFailure: Gauge<string>;
   private readonly schedulerJobDuration: Histogram<string>;
   private readonly schedulerLockContention: Counter<string>;
+
+  // Cache observability //
+  // Cache names are bounded by the cache module.  User supplied keys, account
+  // addresses, contract IDs, and request parameters are never metric labels.
+  private readonly cacheReads: Counter<string>;
+  private readonly cacheStaleness: Gauge<string>;
+  private readonly cacheInvalidations: Counter<string>;
+  private readonly cacheStaleServings: Counter<string>;
+  private readonly cacheFillRacePrevented: Counter<string>;
 
   // Running totals for the rolling-average sentiment gauge
   private sentimentSum = 0;
@@ -246,6 +256,37 @@ export class MetricsService implements OnModuleInit {
       name: 'lumenpulse_scheduler_lock_contention_total',
       help: 'Total advisory-lock acquisition failures, per scheduled job',
       labelNames: ['job'] as const,
+      registers: [this.registry],
+    });
+
+    this.cacheReads = new Counter({
+      name: 'cache_reads_total',
+      help: 'Cache reads by bounded cache name and result (hit or miss)',
+      labelNames: ['cache', 'result'] as const,
+      registers: [this.registry],
+    });
+    this.cacheStaleness = new Gauge({
+      name: 'cache_staleness_seconds',
+      help: 'Seconds since the current cache generation was loaded or invalidated',
+      labelNames: ['cache'] as const,
+      registers: [this.registry],
+    });
+    this.cacheInvalidations = new Counter({
+      name: 'cache_invalidations_total',
+      help: 'Cache invalidation attempts by bounded cache name and result',
+      labelNames: ['cache', 'result'] as const,
+      registers: [this.registry],
+    });
+    this.cacheStaleServings = new Counter({
+      name: 'cache_stale_servings_total',
+      help: 'Cache hits served after a newer invalidation generation was observed',
+      labelNames: ['cache'] as const,
+      registers: [this.registry],
+    });
+    this.cacheFillRacePrevented = new Counter({
+      name: 'cache_fill_race_prevented_total',
+      help: 'Cache fills discarded because an invalidation occurred while loading',
+      labelNames: ['cache'] as const,
       registers: [this.registry],
     });
   }
@@ -484,6 +525,40 @@ export class MetricsService implements OnModuleInit {
   /** Count a failed advisory-lock acquisition (another instance held the lock). */
   recordSchedulerLockContention(job: string): void {
     this.schedulerLockContention.inc({ job });
+  }
+
+  // Cache instrumentation //
+
+  /**
+   * Record one bounded cache read.  `cache` must be one of the names declared
+   * by the cache module; callers must not pass a physical key here.
+   */
+  recordCacheRead(
+    cache: string,
+    result: 'hit' | 'miss',
+    stalenessSeconds = 0,
+  ): void {
+    const cacheName = asCacheName(cache);
+    this.cacheReads.inc({ cache: cacheName, result });
+    this.cacheStaleness.labels(cacheName).set(Math.max(0, stalenessSeconds));
+  }
+
+  setCacheStaleness(cache: string, stalenessSeconds: number): void {
+    this.cacheStaleness
+      .labels(asCacheName(cache))
+      .set(Math.max(0, stalenessSeconds));
+  }
+
+  recordCacheInvalidation(cache: string, result: 'success' | 'error'): void {
+    this.cacheInvalidations.inc({ cache: asCacheName(cache), result });
+  }
+
+  recordStaleCacheServing(cache: string): void {
+    this.cacheStaleServings.labels({ cache: asCacheName(cache) }).inc();
+  }
+
+  recordCacheFillRacePrevented(cache: string): void {
+    this.cacheFillRacePrevented.labels({ cache: asCacheName(cache) }).inc();
   }
 
   // Dynamic metric helpers (legacy API)

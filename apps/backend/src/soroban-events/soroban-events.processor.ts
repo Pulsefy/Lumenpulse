@@ -17,6 +17,7 @@ import { SorobanEventsDeadLetterService } from './soroban-events-dead-letter.ser
 import { mapSorobanEvent } from './soroban-event-mapper';
 import { CrowdfundSyncService } from '../crowdfund-sync/crowdfund-sync.service';
 import { CrowdfundVaultProject } from '../crowdfund-sync/entities/crowdfund-vault-project.entity';
+import { CacheService } from '../cache/cache.service';
 
 // Event types that are relevant to crowdfund vaults
 const CROWDFUND_VAULT_EVENT_TYPES = [
@@ -61,6 +62,7 @@ export class SorobanEventsProcessor extends WorkerHost {
     private readonly sorobanEventsService: SorobanEventsService,
     private readonly dlqService: SorobanEventsDeadLetterService,
     private readonly crowdfundSyncService: CrowdfundSyncService,
+    private readonly cacheService: CacheService,
   ) {
     super();
   }
@@ -129,6 +131,11 @@ export class SorobanEventsProcessor extends WorkerHost {
           rawPayload,
         );
       }
+
+      // Cache invalidation is part of processing. Keep the event retryable if
+      // Redis is temporarily unavailable instead of marking it PROCESSED and
+      // skipping the work on BullMQ's next attempt.
+      await this.invalidateContributorCachesIfNeeded(eventType, rawPayload);
 
       // Mark as processed
       event.status = SorobanEventStatus.PROCESSED;
@@ -534,6 +541,68 @@ export class SorobanEventsProcessor extends WorkerHost {
     await this.crowdfundSyncService.syncVault({
       vaultAddress: vaultProject.vaultAddress,
     });
+  }
+
+  private async invalidateContributorCachesIfNeeded(
+    eventType: string | null | undefined,
+    rawPayload: Record<string, unknown>,
+  ): Promise<void> {
+    const normalizedType = String(eventType ?? '').toLowerCase();
+    if (
+      !normalizedType.includes('contributor') &&
+      !normalizedType.includes('reputation') &&
+      !normalizedType.includes('badge') &&
+      !normalizedType.includes('attestation') &&
+      !normalizedType.includes('registration') &&
+      !normalizedType.includes('deregister') &&
+      !normalizedType.includes('unregister') &&
+      !normalizedType.includes('nonce') &&
+      !normalizedType.includes('profile')
+    ) {
+      return;
+    }
+
+    const payload = rawPayload;
+    const address = [
+      payload.address,
+      payload.contributor,
+      payload.publicKey,
+      payload.public_key,
+      payload.wallet,
+    ].find(
+      (value): value is string => typeof value === 'string' && value.length > 0,
+    );
+    const githubHandle = [
+      payload.githubHandle,
+      payload.github_handle,
+      payload.handle,
+      payload.new_github_handle,
+      payload.newGithubHandle,
+      payload.freed_github_handle,
+      payload.previousGithubHandle,
+    ].find(
+      (value): value is string => typeof value === 'string' && value.length > 0,
+    );
+
+    if (address) {
+      await this.cacheService.invalidateContributorCaches(
+        address,
+        githubHandle,
+        true,
+      );
+      return;
+    }
+
+    // Without an address there is no safe reverse lookup from a GitHub
+    // handle to the contributor's address/reputation/nonce keys. Evict the
+    // bounded contributor namespace even when the event includes a handle;
+    // otherwise an address-keyed representation can survive the write.
+    await Promise.all([
+      this.cacheService.invalidatePrefix('contributor-registry:address:'),
+      this.cacheService.invalidatePrefix('contributor-registry:github:'),
+      this.cacheService.invalidatePrefix('contributor-registry:reputation:'),
+      this.cacheService.invalidatePrefix('contributor-registry:nonce:'),
+    ]);
   }
 
   /**

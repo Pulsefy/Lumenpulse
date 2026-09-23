@@ -6,9 +6,14 @@ import {
   Param,
   UseInterceptors,
 } from '@nestjs/common';
-import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
+import { CacheKey, CacheTTL } from '@nestjs/cache-manager';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { ContractCapabilityService } from './contract-capability.service';
+import {
+  buildContractCapabilitiesCacheKey,
+  CONTRACT_CAPABILITIES_CACHE_KEY,
+} from '../cache/cache.constants';
+import { ObservedCacheInterceptor } from '../cache/observed-cache.interceptor';
 import {
   ContractCapabilityCatalogResponseDto,
   ContractCapabilityDto,
@@ -34,7 +39,8 @@ export class ContractsController {
    */
   @Get('capabilities')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(CacheInterceptor)
+  @UseInterceptors(ObservedCacheInterceptor)
+  @CacheKey(CONTRACT_CAPABILITIES_CACHE_KEY)
   @CacheTTL(300_000) // 5 minutes — contract capabilities rarely change at runtime
   @ApiOperation({
     summary: 'Get contract capability catalog',
@@ -62,7 +68,13 @@ export class ContractsController {
    */
   @Get('capabilities/:contractId')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(CacheInterceptor)
+  @UseInterceptors(ObservedCacheInterceptor)
+  @CacheKey((context) => {
+    const request = context
+      .switchToHttp()
+      .getRequest<{ params?: { contractId?: string } }>();
+    return buildContractCapabilitiesCacheKey(request.params?.contractId);
+  })
   @CacheTTL(300_000) // 5 minutes
   @ApiOperation({
     summary: 'Get capabilities for a specific contract',

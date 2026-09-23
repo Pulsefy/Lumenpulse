@@ -5,9 +5,11 @@ import {
   HttpStatus,
   UseInterceptors,
 } from '@nestjs/common';
-import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
+import { CacheKey, CacheTTL } from '@nestjs/cache-manager';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ConfigService } from './config.service';
+import { STELLAR_CONFIG_CACHE_KEY } from '../cache/cache.constants';
+import { ObservedCacheInterceptor } from '../cache/observed-cache.interceptor';
 import { StellarConfigResponseDto } from './dto/stellar-config.dto';
 
 @ApiTags('config')
@@ -25,7 +27,8 @@ export class ConfigController {
    */
   @Get('stellar')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(CacheInterceptor)
+  @UseInterceptors(ObservedCacheInterceptor)
+  @CacheKey(STELLAR_CONFIG_CACHE_KEY)
   @CacheTTL(300_000) // 5 minutes — config rarely changes at runtime
   @ApiOperation({
     summary: 'Get Stellar testnet/mainnet configuration',

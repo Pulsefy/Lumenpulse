@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { IngestSorobanEventDto } from './dto/ingest-soroban-event.dto';
 import { ProjectRegistryEntity } from '../database/entities/project-registry.entity';
+import { CacheService } from '../cache/cache.service';
 
 export const SOROBAN_EVENTS_QUEUE = 'soroban-events';
 export const PROCESS_EVENT_JOB = 'process-event';
@@ -28,6 +29,7 @@ export class SorobanEventsService {
 
     @InjectRepository(ProjectRegistryEntity)
     private readonly projectRepo: Repository<ProjectRegistryEntity>,
+    private readonly cacheService: CacheService,
   ) {}
 
   async ingest(
@@ -77,5 +79,8 @@ export class SorobanEventsService {
       },
       ['projectId'], // Conflict target prevents duplicate rows
     );
+    // Project detail responses include the derived contract-read state. The
+    // registry write changes the source version for that read-through entry.
+    await this.cacheService.invalidateContractById(projectId);
   }
 }

@@ -135,8 +135,17 @@ export class WarmCachePreloaderService {
       let errorMsg: string | undefined;
 
       try {
+        const generation = this.cacheService.getGeneration(route.cacheKey);
         const value = await route.loader();
-        await this.cacheService.set(route.cacheKey, value, route.ttlMs);
+        const stored = await this.cacheService.setIfCurrent(
+          route.cacheKey,
+          value,
+          route.ttlMs,
+          generation,
+        );
+        if (!stored) {
+          throw new Error('Cache was invalidated while the route was loading');
+        }
         success = true;
         this.incrementCounter(METRIC_PRELOAD_SUCCESS, { route: route.name });
         this.logger.log(

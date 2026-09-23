@@ -33,6 +33,7 @@ import {
 import { SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
 import { JobLockService } from '../scheduler/job-lock.service';
 import { JobHistoryService } from '../scheduler/job-history.service';
+import { CacheService } from '../cache/cache.service';
 
 const JOB_NAME = 'crowdfund-vault-sync';
 const MAX_LEDGER_RANGE_PER_RUN = 1000;
@@ -96,6 +97,7 @@ export class CrowdfundSyncService {
     private readonly jobHistory: JobHistoryService,
     private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
+    private readonly cacheService: CacheService,
   ) {}
 
   /**
@@ -175,6 +177,13 @@ export class CrowdfundSyncService {
         if (processed) {
           processedCount++;
         }
+      }
+
+      if (processedCount > 0) {
+        // The project detail read-through cache is derived from vault state;
+        // an indexed event changes that source even when the event processor
+        // only advances synchronization metadata.
+        await this.cacheService.invalidateContractById(vault.projectId);
       }
 
       // Update cursor
@@ -1234,12 +1243,20 @@ export class CrowdfundSyncService {
     });
 
     if (existing) {
+      const previousProjectId = existing.projectId;
       existing.isActive = true;
       existing.projectId = projectId;
       existing.contractAddress = contractAddress ?? existing.contractAddress;
       existing.tokenAddress = tokenAddress ?? existing.tokenAddress;
       existing.ownerAddress = ownerAddress ?? existing.ownerAddress;
-      return this.projectRepo.save(existing);
+      const saved = await this.projectRepo.save(existing);
+      const affectedProjectIds = new Set([previousProjectId, projectId]);
+      await Promise.all(
+        [...affectedProjectIds].map((id) =>
+          this.cacheService.invalidateContractById(id),
+        ),
+      );
+      return saved;
     }
 
     const vault = this.projectRepo.create({
@@ -1251,6 +1268,8 @@ export class CrowdfundSyncService {
       isActive: true,
     });
 
-    return this.projectRepo.save(vault);
+    const saved = await this.projectRepo.save(vault);
+    await this.cacheService.invalidateContractById(projectId);
+    return saved;
   }
 }

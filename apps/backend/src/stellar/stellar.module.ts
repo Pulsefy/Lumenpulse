@@ -14,6 +14,7 @@ import { MatchingPoolAdminController } from './controllers/matching-pool-admin.c
 import { TestnetBootstrapController } from './controllers/testnet-bootstrap.controller';
 import { TestnetBootstrapService } from './services/testnet-bootstrap.service';
 import { AppCacheModule } from '../cache/cache.module';
+import { ObservedCacheInterceptor } from '../cache/observed-cache.interceptor';
 import { BootstrapRunsModule } from '../bootstrap-runs/bootstrap-runs.module';
 
 @Module({
@@ -33,6 +34,7 @@ import { BootstrapRunsModule } from '../bootstrap-runs/bootstrap-runs.module';
   providers: [
     StellarService,
     SorobanRpcClientService,
+    ObservedCacheInterceptor,
     HorizonClientService,
     ContractRotationService,
     StellarContractRotationService,

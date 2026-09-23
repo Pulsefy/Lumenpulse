@@ -50,10 +50,11 @@ describe('SorobanRpcClientService simulation trace logging', () => {
       } as unknown as RequestContextService,
       new Registry(),
     );
-    (service as unknown as { server: { simulateTransaction: jest.Mock } }).server =
-      {
-        simulateTransaction: jest.fn().mockResolvedValue(simulationError),
-      };
+    (
+      service as unknown as { server: { simulateTransaction: jest.Mock } }
+    ).server = {
+      simulateTransaction: jest.fn().mockResolvedValue(simulationError),
+    };
 
     jest.spyOn(rpc.Api, 'isSimulationError').mockReturnValue(true);
     errorSpy = jest
@@ -70,7 +71,10 @@ describe('SorobanRpcClientService simulation trace logging', () => {
 
   it('logs request-scoped failed simulation summary without raw payloads', async () => {
     const tx = new TransactionBuilder(
-      new Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '1'),
+      new Account(
+        'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+        '1',
+      ),
       { fee: BASE_FEE, networkPassphrase: Networks.TESTNET },
     )
       .addOperation(
@@ -134,5 +138,172 @@ describe('SorobanRpcClientService simulation trace logging', () => {
     });
 
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('serves a read-only simulation until a state-changing write invalidates it', async () => {
+    jest.spyOn(rpc.Api, 'isSimulationError').mockReturnValue(false);
+    const simulation = {
+      latestLedger: 10,
+      result: {},
+    } as unknown as rpc.Api.SimulateTransactionResponse;
+    const server = {
+      getLatestLedger: jest.fn().mockResolvedValue({ sequence: 10 }),
+      simulateTransaction: jest.fn().mockResolvedValue(simulation),
+      sendTransaction: jest.fn().mockResolvedValue({
+        status: 'PENDING',
+        hash: 'tx-1',
+      }),
+    };
+    (service as unknown as { server: typeof server }).server = server;
+
+    const tx = new TransactionBuilder(
+      new Account(
+        'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+        '1',
+      ),
+      { fee: BASE_FEE, networkPassphrase: Networks.TESTNET },
+    )
+      .addOperation(
+        new Contract(
+          'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4',
+        ).call('balance'),
+      )
+      .setTimeout(30)
+      .build();
+
+    await service.simulateTransaction(tx, { isReadOnly: true, maxRetries: 0 });
+    await service.simulateTransaction(tx, { isReadOnly: true, maxRetries: 0 });
+    expect(server.simulateTransaction).toHaveBeenCalledTimes(1);
+
+    await service.sendTransaction(tx, { maxRetries: 0 });
+    await service.simulateTransaction(tx, { isReadOnly: true, maxRetries: 0 });
+    expect(server.simulateTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not restore a ledger response invalidated during a write', async () => {
+    jest.spyOn(rpc.Api, 'isSimulationError').mockReturnValue(false);
+    const simulation = {
+      latestLedger: 11,
+      result: {},
+    } as unknown as rpc.Api.SimulateTransactionResponse;
+    let releaseLedger!: (value: { sequence: number }) => void;
+    let markLedgerStarted!: () => void;
+    const ledgerStarted = new Promise<void>((resolve) => {
+      markLedgerStarted = resolve;
+    });
+    const pendingLedger = new Promise<{ sequence: number }>((resolve) => {
+      releaseLedger = resolve;
+    });
+    const server = {
+      getLatestLedger: jest
+        .fn()
+        .mockImplementationOnce(() => {
+          markLedgerStarted();
+          return pendingLedger;
+        })
+        .mockResolvedValue({ sequence: 11 }),
+      simulateTransaction: jest.fn().mockResolvedValue(simulation),
+      sendTransaction: jest.fn().mockResolvedValue({
+        status: 'PENDING',
+        hash: 'tx-ledger-race',
+      }),
+    };
+    (service as unknown as { server: typeof server }).server = server;
+
+    const tx = new TransactionBuilder(
+      new Account(
+        'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+        '1',
+      ),
+      { fee: BASE_FEE, networkPassphrase: Networks.TESTNET },
+    )
+      .addOperation(
+        new Contract(
+          'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4',
+        ).call('balance'),
+      )
+      .setTimeout(30)
+      .build();
+
+    const pending = service.simulateTransaction(tx, {
+      isReadOnly: true,
+      maxRetries: 0,
+    });
+    await ledgerStarted;
+    await service.sendTransaction(tx, { maxRetries: 0 });
+    releaseLedger({ sequence: 10 });
+    await pending;
+
+    await service.simulateTransaction(tx, {
+      isReadOnly: true,
+      maxRetries: 0,
+    });
+    expect(server.getLatestLedger).toHaveBeenCalledTimes(2);
+    expect(server.simulateTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not repopulate a simulation that was in flight during a write', async () => {
+    jest.spyOn(rpc.Api, 'isSimulationError').mockReturnValue(false);
+    const simulation = {
+      latestLedger: 10,
+      result: {},
+    } as unknown as rpc.Api.SimulateTransactionResponse;
+    let releaseSimulation!: (
+      value: rpc.Api.SimulateTransactionResponse,
+    ) => void;
+    let markSimulationStarted!: () => void;
+    const simulationStarted = new Promise<void>((resolve) => {
+      markSimulationStarted = resolve;
+    });
+    const pendingSimulation = new Promise<rpc.Api.SimulateTransactionResponse>(
+      (resolve) => {
+        releaseSimulation = resolve;
+      },
+    );
+    const server = {
+      getLatestLedger: jest.fn().mockResolvedValue({ sequence: 10 }),
+      simulateTransaction: jest
+        .fn()
+        .mockImplementationOnce(() => {
+          markSimulationStarted();
+          return pendingSimulation;
+        })
+        .mockResolvedValue(simulation),
+      sendTransaction: jest.fn().mockResolvedValue({
+        status: 'PENDING',
+        hash: 'tx-race',
+      }),
+    };
+    (service as unknown as { server: typeof server }).server = server;
+
+    const tx = new TransactionBuilder(
+      new Account(
+        'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+        '1',
+      ),
+      { fee: BASE_FEE, networkPassphrase: Networks.TESTNET },
+    )
+      .addOperation(
+        new Contract(
+          'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4',
+        ).call('balance'),
+      )
+      .setTimeout(30)
+      .build();
+
+    const pending = service.simulateTransaction(tx, {
+      isReadOnly: true,
+      maxRetries: 0,
+    });
+    await simulationStarted;
+    await service.sendTransaction(tx, { maxRetries: 0 });
+    releaseSimulation(simulation);
+    await pending;
+
+    await service.simulateTransaction(tx, {
+      isReadOnly: true,
+      maxRetries: 0,
+    });
+    expect(server.simulateTransaction).toHaveBeenCalledTimes(2);
   });
 });

@@ -8,6 +8,7 @@ import { NewsService } from './news.service';
 import { News } from './news.entity';
 import { NewsSentimentService } from './news-sentiment.services';
 import { AppCacheModule } from '../cache/cache.module';
+import { ObservedCacheInterceptor } from '../cache/observed-cache.interceptor';
 import { ProfilingModule } from '../common/profiling/profiling.module';
 import { SchedulerModule } from '../scheduler/scheduler.module';
 
@@ -23,7 +24,12 @@ import { SchedulerModule } from '../scheduler/scheduler.module';
     SchedulerModule,
   ],
   controllers: [NewsController],
-  providers: [NewsProviderService, NewsService, NewsSentimentService],
+  providers: [
+    NewsProviderService,
+    NewsService,
+    NewsSentimentService,
+    ObservedCacheInterceptor,
+  ],
   exports: [NewsProviderService, NewsService, NewsSentimentService],
 })
 export class NewsModule {}

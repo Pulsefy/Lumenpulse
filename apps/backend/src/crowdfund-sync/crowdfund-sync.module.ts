@@ -11,6 +11,7 @@ import { CrowdfundVaultProject } from './entities/crowdfund-vault-project.entity
 import { SorobanEventsModule } from '../soroban-events/soroban-events.module';
 import { StellarModule } from '../stellar/stellar.module';
 import { SchedulerModule } from '../scheduler/scheduler.module';
+import { AppCacheModule } from '../cache/cache.module';
 
 export const CROWDFUND_VAULT_QUEUE = 'crowdfund-vault-sync';
 
@@ -37,6 +38,7 @@ export const CROWDFUND_VAULT_QUEUE = 'crowdfund-vault-sync';
     SorobanEventsModule,
     StellarModule,
     SchedulerModule,
+    AppCacheModule,
   ],
   providers: [CrowdfundSyncService, CrowdfundSyncWorker],
   controllers: [CrowdfundSyncController],

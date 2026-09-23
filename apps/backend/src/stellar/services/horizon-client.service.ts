@@ -132,20 +132,23 @@ export class HorizonClientService {
     );
 
     const startTime = Date.now();
+    let requestStatus: 'success' | 'error' = 'success';
     try {
       const response = await this.instrumentedFetch(url, method);
       const data = (await response.json()) as
-        HorizonTransactionsResponse | HorizonErrorResponse;
+        | HorizonTransactionsResponse
+        | HorizonErrorResponse;
 
       if (!response.ok) {
         const errorDetail = (data as HorizonErrorResponse).detail;
         const errorMessage = errorDetail || 'Failed to fetch transactions';
-        this.metricsService.recordHorizonError(method, String(response.status));
+        const error = new Error(errorMessage) as Error & { status: number };
+        error.status = response.status;
         this.logger.error(
           { requestId, method, status: response.status, error: errorMessage },
           'Horizon API error',
         );
-        throw new Error(errorMessage);
+        throw error;
       }
 
       const horizonData = data as HorizonTransactionsResponse;
@@ -171,6 +174,7 @@ export class HorizonClientService {
         nextPage,
       };
     } catch (error) {
+      requestStatus = 'error';
       const durationMs = Date.now() - startTime;
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -188,7 +192,11 @@ export class HorizonClientService {
       throw error;
     } finally {
       const durationMs = Date.now() - startTime;
-      this.metricsService.recordHorizonRequest(method, 'success', durationMs);
+      this.metricsService.recordHorizonRequest(
+        method,
+        requestStatus,
+        durationMs,
+      );
     }
   }
 
@@ -206,17 +214,17 @@ export class HorizonClientService {
     );
 
     const startTime = Date.now();
+    let requestStatus: 'success' | 'error' = 'success';
     try {
       const response = await this.instrumentedFetch(url, method);
       const data = (await response.json()) as HorizonOperationsResponse;
 
       if (!response.ok) {
-        this.metricsService.recordHorizonError(method, String(response.status));
-        this.logger.error(
-          { requestId, method, status: response.status, transactionId },
-          'Failed to fetch operations',
-        );
-        return [];
+        const errorMessage =
+          (data as HorizonErrorResponse).detail || 'Failed to fetch operations';
+        const error = new Error(errorMessage) as Error & { status: number };
+        error.status = response.status;
+        throw error;
       }
 
       const operations = data._embedded?.records || [];
@@ -234,6 +242,7 @@ export class HorizonClientService {
 
       return operations;
     } catch (error) {
+      requestStatus = 'error';
       const durationMs = Date.now() - startTime;
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -248,10 +257,14 @@ export class HorizonClientService {
         'Failed to fetch operations from Horizon',
       );
 
-      return [];
+      throw error;
     } finally {
       const durationMs = Date.now() - startTime;
-      this.metricsService.recordHorizonRequest(method, 'success', durationMs);
+      this.metricsService.recordHorizonRequest(
+        method,
+        requestStatus,
+        durationMs,
+      );
     }
   }
 
