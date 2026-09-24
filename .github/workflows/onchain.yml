@@ -46,7 +46,10 @@ jobs:
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
 
-  
+    - name: Check for test modules
+      run: bash ../../scripts/check-contract-tests.sh
+
+
 
     - name: Build Contracts
       run: cargo build --target wasm32-unknown-unknown --release
