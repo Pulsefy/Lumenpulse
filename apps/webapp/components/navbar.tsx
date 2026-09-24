@@ -22,6 +22,7 @@ import { useStellarConfig } from "@/contexts/StellarConfigContext";
 import { useWallet } from "@/contexts/WalletContext";
 import { useExplorerUrl } from "@/hooks/useExplorerUrl";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { GlobalSearch } from "@/components/global-search";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -51,6 +52,11 @@ export function Navbar() {
                 priority
               />
             </Link>
+          </div>
+
+          {/* Global search — available on every page via navbar */}
+          <div className="hidden sm:block flex-1 max-w-md mx-4">
+            <GlobalSearch />
           </div>
 
           {/* Desktop Navigation */}
@@ -196,6 +202,9 @@ export function Navbar() {
       {isMenuOpen && (
         <div className="md:hidden bg-black/95 border-t border-primary/20 backdrop-blur-xl">
           <div className="container mx-auto px-4 py-4 space-y-2">
+            <div className="sm:hidden pb-2">
+              <GlobalSearch className="max-w-none" />
+            </div>
             <Link
               href="/news"
               className="flex items-center gap-3 p-3 rounded-lg text-white hover:bg-white/5 transition-all relative group"

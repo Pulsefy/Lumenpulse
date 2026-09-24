@@ -13,12 +13,14 @@ import MarketInsightsCard from "@/components/market-insights-card";
 import { useStellarAccount } from "@/hooks/useStellarAccount";
 import { useStellarWallet } from "@/app/providers";
 import { usePortfolioSnapshot } from "@/hooks/usePortfolioSnapshot";
+import { useSignals } from "@/hooks/useSignals";
+import SignalsPanel from "@/components/signals-panel";
 import { getExplorerUrl } from "@/lib/utils";
 
 export default function DashboardPage() {
   const router = useRouter();
   const { publicKey } = useStellarWallet();
-  const [selectedAsset, setSelectedAsset] = useState<{
+   const [selectedAsset, setSelectedAsset] = useState<{
     code: string;
     issuer?: string;
     balance: string;
@@ -38,6 +40,15 @@ export default function DashboardPage() {
     lastUpdatedLabel: portfolioLastUpdatedLabel,
     refresh: refreshPortfolio,
   } = usePortfolioSnapshot(publicKey);
+
+  const { data: signalsData, isLoading: isSignalsLoading, error: signalsError, isFresh: signalsIsFresh, ageLabel: signalsAgeLabel, refresh: refreshSignals, isAuthenticated: signalsAuthenticated } = useSignals();
+
+  const portfolioAssetCodes = portfolioSummary?.assets
+    ? portfolioSummary.assets.map((asset) => ({
+        code: asset.assetCode || "XLM",
+        issuer: asset.assetIssuer || undefined,
+      }))
+    : [];
 
   return (
     <>
@@ -292,6 +303,27 @@ export default function DashboardPage() {
                   isFresh={portfolioIsFresh}
                   lastUpdatedLabel={portfolioLastUpdatedLabel}
                   refresh={refreshPortfolio}
+                />
+              </div>
+
+              {/* Market Signals Panel — backed by the signals API */}
+              <div className="bg-gray-900/50 backdrop-blur-sm p-6 rounded-xl border border-white/10 shadow-xl col-span-1 md:col-span-2">
+                <SignalsPanel
+                  data={signalsData}
+                  isLoading={isSignalsLoading}
+                  error={signalsError}
+                  isFresh={signalsIsFresh}
+                  ageLabel={signalsAgeLabel}
+                  refresh={refreshSignals}
+                  isAuthenticated={signalsAuthenticated}
+                  assets={portfolioAssetCodes}
+                  onAssetSelect={(asset) =>
+                    setSelectedAsset({
+                      code: asset.code,
+                      issuer: asset.issuer,
+                      balance: "0",
+                    })
+                  }
                 />
               </div>
             </div>

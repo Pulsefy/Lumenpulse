@@ -25,6 +25,7 @@ import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 import { QueryReportsDto } from './dto/query-reports.dto';
 import { AssignReviewerDto } from './dto/assign-reviewer.dto';
+import { ContentReport } from './entities/content-report.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
@@ -52,7 +53,11 @@ export class ModerationController {
   @UsePipes(new ValidationPipe())
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Submit a content report' })
-  @ApiResponse({ status: 201, description: 'Report successfully created' })
+  @ApiResponse({
+    status: 201,
+    description: 'Report successfully created',
+    type: ContentReport,
+  })
   @ApiResponse({
     status: 400,
     description: 'Bad request - duplicate report or invalid data',
@@ -150,4 +155,3 @@ export class ModerationController {
     );
   }
 }
-

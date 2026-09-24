@@ -28,6 +28,10 @@ export class OutboxEvent {
   @Column({ type: 'jsonb' })
   payload: Record<string, unknown>;
 
+  /** Correlation ID carrying end-to-end trace across hops */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  correlationId: string | null;
+
   @Column({
     type: 'enum',
     enum: OutboxEventStatus,

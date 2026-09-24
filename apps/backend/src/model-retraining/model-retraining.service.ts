@@ -4,6 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
 import { config } from '../lib/config';
+import {
+  CORRELATION_ID_HEADER,
+  REQUEST_ID_HEADER,
+} from '../common/constants/request.constants';
+import { RequestContextService } from '../common/services/request-context.service';
 
 export interface RetrainResult {
   status: string;
@@ -61,7 +66,13 @@ export class ModelRetrainingService {
   }
 
   private get headers() {
-    return this.apiKey ? { 'X-API-Key': this.apiKey } : {};
+    const correlationId = RequestContextService.getCorrelationId();
+    const requestId = RequestContextService.getRequestId();
+    return {
+      ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {}),
+      [CORRELATION_ID_HEADER]: correlationId,
+      [REQUEST_ID_HEADER]: requestId,
+    };
   }
 
   /**

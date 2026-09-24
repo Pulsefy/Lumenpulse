@@ -76,8 +76,7 @@ export class FlagAuditLogResponseDto {
   previousEnabled: boolean | null;
 
   @ApiPropertyOptional({
-    description:
-      "Flag's enabled state after this mutation (null for removals)",
+    description: "Flag's enabled state after this mutation (null for removals)",
     example: true,
   })
   newEnabled: boolean | null;

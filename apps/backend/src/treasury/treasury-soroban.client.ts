@@ -15,7 +15,10 @@ import {
 import { config } from '../lib/config';
 import { BadRequestException } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
-import { SorobanRpcError, SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
+import {
+  SorobanRpcError,
+  SorobanRpcClientService,
+} from '../stellar/services/soroban-rpc-client.service';
 import {
   TreasuryNotConfiguredException,
   TreasuryRpcUnavailableException,
@@ -28,7 +31,6 @@ const NETWORK_PASSPHRASES = {
   testnet: Networks.TESTNET,
   mainnet: Networks.PUBLIC,
 } as const;
-
 
 /** How long to poll for transaction confirmation before giving up. */
 const TX_CONFIRMATION_TIMEOUT_MS = 30_000;
@@ -112,7 +114,9 @@ export class TreasurySorobanClient {
     const keypair = this.getAdminKeypair();
 
     try {
-      const sourceAccount = await this.sorobanRpc.getAccount(keypair.publicKey());
+      const sourceAccount = await this.sorobanRpc.getAccount(
+        keypair.publicKey(),
+      );
       if (!(sourceAccount instanceof Account)) {
         throw new Error('Failed to retrieve source account');
       }
@@ -137,7 +141,10 @@ export class TreasurySorobanClient {
 
       const simulation = await this.sorobanRpc.simulateTransaction(tx);
       if (rpc.Api.isSimulationError(simulation)) {
-        const errorMsg = typeof simulation.error === 'string' ? simulation.error : String(simulation.error);
+        const errorMsg =
+          typeof simulation.error === 'string'
+            ? simulation.error
+            : String(simulation.error);
         throw toTreasuryException(errorMsg, params.beneficiary);
       }
 
@@ -164,9 +171,10 @@ export class TreasurySorobanClient {
 
     const keypair = this.getAdminKeypair();
 
-
     try {
-      const sourceAccount = await this.sorobanRpc.getAccount(keypair.publicKey());
+      const sourceAccount = await this.sorobanRpc.getAccount(
+        keypair.publicKey(),
+      );
       if (!(sourceAccount instanceof Account)) {
         throw new Error('Failed to retrieve source account');
       }
@@ -189,7 +197,10 @@ export class TreasurySorobanClient {
 
       const simulation = await this.sorobanRpc.simulateTransaction(tx);
       if (rpc.Api.isSimulationError(simulation)) {
-        const errorMsg = typeof simulation.error === 'string' ? simulation.error : String(simulation.error);
+        const errorMsg =
+          typeof simulation.error === 'string'
+            ? simulation.error
+            : String(simulation.error);
         throw toTreasuryException(errorMsg, params.oldBeneficiary);
       }
 
@@ -252,8 +263,6 @@ export class TreasurySorobanClient {
     const contractId = this.getContractId();
     this.validateAddressOrThrow(beneficiary, 'beneficiary');
 
-
-
     try {
       const ledgerKey = xdr.LedgerKey.contractData(
         new xdr.LedgerKeyContractData({
@@ -267,7 +276,8 @@ export class TreasurySorobanClient {
         }),
       );
 
-      const response = await this.sorobanRpc.rawServer.getLedgerEntries(ledgerKey);
+      const response =
+        await this.sorobanRpc.rawServer.getLedgerEntries(ledgerKey);
       if (response.entries.length === 0) {
         return null;
       }

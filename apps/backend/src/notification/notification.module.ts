@@ -15,6 +15,7 @@ import { PushTokenController } from './push-token.controller';
 import { NotificationPreferenceController } from './notification-preference.controller';
 import { NotificationFanoutController } from './notification-fanout.controller';
 import { ProfilingModule } from '../common/profiling/profiling.module';
+import { MetricsModule } from '../metrics/metrics.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ProfilingModule } from '../common/profiling/profiling.module';
       WatchlistItem,
     ]),
     ProfilingModule,
+    MetricsModule,
   ],
   providers: [
     NotificationService,

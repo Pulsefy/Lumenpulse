@@ -15,6 +15,10 @@ import { MetricsModule } from '../metrics/metrics.module';
     WebhookVerificationService,
     WebhookVerificationGuard,
   ],
-  exports: [WebhookVerificationService, WebhookVerificationGuard],
+  exports: [
+    WebhookService,
+    WebhookVerificationService,
+    WebhookVerificationGuard,
+  ],
 })
 export class WebhookModule {}

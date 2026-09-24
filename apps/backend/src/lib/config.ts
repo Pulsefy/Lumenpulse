@@ -562,11 +562,7 @@ const envSchema = z
       .default(30_000),
     IDEMPOTENCY_CLEANUP_CRON: z.string().trim().default('0 3 * * *'),
 
-    SHUTDOWN_GRACE_PERIOD_MS: z.coerce
-      .number()
-      .int()
-      .min(0)
-      .default(15_000),
+    SHUTDOWN_GRACE_PERIOD_MS: z.coerce.number().int().min(0).default(15_000),
   })
   .superRefine((values, context) => {
     if (values.NODE_ENV === 'production' && !values.CORS_ORIGIN) {
@@ -919,10 +915,7 @@ const optionalSummary = [
   ['STELLAR_TIMEOUT', String(parsedEnv.STELLAR_TIMEOUT)],
   ['STELLAR_RETRY_ATTEMPTS', String(parsedEnv.STELLAR_RETRY_ATTEMPTS)],
   ['STELLAR_RETRY_DELAY', String(parsedEnv.STELLAR_RETRY_DELAY)],
-  [
-    'SOROBAN_SIMULATION_TRACE_LEVEL',
-    parsedEnv.SOROBAN_SIMULATION_TRACE_LEVEL,
-  ],
+  ['SOROBAN_SIMULATION_TRACE_LEVEL', parsedEnv.SOROBAN_SIMULATION_TRACE_LEVEL],
   [
     'STELLAR_CONTRACT_LUMEN_TOKEN',
     parsedEnv.STELLAR_CONTRACT_LUMEN_TOKEN ?? '(not set)',

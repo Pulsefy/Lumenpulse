@@ -307,7 +307,10 @@ export class VerificationService {
     return this.toSubmissionDto(this.getSubmissionRecord(projectId));
   }
 
-  listSubmissions(status?: SubmissionStatus, reviewerId?: string): ProjectSubmissionDto[] {
+  listSubmissions(
+    status?: SubmissionStatus,
+    reviewerId?: string,
+  ): ProjectSubmissionDto[] {
     return [...this.submissions.values()]
       .filter((submission) => !status || submission.status === status)
       .filter((submission) => {
@@ -415,7 +418,7 @@ export class VerificationService {
       'assign_submission_reviewer',
       assignerId,
       null,
-      { projectId, previousReviewerId, newReviewerId: reviewerId || null }
+      { projectId, previousReviewerId, newReviewerId: reviewerId || null },
     );
 
     return this.toSubmissionDto(submission);

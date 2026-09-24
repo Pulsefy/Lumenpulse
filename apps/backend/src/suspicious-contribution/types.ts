@@ -8,6 +8,7 @@ export interface ContributionJobPayload {
   amount: string;
   roundTotalContributions: string;
   contributorTotalInRound: string;
+  correlationId?: string;
 }
 
 export interface ContributionFinding {

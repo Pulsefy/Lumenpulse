@@ -6,7 +6,10 @@ import { rpc } from '@stellar/stellar-sdk';
 import { SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
 import { JobLockService } from '../scheduler/job-lock.service';
 import { JobHistoryService } from '../scheduler/job-history.service';
-import { SorobanEvent, SorobanEventStatus } from './entities/soroban-event.entity';
+import {
+  SorobanEvent,
+  SorobanEventStatus,
+} from './entities/soroban-event.entity';
 import { SorobanIndexerCursor } from './entities/soroban-indexer-cursor.entity';
 import { SorobanEventIndexerService } from './soroban-event-indexer.service';
 import { ReplaySorobanRangeDto } from './dto/replay-range.dto';
@@ -62,10 +65,7 @@ export class SorobanEventReplayService {
       );
     }
 
-    const run = await this.jobHistory.start(
-      REPLAY_JOB_NAME,
-      triggeredBy,
-    );
+    const run = await this.jobHistory.start(REPLAY_JOB_NAME, triggeredBy);
 
     try {
       const latestLedger = await this.fetchLatestLedger();
@@ -74,7 +74,15 @@ export class SorobanEventReplayService {
           indexed: 0,
           reason: 'rpc-unavailable',
         });
-        return this.buildResponse(0, 0, 0, dryRun, startLedger, endLedger, contractId ?? null);
+        return this.buildResponse(
+          0,
+          0,
+          0,
+          dryRun,
+          startLedger,
+          endLedger,
+          contractId ?? null,
+        );
       }
 
       // Clamp endLedger to the latest known ledger to avoid requesting future ledgers
@@ -88,7 +96,15 @@ export class SorobanEventReplayService {
           indexed: 0,
           upToDate: true,
         });
-        return this.buildResponse(0, 0, 0, dryRun, startLedger, endLedger, contractId ?? null);
+        return this.buildResponse(
+          0,
+          0,
+          0,
+          dryRun,
+          startLedger,
+          endLedger,
+          contractId ?? null,
+        );
       }
 
       this.logger.log(
@@ -273,8 +289,7 @@ export class SorobanEventReplayService {
       if (!topics || topics.length === 0) return null;
       const first = topics[0];
       const sym = first.sym?.();
-      if (sym)
-        return Buffer.isBuffer(sym) ? sym.toString('utf8') : String(sym);
+      if (sym) return Buffer.isBuffer(sym) ? sym.toString('utf8') : String(sym);
       const str = first.str?.();
       if (str) return str.toString('utf8');
       return null;
@@ -306,4 +321,3 @@ export class SorobanEventReplayService {
     };
   }
 }
-
