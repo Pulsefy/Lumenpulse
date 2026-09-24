@@ -847,6 +847,8 @@ class ComparisonLogResponse(BaseModel):
 class RollbackRequest(BaseModel):
     model_type: str
     target_version: Optional[str] = None  # If omitted, rollback to previous version
+    actor: str
+    reason: str
 
 
 class RollbackResponse(BaseModel):
@@ -1052,9 +1054,9 @@ async def model_rollback(
             ),
         )
 
-    # Promote the targeted version
-    from src.ml.model_registry import promote_model
-    promote_model(body.model_type, target)
+    # Rollback the targeted version
+    from src.ml.model_registry import rollback_model
+    rollback_model(body.model_type, target, body.actor, body.reason)
 
     # Also clear any shadow so it doesn't conflict
     if get_shadow_version(body.model_type):

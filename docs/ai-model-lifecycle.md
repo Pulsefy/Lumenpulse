@@ -390,7 +390,9 @@ Content-Type: application/json
 
 {
   "model_type": "price_predictor",
-  "target_version": "v1.4"    // OMIT to auto-select the version just before current
+  "target_version": "v1.4",   // OMIT to auto-select the version just before current
+  "actor": "admin_user",
+  "reason": "Model performance degraded in production"
 }
 ```
 
@@ -401,16 +403,18 @@ Implementation details of what the endpoint does ([server.py#L889-L969](file:///
 3. If `target_version` is omitted: auto-selects the version immediately before the current version in the sorted version list. If current is already the first (oldest), picks the next one (index 1 if available, else index 0).
 4. Validates target ≠ current live version (HTTP 400 if already live).
 5. Validates target exists in `available_versions` (HTTP 400 if not found).
-6. **Calls `promote_model(model_type, target)`** — this performs the atomic zero-downtime swap:
+6. **Calls `rollback_model(model_type, target, actor, reason)`** — this performs the atomic zero-downtime swap and audit logging:
+   - Verifies the target model exists and loads successfully.
    - Updates `current.json` atomically under RLock.
    - Hot-swaps `_live_models` and `_live_versions` in memory.
    - Invalidates the inference cache namespace.
+   - Logs an audited rollback event in `promotion_log.jsonl` with actor, reason, and versions.
 7. **Clears any registered shadow model** (`unregister_shadow()`) so the old shadow (which may be the bad model you're rolling back from or something conflicting) doesn't interfere.
 8. Response includes: `{ status: "rolled_back", previous_version, new_version, message }`.
 
 ### Step 3: Update Registry
 
-The rollback endpoint already updates the registry via `promote_model()`, which:
+The rollback endpoint already updates the registry via `rollback_model()`, which:
 
 1. **Atomically updates `current.json`** on disk (via temp file + `os.replace()`) under the RLock.
 2. **Updates in-memory caches** `_live_models[model_type]` and `_live_versions[model_type]` under the same RLock.
