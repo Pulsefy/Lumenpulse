@@ -6,6 +6,7 @@ import {
   SorobanErrorCode,
   SorobanRpcError,
 } from '../services/soroban-rpc-client.service';
+import errorReference from './error-reference.json';
 
 export interface SorobanApiError {
   code: ErrorCode;
@@ -102,12 +103,19 @@ export function mapContractDiagnosticToError(
       return toVestingWalletException(message, beneficiary);
     default: {
       const contractErrorCode = extractContractErrorCode(message);
+      let finalMessage = message;
+      if (contractErrorCode !== null) {
+        const ref = (errorReference as any)[contractErrorCode.toString()];
+        if (ref) {
+          finalMessage = ref.message;
+        }
+      }
       const details =
         contractErrorCode !== null ? { contractErrorCode } : undefined;
       return new HttpException(
         {
           code: ErrorCode.STEL_SIMULATION_FAILED,
-          message,
+          message: finalMessage,
           details,
         },
         HttpStatus.BAD_REQUEST,

@@ -4,34 +4,34 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum TreasuryError {
-    NotInitialized = 1,
-    AlreadyInitialized = 2,
-    Unauthorized = 3,
-    InvalidAmount = 4,
-    InvalidDuration = 5,
-    InvalidStartTime = 6,
-    StreamNotFound = 7,
-    NothingToClaim = 8,
-    Reentrancy = 9,
-    AlreadyExecuted = 10,
-    SameBeneficiary = 11,
+    NotInitialized = 2100,
+    AlreadyInitialized = 2101,
+    Unauthorized = 2102,
+    InvalidAmount = 2103,
+    InvalidDuration = 2104,
+    InvalidStartTime = 2105,
+    StreamNotFound = 2106,
+    NothingToClaim = 2107,
+    Reentrancy = 2108,
+    AlreadyExecuted = 2109,
+    SameBeneficiary = 2110,
     // ── Multisig proposal errors ──────────────────────────────
-    ProposalNotFound = 12,
-    ProposalNotApproved = 13,
-    ProposalAlreadySigned = 14,
-    ProposalExpired = 15,
-    ProposalNotActive = 16,
-    WrongProposalAction = 17,
-    InvalidMultisigConfig = 18,
-    TooManySigners = 19,
+    ProposalNotFound = 2111,
+    ProposalNotApproved = 2112,
+    ProposalAlreadySigned = 2113,
+    ProposalExpired = 2114,
+    ProposalNotActive = 2115,
+    WrongProposalAction = 2116,
+    InvalidMultisigConfig = 2117,
+    TooManySigners = 2118,
     // ── Cliff / schedule preview errors ───────────────────────
     /// Cliff time supplied for a stream was invalid: not yet at start_time,
     /// or cliff_time + step would overflow u64.
-    InvalidCliffTime = 20,
+    InvalidCliffTime = 2119,
     /// A preview query received a zero step or step > max allowed.
-    InvalidScheduleStep = 21,
+    InvalidScheduleStep = 2120,
     /// preview_schedule asked for too many entries (caps iteration cost).
-    TooManyInstallments = 22,
+    TooManyInstallments = 2121,
     /// Total unreleased obligations across all streams exceed held balance.
-    Insolvent = 23,
+    Insolvent = 2122,
 }

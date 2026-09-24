@@ -4,14 +4,14 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum ContractError {
-    AlreadyInitialized = 1,
-    Unauthorized = 2,
-    NotInitialized = 3,
+    AlreadyInitialized = 2200,
+    Unauthorized = 2201,
+    NotInitialized = 2202,
 
-    OperationAlreadyQueued = 4,
-    OperationNotFound = 5,
-    OperationNotReady = 6,
-    OperationExpired = 7,
+    OperationAlreadyQueued = 2203,
+    OperationNotFound = 2204,
+    OperationNotReady = 2205,
+    OperationExpired = 2206,
 
-    InvalidDelay = 8,
+    InvalidDelay = 2207,
 }
