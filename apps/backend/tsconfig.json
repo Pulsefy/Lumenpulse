@@ -20,6 +20,6 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
-    "ignoreDeprecations": "6.0"
+    "ignoreDeprecations": ["6.0"]
   }
 }
