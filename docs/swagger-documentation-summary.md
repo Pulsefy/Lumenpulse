@@ -99,7 +99,7 @@ All DTOs have been enhanced with `@ApiProperty()` decorators:
 
 #### 4. Documentation
 
-Three comprehensive documentation files created in `document/` folder:
+Three comprehensive documentation files created in `docs/` folder:
 
 1. **`api-documentation-guide.md`** (User-facing)
    - Complete API reference
@@ -316,7 +316,7 @@ openapi-generator-cli generate \
 ✅ All DTOs have `@ApiProperty` with descriptions and example values
 ✅ Error responses (400, 401, 404) are documented using `@ApiResponse`
 ✅ The generated Swagger UI (`/api/docs`) is complete and usable for testing endpoints
-✅ Documentation artifacts placed in `document/` folder
+✅ Documentation artifacts placed in `docs/` folder
 
 ## Next Steps
 

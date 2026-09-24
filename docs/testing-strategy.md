@@ -465,7 +465,7 @@ Baselines recorded in §3 and coverage thresholds in §3.2 are **floors**, not t
 3. Mobile coverage thresholds are reviewed quarterly; the numbers in `jest.config.js` should march upward as pure logic migrates from screens into `lib/`.
 4. Once webapp coverage is wired to a numeric floor, it should follow the same quarterly raise model as mobile.
 
-Proposals to change any minimum bar, add a new layer (e.g. browser E2E with Playwright, Detox mobile E2E, fuzz testing), or to permanently lower any threshold must be filed as an ADR under `doc/adr/` and referenced in this document.
+Proposals to change any minimum bar, add a new layer (e.g. browser E2E with Playwright, Detox mobile E2E, fuzz testing), or to permanently lower any threshold must be filed as an ADR under `docs/adr/` and referenced in this document.
 
 ---
 

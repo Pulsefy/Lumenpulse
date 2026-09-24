@@ -129,7 +129,7 @@ The PR is now ready for merge. All CI checks pass both locally and on GitHub Act
 - ✅ Privacy enforcement: `toPublicPayload()` excludes all reviewer-only fields
 - ✅ Type safety: Proper error handling with type guards
 - ✅ Test coverage: 19 tests covering privacy, functionality, and reliability
-- ✅ Documentation: Complete consumer guide in `document/moderation-events.md`
+- ✅ Documentation: Complete consumer guide in `docs/moderation-events.md`
 - ✅ No breaking changes: Existing moderation API unchanged
 
 ---

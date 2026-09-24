@@ -4,7 +4,7 @@
 **Audience**: On-call engineers, incident leads, and maintainers
 **Purpose**: Provide a consistent, reusable structure for documenting incident postmortems so that every incident produces actionable learnings and traceable follow-up tasks.
 
-> **How to use this template**: Copy this file, rename it to `POSTMORTEM-<YYYY-MM-DD>-<short-title>.md`, place it under `document/postmortems/`, and fill in every section. Remove this callout block before publishing.
+> **How to use this template**: Copy this file, rename it to `POSTMORTEM-<YYYY-MM-DD>-<short-title>.md`, place it under `docs/postmortems/`, and fill in every section. Remove this callout block before publishing.
 
 ---
 

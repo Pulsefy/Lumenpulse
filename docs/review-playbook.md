@@ -108,7 +108,7 @@ Use the checklist that matches the changed area. Skip sections that do not apply
 - [ ] `cargo test --workspace` passes, including edge-case tests.
 - [ ] Contract storage keys and types remain backward-compatible (no silent breaking changes).
 - [ ] Events and errors are explicit and documented for on-chain observability.
-- [ ] Interface-impacting changes are documented in `document/SMART_CONTRACTS.md`.
+- [ ] Interface-impacting changes are documented in `docs/SMART_CONTRACTS.md`.
 - [ ] No unchecked arithmetic — `overflow-checks = true` is preserved in `Cargo.toml`.
 
 ### 3.4 Data Processing
@@ -122,7 +122,7 @@ Use the checklist that matches the changed area. Skip sections that do not apply
 ### 3.5 Documentation
 
 - [ ] Spelling and grammar are correct.
-- [ ] File is placed in `document/` (project-level guides) or alongside the relevant code (area-specific).
+- [ ] File is placed in `docs/` (project-level guides) or alongside the relevant code (area-specific).
 - [ ] Links to other docs, issues, or code are valid.
 - [ ] No redundant duplication of information that lives elsewhere — prefer linking.
 

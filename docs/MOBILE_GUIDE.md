@@ -456,4 +456,4 @@ pnpm expo run:ios       # builds and installs dev client on simulator
 
 ---
 
-*For questions about the backend API, see `apps/backend/README.md`. For the overall architecture, see `document/ARCHITECTURE.md`.*
+*For questions about the backend API, see `apps/backend/README.md`. For the overall architecture, see `docs/ARCHITECTURE.md`.*

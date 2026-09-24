@@ -123,7 +123,7 @@ The migration shifted to Soroban-specific patterns:
 - [Soroban Documentation](https://soroban.stellar.org/)
 - [Stellar Developer Docs](https://developers.stellar.org/)
 - [SEP-41 Token Standard](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md)
-- [LumenPulse Contract Reference](document/SMART_CONTRACTS.md)
+- [LumenPulse Contract Reference](SMART_CONTRACTS.md)
 
 ## Questions?
 

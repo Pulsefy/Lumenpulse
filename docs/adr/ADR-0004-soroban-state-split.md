@@ -39,5 +39,5 @@ This preserves upgrade boundaries and makes it easier to reason about which cont
 ## Related implementation summaries
 
 - [apps/onchain/IMPLEMENTATION_SUMMARY.md](../../apps/onchain/IMPLEMENTATION_SUMMARY.md)
-- [document/SMART_CONTRACTS.md](../../document/SMART_CONTRACTS.md)
+- [docs/SMART_CONTRACTS.md](../SMART_CONTRACTS.md)
 - [apps/backend/IMPLEMENTATION_SUMMARY_CONTRACT_ROTATION.md](../../apps/backend/IMPLEMENTATION_SUMMARY_CONTRACT_ROTATION.md)

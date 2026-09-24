@@ -40,4 +40,4 @@ The implementation aligns with a clear separation between proposing an action an
 
 - [apps/backend/IMPLEMENTATION_SUMMARY_CONTRACT_ROTATION.md](../../apps/backend/IMPLEMENTATION_SUMMARY_CONTRACT_ROTATION.md)
 - [apps/backend/FEATURE_CONTRACT_ROTATION.md](../../apps/backend/FEATURE_CONTRACT_ROTATION.md)
-- [document/SMART_CONTRACTS.md](../../document/SMART_CONTRACTS.md)
+- [docs/SMART_CONTRACTS.md](../SMART_CONTRACTS.md)

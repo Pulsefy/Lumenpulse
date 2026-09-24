@@ -19,15 +19,15 @@ Designed for crypto enthusiasts, traders, and developers worldwide, LumenPulse s
 
 ## Local Development
 
-For a step-by-step guide to running the complete LumenPulse stack locally—including wallet setup, Soroban tooling, environment variables, seeded data, and service startup order—see **[document/LOCAL_SETUP.md](document/LOCAL_SETUP.md)**.
+For a step-by-step guide to running the complete LumenPulse stack locally—including wallet setup, Soroban tooling, environment variables, seeded data, and service startup order—see **[docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md)**.
 
 ## Migration Notes
 
-LumenPulse has migrated to Stellar/Soroban architecture. For details on changes from prior chain assumptions, completed migrations, and legacy cleanup, see [Stellar Migration Notes](document/STELLAR_MIGRATION_NOTES.md).
+LumenPulse has migrated to Stellar/Soroban architecture. For details on changes from prior chain assumptions, completed migrations, and legacy cleanup, see [Stellar Migration Notes](docs/STELLAR_MIGRATION_NOTES.md).
 
 ## Architecture Decisions
 
-The repository keeps design rationale alongside implementation notes. The ADR log captures why key choices were made and which trade-offs were considered: [doc/adr/README.md](doc/adr/README.md).
+The repository keeps design rationale alongside implementation notes. The ADR log captures why key choices were made and which trade-offs were considered: [docs/adr/README.md](docs/adr/README.md).
 
 Related implementation summaries remain cross-referenced there so the historical write-ups and the decision records stay connected.
 

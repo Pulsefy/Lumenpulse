@@ -230,7 +230,7 @@ xcrun simctl openurl booted "exp+{your-project-slug}://grants/1"
 | `app/_layout.tsx` | Added `<DeepLinkProvider>` to provider tree |
 | `app/(tabs)/grants/[id].tsx` | Wrapped with `<ProtectedRoute>` to prevent auth race condition |
 | `app/(tabs)/grants/index.tsx` | Wrapped with `<ProtectedRoute>` for consistency |
-| `document/QA_DEEP_LINKING.md` | **NEW** — This document |
+| `docs/QA_DEEP_LINKING.md` | **NEW** — This document |
 
 ## Limitations
 

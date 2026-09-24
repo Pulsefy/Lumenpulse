@@ -6,13 +6,13 @@ Thanks for contributing. This guide defines the standards expected before review
 
 Use this document for repo-wide workflow and standards. For area-specific commands and architecture notes:
 
-- [Mobile Guide](document/mobile-contributing.md)
-- [Backend Guide](document/backend-contributing.md)
-- [Contracts Guide](document/contracts-contributing.md)
+- [Mobile Guide](docs/mobile-contributing.md)
+- [Backend Guide](docs/backend-contributing.md)
+- [Contracts Guide](docs/contracts-contributing.md)
 
 ## Platform Direction
 
-LumenPulse operates on Stellar/Soroban. All new work should align with Stellar-first principles. See [Stellar Migration Notes](document/STELLAR_MIGRATION_NOTES.md) for details on migration from prior chain assumptions and guidance for contributors.
+LumenPulse operates on Stellar/Soroban. All new work should align with Stellar-first principles. See [Stellar Migration Notes](docs/STELLAR_MIGRATION_NOTES.md) for details on migration from prior chain assumptions and guidance for contributors.
 
 ## How to Contribute
 
@@ -40,7 +40,7 @@ git checkout -b docs/short-description
 - Update docs when behavior, setup, or usage changes.
 - Add or update an ADR when the change introduces or revises a significant architectural decision, platform boundary, operational pattern, or contract/governance approach.
 
-When an issue changes how services are split, how the backend integrates with Python or external systems, how on-chain state or upgradeability works, or what persistence/eventing pattern is used, the PR should include an ADR entry in [doc/adr/README.md](doc/adr/README.md) and link the related implementation summary or feature write-up.
+When an issue changes how services are split, how the backend integrates with Python or external systems, how on-chain state or upgradeability works, or what persistence/eventing pattern is used, the PR should include an ADR entry in [docs/adr/README.md](docs/adr/README.md) and link the related implementation summary or feature write-up.
 
 4. Run validation locally
 - Run the relevant lint/test commands for your area:
@@ -82,7 +82,7 @@ docs(meta): add comprehensive contributing guidelines and standards
 - [ ] Commit messages follow Conventional Commits.
 - [ ] Lint passed for affected app(s).
 - [ ] Tests passed for affected app(s).
-- [ ] Docs updated (including `document/` guides when applicable).
+- [ ] Docs updated (including `docs/` guides when applicable).
 - [ ] PR description links the issue (`Closes #...`).
 - [ ] Screenshots/video attached for UI changes.
 
@@ -95,6 +95,12 @@ A contribution is done when all conditions are met:
 - [ ] Required documentation updates are included.
 - [ ] PR checklist is fully completed.
 - [ ] Reviewer feedback is resolved and approved.
+
+## Documentation Guidelines
+
+- All documentation must live in `/docs`
+- Do not create new documentation directories
+- Update `docs/README.md` when adding new documents
 
 ## Review Standards
 

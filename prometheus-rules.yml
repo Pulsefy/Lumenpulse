@@ -115,7 +115,7 @@ groups:
         annotations:
           summary: 'Reconciliation drift warning'
           description: '{{ .Labels.dataset }} has recorded warning-level drift breaches in the last 10 minutes'
-          runbook: 'document/RECONCILIATION_ALERTING_RUNBOOK.md'
+          runbook: 'docs/RECONCILIATION_ALERTING_RUNBOOK.md'
 
       - alert: ReconciliationDriftCritical
         expr: |
@@ -129,7 +129,7 @@ groups:
         annotations:
           summary: 'Critical reconciliation drift'
           description: '{{ .Labels.dataset }} has recorded critical drift breaches in the last 10 minutes'
-          runbook: 'document/RECONCILIATION_ALERTING_RUNBOOK.md'
+          runbook: 'docs/RECONCILIATION_ALERTING_RUNBOOK.md'
 
       # ====================
       # Ingestion Dataset SLA Alerts
