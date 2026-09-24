@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: lumenpulse-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus-rules.yml:/etc/prometheus/prometheus-rules.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: lumenpulse-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: lumenpulse-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_DASHBOARDS_DEFAULT_HOME_PATH=/var/lib/grafana/dashboards/lumenpulse.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./lumenpulse-grafana-dashboard.json:/var/lib/grafana/dashboards/lumenpulse.json
+    restart: unless-stopped
+  postgres_exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    container_name: lumenpulse-postgres-exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://lumenpulse:lumenpulse@postgres:5432/lumenpulse?sslmode=disable
+    ports:
+      - "9187:9187"
+    restart: unless-stopped
+
+  redis_exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: lumenpulse-redis-exporter
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "9121:9121"
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:

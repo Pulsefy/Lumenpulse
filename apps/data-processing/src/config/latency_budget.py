@@ -74,9 +74,10 @@ def get_budgets() -> Dict[str, int]:
     return {path: get_budget_ms(path) for path in _ENDPOINT_DEFAULTS_MS}
 
 
-def record_latency(path: str, method: str, duration_seconds: float) -> bool:
+def record_latency(path: str, method: str, duration_seconds: float, model_version: str = "unknown") -> bool:
     """
     Record request latency and flag breaches of the endpoint budget.
+    Also records the model version used for the request.
 
     Observes the Prometheus latency histogram and increments the breach
     counter when ``duration_seconds`` exceeds the configured budget.
@@ -85,13 +86,19 @@ def record_latency(path: str, method: str, duration_seconds: float) -> bool:
         path: Request path (e.g. ``/analyze``).
         method: HTTP method (e.g. ``POST``).
         duration_seconds: End-to-end request duration in seconds.
+        model_version: Version identifier of the model handling the request.
 
     Returns:
         True when the request breached the latency budget, False otherwise.
     """
+    # Record latency metric
     INFERENCE_LATENCY_SECONDS.labels(endpoint=path, method=method).observe(
         duration_seconds
     )
+    # Log model version for observability (optional separate metric could be added)
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Latency recorded for path={path}, method={method}, model_version={model_version}, duration_s={duration_seconds}")
     breached = (duration_seconds * 1000.0) > get_budget_ms(path)
     if breached:
         INFERENCE_LATENCY_BUDGET_BREACHES_TOTAL.labels(
