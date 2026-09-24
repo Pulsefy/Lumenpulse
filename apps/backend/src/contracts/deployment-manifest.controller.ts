@@ -131,6 +131,27 @@ export class DeploymentManifestController {
     return this.manifestService.findOne(id);
   }
 
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, ContractAdminGuard, ContractAdminTrustedCallerGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiSecurity({ [JWT_SECURITY_SCHEME]: [], [API_KEY_SECURITY_SCHEME]: [] })
+  @ApiOperation({
+    summary: 'Refresh active contract deployment manifest from disk (admin only)',
+    description:
+      'Forces a reload of the testnet-manifest.json file to update contract IDs and caches.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Manifest refreshed successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Requires admin role' })
+  async refreshManifest(): Promise<{ message: string }> {
+    await this.manifestService.refreshManifest();
+    return { message: 'Manifest refresh triggered' };
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard, ContractAdminGuard, ContractAdminTrustedCallerGuard)
