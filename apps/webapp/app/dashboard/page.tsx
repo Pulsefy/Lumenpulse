@@ -52,8 +52,9 @@ export default function DashboardPage() {
     : [];
 
   return (
-    <>
-      <div className="min-h-screen bg-black text-white p-8">
+    <WatchlistProvider>
+      <>
+        <div className="min-h-screen bg-black text-white p-8">
         {selectedAsset ? (
           <AssetDetail
             code={selectedAsset.code}
@@ -337,5 +338,6 @@ export default function DashboardPage() {
         )}
       </div>
     </>
+  </WatchlistProvider>
   );
 }
