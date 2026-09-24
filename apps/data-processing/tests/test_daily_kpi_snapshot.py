@@ -128,8 +128,9 @@ def test_postgres_service_snapshot_methods(sqlite_db_service):
     assert created_dup is False
     assert s_obj_dup.id == s_obj.id
 
-    # Test retrieving snapshots
-    snapshots = sqlite_db_service.get_daily_onchain_kpi_snapshots(period="daily")
+    # Test retrieving snapshots (paginated tuple: items, total)
+    snapshots, total = sqlite_db_service.get_daily_onchain_kpi_snapshots(period="daily")
+    assert total == 1
     assert len(snapshots) == 1
     assert snapshots[0].snapshot_date == "2026-07-20"
 

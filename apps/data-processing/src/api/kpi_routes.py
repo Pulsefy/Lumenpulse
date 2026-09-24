@@ -13,12 +13,17 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Response
 from pydantic import BaseModel, Field
 
 from src.utils.logger import setup_logger
 from src.kpi_computer import KPIComputer, get_current_kpis, get_kpi_history
 from src.security import verify_admin_token
+from src.utils.pagination import (
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    pagination_headers,
+)
 
 logger = setup_logger(__name__)
 
@@ -75,6 +80,7 @@ async def get_latest_kpis() -> KPIResponse:
 
 @router.get("/series", response_model=List[KPISeriesResponse])
 async def get_kpi_series(
+    response: Response,
     start_date: Optional[str] = Query(
         None,
         description="Start date in YYYY-MM-DD format"
@@ -87,19 +93,24 @@ async def get_kpi_series(
         "daily",
         description="Period granularity (daily, hourly)"
     ),
+    limit: int = Query(
+        DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=MAX_PAGE_SIZE,
+        description=f"Page size (max {MAX_PAGE_SIZE}; uncapped responses are rejected)",
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Number of rows to skip (stable ascending date order)",
+    ),
 ) -> List[KPISeriesResponse]:
     """
-    Get KPI time series data.
+    Get KPI time series data with pagination and a hard max page size (#1458).
 
-    Args:
-        start_date: Start date (inclusive)
-        end_date: End date (inclusive)
-        period: Time period granularity
-
-    Returns:
-        List of KPI snapshots over time.
+    Response headers: X-Total-Count, X-Limit, X-Offset, X-Has-More, X-Max-Page-Size.
+    Ordering is stable: snapshot_date ASC, id ASC.
     """
-    # Validate date formats
     if start_date:
         try:
             datetime.strptime(start_date, "%Y-%m-%d")
@@ -108,7 +119,7 @@ async def get_kpi_series(
                 status_code=400,
                 detail="start_date must be in YYYY-MM-DD format"
             )
-    
+
     if end_date:
         try:
             datetime.strptime(end_date, "%Y-%m-%d")
@@ -117,10 +128,19 @@ async def get_kpi_series(
                 status_code=400,
                 detail="end_date must be in YYYY-MM-DD format"
             )
-    
-    history = get_kpi_history(start_date=start_date, end_date=end_date)
-    
-    # Convert to response model
+
+    history, total = get_kpi_history(
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+        offset=offset,
+    )
+
+    for key, value in pagination_headers(
+        total=total, limit=limit, offset=offset, returned=len(history)
+    ).items():
+        response.headers[key] = value
+
     return [KPISeriesResponse(**item) for item in history]
 
 
