@@ -18,7 +18,7 @@ mod errors;
 pub mod safe_view;
 pub mod token_helpers;
 
-pub use admin_helpers::{get_admin, require_admin};
+pub use admin_helpers::{get_admin, require_admin, is_initialized};
 pub use errors::ViewError;
 pub use safe_view::{has_state, read_state, read_state_with_default};
 pub use token_helpers::{allowance, balance, token_info};
