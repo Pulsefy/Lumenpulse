@@ -139,6 +139,7 @@ from src.api.kpi_routes import router as kpi_router
 from src.api.account_operation_routes import router as account_operation_router
 from src.api.lineage_routes import router as lineage_router
 from src.api.job_routes import router as job_router
+from src.api.pipeline_topology_routes import router as pipeline_topology_router
 
 app.include_router(ingestion_quality_router)
 app.include_router(review_queue_router)
@@ -149,6 +150,7 @@ app.include_router(rebuild_router)  # Rebuild routes for admin
 app.include_router(sentiment_label_router)
 app.include_router(lineage_router)  # Feature/KPI lineage graph (#1254)
 app.include_router(job_router)  # Async analytics job status (#1248)
+app.include_router(pipeline_topology_router)  # Scheduler-derived pipeline topology (#1451)
 
 
 try:
@@ -346,6 +348,7 @@ async def root(request: Request) -> Dict[str, Any]:
             "GET /model/status": "Get model registry status (Admin only, requires X-API-Key header)",
             # Async analytics job queue (Issue #1248)
             "GET /api/jobs/{job_id}": "Poll the status/result of a job submitted to /retrain, /correlation/analyze, /correlation/lag-analysis, or /analytics/kpis/daily-snapshots/run (requires X-API-Key header)",
+            "GET /api/pipeline/topology": "Return the scheduler-derived pipeline stages, dependencies, schedules, and last run state (requires X-API-Key header)",
             # Shadow-mode deployment (Issue #1256)
             "POST /model/shadow/register": "Register a candidate model for shadow evaluation (Admin only)",
             "POST /model/shadow/promote": "Promote shadow model to live (Admin only)",

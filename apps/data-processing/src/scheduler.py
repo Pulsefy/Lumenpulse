@@ -4,6 +4,7 @@ Job scheduler module - schedules and manages background jobs
 """
 
 import os
+from typing import Any, Dict, List, Optional
 from src.utils.logger import setup_logger
 from src.utils.metrics import JOBS_RUN_TOTAL
 from datetime import datetime
@@ -33,6 +34,54 @@ from src.kpi_reconciliation import KPIReconciler
 
 
 logger = setup_logger(__name__)
+
+_STAGE_RUN_STATE: Dict[str, Dict[str, Any]] = {}
+_GLOBAL_SCHEDULER: Optional["AnalyticsScheduler"] = None
+
+
+def set_global_scheduler(scheduler: "AnalyticsScheduler") -> None:
+    """Register the live scheduler instance for API inspection."""
+    global _GLOBAL_SCHEDULER
+    _GLOBAL_SCHEDULER = scheduler
+
+
+def get_global_scheduler() -> Optional["AnalyticsScheduler"]:
+    """Return the currently registered scheduler instance, if any."""
+    return _GLOBAL_SCHEDULER
+
+
+def _record_stage_run(stage_id: str, func):
+    """Wrap a scheduled function so stage execution state is captured."""
+
+    def wrapped(*args, **kwargs):
+        started_at = datetime.utcnow()
+        _STAGE_RUN_STATE[stage_id] = {
+            "last_run": started_at.isoformat(),
+            "duration_seconds": None,
+            "outcome": "running",
+            "error": None,
+        }
+        try:
+            result = func(*args, **kwargs)
+            duration = (datetime.utcnow() - started_at).total_seconds()
+            _STAGE_RUN_STATE[stage_id] = {
+                "last_run": started_at.isoformat(),
+                "duration_seconds": round(duration, 3),
+                "outcome": "success",
+                "error": None,
+            }
+            return result
+        except Exception as exc:  # pragma: no cover - scheduler-level failure tracking
+            duration = (datetime.utcnow() - started_at).total_seconds()
+            _STAGE_RUN_STATE[stage_id] = {
+                "last_run": started_at.isoformat(),
+                "duration_seconds": round(duration, 3),
+                "outcome": "failed",
+                "error": str(exc),
+            }
+            raise
+
+    return wrapped
 
 
 class MarketAnalyzer:
@@ -415,151 +464,150 @@ class AnalyticsScheduler:
         self.analyzer = MarketAnalyzer()
         # Allow injecting a custom pipeline function (used by main.py)
         self._pipeline_fn = pipeline_fn
+        set_global_scheduler(self)
+
+    def _get_stage_definitions(self) -> List[Dict[str, Any]]:
+        """Return the canonical scheduler topology config used to register jobs."""
+        run_fn = self._pipeline_fn if self._pipeline_fn else self.analyzer.run
+        alerting_interval = int(os.getenv("INGESTION_ALERT_INTERVAL_MINUTES", "5"))
+        feature_drift_interval = int(os.getenv("FEATURE_DRIFT_INTERVAL_HOURS", "6"))
+        contract_lag_interval = int(os.getenv("CONTRACT_LAG_INTERVAL_MINUTES", "5"))
+
+        return [
+            {
+                "id": "market_analyzer_hourly",
+                "name": "Market Analyzer - Hourly Analytics",
+                "func": run_fn,
+                "schedule": "every 1 hour",
+                "dependencies": [],
+                "trigger": IntervalTrigger(hours=1),
+            },
+            {
+                "id": "stellar_ingestion_quality_checks_hourly",
+                "name": "Stellar Ingestion Quality Checks - Hourly",
+                "func": _ingestion_quality_checks_job,
+                "schedule": "every 1 hour",
+                "dependencies": ["market_analyzer_hourly"],
+                "trigger": IntervalTrigger(hours=1),
+            },
+            {
+                "id": "ingestion_lag_alerting",
+                "name": "Indexer Lag and Source Failure Alerting",
+                "func": _ingestion_alerting_job,
+                "schedule": f"every {alerting_interval} minutes",
+                "dependencies": ["stellar_ingestion_quality_checks_hourly"],
+                "trigger": IntervalTrigger(minutes=alerting_interval),
+            },
+            {
+                "id": "model_retraining_daily",
+                "name": "Automated Model Retraining - Daily",
+                "func": _retraining_job,
+                "schedule": "cron: 02:00 UTC",
+                "dependencies": ["market_analyzer_hourly", "feature_drift_detection", "kpi_reconciliation"],
+                "trigger": CronTrigger(hour=2, minute=0, timezone="UTC"),
+            },
+            {
+                "id": "project_verification_trend",
+                "name": "Project Verification Trend Analyzer",
+                "func": _project_verification_trend_job,
+                "schedule": "every 6 hours",
+                "dependencies": ["market_analyzer_hourly"],
+                "trigger": IntervalTrigger(hours=6),
+            },
+            {
+                "id": "rpc_provider_benchmark",
+                "name": "RPC Provider Benchmark",
+                "func": _rpc_provider_benchmark_job,
+                "schedule": "every 30 minutes",
+                "dependencies": [],
+                "trigger": IntervalTrigger(minutes=30),
+            },
+            {
+                "id": "round_anomaly_detection",
+                "name": "Round Anomaly Detection",
+                "func": _round_analyzer_job,
+                "schedule": "every 6 hours",
+                "dependencies": ["market_analyzer_hourly"],
+                "trigger": IntervalTrigger(hours=6),
+            },
+            {
+                "id": "contributor_reputation_snapshot_daily",
+                "name": "Contributor Reputation Snapshot Builder",
+                "func": _contributor_reputation_snapshot_job,
+                "schedule": "cron: 03:30 UTC",
+                "dependencies": ["market_analyzer_hourly"],
+                "trigger": CronTrigger(hour=3, minute=30, timezone="UTC"),
+            },
+            {
+                "id": "metadata_drift_detection",
+                "name": "Metadata Drift Detector (backend vs on-chain)",
+                "func": _metadata_drift_detector_job,
+                "schedule": "every 6 hours",
+                "dependencies": ["market_analyzer_hourly"],
+                "trigger": IntervalTrigger(hours=6),
+            },
+            {
+                "id": "feature_drift_detection",
+                "name": "Training-vs-Serving Feature Drift Detection",
+                "func": _feature_drift_detection_job,
+                "schedule": f"every {feature_drift_interval} hours",
+                "dependencies": ["market_analyzer_hourly"],
+                "trigger": IntervalTrigger(hours=feature_drift_interval),
+            },
+            {
+                "id": "kpi_reconciliation",
+                "name": "KPI Reconciler against Live Contract Reads",
+                "func": _kpi_reconciliation_job,
+                "schedule": "every 6 hours",
+                "dependencies": ["market_analyzer_hourly"],
+                "trigger": IntervalTrigger(hours=6),
+            },
+            {
+                "id": "daily_onchain_kpi_snapshot",
+                "name": "Daily On-Chain KPI Snapshot Scheduler",
+                "func": _daily_onchain_kpi_snapshot_job,
+                "schedule": "cron: 00:05 UTC",
+                "dependencies": ["kpi_reconciliation"],
+                "trigger": CronTrigger(hour=0, minute=5, timezone="UTC"),
+            },
+            {
+                "id": "contract_ingestion_lag_metrics",
+                "name": "Per-Contract Ingestion Lag Metrics",
+                "func": _contract_lag_metrics_job,
+                "schedule": f"every {contract_lag_interval} minutes",
+                "dependencies": ["stellar_ingestion_quality_checks_hourly"],
+                "trigger": IntervalTrigger(minutes=contract_lag_interval),
+            },
+            {
+                "id": "prediction_logs_cleanup",
+                "name": "Prediction Logs Cleanup Scheduler",
+                "func": _prediction_logs_cleanup_job,
+                "schedule": "cron: 02:00 UTC",
+                "dependencies": ["model_retraining_daily"],
+                "trigger": CronTrigger(hour=2, minute=0, timezone="UTC"),
+            },
+        ]
 
     def start(self):
         """Start the scheduler with all registered jobs."""
         try:
-            # ── Market Analyzer: every hour ──────────────────────────────
-            run_fn = self._pipeline_fn if self._pipeline_fn else self.analyzer.run
-            market_job = self.scheduler.add_job(
-                func=run_fn,
-                trigger=IntervalTrigger(hours=1),
-                id="market_analyzer_hourly",
-                name="Market Analyzer - Hourly Analytics",
-                replace_existing=True,
-            )
-
-            # ── Stellar ingestion quality checks: every hour ──────────
-            # Low-noise: only fails CI/process when ingestion lag is critical.
-            quality_job = self.scheduler.add_job(
-                func=_ingestion_quality_checks_job,
-                trigger=IntervalTrigger(hours=1),
-                id="stellar_ingestion_quality_checks_hourly",
-                name="Stellar Ingestion Quality Checks - Hourly",
-                replace_existing=True,
-            )
-
-            # ── Indexer lag + source failure alerting: every 5 minutes (#745) ──
-            alerting_interval = int(os.getenv("INGESTION_ALERT_INTERVAL_MINUTES", "5"))
-            self.scheduler.add_job(
-                func=_ingestion_alerting_job,
-                trigger=IntervalTrigger(minutes=alerting_interval),
-                id="ingestion_lag_alerting",
-                name="Indexer Lag and Source Failure Alerting",
-                replace_existing=True,
-            )
-
-            # ── Model Retraining: daily at 02:00 UTC ─────────────────────
-            retrain_job = self.scheduler.add_job(
-                func=_retraining_job,
-                trigger=CronTrigger(hour=2, minute=0, timezone="UTC"),
-                id="model_retraining_daily",
-                name="Automated Model Retraining - Daily",
-                replace_existing=True,
-            )
-
-            # ── Project Verification Trend: every 6 hours (#885) ─────────
-            self.scheduler.add_job(
-                func=_project_verification_trend_job,
-                trigger=IntervalTrigger(hours=6),
-                id="project_verification_trend",
-                name="Project Verification Trend Analyzer",
-                replace_existing=True,
-            )
-
-            # ── RPC Provider Benchmark: every 30 minutes (#884) ──────────
-            self.scheduler.add_job(
-                func=_rpc_provider_benchmark_job,
-                trigger=IntervalTrigger(minutes=30),
-                id="rpc_provider_benchmark",
-                name="RPC Provider Benchmark",
-                replace_existing=True,
-            )
-
-            # ── Round Anomaly Detection: every 6 hours (#874) ───────────
-            self.scheduler.add_job(
-                func=_round_analyzer_job,
-                trigger=IntervalTrigger(hours=6),
-                id="round_anomaly_detection",
-                name="Round Anomaly Detection",
-                replace_existing=True,
-            )
-
-            # ── Contributor Reputation Snapshot: daily at 03:30 UTC ─────────
-            self.scheduler.add_job(
-                func=_contributor_reputation_snapshot_job,
-                trigger=CronTrigger(hour=3, minute=30, timezone="UTC"),
-                id="contributor_reputation_snapshot_daily",
-                name="Contributor Reputation Snapshot Builder",
-                replace_existing=True,
-            )
-
-            # ── Metadata Drift Detection: every 6 hours (#882) ───────────
-            self.scheduler.add_job(
-                func=_metadata_drift_detector_job,
-                trigger=IntervalTrigger(hours=6),
-                id="metadata_drift_detection",
-                name="Metadata Drift Detector (backend vs on-chain)",
-                replace_existing=True,
-            )
-
-            # ── Feature Drift Detection: every 6 hours (#1239) ───────────
-            feature_drift_interval = int(
-                os.getenv("FEATURE_DRIFT_INTERVAL_HOURS", "6")
-            )
-            self.scheduler.add_job(
-                func=_feature_drift_detection_job,
-                trigger=IntervalTrigger(hours=feature_drift_interval),
-                id="feature_drift_detection",
-                name="Training-vs-Serving Feature Drift Detection",
-                replace_existing=True,
-            )
-
-            # ── KPI Reconciliation: every 6 hours (#1054) ───────────────
-            self.scheduler.add_job(
-                func=_kpi_reconciliation_job,
-                trigger=IntervalTrigger(hours=6),
-                id="kpi_reconciliation",
-                name="KPI Reconciler against Live Contract Reads",
-                replace_existing=True,
-            )
-
-            # ── Daily On-Chain KPI Snapshot: daily at 00:05 UTC (#877) ──
-            self.scheduler.add_job(
-                func=_daily_onchain_kpi_snapshot_job,
-                trigger=CronTrigger(hour=0, minute=5, timezone="UTC"),
-                id="daily_onchain_kpi_snapshot",
-                name="Daily On-Chain KPI Snapshot Scheduler",
-                replace_existing=True,
-            )
-
-            # ── Per-contract ingestion lag metrics: every 5 minutes ──────
-            contract_lag_interval = int(
-                os.getenv("CONTRACT_LAG_INTERVAL_MINUTES", "5")
-            )
-            self.scheduler.add_job(
-                func=_contract_lag_metrics_job,
-                trigger=IntervalTrigger(minutes=contract_lag_interval),
-                id="contract_ingestion_lag_metrics",
-                name="Per-Contract Ingestion Lag Metrics",
-                replace_existing=True,
-            )
-
-
-            # ── Prediction Logs Cleanup: daily at 02:00 UTC ──────
-            self.scheduler.add_job(
-                func=_prediction_logs_cleanup_job,
-                trigger=CronTrigger(hour=2, minute=0, timezone="UTC"),
-                id="prediction_logs_cleanup",
-                name="Prediction Logs Cleanup Scheduler",
-                replace_existing=True,
-            )
-
+            stage_definitions = self._get_stage_definitions()
+            added_jobs = {}
+            for stage in stage_definitions:
+                wrapped_fn = _record_stage_run(stage["id"], stage["func"])
+                job = self.scheduler.add_job(
+                    func=wrapped_fn,
+                    trigger=stage["trigger"],
+                    id=stage["id"],
+                    name=stage["name"],
+                    replace_existing=True,
+                )
+                added_jobs[stage["id"]] = job
 
             self.scheduler.start()
             logger.info("✓ Analytics scheduler started")
-            logger.info(f"  - Job: {market_job.name} | Next: {market_job.next_run_time}")
-            logger.info(f"  - Job: {retrain_job.name} | Next: {retrain_job.next_run_time}")
+            logger.info(f"  - Job: {added_jobs['market_analyzer_hourly'].name} | Next: {added_jobs['market_analyzer_hourly'].next_run_time}")
+            logger.info(f"  - Job: {added_jobs['model_retraining_daily'].name} | Next: {added_jobs['model_retraining_daily'].next_run_time}")
         except Exception as e:
             logger.error(f"Error starting scheduler: {e}")
             raise
@@ -584,6 +632,38 @@ class AnalyticsScheduler:
             logger.info("✓ Analytics scheduler stopped")
         except Exception as e:
             logger.error(f"Error stopping scheduler: {e}")
+
+    def get_pipeline_topology(self) -> List[Dict[str, Any]]:
+        """Return the scheduler-derived stage topology with runtime metadata."""
+        stage_definitions = self._get_stage_definitions()
+        job_lookup = {job.id: job for job in self.scheduler.get_jobs()}
+        topology: List[Dict[str, Any]] = []
+
+        for stage in stage_definitions:
+            job = job_lookup.get(stage["id"])
+            run_state = _STAGE_RUN_STATE.get(stage["id"], {})
+            last_run = run_state.get("last_run")
+            duration_seconds = run_state.get("duration_seconds")
+            outcome = run_state.get("outcome", "not_run")
+            error = run_state.get("error")
+
+            if job and getattr(job, "last_run_time", None) is not None and last_run is None:
+                last_run = job.last_run_time.isoformat()
+
+            topology.append(
+                {
+                    "id": stage["id"],
+                    "name": stage["name"],
+                    "dependencies": stage["dependencies"],
+                    "schedule": stage["schedule"],
+                    "last_run": last_run,
+                    "duration_seconds": duration_seconds,
+                    "outcome": outcome,
+                    "error": error,
+                }
+            )
+
+        return topology
 
     def get_jobs(self) -> list:
         """Get list of scheduled jobs"""
