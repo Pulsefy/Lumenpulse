@@ -227,3 +227,5 @@ mod tests {
         assert_eq!(IdempotencyError::AlreadyExecuted as u32, 100);
     }
 }
+/ /   S t o r a g e   c o s t   p e r   g u a r d e d   o p e r a t i o n :   ~ 6 4   b y t e s   p e r   u n i q u e   r e q u e s t _ i d  
+ 
