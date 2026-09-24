@@ -493,6 +493,14 @@ const envSchema = z
       .optional(),
     SOROBAN_INDEXER_START_LEDGER: z.coerce.number().int().min(0).default(0),
 
+    // Drift alert ingest from data-processing (#1447)
+    DRIFT_ALERT_INGEST_SECRET: z.string().trim().optional(),
+    DRIFT_ALERT_TIMESTAMP_TOLERANCE_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .optional(),
+
     TELEGRAM_BOT_TOKEN: z.string().trim().optional(),
     METRICS_ALLOWED_IPS: z.string().trim().optional(),
     USE_MOCK_TRANSACTIONS: z.preprocess(
@@ -562,11 +570,7 @@ const envSchema = z
       .default(30_000),
     IDEMPOTENCY_CLEANUP_CRON: z.string().trim().default('0 3 * * *'),
 
-    SHUTDOWN_GRACE_PERIOD_MS: z.coerce
-      .number()
-      .int()
-      .min(0)
-      .default(15_000),
+    SHUTDOWN_GRACE_PERIOD_MS: z.coerce.number().int().min(0).default(15_000),
   })
   .superRefine((values, context) => {
     if (values.NODE_ENV === 'production' && !values.CORS_ORIGIN) {
@@ -919,10 +923,7 @@ const optionalSummary = [
   ['STELLAR_TIMEOUT', String(parsedEnv.STELLAR_TIMEOUT)],
   ['STELLAR_RETRY_ATTEMPTS', String(parsedEnv.STELLAR_RETRY_ATTEMPTS)],
   ['STELLAR_RETRY_DELAY', String(parsedEnv.STELLAR_RETRY_DELAY)],
-  [
-    'SOROBAN_SIMULATION_TRACE_LEVEL',
-    parsedEnv.SOROBAN_SIMULATION_TRACE_LEVEL,
-  ],
+  ['SOROBAN_SIMULATION_TRACE_LEVEL', parsedEnv.SOROBAN_SIMULATION_TRACE_LEVEL],
   [
     'STELLAR_CONTRACT_LUMEN_TOKEN',
     parsedEnv.STELLAR_CONTRACT_LUMEN_TOKEN ?? '(not set)',
@@ -980,6 +981,14 @@ const optionalSummary = [
   [
     'SOROBAN_INDEXER_START_LEDGER',
     String(parsedEnv.SOROBAN_INDEXER_START_LEDGER),
+  ],
+  [
+    'DRIFT_ALERT_INGEST_SECRET',
+    parsedEnv.DRIFT_ALERT_INGEST_SECRET ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'DRIFT_ALERT_TIMESTAMP_TOLERANCE_MS',
+    String(parsedEnv.DRIFT_ALERT_TIMESTAMP_TOLERANCE_MS ?? 300_000),
   ],
   [
     'TELEGRAM_BOT_TOKEN',
@@ -1166,6 +1175,11 @@ export const config = Object.freeze({
     ingestSecret: parsedEnv.SOROBAN_INGEST_SECRET,
     timestampToleranceMs: parsedEnv.SOROBAN_TIMESTAMP_TOLERANCE_MS ?? 300_000,
     indexerStartLedger: parsedEnv.SOROBAN_INDEXER_START_LEDGER,
+  }),
+  driftAlerts: Object.freeze({
+    ingestSecret: parsedEnv.DRIFT_ALERT_INGEST_SECRET,
+    timestampToleranceMs:
+      parsedEnv.DRIFT_ALERT_TIMESTAMP_TOLERANCE_MS ?? 300_000,
   }),
   metrics: Object.freeze({
     allowedIps: Object.freeze(splitCsv(parsedEnv.METRICS_ALLOWED_IPS)),

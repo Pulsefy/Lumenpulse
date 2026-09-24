@@ -340,13 +340,20 @@ describe('VerificationService', () => {
     });
     svc.submitForReview(102);
 
-    const assigned = await svc.assignReviewer(101, 'admin-user', 'reviewer-123');
+    const assigned = await svc.assignReviewer(
+      101,
+      'admin-user',
+      'reviewer-123',
+    );
     expect(assigned.reviewerId).toBe('reviewer-123');
     expect(mockAuditService.log).toHaveBeenCalledWith(
       'assign_submission_reviewer',
       'admin-user',
       null,
-      expect.objectContaining({ projectId: 101, newReviewerId: 'reviewer-123' }),
+      expect.objectContaining({
+        projectId: 101,
+        newReviewerId: 'reviewer-123',
+      }),
     );
 
     const forReviewer = svc.listSubmissions(undefined, 'reviewer-123');
@@ -358,4 +365,3 @@ describe('VerificationService', () => {
     expect(unassigned.some((s) => s.projectId === 101)).toBe(false);
   });
 });
-

@@ -54,9 +54,11 @@ const RAW_EVENT_MAP: Record<string, CanonicalEventType> = {
   fee_config_changed_event: CanonicalEventType.ADMIN_FEE_CONFIG_CHANGED,
   config_updated_event: CanonicalEventType.ADMIN_CONFIG_UPDATED,
   vote_cast_event: CanonicalEventType.MILESTONE_VOTE_CAST,
-  milestone_approved_by_vote_event: CanonicalEventType.MILESTONE_APPROVED_BY_VOTE,
+  milestone_approved_by_vote_event:
+    CanonicalEventType.MILESTONE_APPROVED_BY_VOTE,
   milestone_disputed_event: CanonicalEventType.MILESTONE_DISPUTED,
-  milestone_dispute_resolved_event: CanonicalEventType.MILESTONE_DISPUTE_RESOLVED,
+  milestone_dispute_resolved_event:
+    CanonicalEventType.MILESTONE_DISPUTE_RESOLVED,
   storage_migrated_event: CanonicalEventType.ADMIN_STORAGE_MIGRATED,
   round_created_event: CanonicalEventType.POOL_ROUND_CREATED,
   pool_funded_event: CanonicalEventType.POOL_FUNDED,
@@ -67,7 +69,8 @@ const RAW_EVENT_MAP: Record<string, CanonicalEventType> = {
   round_finalized_event: CanonicalEventType.POOL_ROUND_FINALIZED,
   round_cap_updated_event: CanonicalEventType.POOL_ROUND_CAP_UPDATED,
   match_distributed_event: CanonicalEventType.POOL_MATCH_DISTRIBUTED,
-  all_matches_distributed_event: CanonicalEventType.POOL_ALL_MATCHES_DISTRIBUTED,
+  all_matches_distributed_event:
+    CanonicalEventType.POOL_ALL_MATCHES_DISTRIBUTED,
   pool_initialized_event: CanonicalEventType.LIQUIDITY_POOL_INITIALIZED,
   liquidity_added_event: CanonicalEventType.LIQUIDITY_ADDED,
   liquidity_removed_event: CanonicalEventType.LIQUIDITY_REMOVED,
@@ -81,7 +84,8 @@ const RAW_EVENT_MAP: Record<string, CanonicalEventType> = {
   tokens_claimed_event: CanonicalEventType.TOKEN_CLAIMED,
   stream_created_event: CanonicalEventType.TOKEN_STREAM_CREATED,
   cliff_stream_created_event: CanonicalEventType.TOKEN_STREAM_CREATED,
-  beneficiary_rotated_event: CanonicalEventType.TOKEN_STREAM_BENEFICIARY_ROTATED,
+  beneficiary_rotated_event:
+    CanonicalEventType.TOKEN_STREAM_BENEFICIARY_ROTATED,
   stream_cancelled_event: CanonicalEventType.TOKEN_STREAM_CANCELLED,
   delegate_approved_event: CanonicalEventType.TOKEN_DELEGATE_APPROVED,
   delegate_revoked_event: CanonicalEventType.TOKEN_DELEGATE_REVOKED,
@@ -100,14 +104,17 @@ const RAW_EVENT_MAP: Record<string, CanonicalEventType> = {
   gasless_registration_event: CanonicalEventType.REPUTATION_UPDATED,
   badge_granted_event: CanonicalEventType.REPUTATION_BADGE_GRANTED,
   badge_revoked_event: CanonicalEventType.REPUTATION_BADGE_REVOKED,
-  reputation_penalty_applied_event: CanonicalEventType.REPUTATION_PENALTY_APPLIED,
-  contributor_profile_changed_evt: CanonicalEventType.REPUTATION_PROFILE_CHANGED,
+  reputation_penalty_applied_event:
+    CanonicalEventType.REPUTATION_PENALTY_APPLIED,
+  contributor_profile_changed_evt:
+    CanonicalEventType.REPUTATION_PROFILE_CHANGED,
   contributor_deregistered_event:
     CanonicalEventType.REPUTATION_CONTRIBUTOR_DEREGISTERED,
   attestation_suspended_event:
     CanonicalEventType.REPUTATION_ATTESTATION_SUSPENDED,
   attestation_revoked_event: CanonicalEventType.REPUTATION_ATTESTATION_REVOKED,
-  attestation_restored_event: CanonicalEventType.REPUTATION_ATTESTATION_RESTORED,
+  attestation_restored_event:
+    CanonicalEventType.REPUTATION_ATTESTATION_RESTORED,
   module_registered_event: CanonicalEventType.MODULE_REGISTERED,
   module_updated_event: CanonicalEventType.MODULE_UPDATED,
   module_deactivated_event: CanonicalEventType.MODULE_DEACTIVATED,
@@ -128,9 +135,11 @@ const RAW_EVENT_MAP: Record<string, CanonicalEventType> = {
   project_rejected_event: CanonicalEventType.PROJECT_REJECTED,
   project_archived_event: CanonicalEventType.PROJECT_ARCHIVED,
   project_delisted_event: CanonicalEventType.PROJECT_DELISTED,
-  verification_overridden_event: CanonicalEventType.ADMIN_VERIFICATION_OVERRIDDEN,
+  verification_overridden_event:
+    CanonicalEventType.ADMIN_VERIFICATION_OVERRIDDEN,
   subscriber_changed_event: CanonicalEventType.CONTRIBUTION_SUBSCRIBER_CHANGED,
-  treasury_allocated_event: CanonicalEventType.CONTRIBUTION_ALLOCATED_TO_TREASURY,
+  treasury_allocated_event:
+    CanonicalEventType.CONTRIBUTION_ALLOCATED_TO_TREASURY,
   emrg_migr_proposed_event:
     CanonicalEventType.CONTRIBUTION_EMERGENCY_MIGRATION_PROPOSED,
   emrg_migr_executed_event:

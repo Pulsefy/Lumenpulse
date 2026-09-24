@@ -22,9 +22,10 @@ import {
   SuppressionLogResponseDto,
 } from './dto/fanout.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JWT_SECURITY_SCHEME } from '../openapi/openapi.constants';
 
 @ApiTags('notification-fanout')
-@ApiBearerAuth()
+@ApiBearerAuth(JWT_SECURITY_SCHEME)
 @UseGuards(JwtAuthGuard)
 @Controller('notifications')
 export class NotificationFanoutController {

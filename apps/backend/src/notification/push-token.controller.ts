@@ -15,9 +15,10 @@ import {
   RegisterPushTokenDto,
 } from './dto/push-token.dto';
 import { PushTokenService } from './push-token.service';
+import { JWT_SECURITY_SCHEME } from '../openapi/openapi.constants';
 
 @ApiTags('notification-devices')
-@ApiBearerAuth()
+@ApiBearerAuth(JWT_SECURITY_SCHEME)
 @UseGuards(JwtAuthGuard)
 @Controller('notification-devices')
 export class PushTokenController {

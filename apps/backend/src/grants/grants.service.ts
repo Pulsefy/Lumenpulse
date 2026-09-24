@@ -28,6 +28,7 @@ import {
   CONTRIBUTION_QUEUE,
   DETECTION_JOB,
 } from '../suspicious-contribution/types';
+import { RequestContextService } from '../common/services/request-context.service';
 
 /**
  * In-memory store for round and contribution data.
@@ -311,6 +312,7 @@ export class GrantsService {
           amount: dto.amount,
           roundTotalContributions: roundTotal.toString(),
           contributorTotalInRound: contributorTotal.toString(),
+          correlationId: RequestContextService.getCorrelationId(),
         },
         { attempts: 2, backoff: { type: 'exponential', delay: 2000 } },
       )

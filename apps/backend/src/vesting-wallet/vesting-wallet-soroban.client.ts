@@ -15,7 +15,10 @@ import {
 import { config } from '../lib/config';
 import { BadRequestException } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
-import { SorobanRpcError, SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
+import {
+  SorobanRpcError,
+  SorobanRpcClientService,
+} from '../stellar/services/soroban-rpc-client.service';
 import {
   VestingWalletNotConfiguredException,
   VestingWalletRpcUnavailableException,
@@ -28,7 +31,6 @@ const NETWORK_PASSPHRASES = {
   testnet: Networks.TESTNET,
   mainnet: Networks.PUBLIC,
 } as const;
-
 
 const TX_CONFIRMATION_TIMEOUT_MS = 30_000;
 const TX_POLL_INTERVAL_MS = 1_500;
@@ -92,7 +94,9 @@ export class VestingWalletSorobanClient {
     const keypair = this.getAdminKeypair();
 
     try {
-      const sourceAccount = await this.sorobanRpc.getAccount(keypair.publicKey());
+      const sourceAccount = await this.sorobanRpc.getAccount(
+        keypair.publicKey(),
+      );
       if (!(sourceAccount instanceof Account)) {
         throw new Error('Failed to retrieve source account');
       }
@@ -142,9 +146,10 @@ export class VestingWalletSorobanClient {
 
     const keypair = this.getAdminKeypair();
 
-
     try {
-      const sourceAccount = await this.sorobanRpc.getAccount(keypair.publicKey());
+      const sourceAccount = await this.sorobanRpc.getAccount(
+        keypair.publicKey(),
+      );
       if (!(sourceAccount instanceof Account)) {
         throw new Error('Failed to retrieve source account');
       }
@@ -196,8 +201,6 @@ export class VestingWalletSorobanClient {
     const contractId = this.getContractId();
     this.validateAddressOrThrow(beneficiary, 'beneficiary');
 
-
-
     try {
       const ledgerKey = xdr.LedgerKey.contractData(
         new xdr.LedgerKeyContractData({
@@ -210,7 +213,8 @@ export class VestingWalletSorobanClient {
         }),
       );
 
-      const response = await this.sorobanRpc.rawServer.getLedgerEntries(ledgerKey);
+      const response =
+        await this.sorobanRpc.rawServer.getLedgerEntries(ledgerKey);
       if (response.entries.length === 0) {
         return null;
       }
@@ -225,8 +229,6 @@ export class VestingWalletSorobanClient {
   async getClaimable(beneficiary: string): Promise<bigint> {
     const contractId = this.getContractId();
     this.validateAddressOrThrow(beneficiary, 'beneficiary');
-
-
 
     try {
       const contract = new Contract(contractId);
@@ -249,7 +251,9 @@ export class VestingWalletSorobanClient {
         .setTimeout(30)
         .build();
 
-      const simulation = await this.sorobanRpc.simulateTransaction(tx, { isReadOnly: true });
+      const simulation = await this.sorobanRpc.simulateTransaction(tx, {
+        isReadOnly: true,
+      });
       if (rpc.Api.isSimulationError(simulation)) {
         const simError = simulation.error;
         throw toVestingWalletException(

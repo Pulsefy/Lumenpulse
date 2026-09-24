@@ -8,6 +8,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
+import { ApiProperty } from '@nestjs/swagger';
 import { User } from '../../users/entities/user.entity';
 
 export enum ReportType {
@@ -41,6 +42,7 @@ export class ContentReport {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @ApiProperty({ enum: ReportType, enumName: 'ReportType' })
   @Column({
     type: 'enum',
     enum: ReportType,
@@ -51,6 +53,7 @@ export class ContentReport {
   @Column({ name: 'target_id', nullable: false })
   targetId: string;
 
+  @ApiProperty({ enum: ReportReason, enumName: 'ReportReason' })
   @Column({
     type: 'enum',
     enum: ReportReason,
@@ -61,6 +64,7 @@ export class ContentReport {
   @Column({ name: 'description', type: 'text', nullable: true })
   description?: string;
 
+  @ApiProperty({ enum: ReportStatus, enumName: 'ReportStatus' })
   @Column({
     type: 'enum',
     enum: ReportStatus,

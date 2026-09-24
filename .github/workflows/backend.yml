@@ -6,11 +6,15 @@ on:
     branches: [ "main" ]
     paths:
       - 'apps/backend/**'
+      - 'apps/webapp/generated/**'
+      - 'apps/webapp/scripts/generate-api-types.mjs'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'apps/backend/**'
       - 'apps/backend/.ci-trigger'
+      - 'apps/webapp/generated/**'
+      - 'apps/webapp/scripts/generate-api-types.mjs'
 
 jobs:
   backend-checks:
@@ -46,8 +50,19 @@ jobs:
       if: env.SKIP_TESTS != 'true'
       run: npm run test
 
-    - name: Build
+    - name: Build (also regenerates openapi.json)
       run: npm run build
+
+    - name: Verify committed OpenAPI spec is up to date
+      run: |
+        if ! git diff --exit-code -- openapi.json; then
+          echo "::error file=apps/backend/openapi.json::openapi.json is stale. Run 'npm run build' in apps/backend and commit the updated openapi.json."
+          exit 1
+        fi
+
+    - name: Verify webapp API types match the spec
+      working-directory: ./apps/webapp
+      run: node scripts/generate-api-types.mjs --check
 
   migration-safety:
     runs-on: ubuntu-latest
@@ -109,3 +124,63 @@ jobs:
         JWT_SECRET: ci-jwt-secret
         STELLAR_SERVER_SECRET: 'SB6RIPM3GJQ7RP3Q6R5F3QIBYZHP4N27SGGCQ3R4LWA2ZKXZWQ3NU3G4'
       run: npm run migration:verify
+
+  db-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ./apps/backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: './apps/backend/package-lock.json'
+
+    - name: Install dependencies
+      run: npm ci
+
+    # Each run creates a disposable database, runs all migrations, and drops it
+    # in Jest's global teardown (also on failure). Runtime is printed and added
+    # to the job summary.
+    - name: Run DB-backed e2e suite
+      env:
+        NODE_ENV: test
+        ENVIRONMENT: test
+        DB_HOST: localhost
+        DB_PORT: '5432'
+        DB_USERNAME: postgres
+        DB_PASSWORD: postgres
+        REDIS_HOST: localhost
+        REDIS_PORT: '6379'
+        JWT_SECRET: ci-jwt-secret
+      run: npm run test:e2e:db

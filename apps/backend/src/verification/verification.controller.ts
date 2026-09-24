@@ -212,7 +212,11 @@ export class VerificationController {
       'Returns project submissions across draft/review/approval/publish workflow states.',
   })
   @ApiQuery({ name: 'status', required: false, enum: SubmissionStatus })
-  @ApiQuery({ name: 'reviewerId', required: false, description: 'Filter by reviewer ID or "unassigned"' })
+  @ApiQuery({
+    name: 'reviewerId',
+    required: false,
+    description: 'Filter by reviewer ID or "unassigned"',
+  })
   @ApiResponse({
     status: 200,
     description: 'Submission records retrieved successfully',

@@ -42,6 +42,23 @@ greater than the configured budget. Breaches increment
 `lumenpulse_inference_latency_budget_breaches_total{endpoint,method}` and are
 therefore visible in `/metrics` and alertable via Prometheus.
 
+### Per-token explanations (`explain: true`)
+
+`POST /analyze` can optionally return per-token sentiment explanations
+(`{"text": "...", "explain": true}`, Issue #1456). Explanation work is off by
+default and bounded:
+
+* The `/analyze` endpoint uses the pure-VADER analyzer, so explaining adds only
+  in-process lexical passes (no extra transformer inference) — well within the
+  500 ms budget.
+* The ingestion-side analyzer (`src/analytics/sentiment.py`) can additionally
+  explain the FinBERT path, which costs at most 20 extra transformer forward
+  passes (each truncated to 512 tokens) — this is why `explain` is opt-in.
+
+Method-specific overhead bounds are detailed in
+`SENTIMENT_EXPLANATIONS.md` and exposed programmatically via
+`explanation_latency_overhead(method)`.
+
 ---
 
 ## 2. Caching repeated analyses

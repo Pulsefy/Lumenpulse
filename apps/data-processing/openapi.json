@@ -2751,6 +2751,11 @@
               }
             ],
             "title": "Asset"
+          },
+          "explain": {
+            "type": "boolean",
+            "title": "Explain",
+            "default": false
           }
         },
         "type": "object",
@@ -2782,6 +2787,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SentimentIndicatorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SentimentExplanationResponse"
               },
               {
                 "type": "null"
@@ -5079,6 +5094,49 @@
         ],
         "title": "RollbackResponse"
       },
+      "SentimentExplanationResponse": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/TokenContributionResponse"
+            },
+            "type": "array",
+            "title": "Contributions",
+            "default": []
+          },
+          "unattributed": {
+            "type": "number",
+            "title": "Unattributed",
+            "default": 0.0
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "score"
+        ],
+        "title": "SentimentExplanationResponse",
+        "description": "Per-token decomposition of a sentiment score (#1456)."
+      },
       "SentimentIndicatorResponse": {
         "properties": {
           "score": {
@@ -5313,6 +5371,40 @@
           "message"
         ],
         "title": "ShadowUnregisterResponse"
+      },
+      "TokenContributionResponse": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "contribution": {
+            "type": "number",
+            "title": "Contribution"
+          },
+          "feature": {
+            "type": "string",
+            "title": "Feature"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "contribution",
+          "feature",
+          "kind"
+        ],
+        "title": "TokenContributionResponse",
+        "description": "A single token's contribution to the analyzed sentiment score (#1456)."
       },
       "UpdateReviewStatusRequest": {
         "properties": {

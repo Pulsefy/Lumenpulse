@@ -50,10 +50,11 @@ describe('SorobanRpcClientService simulation trace logging', () => {
       } as unknown as RequestContextService,
       new Registry(),
     );
-    (service as unknown as { server: { simulateTransaction: jest.Mock } }).server =
-      {
-        simulateTransaction: jest.fn().mockResolvedValue(simulationError),
-      };
+    (
+      service as unknown as { server: { simulateTransaction: jest.Mock } }
+    ).server = {
+      simulateTransaction: jest.fn().mockResolvedValue(simulationError),
+    };
 
     jest.spyOn(rpc.Api, 'isSimulationError').mockReturnValue(true);
     errorSpy = jest
@@ -70,7 +71,10 @@ describe('SorobanRpcClientService simulation trace logging', () => {
 
   it('logs request-scoped failed simulation summary without raw payloads', async () => {
     const tx = new TransactionBuilder(
-      new Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '1'),
+      new Account(
+        'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+        '1',
+      ),
       { fee: BASE_FEE, networkPassphrase: Networks.TESTNET },
     )
       .addOperation(

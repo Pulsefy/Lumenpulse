@@ -194,8 +194,8 @@ export class StellarApiService {
 // Portfolio API — interfaces mirroring backend DTOs
 // ---------------------------------------------------------------------------
 
-export type AssetBalanceWithCurrency = components['schemas']['AssetBalanceWithCurrency'];
-export type PortfolioSummaryResponse = components['schemas']['PortfolioSummaryResponseDto'];
+export type AssetBalanceWithCurrency = components['schemas']['AssetBalanceWithCurrencyDto'];
+export type PortfolioSummaryResponse = components['schemas']['PortfolioSummaryWithCurrencyResponseDto'];
 
 export interface TimeWindowPerformance {
   window: '24h' | '7d' | '30d';

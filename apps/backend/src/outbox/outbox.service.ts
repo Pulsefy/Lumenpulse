@@ -10,6 +10,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { OutboxEvent, OutboxEventStatus } from './outbox-event.entity';
 import { JobLockService } from '../scheduler/job-lock.service';
 import { MetricsService } from '../metrics/metrics.service';
+import { RequestContextService } from '../common/services/request-context.service';
 import { config } from '../lib/config';
 
 /** How many pending events to process per poll cycle */
@@ -64,12 +65,22 @@ export class OutboxService {
     eventType: string,
     payload: Record<string, unknown>,
     manager?: EntityManager,
+    correlationId?: string,
   ): Promise<OutboxEvent> {
     const repo = manager ? manager.getRepository(OutboxEvent) : this.outboxRepo;
+    const resolvedCorrelationId =
+      correlationId ||
+      (typeof payload._correlationId === 'string'
+        ? payload._correlationId
+        : undefined) ||
+      (RequestContextService.getCorrelationId() !== 'unknown'
+        ? RequestContextService.getCorrelationId()
+        : null);
 
     const event = repo.create({
       eventType,
       payload,
+      correlationId: resolvedCorrelationId,
       status: OutboxEventStatus.PENDING,
       attempts: 0,
       lastError: null,
@@ -127,35 +138,44 @@ export class OutboxService {
 
   private async dispatch(event: OutboxEvent): Promise<void> {
     event.attempts += 1;
+    const correlationId =
+      event.correlationId ||
+      (event.payload?._correlationId as string) ||
+      'unknown';
 
-    try {
-      await Promise.all(
-        this.handlers.map((h) => h(event.eventType, event.payload)),
-      );
+    await RequestContextService.run(
+      { correlationId, requestId: correlationId },
+      async () => {
+        try {
+          await Promise.all(
+            this.handlers.map((h) => h(event.eventType, event.payload)),
+          );
 
-      event.status = OutboxEventStatus.PROCESSED;
-      event.processedAt = new Date();
-      event.lastError = null;
-      this.metricsService.recordOutboxAttempt('processed');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(
-        `Outbox dispatch failed for event ${event.id} (${event.eventType}), attempt ${event.attempts}: ${message}`,
-      );
+          event.status = OutboxEventStatus.PROCESSED;
+          event.processedAt = new Date();
+          event.lastError = null;
+          this.metricsService.recordOutboxAttempt('processed');
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger.warn(
+            `Outbox dispatch failed for event ${event.id} (${event.eventType}), attempt ${event.attempts}: ${message}`,
+          );
 
-      event.lastError = message;
+          event.lastError = message;
 
-      if (event.attempts >= config.outbox.maxAttempts) {
-        event.status = OutboxEventStatus.DEAD_LETTER;
-        event.deadLetterAt = new Date();
-        this.metricsService.recordOutboxAttempt('dead_letter');
-        this.logger.error(
-          `Outbox event ${event.id} (${event.eventType}) moved to dead-letter after ${event.attempts} attempts.`,
-        );
-      } else {
-        this.metricsService.recordOutboxAttempt('failed');
-      }
-    }
+          if (event.attempts >= config.outbox.maxAttempts) {
+            event.status = OutboxEventStatus.DEAD_LETTER;
+            event.deadLetterAt = new Date();
+            this.metricsService.recordOutboxAttempt('dead_letter');
+            this.logger.error(
+              `Outbox event ${event.id} (${event.eventType}) moved to dead-letter after ${event.attempts} attempts.`,
+            );
+          } else {
+            this.metricsService.recordOutboxAttempt('failed');
+          }
+        }
+      },
+    );
 
     await this.outboxRepo.save(event);
   }

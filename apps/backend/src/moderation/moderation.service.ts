@@ -264,7 +264,10 @@ export class ModerationService {
     const report = await this.getReportById(id);
     const previousReviewerId = report.reviewerId;
 
-    if (report.status !== ReportStatus.PENDING && report.status !== ReportStatus.UNDER_REVIEW) {
+    if (
+      report.status !== ReportStatus.PENDING &&
+      report.status !== ReportStatus.UNDER_REVIEW
+    ) {
       throw new BadRequestException(
         `Cannot assign reviewer to report in status ${report.status}`,
       );
@@ -281,7 +284,7 @@ export class ModerationService {
       'assign_moderation_report_reviewer',
       assignerId,
       null,
-      { reportId: id, previousReviewerId, newReviewerId: reviewerId || null }
+      { reportId: id, previousReviewerId, newReviewerId: reviewerId || null },
     );
 
     return updatedReport;

@@ -7,14 +7,20 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { REQUEST_ID_HEADER } from '../common/constants/request.constants';
+import {
+  CORRELATION_ID_HEADER,
+  REQUEST_ID_HEADER,
+} from '../common/constants/request.constants';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import { ErrorResponse } from '../interfaces/error-response.interface';
 import { resolveNodeEnv } from '../lib/config';
 import { mapSorobanRpcErrorToApi } from '../stellar/utils/soroban-error.mapper';
 import { SorobanRpcError } from '../stellar/services/soroban-rpc-client.service';
 
-type RequestWithRequestId = Request & { requestId?: string };
+type RequestWithRequestId = Request & {
+  correlationId?: string;
+  requestId?: string;
+};
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -25,10 +31,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<RequestWithRequestId>();
     const status = this.getStatus(exception);
-    const requestId =
-      typeof request.requestId === 'string' ? request.requestId : 'unknown';
+    const correlationId =
+      (typeof request.correlationId === 'string' && request.correlationId) ||
+      (typeof request.requestId === 'string' && request.requestId) ||
+      'unknown';
+    const requestId = correlationId;
     const errorResponse = this.buildErrorResponse(exception, status, requestId);
 
+    response.setHeader(CORRELATION_ID_HEADER, correlationId);
     response.setHeader(REQUEST_ID_HEADER, requestId);
 
     if (status >= 500) {
@@ -36,6 +46,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       this.logger.error(
         JSON.stringify({
           event: 'http_request_failed',
+          correlationId,
           requestId,
           method: request.method,
           url: request.originalUrl ?? request.url,
@@ -50,6 +61,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       this.logger.warn(
         JSON.stringify({
           event: 'http_request_failed',
+          correlationId,
           requestId,
           method: request.method,
           url: request.originalUrl ?? request.url,
@@ -70,6 +82,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     requestId: string,
   ): ErrorResponse {
     const isProduction = resolveNodeEnv() === 'production';
+    const correlationId = requestId;
 
     if (exception instanceof HttpException) {
       const exceptionResponse = exception.getResponse();
@@ -88,6 +101,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         ),
         details: this.getErrorDetails(responseBody, status),
         requestId,
+        correlationId,
       };
     }
 
@@ -98,6 +112,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         message: mapped.message,
         details: mapped.details,
         requestId,
+        correlationId,
       };
     }
 
@@ -108,6 +123,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           ? 'Internal server error'
           : exception.message || 'Internal server error',
         requestId,
+        correlationId,
       };
     }
 
@@ -115,6 +131,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       code: ErrorCode.SYS_INTERNAL_ERROR,
       message: 'Internal server error',
       requestId,
+      correlationId,
     };
   }
 

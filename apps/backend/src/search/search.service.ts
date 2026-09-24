@@ -403,7 +403,11 @@ export class SearchService {
     });
   }
 
-  async rebuildIndex(): Promise<{ success: boolean; message: string; timestamp: string }> {
+  async rebuildIndex(): Promise<{
+    success: boolean;
+    message: string;
+    timestamp: string;
+  }> {
     await Promise.resolve();
     return {
       success: true,

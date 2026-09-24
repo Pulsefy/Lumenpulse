@@ -22,7 +22,9 @@ export class ShutdownService
 
   // mark as async so we can await job.stop() (prevents no-floating-promises)
   async onModuleDestroy(): Promise<void> {
-    this.logger.log('Application is destroying modules. Stopping schedulers...');
+    this.logger.log(
+      'Application is destroying modules. Stopping schedulers...',
+    );
     try {
       // schedulerRegistry.getCronJobs() returns a Map-like iterable
       // iterate and await each stop call to avoid floating promises
@@ -53,7 +55,9 @@ export class ShutdownService
       );
       // Use a Promise wrapper with setTimeout; gracePeriodMs is now a number
       await new Promise<void>((resolve) => setTimeout(resolve, gracePeriodMs));
-      this.logger.log('Drain period completed. Proceeding to close HTTP server and database connections.');
+      this.logger.log(
+        'Drain period completed. Proceeding to close HTTP server and database connections.',
+      );
     }
   }
 }

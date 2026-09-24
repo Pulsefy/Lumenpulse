@@ -10,6 +10,7 @@ import {
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
 import { CrowdfundSyncService } from './crowdfund-sync.service';
 import {
   SyncVaultDto,
@@ -24,7 +25,9 @@ import {
   VaultSyncStatsDto,
 } from './dto/crowdfund-sync.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JWT_SECURITY_SCHEME } from '../openapi/openapi.constants';
 
+@ApiBearerAuth(JWT_SECURITY_SCHEME)
 @Controller('crowdfund-sync')
 @UseGuards(JwtAuthGuard)
 export class CrowdfundSyncController {

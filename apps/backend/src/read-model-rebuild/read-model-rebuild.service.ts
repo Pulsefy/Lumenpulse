@@ -23,6 +23,11 @@ import {
 import { JobLockService } from '../scheduler/job-lock.service';
 import { JobHistoryService } from '../scheduler/job-history.service';
 import { AdminAuditService } from '../admin-audit/admin-audit.service';
+import {
+  CORRELATION_ID_HEADER,
+  REQUEST_ID_HEADER,
+} from '../common/constants/request.constants';
+import { RequestContextService } from '../common/services/request-context.service';
 import { ConfigService } from '@nestjs/config';
 import { config } from '../lib/config';
 
@@ -257,11 +262,17 @@ export class ReadModelRebuildService {
 
       this.logger.log(`Calling data-processing: ${url}`);
 
+      const correlationId =
+        RequestContextService.getCorrelationId() !== 'unknown'
+          ? RequestContextService.getCorrelationId()
+          : `rebuild-${job.id}`;
+
       const response = await firstValueFrom(
         this.httpService.post<RebuildResultResponse>(url, payload, {
           headers: {
             ...(this.pythonApiKey ? { 'X-API-Key': this.pythonApiKey } : {}),
-            'X-Correlation-ID': `rebuild-${job.id}`,
+            [CORRELATION_ID_HEADER]: correlationId,
+            [REQUEST_ID_HEADER]: correlationId,
           },
           timeout: 300000, // 5 minutes
         }),

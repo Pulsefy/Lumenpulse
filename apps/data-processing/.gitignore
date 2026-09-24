@@ -157,3 +157,8 @@ benchmark-results/
 # Keep the README but ignore the downloaded model files.
 models/ner/*
 !models/ner/README.md
+
+# Runtime artifacts (drift alert suppression store / undelivered-alert spool)
+data/alert_suppression.json
+data/drift_alert_suppression.json
+data/undelivered_notifications.jsonl

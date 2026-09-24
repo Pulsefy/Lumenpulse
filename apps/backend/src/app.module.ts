@@ -30,7 +30,8 @@ import databaseConfig from './database/database.config';
 import stellarConfig from './stellar/config/stellar.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
-import { RequestContextService } from './common/services/request-context.service';
+import { RequestContextModule } from './common/services/request-context.module';
+import { StructuredLoggerService } from './common/services/structured-logger.service';
 import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
 import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { RateLimitStorageService } from './common/rate-limit/rate-limit.storage';
@@ -76,6 +77,8 @@ import { SnapshotsModule } from './snapshot/snapshot.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { PriceAlertModule } from './price-alert/price-alert.module';
+import { ProfilingModule } from './common/profiling/profiling.module';
+import { QueryCountMiddleware } from './common/profiling/query-count.middleware';
 
 @Module({
   imports: [
@@ -98,6 +101,9 @@ import { PriceAlertModule } from './price-alert/price-alert.module';
         };
       },
     }),
+
+    // Request-scoped context (shared AsyncLocalStorage)
+    RequestContextModule,
 
     // Scheduling
     ScheduleModule.forRoot(),
@@ -209,11 +215,14 @@ import { PriceAlertModule } from './price-alert/price-alert.module';
 
     // Idempotency for write endpoints
     IdempotencyModule,
+
+    // Query profiling (dev-only, enabled via QUERY_PROFILING=true)
+    ProfilingModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    RequestContextService,
+    StructuredLoggerService,
     {
       provide: APP_GUARD,
       useClass: RateLimitGuard,
@@ -236,5 +245,11 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // Apply request ID and logging middleware to all routes
     consumer.apply(RequestIdMiddleware, LoggerMiddleware).forRoutes('*');
+
+    // Apply query-count profiling middleware when QUERY_PROFILING=true.
+    // Off by default — zero overhead in production.
+    if (process.env['QUERY_PROFILING']?.toLowerCase() === 'true') {
+      consumer.apply(QueryCountMiddleware).forRoutes('*');
+    }
   }
 }

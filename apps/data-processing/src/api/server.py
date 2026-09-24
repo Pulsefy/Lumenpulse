@@ -234,9 +234,30 @@ class SentimentIndicatorResponse(BaseModel):
     display_text: str  # e.g. "0.85 Bullish"
 
 
+class TokenContributionResponse(BaseModel):
+    """A single token's contribution to the analyzed sentiment score (#1456)."""
+
+    token: str
+    contribution: float
+    feature: str  # lexicon entry or model feature responsible
+    kind: str  # "lexicon" | "model"
+    note: str = ""
+
+
+class SentimentExplanationResponse(BaseModel):
+    """Per-token decomposition of a sentiment score (#1456)."""
+
+    method: str
+    score: float
+    contributions: List[TokenContributionResponse] = []
+    unattributed: float = 0.0
+    model: Optional[str] = None
+
+
 class AnalyzeRequest(BaseModel):
     text: str
     asset: Optional[str] = None  # Optional asset filter
+    explain: bool = False  # Optionally include per-token contributions (#1456)
 
 
 class AnalyzeResponse(BaseModel):
@@ -244,6 +265,7 @@ class AnalyzeResponse(BaseModel):
     asset_codes: List[str] = []  # Asset codes found in text
     sentiment_label: str = ""  # positive/negative/neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
+    explanation: Optional[SentimentExplanationResponse] = None  # Token attribution (#1456)
 
 
 class AssetAnalysisResponse(BaseModel):
@@ -321,7 +343,7 @@ async def root(request: Request) -> Dict[str, Any]:
             "GET /health": "Health check (no auth required)",
             "GET /metrics": "Prometheus metrics (no auth required)",
             "GET /news": "Get recent news with optional ?entity=... filter (requires X-API-Key header)",
-            "POST /analyze": "Analyze text sentiment (requires X-API-Key header)",
+            "POST /analyze": "Analyze text sentiment (requires X-API-Key header; set explain=true to include token-level attribution #1456)",
             "GET /analyze": "Get asset-specific sentiment analysis (requires X-API-Key header)",
             "POST /analyze-batch": "Batch analyze multiple texts (requires X-API-Key header)",
             "GET /contributors/{contributor}/timeline": "Get contributor activity timeline from on-chain events (requires X-API-Key header)",
@@ -494,11 +516,13 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
             raise HTTPException(status_code=400, detail="Text cannot be empty")
 
         # Use your existing SentimentAnalyzer with asset filter
-        result = sentiment_analyzer.analyze(body.text, body.asset)
+        result = sentiment_analyzer.analyze(
+            body.text, body.asset, explain=body.explain
+        )
 
         logger.info(
             f"Analyzed text: '{body.text[:50]}...' -> sentiment: {result.compound_score} | "
-            f"asset: {body.asset} | client_ip: {request.client.host}"
+            f"asset: {body.asset} | explain: {body.explain} | client_ip: {request.client.host}"
         )
 
         # Build visual indicator
@@ -524,6 +548,11 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
             asset_codes=result.asset_codes,
             sentiment_label=result.sentiment_label,
             indicator=SentimentIndicatorResponse(**ind.to_dict()),
+            explanation=(
+                SentimentExplanationResponse(**result.explanation)
+                if result.explanation
+                else None
+            ),
         )
 
     except HTTPException:

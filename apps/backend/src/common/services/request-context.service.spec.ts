@@ -39,6 +39,29 @@ describe('RequestContextService', () => {
     });
   });
 
+  describe('getCorrelationId and static methods', () => {
+    it('should return correlationId when provided', () => {
+      const result = service.run({ correlationId: 'corr-999' }, () => {
+        return service.getCorrelationId();
+      });
+      expect(result).toBe('corr-999');
+    });
+
+    it('should fallback to requestId if correlationId not explicitly set', () => {
+      const result = service.run({ requestId: 'req-888' }, () => {
+        return service.getCorrelationId();
+      });
+      expect(result).toBe('req-888');
+    });
+
+    it('should allow static access without dependency injection', () => {
+      RequestContextService.run({ correlationId: 'static-corr-1' }, () => {
+        expect(RequestContextService.getCorrelationId()).toBe('static-corr-1');
+        expect(RequestContextService.getRequestId()).toBe('static-corr-1');
+      });
+    });
+  });
+
   describe('getContext', () => {
     it('should return undefined when outside request context', () => {
       expect(service.getContext()).toBeUndefined();
