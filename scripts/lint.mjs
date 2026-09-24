@@ -41,4 +41,15 @@ if (!ranAny) {
   process.exit(1);
 }
 
+console.log('[lint] Checking contract error codes for overlaps...');
+const contractErrorsResult = spawnSync('node', ['scripts/lint-contract-errors.mjs'], {
+  cwd: process.cwd(),
+  stdio: 'inherit',
+  shell: true,
+});
+
+if (contractErrorsResult.status !== 0) {
+  failed = true;
+}
+
 process.exit(failed ? 1 : 0);

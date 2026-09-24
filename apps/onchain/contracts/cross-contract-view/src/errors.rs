@@ -11,28 +11,28 @@ use soroban_sdk::contracterror;
 #[repr(u32)]
 pub enum ViewError {
     /// The requested data was not found in storage.
-    NotFound = 1,
+    NotFound = 1200,
 
     /// The contract is not initialized.
-    NotInitialized = 2,
+    NotInitialized = 1201,
 
     /// The caller is not authorized to perform this action.
-    Unauthorized = 3,
+    Unauthorized = 1202,
 
     /// The target contract address is invalid or not registered.
-    InvalidContract = 4,
+    InvalidContract = 1203,
 
     /// The operation failed due to a type mismatch or conversion error.
-    TypeMismatch = 5,
+    TypeMismatch = 1204,
 
     /// Storage operation failed (e.g., TTL extension).
-    StorageError = 6,
+    StorageError = 1205,
 
     /// The token operation failed.
-    TokenError = 7,
+    TokenError = 1206,
 
     /// Cross-contract call failed.
-    CrossContractCallFailed = 8,
+    CrossContractCallFailed = 1207,
 }
 
 impl ViewError {

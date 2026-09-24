@@ -1,0 +1,967 @@
+{
+    "1332":  {
+                 "message":  "crowdfund_vault: EmergencyMigrationRequiresPause",
+                 "contract":  "crowdfund_vault",
+                 "name":  "EmergencyMigrationRequiresPause"
+             },
+    "1323":  {
+                 "message":  "crowdfund_vault: MilestoneEscrowed",
+                 "contract":  "crowdfund_vault",
+                 "name":  "MilestoneEscrowed"
+             },
+    "1618":  {
+                 "message":  "matching_pool: ContributionScopePaused",
+                 "contract":  "matching_pool",
+                 "name":  "ContributionScopePaused"
+             },
+    "2404":  {
+                 "message":  "yield_vault: ProviderNotFound",
+                 "contract":  "yield_vault",
+                 "name":  "ProviderNotFound"
+             },
+    "1107":  {
+                 "message":  "contributor_registry: GitHubHandleTaken",
+                 "contract":  "contributor_registry",
+                 "name":  "GitHubHandleTaken"
+             },
+    "2122":  {
+                 "message":  "treasury: Insolvent",
+                 "contract":  "treasury",
+                 "name":  "Insolvent"
+             },
+    "2107":  {
+                 "message":  "treasury: NothingToClaim",
+                 "contract":  "treasury",
+                 "name":  "NothingToClaim"
+             },
+    "1902":  {
+                 "message":  "project_registry: Unauthorized",
+                 "contract":  "project_registry",
+                 "name":  "Unauthorized"
+             },
+    "1901":  {
+                 "message":  "project_registry: AlreadyInitialized",
+                 "contract":  "project_registry",
+                 "name":  "AlreadyInitialized"
+             },
+    "2403":  {
+                 "message":  "yield_vault: InsufficientBalance",
+                 "contract":  "yield_vault",
+                 "name":  "InsufficientBalance"
+             },
+    "2114":  {
+                 "message":  "treasury: ProposalExpired",
+                 "contract":  "treasury",
+                 "name":  "ProposalExpired"
+             },
+    "2001":  {
+                 "message":  "protocol_registry: AlreadyInitialized",
+                 "contract":  "protocol_registry",
+                 "name":  "AlreadyInitialized"
+             },
+    "2120":  {
+                 "message":  "treasury: InvalidScheduleStep",
+                 "contract":  "treasury",
+                 "name":  "InvalidScheduleStep"
+             },
+    "1203":  {
+                 "message":  "cross-contract-view: InvalidContract",
+                 "contract":  "cross-contract-view",
+                 "name":  "InvalidContract"
+             },
+    "1304":  {
+                 "message":  "crowdfund_vault: MilestoneNotApproved",
+                 "contract":  "crowdfund_vault",
+                 "name":  "MilestoneNotApproved"
+             },
+    "1109":  {
+                 "message":  "contributor_registry: TooManySigners",
+                 "contract":  "contributor_registry",
+                 "name":  "TooManySigners"
+             },
+    "2405":  {
+                 "message":  "yield_vault: NoProvidersAvailable",
+                 "contract":  "yield_vault",
+                 "name":  "NoProvidersAvailable"
+             },
+    "1702":  {
+                 "message":  "notification_broker: SubscriptionNotFound",
+                 "contract":  "notification_broker",
+                 "name":  "SubscriptionNotFound"
+             },
+    "1113":  {
+                 "message":  "contributor_registry: AlreadySigned",
+                 "contract":  "contributor_registry",
+                 "name":  "AlreadySigned"
+             },
+    "1402":  {
+                 "message":  "feature_flags: Unauthorized",
+                 "contract":  "feature_flags",
+                 "name":  "Unauthorized"
+             },
+    "1339":  {
+                 "message":  "crowdfund_vault: InvalidBatch",
+                 "contract":  "crowdfund_vault",
+                 "name":  "InvalidBatch"
+             },
+    "2309":  {
+                 "message":  "vesting-wallet: Reentrancy",
+                 "contract":  "vesting-wallet",
+                 "name":  "Reentrancy"
+             },
+    "1110":  {
+                 "message":  "contributor_registry: ProposalNotFound",
+                 "contract":  "contributor_registry",
+                 "name":  "ProposalNotFound"
+             },
+    "2407":  {
+                 "message":  "yield_vault: Unauthorized",
+                 "contract":  "yield_vault",
+                 "name":  "Unauthorized"
+             },
+    "2106":  {
+                 "message":  "treasury: StreamNotFound",
+                 "contract":  "treasury",
+                 "name":  "StreamNotFound"
+             },
+    "2303":  {
+                 "message":  "vesting-wallet: VestingNotFound",
+                 "contract":  "vesting-wallet",
+                 "name":  "VestingNotFound"
+             },
+    "2304":  {
+                 "message":  "vesting-wallet: InvalidAmount",
+                 "contract":  "vesting-wallet",
+                 "name":  "InvalidAmount"
+             },
+    "1703":  {
+                 "message":  "notification_broker: ReentrancyDetected",
+                 "contract":  "notification_broker",
+                 "name":  "ReentrancyDetected"
+             },
+    "1615":  {
+                 "message":  "matching_pool: ContractPaused",
+                 "contract":  "matching_pool",
+                 "name":  "ContractPaused"
+             },
+    "2402":  {
+                 "message":  "yield_vault: InvalidAmount",
+                 "contract":  "yield_vault",
+                 "name":  "InvalidAmount"
+             },
+    "1322":  {
+                 "message":  "crowdfund_vault: MilestoneNotDisputed",
+                 "contract":  "crowdfund_vault",
+                 "name":  "MilestoneNotDisputed"
+             },
+    "1502":  {
+                 "message":  "lumenpulse-curation: ProjectNotFound",
+                 "contract":  "lumenpulse-curation",
+                 "name":  "ProjectNotFound"
+             },
+    "1312":  {
+                 "message":  "crowdfund_vault: ProjectNotCancellable",
+                 "contract":  "crowdfund_vault",
+                 "name":  "ProjectNotCancellable"
+             },
+    "2409":  {
+                 "message":  "yield_vault: Reentrancy",
+                 "contract":  "yield_vault",
+                 "name":  "Reentrancy"
+             },
+    "2201":  {
+                 "message":  "upgradable-contract: Unauthorized",
+                 "contract":  "upgradable-contract",
+                 "name":  "Unauthorized"
+             },
+    "2101":  {
+                 "message":  "treasury: AlreadyInitialized",
+                 "contract":  "treasury",
+                 "name":  "AlreadyInitialized"
+             },
+    "1616":  {
+                 "message":  "matching_pool: Reentrancy",
+                 "contract":  "matching_pool",
+                 "name":  "Reentrancy"
+             },
+    "1908":  {
+                 "message":  "project_registry: InvalidThreshold",
+                 "contract":  "project_registry",
+                 "name":  "InvalidThreshold"
+             },
+    "2301":  {
+                 "message":  "vesting-wallet: AlreadyInitialized",
+                 "contract":  "vesting-wallet",
+                 "name":  "AlreadyInitialized"
+             },
+    "1910":  {
+                 "message":  "project_registry: ProjectAlreadyVerified",
+                 "contract":  "project_registry",
+                 "name":  "ProjectAlreadyVerified"
+             },
+    "1800":  {
+                 "message":  "pricing_adapter: NotInitialized",
+                 "contract":  "pricing_adapter",
+                 "name":  "NotInitialized"
+             },
+    "1313":  {
+                 "message":  "crowdfund_vault: RefundFailed",
+                 "contract":  "crowdfund_vault",
+                 "name":  "RefundFailed"
+             },
+    "1336":  {
+                 "message":  "crowdfund_vault: InvalidMigrationRecipient",
+                 "contract":  "crowdfund_vault",
+                 "name":  "InvalidMigrationRecipient"
+             },
+    "1106":  {
+                 "message":  "contributor_registry: ReputationOverflow",
+                 "contract":  "contributor_registry",
+                 "name":  "ReputationOverflow"
+             },
+    "1803":  {
+                 "message":  "pricing_adapter: PriceNotFound",
+                 "contract":  "pricing_adapter",
+                 "name":  "PriceNotFound"
+             },
+    "1319":  {
+                 "message":  "crowdfund_vault: InsufficientContributionToVote",
+                 "contract":  "crowdfund_vault",
+                 "name":  "InsufficientContributionToVote"
+             },
+    "1608":  {
+                 "message":  "matching_pool: ProjectAlreadyEligible",
+                 "contract":  "matching_pool",
+                 "name":  "ProjectAlreadyEligible"
+             },
+    "1119":  {
+                 "message":  "contributor_registry: AttestationAlreadyRevoked",
+                 "contract":  "contributor_registry",
+                 "name":  "AttestationAlreadyRevoked"
+             },
+    "2308":  {
+                 "message":  "vesting-wallet: InsufficientBalance",
+                 "contract":  "vesting-wallet",
+                 "name":  "InsufficientBalance"
+             },
+    "1610":  {
+                 "message":  "matching_pool: InsufficientPoolBalance",
+                 "contract":  "matching_pool",
+                 "name":  "InsufficientPoolBalance"
+             },
+    "2002":  {
+                 "message":  "protocol_registry: Unauthorized",
+                 "contract":  "protocol_registry",
+                 "name":  "Unauthorized"
+             },
+    "1334":  {
+                 "message":  "crowdfund_vault: MigrationPlanNotFound",
+                 "contract":  "crowdfund_vault",
+                 "name":  "MigrationPlanNotFound"
+             },
+    "2110":  {
+                 "message":  "treasury: SameBeneficiary",
+                 "contract":  "treasury",
+                 "name":  "SameBeneficiary"
+             },
+    "2310":  {
+                 "message":  "vesting-wallet: DelegateNotAuthorized",
+                 "contract":  "vesting-wallet",
+                 "name":  "DelegateNotAuthorized"
+             },
+    "1328":  {
+                 "message":  "crowdfund_vault: RefundWindowClosed",
+                 "contract":  "crowdfund_vault",
+                 "name":  "RefundWindowClosed"
+             },
+    "1508":  {
+                 "message":  "lumenpulse-curation: InvalidMetadata",
+                 "contract":  "lumenpulse-curation",
+                 "name":  "InvalidMetadata"
+             },
+    "1112":  {
+                 "message":  "contributor_registry: ProposalExpired",
+                 "contract":  "contributor_registry",
+                 "name":  "ProposalExpired"
+             },
+    "1403":  {
+                 "message":  "feature_flags: ContractPaused",
+                 "contract":  "feature_flags",
+                 "name":  "ContractPaused"
+             },
+    "2121":  {
+                 "message":  "treasury: TooManyInstallments",
+                 "contract":  "treasury",
+                 "name":  "TooManyInstallments"
+             },
+    "2117":  {
+                 "message":  "treasury: InvalidMultisigConfig",
+                 "contract":  "treasury",
+                 "name":  "InvalidMultisigConfig"
+             },
+    "1620":  {
+                 "message":  "matching_pool: GovernanceScopePaused",
+                 "contract":  "matching_pool",
+                 "name":  "GovernanceScopePaused"
+             },
+    "1701":  {
+                 "message":  "notification_broker: AlreadyInitialized",
+                 "contract":  "notification_broker",
+                 "name":  "AlreadyInitialized"
+             },
+    "1501":  {
+                 "message":  "lumenpulse-curation: NotInitialized",
+                 "contract":  "lumenpulse-curation",
+                 "name":  "NotInitialized"
+             },
+    "1326":  {
+                 "message":  "crowdfund_vault: MigrationRequired",
+                 "contract":  "crowdfund_vault",
+                 "name":  "MigrationRequired"
+             },
+    "1601":  {
+                 "message":  "matching_pool: AlreadyInitialized",
+                 "contract":  "matching_pool",
+                 "name":  "AlreadyInitialized"
+             },
+    "1401":  {
+                 "message":  "feature_flags: AlreadyInitialized",
+                 "contract":  "feature_flags",
+                 "name":  "AlreadyInitialized"
+             },
+    "1911":  {
+                 "message":  "project_registry: ProjectAlreadyRejected",
+                 "contract":  "project_registry",
+                 "name":  "ProjectAlreadyRejected"
+             },
+    "1614":  {
+                 "message":  "matching_pool: InvalidRoundDates",
+                 "contract":  "matching_pool",
+                 "name":  "InvalidRoundDates"
+             },
+    "2102":  {
+                 "message":  "treasury: Unauthorized",
+                 "contract":  "treasury",
+                 "name":  "Unauthorized"
+             },
+    "2204":  {
+                 "message":  "upgradable-contract: OperationNotFound",
+                 "contract":  "upgradable-contract",
+                 "name":  "OperationNotFound"
+             },
+    "1200":  {
+                 "message":  "cross-contract-view: NotFound",
+                 "contract":  "cross-contract-view",
+                 "name":  "NotFound"
+             },
+    "1300":  {
+                 "message":  "crowdfund_vault: NotInitialized",
+                 "contract":  "crowdfund_vault",
+                 "name":  "NotInitialized"
+             },
+    "1100":  {
+                 "message":  "contributor_registry: NotInitialized",
+                 "contract":  "contributor_registry",
+                 "name":  "NotInitialized"
+             },
+    "2400":  {
+                 "message":  "yield_vault: AlreadyInitialized",
+                 "contract":  "yield_vault",
+                 "name":  "AlreadyInitialized"
+             },
+    "1321":  {
+                 "message":  "crowdfund_vault: MilestoneAlreadyDisputed",
+                 "contract":  "crowdfund_vault",
+                 "name":  "MilestoneAlreadyDisputed"
+             },
+    "1305":  {
+                 "message":  "crowdfund_vault: InsufficientBalance",
+                 "contract":  "crowdfund_vault",
+                 "name":  "InsufficientBalance"
+             },
+    "1603":  {
+                 "message":  "matching_pool: RoundNotFound",
+                 "contract":  "matching_pool",
+                 "name":  "RoundNotFound"
+             },
+    "2205":  {
+                 "message":  "upgradable-contract: OperationNotReady",
+                 "contract":  "upgradable-contract",
+                 "name":  "OperationNotReady"
+             },
+    "2113":  {
+                 "message":  "treasury: ProposalAlreadySigned",
+                 "contract":  "treasury",
+                 "name":  "ProposalAlreadySigned"
+             },
+    "1105":  {
+                 "message":  "contributor_registry: InvalidGitHubHandle",
+                 "contract":  "contributor_registry",
+                 "name":  "InvalidGitHubHandle"
+             },
+    "1509":  {
+                 "message":  "lumenpulse-curation: Unauthorized",
+                 "contract":  "lumenpulse-curation",
+                 "name":  "Unauthorized"
+             },
+    "1205":  {
+                 "message":  "cross-contract-view: StorageError",
+                 "contract":  "cross-contract-view",
+                 "name":  "StorageError"
+             },
+    "1609":  {
+                 "message":  "matching_pool: InvalidAmount",
+                 "contract":  "matching_pool",
+                 "name":  "InvalidAmount"
+             },
+    "1118":  {
+                 "message":  "contributor_registry: AttestationNotSuspended",
+                 "contract":  "contributor_registry",
+                 "name":  "AttestationNotSuspended"
+             },
+    "2000":  {
+                 "message":  "protocol_registry: NotInitialized",
+                 "contract":  "protocol_registry",
+                 "name":  "NotInitialized"
+             },
+    "1003":  {
+                 "message":  "contract_registry: ContractNotFound",
+                 "contract":  "contract_registry",
+                 "name":  "ContractNotFound"
+             },
+    "2116":  {
+                 "message":  "treasury: WrongProposalAction",
+                 "contract":  "treasury",
+                 "name":  "WrongProposalAction"
+             },
+    "2115":  {
+                 "message":  "treasury: ProposalNotActive",
+                 "contract":  "treasury",
+                 "name":  "ProposalNotActive"
+             },
+    "2003":  {
+                 "message":  "protocol_registry: ModuleNotFound",
+                 "contract":  "protocol_registry",
+                 "name":  "ModuleNotFound"
+             },
+    "2111":  {
+                 "message":  "treasury: ProposalNotFound",
+                 "contract":  "treasury",
+                 "name":  "ProposalNotFound"
+             },
+    "1907":  {
+                 "message":  "project_registry: InsufficientWeight",
+                 "contract":  "project_registry",
+                 "name":  "InsufficientWeight"
+             },
+    "1307":  {
+                 "message":  "crowdfund_vault: InvalidAmount",
+                 "contract":  "crowdfund_vault",
+                 "name":  "InvalidAmount"
+             },
+    "1607":  {
+                 "message":  "matching_pool: ProjectNotEligible",
+                 "contract":  "matching_pool",
+                 "name":  "ProjectNotEligible"
+             },
+    "1311":  {
+                 "message":  "crowdfund_vault: ProjectAlreadyCanceled",
+                 "contract":  "crowdfund_vault",
+                 "name":  "ProjectAlreadyCanceled"
+             },
+    "1507":  {
+                 "message":  "lumenpulse-curation: InsufficientReputation",
+                 "contract":  "lumenpulse-curation",
+                 "name":  "InsufficientReputation"
+             },
+    "1207":  {
+                 "message":  "cross-contract-view: CrossContractCallFailed",
+                 "contract":  "cross-contract-view",
+                 "name":  "CrossContractCallFailed"
+             },
+    "1111":  {
+                 "message":  "contributor_registry: InvalidProposalStatus",
+                 "contract":  "contributor_registry",
+                 "name":  "InvalidProposalStatus"
+             },
+    "1116":  {
+                 "message":  "contributor_registry: InvalidSignature",
+                 "contract":  "contributor_registry",
+                 "name":  "InvalidSignature"
+             },
+    "1204":  {
+                 "message":  "cross-contract-view: TypeMismatch",
+                 "contract":  "cross-contract-view",
+                 "name":  "TypeMismatch"
+             },
+    "1104":  {
+                 "message":  "contributor_registry: ContributorAlreadyExists",
+                 "contract":  "contributor_registry",
+                 "name":  "ContributorAlreadyExists"
+             },
+    "2100":  {
+                 "message":  "treasury: NotInitialized",
+                 "contract":  "treasury",
+                 "name":  "NotInitialized"
+             },
+    "1340":  {
+                 "message":  "crowdfund_vault: InvalidSignature",
+                 "contract":  "crowdfund_vault",
+                 "name":  "InvalidSignature"
+             },
+    "1120":  {
+                 "message":  "contributor_registry: ContributionScopePaused",
+                 "contract":  "contributor_registry",
+                 "name":  "ContributionScopePaused"
+             },
+    "1101":  {
+                 "message":  "contributor_registry: AlreadyInitialized",
+                 "contract":  "contributor_registry",
+                 "name":  "AlreadyInitialized"
+             },
+    "1327":  {
+                 "message":  "crowdfund_vault: MilestoneExpired",
+                 "contract":  "crowdfund_vault",
+                 "name":  "MilestoneExpired"
+             },
+    "1505":  {
+                 "message":  "lumenpulse-curation: VotingWindowNotExpired",
+                 "contract":  "lumenpulse-curation",
+                 "name":  "VotingWindowNotExpired"
+             },
+    "1103":  {
+                 "message":  "contributor_registry: ContributorNotFound",
+                 "contract":  "contributor_registry",
+                 "name":  "ContributorNotFound"
+             },
+    "1324":  {
+                 "message":  "crowdfund_vault: InvalidRecipient",
+                 "contract":  "crowdfund_vault",
+                 "name":  "InvalidRecipient"
+             },
+    "2103":  {
+                 "message":  "treasury: InvalidAmount",
+                 "contract":  "treasury",
+                 "name":  "InvalidAmount"
+             },
+    "2307":  {
+                 "message":  "vesting-wallet: NothingToClaim",
+                 "contract":  "vesting-wallet",
+                 "name":  "NothingToClaim"
+             },
+    "2406":  {
+                 "message":  "yield_vault: AlreadyExecuted",
+                 "contract":  "yield_vault",
+                 "name":  "AlreadyExecuted"
+             },
+    "1337":  {
+                 "message":  "crowdfund_vault: MigrationAmountExceedsBalance",
+                 "contract":  "crowdfund_vault",
+                 "name":  "MigrationAmountExceedsBalance"
+             },
+    "1325":  {
+                 "message":  "crowdfund_vault: UnsupportedStorageVersion",
+                 "contract":  "crowdfund_vault",
+                 "name":  "UnsupportedStorageVersion"
+             },
+    "1301":  {
+                 "message":  "crowdfund_vault: AlreadyInitialized",
+                 "contract":  "crowdfund_vault",
+                 "name":  "AlreadyInitialized"
+             },
+    "1806":  {
+                 "message":  "pricing_adapter: PriceInvalidated",
+                 "contract":  "pricing_adapter",
+                 "name":  "PriceInvalidated"
+             },
+    "1206":  {
+                 "message":  "cross-contract-view: TokenError",
+                 "contract":  "cross-contract-view",
+                 "name":  "TokenError"
+             },
+    "1617":  {
+                 "message":  "matching_pool: ContributionCapExceeded",
+                 "contract":  "matching_pool",
+                 "name":  "ContributionCapExceeded"
+             },
+    "1320":  {
+                 "message":  "crowdfund_vault: MilestoneAlreadyApproved",
+                 "contract":  "crowdfund_vault",
+                 "name":  "MilestoneAlreadyApproved"
+             },
+    "1117":  {
+                 "message":  "contributor_registry: AttestationNotActive",
+                 "contract":  "contributor_registry",
+                 "name":  "AttestationNotActive"
+             },
+    "1002":  {
+                 "message":  "contract_registry: NotInitialized",
+                 "contract":  "contract_registry",
+                 "name":  "NotInitialized"
+             },
+    "1330":  {
+                 "message":  "crowdfund_vault: Reentrancy",
+                 "contract":  "crowdfund_vault",
+                 "name":  "Reentrancy"
+             },
+    "1802":  {
+                 "message":  "pricing_adapter: Unauthorized",
+                 "contract":  "pricing_adapter",
+                 "name":  "Unauthorized"
+             },
+    "1306":  {
+                 "message":  "crowdfund_vault: ProjectNotActive",
+                 "contract":  "crowdfund_vault",
+                 "name":  "ProjectNotActive"
+             },
+    "1804":  {
+                 "message":  "pricing_adapter: InvalidPrice",
+                 "contract":  "pricing_adapter",
+                 "name":  "InvalidPrice"
+             },
+    "1506":  {
+                 "message":  "lumenpulse-curation: AlreadyVoted",
+                 "contract":  "lumenpulse-curation",
+                 "name":  "AlreadyVoted"
+             },
+    "1315":  {
+                 "message":  "crowdfund_vault: YieldProviderNotFound",
+                 "contract":  "crowdfund_vault",
+                 "name":  "YieldProviderNotFound"
+             },
+    "1604":  {
+                 "message":  "matching_pool: RoundNotActive",
+                 "contract":  "matching_pool",
+                 "name":  "RoundNotActive"
+             },
+    "1115":  {
+                 "message":  "contributor_registry: InvalidNonce",
+                 "contract":  "contributor_registry",
+                 "name":  "InvalidNonce"
+             },
+    "1318":  {
+                 "message":  "crowdfund_vault: AlreadyVoted",
+                 "contract":  "crowdfund_vault",
+                 "name":  "AlreadyVoted"
+             },
+    "1303":  {
+                 "message":  "crowdfund_vault: ProjectNotFound",
+                 "contract":  "crowdfund_vault",
+                 "name":  "ProjectNotFound"
+             },
+    "1310":  {
+                 "message":  "crowdfund_vault: ContractPaused",
+                 "contract":  "crowdfund_vault",
+                 "name":  "ContractPaused"
+             },
+    "1619":  {
+                 "message":  "matching_pool: PayoutScopePaused",
+                 "contract":  "matching_pool",
+                 "name":  "PayoutScopePaused"
+             },
+    "2007":  {
+                 "message":  "protocol_registry: VersionNotIncremented",
+                 "contract":  "protocol_registry",
+                 "name":  "VersionNotIncremented"
+             },
+    "2306":  {
+                 "message":  "vesting-wallet: InvalidStartTime",
+                 "contract":  "vesting-wallet",
+                 "name":  "InvalidStartTime"
+             },
+    "1904":  {
+                 "message":  "project_registry: ProjectAlreadyRegistered",
+                 "contract":  "project_registry",
+                 "name":  "ProjectAlreadyRegistered"
+             },
+    "1308":  {
+                 "message":  "crowdfund_vault: AlreadyRegistered",
+                 "contract":  "crowdfund_vault",
+                 "name":  "AlreadyRegistered"
+             },
+    "2004":  {
+                 "message":  "protocol_registry: ModuleAlreadyRegistered",
+                 "contract":  "protocol_registry",
+                 "name":  "ModuleAlreadyRegistered"
+             },
+    "1335":  {
+                 "message":  "crowdfund_vault: MigrationAlreadyExecuted",
+                 "contract":  "crowdfund_vault",
+                 "name":  "MigrationAlreadyExecuted"
+             },
+    "1108":  {
+                 "message":  "contributor_registry: InvalidMultisigConfig",
+                 "contract":  "contributor_registry",
+                 "name":  "InvalidMultisigConfig"
+             },
+    "1504":  {
+                 "message":  "lumenpulse-curation: VotingWindowExpired",
+                 "contract":  "lumenpulse-curation",
+                 "name":  "VotingWindowExpired"
+             },
+    "1317":  {
+                 "message":  "crowdfund_vault: VotingWindowClosed",
+                 "contract":  "crowdfund_vault",
+                 "name":  "VotingWindowClosed"
+             },
+    "1606":  {
+                 "message":  "matching_pool: RoundNotFinalized",
+                 "contract":  "matching_pool",
+                 "name":  "RoundNotFinalized"
+             },
+    "1102":  {
+                 "message":  "contributor_registry: Unauthorized",
+                 "contract":  "contributor_registry",
+                 "name":  "Unauthorized"
+             },
+    "1611":  {
+                 "message":  "matching_pool: NoEligibleProjects",
+                 "contract":  "matching_pool",
+                 "name":  "NoEligibleProjects"
+             },
+    "2206":  {
+                 "message":  "upgradable-contract: OperationExpired",
+                 "contract":  "upgradable-contract",
+                 "name":  "OperationExpired"
+             },
+    "2104":  {
+                 "message":  "treasury: InvalidDuration",
+                 "contract":  "treasury",
+                 "name":  "InvalidDuration"
+             },
+    "1329":  {
+                 "message":  "crowdfund_vault: RefundWindowNotOpen",
+                 "contract":  "crowdfund_vault",
+                 "name":  "RefundWindowNotOpen"
+             },
+    "2119":  {
+                 "message":  "treasury: InvalidCliffTime",
+                 "contract":  "treasury",
+                 "name":  "InvalidCliffTime"
+             },
+    "2203":  {
+                 "message":  "upgradable-contract: OperationAlreadyQueued",
+                 "contract":  "upgradable-contract",
+                 "name":  "OperationAlreadyQueued"
+             },
+    "2006":  {
+                 "message":  "protocol_registry: ContractPaused",
+                 "contract":  "protocol_registry",
+                 "name":  "ContractPaused"
+             },
+    "1906":  {
+                 "message":  "project_registry: VotingClosed",
+                 "contract":  "project_registry",
+                 "name":  "VotingClosed"
+             },
+    "1333":  {
+                 "message":  "crowdfund_vault: MigrationPlanAlreadyExists",
+                 "contract":  "crowdfund_vault",
+                 "name":  "MigrationPlanAlreadyExists"
+             },
+    "2207":  {
+                 "message":  "upgradable-contract: InvalidDelay",
+                 "contract":  "upgradable-contract",
+                 "name":  "InvalidDelay"
+             },
+    "2408":  {
+                 "message":  "yield_vault: VaultPaused",
+                 "contract":  "yield_vault",
+                 "name":  "VaultPaused"
+             },
+    "1202":  {
+                 "message":  "cross-contract-view: Unauthorized",
+                 "contract":  "cross-contract-view",
+                 "name":  "Unauthorized"
+             },
+    "1613":  {
+                 "message":  "matching_pool: MatchAlreadyDistributed",
+                 "contract":  "matching_pool",
+                 "name":  "MatchAlreadyDistributed"
+             },
+    "1001":  {
+                 "message":  "contract_registry: AlreadyInitialized",
+                 "contract":  "contract_registry",
+                 "name":  "AlreadyInitialized"
+             },
+    "1602":  {
+                 "message":  "matching_pool: Unauthorized",
+                 "contract":  "matching_pool",
+                 "name":  "Unauthorized"
+             },
+    "1900":  {
+                 "message":  "project_registry: NotInitialized",
+                 "contract":  "project_registry",
+                 "name":  "NotInitialized"
+             },
+    "2118":  {
+                 "message":  "treasury: TooManySigners",
+                 "contract":  "treasury",
+                 "name":  "TooManySigners"
+             },
+    "1700":  {
+                 "message":  "notification_broker: NotInitialized",
+                 "contract":  "notification_broker",
+                 "name":  "NotInitialized"
+             },
+    "1905":  {
+                 "message":  "project_registry: AlreadyVoted",
+                 "contract":  "project_registry",
+                 "name":  "AlreadyVoted"
+             },
+    "1500":  {
+                 "message":  "lumenpulse-curation: AlreadyInitialized",
+                 "contract":  "lumenpulse-curation",
+                 "name":  "AlreadyInitialized"
+             },
+    "1331":  {
+                 "message":  "crowdfund_vault: AlreadyExecuted",
+                 "contract":  "crowdfund_vault",
+                 "name":  "AlreadyExecuted"
+             },
+    "1600":  {
+                 "message":  "matching_pool: NotInitialized",
+                 "contract":  "matching_pool",
+                 "name":  "NotInitialized"
+             },
+    "1302":  {
+                 "message":  "crowdfund_vault: Unauthorized",
+                 "contract":  "crowdfund_vault",
+                 "name":  "Unauthorized"
+             },
+    "1805":  {
+                 "message":  "pricing_adapter: StalePrice",
+                 "contract":  "pricing_adapter",
+                 "name":  "StalePrice"
+             },
+    "1400":  {
+                 "message":  "feature_flags: NotInitialized",
+                 "contract":  "feature_flags",
+                 "name":  "NotInitialized"
+             },
+    "1314":  {
+                 "message":  "crowdfund_vault: ContractNotPaused",
+                 "contract":  "crowdfund_vault",
+                 "name":  "ContractNotPaused"
+             },
+    "1605":  {
+                 "message":  "matching_pool: RoundAlreadyFinalized",
+                 "contract":  "matching_pool",
+                 "name":  "RoundAlreadyFinalized"
+             },
+    "1114":  {
+                 "message":  "contributor_registry: BelowThreshold",
+                 "contract":  "contributor_registry",
+                 "name":  "BelowThreshold"
+             },
+    "2401":  {
+                 "message":  "yield_vault: NotInitialized",
+                 "contract":  "yield_vault",
+                 "name":  "NotInitialized"
+             },
+    "2108":  {
+                 "message":  "treasury: Reentrancy",
+                 "contract":  "treasury",
+                 "name":  "Reentrancy"
+             },
+    "1903":  {
+                 "message":  "project_registry: ProjectNotFound",
+                 "contract":  "project_registry",
+                 "name":  "ProjectNotFound"
+             },
+    "2112":  {
+                 "message":  "treasury: ProposalNotApproved",
+                 "contract":  "treasury",
+                 "name":  "ProposalNotApproved"
+             },
+    "2202":  {
+                 "message":  "upgradable-contract: NotInitialized",
+                 "contract":  "upgradable-contract",
+                 "name":  "NotInitialized"
+             },
+    "1801":  {
+                 "message":  "pricing_adapter: AlreadyInitialized",
+                 "contract":  "pricing_adapter",
+                 "name":  "AlreadyInitialized"
+             },
+    "2302":  {
+                 "message":  "vesting-wallet: Unauthorized",
+                 "contract":  "vesting-wallet",
+                 "name":  "Unauthorized"
+             },
+    "2005":  {
+                 "message":  "protocol_registry: ModuleInactive",
+                 "contract":  "protocol_registry",
+                 "name":  "ModuleInactive"
+             },
+    "2200":  {
+                 "message":  "upgradable-contract: AlreadyInitialized",
+                 "contract":  "upgradable-contract",
+                 "name":  "AlreadyInitialized"
+             },
+    "1316":  {
+                 "message":  "crowdfund_vault: VotingWindowNotStarted",
+                 "contract":  "crowdfund_vault",
+                 "name":  "VotingWindowNotStarted"
+             },
+    "1503":  {
+                 "message":  "lumenpulse-curation: VotingClosed",
+                 "contract":  "lumenpulse-curation",
+                 "name":  "VotingClosed"
+             },
+    "1309":  {
+                 "message":  "crowdfund_vault: ContributorNotFound",
+                 "contract":  "crowdfund_vault",
+                 "name":  "ContributorNotFound"
+             },
+    "1201":  {
+                 "message":  "cross-contract-view: NotInitialized",
+                 "contract":  "cross-contract-view",
+                 "name":  "NotInitialized"
+             },
+    "1612":  {
+                 "message":  "matching_pool: RoundStillOpen",
+                 "contract":  "matching_pool",
+                 "name":  "RoundStillOpen"
+             },
+    "2105":  {
+                 "message":  "treasury: InvalidStartTime",
+                 "contract":  "treasury",
+                 "name":  "InvalidStartTime"
+             },
+    "1000":  {
+                 "message":  "contract_registry: Unauthorized",
+                 "contract":  "contract_registry",
+                 "name":  "Unauthorized"
+             },
+    "1121":  {
+                 "message":  "contributor_registry: GovernanceScopePaused",
+                 "contract":  "contributor_registry",
+                 "name":  "GovernanceScopePaused"
+             },
+    "2305":  {
+                 "message":  "vesting-wallet: InvalidDuration",
+                 "contract":  "vesting-wallet",
+                 "name":  "InvalidDuration"
+             },
+    "1338":  {
+                 "message":  "crowdfund_vault: MigrationPlanVetoed",
+                 "contract":  "crowdfund_vault",
+                 "name":  "MigrationPlanVetoed"
+             },
+    "1909":  {
+                 "message":  "project_registry: ContractPaused",
+                 "contract":  "project_registry",
+                 "name":  "ContractPaused"
+             },
+    "2109":  {
+                 "message":  "treasury: AlreadyExecuted",
+                 "contract":  "treasury",
+                 "name":  "AlreadyExecuted"
+             },
+    "2300":  {
+                 "message":  "vesting-wallet: NotInitialized",
+                 "contract":  "vesting-wallet",
+                 "name":  "NotInitialized"
+             }
+}

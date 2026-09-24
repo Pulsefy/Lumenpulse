@@ -4,15 +4,15 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum VestingError {
-    NotInitialized = 1,
-    AlreadyInitialized = 2,
-    Unauthorized = 3,
-    VestingNotFound = 4,
-    InvalidAmount = 5,
-    InvalidDuration = 6,
-    InvalidStartTime = 7,
-    NothingToClaim = 8,
-    InsufficientBalance = 9,
-    Reentrancy = 10,
-    DelegateNotAuthorized = 11,
+    NotInitialized = 2300,
+    AlreadyInitialized = 2301,
+    Unauthorized = 2302,
+    VestingNotFound = 2303,
+    InvalidAmount = 2304,
+    InvalidDuration = 2305,
+    InvalidStartTime = 2306,
+    NothingToClaim = 2307,
+    InsufficientBalance = 2308,
+    Reentrancy = 2309,
+    DelegateNotAuthorized = 2310,
 }
