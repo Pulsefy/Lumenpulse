@@ -35,6 +35,11 @@ class TrainingDataInfo:
     description: Optional[str] = None
     features: Optional[List[str]] = None  # List of feature names used
 
+    # Immutable training-data snapshot reference (Issue #1449)
+    snapshot_id: Optional[str] = None
+    snapshot_hash: Optional[str] = None
+    snapshot_uri: Optional[str] = None
+
 
 @dataclass
 class HyperparametersInfo:
