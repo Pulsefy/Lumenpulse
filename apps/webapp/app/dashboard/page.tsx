@@ -9,7 +9,8 @@ import WatchlistPanel from "@/components/watchlist-panel";
 import ContributionInsightsWidget from "@/components/contribution-insights-widget";
 import PortfolioOverviewCard from "@/components/portfolio-overview-card";
 import MarketInsightsCard from "@/components/market-insights-card";
-
+import ExportPanel from "@/components/export-panel";
+import { WatchlistProvider } from "@/hooks/use-watchlist";
 import { useStellarAccount } from "@/hooks/useStellarAccount";
 import { useStellarWallet } from "@/app/providers";
 import { usePortfolioSnapshot } from "@/hooks/usePortfolioSnapshot";
@@ -325,6 +326,11 @@ export default function DashboardPage() {
                     })
                   }
                 />
+              </div>
+
+              {/* Export Data Panel */}
+              <div className="col-span-1 md:col-span-2">
+                <ExportPanel />
               </div>
             </div>
           </>
