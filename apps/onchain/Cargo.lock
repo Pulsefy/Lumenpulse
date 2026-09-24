@@ -281,7 +281,7 @@ checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
 name = "contract_registry"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "soroban-sdk",
 ]
@@ -1768,6 +1768,14 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der",
+]
+
+[[package]]
+name = "stable-swap-pool"
+version = "0.1.0"
+dependencies = [
+ "reentrancy-guard",
+ "soroban-sdk",
 ]
 
 [[package]]
