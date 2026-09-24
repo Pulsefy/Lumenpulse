@@ -7,6 +7,7 @@ import os
 from typing import Any, Dict, List, Optional
 from src.utils.logger import setup_logger
 from src.utils.metrics import JOBS_RUN_TOTAL
+from src.utils.profiler import profile_stage
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -62,7 +63,8 @@ def _record_stage_run(stage_id: str, func):
             "error": None,
         }
         try:
-            result = func(*args, **kwargs)
+            with profile_stage(stage_id):
+                result = func(*args, **kwargs)
             duration = (datetime.utcnow() - started_at).total_seconds()
             _STAGE_RUN_STATE[stage_id] = {
                 "last_run": started_at.isoformat(),

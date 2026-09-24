@@ -39,6 +39,27 @@ MODEL_RETRAINING_DURATION = Histogram(
     buckets=[1, 5, 10, 30, 60, 120, 300, 600],
 )
 
+# ── Pipeline stage profiling metrics (per-stage) ───────────────────────
+PIPELINE_STAGE_WALL_SECONDS = Histogram(
+    "lumenpulse_pipeline_stage_wall_seconds",
+    "Wall-clock duration of individual pipeline stages in seconds",
+    ["stage"],
+    buckets=[0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300],
+)
+
+PIPELINE_STAGE_CPU_SECONDS = Histogram(
+    "lumenpulse_pipeline_stage_cpu_seconds",
+    "CPU time consumed by individual pipeline stages in seconds",
+    ["stage"],
+    buckets=[0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300],
+)
+
+PIPELINE_STAGE_PEAK_MEMORY_BYTES = Gauge(
+    "lumenpulse_pipeline_stage_peak_memory_bytes",
+    "Peak Python memory allocated during a pipeline stage (bytes)",
+    ["stage"],
+)
+
 INDEXER_LAG_SECONDS = Gauge(
     "lumenpulse_indexer_lag_seconds",
     "Seconds of lag between now and the latest indexed or ingested data",
