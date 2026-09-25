@@ -18,11 +18,11 @@ import {
 } from "lucide-react";
 import { WalletButton } from "./wallet-button";
 import { ThemeSelector } from "./theme-selector";
-import { WalletSwitcher } from "@/components/wallet-switcher";
 import { useStellarConfig } from "@/contexts/StellarConfigContext";
 import { useWallet } from "@/contexts/WalletContext";
 import { useExplorerUrl } from "@/hooks/useExplorerUrl";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import AdminRoleGate from "@/components/auth/AdminRoleGate";
 import { GlobalSearch } from "@/components/global-search";
 
 export function Navbar() {
@@ -152,18 +152,20 @@ export function Navbar() {
               </span>
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
-            {/* Admin link - only shown to authenticated users */}
+            {/* Admin link - only shown to users with confirmed admin role */}
             {isAuthenticated && (
-              <Link
-                href="/admin"
-                className="px-3 py-2 text-sm font-medium text-foreground/60 hover:text-primary transition-all flex items-center gap-2 group relative"
-              >
-                <Shield className="w-4 h-4 text-primary/60 group-hover:text-primary transition-colors" />
-                <span className="group-hover:translate-x-0.5 transition-transform">
-                  Admin
-                </span>
-                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
-              </Link>
+              <AdminRoleGate forbiddenFallback={null}>
+                <Link
+                  href="/admin"
+                  className="px-3 py-2 text-sm font-medium text-foreground/60 hover:text-primary transition-all flex items-center gap-2 group relative"
+                >
+                  <Shield className="w-4 h-4 text-primary/60 group-hover:text-primary transition-colors" />
+                  <span className="group-hover:translate-x-0.5 transition-transform">
+                    Admin
+                  </span>
+                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
+                </Link>
+              </AdminRoleGate>
             )}
           </div>
 
@@ -297,17 +299,19 @@ export function Navbar() {
               <span>Dashboard</span>
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
-            {/* Admin link in mobile menu */}
+            {/* Admin link in mobile menu - only for confirmed admin role */}
             {isAuthenticated && (
-              <Link
-                href="/admin"
-                className="flex items-center gap-3 p-3 rounded-lg text-foreground/60 hover:text-primary hover:bg-white/5 transition-all relative group"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                <Shield className="w-5 h-5 text-primary/60 group-hover:text-primary transition-colors" />
-                <span>Admin Console</span>
-                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
-              </Link>
+              <AdminRoleGate forbiddenFallback={null}>
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-3 p-3 rounded-lg text-foreground/60 hover:text-primary hover:bg-white/5 transition-all relative group"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <Shield className="w-5 h-5 text-primary/60 group-hover:text-primary transition-colors" />
+                  <span>Admin Console</span>
+                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
+                </Link>
+              </AdminRoleGate>
             )}
 
             {/* Testnet badge + Contract link + Wallet connect in mobile menu */}

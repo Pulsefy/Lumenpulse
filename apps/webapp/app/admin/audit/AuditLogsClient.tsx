@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { useStellarConfig } from '@/contexts/StellarConfigContext';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
+import { useAdminRole } from '@/hooks/useAdminRole';
+import { ForbiddenView } from '@/components/auth/ForbiddenView';
 
 import { clientConfig } from '@/lib/config';
 
@@ -72,6 +74,7 @@ export default function AuditLogsClient() {
   const router = useRouter();
   const { config } = useStellarConfig();
   const { loading: authLoading, isAuthenticated } = useAuthGuard();
+  const { loading: roleLoading, isAdmin, resolved: roleResolved } = useAdminRole();
 
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -81,10 +84,10 @@ export default function AuditLogsClient() {
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
+    if (!authLoading && !roleLoading && isAuthenticated && isAdmin) {
       loadLogs();
     }
-  }, [authLoading, isAuthenticated]);
+  }, [authLoading, roleLoading, isAuthenticated, isAdmin]);
 
   const loadLogs = async () => {
     try {
@@ -92,6 +95,7 @@ export default function AuditLogsClient() {
       setError(null);
       const response = await fetch(`${API_BASE}/admin/audit-logs?limit=50`, {
         headers: { Accept: 'application/json' },
+        credentials: 'include',
       });
       if (!response.ok) {
         throw new Error(`Failed to load logs: ${response.statusText}`);
@@ -100,52 +104,74 @@ export default function AuditLogsClient() {
       setLogs(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load audit logs');
-      // Use mock data as fallback
-      setLogs([
-        {
-          id: '1',
-          action: 'ROTATE_CONTRACT',
-          target: 'crowdfund_vault',
-          performedBy: 'admin@example.com',
-          timestamp: new Date().toISOString(),
-          status: 'success',
-          environment: 'testnet',
-          details: { oldAddress: '0x123...', newAddress: '0x456...' },
-        },
-        {
-          id: '2',
-          action: 'PAUSE_CONTRACT',
-          target: 'treasury',
-          performedBy: 'admin@example.com',
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-          status: 'success',
-          environment: 'testnet',
-        },
-        {
-          id: '3',
-          action: 'SYNC_VAULT',
-          target: 'crowdfund_vault',
-          performedBy: 'system',
-          timestamp: new Date(Date.now() - 7200000).toISOString(),
-          status: 'failed',
-          environment: 'testnet',
-          details: { error: 'RPC timeout' },
-        },
-      ]);
+      // Use mock data as fallback (only for confirmed admins to avoid leaking structure)
+      if (isAdmin) {
+        setLogs([
+          {
+            id: '1',
+            action: 'ROTATE_CONTRACT',
+            target: 'crowdfund_vault',
+            performedBy: 'admin@example.com',
+            timestamp: new Date().toISOString(),
+            status: 'success',
+            environment: 'testnet',
+            details: { oldAddress: '0x123...', newAddress: '0x456...' },
+          },
+          {
+            id: '2',
+            action: 'PAUSE_CONTRACT',
+            target: 'treasury',
+            performedBy: 'admin@example.com',
+            timestamp: new Date(Date.now() - 3600000).toISOString(),
+            status: 'success',
+            environment: 'testnet',
+          },
+          {
+            id: '3',
+            action: 'SYNC_VAULT',
+            target: 'crowdfund_vault',
+            performedBy: 'system',
+            timestamp: new Date(Date.now() - 7200000).toISOString(),
+            status: 'failed',
+            environment: 'testnet',
+            details: { error: 'RPC timeout' },
+          },
+        ]);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (!authLoading && !isAuthenticated) {
+  if (authLoading || roleLoading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-foreground/50 text-sm">Loading audit logs...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <FileText className="w-12 h-12 text-foreground/20 mx-auto mb-4" />
           <h2 className="text-xl font-semibold">Access Denied</h2>
-          <p className="text-foreground/50 text-sm mt-2">You do not have permission to view audit logs.</p>
+          <p className="text-foreground/50 text-sm mt-2">You must be logged in to view audit logs.</p>
         </div>
       </div>
+    );
+  }
+
+  if (roleResolved && !isAdmin) {
+    return (
+      <ForbiddenView
+        title="Admin Access Required"
+        description="Your account does not have permission to view audit logs."
+      />
     );
   }
 

@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Clipboard,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -13,23 +15,73 @@ import { useRouter } from 'expo-router';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { useLocalization } from '../../src/context';
 import { config } from '../../lib/config';
-import { getReleaseMetadata, ReleaseInfo } from '../../lib/release-metadata';
+import {
+  buildDiagnosticsBlock,
+  checkForRuntimeUpdate,
+  DiagnosticsContext,
+  getReleaseMetadata,
+  getRuntimeUpdateInfo,
+  ReleaseInfo,
+  RuntimeUpdateInfo,
+  UpdateCheckResult,
+  UpdateCheckStatus,
+} from '../../lib/release-metadata';
 import axios from 'axios';
 
 type ConnectionStatus = 'idle' | 'testing' | 'online' | 'offline';
+
+function updateStatusColor(
+  status: UpdateCheckStatus,
+  palette: { success: string; danger: string; warning: string; accent: string; textSecondary: string },
+): string {
+  switch (status) {
+    case 'available':
+    case 'roll-back-available':
+      return palette.accent;
+    case 'up-to-date':
+      return palette.success;
+    case 'error':
+      return palette.danger;
+    case 'checking':
+      return palette.warning;
+    case 'unsupported':
+    case 'idle':
+    default:
+      return palette.textSecondary;
+  }
+}
+
+function formatUpdateId(updateId: string | null, fallback: string): string {
+  if (!updateId) return fallback;
+  if (updateId.length <= 10) return updateId;
+  return `${updateId.slice(0, 6)}…${updateId.slice(-4)}`;
+}
 
 export default function StatusScreen() {
   const router = useRouter();
   const { colors, t } = useLocalization();
   const { environment, environmentConfig } = useEnvironment();
+
   const [releaseNotes, setReleaseNotes] = useState<ReleaseInfo[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle');
   const [lastChecked, setLastChecked] = useState<string | null>(null);
 
+  const [runtimeInfo, setRuntimeInfo] = useState<RuntimeUpdateInfo>(() => getRuntimeUpdateInfo());
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult>({
+    status: 'idle',
+    message: null,
+    newUpdateId: null,
+    createdAt: null,
+  });
+  const [diagnosticsCopied, setDiagnosticsCopied] = useState(false);
+
   useEffect(() => {
-    // Load release notes using utility helper
     const data = getReleaseMetadata();
     setReleaseNotes(data.releases);
+  }, []);
+
+  useEffect(() => {
+    setRuntimeInfo(getRuntimeUpdateInfo());
   }, []);
 
   const handleTestConnection = async () => {
@@ -45,7 +97,6 @@ export default function StatusScreen() {
     }
 
     try {
-      // Use axios or fetch with a 5 second timeout to test endpoint reachability
       const source = axios.CancelToken.source();
       const timeout = setTimeout(() => {
         source.cancel('Timeout');
@@ -53,7 +104,7 @@ export default function StatusScreen() {
 
       await axios.get(targetUrl, {
         cancelToken: source.token,
-        validateStatus: () => true, // resolve on any status code (even 404 means server is up)
+        validateStatus: () => true,
       });
 
       clearTimeout(timeout);
@@ -65,6 +116,42 @@ export default function StatusScreen() {
       setLastChecked(new Date().toLocaleTimeString());
     }
   };
+
+  const handleCheckForUpdate = useCallback(async () => {
+    setUpdateCheck((prev) =>
+      prev.status === 'checking'
+        ? prev
+        : { ...prev, status: 'checking', message: null },
+    );
+    const result = await checkForRuntimeUpdate();
+    setUpdateCheck(result);
+  }, []);
+
+  const diagnosticsContext = useMemo<DiagnosticsContext>(
+    () => ({
+      environment,
+      environmentLabel: environmentConfig.label,
+      apiBaseUrl: environmentConfig.apiBaseUrl || null,
+      stellarNetwork: environmentConfig.stellarNetwork || null,
+      sorobanRpcUrl: environmentConfig.sorobanRpcUrl || null,
+      crowdfundContractId: environmentConfig.crowdfundContractId || null,
+      connectionStatus,
+      lastCheckedAt: lastChecked,
+    }),
+    [environment, environmentConfig, connectionStatus, lastChecked],
+  );
+
+  const handleCopyDiagnostics = useCallback(async () => {
+    try {
+      const block = buildDiagnosticsBlock(diagnosticsContext);
+      await Clipboard.setString(block);
+      setDiagnosticsCopied(true);
+      setTimeout(() => setDiagnosticsCopied(false), 2500);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Unable to copy diagnostics', message);
+    }
+  }, [diagnosticsContext]);
 
   const getStatusColor = (status: ConnectionStatus) => {
     switch (status) {
@@ -92,6 +179,44 @@ export default function StatusScreen() {
     }
   };
 
+  const updateCheckCta = (() => {
+    switch (updateCheck.status) {
+      case 'checking':
+        return 'Checking…';
+      case 'available':
+      case 'roll-back-available':
+        return 'Check again';
+      case 'up-to-date':
+        return 'Check again';
+      case 'error':
+      case 'unsupported':
+        return 'Retry';
+      case 'idle':
+      default:
+        return 'Check for update';
+    }
+  })();
+
+  const updateBadgeText = (() => {
+    switch (updateCheck.status) {
+      case 'available':
+        return 'Update available';
+      case 'roll-back-available':
+        return 'Rollback available';
+      case 'up-to-date':
+        return 'Up to date';
+      case 'checking':
+        return 'Checking…';
+      case 'error':
+        return 'Check failed';
+      case 'unsupported':
+        return 'Dev client';
+      case 'idle':
+      default:
+        return 'Not checked';
+    }
+  })();
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -118,6 +243,159 @@ export default function StatusScreen() {
             <Text style={[styles.subtitle, { color: colors.textSecondary }]} accessible>
               {t('settings.status_info.description')}
             </Text>
+          </View>
+        </View>
+
+        {/* Build & OTA Section */}
+        <View
+          style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessible
+          accessibilityLabel="Build version and update status card"
+        >
+          <View style={styles.cardHeader}>
+            <Ionicons name="build-outline" size={20} color={colors.accent} />
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Build & Updates</Text>
+          </View>
+
+          <View style={styles.buildGrid}>
+            <View style={styles.buildItem}>
+              <Text style={[styles.buildLabel, { color: colors.textSecondary }]}>
+                Runtime Version
+              </Text>
+              <Text style={[styles.buildValue, { color: colors.text }]}>
+                {runtimeInfo.runtimeVersion}
+              </Text>
+            </View>
+
+            <View style={styles.buildItem}>
+              <Text style={[styles.buildLabel, { color: colors.textSecondary }]}>
+                Update Channel
+              </Text>
+              <Text
+                style={[
+                  styles.buildValue,
+                  { color: colors.text, textTransform: 'capitalize' },
+                ]}
+              >
+                {runtimeInfo.channel}
+              </Text>
+            </View>
+
+            <View style={styles.buildItem}>
+              <Text style={[styles.buildLabel, { color: colors.textSecondary }]}>
+                Update ID
+              </Text>
+              <Text
+                style={[styles.buildValue, { color: colors.text }]}
+                numberOfLines={1}
+                ellipsizeMode="middle"
+              >
+                {runtimeInfo.updateId
+                  ? formatUpdateId(runtimeInfo.updateId, '(unknown)')
+                  : runtimeInfo.isEmbedded
+                    ? '(embedded build)'
+                    : '(unknown)'}
+              </Text>
+            </View>
+
+            {runtimeInfo.createdAt && (
+              <View style={styles.buildItem}>
+                <Text style={[styles.buildLabel, { color: colors.textSecondary }]}>
+                  Applied
+                </Text>
+                <Text style={[styles.buildValue, { color: colors.text }]}>
+                  {runtimeInfo.createdAt}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <View style={styles.updateRow}>
+            <View style={styles.updateLabelWrap}>
+              <Text style={[styles.buildLabel, { color: colors.textSecondary }]}>
+                Update Status
+              </Text>
+              <View style={styles.badgeRow}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    {
+                      backgroundColor:
+                        updateStatusColor(updateCheck.status, colors) + '15',
+                      borderColor: updateStatusColor(updateCheck.status, colors),
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusBadgeText,
+                      { color: updateStatusColor(updateCheck.status, colors) },
+                    ]}
+                  >
+                    {updateBadgeText}
+                  </Text>
+                </View>
+                {updateCheck.newUpdateId &&
+                  (updateCheck.status === 'available' ||
+                    updateCheck.status === 'roll-back-available') && (
+                    <Text
+                      style={[styles.updateIdInline, { color: colors.textSecondary }]}
+                      numberOfLines={1}
+                      ellipsizeMode="middle"
+                    >
+                      {formatUpdateId(updateCheck.newUpdateId, '')}
+                    </Text>
+                  )}
+              </View>
+              {updateCheck.message ? (
+                <Text style={[styles.updateMessage, { color: colors.textSecondary }]}>
+                  {updateCheck.message}
+                </Text>
+              ) : null}
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.updateButton,
+                {
+                  backgroundColor:
+                    updateCheck.status === 'available' ||
+                    updateCheck.status === 'roll-back-available'
+                      ? colors.accent + '15'
+                      : colors.card,
+                  borderColor: updateStatusColor(updateCheck.status, colors),
+                },
+              ]}
+              onPress={handleCheckForUpdate}
+              disabled={updateCheck.status === 'checking'}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Check for available OTA update"
+            >
+              {updateCheck.status === 'checking' ? (
+                <ActivityIndicator
+                  size="small"
+                  color={updateStatusColor(updateCheck.status, colors)}
+                />
+              ) : (
+                <Text
+                  style={[
+                    styles.updateButtonText,
+                    {
+                      color:
+                        updateCheck.status === 'available' ||
+                        updateCheck.status === 'roll-back-available'
+                          ? colors.accent
+                          : colors.text,
+                    },
+                  ]}
+                >
+                  {updateCheckCta}
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -281,6 +559,51 @@ export default function StatusScreen() {
           )}
         </View>
 
+        {/* Diagnostics Section */}
+        <View
+          style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessible
+          accessibilityLabel="Copy diagnostics card"
+        >
+          <View style={styles.cardHeader}>
+            <Ionicons name="bug-outline" size={20} color={colors.accent} />
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Diagnostics</Text>
+          </View>
+          <Text style={[styles.diagnosticsBlurb, { color: colors.textSecondary }]}>
+            Copy a build and environment snapshot to paste into a bug report. Wallet
+            addresses and auth tokens are never included.
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.diagnosticsButton,
+              {
+                backgroundColor: diagnosticsCopied
+                  ? colors.success + '15'
+                  : colors.accent + '15',
+                borderColor: diagnosticsCopied ? colors.success : colors.accent,
+              },
+            ]}
+            onPress={handleCopyDiagnostics}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Copy diagnostics to clipboard for a bug report"
+          >
+            <Ionicons
+              name={diagnosticsCopied ? 'checkmark-outline' : 'copy-outline'}
+              size={18}
+              color={diagnosticsCopied ? colors.success : colors.accent}
+            />
+            <Text
+              style={[
+                styles.diagnosticsButtonText,
+                { color: diagnosticsCopied ? colors.success : colors.accent },
+              ]}
+            >
+              {diagnosticsCopied ? 'Copied!' : 'Copy diagnostics'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* App Meta Section */}
         <View style={styles.metaContainer}>
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
@@ -341,6 +664,74 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  buildGrid: {
+    gap: 14,
+  },
+  buildItem: {},
+  buildLabel: {
+    fontSize: 12,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  buildValue: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 16,
+  },
+  updateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  updateLabelWrap: {
+    flex: 1,
+    gap: 6,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  updateIdInline: {
+    fontSize: 12,
+    flexShrink: 1,
+  },
+  updateMessage: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  updateButton: {
+    borderRadius: 10,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minWidth: 110,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  updateButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   statusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -378,10 +769,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 6,
     textAlign: 'right',
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: 16,
   },
   detailDivider: {
     height: StyleSheet.hairlineWidth,
@@ -451,6 +838,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     flex: 1,
+  },
+  diagnosticsBlurb: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  diagnosticsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  diagnosticsButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.1,
   },
   metaContainer: {
     alignItems: 'center',

@@ -20,7 +20,9 @@ import {
 import { useStellarConfig } from '@/contexts/StellarConfigContext';
 import { useStellarWallet } from '@/app/providers';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
+import { useAdminRole } from '@/hooks/useAdminRole';
 import { useExplorerUrl } from '@/hooks/useExplorerUrl';
+import { ForbiddenView } from '@/components/auth/ForbiddenView';
 
 import { clientConfig } from '@/lib/config';
 
@@ -163,6 +165,7 @@ export default function AdminActionsClient() {
   const { config, status: configStatus } = useStellarConfig();
   const { publicKey } = useStellarWallet();
   const { loading: authLoading, isAuthenticated } = useAuthGuard();
+  const { loading: roleLoading, isAdmin, resolved: roleResolved } = useAdminRole();
   const buildExplorerUrl = useExplorerUrl();
 
   const [selectedAction, setSelectedAction] = useState<ActionDefinition | null>(null);
@@ -193,7 +196,7 @@ export default function AdminActionsClient() {
   };
 
   const handleExecute = async () => {
-    if (!selectedAction || !hasValidConfig) return;
+    if (!selectedAction || !hasValidConfig || !isAdmin) return;
 
     // Check if confirmation is required and matches
     if (selectedAction.requiresConfirmation && selectedAction.confirmationText) {
@@ -213,6 +216,7 @@ export default function AdminActionsClient() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           parameters,
           performedBy: publicKey,
@@ -234,16 +238,38 @@ export default function AdminActionsClient() {
     }
   };
 
+  // Loading state
+  if (authLoading || roleLoading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-foreground/50 text-sm">Loading contract actions...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Redirect if not authenticated
-  if (!authLoading && !isAuthenticated) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <Shield className="w-12 h-12 text-foreground/20 mx-auto mb-4" />
           <h2 className="text-xl font-semibold">Access Denied</h2>
-          <p className="text-foreground/50 text-sm mt-2">You do not have permission to access this page.</p>
+          <p className="text-foreground/50 text-sm mt-2">You must be logged in to access this page.</p>
         </div>
       </div>
+    );
+  }
+
+  // Role-unauthorized state
+  if (roleResolved && !isAdmin) {
+    return (
+      <ForbiddenView
+        title="Admin Access Required"
+        description="Your account does not have permission to execute contract admin actions."
+      />
     );
   }
 
