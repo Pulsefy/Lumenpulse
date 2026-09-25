@@ -7,6 +7,7 @@ import {
   Max,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PaginationMetaDto, PaginatedResponseDto } from '../../common/dto/response-envelope.dto';
 
 export enum ProjectStatus {
   ACTIVE = 'active',
@@ -147,19 +148,4 @@ export class ProjectDetailDto extends ProjectListItemDto {
   }>;
 }
 
-export class ProjectListResponseDto {
-  @ApiProperty({ description: 'Array of projects' })
-  projects: ProjectListItemDto[];
-
-  @ApiProperty({ description: 'Total number of projects' })
-  total: number;
-
-  @ApiProperty({ description: 'Current page number' })
-  page: number;
-
-  @ApiProperty({ description: 'Items per page' })
-  limit: number;
-
-  @ApiProperty({ description: 'Total number of pages' })
-  totalPages: number;
-}
+export class ProjectListResponseDto extends PaginatedResponseDto<ProjectListItemDto> {}

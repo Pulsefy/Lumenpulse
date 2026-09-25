@@ -23,6 +23,7 @@ import {
   WebhookProvider,
 } from './webhook-verification.guard';
 import { WEBHOOK_SIGNATURE_SECURITY_SCHEME } from '../openapi/openapi.constants';
+import { SkipResponseEnvelope } from '../common/decorators/skip-response-envelope.decorator';
 
 interface RawRequest {
   rawBody?: Buffer;
@@ -38,6 +39,7 @@ export class WebhookController {
   @UseGuards(WebhookVerificationGuard)
   @ApiSecurity(WEBHOOK_SIGNATURE_SECURITY_SCHEME)
   @WebhookProvider('data-processing')
+  @SkipResponseEnvelope()
   @ApiOperation({
     summary: 'Receive data-processing intelligence events',
     description:

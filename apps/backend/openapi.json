@@ -46578,6 +46578,73 @@
         "required": [
           "message"
         ]
+      },
+      "ApiResponseEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Indicates if the request was successful",
+            "example": true
+          },
+          "data": {
+            "type": "object",
+            "description": "Response data"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "ApiErrorDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message",
+            "example": "Resource not found"
+          },
+          "code": {
+            "type": "string",
+            "description": "Machine-readable error code",
+            "example": "NOT_FOUND"
+          },
+          "statusCode": {
+            "type": "number",
+            "description": "HTTP status code",
+            "example": 404
+          },
+          "details": {
+            "type": "object",
+            "description": "Additional error details"
+          }
+        },
+        "required": [
+          "message",
+          "statusCode"
+        ]
+      },
+      "ApiErrorResponseEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Indicates if the request was successful",
+            "example": false
+          },
+          "error": {
+            "description": "Error details",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ApiErrorDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "success",
+          "error"
+        ]
       }
     }
   }

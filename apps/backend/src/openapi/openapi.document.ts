@@ -10,6 +10,10 @@ import {
   WEBHOOK_SIGNATURE_SECURITY_SCHEME,
 } from './openapi.constants';
 import { ErrorDetailDto, ErrorResponseDto } from './error-response.dto';
+import {
+  ApiResponseEnvelopeDto,
+  ApiErrorResponseEnvelopeDto,
+} from '../common/dto/response-envelope.dto';
 
 type OperationObject = OpenAPIObject['paths'][string]['get'] & object;
 type ResponsesObject = OperationObject['responses'];
@@ -113,7 +117,12 @@ export function buildSwaggerConfig(): Omit<OpenAPIObject, 'paths'> {
  */
 export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
   const document = SwaggerModule.createDocument(app, buildSwaggerConfig(), {
-    extraModels: [ErrorResponseDto, ErrorDetailDto],
+    extraModels: [
+      ErrorResponseDto,
+      ErrorDetailDto,
+      ApiResponseEnvelopeDto,
+      ApiErrorResponseEnvelopeDto,
+    ],
     operationIdFactory: (controllerKey, methodKey) =>
       `${controllerKey}_${methodKey}`,
   });
