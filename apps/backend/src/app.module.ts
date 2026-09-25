@@ -3,7 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 
@@ -53,6 +53,8 @@ import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 import { IdempotencyModule } from './idempotency/idempotency.module';
 import { DeprecationInterceptor } from './common/interceptors/deprecation.interceptor';
+import { ResponseEnvelopeInterceptor } from './common/interceptors/response-envelope.interceptor';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { SearchModule } from './search/search.module';
 import { ExportModule } from './export/export.module';
 import { SignalsModule } from './signals/signals.module';
@@ -240,6 +242,14 @@ import { QueryCountMiddleware } from './common/profiling/query-count.middleware'
     {
       provide: APP_INTERCEPTOR,
       useClass: DeprecationInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ResponseEnvelopeInterceptor,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: HttpExceptionFilter,
     },
   ],
 })

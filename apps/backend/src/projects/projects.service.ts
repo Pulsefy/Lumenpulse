@@ -98,11 +98,13 @@ export class ProjectsService {
       );
 
       const response: ProjectListResponseDto = {
-        projects: projectItems,
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
+        items: projectItems,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
       };
 
       const duration = Date.now() - startTime;
