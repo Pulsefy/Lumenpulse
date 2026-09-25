@@ -1,10 +1,17 @@
+import NetInfo from '@react-native-community/netinfo';
 import { ApiClient } from '../api-client';
+
+jest.mock('@react-native-community/netinfo', () => ({
+  fetch: jest.fn(),
+  addEventListener: jest.fn().mockReturnValue(jest.fn()),
+}));
 
 describe('ApiClient', () => {
   const originalFetch = global.fetch;
 
   beforeEach(() => {
     global.fetch = jest.fn() as typeof fetch;
+    (NetInfo.fetch as jest.Mock).mockResolvedValue({ isConnected: true });
   });
 
   afterAll(() => {

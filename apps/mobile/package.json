@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "tsc": "tsc",
     "test": "jest --runInBand",
-    "test:coverage": "jest --coverage --runInBand"
+    "test:coverage": "jest --coverage --runInBand",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -46,6 +47,7 @@
     "react-native-worklets-core": "^1.6.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.48.0",
     "@types/jest": "^29.5.14",
     "@types/react": "~19.1.0",
     "babel-preset-expo": "^54.0.10",

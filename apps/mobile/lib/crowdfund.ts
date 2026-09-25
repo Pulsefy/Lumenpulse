@@ -1,4 +1,5 @@
 import { apiClient, ApiResponse } from './api-client';
+import { normalizeContributionError } from './contribution-pause';
 
 export type OnChainStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED' | 'PENDING';
 
@@ -106,7 +107,11 @@ export const crowdfundApi = {
    * the transaction to the network.
    */
   async contribute(payload: ContributionRequest): Promise<ApiResponse<ContributionResponse>> {
-    return apiClient.post<ContributionResponse>('/crowdfund/contribute', payload);
+    const response = await apiClient.post<ContributionResponse>('/crowdfund/contribute', payload);
+    if (!response.success) {
+      return { ...response, error: normalizeContributionError(response.error) };
+    }
+    return response;
   },
 
   /**

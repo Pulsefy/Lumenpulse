@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
+version-interface = { path = "../version-interface" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

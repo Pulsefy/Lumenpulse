@@ -24,6 +24,14 @@ npm run test
 npm run test:e2e
 ```
 
+## API contract (OpenAPI)
+
+`npm run build` regenerates the committed spec at `openapi.json`. Commit it with any API change, because CI fails when it is stale. `npm run openapi:check` checks it without writing. See [OPENAPI_CONTRACT.md](./OPENAPI_CONTRACT.md).
+
+## Audit retention and export
+
+Each audit record type has a retention window. A nightly job archives or purges records older than that window, and admins can export a scoped extract for auditors. See [AUDIT_RETENTION.md](./AUDIT_RETENTION.md).
+
 ## Demo bootstrap endpoint
 
 The backend exposes an admin-only demo bootstrap endpoint that can populate a small set of sample crowdfund projects for reviewer/testnet validation.

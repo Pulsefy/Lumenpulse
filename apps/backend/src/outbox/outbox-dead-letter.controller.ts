@@ -23,6 +23,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
+import { JWT_SECURITY_SCHEME } from '../openapi/openapi.constants';
 
 /**
  * Outbox Dead Letter Controller
@@ -35,7 +36,7 @@ import { UserRole } from '../users/entities/user.entity';
 @Controller('outbox/dead-letter')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
-@ApiBearerAuth()
+@ApiBearerAuth(JWT_SECURITY_SCHEME)
 export class OutboxDeadLetterController {
   private readonly logger = new Logger(OutboxDeadLetterController.name);
 

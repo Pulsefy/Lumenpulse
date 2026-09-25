@@ -13,9 +13,12 @@ const JOB_NAME = 'model-retraining-daily';
  * 02:00 UTC job, acting as a redundant fallback in case the Python process
  * missed its window (e.g. restart, cold start).
  *
- * The Python service itself deduplicates concurrent runs via a threading lock,
- * so double-triggering is safe. The advisory lock here prevents multiple
- * NestJS instances from all firing the fallback simultaneously.
+ * The Python service submits retraining to its async job queue (#1248) and
+ * collapses concurrent duplicate submissions onto whichever run is already
+ * in flight, so double-triggering is safe. The advisory lock here prevents
+ * multiple NestJS instances from all firing the fallback simultaneously.
+ * `triggerRetrainingAndWait` polls the job queue instead of holding a
+ * single long-lived HTTP request open for the duration of the run.
  */
 @Injectable()
 export class ModelRetrainingScheduler {
@@ -39,7 +42,7 @@ export class ModelRetrainingScheduler {
 
     const run = await this.jobHistory.start(JOB_NAME);
     try {
-      const result = await this.retrainingService.triggerRetraining();
+      const result = await this.retrainingService.triggerRetrainingAndWait();
       await this.jobHistory.complete(run, {
         status: result.status,
         durationSeconds: result.duration_seconds,

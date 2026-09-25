@@ -39,3 +39,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Playwright E2E (issue #1402)
+/test-results
+/playwright-report
+/e2e-results.xml

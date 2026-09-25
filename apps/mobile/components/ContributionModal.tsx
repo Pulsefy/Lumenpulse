@@ -324,6 +324,7 @@ export default function ContributionModal({
                   <TextInput
                     ref={inputRef}
                     style={[styles.amountInput, { color: colors.text }]}
+                    testID="contribution-amount-input"
                     placeholder="0.00"
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="decimal-pad"

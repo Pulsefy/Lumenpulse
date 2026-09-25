@@ -6,18 +6,29 @@ import logging
 import math
 import os
 import time
-from typing import List, Dict, Any, Optional, Tuple
+import uuid
+from typing import List, Dict, Any, Optional, Tuple, Generator
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 from collections import defaultdict
 
-from sqlalchemy import create_engine, select, and_, desc, func, delete
+from sqlalchemy import (
+    create_engine,
+    exists,
+    select,
+    and_,
+    desc,
+    func,
+    delete,
+    update as sa_update,
+)
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
+from sqlalchemy.exc import SQLAlchemyError, OperationalError, IntegrityError
 
 from .models import (
     Base,
     Article,
+    ArticleEmbedding,
     ArticleOnchainEntityLink,
     SocialPost,
     AnalyticsRecord,
@@ -35,6 +46,7 @@ from .models import (
     DailyOnchainKPISnapshot,
     PredictionLog,
     SentimentLabel,
+    AnalyticsJob,
 )
 from .cohort_models import (
     GrantRound,
@@ -44,6 +56,12 @@ from .cohort_models import (
     RepeatContributorSummary,
 )
 from src.analytics.ner_service import NERService
+from src.analytics.embedding_service import (
+    EmbeddingService,
+    MissingEmbeddingModelError,
+    cosine_similarity,
+    hash_article_text,
+)
 from src.analytics.onchain_entity_linker import (
     OnchainEntityCandidate,
     OnchainEntityLink,
@@ -94,6 +112,10 @@ class PostgresService:
             )
             self.ner_service = NERService()
             self.onchain_linker = OnchainEntityLinker()
+            # Lazily built: the pinned embedding pipeline (spaCy) is only
+            # loaded on the first article save / similarity search so the
+            # service starts without paying the model I/O cost (#1455).
+            self._embedding_service: Optional[EmbeddingService] = None
             logger.info("PostgreSQL service initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize PostgreSQL service: {e}")
@@ -114,6 +136,65 @@ class PostgresService:
             )
         )
         return normalized
+
+    def _get_embedding_service(self) -> Optional[EmbeddingService]:
+        """
+        Lazily construct the pinned embedding pipeline (once).
+
+        Returns None when the service could not be initialised (for example a
+        missing vendored model in a non-container dev env); ingestion then
+        proceeds without embeddings — the resumable backfill closes the gap.
+        Leases a ``__new__``-constructed instance (as used by the SQLite test
+        harness) safely by falling back to ``None`` when the attribute has not
+        been initialised.
+        """
+        svc = getattr(self, "_embedding_service", None)
+        if svc is None:
+            try:
+                svc = EmbeddingService()
+            except MissingEmbeddingModelError as exc:
+                logger.warning(
+                    "Embedding service unavailable; embeddings will be skipped "
+                    "until the pinned model is vendored: %s",
+                    exc,
+                )
+                svc = None
+            self._embedding_service = svc
+        return svc
+
+    def _persist_embedding(self, article: Article) -> None:
+        """
+        Best-effort: compute and store the embedding for an article.
+
+        Never raises or blocks the article save: when the pinned model is not
+        available, or the article text is empty, the embedding is simply not
+        stored (and the row remains eligible for the resumable backfill).
+        """
+        try:
+            svc = self._get_embedding_service()
+            if svc is None:
+                return
+            vector = svc.embed_article(
+                title=article.title,
+                summary=article.summary,
+                content=article.content,
+            )
+            if not vector or not any(vector):
+                return
+            self.save_article_embedding(
+                article_id=article.article_id,
+                embedding=vector,
+                model_name=svc.model_name,
+                model_version=svc.model_version,
+                dimension=svc.dimension,
+                text_hash=hash_article_text(
+                    article.title, article.summary, article.content
+                ),
+            )
+        except Exception as exc:
+            logger.debug(
+                "Embedding skipped for article %s: %s", article.article_id, exc
+            )
 
     def _project_candidates_from_session(
         self,
@@ -493,7 +574,11 @@ class PostgresService:
                     return article
 
         try:
-            return self._retry_operation(_save)
+            article = self._retry_operation(_save)
+            if article is not None:
+                # Best-effort semantic embedding (#1455); never fails the save.
+                self._persist_embedding(article)
+            return article
         except SQLAlchemyError as e:
             logger.error(f"Failed to save article: {e}")
             return None
@@ -581,6 +666,9 @@ class PostgresService:
                                 "sentiment_label"
                             )
                             existing.analyzed_at = datetime.utcnow()
+
+                        session.flush()
+                        self._persist_embedding(existing)
                     else:
                         links = self._link_article_onchain_entities(
                             session, article_data
@@ -619,6 +707,7 @@ class PostgresService:
                         session.add(article)
                         session.flush()
                         self._sync_article_onchain_links(session, article, links)
+                        self._persist_embedding(article)
 
                     saved_count += 1
 
@@ -675,6 +764,264 @@ class PostgresService:
                 return results
         except SQLAlchemyError as e:
             logger.error(f"Failed to retrieve articles: {e}")
+            return []
+
+    def get_article_by_id(self, article_id: str) -> Optional[Article]:
+        """
+        Fetch a single article by its id.
+
+        Used by the embedding backfill to re-embed one article at a time.
+        """
+        try:
+            with self.get_session() as session:
+                return session.execute(
+                    select(Article).where(Article.article_id == article_id)
+                ).scalar_one_or_none()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve article {article_id}: {e}")
+            return None
+
+    # ── Semantic embedding persistence + similarity search (#1455) ──────────
+
+    _DEFAULT_EMBEDDING_MODEL = "en_core_web_md"
+    _DEFAULT_EMBEDDING_VERSION = "3.7.1"
+    _DEFAULT_EMBEDDING_DIMENSION = 300
+
+    def save_article_embedding(
+        self,
+        article_id: str,
+        embedding: List[float],
+        model_name: Optional[str] = None,
+        model_version: Optional[str] = None,
+        dimension: Optional[int] = None,
+        text_hash: Optional[str] = None,
+    ) -> bool:
+        """
+        Upsert a single article embedding vector.
+
+        One row per ``(article_id, model_version)``; re-embedding with the same
+        pinned model overwrites the vector (idempotent), while a newer model
+        version can coexist in a separate row so the endpoint always searches a
+        single auditable model version.
+
+        Args:
+            article_id: Article identifier
+            embedding: Unit-normalised vector (cosine-ready)
+            model_name: Model name (defaults to the pinned embedding model)
+            model_version: Model version (defaults to the pinned version)
+            dimension: Vector dimension (defaults to the pinned dimension)
+            text_hash: sha256 of the embedded text for stale-row detection
+
+        Returns:
+            True if persisted, False on failure
+        """
+        model_name = model_name or self._DEFAULT_EMBEDDING_MODEL
+        model_version = model_version or self._DEFAULT_EMBEDDING_VERSION
+        dimension = dimension or self._DEFAULT_EMBEDDING_DIMENSION
+
+        def _save():
+            with self.get_session() as session:
+                existing = session.execute(
+                    select(ArticleEmbedding).where(
+                        ArticleEmbedding.article_id == article_id,
+                        ArticleEmbedding.model_version == model_version,
+                    )
+                ).scalar_one_or_none()
+                if existing:
+                    existing.embedding = embedding
+                    existing.dimension = dimension
+                    if text_hash:
+                        existing.text_hash = text_hash
+                    existing.updated_at = datetime.utcnow()
+                else:
+                    session.add(
+                        ArticleEmbedding(
+                            article_id=article_id,
+                            model_name=model_name,
+                            model_version=model_version,
+                            dimension=dimension,
+                            embedding=embedding,
+                            text_hash=text_hash or "",
+                        )
+                    )
+                session.flush()
+            return True
+
+        try:
+            return self._retry_operation(_save)
+        except SQLAlchemyError as e:
+            logger.error(
+                f"Failed to persist embedding for article {article_id}: {e}"
+            )
+            return False
+
+    def search_articles_by_embedding(
+        self,
+        query_vector: List[float],
+        model_version: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """
+        Rank articles by cosine similarity to a query embedding.
+
+        A single-pinned-model version may be passed to scope the search; when
+        omitted, the latest model version present in the store is used. Cosine
+        is computed in Python over vendored 300d vectors (no pgvector), so the
+        query stays within the service latency budget for reasonable limits.
+
+        Returns:
+            List of dicts: ``{article_id, title, url, source, summary,
+            categories, published_at, similarity_score}`` sorted descending.
+        """
+        try:
+            with self.get_session() as session:
+                if model_version is None:
+                    model_version = session.execute(
+                        select(ArticleEmbedding.model_version)
+                        .order_by(desc(ArticleEmbedding.model_version))
+                        .limit(1)
+                    ).scalar_one_or_none()
+                    if not model_version:
+                        logger.warning("No article embeddings stored yet.")
+                        return []
+
+                rows = session.execute(
+                    select(ArticleEmbedding, Article).join(
+                        Article, Article.article_id == ArticleEmbedding.article_id
+                    ).where(ArticleEmbedding.model_version == model_version)
+                ).all()
+
+                ranked = []
+                for embedding_row, article in rows:
+                    score = cosine_similarity(
+                        query_vector, embedding_row.embedding
+                    )
+                    ranked.append(
+                        {
+                            "article_id": article.article_id,
+                            "title": article.title,
+                            "url": article.url,
+                            "source": article.source,
+                            "summary": article.summary,
+                            "categories": article.categories,
+                            "primary_asset": article.primary_asset,
+                            "published_at": (
+                                article.published_at.isoformat()
+                                if article.published_at
+                                else None
+                            ),
+                            "similarity_score": round(score, 6),
+                        }
+                    )
+
+                ranked.sort(key=lambda row: row["similarity_score"], reverse=True)
+                return ranked[:limit]
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to run embedding search: {e}")
+            return []
+
+    def iter_article_ids_missing_embeddings(
+        self,
+        model_version: Optional[str] = None,
+        batch_size: int = 500,
+    ) -> Generator[List[str], None, None]:
+        """
+        Yield batches of article ids that have no embedding row for
+        ``model_version`` (resumable backfill). When ``model_version`` is None,
+        the pinned default is used so backfill is always version-scoped.
+
+        Uses an anti-join (NOT EXISTS) against the unique ``(article_id,
+        model_version)`` index so the work list stays proportional to the
+        batch size rather than the total embedded corpus. Each batch is
+        ordered deterministically so a crash mid-run is resumable.
+
+        Each batch is read in its own short-lived committed transaction, so a
+        consumer that persists an embedding between batches (as
+        ``scripts/backfill_embeddings.py`` does) makes the next batch advance
+        to the articles that are still missing — regardless of the database
+        isolation level.
+        """
+        model_version = model_version or self._DEFAULT_EMBEDDING_VERSION
+        anti_join = ~exists(
+            select(1).where(
+                ArticleEmbedding.article_id == Article.article_id,
+                ArticleEmbedding.model_version == model_version,
+            )
+        )
+        try:
+            while True:
+                with self.get_session() as session:
+                    missing = (
+                        session.execute(
+                            select(Article.article_id)
+                            .where(anti_join)
+                            .order_by(Article.article_id)
+                            .limit(batch_size)
+                        )
+                        .scalars()
+                        .all()
+                    )
+                if not missing:
+                    break
+                yield [aid for aid in missing]
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to enumerate missing embeddings: {e}")
+
+    def get_embedded_articles(
+        self,
+        model_version: Optional[str] = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch articles together with their stored versioned embedding.
+
+        Used by the quality harness so semantic and keyword ranking are both
+        computed over the *same* corpus. When ``model_version`` is None the
+        latest stored model version is used.
+
+        Returns:
+            List of dicts keyed by ``article_id`` with ``title``, ``summary``,
+            ``content`` and a unit-normalised ``embedding`` vector.
+        """
+        try:
+            with self.get_session() as session:
+                if model_version is None:
+                    model_version = session.execute(
+                        select(ArticleEmbedding.model_version)
+                        .order_by(desc(ArticleEmbedding.model_version))
+                        .limit(1)
+                    ).scalar_one_or_none()
+                    if not model_version:
+                        logger.warning("No article embeddings stored yet.")
+                        return []
+
+                rows = (
+                    session.execute(
+                        select(Article, ArticleEmbedding)
+                        .join(
+                            Article,
+                            Article.article_id == ArticleEmbedding.article_id,
+                        )
+                        .where(ArticleEmbedding.model_version == model_version)
+                        .order_by(desc(Article.published_at))
+                        .limit(limit)
+                        .offset(offset)
+                    )
+                    .all()
+                )
+                return [
+                    {
+                        "article_id": article.article_id,
+                        "title": article.title,
+                        "summary": article.summary,
+                        "content": article.content,
+                        "embedding": embedding_row.embedding,
+                    }
+                    for article, embedding_row in rows
+                ]
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve embedded articles: {e}")
             return []
 
     def get_article_onchain_links(
@@ -3030,3 +3377,143 @@ class PostgresService:
         except Exception as e:
             logger.error(f"Failed to query prediction logs: {e}")
             return []
+
+    # ------------------------------------------------------------------
+    # Async analytics job queue (#1248)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _analytics_job_dict(job: AnalyticsJob) -> Dict[str, Any]:
+        return {
+            "job_id": job.job_id,
+            "job_type": job.job_type,
+            "status": job.status,
+            "params": job.params,
+            "result": job.result,
+            "error": job.error,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+        }
+
+    def find_active_analytics_job(self, dedupe_key: str) -> Optional[Dict[str, Any]]:
+        """Find a queued/running job with the given dedupe key, if any."""
+        try:
+            with self.get_session() as session:
+                job = session.execute(
+                    select(AnalyticsJob).where(AnalyticsJob.dedupe_key == dedupe_key)
+                ).scalar_one_or_none()
+                return self._analytics_job_dict(job) if job else None
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to look up active analytics job: {e}")
+            return None
+
+    def create_analytics_job(
+        self,
+        job_type: str,
+        dedupe_key: str,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Create a new queued job. Returns None (instead of raising) if a
+        concurrent request already claimed the same dedupe_key, so the
+        caller can look up and return that job instead.
+        """
+        try:
+            with self.get_session() as session:
+                job = AnalyticsJob(
+                    job_id=str(uuid.uuid4()),
+                    job_type=job_type,
+                    status="queued",
+                    dedupe_key=dedupe_key,
+                    params=params,
+                )
+                session.add(job)
+                session.flush()
+                return self._analytics_job_dict(job)
+        except IntegrityError:
+            logger.info(f"Concurrent duplicate job submission collapsed: {dedupe_key}")
+            return None
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to create analytics job: {e}")
+            return None
+
+    def get_analytics_job(self, job_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            with self.get_session() as session:
+                job = session.execute(
+                    select(AnalyticsJob).where(AnalyticsJob.job_id == job_id)
+                ).scalar_one_or_none()
+                return self._analytics_job_dict(job) if job else None
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to fetch analytics job {job_id}: {e}")
+            return None
+
+    def mark_analytics_job_running(self, job_id: str) -> None:
+        try:
+            with self.get_session() as session:
+                session.execute(
+                    sa_update(AnalyticsJob)
+                    .where(AnalyticsJob.job_id == job_id)
+                    .values(status="running", started_at=datetime.utcnow())
+                )
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to mark analytics job {job_id} running: {e}")
+
+    def mark_analytics_job_succeeded(self, job_id: str, result: Dict[str, Any]) -> None:
+        try:
+            with self.get_session() as session:
+                session.execute(
+                    sa_update(AnalyticsJob)
+                    .where(AnalyticsJob.job_id == job_id)
+                    .values(
+                        status="succeeded",
+                        result=result,
+                        dedupe_key=None,
+                        finished_at=datetime.utcnow(),
+                    )
+                )
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to mark analytics job {job_id} succeeded: {e}")
+
+    def mark_analytics_job_failed(self, job_id: str, error: str) -> None:
+        try:
+            with self.get_session() as session:
+                session.execute(
+                    sa_update(AnalyticsJob)
+                    .where(AnalyticsJob.job_id == job_id)
+                    .values(
+                        status="failed",
+                        error=error,
+                        dedupe_key=None,
+                        finished_at=datetime.utcnow(),
+                    )
+                )
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to mark analytics job {job_id} failed: {e}")
+
+    def fail_orphaned_analytics_jobs(self, message: str) -> int:
+        """
+        Mark any job still in queued/running state as failed.
+
+        Called once on process startup: a queued/running row at that point
+        can only be leftover from a previous process that died mid-job
+        (in-process thread pools don't survive a restart), so its loss must
+        be surfaced rather than left silently stuck.
+        """
+        try:
+            with self.get_session() as session:
+                result = session.execute(
+                    sa_update(AnalyticsJob)
+                    .where(AnalyticsJob.status.in_(["queued", "running"]))
+                    .values(
+                        status="failed",
+                        error=message,
+                        dedupe_key=None,
+                        finished_at=datetime.utcnow(),
+                    )
+                )
+                return result.rowcount or 0
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to reconcile orphaned analytics jobs: {e}")
+            return 0

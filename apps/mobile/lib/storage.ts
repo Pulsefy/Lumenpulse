@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from './secure-storage';
 import {
   CONTRIBUTION_DRAFT_STORAGE_KEY,
   ContributionDraft,

@@ -2,6 +2,7 @@
 Database models for analytics data persistence
 """
 
+import uuid
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import (
@@ -13,6 +14,7 @@ from sqlalchemy import (
     JSON,
     Text,
     Index,
+    UniqueConstraint,
     BigInteger,
     Boolean,
 )
@@ -118,6 +120,54 @@ class Article(Base):
 
     def __repr__(self):
         return f"<Article(id={self.article_id}, title={self.title[:50]}, asset={self.primary_asset}, sentiment={self.sentiment_label})>"
+
+
+class ArticleEmbedding(Base):
+    """
+    Stores the versioned semantic embedding vector for a news article.
+
+    One row per ``(article_id, model_version)`` so a re-embedding with a newer
+    pinned model can coexist with the existing vectors; the similarity endpoint
+    always queries against a single model version. Keeping the exact model
+    reference on every row makes which model produced a vector auditable.
+    """
+
+    __tablename__ = "article_embeddings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    article_id = Column(String(255), nullable=False, index=True)
+    model_name = Column(String(100), nullable=False)
+    model_version = Column(String(100), nullable=False, index=True)
+    dimension = Column(Integer, nullable=False)
+    # Unit-normalised vector (ready for cosine similarity at query time).
+    embedding = Column(JSON, nullable=False)
+    # sha256 over the embedded text so stale rows can be detected cheaply
+    # without re-embedding every article during backfill.
+    text_hash = Column(String(64), nullable=False)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "article_id",
+            "model_version",
+            name="ux_article_embeddings_article_model",
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ArticleEmbedding(article_id={self.article_id}, "
+            f"model={self.model_name}:{self.model_version})>"
+        )
 
 
 class ArticleOnchainEntityLink(Base):
@@ -819,3 +869,44 @@ class DailyOnchainKPISnapshot(Base):
             f"tvl={self.tvl}, volume={self.volume}, active_rounds={self.active_rounds}, "
             f"contribution_count={self.contribution_count})>"
         )
+
+
+class AnalyticsJob(Base):
+    """
+    Tracks long-running analytics operations (retraining, correlation analysis,
+    daily KPI snapshots) submitted to the async job queue (#1248), so a caller
+    gets a job identifier immediately and can poll for the outcome instead of
+    blocking on the request.
+    """
+
+    __tablename__ = "analytics_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(
+        String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4())
+    )
+    job_type = Column(String(50), nullable=False, index=True)
+    # queued | running | succeeded | failed
+    status = Column(String(20), nullable=False, default="queued", index=True)
+    # Set to "<job_type>:<idempotency_hash>" while queued/running, and cleared
+    # to NULL on completion so a fresh submission can run again later. The
+    # unique index on this column is what collapses concurrent duplicates.
+    dedupe_key = Column(String(255), nullable=True, unique=True, index=True)
+    params = Column(JSON, nullable=True)
+    result = Column(JSON, nullable=True)
+    error = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    def __repr__(self):
+        return f"<AnalyticsJob(job_id='{self.job_id}', type='{self.job_type}', status='{self.status}')>"

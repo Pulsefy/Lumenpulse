@@ -1,4 +1,4 @@
-use soroban_sdk::{contractevent, Address, Symbol};
+use soroban_sdk::{contractevent, Address, BytesN, Symbol};
 
 #[contractevent]
 pub struct InitializedEvent {
@@ -97,4 +97,38 @@ pub struct ScopePauseChangedEvent {
     /// `true` = scope is now paused; `false` = scope is now unpaused.
     pub paused: bool,
     pub timestamp: u64,
+}
+
+// ── Legacy whole-contract admin events (issue #1231) ──────────────────────
+
+#[contractevent]
+pub struct ContractPauseEvent {
+    #[topic]
+    pub admin: Address,
+    pub paused: bool,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct ContractUnpauseEvent {
+    #[topic]
+    pub admin: Address,
+    pub paused: bool,
+    pub timestamp: u64,
+}
+
+/// Emitted when the admin role is transferred to a new address.
+#[contractevent]
+pub struct AdminChangedEvent {
+    #[topic]
+    pub old_admin: Address,
+    pub new_admin: Address,
+}
+
+/// Emitted when the contract WASM is upgraded to a new hash.
+#[contractevent]
+pub struct UpgradedEvent {
+    #[topic]
+    pub admin: Address,
+    pub new_wasm_hash: BytesN<32>,
 }

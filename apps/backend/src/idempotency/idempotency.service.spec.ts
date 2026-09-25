@@ -12,11 +12,7 @@ describe('IdempotencyService', () => {
   let repo: jest.Mocked<
     Pick<
       Repository<IdempotencyRecord>,
-      | 'findOne'
-      | 'create'
-      | 'save'
-      | 'delete'
-      | 'createQueryBuilder'
+      'findOne' | 'create' | 'save' | 'delete' | 'createQueryBuilder'
     >
   >;
 

@@ -5,22 +5,22 @@ echo "🔍 Testing Swagger Documentation Implementation..."
 echo ""
 
 # Check if main.ts has Swagger configuration
-echo "✓ Checking main.ts configuration..."
-if grep -q "DocumentBuilder" apps/backend/src/main.ts; then
+echo "✓ Checking OpenAPI document configuration..."
+if grep -q "DocumentBuilder" apps/backend/src/openapi/openapi.document.ts; then
     echo "  ✅ DocumentBuilder found"
 else
     echo "  ❌ DocumentBuilder not found"
     exit 1
 fi
 
-if grep -q "addBearerAuth" apps/backend/src/main.ts; then
+if grep -q "addBearerAuth" apps/backend/src/openapi/openapi.document.ts; then
     echo "  ✅ Bearer auth configured"
 else
     echo "  ❌ Bearer auth not configured"
     exit 1
 fi
 
-if grep -q "addTag" apps/backend/src/main.ts; then
+if grep -q "addTag" apps/backend/src/openapi/openapi.document.ts; then
     echo "  ✅ API tags configured"
 else
     echo "  ❌ API tags not configured"

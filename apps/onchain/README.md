@@ -59,6 +59,8 @@ Rules enforced by CI:
 
 This is the contract metadata contract used by the backend: `contracts` is a map keyed by contract name, and the service persists the entire JSON under the `contracts` field without rewriting the schema.
 
+For end-to-end deployment workflows, topological contract ordering, smoke verification, and emergency halt procedures, consult the [Contract Deployment & Rollback Playbook](../../document/CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md).
+
 ### Retired contracts
 
 - **`aave_lending_pool`** — removed from the repository. Decision rationale: it was never a cargo workspace member, it had zero integration in the repo, it pinned an older `soroban-sdk 21`, and it only implemented a prototype lending flow rather than the current protocol stack. Its “mock Aave” narrative remains as documentation of how to integrate an external lending provider via `YieldProviderTrait` (see `YIELD_VAULT_IMPLEMENTATION.md`).

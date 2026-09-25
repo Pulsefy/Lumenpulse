@@ -16,6 +16,11 @@ use storage::{
 };
 use token::transfer;
 use vault_interface::CrowdfundVaultClient;
+use version_interface::{ContractVersion, VersionedContract};
+
+/// Bumped on storage-layout or interface changes that break compatibility
+/// with prior deployments; see [`version_interface::ContractVersion`].
+const CONTRACT_VERSION: ContractVersion = ContractVersion::new(1, 0, 0);
 
 #[contract]
 pub struct VestingWalletContract;
@@ -634,6 +639,13 @@ impl VestingWalletContract {
                 .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
         }
         delegates
+    }
+}
+
+#[contractimpl]
+impl VersionedContract for VestingWalletContract {
+    fn contract_version(_env: Env) -> ContractVersion {
+        CONTRACT_VERSION
     }
 }
 

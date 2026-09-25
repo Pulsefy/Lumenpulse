@@ -34,6 +34,33 @@ describe('AnalyticsService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('getChartMeta', () => {
+    it('describes every ChartDataPointDto value with a label and a known axis', () => {
+      const meta = service.getChartMeta();
+      const axisIds = meta.yAxes.map((axis) => axis.id);
+
+      expect(meta.xAxis.label).toBeTruthy();
+      expect(meta.series.map((s) => s.key).sort()).toEqual([
+        'count',
+        'sentiment',
+      ]);
+      meta.series.forEach((s) => {
+        expect(s.label).toBeTruthy();
+        expect(axisIds).toContain(s.axisId);
+      });
+    });
+
+    it('offers every supported range', () => {
+      const ranges = service.getChartMeta().ranges.map((r) => r.range);
+      expect(ranges).toEqual(Object.values(ChartRange));
+    });
+
+    it('does not query the database', () => {
+      service.getChartMeta();
+      expect(dataSource.query).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getChartData', () => {
     it('should call getHourlyChartData for 1h interval', async () => {
       const query = {

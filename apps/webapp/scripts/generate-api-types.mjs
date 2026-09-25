@@ -23,9 +23,14 @@ const schemaNames = [
   'FeedActivityType',
   'FeedActivityItemDto',
   'ContributorFeedResponseDto',
-  'AssetBalanceWithCurrency',
-  'PortfolioSummaryResponseDto',
+  'AssetBalanceWithCurrencyDto',
+  'PortfolioSummaryWithCurrencyResponseDto',
+  'ChartMetaDto',
+  'ChartDataPointDto',
 ];
+
+// Types live inside `components['schemas']`, so references must be qualified.
+const schemaRef = (ref) => `components['schemas']['${ref.split('/').pop()}']`;
 
 const tsType = (schema) => {
   if (!schema || typeof schema !== 'object') return 'unknown';
@@ -62,19 +67,27 @@ ${entries.join('\n')}
     return schema.oneOf.map((item) => propType(item)).join(' | ');
   }
   if (schema.$ref) {
-    const name = schema.$ref.split('/').pop();
-    return name;
+    return schemaRef(schema.$ref);
   }
 
   return 'unknown';
 };
 
 const propType = (schema) => {
+  const base = basePropType(schema);
+  return schema?.nullable && base !== 'unknown' ? `${base} | null` : base;
+};
+
+const basePropType = (schema) => {
   if (!schema || typeof schema !== 'object') return 'unknown';
 
+  // @nestjs/swagger wraps named enums/refs that carry a description in allOf.
+  if (Array.isArray(schema.allOf)) {
+    return schema.allOf.map((item) => propType(item)).join(' & ');
+  }
+
   if (schema.$ref) {
-    const name = schema.$ref.split('/').pop();
-    return name;
+    return schemaRef(schema.$ref);
   }
 
   if (schema.type === 'array') return `${propType(schema.items)}[]`;
@@ -102,6 +115,27 @@ const propType = (schema) => {
   return 'unknown';
 };
 
+// Emit the requested schemas plus everything they reference, so the output
+// never names a type it does not define.
+const withReferencedSchemas = (names, schemas) => {
+  const result = [...names];
+  const seen = new Set(names);
+  const visit = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (typeof node.$ref === 'string') {
+      const name = node.$ref.split('/').pop();
+      if (!seen.has(name)) {
+        seen.add(name);
+        result.push(name);
+        visit(schemas[name]);
+      }
+    }
+    Object.values(node).forEach(visit);
+  };
+  names.forEach((name) => visit(schemas[name]));
+  return result;
+};
+
 const generateTypes = () => {
   if (!existsSync(sourceSpec)) {
     console.error(`OpenAPI spec missing at ${sourceSpec}`);
@@ -115,7 +149,7 @@ const generateTypes = () => {
     '  schemas: {',
   ];
 
-  for (const name of schemaNames) {
+  for (const name of withReferencedSchemas(schemaNames, schemas)) {
     const schema = schemas[name];
     if (!schema) {
       throw new Error(`Missing schema export for ${name}`);

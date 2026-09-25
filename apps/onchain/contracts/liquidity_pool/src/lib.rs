@@ -9,7 +9,7 @@ mod test;
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contracterror, contractimpl, Address, Env};
-use storage::DataKey;
+use storage::{DataKey, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 const SWAP_FEE_BP: u32 = 30; // 0.3% swap fee in basis points (Uniswap v2 standard)
 
@@ -44,6 +44,26 @@ impl LiquidityPoolContract {
         result
     }
 
+    /// Extends the shared instance-storage TTL (covers `Admin`, `Token0`,
+    /// `Token1` together, since instance TTL is one bucket per contract).
+    fn touch_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+    }
+
+    /// Extends `key`'s persistent-storage TTL if it exists. Safe to call
+    /// unconditionally after a read or write — a `.set()` guarantees the key
+    /// exists, and reads that default via `unwrap_or` may target a key that
+    /// was never written yet, which `extend_ttl` would otherwise panic on.
+    fn touch_persistent(env: &Env, key: &DataKey) {
+        if env.storage().persistent().has(key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+    }
+
     /// Initialize pool with two tokens
     pub fn initialize(
         env: Env,
@@ -59,7 +79,7 @@ impl LiquidityPoolContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Token0, &token_0);
         env.storage().instance().set(&DataKey::Token1, &token_1);
-        env.storage().instance().extend_ttl(100, 100);
+        Self::touch_instance(&env);
 
         events::PoolInitializedEvent {
             admin,
@@ -79,6 +99,7 @@ impl LiquidityPoolContract {
         amount_1: i128,
         min_lp: i128,
     ) -> Result<i128, LiquidityPoolError> {
+        from.require_auth();
         Self::with_reentrancy_guard(&env, || {
             if amount_0 <= 0 || amount_1 <= 0 {
                 return Err(LiquidityPoolError::InvalidAmount);
@@ -95,6 +116,7 @@ impl LiquidityPoolContract {
                 .instance()
                 .get(&DataKey::Token1)
                 .ok_or(LiquidityPoolError::NotInitialized)?;
+            Self::touch_instance(&env);
 
             // Transfer tokens
             let token_0 = TokenClient::new(&env, &token_0_addr);
@@ -150,6 +172,9 @@ impl LiquidityPoolContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::LPSupply, &(lp_supply + lp_tokens));
+            Self::touch_persistent(&env, &DataKey::Reserve0);
+            Self::touch_persistent(&env, &DataKey::Reserve1);
+            Self::touch_persistent(&env, &DataKey::LPSupply);
 
             let user_lp: i128 = env
                 .storage()
@@ -160,6 +185,7 @@ impl LiquidityPoolContract {
                 &DataKey::UserLPBalance(from.clone()),
                 &(user_lp + lp_tokens),
             );
+            Self::touch_persistent(&env, &DataKey::UserLPBalance(from.clone()));
 
             // Accrue fees to reserves (simulating LP fee sharing)
             Self::accrue_protocol_fees(&env);
@@ -239,6 +265,10 @@ impl LiquidityPoolContract {
             &DataKey::UserLPBalance(user.clone()),
             &(user_lp - lp_amount),
         );
+        Self::touch_persistent(&env, &DataKey::Reserve0);
+        Self::touch_persistent(&env, &DataKey::Reserve1);
+        Self::touch_persistent(&env, &DataKey::LPSupply);
+        Self::touch_persistent(&env, &DataKey::UserLPBalance(user.clone()));
 
         // Transfer tokens
         let token_0_addr: Address = env
@@ -251,6 +281,7 @@ impl LiquidityPoolContract {
             .instance()
             .get(&DataKey::Token1)
             .ok_or(LiquidityPoolError::NotInitialized)?;
+        Self::touch_instance(&env);
 
         let token_0 = TokenClient::new(&env, &token_0_addr);
         let token_1 = TokenClient::new(&env, &token_1_addr);
@@ -292,6 +323,7 @@ impl LiquidityPoolContract {
             .instance()
             .get(&DataKey::Token1)
             .ok_or(LiquidityPoolError::NotInitialized)?;
+        Self::touch_instance(&env);
 
         let reserve_0: i128 = env
             .storage()
@@ -331,6 +363,8 @@ impl LiquidityPoolContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::Reserve1, &(reserve_1 - amount_out));
+            Self::touch_persistent(&env, &DataKey::Reserve0);
+            Self::touch_persistent(&env, &DataKey::Reserve1);
 
             events::SwapEvent {
                 user: from.clone(),
@@ -409,14 +443,17 @@ impl LiquidityPoolContract {
         env.storage()
             .persistent()
             .set(&DataKey::LastFeeAccrual, &current_time);
+        Self::touch_persistent(env, &DataKey::AccruedFees0);
+        Self::touch_persistent(env, &DataKey::AccruedFees1);
+        Self::touch_persistent(env, &DataKey::LastFeeAccrual);
     }
 
     /// Get LP token balance
     pub fn lp_balance(env: Env, user: Address) -> i128 {
-        env.storage()
-            .persistent()
-            .get(&DataKey::UserLPBalance(user))
-            .unwrap_or(0)
+        let key = DataKey::UserLPBalance(user);
+        let balance = env.storage().persistent().get(&key).unwrap_or(0);
+        Self::touch_persistent(&env, &key);
+        balance
     }
 
     /// Get current reserves
@@ -431,6 +468,8 @@ impl LiquidityPoolContract {
             .persistent()
             .get(&DataKey::Reserve1)
             .unwrap_or(0);
+        Self::touch_persistent(&env, &DataKey::Reserve0);
+        Self::touch_persistent(&env, &DataKey::Reserve1);
         (r0, r1)
     }
 
@@ -446,6 +485,8 @@ impl LiquidityPoolContract {
             .persistent()
             .get(&DataKey::AccruedFees1)
             .unwrap_or(0);
+        Self::touch_persistent(&env, &DataKey::AccruedFees0);
+        Self::touch_persistent(&env, &DataKey::AccruedFees1);
         (f0, f1)
     }
 }

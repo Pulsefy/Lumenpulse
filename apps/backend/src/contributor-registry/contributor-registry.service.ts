@@ -368,7 +368,7 @@ export class ContributorRegistryService {
     let simulation: rpc.Api.SimulateTransactionResponse;
     try {
       simulation = await this.sorobanRpcClient.simulateTransaction(tx);
-    } catch (err) {
+    } catch (err: unknown) {
       if (
         err instanceof SorobanRpcError &&
         err.code === SorobanErrorCode.SIMULATION_FAILED
@@ -424,7 +424,7 @@ export class ContributorRegistryService {
     let simulation: rpc.Api.SimulateTransactionResponse;
     try {
       simulation = await this.sorobanRpcClient.simulateTransaction(tx);
-    } catch (err) {
+    } catch (err: unknown) {
       if (
         err instanceof SorobanRpcError &&
         err.code === SorobanErrorCode.SIMULATION_FAILED
@@ -480,7 +480,7 @@ export class ContributorRegistryService {
     let simulation: rpc.Api.SimulateTransactionResponse;
     try {
       simulation = await this.sorobanRpcClient.simulateTransaction(tx);
-    } catch (err) {
+    } catch (err: unknown) {
       if (
         err instanceof SorobanRpcError &&
         err.code === SorobanErrorCode.SIMULATION_FAILED

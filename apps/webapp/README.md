@@ -32,6 +32,8 @@ Validation happens at module load time with clear error messages for missing var
 
 The webapp consumes shared TypeScript types generated from the backend OpenAPI contract. The generated output lives in `generated/` and is meant to be treated as a build artifact, not a hand-edited source file.
 
+The input spec is the committed artifact at **`apps/backend/openapi.json`** (resolved by the script as `../backend/openapi.json`). The backend regenerates it on every `npm run build`, and backend CI fails if it is stale, so it always matches the backend code. See [`apps/backend/OPENAPI_CONTRACT.md`](../backend/OPENAPI_CONTRACT.md) for the error envelope, auth schemes and the `Idempotency-Key` header it describes.
+
 ```bash
 # Regenerate the shared types from apps/backend/openapi.json
 npm run generate:api-types

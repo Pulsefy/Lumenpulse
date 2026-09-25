@@ -50,6 +50,19 @@ suppression_rules:
     window_seconds: 300
     key_fields: ["domain", "severity"]
     alert_types: ["contract_lag"]
+
+  # Drift alerts routed to backend notifications (#1447).
+  - type: alert_type
+    name: "dedup_feature_drift"
+    window_seconds: 3600
+    key_fields: ["alert_type", "feature_set", "schema_signature"]
+    alert_types: ["feature_drift"]
+
+  - type: alert_type
+    name: "dedup_metadata_drift"
+    window_seconds: 3600
+    key_fields: ["alert_type", "schema_signature"]
+    alert_types: ["metadata_drift"]
 """
 
 
@@ -180,5 +193,17 @@ def _default_rules() -> List[SuppressionRule]:
             window_seconds=300,
             key_fields=["domain", "severity"],
             alert_types=["contract_lag"],
+        ),
+        AlertTypeRule(
+            name="dedup_feature_drift",
+            window_seconds=3600,
+            key_fields=["alert_type", "feature_set", "schema_signature"],
+            alert_types=["feature_drift"],
+        ),
+        AlertTypeRule(
+            name="dedup_metadata_drift",
+            window_seconds=3600,
+            key_fields=["alert_type", "schema_signature"],
+            alert_types=["metadata_drift"],
         ),
     ]

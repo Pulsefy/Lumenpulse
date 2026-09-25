@@ -18,7 +18,6 @@ import {
   Param,
   BadRequestException,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
 import type { Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -42,7 +41,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { ProfileResponseDto } from '../users/dto/profile-response.dto';
-import { getAuthThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 import { AuditLogAction } from '../audit/decorators/audit-log.decorator';
 
 import {
@@ -60,7 +59,7 @@ export class AuthController {
   ) {}
 
   @Post('login')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({
@@ -108,7 +107,7 @@ export class AuthController {
   }
 
   @Post('register')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new user account' })
   @ApiResponse({
@@ -142,7 +141,7 @@ export class AuthController {
   }
 
   @Post('forgot-password')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request a password reset token' })
   @ApiResponse({
@@ -159,7 +158,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password using a one-time token' })
   @ApiResponse({
@@ -181,7 +180,7 @@ export class AuthController {
   }
 
   @Post('refresh')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
   @ApiResponse({
@@ -227,6 +226,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Post('logout-all')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout from all devices' })
@@ -313,7 +313,7 @@ export class AuthController {
   }
 
   @Post('verify')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @ApiOperation({ summary: 'Verify signed challenge and issue JWT' })
   @ApiResponse({
     status: 200,
@@ -361,6 +361,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Get('sessions')
   @ApiOperation({ summary: 'Get active sessions for current user' })
   @ApiResponse({
@@ -374,6 +375,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Post('sessions/:id/revoke')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Revoke a specific session' })
@@ -433,7 +435,7 @@ export class AuthController {
   }
 
   @Post('2fa/verify')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify 2FA token during login' })
   @ApiResponse({

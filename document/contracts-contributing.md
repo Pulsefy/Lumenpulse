@@ -1,6 +1,6 @@
 # Contracts Contribution Guide
 
-This guide covers app-specific standards for `apps/onchain`. All contracts are built with Soroban/Rust. For migration context from prior chain assumptions, see [Stellar Migration Notes](STELLAR_MIGRATION_NOTES.md).
+This guide covers app-specific standards for `apps/onchain`. All contracts are built with Soroban/Rust. For deployment, canonical manifest updates, and emergency rollback procedures, see the [Contract Deployment & Rollback Playbook](CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md). For migration context from prior chain assumptions, see [Stellar Migration Notes](STELLAR_MIGRATION_NOTES.md).
 
 ## Setup
 

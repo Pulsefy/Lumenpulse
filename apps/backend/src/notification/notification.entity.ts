@@ -8,6 +8,7 @@ import {
 
 export enum NotificationType {
   ANOMALY = 'anomaly',
+  DRIFT = 'drift',
   SENTIMENT_SPIKE = 'sentiment_spike',
   SYSTEM = 'system',
   PROJECT = 'project',

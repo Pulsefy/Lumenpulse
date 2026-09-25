@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, ApiSchema } from '@nestjs/swagger';
 import {
   IsString,
   IsNotEmpty,
@@ -9,6 +9,7 @@ import {
 import { Type } from 'class-transformer';
 import { IsStellarAddress } from '../../common/validators/stellar.validators';
 
+@ApiSchema({ name: 'MatchingPoolCreateRoundDto' })
 export class CreateRoundDto {
   @ApiProperty({ example: 'Q3 2025 Matching Round' })
   @IsString()
@@ -30,6 +31,7 @@ export class CreateRoundDto {
   description?: string;
 }
 
+@ApiSchema({ name: 'MatchingPoolApproveProjectDto' })
 export class ApproveProjectDto {
   @ApiProperty({
     example: 'GABC...XYZ',
