@@ -6,6 +6,66 @@ import {
   TransactionStatus,
 } from './dto/transaction.dto';
 import { getMockTransactions } from './mocks/mock-transactions';
+import { DEFAULT_PAGE_SIZE } from '../common/pagination';
+
+interface HorizonOperation {
+  id: string;
+  type: string;
+  created_at: string;
+  transaction_hash: string;
+  source_account: string;
+  from?: string;
+  to?: string;
+  into?: string;
+  amount?: string;
+  amount_charged?: string;
+  asset_type?: string;
+  asset_code?: string;
+  asset_issuer?: string;
+  starting_balance?: string;
+  funder?: string;
+  account?: string;
+  trustor?: string;
+  trustee?: string;
+  limit?: string;
+  offer_id?: string;
+  buying_asset_code?: string;
+  selling_asset_code?: string;
+  buying_asset_type?: string;
+  selling_asset_type?: string;
+  [key: string]: unknown;
+}
+
+interface HorizonResponse {
+  _embedded: {
+    records: HorizonTransaction[];
+  };
+  _links: {
+    next?: {
+      href: string;
+    };
+  };
+}
+
+interface HorizonErrorResponse {
+  detail?: string;
+  title?: string;
+  status?: number;
+}
+
+interface HorizonTransaction {
+  id: string;
+  created_at: string;
+  successful: boolean;
+  memo?: string;
+  fee_charged?: string;
+}
+
+interface OperationsResponse {
+  _embedded?: {
+    records: HorizonOperation[];
+  };
+}
 import { CacheService } from '../cache/cache.service';
 import {
   HorizonClientService,
@@ -45,7 +105,7 @@ export class TransactionService {
 
   async getTransactionHistory(
     publicKey: string,
-    limit: number = 50,
+    limit: number = DEFAULT_PAGE_SIZE,
     cursor?: string,
   ): Promise<{ transactions: TransactionDto[]; nextPage?: string }> {
     this.logger.log(`Fetching transaction history for ${publicKey}`);

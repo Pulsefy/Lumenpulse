@@ -41,8 +41,22 @@ export class UsersService {
     return this.usersRepository.save(newUser);
   }
 
-  async findAll(): Promise<User[]> {
-    return this.usersRepository.find();
+  /**
+   * Returns a single page of users plus the total count so callers can
+   * build standard pagination metadata. Results are ordered by creation
+   * date (newest first) with a stable id tiebreak so pages never overlap
+   * or skip rows when records are inserted concurrently.
+   */
+  async findAll(options: {
+    skip: number;
+    take: number;
+  }): Promise<{ users: User[]; total: number }> {
+    const [users, total] = await this.usersRepository.findAndCount({
+      order: { createdAt: 'DESC', id: 'ASC' },
+      skip: options.skip,
+      take: options.take,
+    });
+    return { users, total };
   }
 
   async findById(id: string): Promise<User | null> {

@@ -46,6 +46,11 @@ import { getAuthThrottleOverride } from '../common/rate-limit/rate-limit.config'
 import { AuditLogAction } from '../audit/decorators/audit-log.decorator';
 
 import {
+  PaginationQueryDto,
+  createOffsetMeta,
+  DEFAULT_PAGE_SIZE,
+} from '../common/pagination';
+import {
   ActiveSessionsResponseDto,
   RevokeSessionResponseDto,
 } from './dto/session.dto';
@@ -363,15 +368,31 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @Get('sessions')
-  @ApiOperation({ summary: 'Get active sessions for current user' })
+  @ApiOperation({
+    summary: 'Get active sessions for current user',
+    description:
+      'Returns a page of active sessions. Supports the standard pagination parameters (page, limit, cursor) and returns standard pagination metadata.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Active sessions retrieved successfully',
     type: ActiveSessionsResponseDto,
   })
-  async getActiveSessions(@Request() req: { user: { id: string } }) {
-    const sessions = await this.authService.getActiveSessions(req.user.id);
-    return sessions;
+  async getActiveSessions(
+    @Request() req: { user: { id: string } },
+    @Query() query: PaginationQueryDto,
+  ): Promise<ActiveSessionsResponseDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? DEFAULT_PAGE_SIZE;
+    const { sessions, total } = await this.authService.getActiveSessions(
+      req.user.id,
+      { skip: (page - 1) * limit, take: limit },
+    );
+    return {
+      sessions,
+      total,
+      meta: createOffsetMeta({ page, limit, total }),
+    };
   }
 
   @UseGuards(JwtAuthGuard)

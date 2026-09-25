@@ -14,6 +14,7 @@ import {
   WatchlistItemResponseDto,
   WatchlistResponseDto,
 } from './dto/watchlist.dto';
+import { createOffsetMeta, DEFAULT_PAGE_SIZE } from '../common/pagination';
 
 @Injectable()
 export class WatchlistService {
@@ -82,11 +83,15 @@ export class WatchlistService {
   }
 
   /**
-   * Get all watchlist items for a user
+   * Get a page of watchlist items for a user
    */
   async getWatchlist(
     userId: string,
     type?: WatchlistItemType,
+    pagination: { page: number; limit: number } = {
+      page: 1,
+      limit: DEFAULT_PAGE_SIZE,
+    },
   ): Promise<WatchlistResponseDto> {
     this.logger.log(`Fetching watchlist for user ${userId}`);
 
@@ -95,6 +100,13 @@ export class WatchlistService {
       where.type = type;
     }
 
+    const { page, limit } = pagination;
+    const [items, total] = await this.watchlistRepository.findAndCount({
+      where,
+      order: { sortOrder: 'ASC', createdAt: 'DESC', id: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
     const [items, total] = await this.profiler.profile(
       () =>
         this.watchlistRepository.findAndCount({
@@ -107,6 +119,7 @@ export class WatchlistService {
     return {
       items: items.map((item) => this.toResponseDto(item)),
       total,
+      meta: createOffsetMeta({ page, limit, total }),
     };
   }
 

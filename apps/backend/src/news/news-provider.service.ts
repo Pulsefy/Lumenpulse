@@ -19,9 +19,16 @@ import {
   CoinDeskSingleArticleResponse,
   CoinDeskCategory,
 } from './interfaces/coindesk-response.interface';
+import {
+  createOffsetMeta,
+  paginateArray,
+  DEFAULT_PAGE_SIZE,
+  MAX_PAGE_SIZE,
+} from '../common/pagination';
 
 export interface LatestArticlesOptions {
   limit?: number;
+  page?: number;
   lang?: string;
 }
 
@@ -30,6 +37,7 @@ export interface SearchArticlesOptions {
   sourceKey: string;
   lang?: string;
   limit?: number;
+  page?: number;
 }
 
 export interface GetArticleOptions {
@@ -39,6 +47,8 @@ export interface GetArticleOptions {
 
 export interface ListCategoriesOptions {
   status?: 'ACTIVE' | 'INACTIVE' | 'ALL';
+  limit?: number;
+  page?: number;
 }
 
 @Injectable()
@@ -55,11 +65,13 @@ export class NewsProviderService {
   async getLatestArticles(
     options: LatestArticlesOptions = {},
   ): Promise<NewsArticlesResponseDto> {
-    const { limit = 20, lang = 'EN' } = options;
+    const { limit = DEFAULT_PAGE_SIZE, page = 1, lang = 'EN' } = options;
 
+    // The provider exposes no offset support, so over-fetch up to the
+    // provider window (capped at MAX_PAGE_SIZE) and slice out the page.
     const params: Record<string, string> = {
       lang,
-      limit: Math.min(limit, 100).toString(),
+      limit: Math.min(limit * page, MAX_PAGE_SIZE).toString(),
     };
 
     const response = await this.makeRequest<CoinDeskArticleListResponse>(
@@ -67,19 +79,28 @@ export class NewsProviderService {
       params,
     );
 
-    const articles = this.normalizeArticles(response.Data || []);
+    const allArticles = this.normalizeArticles(response.Data || []);
+    const { items: articles } = paginateArray(allArticles, page, limit);
 
     return {
       articles,
       totalCount: articles.length,
       fetchedAt: new Date().toISOString(),
+      // The provider cannot report a total for the full feed.
+      meta: createOffsetMeta({ page, limit, total: null }),
     };
   }
 
   async searchArticles(
     options: SearchArticlesOptions,
   ): Promise<NewsSearchResponseDto> {
-    const { searchString, sourceKey, lang = 'EN', limit = 20 } = options;
+    const {
+      searchString,
+      sourceKey,
+      lang = 'EN',
+      limit = DEFAULT_PAGE_SIZE,
+      page = 1,
+    } = options;
 
     if (!searchString?.trim()) {
       throw new HttpException(
@@ -99,7 +120,7 @@ export class NewsProviderService {
       search_string: searchString.trim(),
       source_key: sourceKey.trim(),
       lang,
-      limit: Math.min(limit, 100).toString(),
+      limit: Math.min(limit * page, MAX_PAGE_SIZE).toString(),
     };
 
     const response = await this.makeRequest<CoinDeskSearchResponse>(
@@ -107,13 +128,16 @@ export class NewsProviderService {
       params,
     );
 
-    const articles = this.normalizeArticles(response.Data || []);
+    const allArticles = this.normalizeArticles(response.Data || []);
+    const { items: articles } = paginateArray(allArticles, page, limit);
 
     return {
       articles,
       searchTerm: searchString,
       totalCount: articles.length,
       fetchedAt: new Date().toISOString(),
+      // The provider cannot report a total for the full result set.
+      meta: createOffsetMeta({ page, limit, total: null }),
     };
   }
 
@@ -159,7 +183,7 @@ export class NewsProviderService {
   async getCategories(
     options: ListCategoriesOptions = {},
   ): Promise<NewsCategoriesResponseDto> {
-    const { status = 'ACTIVE' } = options;
+    const { status = 'ACTIVE', page = 1, limit = DEFAULT_PAGE_SIZE } = options;
 
     const params: Record<string, string> = { status };
 
@@ -168,29 +192,39 @@ export class NewsProviderService {
       params,
     );
 
-    const categories = this.normalizeCategories(response.Data || []);
+    // The provider returns the full category list in a single call, so the
+    // in-memory offset page is exact and the total is always known.
+    const { items: categories, total } = paginateArray(
+      this.normalizeCategories(response.Data || []),
+      page,
+      limit,
+    );
 
     return {
       categories,
-      totalCount: categories.length,
+      totalCount: total,
       fetchedAt: new Date().toISOString(),
+      meta: createOffsetMeta({ page, limit, total }),
     };
   }
 
   async getArticlesByCoin(
     symbol: string,
-    limit = 10,
+    limit = DEFAULT_PAGE_SIZE,
+    page = 1,
   ): Promise<NewsArticlesResponseDto> {
     const result = await this.searchArticles({
       searchString: symbol.toUpperCase(),
       sourceKey: 'coindesk',
       limit,
+      page,
     });
 
     return {
       articles: result.articles,
       totalCount: result.totalCount,
       fetchedAt: result.fetchedAt,
+      meta: result.meta,
     };
   }
 

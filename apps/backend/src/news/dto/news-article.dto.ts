@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { PaginationMetaDto } from '../../common/pagination';
 
 export class NewsArticleDto {
   @ApiProperty({
@@ -114,6 +115,12 @@ export class NewsArticlesResponseDto {
     example: '2024-02-25T15:30:00Z',
   })
   fetchedAt: string;
+
+  @ApiProperty({
+    description: 'Standard pagination metadata',
+    type: PaginationMetaDto,
+  })
+  meta: PaginationMetaDto;
 }
 
 export class NewsSearchResponseDto {
@@ -137,6 +144,12 @@ export class NewsSearchResponseDto {
     example: '2024-02-25T15:30:00Z',
   })
   fetchedAt: string;
+
+  @ApiProperty({
+    description: 'Standard pagination metadata',
+    type: PaginationMetaDto,
+  })
+  meta: PaginationMetaDto;
 }
 
 export class NewsCategoriesResponseDto {
@@ -154,6 +167,12 @@ export class NewsCategoriesResponseDto {
     example: '2024-02-25T15:30:00Z',
   })
   fetchedAt: string;
+
+  @ApiProperty({
+    description: 'Standard pagination metadata',
+    type: PaginationMetaDto,
+  })
+  meta: PaginationMetaDto;
 }
 
 export class SingleArticleResponseDto {

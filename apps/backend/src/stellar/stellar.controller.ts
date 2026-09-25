@@ -22,7 +22,6 @@ import {
   ApiOperation,
   ApiResponse,
   ApiParam,
-  ApiQuery,
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { StellarService } from './stellar.service';
@@ -32,12 +31,14 @@ import {
   AssetDiscoveryQueryDto,
   AssetDiscoveryResponseDto,
 } from './dto/asset-discovery.dto';
+import { StellarTransactionsQueryDto } from './dto/stellar-transactions-query.dto';
 import { Inject } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import stellarConfig from './config/stellar.config';
 import { TransactionService } from '../transaction/transaction.service';
 import { TransactionHistoryResponseDto } from '../transaction/dto/transaction.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { createCursorMeta, DEFAULT_PAGE_SIZE } from '../common/pagination';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles, GetUser } from '../auth/decorators/auth.decorators';
 import { UserRole, User } from '../users/entities/user.entity';
@@ -170,29 +171,7 @@ export class StellarController {
   @ApiOperation({
     summary: 'Get transaction history for a Stellar account',
     description:
-      'Fetches and formats paginated transaction history for a given Stellar public key from Horizon. Includes human-readable descriptions for each operation type.',
-  })
-  @ApiParam({
-    name: 'publicKey',
-    required: false,
-    description: 'Stellar account public key',
-    example: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
-  })
-  @ApiQuery({
-    name: 'publicKey',
-    required: true,
-    description: 'Stellar account public key',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Number of transactions to return (default: 50, max: 200)',
-    example: 50,
-  })
-  @ApiQuery({
-    name: 'cursor',
-    required: false,
-    description: 'Pagination cursor from previous response',
+      'Fetches and formats a cursor-paginated page of transaction history for a given Stellar public key from Horizon. Supports the standard pagination parameters (page, limit, cursor) and returns standard pagination metadata. Includes human-readable descriptions for each operation type.',
   })
   @ApiResponse({
     status: 200,
@@ -203,27 +182,22 @@ export class StellarController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 503, description: 'Horizon API unavailable' })
   async getTransactions(
-    @Query('publicKey') publicKey: string,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-    @Query('cursor') cursor?: string,
+    @Query() query: StellarTransactionsQueryDto,
   ): Promise<TransactionHistoryResponseDto> {
-    if (!publicKey) {
-      throw new BadRequestException('publicKey query parameter is required');
-    }
-
-    const clampedLimit = Math.min(Math.max(limit, 1), 200);
+    const limit = query.limit ?? DEFAULT_PAGE_SIZE;
 
     const { transactions, nextPage } =
       await this.transactionService.getTransactionHistory(
-        publicKey,
-        clampedLimit,
-        cursor,
+        query.publicKey,
+        limit,
+        query.cursor,
       );
 
     return {
       transactions,
       total: transactions.length,
       nextPage,
+      meta: createCursorMeta({ limit, nextCursor: nextPage }),
     };
   }
 
@@ -234,7 +208,7 @@ export class StellarController {
   @ApiOperation({
     summary: 'Discover Stellar assets',
     description:
-      'Search for Stellar assets by code, issuer, or partial match with pagination support',
+      'Search for Stellar assets by code, issuer, or partial match. Cursor-paginated: supports the standard pagination parameters (page, limit, cursor) and returns standard pagination metadata.',
   })
   @ApiResponse({
     status: 200,

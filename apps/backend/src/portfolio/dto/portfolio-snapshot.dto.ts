@@ -1,6 +1,5 @@
-import { IsNumber, IsOptional, Min } from 'class-validator';
-import { Type } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
+import { PaginationMetaDto } from '../../common/pagination';
 
 export class AssetBalanceDto {
   @ApiProperty({ description: 'Asset code', example: 'XLM' })
@@ -74,32 +73,6 @@ export class PortfolioSummaryResponseDto {
   hasLinkedAccount: boolean;
 }
 
-export class GetPortfolioHistoryDto {
-  @ApiPropertyOptional({
-    description: 'Page number for pagination',
-    example: 1,
-    minimum: 1,
-    default: 1,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiPropertyOptional({
-    description: 'Number of items per page',
-    example: 10,
-    minimum: 1,
-    default: 10,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(1)
-  limit?: number = 10;
-}
-
 export class PortfolioHistoryResponseDto {
   @ApiProperty({
     description: 'List of portfolio snapshots',
@@ -118,6 +91,12 @@ export class PortfolioHistoryResponseDto {
 
   @ApiProperty({ description: 'Total number of pages', example: 15 })
   totalPages: number;
+
+  @ApiProperty({
+    description: 'Standard pagination metadata',
+    type: PaginationMetaDto,
+  })
+  meta: PaginationMetaDto;
 }
 
 export class PortfolioSnapshotBatchStatusDto {

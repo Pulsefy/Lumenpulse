@@ -18,6 +18,11 @@ import {
   HorizonUnavailableException,
   InvalidPublicKeyException,
 } from './exceptions/stellar.exceptions';
+import {
+  createCursorMeta,
+  DEFAULT_PAGE_SIZE,
+  MAX_PAGE_SIZE,
+} from '../common/pagination';
 import { validateStellarPublicKey } from './utils/stellar-validator';
 import { retryWithBackoff } from './utils/retry.util';
 import { CacheService } from '../cache/cache.service';
@@ -300,7 +305,7 @@ export class StellarService {
     this.logger.debug(`Discovering assets with query:`, query);
 
     try {
-      const limit = Math.min(query.limit || 10, 100); // Cap at 100 for safety
+      const limit = Math.min(query.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
       let assetsBuilder = this.server.assets();
 
       // Apply filters based on query parameters
@@ -355,12 +360,15 @@ export class StellarService {
         );
       }
 
+      const nextCursor = assetsResponse.next
+        ? ((assetsResponse.next as unknown as string) ?? undefined)
+        : undefined;
+
       const response: AssetDiscoveryResponseDto = {
         assets,
         hasMore: !!assetsResponse.next,
-        nextCursor: assetsResponse.next
-          ? (assetsResponse.next as unknown as string)
-          : undefined,
+        nextCursor,
+        meta: createCursorMeta({ limit, nextCursor }),
       };
 
       this.logger.log(

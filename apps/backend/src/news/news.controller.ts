@@ -26,6 +26,16 @@ import {
   NewsCategoriesResponseDto,
   SingleArticleResponseDto,
 } from './dto/news-article.dto';
+import {
+  NewsListQueryDto,
+  NewsSearchQueryDto,
+  NewsCategoriesQueryDto,
+} from './dto/news-query.dto';
+import {
+  PaginationQueryDto,
+  createOffsetMeta,
+  DEFAULT_PAGE_SIZE,
+} from '../common/pagination';
 
 @ApiTags('news')
 @Controller('news')
@@ -41,32 +51,24 @@ export class NewsController {
   @UseInterceptors(CacheInterceptor)
   @CacheKey(NEWS_CACHE_KEY)
   @CacheTTL(300_000)
-  @ApiOperation({ summary: 'Get latest crypto news articles' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
-  @ApiQuery({ name: 'lang', required: false, type: String, example: 'EN' })
-  @ApiQuery({
-    name: 'tag',
-    required: false,
-    type: String,
-    example: 'stellar',
-    description: 'Filter by article tag',
-  })
-  @ApiQuery({
-    name: 'category',
-    required: false,
-    type: String,
-    example: 'DeFi',
-    description: 'Filter by article category',
+  @ApiOperation({
+    summary: 'Get latest crypto news articles',
+    description:
+      'Returns a page of news articles. Supports the standard pagination parameters (page, limit, cursor) and returns standard pagination metadata.',
   })
   @ApiResponse({ status: 200, type: NewsArticlesResponseDto })
   async getLatestArticles(
-    @Query('limit') limit?: string,
-    @Query('lang') lang?: string,
-    @Query('tag') tag?: string,
-    @Query('category') category?: string,
+    @Query() query: NewsListQueryDto,
   ): Promise<NewsArticlesResponseDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? DEFAULT_PAGE_SIZE;
+    const { tag, category, lang } = query;
+
     if (tag || category) {
-      const articles = await this.newsService.findAll({ tag, category });
+      const { articles, total } = await this.newsService.findAll(
+        { tag, category },
+        { page, limit },
+      );
       return {
         articles: articles.map((a) => ({
           id: a.id,
@@ -86,57 +88,55 @@ export class NewsController {
           publishedAt: a.publishedAt.toISOString(),
           relatedCoins: [],
         })),
-        totalCount: articles.length,
+        totalCount: total,
         fetchedAt: new Date().toISOString(),
+        meta: createOffsetMeta({ page, limit, total }),
       };
     }
 
     return this.newsProviderService.getLatestArticles({
-      limit: limit ? parseInt(limit, 10) : undefined,
+      limit,
+      page,
       lang,
     });
   }
 
   @Get('search')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Search news articles by keyword' })
-  @ApiQuery({ name: 'q', required: true, type: String, example: 'Bitcoin ETF' })
-  @ApiQuery({
-    name: 'source',
-    required: true,
-    type: String,
-    example: 'coindesk',
+  @ApiOperation({
+    summary: 'Search news articles by keyword',
+    description:
+      'Returns a page of search results. Supports the standard pagination parameters (page, limit, cursor) and returns standard pagination metadata.',
   })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
-  @ApiQuery({ name: 'lang', required: false, type: String, example: 'EN' })
   @ApiResponse({ status: 200, type: NewsSearchResponseDto })
   async searchArticles(
-    @Query('q') searchString: string,
-    @Query('source') sourceKey: string,
-    @Query('limit') limit?: string,
-    @Query('lang') lang?: string,
+    @Query() query: NewsSearchQueryDto,
   ): Promise<NewsSearchResponseDto> {
     return this.newsProviderService.searchArticles({
-      searchString,
-      sourceKey,
-      limit: limit ? parseInt(limit, 10) : undefined,
-      lang,
+      searchString: query.q,
+      sourceKey: query.source,
+      limit: query.limit ?? DEFAULT_PAGE_SIZE,
+      page: query.page ?? 1,
+      lang: query.lang,
     });
   }
 
   @Get('categories')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get all news categories' })
-  @ApiQuery({
-    name: 'status',
-    required: false,
-    enum: ['ACTIVE', 'INACTIVE', 'ALL'],
+  @ApiOperation({
+    summary: 'Get all news categories',
+    description:
+      'Returns a page of news categories. Supports the standard pagination parameters (page, limit, cursor) and returns standard pagination metadata.',
   })
   @ApiResponse({ status: 200, type: NewsCategoriesResponseDto })
   async getCategories(
-    @Query('status') status?: 'ACTIVE' | 'INACTIVE' | 'ALL',
+    @Query() query: NewsCategoriesQueryDto,
   ): Promise<NewsCategoriesResponseDto> {
-    return this.newsProviderService.getCategories({ status });
+    return this.newsProviderService.getCategories({
+      status: query.status,
+      page: query.page ?? 1,
+      limit: query.limit ?? DEFAULT_PAGE_SIZE,
+    });
   }
 
   @Get('sentiment-summary')
@@ -181,17 +181,21 @@ export class NewsController {
 
   @Get('coin/:symbol')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get news for a specific cryptocurrency' })
+  @ApiOperation({
+    summary: 'Get news for a specific cryptocurrency',
+    description:
+      'Returns a page of news for the given coin. Supports the standard pagination parameters (page, limit, cursor) and returns standard pagination metadata.',
+  })
   @ApiParam({ name: 'symbol', type: String, example: 'BTC' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
   @ApiResponse({ status: 200, type: NewsArticlesResponseDto })
   async getArticlesByCoin(
     @Param('symbol') symbol: string,
-    @Query('limit') limit?: string,
+    @Query() query: PaginationQueryDto,
   ): Promise<NewsArticlesResponseDto> {
     return this.newsProviderService.getArticlesByCoin(
       symbol,
-      limit ? parseInt(limit, 10) : undefined,
+      query.limit ?? DEFAULT_PAGE_SIZE,
+      query.page ?? 1,
     );
   }
 }

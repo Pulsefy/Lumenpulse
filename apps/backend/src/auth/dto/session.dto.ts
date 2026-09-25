@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { PaginationMetaDto } from '../../common/pagination';
 
 export class SessionDto {
   @ApiProperty({
@@ -50,10 +51,16 @@ export class ActiveSessionsResponseDto {
   sessions: SessionDto[];
 
   @ApiProperty({
-    description: 'Total number of active sessions',
+    description: 'Total number of active sessions across all pages',
     example: 3,
   })
   total: number;
+
+  @ApiProperty({
+    description: 'Standard pagination metadata',
+    type: PaginationMetaDto,
+  })
+  meta: PaginationMetaDto;
 }
 
 export class RevokeSessionResponseDto {

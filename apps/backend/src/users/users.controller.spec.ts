@@ -34,7 +34,7 @@ describe('UsersController', () => {
 
   beforeEach(async () => {
     const mockUsersService: Partial<UsersService> = {
-      findAll: jest.fn().mockResolvedValue([mockUser]),
+      findAll: jest.fn().mockResolvedValue({ users: [mockUser], total: 1 }),
 
       findById: jest.fn().mockResolvedValue(mockUser),
 

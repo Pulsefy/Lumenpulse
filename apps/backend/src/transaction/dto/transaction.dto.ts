@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { PaginationMetaDto } from '../../common/pagination';
 
 export enum TransactionType {
   PAYMENT = 'payment',
@@ -109,6 +110,7 @@ export class TransactionHistoryResponseDto {
   })
   transactions: TransactionDto[];
 
+  @ApiProperty({ description: 'Number of transactions in this page' })
   @ApiProperty({
     description: 'Total number of transactions matching the query',
     example: 42,
@@ -123,4 +125,10 @@ export class TransactionHistoryResponseDto {
     nullable: true,
   })
   nextPage?: string;
+
+  @ApiProperty({
+    description: 'Standard pagination metadata',
+    type: PaginationMetaDto,
+  })
+  meta: PaginationMetaDto;
 }
