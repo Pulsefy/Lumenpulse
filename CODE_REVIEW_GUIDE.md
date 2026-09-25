@@ -5,6 +5,8 @@ This document provides detailed code changes for reviewers to understand the imp
 
 ---
 
+these new changes require spwcial efdexrs
+
 ## 1. Configuration Validation (lib/config.ts)
 
 ### Added Function: `validateEnvironmentConfig()`
