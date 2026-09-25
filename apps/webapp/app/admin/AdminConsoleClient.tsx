@@ -28,8 +28,10 @@ import {
 import { useStellarConfig } from '@/contexts/StellarConfigContext';
 import { useStellarWallet } from '@/app/providers';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
+import { useAdminRole } from '@/hooks/useAdminRole';
 import { useExplorerUrl } from '@/hooks/useExplorerUrl';
 import { DependencyStatusBanner } from '@/components/DependencyStatusBanner';
+import { ForbiddenView } from '@/components/auth/ForbiddenView';
 
 import { clientConfig } from '@/lib/config';
 
@@ -375,6 +377,7 @@ export default function AdminConsoleClient() {
   const { config, status: configStatus, error: configError, retry: retryConfig } = useStellarConfig();
   const { publicKey } = useStellarWallet();
   const { loading: authLoading, isAuthenticated } = useAuthGuard();
+  const { loading: roleLoading, isAdmin, resolved: roleResolved } = useAdminRole();
 
   const [contracts, setContracts] = useState<ContractMetadata[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
@@ -388,7 +391,7 @@ export default function AdminConsoleClient() {
   const hasValidConfig = configStatus === 'ready' && config;
 
   const loadData = useCallback(async () => {
-    if (!hasValidConfig || !isAuthenticated) return;
+    if (!hasValidConfig || !isAuthenticated || !isAdmin) return;
 
     try {
       setIsRefreshing(true);
@@ -419,6 +422,7 @@ export default function AdminConsoleClient() {
       try {
         const statusResponse = await fetch(`${API_BASE}/admin/status`, {
           headers: { Accept: 'application/json' },
+          credentials: 'include',
         });
         if (statusResponse.ok) {
           const statusData = await statusResponse.json();
@@ -440,6 +444,7 @@ export default function AdminConsoleClient() {
       try {
         const logsResponse = await fetch(`${API_BASE}/admin/audit-logs?limit=10`, {
           headers: { Accept: 'application/json' },
+          credentials: 'include',
         });
         if (logsResponse.ok) {
           const logsData = await logsResponse.json();
@@ -465,20 +470,20 @@ export default function AdminConsoleClient() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [hasValidConfig, isAuthenticated, config]);
+  }, [hasValidConfig, isAuthenticated, isAdmin, config]);
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
+    if (!authLoading && !roleLoading && isAuthenticated && isAdmin) {
       loadData();
     }
-  }, [authLoading, isAuthenticated, loadData]);
+  }, [authLoading, roleLoading, isAuthenticated, isAdmin, loadData]);
 
   const handleRefresh = async () => {
     await loadData();
   };
 
   // Loading state
-  if (authLoading || configStatus === 'loading') {
+  if (authLoading || roleLoading || configStatus === 'loading') {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -489,19 +494,29 @@ export default function AdminConsoleClient() {
     );
   }
 
-  // Unauthorized state
+  // Unauthenticated state
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <Shield className="w-12 h-12 text-foreground/20 mx-auto mb-4" />
           <h2 className="text-xl font-semibold">Access Denied</h2>
-          <p className="text-foreground/50 text-sm mt-2">You do not have permission to access this page.</p>
+          <p className="text-foreground/50 text-sm mt-2">You must be logged in to access this page.</p>
           <Link href="/" className="mt-4 inline-block text-primary hover:underline text-sm">
             Return to home
           </Link>
         </div>
       </div>
+    );
+  }
+
+  // Role-unauthorized state (authenticated but not admin, or role resolution failed -> degraded to deny)
+  if (roleResolved && !isAdmin) {
+    return (
+      <ForbiddenView
+        title="Admin Access Required"
+        description="Your account does not have permission to access the admin console. If you believe this is an error, contact a system administrator."
+      />
     );
   }
 

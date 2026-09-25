@@ -99,6 +99,7 @@ export class UsersController {
       bio: user.bio,
       avatarUrl: user.avatarUrl,
       stellarPublicKey: user.stellarPublicKey,
+      role: user.role,
       preferences: this.resolvePreferences(user.preferences),
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

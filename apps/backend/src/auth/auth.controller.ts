@@ -264,6 +264,7 @@ export class AuthController {
       bio: user.bio,
       avatarUrl: user.avatarUrl,
       stellarPublicKey: user.stellarPublicKey,
+      role: user.role,
       preferences: user.preferences,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

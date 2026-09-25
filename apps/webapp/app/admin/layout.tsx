@@ -1,10 +1,8 @@
-import { Metadata } from 'next';
-import AuthGate from '@/components/auth/AuthGate';
+"use client";
 
-export const metadata: Metadata = {
-  title: 'Admin Console | Lumenpulse',
-  description: 'Secure admin interface for contract operations with environment safety rails.',
-};
+import AuthGate from '@/components/auth/AuthGate';
+import AdminRoleGate from '@/components/auth/AdminRoleGate';
+import { ForbiddenView } from '@/components/auth/ForbiddenView';
 
 export default function AdminLayout({
   children,
@@ -13,7 +11,16 @@ export default function AdminLayout({
 }) {
   return (
     <AuthGate>
-      {children}
+      <AdminRoleGate
+        forbiddenFallback={
+          <ForbiddenView
+            title="Admin Access Required"
+            description="Your account does not have permission to access the admin console. If you believe this is an error, contact a system administrator."
+          />
+        }
+      >
+        {children}
+      </AdminRoleGate>
     </AuthGate>
   );
 }
