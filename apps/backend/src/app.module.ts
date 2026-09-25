@@ -81,6 +81,7 @@ import { TransactionModule } from './transaction/transaction.module';
 import { PriceAlertModule } from './price-alert/price-alert.module';
 import { ProfilingModule } from './common/profiling/profiling.module';
 import { QueryCountMiddleware } from './common/profiling/query-count.middleware';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -220,6 +221,9 @@ import { QueryCountMiddleware } from './common/profiling/query-count.middleware'
 
     // Query profiling (dev-only, enabled via QUERY_PROFILING=true)
     ProfilingModule,
+
+    // Aggregated, cached dashboard read model
+    DashboardModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [

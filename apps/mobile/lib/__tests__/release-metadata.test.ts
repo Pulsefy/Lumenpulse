@@ -262,8 +262,9 @@ describe('redactSensitiveDiagnostics', () => {
 
   it('redacts stellar G... (56 char) public keys', () => {
     const { redactSensitiveDiagnostics } = require(releaseMetadataPath);
-    const key =
-      'GCVHEKSRASJBD6O2Z532LWH4N2ZLCBTET73Y35P72OY3Y3Y3Y3Y3Y3Y3Y3Y3Y3Y3Y3Y3Y3Y3Y3';
+    // A sample 56-char G-prefixed address of the same length as a real
+    // stellar ed25519 key (never a real wallet / used on any network).
+    const key = 'G' + 'A'.repeat(55);
     const scrubbed = redactSensitiveDiagnostics(`wallet: ${key}`);
     expect(scrubbed).not.toContain(key);
     expect(scrubbed).toContain('[REDACTED_STELLAR_ADDRESS]');
@@ -271,8 +272,9 @@ describe('redactSensitiveDiagnostics', () => {
 
   it('redacts M... muxed account addresses', () => {
     const { redactSensitiveDiagnostics } = require(releaseMetadataPath);
-    const mux =
-      'MDT67MK7Z2X4FRUGBPWLFPREMEY5M6CNP6N2MZTF7X2STHK23XZAAAAAAAAAAMBIH7L4F7T47R522';
+    // A sample 69-char M-prefixed muxed address of the canonical length
+    // (never a real address / used on any network).
+    const mux = 'M' + 'A'.repeat(68);
     const scrubbed = redactSensitiveDiagnostics(`muxed = ${mux}`);
     expect(scrubbed).not.toContain(mux);
     expect(scrubbed).toContain('[REDACTED_STELLAR_MUXED_ADDRESS]');
@@ -280,7 +282,9 @@ describe('redactSensitiveDiagnostics', () => {
 
   it('redacts C... contract addresses (but intentionally kept in context below)', () => {
     const { redactSensitiveDiagnostics } = require(releaseMetadataPath);
-    const c = 'CDJ4QV4PG7J6YTYHEFV7F43XSZ2Z53JQ6N3O4256P4XJ72Z6Y3Y3Y3Y3Y3Y3Y3Y3';
+    // A sample 56-char C-prefixed contract address of the canonical length
+    // (never a real contract / deployed on any network).
+    const c = 'C' + 'A'.repeat(55);
     const scrubbed = redactSensitiveDiagnostics(`contract=${c}`);
     expect(scrubbed).not.toContain(c);
     expect(scrubbed).toContain('[REDACTED_CONTRACT_ADDRESS]');
@@ -288,28 +292,32 @@ describe('redactSensitiveDiagnostics', () => {
 
   it('redacts JWT tokens (eyJ.... form)', () => {
     const { redactSensitiveDiagnostics } = require(releaseMetadataPath);
-    const jwt =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+    // A structurally-valid-shape 3-segment base64url JWT placeholder that is
+    // long enough for the regex but never a real signed token or secret.
+    const header = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9';
+    const payload = 'eyJpc3MiOiJ0ZXN0LWZpeHR1cmUiLCJhdWQiOiJ0ZXN0LXRva2VuLW1vY2sifQ';
+    const sig = 'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4';
+    const jwt = `${header}.${payload}.${sig}`;
     const scrubbed = redactSensitiveDiagnostics(`token: ${jwt}`);
-    expect(scrubbed).not.toContain('eyJhbGci');
+    expect(scrubbed).not.toContain(header);
     expect(scrubbed).toContain('[REDACTED_JWT]');
   });
 
   it('redacts authorization / x-api-key style headers', () => {
     const { redactSensitiveDiagnostics } = require(releaseMetadataPath);
-    const line = 'Authorization: Bearer sk_live_abcdefghijk1234567890abcdefgh';
+    const line = 'Authorization: Bearer <PLACEHOLDER_LONG_SECRET_VALUE_REDACTED_IN_TEST_FIXTURE>';
     const scrubbed = redactSensitiveDiagnostics(line);
-    expect(scrubbed).not.toContain('sk_live_');
+    expect(scrubbed).not.toContain('PLACEHOLDER_LONG_SECRET_VALUE');
     expect(scrubbed).toMatch(/authorization:\s*\[REDACTED_TOKEN\]/i);
   });
 
   it('redacts auth-token style cookies', () => {
     const { redactSensitiveDiagnostics } = require(releaseMetadataPath);
     const line =
-      'cookie: auth-token=eyJhbGciOi...notAValidJWTButStillSecret1234567890abcdef; other=1';
+      'cookie: auth-token=<PLACEHOLDER_LONG_COOKIE_VALUE_REDACTED_IN_TEST_FIXTURE>; other=1';
     const scrubbed = redactSensitiveDiagnostics(line);
     expect(scrubbed).toContain('auth-token=[REDACTED_COOKIE]');
-    expect(scrubbed).not.toContain('notAValidJWTButStillSecret');
+    expect(scrubbed).not.toContain('PLACEHOLDER_LONG_COOKIE_VALUE');
   });
 
   it('passes non-sensitive lines through untouched', () => {
@@ -339,7 +347,9 @@ describe('buildDiagnosticsBlock', () => {
     apiBaseUrl: 'https://api.example.com',
     stellarNetwork: 'testnet',
     sorobanRpcUrl: 'https://soroban-testnet.stellar.org',
-    crowdfundContractId: 'CDJ4QV4PG7J6YTYHEFV7F43XSZ2Z53JQ6N3O4256P4XJ72Z6AAAAAAAAAA',
+    // Sample 56-char C-prefixed placeholder of the canonical contract-address
+    // length; never a real contract / deployed on any network.
+    crowdfundContractId: 'C' + 'A'.repeat(55),
     connectionStatus: 'online' as const,
     lastCheckedAt: '2026-09-20T12:00:00.000Z',
   };
@@ -362,21 +372,30 @@ describe('buildDiagnosticsBlock', () => {
   });
 
   it('redacts wallet addresses and tokens when they sneak into a string context value', () => {
-    // Construct the same context but with an embedded wallet/token in a label-like context.
-    // We also directly test the redaction pipeline with a pre-constructed dangerous block.
+    // Build diagnostics from base context, then pipe it through the redactor
+    // together with a synthetic block that embeds a structurally-valid-shape
+    // wallet address and a long secret-value token. The test asserts the
+    // redactor scrubs both classes — no specific real values are used.
     const { buildDiagnosticsBlock, redactSensitiveDiagnostics } = require(releaseMetadataPath);
     const block = buildDiagnosticsBlock(baseCtx);
 
-    // Ensure base block is safe for basic tests.
+    // Base block for a safe diagnostics fixture should never contain a
+    // redacted-JWT marker.
     expect(block).not.toContain('[REDACTED_JWT]');
 
-    const dangerous = `header:Authorization: Bearer verysecretvalue1234567890
-  wallet=GCVHEKSRASJBD6O2Z532LWH4N2ZLCBTET73Y35P72OY3Y3Y3Y3Y3Y3Y3Y3Y3Y3Y3Y3Y3Y3Y3Y3
+    // Sample wallet/token SHAPES — values are never real keys, just placeholders
+    // of the canonical length so the regexes match.
+    const wallet = 'G' + 'A'.repeat(55);
+    const token = '<LONG_SECRET_TOKEN_PLACEHOLDER_OF_SUFFICIENT_LENGTH_TO_MATCH_RE>';
+    const dangerous = `header:Authorization: Bearer ${token}
+  wallet=${wallet}
   ${block}`;
+
     const scrubbed = redactSensitiveDiagnostics(dangerous);
     expect(scrubbed).toContain('[REDACTED_TOKEN]');
     expect(scrubbed).toContain('[REDACTED_STELLAR_ADDRESS]');
-    expect(scrubbed).not.toContain('verysecretvalue');
+    expect(scrubbed).not.toContain('LONG_SECRET_TOKEN_PLACEHOLDER');
+    expect(scrubbed).not.toContain(wallet);
   });
 
   it('omits crowdfund contract when missing (no divider line for it)', () => {

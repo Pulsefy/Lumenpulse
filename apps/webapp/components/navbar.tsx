@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { WalletButton } from "./wallet-button";
 import { ThemeSelector } from "./theme-selector";
-import { WalletSwitcher } from "@/components/wallet-switcher";
 import { useStellarConfig } from "@/contexts/StellarConfigContext";
 import { useWallet } from "@/contexts/WalletContext";
 import { useExplorerUrl } from "@/hooks/useExplorerUrl";

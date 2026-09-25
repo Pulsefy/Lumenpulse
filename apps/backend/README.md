@@ -217,6 +217,41 @@ Deployments should configure separate readiness and liveness endpoints instead o
 - **Liveness:** `GET /health/live`
 - **Readiness:** `GET /health/ready`
 
+### Dependency health response
+
+`GET /health` and `GET /health/ready` return the same JSON report. The top-level
+`status` is `ok` or `error`; `summary` is `healthy`, `degraded`, or `down`.
+`dependencies` contains a stable entry for `database` (Postgres), `redis`,
+`horizon`, `sorobanRpc`, `python` (data-processing), `coinGecko`, and
+`exchangeRateApi`. Each entry has `status` (`up` or `down`), `latencyMs` (elapsed
+milliseconds, including failures and timeouts), `critical` (boolean), and an
+optional `message`. The existing `info`, `error`, `details`, and `latencyBudget`
+fields remain available. Do not alert on the text of `message`.
+
+```json
+{
+  "status": "ok",
+  "summary": "degraded",
+  "dependencies": {
+    "database": { "status": "up", "latencyMs": 2, "critical": true },
+    "redis": { "status": "down", "latencyMs": 3000, "critical": false, "message": "redis timed out" },
+    "horizon": { "status": "up", "latencyMs": 48, "critical": true },
+    "sorobanRpc": { "status": "up", "latencyMs": 61, "critical": true },
+    "python": { "status": "up", "latencyMs": 7, "critical": false },
+    "coinGecko": { "status": "up", "latencyMs": 22, "critical": false },
+    "exchangeRateApi": { "status": "up", "latencyMs": 19, "critical": false }
+  }
+}
+```
+
+Readiness returns HTTP 503 when Postgres, Horizon, or Soroban RPC is down, or
+when the shutdown drain begins. Optional dependency failures return HTTP 200
+with `summary: "degraded"`. Each Postgres, Redis, Python, and external API probe
+has a 3-second deadline; the Horizon and Soroban RPC probes use their configured
+latency budgets, with a 6-second cap on the combined budget report. `GET
+/health/live` returns HTTP 200 with `{ "status": "ok", "summary": "healthy" }`
+while the HTTP process can serve requests, without waiting on dependencies.
+
 Key environment variables:
 
 ```bash
