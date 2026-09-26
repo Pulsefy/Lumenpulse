@@ -7,6 +7,7 @@ import {
   Index,
   OneToMany,
 } from 'typeorm';
+import { ApiHideProperty } from '@nestjs/swagger';
 import { StellarAccount } from './stellar-account.entity';
 
 export enum UserRole {
@@ -84,6 +85,16 @@ export class User {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   twoFactorSecret: string | null;
+
+  /**
+   * Set when the account holder has exercised their right to erasure. The row
+   * is kept as a non-identifiable tombstone so retained audit and moderation
+   * records keep a valid foreign key; a non-null value also blocks every
+   * further authentication attempt. Hidden from the public OpenAPI schema.
+   */
+  @ApiHideProperty()
+  @Column({ type: 'timestamptz', nullable: true, default: null })
+  deletedAt?: Date | null;
 
   @OneToMany(() => StellarAccount, (stellarAccount) => stellarAccount.user)
   stellarAccounts: StellarAccount[];
