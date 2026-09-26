@@ -3283,25 +3283,46 @@ class PostgresService:
         end_date: Optional[str] = None,
         period: str = "daily",
         limit: int = 100,
-    ) -> List[DailyOnchainKPISnapshot]:
+        offset: int = 0,
+    ) -> Tuple[List[DailyOnchainKPISnapshot], int]:
         """
-        Retrieve historical daily on-chain KPI snapshots.
+        Retrieve historical daily on-chain KPI snapshots with stable ordering
+        and pagination (#1458).
+
+        Ordering is ``snapshot_date DESC, id DESC`` so pages remain stable as
+        history accumulates. Returns ``(page_items, total_matching)``.
         """
+        from src.utils.pagination import clamp_limit, clamp_offset
+
+        limit = clamp_limit(limit)
+        offset = clamp_offset(offset)
         try:
             with self.get_session() as session:
-                stmt = select(DailyOnchainKPISnapshot).where(
-                    DailyOnchainKPISnapshot.period == period
-                )
+                filters = [DailyOnchainKPISnapshot.period == period]
                 if start_date:
-                    stmt = stmt.where(DailyOnchainKPISnapshot.snapshot_date >= start_date)
+                    filters.append(DailyOnchainKPISnapshot.snapshot_date >= start_date)
                 if end_date:
-                    stmt = stmt.where(DailyOnchainKPISnapshot.snapshot_date <= end_date)
+                    filters.append(DailyOnchainKPISnapshot.snapshot_date <= end_date)
 
-                stmt = stmt.order_by(desc(DailyOnchainKPISnapshot.snapshot_date)).limit(limit)
-                return session.execute(stmt).scalars().all()
+                total = session.execute(
+                    select(func.count()).select_from(DailyOnchainKPISnapshot).where(and_(*filters))
+                ).scalar_one()
+
+                stmt = (
+                    select(DailyOnchainKPISnapshot)
+                    .where(and_(*filters))
+                    .order_by(
+                        desc(DailyOnchainKPISnapshot.snapshot_date),
+                        desc(DailyOnchainKPISnapshot.id),
+                    )
+                    .limit(limit)
+                    .offset(offset)
+                )
+                items = list(session.execute(stmt).scalars().all())
+                return items, int(total or 0)
         except SQLAlchemyError as e:
             logger.error(f"Failed to retrieve daily on-chain KPI snapshots: {e}")
-            return []
+            return [], 0
 
     def get_latest_daily_onchain_kpi_snapshot(
         self,
