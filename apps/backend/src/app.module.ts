@@ -63,6 +63,7 @@ import { CrowdfundSyncModule } from './crowdfund-sync/crowdfund-sync.module';
 import { ContributorRegistryModule } from './contributor-registry/contributor-registry.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
+import { DataRetentionModule } from './data-retention/data-retention.module';
 import { SorobanEventsModule } from './soroban-events/soroban-events.module';
 import { TreasuryModule } from './treasury/treasury.module';
 import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
@@ -174,6 +175,9 @@ import { DashboardModule } from './dashboard/dashboard.module';
 
     // Audit
     AuditModule,
+
+    // Data retention and user erasure
+    DataRetentionModule,
 
     // Soroban event processing
     SorobanEventsModule,
