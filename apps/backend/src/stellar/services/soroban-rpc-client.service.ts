@@ -11,12 +11,18 @@ import {
 import { Counter, Histogram, Registry } from 'prom-client';
 import { config } from '../../lib/config';
 import { RequestContextService } from '../../common/services/request-context.service';
+import {
+  BAD_SEQUENCE_RESULT_CODE,
+  extractTransactionResultCode,
+} from '../utils/stellar-result-code';
 
 export enum SorobanErrorCode {
   TIMEOUT = 'SOROBAN_TIMEOUT',
   SIMULATION_FAILED = 'SOROBAN_SIMULATION_FAILED',
   ACCOUNT_NOT_FOUND = 'SOROBAN_ACCOUNT_NOT_FOUND',
   SUBMISSION_FAILED = 'SOROBAN_SUBMISSION_FAILED',
+  /** The network rejected the transaction because its sequence number is stale. */
+  SUBMISSION_BAD_SEQUENCE = 'SOROBAN_SUBMISSION_BAD_SEQUENCE',
   NETWORK_ERROR = 'SOROBAN_NETWORK_ERROR',
   MAX_RETRIES_EXCEEDED = 'SOROBAN_MAX_RETRIES_EXCEEDED',
 }
@@ -26,6 +32,8 @@ export class SorobanRpcError extends Error {
     public readonly code: SorobanErrorCode,
     message: string,
     public readonly cause?: unknown,
+    /** Stellar result code (e.g. `tx_bad_seq`) when the failure came from the ledger. */
+    public readonly resultCode?: string,
   ) {
     super(message);
     this.name = 'SorobanRpcError';
@@ -78,6 +86,7 @@ export class SorobanRpcClientService {
   private readonly rpcLatency: Histogram;
   private readonly rpcErrors: Counter;
   private readonly rpcRequests: Counter;
+  private readonly submissionFailures: Counter;
 
   constructor(
     private readonly requestContextService: RequestContextService,
@@ -115,6 +124,13 @@ export class SorobanRpcClientService {
       name: 'soroban_rpc_requests_total',
       help: 'Total Soroban RPC requests by method',
       labelNames: ['method'],
+      registers: [reg],
+    });
+
+    this.submissionFailures = new Counter({
+      name: 'stellar_submission_failures_total',
+      help: 'Total Stellar transaction submission failures by Stellar result code',
+      labelNames: ['result_code'],
       registers: [reg],
     });
   }
@@ -227,9 +243,23 @@ export class SorobanRpcClientService {
         tx as Parameters<rpc.Server['sendTransaction']>[0],
       );
       if (result.status === 'ERROR') {
+        const resultCode = extractTransactionResultCode(result.errorResult);
+        this.submissionFailures.inc({ result_code: resultCode ?? 'unknown' });
+
+        if (resultCode === BAD_SEQUENCE_RESULT_CODE) {
+          throw new SorobanRpcError(
+            SorobanErrorCode.SUBMISSION_BAD_SEQUENCE,
+            `Transaction rejected with ${BAD_SEQUENCE_RESULT_CODE}; the source account sequence is stale`,
+            result,
+            resultCode,
+          );
+        }
+
         throw new SorobanRpcError(
           SorobanErrorCode.SUBMISSION_FAILED,
           `Transaction submission failed: ${JSON.stringify(result.errorResult ?? 'Unknown')}`,
+          undefined,
+          resultCode ?? undefined,
         );
       }
       return result;
@@ -592,6 +622,9 @@ export class SorobanRpcClientService {
 
   private isRetryable(err: unknown): boolean {
     if (err instanceof SorobanRpcError) {
+      // `SUBMISSION_BAD_SEQUENCE` is deliberately excluded: replaying the same
+      // bytes cannot succeed. It is retried with a fresh sequence by
+      // `SequenceManagerService.withSequence()`.
       return [
         SorobanErrorCode.TIMEOUT,
         SorobanErrorCode.NETWORK_ERROR,
