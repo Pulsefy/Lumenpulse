@@ -13,10 +13,13 @@ use soroban_sdk::{Address, Env};
 ///
 /// # Returns
 ///
-/// The token balance, or 0 if the call fails.
-pub fn balance(env: &Env, token: &Address, address: &Address) -> i128 {
+/// The token balance, or ViewError::TokenError if the call fails.
+pub fn balance(env: &Env, token: &Address, address: &Address) -> Result<i128, ViewError> {
     let client = soroban_sdk::token::Client::new(env, token);
-    client.balance(address)
+    match client.try_balance(address) {
+        Ok(Ok(v)) => Ok(v),
+        _ => Err(ViewError::TokenError),
+    }
 }
 
 /// Safely read the token allowance from owner to spender.
@@ -30,10 +33,13 @@ pub fn balance(env: &Env, token: &Address, address: &Address) -> i128 {
 ///
 /// # Returns
 ///
-/// The allowance amount, or 0 if the call fails.
-pub fn allowance(env: &Env, token: &Address, owner: &Address, spender: &Address) -> i128 {
+/// The allowance amount, or ViewError::TokenError if the call fails.
+pub fn allowance(env: &Env, token: &Address, owner: &Address, spender: &Address) -> Result<i128, ViewError> {
     let client = soroban_sdk::token::Client::new(env, token);
-    client.allowance(owner, spender)
+    match client.try_allowance(owner, spender) {
+        Ok(Ok(v)) => Ok(v),
+        _ => Err(ViewError::TokenError),
+    }
 }
 
 /// Token metadata information.
@@ -57,10 +63,23 @@ pub struct TokenInfo {
 pub fn token_info(env: &Env, token: &Address) -> Result<TokenInfo, ViewError> {
     let client = soroban_sdk::token::Client::new(env, token);
 
+    let decimals = match client.try_decimals() {
+        Ok(Ok(v)) => v,
+        _ => return Err(ViewError::TokenError),
+    };
+    let name = match client.try_name() {
+        Ok(Ok(v)) => v,
+        _ => return Err(ViewError::TokenError),
+    };
+    let symbol = match client.try_symbol() {
+        Ok(Ok(v)) => v,
+        _ => return Err(ViewError::TokenError),
+    };
+
     Ok(TokenInfo {
-        decimals: client.decimals(),
-        name: client.name(),
-        symbol: client.symbol(),
+        decimals,
+        name,
+        symbol,
     })
 }
 

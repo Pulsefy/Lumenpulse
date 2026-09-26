@@ -1063,3 +1063,15 @@ fn test_contract_version() {
 
     assert_eq!(client.contract_version(), ContractVersion::new(1, 0, 0));
 }
+
+#[test]
+fn test_cross_contract_view_integration() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (token_client, token_admin_client) = create_token_contract(&env, &admin);
+    token_admin_client.mint(&admin, &10_000_000);
+    let balance = cross_contract_view::token_helpers::balance(&env, &token_client.address, &admin);
+    assert_eq!(balance, Ok(10_000_000));
+}
+
