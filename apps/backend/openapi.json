@@ -40518,11 +40518,11 @@
             "type": "string"
           },
           "action": {
+            "type": "string",
             "enum": [
               "create",
               "update"
-            ],
-            "type": "string"
+            ]
           },
           "previousVersion": {
             "type": "number"
