@@ -54,6 +54,8 @@ class ForecastResult:
     model_backend: str            # "prophet" | "sklearn" | "heuristic"
     data_points_used: int
     generated_at: str
+    # Walk-forward backtest confidence: "high" | "medium" | "low" | "insufficient_data"
+    backtest_confidence: str = "insufficient_data"
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -496,13 +498,56 @@ class SentimentForecaster:
 
     # ── Convenience ───────────────────────────────────────────────────────
 
-    def run(self, jsonl_path: Optional[Path] = None) -> ForecastResult:
+    def run(
+        self,
+        jsonl_path: Optional[Path] = None,
+        run_backtest: bool = True,
+        backtest_config_path: Optional[Path] = None,
+    ) -> ForecastResult:
         """
         One-call shortcut: load history → train (if needed) → predict.
+
+        Optionally runs a walk-forward backtest to derive a
+        ``backtest_confidence`` value embedded in the returned
+        :class:`ForecastResult`.
+
+        Parameters
+        ----------
+        jsonl_path:
+            Path to ``analytics.jsonl``; falls back to the instance default.
+        run_backtest:
+            When ``True`` (default) a walk-forward backtest is run on the
+            loaded history and its confidence label is attached to the result.
+            Set to ``False`` to skip the backtest for a faster response (the
+            field will remain ``"insufficient_data"``).
+        backtest_config_path:
+            Optional path to a YAML backtest config file.  Defaults to
+            ``config/backtest_config.yaml``.
 
         Safe to call repeatedly — reuses an existing trained model.
         """
         df = self.load_history(jsonl_path)
         if not self._is_trained:
             self.train(df)
-        return self.predict(df)
+        result = self.predict(df)
+
+        if run_backtest:
+            try:
+                from src.analytics.backtesting import (
+                    WalkForwardBacktester,
+                    load_backtest_config,
+                )
+
+                bt_config = load_backtest_config(backtest_config_path)
+                bt = WalkForwardBacktester(bt_config)
+                bt_result = bt.run(df)
+                result.backtest_confidence = bt_result.backtest_confidence
+                logger.info(
+                    f"Backtest complete: {bt_result.n_windows} windows, "
+                    f"confidence={bt_result.backtest_confidence}, "
+                    f"MAE_24h={bt_result.mean_mae_24h}"
+                )
+            except Exception as exc:
+                logger.warning(f"Backtest failed (result will lack confidence): {exc}")
+
+        return result
