@@ -14,21 +14,43 @@ import {
   QueryDeploymentManifestDto,
   DeploymentManifestListResponseDto,
 } from './dto/deployment-manifest.dto';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, watchFile } from 'fs';
 import { resolve } from 'path';
+import { ConfigService } from '../config/config.service';
+import { ContractCapabilityService } from './contract-capability.service';
 
 @Injectable()
 export class DeploymentManifestService implements OnModuleInit {
   private readonly logger = new Logger(DeploymentManifestService.name);
+  private lastKnownHashes: Record<string, string> = {};
 
   constructor(
     @Optional()
     @InjectRepository(ContractDeploymentManifest)
-    private readonly manifestRepo?: Repository<ContractDeploymentManifest>,
+    private readonly manifestRepo: Repository<ContractDeploymentManifest> | undefined,
+    private readonly configService: ConfigService,
+    private readonly contractCapabilityService: ContractCapabilityService,
   ) {}
 
   async onModuleInit(): Promise<void> {
     await this.seedFromOnchainManifestIfEmpty();
+    await this.refreshManifest(); // Initialize memory state
+
+    const repoRoot = process.cwd();
+    const candidatePaths = [
+      resolve(repoRoot, 'apps/onchain/testnet-manifest.json'),
+      resolve(repoRoot, '../onchain/testnet-manifest.json'),
+      resolve(repoRoot, 'testnet-manifest.json'),
+    ];
+    const manifestPath = candidatePaths.find((p) => existsSync(p));
+    if (manifestPath) {
+      watchFile(manifestPath, { interval: 5000 }, (curr, prev) => {
+        if (curr.mtime !== prev.mtime) {
+          this.logger.log('testnet-manifest.json changed on disk. Reloading...');
+          this.refreshManifest();
+        }
+      });
+    }
   }
 
   /**
@@ -290,6 +312,68 @@ export class DeploymentManifestService implements OnModuleInit {
     const manifest = await this.findOne(id);
     if (this.manifestRepo) {
       await this.manifestRepo.remove(manifest);
+    }
+  }
+
+  /**
+   * Refreshes the manifest from the testnet-manifest.json file.
+   * If contract IDs or WASM hashes have changed, invalidates caches.
+   */
+  async refreshManifest(): Promise<void> {
+    const repoRoot = process.cwd();
+    const candidatePaths = [
+      resolve(repoRoot, 'apps/onchain/testnet-manifest.json'),
+      resolve(repoRoot, '../onchain/testnet-manifest.json'),
+      resolve(repoRoot, 'testnet-manifest.json'),
+    ];
+
+    const manifestPath = candidatePaths.find((p) => existsSync(p));
+    if (!manifestPath) {
+      this.logger.warn('No testnet-manifest.json found to refresh from.');
+      return;
+    }
+
+    try {
+      const content = readFileSync(manifestPath, 'utf8');
+      const parsed = JSON.parse(content);
+      
+      const contracts = parsed.contracts || {};
+      let hasChanges = false;
+      const updates: Record<string, string | null> = {};
+
+      for (const [snakeKey, contractInfo] of Object.entries(contracts)) {
+        // Convert snake_case to camelCase
+        const camelKey = snakeKey.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+        
+        // Skip un-deployed contracts (they have a 'reason' instead of 'id')
+        if ((contractInfo as any).reason) {
+          continue;
+        }
+
+        const id = (contractInfo as any).id;
+        const wasmHash = (contractInfo as any).wasm_hash;
+
+        if (id && wasmHash) {
+          const prevHash = this.lastKnownHashes[camelKey];
+          if (prevHash !== wasmHash) {
+            this.logger.log(\`Contract \${camelKey} changed: previous hash \${prevHash || 'none'}, new hash \${wasmHash}\`);
+            this.lastKnownHashes[camelKey] = wasmHash;
+            updates[camelKey] = id;
+            hasChanges = true;
+          }
+        }
+      }
+
+      if (hasChanges) {
+        this.logger.log('Manifest changes detected. Applying updates and invalidating caches.');
+        this.configService.setStellarContractOverrides(updates);
+        await this.configService.invalidateCache();
+        this.contractCapabilityService.invalidateCache();
+      } else {
+        this.logger.debug('Manifest parsed, no changes detected.');
+      }
+    } catch (error) {
+      this.logger.error('Failed to parse or refresh manifest. Retaining previous state.', error);
     }
   }
 }
