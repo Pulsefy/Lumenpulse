@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { AccessControlService } from './access-control.service';
 import { User, UserRole } from '../../users/entities/user.entity';
 import { WebhookVerificationService } from '../../webhook/webhook-verification.service';
+import { SecretRotationService } from '../../config/secret-rotation.service';
 import {
   AccessAction,
   ResourceType,
@@ -16,6 +17,10 @@ describe('AccessControlService', () => {
   let userRepository: jest.Mocked<Repository<User>>;
   let configService: jest.Mocked<ConfigService>;
   let webhookService: jest.Mocked<WebhookVerificationService>;
+
+  const mockSecretRotationService = {
+    acceptableValues: jest.fn(),
+  };
 
   beforeEach(async () => {
     const mockUserRepository = {
@@ -29,6 +34,8 @@ describe('AccessControlService', () => {
     const mockWebhookService = {
       verifySignature: jest.fn(),
     };
+
+    mockSecretRotationService.acceptableValues.mockReturnValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -44,6 +51,10 @@ describe('AccessControlService', () => {
         {
           provide: WebhookVerificationService,
           useValue: mockWebhookService,
+        },
+        {
+          provide: SecretRotationService,
+          useValue: mockSecretRotationService,
         },
       ],
     }).compile();
@@ -208,6 +219,26 @@ describe('AccessControlService', () => {
 
       expect(result.trusted).toBe(false);
       expect(result.error).toBe('API key verification not configured');
+    });
+
+    it('should accept the new and previous values during a rotation overlap', async () => {
+      configService.get.mockReturnValue('boot-key');
+      mockSecretRotationService.acceptableValues.mockReturnValue([
+        'rotated-key',
+        'boot-key',
+      ]);
+
+      const active = await service.verifyTrustedCaller({
+        verificationType: VerificationType.API_KEY,
+        verificationData: { apiKey: 'rotated-key' },
+      });
+      const previous = await service.verifyTrustedCaller({
+        verificationType: VerificationType.API_KEY,
+        verificationData: { apiKey: 'boot-key' },
+      });
+
+      expect(active.trusted).toBe(true);
+      expect(previous.trusted).toBe(true);
     });
   });
 

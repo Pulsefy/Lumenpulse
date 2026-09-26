@@ -8,4 +8,5 @@ export interface ErrorResponse {
   message: string;
   details?: ErrorDetail[] | Record<string, unknown>;
   requestId: string;
+  correlationId: string;
 }

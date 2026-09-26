@@ -5,6 +5,7 @@ import { ReportStatus, ReportType } from '../entities/content-report.entity';
 export class QueryReportsDto {
   @ApiPropertyOptional({
     enum: ReportStatus,
+    enumName: 'ReportStatus',
     description: 'Filter by report status',
     example: ReportStatus.PENDING,
   })
@@ -14,6 +15,7 @@ export class QueryReportsDto {
 
   @ApiPropertyOptional({
     enum: ReportType,
+    enumName: 'ReportType',
     description: 'Filter by target type',
     example: ReportType.PROJECT,
   })
@@ -46,7 +48,8 @@ export class QueryReportsDto {
   limit?: string;
 
   @ApiPropertyOptional({
-    description: 'Filter by assigned reviewer ID, or "unassigned" to get reports without a reviewer',
+    description:
+      'Filter by assigned reviewer ID, or "unassigned" to get reports without a reviewer',
     example: 'uuid-1234',
   })
   @IsOptional()

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { SorobanEvent } from './entities/soroban-event.entity';
@@ -20,6 +20,8 @@ import { ProjectRegistryEntity } from '../database/entities/project-registry.ent
 import { StellarModule } from '../stellar/stellar.module';
 import { SchedulerModule } from '../scheduler/scheduler.module';
 import { AdminAuditModule } from '../admin-audit/admin-audit.module';
+import { CrowdfundSyncModule } from '../crowdfund-sync/crowdfund-sync.module';
+import { CrowdfundVaultProject } from '../crowdfund-sync/entities/crowdfund-vault-project.entity';
 
 @Module({
   imports: [
@@ -28,13 +30,19 @@ import { AdminAuditModule } from '../admin-audit/admin-audit.module';
       SorobanIndexerCursor,
       SorobanEventDeadLetter,
       ProjectRegistryEntity,
+      CrowdfundVaultProject,
     ]),
     BullModule.registerQueue({ name: SOROBAN_EVENTS_QUEUE }),
     StellarModule,
     SchedulerModule,
     AdminAuditModule,
+    forwardRef(() => CrowdfundSyncModule),
   ],
-  controllers: [SorobanEventsController, SorobanEventsDeadLetterController, SorobanEventReplayController],
+  controllers: [
+    SorobanEventsController,
+    SorobanEventsDeadLetterController,
+    SorobanEventReplayController,
+  ],
   providers: [
     SorobanEventsService,
     SorobanEventsProcessor,

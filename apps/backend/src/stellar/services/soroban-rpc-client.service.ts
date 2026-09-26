@@ -131,7 +131,10 @@ export class SorobanRpcClientService {
   }
 
   private cachedLedger = { sequence: 0, expiresAt: 0 };
-  private readonly simulationCache = new Map<string, rpc.Api.SimulateTransactionResponse>();
+  private readonly simulationCache = new Map<
+    string,
+    rpc.Api.SimulateTransactionResponse
+  >();
 
   private async getLatestLedgerSequence(): Promise<number> {
     const now = Date.now();
@@ -139,7 +142,10 @@ export class SorobanRpcClientService {
       return this.cachedLedger.sequence;
     }
     const response = await this.server.getLatestLedger();
-    if (this.cachedLedger.sequence !== 0 && this.cachedLedger.sequence !== response.sequence) {
+    if (
+      this.cachedLedger.sequence !== 0 &&
+      this.cachedLedger.sequence !== response.sequence
+    ) {
       this.simulationCache.clear();
     }
     this.cachedLedger = { sequence: response.sequence, expiresAt: now + 2000 };
@@ -160,12 +166,20 @@ export class SorobanRpcClientService {
     if (isReadOnly && cacheEnabled) {
       try {
         const record = this.asRecord(tx);
-        const operations = Array.isArray(record.operations) ? record.operations : [];
+        const operations = Array.isArray(record.operations)
+          ? record.operations
+          : [];
         if (operations.length === 1) {
           const op = this.asRecord(operations[0]);
           const hostFunction = op.func ?? op.hostFunction;
-          if (hostFunction && typeof hostFunction === 'object' && 'toXDR' in hostFunction) {
-            const funcXdr = (hostFunction as { toXDR: (encoding: string) => string }).toXDR('base64');
+          if (
+            hostFunction &&
+            typeof hostFunction === 'object' &&
+            'toXDR' in hostFunction
+          ) {
+            const funcXdr = (
+              hostFunction as { toXDR: (encoding: string) => string }
+            ).toXDR('base64');
             expectedLedgerSequence = await this.getLatestLedgerSequence();
             cacheKey = `${funcXdr}_${expectedLedgerSequence}`;
 
@@ -176,14 +190,18 @@ export class SorobanRpcClientService {
           }
         }
       } catch (err: unknown) {
-        this.logger.debug(`Failed to compute simulation cache key: ${err instanceof Error ? err.message : String(err)}`);
+        this.logger.debug(
+          `Failed to compute simulation cache key: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 
     return this.withRetry('simulateTransaction', opts, async () => {
-      const result = await this.server.simulateTransaction(tx as Parameters<rpc.Server['simulateTransaction']>[0]);
+      const result = await this.server.simulateTransaction(
+        tx as Parameters<rpc.Server['simulateTransaction']>[0],
+      );
       if (rpc.Api.isSimulationError(result)) {
-        this.logFailedSimulationTrace(tx, result as rpc.Api.SimulateTransactionErrorResponse);
+        this.logFailedSimulationTrace(tx, result);
         throw new SorobanRpcError(
           SorobanErrorCode.SIMULATION_FAILED,
           `Simulation failed: ${result.error ?? 'Unknown error'}`,
@@ -205,7 +223,9 @@ export class SorobanRpcClientService {
     opts?: SorobanClientOptions,
   ): Promise<rpc.Api.SendTransactionResponse> {
     return this.withRetry('sendTransaction', opts, async () => {
-      const result = await this.server.sendTransaction(tx as Parameters<rpc.Server['sendTransaction']>[0]);
+      const result = await this.server.sendTransaction(
+        tx as Parameters<rpc.Server['sendTransaction']>[0],
+      );
       if (result.status === 'ERROR') {
         throw new SorobanRpcError(
           SorobanErrorCode.SUBMISSION_FAILED,
@@ -368,9 +388,7 @@ export class SorobanRpcClientService {
     this.logger.error(trace, 'Soroban simulation trace captured');
   }
 
-  private extractContractInvocation(
-    tx: unknown,
-  ): ContractInvocationSummary {
+  private extractContractInvocation(tx: unknown): ContractInvocationSummary {
     const record = this.asRecord(tx);
     const operations = Array.isArray(record.operations)
       ? record.operations

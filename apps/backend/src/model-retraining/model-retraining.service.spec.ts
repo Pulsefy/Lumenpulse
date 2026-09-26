@@ -9,6 +9,7 @@ import {
   JobStatus,
   ModelStatusResult,
 } from './model-retraining.service';
+import { RequestContextService } from '../common/services/request-context.service';
 
 describe('ModelRetrainingService', () => {
   let service: ModelRetrainingService;
@@ -58,9 +59,41 @@ describe('ModelRetrainingService', () => {
         'http://localhost:8000/retrain',
         { force: true },
         {
-          headers: { 'X-API-Key': 'test-key' },
+          headers: {
+            'X-API-Key': 'test-key',
+            'X-Correlation-ID': 'unknown',
+            'X-Request-Id': 'unknown',
+          },
           timeout: 10_000,
         },
+      );
+    });
+
+    it('propagates active correlationId when available', async () => {
+      const submission: JobSubmission = {
+        job_id: 'job-corr',
+        job_type: 'retrain',
+        status: 'queued',
+        created: true,
+      };
+      (httpService.post as jest.Mock).mockReturnValue(of({ data: submission }));
+
+      await RequestContextService.run(
+        { correlationId: 'corr-retrain-999' },
+        async () => {
+          await service.triggerRetraining(false);
+        },
+      );
+
+      expect(httpService.post).toHaveBeenCalledWith(
+        'http://localhost:8000/retrain',
+        { force: false },
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'X-Correlation-ID': 'corr-retrain-999',
+            'X-Request-Id': 'corr-retrain-999',
+          }),
+        }),
       );
     });
 
@@ -90,7 +123,11 @@ describe('ModelRetrainingService', () => {
       expect(httpService.get).toHaveBeenCalledWith(
         'http://localhost:8000/api/jobs/job-1',
         {
-          headers: { 'X-API-Key': 'test-key' },
+          headers: {
+            'X-API-Key': 'test-key',
+            'X-Correlation-ID': 'unknown',
+            'X-Request-Id': 'unknown',
+          },
           timeout: 10_000,
         },
       );
@@ -199,7 +236,11 @@ describe('ModelRetrainingService', () => {
       expect(httpService.get).toHaveBeenCalledWith(
         'http://localhost:8000/model/status',
         {
-          headers: { 'X-API-Key': 'test-key' },
+          headers: {
+            'X-API-Key': 'test-key',
+            'X-Correlation-ID': 'unknown',
+            'X-Request-Id': 'unknown',
+          },
           timeout: 10_000,
         },
       );

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateFeatureFlagAuditLogs1848000000000
-  implements MigrationInterface
-{
+export class CreateFeatureFlagAuditLogs1848000000000 implements MigrationInterface {
   name = 'CreateFeatureFlagAuditLogs1848000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

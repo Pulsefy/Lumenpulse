@@ -27,6 +27,7 @@ module.exports = {
     '^expo-local-authentication$': '<rootDir>/lib/__tests__/mocks/expo-local-authentication.ts',
     '^expo-modules-core$': '<rootDir>/lib/__tests__/mocks/expo-modules-core.ts',
     '^expo-secure-store$': '<rootDir>/lib/__tests__/mocks/expo-secure-store.ts',
+    '^@react-native-community/netinfo$': '<rootDir>/lib/__tests__/mocks/netinfo.ts',
     '^react-native$': '<rootDir>/lib/__tests__/mocks/react-native.ts',
   },
   transform: {

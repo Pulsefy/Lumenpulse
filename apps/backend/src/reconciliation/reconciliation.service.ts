@@ -57,7 +57,9 @@ export class ReconciliationService {
       1e-5,
     );
     if (critical < warning) {
-      throw new Error('Reconciliation critical threshold must be >= warning threshold');
+      throw new Error(
+        'Reconciliation critical threshold must be >= warning threshold',
+      );
     }
     return { warning, critical };
   }

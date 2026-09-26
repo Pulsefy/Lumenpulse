@@ -134,6 +134,13 @@ FEATURE_SCHEMA_MISMATCH_TOTAL = Counter(
     ["feature_set"],
 )
 
+# ── Backend notification delivery of drift alerts (#1447) ───────────────
+DRIFT_ALERTS_DELIVERED_TOTAL = Counter(
+    "lumenpulse_drift_alerts_delivered_total",
+    "Total number of drift alerts accepted by the backend notification service",
+    ["alert_type", "outcome"],  # outcome: delivered | spooled | suppressed
+)
+
 
 def start_metrics_server(port: int = 9090):
     """Start standalone prometheus metrics server (for background workers)"""

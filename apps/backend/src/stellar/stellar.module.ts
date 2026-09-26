@@ -15,6 +15,9 @@ import { TestnetBootstrapController } from './controllers/testnet-bootstrap.cont
 import { TestnetBootstrapService } from './services/testnet-bootstrap.service';
 import { AppCacheModule } from '../cache/cache.module';
 import { BootstrapRunsModule } from '../bootstrap-runs/bootstrap-runs.module';
+import { ContractAdminModule } from '../contract-admin/contract-admin.module';
+import { AccessControlModule } from '../common/access-control.module';
+import { MatchingPoolAdminService } from './services/matching-pool-admin.service';
 
 @Module({
   imports: [
@@ -24,6 +27,8 @@ import { BootstrapRunsModule } from '../bootstrap-runs/bootstrap-runs.module';
     AppConfigModule,
     AppCacheModule,
     BootstrapRunsModule,
+    ContractAdminModule,
+    AccessControlModule,
   ],
   controllers: [
     StellarController,
@@ -37,6 +42,7 @@ import { BootstrapRunsModule } from '../bootstrap-runs/bootstrap-runs.module';
     ContractRotationService,
     StellarContractRotationService,
     TestnetBootstrapService,
+    MatchingPoolAdminService,
   ],
   exports: [
     StellarService,

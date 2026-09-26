@@ -1,6 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, timeout } from 'rxjs';
 import {
   latencyBudgetConfig,
   LatencyBudgetThreshold,
@@ -72,7 +72,8 @@ export class LatencyBudgetHealthService {
    */
   async getLatencyBudgetReport(): Promise<LatencyBudgetReport> {
     const network = (process.env.STELLAR_NETWORK ?? 'testnet') as
-      'testnet' | 'mainnet';
+      | 'testnet'
+      | 'mainnet';
 
     const horizonUrl =
       process.env.STELLAR_HORIZON_URL ?? DEFAULT_HORIZON_URLS[network];
@@ -115,12 +116,14 @@ export class LatencyBudgetHealthService {
 
     try {
       await firstValueFrom(
-        this.httpService.get(url, {
-          // Hard ceiling is the hard-down threshold + a 500 ms margin to
-          // distinguish "timeout" from "very slow but answered".
-          timeout: thresholds.hardDownMs + 500,
-          headers: { Accept: 'application/json' },
-        }),
+        this.httpService
+          .get(url, {
+            // Hard ceiling is the hard-down threshold + a 500 ms margin to
+            // distinguish "timeout" from "very slow but answered".
+            timeout: thresholds.hardDownMs + 500,
+            headers: { Accept: 'application/json' },
+          })
+          .pipe(timeout(thresholds.hardDownMs + 500)),
       );
 
       const latencyMs = Date.now() - started;
@@ -156,14 +159,16 @@ export class LatencyBudgetHealthService {
 
     try {
       await firstValueFrom(
-        this.httpService.post(
-          url,
-          { jsonrpc: '2.0', id: 1, method: 'getHealth', params: [] },
-          {
-            timeout: thresholds.hardDownMs + 500,
-            headers: { 'Content-Type': 'application/json' },
-          },
-        ),
+        this.httpService
+          .post(
+            url,
+            { jsonrpc: '2.0', id: 1, method: 'getHealth', params: [] },
+            {
+              timeout: thresholds.hardDownMs + 500,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          )
+          .pipe(timeout(thresholds.hardDownMs + 500)),
       );
 
       const latencyMs = Date.now() - started;

@@ -4,6 +4,7 @@ import { OutboxService } from './outbox.service';
 import { OutboxEvent, OutboxEventStatus } from './outbox-event.entity';
 import { JobLockService } from '../scheduler/job-lock.service';
 import { MetricsService } from '../metrics/metrics.service';
+import { RequestContextService } from '../common/services/request-context.service';
 
 const mockRepo = () => ({
   create: jest.fn(),
@@ -256,7 +257,7 @@ describe('OutboxService', () => {
       repo.findOneBy.mockResolvedValue({
         id: 'dl-2',
         status: OutboxEventStatus.PROCESSED,
-      } as OutboxEvent);
+      });
       await expect(service.inspectDeadLetter('dl-2')).rejects.toThrow(
         'Dead-letter outbox event not found',
       );
@@ -274,7 +275,7 @@ describe('OutboxService', () => {
         lastError: 'boom',
         processedAt: null,
         deadLetterAt: new Date(),
-      } as OutboxEvent;
+      } as unknown as OutboxEvent;
 
       repo.findOneBy.mockResolvedValue(event);
       repo.save.mockResolvedValue(event);
@@ -299,7 +300,7 @@ describe('OutboxService', () => {
         lastError: 'boom',
         processedAt: null,
         deadLetterAt: new Date(),
-      } as OutboxEvent;
+      } as unknown as OutboxEvent;
 
       repo.findOneBy.mockResolvedValue(event);
       repo.save.mockResolvedValue(event);
@@ -316,7 +317,7 @@ describe('OutboxService', () => {
       repo.findOneBy.mockResolvedValue({
         id: 'dl-3',
         status: OutboxEventStatus.PROCESSED,
-      } as OutboxEvent);
+      });
 
       await expect(service.replayDeadLetter('dl-3')).rejects.toThrow(
         'is not in the dead-letter queue',
@@ -328,6 +329,53 @@ describe('OutboxService', () => {
       await expect(service.replayDeadLetter('missing')).rejects.toThrow(
         'Outbox event not found',
       );
+    });
+  });
+
+  describe('correlationId propagation', () => {
+    it('captures correlationId from RequestContext during publish', async () => {
+      repo.create.mockImplementation((dto: unknown) => dto);
+      let savedCorrelationId: string | null = null;
+      repo.save.mockImplementation((event: unknown) => {
+        const evt = event as OutboxEvent;
+        savedCorrelationId = evt.correlationId ?? null;
+        return Promise.resolve(evt);
+      });
+
+      await RequestContextService.run(
+        { correlationId: 'corr-pub-123' },
+        async () => {
+          await service.publish('test.event', { foo: 'bar' });
+        },
+      );
+
+      expect(savedCorrelationId).toBe('corr-pub-123');
+    });
+
+    it('propagates correlationId to handlers during dispatch', async () => {
+      const event = {
+        id: 'evt-corr-1',
+        eventType: 'test.corr',
+        payload: { key: 'val' },
+        correlationId: 'corr-dispatch-456',
+        status: OutboxEventStatus.PENDING,
+        attempts: 0,
+        createdAt: new Date(),
+      } as unknown as OutboxEvent;
+
+      repo.find.mockResolvedValue([event]);
+      repo.save.mockResolvedValue(event);
+
+      let capturedCorrelationIdInHandler: string | null = null;
+      service.registerHandler(async () => {
+        capturedCorrelationIdInHandler =
+          RequestContextService.getCorrelationId();
+        await Promise.resolve();
+      });
+
+      await service.pollAndDispatch();
+
+      expect(capturedCorrelationIdInHandler).toBe('corr-dispatch-456');
     });
   });
 });

@@ -15,6 +15,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 from requests.exceptions import RequestException
+from src.privacy import scrub_record
 from src.utils.http_client import RobustHTTPClient
 from src.utils.translator import translate_and_normalize
 
@@ -623,7 +624,9 @@ class SocialFetcher:
 
         logger.info(f"Total unique social posts: {len(unique_posts)}")
 
-        return [post.to_dict() for post in unique_posts]
+        # Scrub personal data at the ingestion boundary, before persistence
+        # and any feature computation (#1452).
+        return [scrub_record(post.to_dict()) for post in unique_posts]
 
     def fetch_as_articles(
         self,

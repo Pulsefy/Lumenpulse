@@ -49,6 +49,13 @@ class SuppressionStore:
     def get(self, dedup_key: str) -> Optional[SuppressionRecord]:
         return self._records.get(dedup_key)
 
+    def replace_records(self, raw: Dict[str, Dict[str, Any]]) -> None:
+        """Replace all records from a plain-dict snapshot (rollback helper)."""
+        self._records = {
+            key: SuppressionRecord(**data) for key, data in raw.items()
+        }
+        self._save()
+
     def record_emitted(self, dedup_key: str, rule_name: str, alert: Dict[str, Any]) -> SuppressionRecord:
         now = datetime.now(timezone.utc).isoformat()
         if dedup_key in self._records:

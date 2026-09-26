@@ -6,7 +6,10 @@ describe('Data-processing OpenAPI Contract', () => {
 
   beforeAll(() => {
     // Artifact location documented for backend contributors: apps/data-processing/openapi.json
-    const schemaPath = resolve(__dirname, '../../../data-processing/openapi.json');
+    const schemaPath = resolve(
+      __dirname,
+      '../../../data-processing/openapi.json',
+    );
     if (existsSync(schemaPath)) {
       const content = readFileSync(schemaPath, 'utf8');
       openapiSchema = JSON.parse(content);
@@ -39,11 +42,11 @@ describe('Data-processing OpenAPI Contract', () => {
       expect(content).toBeDefined();
       const schemaRef = content.schema.$ref;
       expect(schemaRef).toBeDefined();
-      
+
       const schemaName = schemaRef.split('/').pop();
       const requestSchema = openapiSchema.components.schemas[schemaName];
       expect(requestSchema).toBeDefined();
-      
+
       // Assert it has dataset, force, etc.
       expect(requestSchema.properties.dataset).toBeDefined();
       expect(requestSchema.properties.contract_id).toBeDefined();
@@ -58,7 +61,8 @@ describe('Data-processing OpenAPI Contract', () => {
       expect(responseSchemaRef).toBeDefined();
 
       const responseSchemaName = responseSchemaRef.split('/').pop();
-      const responseSchema = openapiSchema.components.schemas[responseSchemaName];
+      const responseSchema =
+        openapiSchema.components.schemas[responseSchemaName];
       expect(responseSchema).toBeDefined();
 
       // Ensure response has totalItems, processedItems, failedItems to match NestJS expectations

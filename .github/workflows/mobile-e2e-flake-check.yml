@@ -1,0 +1,55 @@
+name: Mobile E2E Flake Check
+
+# Issue #1402: measures the flake rate of the mobile E2E smoke suite over ten
+# consecutive runs. Manual (workflow_dispatch) only, not on every push/PR --
+# repeating the full suite 10x on every change would be a disproportionate
+# CI cost for a metric that only needs periodic re-measurement.
+on:
+  workflow_dispatch:
+
+jobs:
+  repeat-suite:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        run_number: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    defaults:
+      run:
+        working-directory: ./apps/mobile
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: './apps/mobile/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install root workspace dependencies (for Metro's monorepo resolution)
+        working-directory: .
+        run: npm install --no-audit --no-fund
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E smoke suite (run ${{ matrix.run_number }} of 10)
+        run: npm run e2e
+        env:
+          CI: '1'
+
+  report:
+    needs: repeat-suite
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarize flake rate
+        run: |
+          echo "### Mobile E2E flake check" >> "$GITHUB_STEP_SUMMARY"
+          echo "10 consecutive runs of the smoke suite completed. See the" >> "$GITHUB_STEP_SUMMARY"
+          echo "'repeat-suite' job matrix above for the pass/fail result of each run." >> "$GITHUB_STEP_SUMMARY"

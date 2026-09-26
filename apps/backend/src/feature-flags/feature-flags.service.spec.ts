@@ -32,15 +32,13 @@ describe('FeatureFlagsService', () => {
 
     auditRepo = {
       find: jest.fn().mockResolvedValue([]),
-      save: jest
-        .fn()
-        .mockImplementation((x: Partial<FlagAuditLog>) =>
-          Promise.resolve({
-            ...(x as object),
-            id: 'audit-uuid',
-            changedAt: new Date(),
-          } as FlagAuditLog),
-        ),
+      save: jest.fn().mockImplementation((x: Partial<FlagAuditLog>) =>
+        Promise.resolve({
+          ...(x as object),
+          id: 'audit-uuid',
+          changedAt: new Date(),
+        } as FlagAuditLog),
+      ),
       create: jest
         .fn()
         .mockImplementation((x: Partial<FlagAuditLog>) => x as FlagAuditLog),

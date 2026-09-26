@@ -1,7 +1,7 @@
 # LumenPulse Threat Model
 
 **Version**: 1.0.0  
-**Last Updated**: 2026-08-26  
+**Last Updated**: 2026-09-26  
 **Status**: Active
 
 ---
@@ -208,6 +208,20 @@ Soroban contracts enforce access control at the protocol layer, independent of t
 | Token admin freeze | `lumen_token/src/lib.rs` | Admin can call `freeze()` to halt token transfers |
 | Already-initialized guard | `upgradable-contract`, `treasury` | `init()`/`initialize()` panic if storage key `Admin` is already set |
 
+### B7 — External Data Sources → Data-Processing (Ingestion)
+
+News APIs and social platforms push untrusted free text (articles, posts, prediction request text) into the data-processing service. The content is attacker-influenced and may contain personal data (emails, handles, phone numbers, IP addresses) or wallet addresses that should not be persisted in the clear.
+
+**Controls:**
+
+| Control | Implementation |
+|---|---|
+| Ingestion scrubbing | `apps/data-processing/src/privacy/scrubbing.py`; applied in `news_fetcher.py`, `social_fetcher.py`, `fetchers.py` before records are returned to feature computation |
+| Persistence scrubbing | `apps/data-processing/src/db/postgres_service.py` — `save_article`, `save_articles_batch`, `save_social_post`, `save_social_posts_batch`, `save_news_insight`, `save_news_insights_batch` scrub before any database write |
+| Prediction request logging | `apps/data-processing/src/api/server.py` — `_log_prediction` hashes and (optionally) stores the scrubbed input; output is scrubbed before write |
+| Field inventory | Declared in `PERSONAL_DATA_INVENTORY` (`scrubbing.py`); unknown fields are scrubbed by default |
+| Wallet address policy | `PRIVACY_WALLET_ADDRESS_POLICY` (`mask` default, `retain`); unknown values raise `ValueError` — see [Personal Data Policy](personal-data-policy.md) |
+
 ---
 
 ## 5. Threat Analysis by Boundary
@@ -267,6 +281,15 @@ Soroban contracts enforce access control at the protocol layer, independent of t
 | Beneficiary address hijacking | Low | High | `rotate_beneficiary` requires admin auth; via-multisig variant requires proposal approval |
 | Front-running on timelock | Low | Medium | Stellar's deterministic ledger order reduces front-running opportunity; operations are cancelled by admin if suspicious |
 | Direct upgrade bypassing timelock | Medium | High | `upgrade()` function retained for backwards compatibility but bypasses delay — see [Accepted Risks](#7-accepted-risks) |
+
+### B7 — Ingestion
+
+| Threat | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| Personal data in third-party content persisted in the clear | High | High | Scrubbing stage at ingestion and persistence boundaries replaces emails, phones, SSNs, card numbers, IPs, and handles with placeholders before storage and before feature computation — see [Personal Data Policy](personal-data-policy.md) |
+| Wallet addresses treated inconsistently across pipelines | Medium | Medium | Explicit `PRIVACY_WALLET_ADDRESS_POLICY` (`mask` default, `retain`); unknown values fail loudly with `ValueError` |
+| Prediction request logs retaining raw user-supplied text | Medium | High | `_log_prediction` hashes the scrubbed input; raw input stored only when `LOG_PREDICTION_RAW_INPUT=true`, and is scrubbed before storage |
+| New fields introducing PII without inventory update | Medium | Medium | `scrub_record()` scrubs any field not declared structural, so unknown fields default to text scrubbing |
 
 ---
 

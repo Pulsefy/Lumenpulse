@@ -24,6 +24,14 @@ npm run test
 npm run test:e2e
 ```
 
+## API contract (OpenAPI)
+
+`npm run build` regenerates the committed spec at `openapi.json`. Commit it with any API change, because CI fails when it is stale. `npm run openapi:check` checks it without writing. See [OPENAPI_CONTRACT.md](./OPENAPI_CONTRACT.md).
+
+## Audit retention and export
+
+Each audit record type has a retention window. A nightly job archives or purges records older than that window, and admins can export a scoped extract for auditors. See [AUDIT_RETENTION.md](./AUDIT_RETENTION.md).
+
 ## Demo bootstrap endpoint
 
 The backend exposes an admin-only demo bootstrap endpoint that can populate a small set of sample crowdfund projects for reviewer/testnet validation.
@@ -208,6 +216,41 @@ The backend natively supports graceful shutdown on `SIGTERM` and `SIGINT` signal
 Deployments should configure separate readiness and liveness endpoints instead of using the combined `/health` endpoint:
 - **Liveness:** `GET /health/live`
 - **Readiness:** `GET /health/ready`
+
+### Dependency health response
+
+`GET /health` and `GET /health/ready` return the same JSON report. The top-level
+`status` is `ok` or `error`; `summary` is `healthy`, `degraded`, or `down`.
+`dependencies` contains a stable entry for `database` (Postgres), `redis`,
+`horizon`, `sorobanRpc`, `python` (data-processing), `coinGecko`, and
+`exchangeRateApi`. Each entry has `status` (`up` or `down`), `latencyMs` (elapsed
+milliseconds, including failures and timeouts), `critical` (boolean), and an
+optional `message`. The existing `info`, `error`, `details`, and `latencyBudget`
+fields remain available. Do not alert on the text of `message`.
+
+```json
+{
+  "status": "ok",
+  "summary": "degraded",
+  "dependencies": {
+    "database": { "status": "up", "latencyMs": 2, "critical": true },
+    "redis": { "status": "down", "latencyMs": 3000, "critical": false, "message": "redis timed out" },
+    "horizon": { "status": "up", "latencyMs": 48, "critical": true },
+    "sorobanRpc": { "status": "up", "latencyMs": 61, "critical": true },
+    "python": { "status": "up", "latencyMs": 7, "critical": false },
+    "coinGecko": { "status": "up", "latencyMs": 22, "critical": false },
+    "exchangeRateApi": { "status": "up", "latencyMs": 19, "critical": false }
+  }
+}
+```
+
+Readiness returns HTTP 503 when Postgres, Horizon, or Soroban RPC is down, or
+when the shutdown drain begins. Optional dependency failures return HTTP 200
+with `summary: "degraded"`. Each Postgres, Redis, Python, and external API probe
+has a 3-second deadline; the Horizon and Soroban RPC probes use their configured
+latency budgets, with a 6-second cap on the combined budget report. `GET
+/health/live` returns HTTP 200 with `{ "status": "ok", "summary": "healthy" }`
+while the HTTP process can serve requests, without waiting on dependencies.
 
 Key environment variables:
 

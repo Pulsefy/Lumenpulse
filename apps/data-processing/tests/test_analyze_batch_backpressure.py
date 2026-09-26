@@ -6,6 +6,7 @@ slowapi, stellar_sdk, etc.) that are unavailable in the lightweight test env.
 """
 
 import asyncio
+import importlib.util
 import os
 import sys
 import types
@@ -16,7 +17,10 @@ from unittest.mock import MagicMock, patch
 # ---------------------------------------------------------------------------
 _SENTINEL = types.ModuleType("_test_stub")
 
-# Stub modules that server.py imports transitively
+# Stub modules that server.py imports transitively.
+# Do NOT replace installed modules: in a full-suite run this file is collected
+# first, and replacing e.g. the real vaderSentiment/redis here would break later
+# tests that rely on them. Only stub modules that are genuinely unavailable.
 _STUBBED = {}
 for _name in [
     "vaderSentiment", "vaderSentiment.vaderSentiment",
@@ -27,47 +31,64 @@ for _name in [
     "apscheduler", "apscheduler.schedulers",
 ]:
     if _name not in sys.modules:
+        try:
+            if importlib.util.find_spec(_name) is not None:
+                continue
+        except (ImportError, ValueError):
+            pass
         mod = types.ModuleType(_name)
         sys.modules[_name] = mod
         _STUBBED[_name] = mod
 
-# slowapi stubs need specific attributes
-if "slowapi" in sys.modules:
-    sys.modules["slowapi"].Limiter = type("Limiter", (), {"__init__": lambda self, **kw: None})
-    sys.modules["slowapi"]._rate_limit_exceeded_handler = lambda *a, **kw: None
-if "slowapi.errors" in sys.modules:
-    sys.modules["slowapi.errors"].RateLimitExceeded = type("RateLimitExceeded", (Exception,), {})
-if "slowapi.util" in sys.modules:
-    sys.modules["slowapi.util"].get_remote_address = lambda *a, **kw: "127.0.0.1"
+# slowapi stubs need specific attributes (only if we created the stub)
+if "slowapi" in _STUBBED:
+    _STUBBED["slowapi"].Limiter = type("Limiter", (), {"__init__": lambda self, **kw: None})
+    _STUBBED["slowapi"]._rate_limit_exceeded_handler = lambda *a, **kw: None
+if "slowapi.errors" in _STUBBED:
+    _STUBBED["slowapi.errors"].RateLimitExceeded = type("RateLimitExceeded", (Exception,), {})
+if "slowapi.util" in _STUBBED:
+    _STUBBED["slowapi.util"].get_remote_address = lambda *a, **kw: "127.0.0.1"
 
-# vaderSentiment stubs
-if "vaderSentiment.vaderSentiment" in sys.modules:
-    sys.modules["vaderSentiment.vaderSentiment"].SentimentIntensityAnalyzer = type(
+# vaderSentiment stubs (only if we created the stub)
+if "vaderSentiment.vaderSentiment" in _STUBBED:
+    _STUBBED["vaderSentiment.vaderSentiment"].SentimentIntensityAnalyzer = type(
         "SentimentIntensityAnalyzer", (), {"polarity_scores": lambda self, t: {"neg": 0, "neu": 1, "pos": 0, "compound": 0}}
     )
+    # Public API constants imported by src/analytics/sentiment.py (#1456)
+    _STUBBED["vaderSentiment.vaderSentiment"].BOOSTER_DICT = {}
+    _STUBBED["vaderSentiment.vaderSentiment"].NEGATE = []
 
-# stellar_sdk exception stubs
-if "stellar_sdk.exceptions" in sys.modules:
+# stellar_sdk exception stubs (only if we created the stub)
+if "stellar_sdk.exceptions" in _STUBBED:
     for exc_name in ("BadRequestError", "ConnectionError", "NotFoundError", "TimeoutError"):
-        setattr(sys.modules["stellar_sdk.exceptions"], exc_name, type(exc_name, (Exception,), {}))
+        setattr(_STUBBED["stellar_sdk.exceptions"], exc_name, type(exc_name, (Exception,), {}))
 
-# jose stub
+# jose stub (only if not installed)
 if "jose" not in sys.modules:
-    sys.modules["jose"] = types.ModuleType("jose")
-    sys.modules["jose"].JWTError = type("JWTError", (Exception,), {})
-    sys.modules["jose"].jwt = MagicMock()
+    try:
+        if importlib.util.find_spec("jose") is None:
+            sys.modules["jose"] = types.ModuleType("jose")
+            sys.modules["jose"].JWTError = type("JWTError", (Exception,), {})
+            sys.modules["jose"].jwt = MagicMock()
+    except (ImportError, ValueError):
+        pass
 
-# pydantic stub - ensure it has BaseModel with ConfigDict
+# pydantic stub - ensure it has BaseModel with ConfigDict (only if not installed)
 if "pydantic" not in sys.modules:
-    pyd = types.ModuleType("pydantic")
-    class _BaseModel:
-        def __init__(self, **data):
-            for k, v in data.items():
-                setattr(self, k, v)
-    pyd.BaseModel = _BaseModel
-    pyd.ConfigDict = lambda **kw: None
-    pyd.ValidationError = type("ValidationError", (Exception,), {})
-    sys.modules["pydantic"] = pyd
+    try:
+        has_real = importlib.util.find_spec("pydantic") is not None
+    except (ImportError, ValueError):
+        has_real = False
+    if not has_real:
+        pyd = types.ModuleType("pydantic")
+        class _BaseModel:
+            def __init__(self, **data):
+                for k, v in data.items():
+                    setattr(self, k, v)
+        pyd.BaseModel = _BaseModel
+        pyd.ConfigDict = lambda **kw: None
+        pyd.ValidationError = type("ValidationError", (Exception,), {})
+        sys.modules["pydantic"] = pyd
 
 os.environ.setdefault("SENTIMENT_DISABLE_TRANSFORMER", "1")
 os.environ.setdefault("RATE_LIMIT_ENABLED", "0")

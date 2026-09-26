@@ -49,6 +49,7 @@ export class ContributorFeedController {
     name: 'activityType',
     required: false,
     enum: FeedActivityType,
+    enumName: 'FeedActivityType',
     description: 'Filter by activity type',
   })
   @ApiQuery({

@@ -1,13 +1,33 @@
-import { ExecutionContext } from '@nestjs/common';
-import { ThrottlerModuleOptions, ThrottlerOptions } from '@nestjs/throttler';
+import { applyDecorators, ExecutionContext } from '@nestjs/common';
+import {
+  Throttle,
+  ThrottlerModuleOptions,
+  ThrottlerOptions,
+} from '@nestjs/throttler';
 import { ThrottlerStorage } from '@nestjs/throttler';
 import { config } from '../../lib/config';
+import {
+  MachinePrincipalType,
+  PRINCIPAL_SCOPED_ENDPOINT_CLASSES,
+  PrincipalScopedEndpointClass,
+  RATE_LIMIT_PRINCIPAL_REQUEST_KEY,
+  RateLimitEndpointClass,
+  RateLimitPrincipal,
+  RateLimitPrincipalType,
+} from './rate-limit.constants';
+import { RateLimitEndpointClass as RateLimitEndpointClassDecorator } from './rate-limit.decorator';
 
-interface RateLimitProfile {
+export interface RateLimitProfile {
   limit: number;
   ttl: number;
   blockDuration: number;
 }
+
+/** Per-class profiles for a machine principal (bot or service). */
+export type PrincipalRateLimitProfiles = Record<
+  PrincipalScopedEndpointClass,
+  RateLimitProfile
+>;
 
 export interface RateLimitSettings {
   global: RateLimitProfile;
@@ -22,7 +42,14 @@ export interface RateLimitSettings {
   stellarRead: RateLimitProfile;
   searchRead: RateLimitProfile;
   analyticsRead: RateLimitProfile;
+  exportJob: RateLimitProfile;
+  contractSimulation: RateLimitProfile;
   friendbotBootstrap: RateLimitProfile;
+  /**
+   * Separately configurable limits for bot and service principals that are
+   * authenticated through bot-auth.
+   */
+  principals: Record<MachinePrincipalType, PrincipalRateLimitProfiles>;
   tracker: {
     useIp: boolean;
     useApiKey: boolean;
@@ -46,6 +73,8 @@ const DEFAULTS = {
     stellarRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    exportJob: { limit: 20, ttl: 60_000, blockDuration: 120_000 },
+    contractSimulation: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     friendbotBootstrap: { limit: 5, ttl: 3_600_000, blockDuration: 3_600_000 },
   },
   staging: {
@@ -61,6 +90,8 @@ const DEFAULTS = {
     stellarRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    exportJob: { limit: 10, ttl: 60_000, blockDuration: 180_000 },
+    contractSimulation: { limit: 15, ttl: 60_000, blockDuration: 120_000 },
     friendbotBootstrap: { limit: 3, ttl: 3_600_000, blockDuration: 3_600_000 },
   },
   production: {
@@ -76,11 +107,79 @@ const DEFAULTS = {
     stellarRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
+    exportJob: { limit: 5, ttl: 60_000, blockDuration: 300_000 },
+    contractSimulation: { limit: 10, ttl: 60_000, blockDuration: 120_000 },
     friendbotBootstrap: { limit: 2, ttl: 3_600_000, blockDuration: 3_600_000 },
   },
 } as const;
 
+/**
+ * Default profiles for machine principals authenticated through bot-auth.
+ *
+ * Bots typically proxy many end users (e.g. a Telegram bot serving many chats)
+ * and services are trusted internal callers, so their general budgets are
+ * higher than a single human's — while expensive classes remain bounded.
+ */
+const PRINCIPAL_DEFAULTS: Record<
+  EnvironmentName,
+  Record<MachinePrincipalType, PrincipalRateLimitProfiles>
+> = {
+  development: {
+    bot: {
+      global: { limit: 600, ttl: 60_000, blockDuration: 60_000 },
+      searchRead: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
+      analyticsRead: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
+      exportJob: { limit: 20, ttl: 60_000, blockDuration: 120_000 },
+      contractSimulation: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    },
+    service: {
+      global: { limit: 1200, ttl: 60_000, blockDuration: 60_000 },
+      searchRead: { limit: 240, ttl: 60_000, blockDuration: 60_000 },
+      analyticsRead: { limit: 240, ttl: 60_000, blockDuration: 60_000 },
+      exportJob: { limit: 40, ttl: 60_000, blockDuration: 120_000 },
+      contractSimulation: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
+    },
+  },
+  staging: {
+    bot: {
+      global: { limit: 400, ttl: 60_000, blockDuration: 60_000 },
+      searchRead: { limit: 80, ttl: 60_000, blockDuration: 60_000 },
+      analyticsRead: { limit: 80, ttl: 60_000, blockDuration: 60_000 },
+      exportJob: { limit: 10, ttl: 60_000, blockDuration: 180_000 },
+      contractSimulation: { limit: 30, ttl: 60_000, blockDuration: 120_000 },
+    },
+    service: {
+      global: { limit: 900, ttl: 60_000, blockDuration: 60_000 },
+      searchRead: { limit: 180, ttl: 60_000, blockDuration: 60_000 },
+      analyticsRead: { limit: 180, ttl: 60_000, blockDuration: 60_000 },
+      exportJob: { limit: 20, ttl: 60_000, blockDuration: 180_000 },
+      contractSimulation: { limit: 60, ttl: 60_000, blockDuration: 120_000 },
+    },
+  },
+  production: {
+    bot: {
+      global: { limit: 300, ttl: 60_000, blockDuration: 60_000 },
+      searchRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+      analyticsRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+      exportJob: { limit: 5, ttl: 60_000, blockDuration: 300_000 },
+      contractSimulation: { limit: 20, ttl: 60_000, blockDuration: 120_000 },
+    },
+    service: {
+      global: { limit: 600, ttl: 60_000, blockDuration: 60_000 },
+      searchRead: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
+      analyticsRead: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
+      exportJob: { limit: 10, ttl: 60_000, blockDuration: 300_000 },
+      contractSimulation: { limit: 40, ttl: 60_000, blockDuration: 120_000 },
+    },
+  },
+};
+
 type EnvironmentName = keyof typeof DEFAULTS;
+
+type ProfileKey = Exclude<
+  keyof RateLimitSettings,
+  'principals' | 'tracker' | 'redisUrl' | 'redisNamespace'
+>;
 
 function parseNumber(
   value: string | undefined,
@@ -92,7 +191,7 @@ function parseNumber(
     return fallback;
   }
 
-  return parsed;
+  return Math.floor(parsed);
 }
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -111,28 +210,15 @@ function getEnvironmentName(nodeEnv: string | undefined): EnvironmentName {
   return 'development';
 }
 
-function resolveProfile(
-  env: NodeJS.ProcessEnv,
-  key:
-    | 'global'
-    | 'auth'
-    | 'portfolioRead'
-    | 'portfolioWrite'
-    | 'watchlistRead'
-    | 'watchlistWrite'
-    | 'newsRead'
-    | 'projectRead'
-    | 'crowdfundRead'
-    | 'stellarRead'
-    | 'searchRead'
-    | 'analyticsRead'
-    | 'friendbotBootstrap',
-): RateLimitProfile {
-  const profileDefaults = DEFAULTS[getEnvironmentName(env.NODE_ENV)][key];
-  const envKeyPrefix = key
-    .replace(/[A-Z]/g, (letter) => `_${letter}`)
-    .toUpperCase();
+function toEnvSegment(key: string): string {
+  return key.replace(/[A-Z]/g, (letter) => `_${letter}`).toUpperCase();
+}
 
+function readProfileFromEnv(
+  env: NodeJS.ProcessEnv,
+  envKeyPrefix: string,
+  profileDefaults: RateLimitProfile,
+): RateLimitProfile {
   return {
     limit: parseNumber(
       env[`RATE_LIMIT_${envKeyPrefix}_LIMIT`],
@@ -147,6 +233,37 @@ function resolveProfile(
       profileDefaults.blockDuration,
     ),
   };
+}
+
+function resolveProfile(
+  env: NodeJS.ProcessEnv,
+  key: ProfileKey,
+): RateLimitProfile {
+  const profileDefaults = DEFAULTS[getEnvironmentName(env.NODE_ENV)][key];
+  return readProfileFromEnv(env, toEnvSegment(key), profileDefaults);
+}
+
+/**
+ * Resolves bot / service profiles from `RATE_LIMIT_<BOT|SERVICE>_<CLASS>_*`
+ * environment variables, falling back to per-environment defaults.
+ */
+export function resolvePrincipalProfiles(
+  env: NodeJS.ProcessEnv,
+): Record<MachinePrincipalType, PrincipalRateLimitProfiles> {
+  const defaults = PRINCIPAL_DEFAULTS[getEnvironmentName(env.NODE_ENV)];
+  const build = (type: MachinePrincipalType): PrincipalRateLimitProfiles => {
+    const entries = PRINCIPAL_SCOPED_ENDPOINT_CLASSES.map((endpointClass) => [
+      endpointClass,
+      readProfileFromEnv(
+        env,
+        `${type.toUpperCase()}_${toEnvSegment(endpointClass)}`,
+        defaults[type][endpointClass],
+      ),
+    ]);
+    return Object.fromEntries(entries) as PrincipalRateLimitProfiles;
+  };
+
+  return { bot: build('bot'), service: build('service') };
 }
 
 export function getRateLimitSettings(
@@ -166,7 +283,10 @@ export function getRateLimitSettings(
       stellarRead: config.rateLimit.stellarRead,
       searchRead: config.rateLimit.searchRead,
       analyticsRead: config.rateLimit.analyticsRead,
+      exportJob: config.rateLimit.exportJob,
+      contractSimulation: config.rateLimit.contractSimulation,
       friendbotBootstrap: config.rateLimit.friendbotBootstrap,
+      principals: resolvePrincipalProfiles(process.env),
       tracker: config.rateLimit.tracker,
       redisUrl: config.rateLimit.redisUrl,
       redisNamespace: config.rateLimit.redisNamespace,
@@ -186,7 +306,10 @@ export function getRateLimitSettings(
     stellarRead: resolveProfile(env, 'stellarRead'),
     searchRead: resolveProfile(env, 'searchRead'),
     analyticsRead: resolveProfile(env, 'analyticsRead'),
+    exportJob: resolveProfile(env, 'exportJob'),
+    contractSimulation: resolveProfile(env, 'contractSimulation'),
     friendbotBootstrap: resolveProfile(env, 'friendbotBootstrap'),
+    principals: resolvePrincipalProfiles(env),
     tracker: {
       useIp: parseBoolean(env.RATE_LIMIT_TRACK_BY_IP, true),
       useApiKey: parseBoolean(env.RATE_LIMIT_TRACK_BY_API_KEY, false),
@@ -198,6 +321,9 @@ export function getRateLimitSettings(
   };
 }
 
+/**
+ * Source-address based tracker used for unauthenticated (anonymous) callers.
+ */
 export function getTrackerId(
   request: Record<string, unknown>,
   settings: RateLimitSettings,
@@ -229,6 +355,53 @@ export function getTrackerId(
   return parts.join('|');
 }
 
+/**
+ * Tracker for a request: the authenticated principal when one was resolved by
+ * the guard, falling back to the source address otherwise.
+ */
+export function getTrackerForRequest(
+  request: Record<string, unknown>,
+  settings: RateLimitSettings,
+): string {
+  const principal = request[RATE_LIMIT_PRINCIPAL_REQUEST_KEY] as
+    | RateLimitPrincipal
+    | undefined;
+
+  if (principal && principal.type !== 'anonymous' && principal.trackerKey) {
+    return principal.trackerKey;
+  }
+
+  return getTrackerId(request, settings);
+}
+
+/**
+ * Picks the profile that applies to a request.
+ *
+ * - Bot / service principals use their own profile for principal-scoped
+ *   classes (global, search, analytics, export, contract simulation).
+ * - Everyone else — and machine principals on any other class, e.g. auth —
+ *   uses the route's standard profile (`fallback`, which already reflects any
+ *   `@Throttle` override on the route).
+ */
+export function resolveEffectiveProfile(
+  settings: RateLimitSettings,
+  endpointClass: RateLimitEndpointClass,
+  principalType: RateLimitPrincipalType,
+  fallback: RateLimitProfile,
+): RateLimitProfile {
+  if (principalType === 'bot' || principalType === 'service') {
+    const principalProfiles = settings.principals?.[principalType];
+    const scoped = principalProfiles?.[
+      endpointClass as PrincipalScopedEndpointClass
+    ] as RateLimitProfile | undefined;
+    if (scoped) {
+      return scoped;
+    }
+  }
+
+  return fallback;
+}
+
 export function createThrottlerOptions(
   settings: RateLimitSettings,
   storage: ThrottlerStorage,
@@ -246,9 +419,42 @@ export function createThrottlerOptions(
     errorMessage: 'Too many requests. Please try again later.',
     getTracker: (req: Record<string, unknown>, context: ExecutionContext) => {
       void context;
-      return getTrackerId(req, settings);
+      return getTrackerForRequest(req, settings);
     },
   };
+}
+
+/** `@Throttle` override for a given endpoint class. */
+export function getThrottleOverride(
+  endpointClass: Exclude<RateLimitEndpointClass, 'global'>,
+) {
+  return {
+    default: getRateLimitSettings()[endpointClass],
+  };
+}
+
+/**
+ * Applies an endpoint class's rate-limit profile to a controller or handler.
+ *
+ * Combines `@Throttle(<class profile>)` with endpoint-class metadata so the
+ * guard can share buckets for expensive classes, apply bot / service limits
+ * and label rejection metrics.
+ */
+export function RateLimitPolicy(
+  endpointClass: Exclude<RateLimitEndpointClass, 'global'>,
+) {
+  return applyDecorators(
+    Throttle(getThrottleOverride(endpointClass)),
+    RateLimitEndpointClassDecorator(endpointClass),
+  );
+}
+
+export function getExportJobThrottleOverride() {
+  return getThrottleOverride('exportJob');
+}
+
+export function getContractSimulationThrottleOverride() {
+  return getThrottleOverride('contractSimulation');
 }
 
 export function getAuthThrottleOverride() {
