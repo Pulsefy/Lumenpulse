@@ -472,6 +472,58 @@ def promote_model(
     return True
 
 
+def rollback_model(
+    model_type: str,
+    target_version: str,
+    actor: str,
+    reason: str,
+) -> bool:
+    """
+    Roll back the live pointer to a previous version and record why.
+    """
+    target = _version_path(model_type, target_version)
+    if not target.exists():
+        raise FileNotFoundError(
+            f"Cannot rollback {model_type} to {target_version}: file not found at {target}"
+        )
+        
+    try:
+        # Verify it loads
+        load_model(model_type, target_version)
+    except Exception as exc:
+        raise ValueError(f"Failed to load target version {target_version}: {exc}")
+
+    previous_version = get_current_version(model_type)
+
+    with _lock:
+        _write_current_version(model_type, target_version)
+
+    # Hot-swap in memory
+    new_model = load_model(model_type, target_version)
+    with _lock:
+        _live_models[model_type] = new_model
+        _live_versions[model_type] = target_version
+
+    _invalidate_cached_inference(model_type)
+
+    event = {
+        "model_type": model_type,
+        "from_version": previous_version,
+        "to_version": target_version,
+        "actor": actor,
+        "reason": reason,
+        "status": "rolled_back",
+    }
+    _record_promotion_event(model_type, event)
+    
+    logger.info(
+        f"Model rolled back: type={model_type} {previous_version} -> {target_version} "
+        f"actor={actor} reason={reason}"
+    )
+
+    return True
+
+
 def _invalidate_cached_inference(model_type: str) -> None:
     """
     Best-effort invalidation of cached inference results for a model type.
