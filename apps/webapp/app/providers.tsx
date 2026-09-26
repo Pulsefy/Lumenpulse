@@ -3,6 +3,7 @@
 import { WalletProvider } from "@/contexts/WalletContext";
 import { StellarConfigProvider, useStellarConfig } from "@/contexts/StellarConfigContext";
 import { ConfigErrorBanner } from "@/components/config-error-banner";
+import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import {
   ReactNode,
   createContext,
@@ -70,7 +71,10 @@ export function Providers({ children }: { children: ReactNode }) {
             <ThemeProvider>
               <WatchlistProvider>
                 <OnboardingProvider>
-                  {children}
+                  <ToastProvider>
+                    {children}
+                    <ToastViewport />
+                  </ToastProvider>
                 </OnboardingProvider>
               </WatchlistProvider>
             </ThemeProvider>
