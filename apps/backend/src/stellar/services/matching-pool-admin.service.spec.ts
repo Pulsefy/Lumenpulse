@@ -27,6 +27,7 @@ import {
   SorobanRpcClientService,
   SorobanRpcError,
 } from './soroban-rpc-client.service';
+import { SequenceManagerService } from './sequence-manager.service';
 
 describe('MatchingPoolAdminService', () => {
   let service: MatchingPoolAdminService;
@@ -41,6 +42,17 @@ describe('MatchingPoolAdminService', () => {
             getAccount: jest.fn(),
             simulateTransaction: jest.fn(),
             sendTransaction: jest.fn(),
+          },
+        },
+        {
+          provide: SequenceManagerService,
+          useValue: {
+            withSequence: jest.fn(
+              (
+                _publicKey: string,
+                submit: (reservation: { account: unknown }) => Promise<unknown>,
+              ) => submit({ account: {} }),
+            ),
           },
         },
       ],
@@ -114,6 +126,24 @@ describe('MatchingPoolAdminService', () => {
       status: HttpStatus.BAD_GATEWAY,
       code: ErrorCode.STEL_TRANSACTION_FAILED,
       details: { sorobanCode: SorobanErrorCode.SUBMISSION_FAILED },
+    });
+  });
+
+  it('maps a stale-sequence submission failure and surfaces the result code', () => {
+    const err = new SorobanRpcError(
+      SorobanErrorCode.SUBMISSION_BAD_SEQUENCE,
+      'Transaction rejected with tx_bad_seq; the source account sequence is stale',
+      undefined,
+      'tx_bad_seq',
+    );
+
+    expectHandleError(err, {
+      status: HttpStatus.BAD_GATEWAY,
+      code: ErrorCode.STEL_TRANSACTION_FAILED,
+      details: {
+        sorobanCode: SorobanErrorCode.SUBMISSION_BAD_SEQUENCE,
+        resultCode: 'tx_bad_seq',
+      },
     });
   });
 });
