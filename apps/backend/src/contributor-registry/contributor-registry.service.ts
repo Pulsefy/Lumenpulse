@@ -24,6 +24,7 @@ import {
 import { CacheService } from '../cache/cache.service';
 import { config } from '../lib/config';
 import { SorobanRpcClientService } from '../stellar/services/soroban-rpc-client.service';
+import { SequenceManagerService } from '../stellar/services/sequence-manager.service';
 import {
   ContributorResponseDto,
   NonceResponseDto,
@@ -62,6 +63,7 @@ export class ContributorRegistryService {
   constructor(
     private readonly cacheService: CacheService,
     private readonly sorobanRpcClient: SorobanRpcClientService,
+    private readonly sequenceManager: SequenceManagerService,
   ) {}
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -162,9 +164,6 @@ export class ContributorRegistryService {
 
     const contractId = this.requireContractId();
     const relayer = this.relayerKeypair();
-    const relayerAccount = await this.sorobanRpcClient.getAccount(
-      relayer.publicKey(),
-    );
     const contract = new Contract(contractId);
 
     // The `signature` parameter is arbitrary bytes attached for auditability;
@@ -173,44 +172,52 @@ export class ContributorRegistryService {
       ? Buffer.from(dto.signatureHex, 'hex')
       : Buffer.alloc(64, 0);
 
-    const tx = new TransactionBuilder(relayerAccount, {
-      fee: BASE_FEE,
-      networkPassphrase: this.networkPassphrase,
-    })
-      .addOperation(
-        contract.call(
-          'register_contributor_with_sig',
-          nativeToScVal(dto.githubHandle, { type: 'string' }),
-          new Address(dto.address).toScVal(),
-          xdr.ScVal.scvBytes(signatureBytes),
-        ),
-      )
-      .setTimeout(30)
-      .build();
+    const result = await this.sequenceManager.withSequence(
+      relayer.publicKey(),
+      async ({ account }) => {
+        const tx = new TransactionBuilder(account, {
+          fee: BASE_FEE,
+          networkPassphrase: this.networkPassphrase,
+        })
+          .addOperation(
+            contract.call(
+              'register_contributor_with_sig',
+              nativeToScVal(dto.githubHandle, { type: 'string' }),
+              new Address(dto.address).toScVal(),
+              xdr.ScVal.scvBytes(signatureBytes),
+            ),
+          )
+          .setTimeout(30)
+          .build();
 
-    const simulation = await this.sorobanRpcClient.simulateTransaction(tx);
+        const simulation =
+          await this.sorobanRpcClient.simulateTransaction(tx);
 
-    // Assemble (applies resource fee and simulation-derived soroban data)
-    const preparedTx = rpc.assembleTransaction(tx, simulation).build();
+        // Assemble (applies resource fee and simulation-derived soroban data)
+        const preparedTx = rpc
+          .assembleTransaction(tx, simulation)
+          .build();
 
-    // Replace the simulation's unsigned auth entry with the contributor's signed one
-    const signedAuthEntry = xdr.SorobanAuthorizationEntry.fromXDR(
-      dto.signedAuthEntryXdr,
-      'base64',
+        // Replace the simulation's unsigned auth entry with the contributor's signed one
+        const signedAuthEntry = xdr.SorobanAuthorizationEntry.fromXDR(
+          dto.signedAuthEntryXdr,
+          'base64',
+        );
+        preparedTx
+          .toEnvelope()
+          .v1()
+          .tx()
+          .operations()[0]
+          .body()
+          .invokeHostFunctionOp()
+          .auth([signedAuthEntry]);
+
+        // Relayer signs to authorize the fee payment
+        preparedTx.sign(relayer);
+
+        return this.sorobanRpcClient.sendTransaction(preparedTx);
+      },
     );
-    preparedTx
-      .toEnvelope()
-      .v1()
-      .tx()
-      .operations()[0]
-      .body()
-      .invokeHostFunctionOp()
-      .auth([signedAuthEntry]);
-
-    // Relayer signs to authorize the fee payment
-    preparedTx.sign(relayer);
-
-    const result = await this.sorobanRpcClient.sendTransaction(preparedTx);
 
     this.logger.log(
       `Gasless registration submitted: address=${dto.address} handle=${dto.githubHandle} hash=${result.hash}`,
