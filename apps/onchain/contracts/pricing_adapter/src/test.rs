@@ -35,7 +35,7 @@ fn test_set_and_get_price() {
     env.mock_all_auths();
     let (client, admin, asset) = setup(&env);
 
-    let sources = Vec::from_array(&env, [0u32]);
+    let sources = soroban_sdk::vec![&env, 0u32];
     client.set_sources(&admin, &asset, &sources);
 
     let price: i128 = 10_000_000;
@@ -53,7 +53,7 @@ fn test_multiple_sources_fallback() {
     env.mock_all_auths();
     let (client, admin, asset) = setup(&env);
 
-    let sources = Vec::from_array(&env, [1u32, 2, 3]);
+    let sources = soroban_sdk::vec![&env, 1u32, 2, 3];
     client.set_sources(&admin, &asset, &sources);
 
     env.ledger().set_timestamp(1_000);
@@ -87,7 +87,7 @@ fn test_all_sources_exhausted() {
     env.mock_all_auths();
     let (client, admin, asset) = setup(&env);
 
-    let sources = Vec::from_array(&env, [1u32, 2]);
+    let sources = soroban_sdk::vec![&env, 1u32, 2];
     client.set_sources(&admin, &asset, &sources);
 
     env.ledger().set_timestamp(1_000);
@@ -112,7 +112,7 @@ fn test_normalize_amount() {
     env.mock_all_auths();
     let (client, admin, asset) = setup(&env);
 
-    let sources = Vec::from_array(&env, [0u32]);
+    let sources = soroban_sdk::vec![&env, 0u32];
     client.set_sources(&admin, &asset, &sources);
 
     let eth_price: i128 = 3000 * 10_000_000;
@@ -132,7 +132,7 @@ fn test_invalidate_price_clears_on_new_set() {
     env.mock_all_auths();
     let (client, admin, asset) = setup(&env);
     
-    let sources = Vec::from_array(&env, [1u32]);
+    let sources = soroban_sdk::vec![&env, 1u32];
     client.set_sources(&admin, &asset, &sources);
 
     env.ledger().set_timestamp(1_000);
