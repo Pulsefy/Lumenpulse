@@ -1,4 +1,4 @@
-use soroban_sdk::{contractevent, Address};
+use soroban_sdk::{contractevent, Address, Vec};
 
 #[contractevent]
 pub struct InitializedEvent {
@@ -10,6 +10,7 @@ pub struct PriceUpdatedEvent {
     #[topic]
     pub asset: Address,
     pub admin: Address,
+    pub source: u32,
     pub price: i128,
 }
 
@@ -27,6 +28,7 @@ pub struct PriceInvalidatedEvent {
     #[topic]
     pub asset: Address,
     pub admin: Address,
+    pub source: u32,
 }
 
 #[contractevent]
@@ -34,4 +36,12 @@ pub struct StalenessWindowUpdatedEvent {
     #[topic]
     pub admin: Address,
     pub max_age_seconds: u64,
+}
+
+#[contractevent]
+pub struct SourcesUpdatedEvent {
+    #[topic]
+    pub asset: Address,
+    pub admin: Address,
+    pub sources: Vec<u32>,
 }
