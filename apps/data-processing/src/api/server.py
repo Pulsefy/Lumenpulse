@@ -1359,6 +1359,8 @@ class ForecastResponse(BaseModel):
     model_backend: str
     data_points_used: int
     generated_at: str
+    # Walk-forward backtest confidence: "high" | "medium" | "low" | "insufficient_data"
+    backtest_confidence: str = "insufficient_data"
 
 
 @app.get("/analytics/forecast", response_model=ForecastResponse)

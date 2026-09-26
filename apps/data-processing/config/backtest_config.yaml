@@ -1,0 +1,54 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Backtest configuration for SentimentForecaster
+#
+# Commit this file to ensure every team member and CI run produces identical
+# walk-forward evaluation results.
+#
+# All keys live under the top-level `backtesting:` namespace so this file
+# can be merged into a larger app config later without key collisions.
+# ─────────────────────────────────────────────────────────────────────────────
+
+backtesting:
+  # ── Walk-forward window settings ──────────────────────────────────────────
+
+  # Minimum number of historical data points required in the training window
+  # before the first evaluation fold begins.
+  # Increase this if you find the first few folds produce noisy metrics.
+  min_train_points: 10
+
+  # How many rows to advance the training window per fold.
+  # step_size: 1  →  every possible fold evaluated (slowest, most thorough)
+  # step_size: 5  →  skip 4 rows between folds (faster for large datasets)
+  step_size: 1
+
+  # ── Forecast horizons ──────────────────────────────────────────────────────
+  #
+  # These are fallback step counts used when the timestamp spacing cannot be
+  # inferred from the data.  The harness auto-detects the median inter-record
+  # interval and adjusts these at runtime to approximate 24 h and 48 h.
+  horizon_24h: 1   # data-point steps ≈ 24 h
+  horizon_48h: 2   # data-point steps ≈ 48 h
+
+  # ── Safety cap ────────────────────────────────────────────────────────────
+  # Maximum number of folds to evaluate (0 = no cap).
+  # Useful in CI to bound test execution time.
+  max_windows: 0
+
+  # ── Reproducibility ───────────────────────────────────────────────────────
+  # Seed passed to any stochastic components (sklearn Ridge solver, etc.)
+  # so repeated runs with the same data produce identical metrics.
+  random_seed: 42
+
+  # ── Confidence thresholds (MAE-based) ─────────────────────────────────────
+  #
+  # After aggregating per-fold MAE for the 24-h horizon, the backtest result
+  # is classified into one of three confidence tiers:
+  #
+  #   mean_mae_24h ≤ confidence_mae_threshold_good  →  "high"
+  #   mean_mae_24h ≤ confidence_mae_threshold_ok    →  "medium"
+  #   mean_mae_24h >  confidence_mae_threshold_ok   →  "low"
+  #
+  # Sentiment scores are in the range [-1, +1], so an MAE of 0.05 means
+  # the forecast is off by ≤ 5 percentage points on average.
+  confidence_mae_threshold_good: 0.05
+  confidence_mae_threshold_ok: 0.15
