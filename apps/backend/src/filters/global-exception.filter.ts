@@ -16,6 +16,7 @@ import { ErrorResponse } from '../interfaces/error-response.interface';
 import { resolveNodeEnv } from '../lib/config';
 import { mapSorobanRpcErrorToApi } from '../stellar/utils/soroban-error.mapper';
 import { SorobanRpcError } from '../stellar/services/soroban-rpc-client.service';
+import { MessageTemplateRenderError } from '../message-template/message-template.errors';
 
 type RequestWithRequestId = Request & {
   correlationId?: string;
@@ -116,6 +117,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       };
     }
 
+    if (exception instanceof MessageTemplateRenderError) {
+      return {
+        code: ErrorCode.SYS_VALIDATION_FAILED,
+        message: exception.message,
+        details: exception.details,
+        requestId,
+        correlationId,
+      };
+    }
+
     if (exception instanceof Error) {
       return {
         code: ErrorCode.SYS_INTERNAL_ERROR,
@@ -142,6 +153,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof SorobanRpcError) {
       return mapSorobanRpcErrorToApi(exception).status;
+    }
+
+    if (exception instanceof MessageTemplateRenderError) {
+      return HttpStatus.BAD_REQUEST;
     }
 
     return HttpStatus.INTERNAL_SERVER_ERROR;

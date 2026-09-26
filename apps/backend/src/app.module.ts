@@ -26,6 +26,7 @@ import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
 import { ModerationModule } from './moderation/moderation.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
+import { MessageTemplateModule } from './message-template/message-template.module';
 
 import databaseConfig from './database/database.config';
 import stellarConfig from './stellar/config/stellar.config';
@@ -161,6 +162,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     ModerationModule,
     SearchModule,
     FeatureFlagsModule,
+    MessageTemplateModule,
 
     // Crowdfund modules
     CrowdfundModule,

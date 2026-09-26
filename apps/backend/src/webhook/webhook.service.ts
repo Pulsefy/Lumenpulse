@@ -14,6 +14,9 @@ import {
   NotificationSeverity,
   Notification,
 } from '../notification/notification.entity';
+import { MessageTemplateService } from '../message-template/message-template.service';
+import { MessageTemplateKey } from '../message-template/message-template.keys';
+import { buildDataProcessingTemplateVariables } from '../notification/data-processing-notification.variables';
 
 interface WebhookSecretEntry {
   id: string;
@@ -29,6 +32,7 @@ export class WebhookService {
     private readonly configService: ConfigService,
     private readonly notificationService: NotificationService,
     private readonly deliveryService: NotificationDeliveryService,
+    private readonly messageTemplateService: MessageTemplateService,
   ) {}
 
   /**
@@ -217,15 +221,25 @@ export class WebhookService {
     }
 
     const severity = this.resolveSeverity(severity_score);
-    const title = this.buildTitle(type, metric_name, severity);
-    const message = this.buildMessage(
+    const templateKey =
+      type === 'sentiment_spike'
+        ? MessageTemplateKey.NOTIFICATION_DATA_PROCESSING_SENTIMENT_SPIKE
+        : MessageTemplateKey.NOTIFICATION_DATA_PROCESSING_ANOMALY;
+    const templateVariables = buildDataProcessingTemplateVariables(
       type,
       metric_name,
       current_value,
       baseline_mean,
       z_score,
       severity_score,
+      severity,
     );
+    const rendered = await this.messageTemplateService.render(
+      templateKey,
+      templateVariables,
+    );
+    const title = rendered.title ?? '';
+    const message = rendered.message ?? '';
 
     // Create the notification
     const notification = await this.notificationService.create({
@@ -270,44 +284,4 @@ export class WebhookService {
     return NotificationSeverity.LOW;
   }
 
-  private buildTitle(
-    type: string,
-    metricName: string,
-    severity: NotificationSeverity,
-  ): string {
-    const label =
-      type === 'sentiment_spike' ? 'Sentiment Spike' : 'Anomaly Detected';
-    const metric = metricName.replace(/_/g, ' ');
-    return `[${severity.toUpperCase()}] ${label} in ${metric}`;
-  }
-
-  private buildMessage(
-    type: string,
-    metricName: string,
-    currentValue: number,
-    baselineMean: number,
-    zScore: number,
-    severityScore: number,
-  ): string {
-    const metric = metricName.replace(/_/g, ' ');
-    const pct =
-      baselineMean !== 0
-        ? (((currentValue - baselineMean) / baselineMean) * 100).toFixed(1)
-        : '0';
-    const direction = currentValue >= baselineMean ? 'above' : 'below';
-
-    if (type === 'sentiment_spike') {
-      return (
-        `Sentiment spike detected for ${metric}. ` +
-        `Current value ${currentValue.toFixed(4)} is ${Math.abs(Number(pct))}% ${direction} baseline ` +
-        `(z-score: ${zScore.toFixed(2)}, severity: ${(severityScore * 100).toFixed(0)}%).`
-      );
-    }
-
-    return (
-      `Anomaly detected in ${metric}. ` +
-      `Current value ${currentValue.toFixed(2)} is ${Math.abs(Number(pct))}% ${direction} baseline of ${baselineMean.toFixed(2)} ` +
-      `(z-score: ${zScore.toFixed(2)}, severity: ${(severityScore * 100).toFixed(0)}%).`
-    );
-  }
 }
