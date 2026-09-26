@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { SentimentService } from './sentiment.service';
+import { SentimentController } from './sentiment.controller';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
@@ -13,7 +14,9 @@ import { ConfigModule } from '@nestjs/config';
     }),
     ConfigModule,
   ],
+  controllers: [SentimentController],
   providers: [SentimentService],
   exports: [SentimentService],
 })
 export class SentimentModule {}
+
