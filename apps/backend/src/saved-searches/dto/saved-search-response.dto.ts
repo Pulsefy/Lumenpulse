@@ -18,7 +18,7 @@ export class SavedSearchResponseDto {
   @ApiProperty() userId: string;
   @ApiProperty() name: string;
   @ApiProperty({ enum: SavedSearchDomain }) domain: SavedSearchDomain;
-  @ApiProperty({ type: 'object' }) filters: Record<string, unknown>;
+  @ApiProperty({ additionalProperties: true }) filters: Record<string, unknown>;
   @ApiProperty() isSubscribed: boolean;
   @ApiPropertyOptional({ nullable: true }) lastNotifiedAt: Date | null;
   @ApiProperty() createdAt: Date;

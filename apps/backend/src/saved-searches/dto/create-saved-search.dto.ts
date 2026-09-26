@@ -36,7 +36,7 @@ export class CreateSavedSearchDto {
       'discovery endpoint (e.g. GET /grants/rounds, GET /search/projects, ' +
       'GET /news).',
     example: { status: 'active', keyword: 'DeFi' },
-    type: 'object',
+    additionalProperties: true,
   })
   @IsObject()
   filters: Record<string, unknown>;
