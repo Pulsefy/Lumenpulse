@@ -68,6 +68,7 @@ from src.analytics.onchain_entity_linker import (
     OnchainEntityLink,
     OnchainEntityLinker,
 )
+from src.privacy import scrub_record
 
 logger = logging.getLogger(__name__)
 
@@ -510,6 +511,9 @@ class PostgresService:
         Returns:
             Article object if successful, None otherwise
         """
+        # Scrub personal data before any feature computation (NER entities,
+        # embeddings) and before the row is persisted (#1452).
+        article_data = scrub_record(article_data)
         article_data = self._ensure_detected_entities(article_data)
 
         def _save():
@@ -632,6 +636,9 @@ class PostgresService:
         try:
             with self.get_session() as session:
                 for i, article_data in enumerate(articles_data):
+                    # Scrub personal data before any feature computation and
+                    # before the row is persisted (#1452).
+                    article_data = scrub_record(article_data)
                     article_data = self._ensure_detected_entities(article_data)
                     sentiment_result = (
                         sentiment_results[i]
@@ -1097,6 +1104,8 @@ class PostgresService:
         Returns:
             SocialPost object if successful, None otherwise
         """
+        # Scrub personal data before the row is persisted (#1452).
+        post_data = scrub_record(post_data)
 
         def _save():
             with self.get_session() as session:
@@ -1198,6 +1207,8 @@ class PostgresService:
         try:
             with self.get_session() as session:
                 for i, post_data in enumerate(posts_data):
+                    # Scrub personal data before the row is persisted (#1452).
+                    post_data = scrub_record(post_data)
                     sentiment_result = (
                         sentiment_results[i]
                         if sentiment_results and i < len(sentiment_results)
@@ -2354,6 +2365,9 @@ class PostgresService:
         Returns:
             NewsInsight object if successful, None otherwise
         """
+        # Scrub personal data before the row is persisted (#1452).
+        if article_data:
+            article_data = scrub_record(article_data)
         try:
             with self.get_session() as session:
                 insight = NewsInsight(
@@ -2404,6 +2418,9 @@ class PostgresService:
                         if articles_data and i < len(articles_data)
                         else None
                     )
+                    # Scrub personal data before the row is persisted (#1452).
+                    if article_data:
+                        article_data = scrub_record(article_data)
 
                     insight = NewsInsight(
                         article_id=article_data.get("id") if article_data else None,

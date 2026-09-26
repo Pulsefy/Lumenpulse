@@ -368,6 +368,11 @@ The following variables are used by the data-processing code but are not all rep
 | `INGESTION_REPORT_DIR`             | Optional    |     No | Ingestion report directory.       |
 | `WEBHOOK_BACKOFF_SECONDS`          | Optional    |     No | Webhook retry backoff.            |
 | `WEBHOOK_MAX_RETRIES`              | Optional    |     No | Maximum webhook retries.          |
+| `PRIVACY_WALLET_ADDRESS_POLICY`    | Optional    |     No | Wallet-address scrubbing policy (`mask` default, `retain`). |
+| `LOG_PREDICTION_RAW_INPUT`         | Optional    |     No | Store the scrubbed prediction request text (`true`) or only its hash (`false`, default). |
+
+> Scrubbing rules for these variables are documented in the
+> [Personal Data Policy](personal-data-policy.md).
 
 ## Drift detection
 

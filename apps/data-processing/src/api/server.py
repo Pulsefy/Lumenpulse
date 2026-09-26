@@ -53,6 +53,7 @@ from src.ml.model_registry import (
 from src.analytics.correlation_engine import CorrelationEngine
 from src.db import PostgresService
 from src.ingestion.stellar_ingestion_checks import run_all_checks
+from src.privacy import scrub_record, scrub_text
 
 from src.analytics.sentiment_indicators import SentimentIndicatorMapper, get_legend as sentiment_legend
 from src.api.rebuild_routes import router as rebuild_router
@@ -214,16 +215,21 @@ def _log_prediction(
         return
         
     try:
+        # Prediction request logging follows the same personal-data rules as
+        # ingestion: both the stored copy and its hash are derived from the
+        # scrubbed text (#1452, doc/personal-data-policy.md).
+        scrubbed_input = scrub_text(input_text)
+        scrubbed_output = scrub_record(output)
         store_raw_input = os.getenv("LOG_PREDICTION_RAW_INPUT", "false").lower() == "true"
-        raw_input = input_text if store_raw_input else None
-        input_hash = hashlib.sha256(input_text.encode("utf-8")).hexdigest()
+        raw_input = scrubbed_input if store_raw_input else None
+        input_hash = hashlib.sha256(scrubbed_input.encode("utf-8")).hexdigest()
         
         postgres_service.log_prediction(
             request_id=request_id,
             model_type=model_type,
             model_version=model_version,
             input_hash=input_hash,
-            output=output,
+            output=scrubbed_output,
             latency_ms=latency_ms,
             raw_input=raw_input,
         )
