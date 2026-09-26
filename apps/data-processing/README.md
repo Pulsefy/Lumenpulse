@@ -75,6 +75,17 @@ Create a `.env` file in the root of `apps/data-processing` and add any necessary
 python src/main.py
 ```
 
+Profiling
+--------
+
+Per-pipeline-stage profiling metrics are exported via Prometheus:
+
+- `lumenpulse_pipeline_stage_wall_seconds{stage="..."}`: wall-clock duration histogram
+- `lumenpulse_pipeline_stage_cpu_seconds{stage="..."}`: CPU-time histogram
+- `lumenpulse_pipeline_stage_peak_memory_bytes{stage="..."}`: peak memory gauge (bytes)
+
+Use the `profile_stage(stage)` context manager from `src/utils/profiler.py` to instrument stages.
+
 ### Scheduled Jobs
 
 The data processing service runs background jobs when started in `serve` mode.
