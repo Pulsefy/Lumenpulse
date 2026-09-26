@@ -99,30 +99,30 @@ def run_data_pipeline():
         price_fetcher = PriceFetcher()
         with profile_stage("fetch_data"):
             with ThreadPoolExecutor(max_workers=5) as io_pool:
-            news_future = io_pool.submit(
-                _fetch_with_source_tracking, "news", fetch_news, limit=5
-            )
-            vol_24h_future = io_pool.submit(
-                _fetch_with_source_tracking, "stellar_horizon", get_asset_volume, "XLM", 24
-            )
-            vol_48h_future = io_pool.submit(
-                _fetch_with_source_tracking, "stellar_horizon", get_asset_volume, "XLM", 48
-            )
-            network_future = io_pool.submit(
-                _fetch_with_source_tracking, "stellar_horizon", get_network_overview
-            )
-            price_future = io_pool.submit(
-                _fetch_with_source_tracking,
-                "price_feed",
-                price_fetcher.fetch_all_prices,
-                ["XLM", "USDC"],
-            )
+                news_future = io_pool.submit(
+                    _fetch_with_source_tracking, "news", fetch_news, limit=5
+                )
+                vol_24h_future = io_pool.submit(
+                    _fetch_with_source_tracking, "stellar_horizon", get_asset_volume, "XLM", 24
+                )
+                vol_48h_future = io_pool.submit(
+                    _fetch_with_source_tracking, "stellar_horizon", get_asset_volume, "XLM", 48
+                )
+                network_future = io_pool.submit(
+                    _fetch_with_source_tracking, "stellar_horizon", get_network_overview
+                )
+                price_future = io_pool.submit(
+                    _fetch_with_source_tracking,
+                    "price_feed",
+                    price_fetcher.fetch_all_prices,
+                    ["XLM", "USDC"],
+                )
 
-            raw_news_articles = news_future.result()
-            raw_volume_24h = vol_24h_future.result()
-            raw_volume_48h = vol_48h_future.result()
-            network_stats = network_future.result()
-            raw_price_feed = price_future.result()
+                raw_news_articles = news_future.result()
+                raw_volume_24h = vol_24h_future.result()
+                raw_volume_48h = vol_48h_future.result()
+                network_stats = network_future.result()
+                raw_price_feed = price_future.result()
 
         fetch_elapsed = time.perf_counter() - pipeline_start
         print(f"All fetches completed in {fetch_elapsed:.2f}s (parallel)")
