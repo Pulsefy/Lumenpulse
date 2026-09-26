@@ -40,7 +40,10 @@ describe('MessageTemplateService', () => {
     } as unknown as jest.Mocked<Repository<MessageTemplate>>;
 
     auditRepo = {
-      create: jest.fn((v) => v),
+      create: jest.fn(
+        (v: Partial<MessageTemplateAuditLog>): MessageTemplateAuditLog =>
+          v as MessageTemplateAuditLog,
+      ),
       save: jest.fn(),
       find: jest.fn(),
     } as unknown as jest.Mocked<Repository<MessageTemplateAuditLog>>;
@@ -65,12 +68,15 @@ describe('MessageTemplateService', () => {
   it('renders a stored template', async () => {
     templateRepo.findOne.mockResolvedValue(seededTemplate);
 
-    const rendered = await service.render(MessageTemplateKey.NOTIFICATION_PRICE_ALERT, {
-      symbol: 'XLM',
-      directionPhrase: 'risen above',
-      targetPrice: 0.15,
-      currentPrice: 0.16,
-    });
+    const rendered = await service.render(
+      MessageTemplateKey.NOTIFICATION_PRICE_ALERT,
+      {
+        symbol: 'XLM',
+        directionPhrase: 'risen above',
+        targetPrice: 0.15,
+        currentPrice: 0.16,
+      },
+    );
 
     expect(rendered.title).toBe('Price Alert: XLM');
     expect(rendered.message).toContain('risen above');
@@ -85,10 +91,12 @@ describe('MessageTemplateService', () => {
 
   it('records audit log on update', async () => {
     templateRepo.findOne.mockResolvedValue(seededTemplate);
-    templateRepo.save.mockImplementation(async (entity) => ({
-      ...(entity as MessageTemplate),
-      version: 2,
-    }));
+    templateRepo.save.mockImplementation((entity) =>
+      Promise.resolve({
+        ...(entity as MessageTemplate),
+        version: 2,
+      }),
+    );
 
     await service.updateTemplate(
       MessageTemplateKey.NOTIFICATION_PRICE_ALERT,
