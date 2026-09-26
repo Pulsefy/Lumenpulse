@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["lib", "cdylib"]
+doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
@@ -15,3 +16,6 @@ event-versioning = { path = "../event-versioning" }
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 proptest = "1.0"
+
+[features]
+testutils = ["soroban-sdk/testutils"]
