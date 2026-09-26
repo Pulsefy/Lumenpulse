@@ -5,6 +5,12 @@ import { GrantsService } from '../grants/grants.service';
 import { NewsService } from '../news/news.service';
 import { ProjectsService } from '../projects/projects.service';
 import {
+  ProjectListQueryDto,
+  ProjectListItemDto,
+  ProjectStatus,
+} from '../projects/dto/projects.dto';
+import { News } from '../news/news.entity';
+import {
   SavedSearch,
   SavedSearchDomain,
 } from './entities/saved-search.entity';
@@ -96,7 +102,9 @@ export class SavedSearchNotificationScheduler {
     _filters: Record<string, unknown>,
     since: Date | null,
   ): number {
-    const rounds = this.grantsService.listRounds() as Array<{ startTime: number }>;
+    const rounds = this.grantsService.listRounds() as Array<{
+      startTime: number;
+    }>;
 
     if (!since) return rounds.length;
 
@@ -111,17 +119,28 @@ export class SavedSearchNotificationScheduler {
     filters: Record<string, unknown>,
     since: Date | null,
   ): Promise<number> {
-    const response = await this.projectsService.listProjects({
-      page: 1,
-      limit: 200,
-      status: filters['status'] as string | undefined,
-      owner: filters['owner'] as string | undefined,
-    } as any);
+    // Build a fully-typed query DTO — no `as any` cast needed.
+    const query = new ProjectListQueryDto();
+    query.page = 1;
+    query.limit = 100;
+
+    if (
+      typeof filters['status'] === 'string' &&
+      Object.values(ProjectStatus).includes(filters['status'] as ProjectStatus)
+    ) {
+      query.status = filters['status'] as ProjectStatus;
+    }
+
+    if (typeof filters['owner'] === 'string') {
+      query.owner = filters['owner'];
+    }
+
+    const response = await this.projectsService.listProjects(query);
 
     if (!since) return response.total;
 
-    return response.items.filter((p: { createdAt?: Date | string }) => {
-      if (!p.createdAt) return false;
+    // ProjectListResponseDto uses `projects`, typed as ProjectListItemDto[].
+    return response.projects.filter((p: ProjectListItemDto) => {
       return new Date(p.createdAt).getTime() > since.getTime();
     }).length;
   }
@@ -133,15 +152,18 @@ export class SavedSearchNotificationScheduler {
     filters: Record<string, unknown>,
     since: Date | null,
   ): Promise<number> {
-    const articles = await this.newsService.findAll({
-      tag: filters['tag'] as string | undefined,
-      category: filters['category'] as string | undefined,
+    const articles: News[] = await this.newsService.findAll({
+      tag: typeof filters['tag'] === 'string' ? filters['tag'] : undefined,
+      category:
+        typeof filters['category'] === 'string'
+          ? filters['category']
+          : undefined,
     });
 
     if (!since) return articles.length;
 
-    return articles.filter((a: { publishedAt: Date | string }) =>
-      new Date(a.publishedAt).getTime() > since.getTime(),
+    return articles.filter(
+      (a: News) => new Date(a.publishedAt).getTime() > since.getTime(),
     ).length;
   }
 }
