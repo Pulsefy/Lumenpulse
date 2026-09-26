@@ -29,18 +29,23 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
+import { JWT_SECURITY_SCHEME } from '../openapi/openapi.constants';
 
-type AuthenticatedRequest = Request & { user?: { email?: string; id?: string } };
+type AuthenticatedRequest = Request & {
+  user?: { email?: string; id?: string };
+};
 
 @ApiTags('message-templates')
+@ApiBearerAuth(JWT_SECURITY_SCHEME)
 @Controller('message-templates')
 export class MessageTemplateController {
-  constructor(private readonly messageTemplateService: MessageTemplateService) {}
+  constructor(
+    private readonly messageTemplateService: MessageTemplateService,
+  ) {}
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'List message templates (admin)' })
   @ApiResponse({ status: 200, type: [MessageTemplateResponseDto] })
   async list(): Promise<MessageTemplateResponseDto[]> {
@@ -51,7 +56,6 @@ export class MessageTemplateController {
   @Get(':key/history')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get template change history (admin)' })
   @ApiResponse({ status: 200, type: [MessageTemplateAuditLogResponseDto] })
   async history(
@@ -63,7 +67,6 @@ export class MessageTemplateController {
   @Post(':key/preview')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Preview a template with sample or custom variables (admin)',
@@ -79,7 +82,6 @@ export class MessageTemplateController {
   @Put(':key')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a message template (admin)' })
   @ApiResponse({ status: 200, type: MessageTemplateResponseDto })
   async update(
