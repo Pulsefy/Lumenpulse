@@ -108,6 +108,21 @@ async def metrics_and_logging_middleware(request: Request, call_next):
     corr_id = request.headers.get("X-Correlation-ID", generate_correlation_id())
     correlation_id_ctx.set(corr_id)
     start_time = time.monotonic()
+    
+    path = request.url.path
+    if path.startswith("/analyze"):
+        model_type = "sentiment"
+    elif path.startswith("/analytics/forecast"):
+        model_type = "sentiment_forecaster"
+    elif path.startswith("/correlation"):
+        model_type = "correlation_engine"
+    else:
+        model_type = "unknown"
+
+    model_version = "unknown"
+    if model_type != "unknown":
+        model_version = get_current_version(model_type) or "1.0.0"
+
     try:
         response = await call_next(request)
         if response.status_code >= 500:
@@ -125,7 +140,9 @@ async def metrics_and_logging_middleware(request: Request, call_next):
             path=request.url.path,
             method=request.method,
             duration_seconds=time.monotonic() - start_time,
+            model_version=model_version,
         )
+
 
 
 # Initialize your existing SentimentAnalyzer

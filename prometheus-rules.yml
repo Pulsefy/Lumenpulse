@@ -1,242 +1,263 @@
 # prometheus-rules.yml
-# Alert rules for LumenPulse backend monitoring
-#
-# These rules define when alerts should fire based on metric conditions
-# Place this file in the root directory and reference it in prometheus.yml
+# This file defines alerting and recording rules for Prometheus.
+# It should be referenced from the main prometheus.yml via the `rule_files` section.
 
 groups:
-  - name: lumenpulse_alerts
-    interval: 30s
+  - name: lumenpulse-recording-rules
+    interval: 1m
     rules:
-      # ===================
-      # HTTP Error Alerts
-      # ===================
+      - record: job:http_requests:rate5m
+        expr: sum by (job) (rate(http_requests_total[5m]))
+      - record: instance:cpu_usage:percent
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
 
-      - alert: HighErrorRate
-        expr: |
-          (rate(http_errors_total[5m]) / rate(http_requests_total[5m])) > 0.05
+  - name: lumenpulse-alerting-rules
+    interval: 1m
+    rules:
+      - alert: HighCPUUsage
+        expr: instance:cpu_usage:percent > 80
         for: 5m
         labels:
           severity: warning
-          service: backend
+          team: sre
         annotations:
-          summary: 'High error rate detected'
-          description: '{{ .Labels.instance }} has error rate > 5% (current: {{ $value | humanizePercentage }})'
-          runbook: 'https://wiki.example.com/runbooks/high-error-rate'
-
-      - alert: CriticalErrorRate
-        expr: |
-          (rate(http_errors_total[5m]) / rate(http_requests_total[5m])) > 0.10
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage exceeds 80% for >5m."
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: sre
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage exceeds 85% for >5m."
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 90
+        for: 10m
+        labels:
+          severity: critical
+          team: sre
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Root FS >90% usage."
+      - alert: InstanceDown
+        expr: up == 0
         for: 2m
         labels:
           severity: critical
-          service: backend
+          team: sre
         annotations:
-          summary: 'Critical error rate detected'
-          description: '{{ .Labels.instance }} has error rate > 10% (current: {{ $value | humanizePercentage }})'
-          runbook: 'https://wiki.example.com/runbooks/critical-error-rate'
+          summary: "Instance {{ $labels.instance }} is down"
+          description: "No metrics for 2m."
+      - alert: HTTPRequestErrorRate
+        expr: sum by (job) (rate(http_requests_total{status=~"5.."}[5m])) / sum by (job) (rate(http_requests_total[5m])) * 100 > 5
+        for: 3m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High 5xx error rate for {{ $labels.job }}"
+          description: "5xx >5% over 5m."
 
-      # ===================
-      # Latency Alerts
-      # ===================
+# This file defines alerting and recording rules for Prometheus.
+# It should be referenced from the main prometheus.yml via the `rule_files` section.
 
-      - alert: HighLatencyP95
-        expr: |
-          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+# ------------------------------------------------------------
+# Grouping
+# ------------------------------------------------------------
+# All rules are grouped for easier management. Prometheus evaluates each group
+# at the interval defined in prometheus.yml (default 1m).
+
+groups:
+  - name: lumenpulse-recording-rules
+    interval: 1m
+    rules:
+      - record: job:http_requests:rate5m
+        expr: sum by (job) (rate(http_requests_total[5m]))
+      - record: instance:cpu_usage:percent
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+  - name: lumenpulse-alerting-rules
+    interval: 1m
+    rules:
+      - alert: HighCPUUsage
+        expr: instance:cpu_usage:percent > 80
         for: 5m
         labels:
           severity: warning
-          service: backend
+          team: sre
         annotations:
-          summary: 'High P95 latency detected'
-          description: '{{ .Labels.instance }} P95 latency > 1s (current: {{ $value | humanizeDuration }})'
-          runbook: 'https://wiki.example.com/runbooks/high-latency'
-
-      - alert: HighLatencyP99
-        expr: |
-          histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 3
-        for: 5m
-        labels:
-          severity: critical
-          service: backend
-        annotations:
-          summary: 'Critical P99 latency detected'
-          description: '{{ .Labels.instance }} P99 latency > 3s (current: {{ $value | humanizeDuration }})'
-          runbook: 'https://wiki.example.com/runbooks/critical-latency'
-
-      # ====================
-      # Job Queue Alerts
-      # ====================
-
-      - alert: QueueBacklogWarning
-        expr: job_queue_size > 100
-        for: 10m
-        labels:
-          severity: warning
-          service: backend
-        annotations:
-          summary: 'Job queue backlog warning'
-          description: '{{ .Labels.queue_name }} queue has {{ $value }} jobs pending'
-
-      - alert: QueueBacklogCritical
-        expr: job_queue_size > 1000
-        for: 5m
-        labels:
-          severity: critical
-          service: backend
-        annotations:
-          summary: 'Critical job queue backlog'
-          description: '{{ .Labels.queue_name }} queue has {{ $value }} jobs (critical backlog)'
-
-      - alert: JobFailureRate
-        expr: |
-          rate(jobs_failed_total[5m]) > 0.1
-        for: 5m
-        labels:
-          severity: warning
-          service: backend
-        annotations:
-          summary: 'High job failure rate'
-          description: '{{ .Labels.queue_name }} has > 10% job failures (current: {{ $value | humanize }}/sec)'
-
-      # ==========================
-      # Reconciliation Drift Alerts
-      # ==========================
-
-      - alert: ReconciliationDriftWarning
-        expr: |
-          sum by (dataset) (
-            increase(lumenpulse_reconciliation_drift_total{severity="warning"}[10m])
-          ) > 0
-        for: 5m
-        labels:
-          severity: warning
-          service: backend
-        annotations:
-          summary: 'Reconciliation drift warning'
-          description: '{{ .Labels.dataset }} has recorded warning-level drift breaches in the last 10 minutes'
-          runbook: 'document/RECONCILIATION_ALERTING_RUNBOOK.md'
-
-      - alert: ReconciliationDriftCritical
-        expr: |
-          sum by (dataset) (
-            increase(lumenpulse_reconciliation_drift_total{severity="critical"}[10m])
-          ) > 0
-        for: 1m
-        labels:
-          severity: critical
-          service: backend
-        annotations:
-          summary: 'Critical reconciliation drift'
-          description: '{{ .Labels.dataset }} has recorded critical drift breaches in the last 10 minutes'
-          runbook: 'document/RECONCILIATION_ALERTING_RUNBOOK.md'
-
-      # ====================
-      # Ingestion Dataset SLA Alerts
-      # ====================
-
-      - alert: IngestionDatasetFreshnessSLABreach
-        expr: |
-          lumenpulse_ingestion_dataset_freshness_seconds
-            > on(dataset) lumenpulse_ingestion_dataset_freshness_target_seconds
-        for: 5m
-        labels:
-          severity: critical
-          service: data-processing
-        annotations:
-          summary: 'Ingestion dataset freshness SLA breach'
-          description: '{{ .Labels.dataset }} freshness is {{ $value | humanizeDuration }}, above its configured SLA target'
-          runbook: 'apps/data-processing/INGESTION_ALERTING_RUNBOOK.md'
-
-      - alert: IngestionDatasetCompletenessSLABreach
-        expr: |
-          lumenpulse_ingestion_dataset_completeness_ratio < 0
-            or lumenpulse_ingestion_dataset_completeness_ratio
-              < on(dataset) lumenpulse_ingestion_dataset_completeness_target_ratio
-        for: 5m
-        labels:
-          severity: critical
-          service: data-processing
-        annotations:
-          summary: 'Ingestion dataset completeness SLA breach'
-          description: '{{ .Labels.dataset }} completeness ratio is {{ $value | humanize }}, below its configured SLA target or unknown'
-          runbook: 'apps/data-processing/INGESTION_ALERTING_RUNBOOK.md'
-
-      # ====================
-      # Request Rate Alerts
-      # ====================
-
-      - alert: UnusuallyLowRequestRate
-        expr: |
-          rate(http_requests_total[5m]) < 0.1
-        for: 10m
-        labels:
-          severity: warning
-          service: backend
-        annotations:
-          summary: 'Unusually low request rate'
-          description: '{{ .Labels.instance }} request rate is abnormally low ({{ $value | humanize }}/sec)'
-
-      - alert: NoRequests
-        expr: |
-          increase(http_requests_total[5m]) == 0
-        for: 10m
-        labels:
-          severity: critical
-          service: backend
-        annotations:
-          summary: 'No requests detected'
-          description: '{{ .Labels.instance }} has received no requests in the last 5 minutes'
-
-      # ====================
-      # Memory Alerts
-      # ====================
-
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage exceeds 80% for >5m."
       - alert: HighMemoryUsage
-        expr: |
-          (process_resident_memory_bytes / node_memory_MemTotal_bytes) > 0.8
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
         for: 5m
         labels:
           severity: warning
-          service: backend
+          team: sre
         annotations:
-          summary: 'High memory usage detected'
-          description: '{{ .Labels.instance }} is using > 80% of available memory'
-
-      # ====================
-      # Health Checks
-      # ====================
-
-      - alert: InstanceDown
-        expr: |
-          up{job="lumenpulse-backend"} == 0
-        for: 1m
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage exceeds 85% for >5m."
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 90
+        for: 10m
         labels:
           severity: critical
-          service: backend
+          team: sre
         annotations:
-          summary: 'Instance is down'
-          description: '{{ .Labels.instance }} has been down for more than 1 minute'
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Root FS >90% usage."
+      - alert: InstanceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: sre
+        annotations:
+          summary: "Instance {{ $labels.instance }} is down"
+          description: "No metrics for 2m."
+      - alert: HTTPRequestErrorRate
+        expr: sum by (job) (rate(http_requests_total{status=~"5.."}[5m])) / sum by (job) (rate(http_requests_total[5m])) * 100 > 5
+        for: 3m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High 5xx error rate for {{ $labels.job }}"
+          description: "5xx >5% over 5m."
 
-      # ====================
-      # Recording Rules (Pre-computed metrics)
-      # ====================
+# This file defines alerting and recording rules for Prometheus.
+# It should be referenced from the main prometheus.yml via the `rule_files` section.
 
-      # These compute common values once to improve dashboard performance
-      - record: 'job:http:requests:rate5m'
-        expr: 'rate(http_requests_total[5m])'
+# ------------------------------------------------------------
+# Recording Rules (pre‑computed metrics for dashboard efficiency)
+# ------------------------------------------------------------
+# These rules calculate common aggregates that can be reused in queries.
+# They do not generate alerts themselves.
 
-      - record: 'job:http:errors:rate5m'
-        expr: 'rate(http_errors_total[5m])'
+# Example: average HTTP request rate per job over the last 5 minutes
+- record: job:http_requests:rate5m
+  expr: sum by (job) (rate(http_requests_total[5m]))
 
-      - record: 'job:http:error_rate:ratio'
-        expr: |
-          rate(http_errors_total[5m]) / rate(http_requests_total[5m])
+# Example: average CPU usage per instance (as a percentage)
+- record: instance:cpu_usage:percent
+  expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
 
-      - record: 'job:http:latency:p95'
-        expr: |
-          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+# ------------------------------------------------------------
+# Alerting Rules
+# ------------------------------------------------------------
+# Each alert includes a severity label, a human‑readable summary and description,
+# and optional annotations for dynamic templating.
 
-      - record: 'job:http:latency:p99'
-        expr: |
-          histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))
+- alert: HighCPUUsage
+  expr: instance:cpu_usage:percent > 80
+  for: 5m
+  labels:
+    severity: warning
+    team: sre
+  annotations:
+    summary: "High CPU usage on {{ $labels.instance }}"
+    description: "CPU usage has been above 80% for more than 5 minutes on instance {{ $labels.instance }} (job: {{ $labels.job }})."
+
+- alert: HighMemoryUsage
+  expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+  for: 5m
+  labels:
+    severity: warning
+    team: sre
+  annotations:
+    summary: "High memory usage on {{ $labels.instance }}"
+    description: "Memory usage exceeds 85% for over 5 minutes on {{ $labels.instance }}."
+
+- alert: DiskSpaceLow
+  expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 90
+  for: 10m
+  labels:
+    severity: critical
+    team: sre
+  annotations:
+    summary: "Low disk space on {{ $labels.instance }}"
+    description: "Root filesystem usage is above 90% on {{ $labels.instance }}."
+
+- alert: InstanceDown
+  expr: up == 0
+  for: 2m
+  labels:
+    severity: critical
+    team: sre
+  annotations:
+    summary: "Instance {{ $labels.instance }} is down"
+    description: "No metrics have been received from {{ $labels.instance }} for at least 2 minutes."
+
+- alert: HTTPRequestErrorRate
+  expr: sum by (job) (rate(http_requests_total{status=~"5.."}[5m])) / sum by (job) (rate(http_requests_total[5m])) * 100 > 5
+  for: 3m
+  labels:
+    severity: warning
+    team: backend
+  annotations:
+    summary: "High 5xx error rate for {{ $labels.job }}"
+    description: "More than 5% of HTTP requests are returning 5xx errors for job {{ $labels.job }} over the last 5 minutes."
+
+# ------------------------------------------------------------
+# Grouping
+# ------------------------------------------------------------
+# All rules are grouped for easier management. Prometheus evaluates each group
+# at the interval defined in prometheus.yml (default 1m).
+
+groups:
+  - name: lumenpulse-recording-rules
+    interval: 1m
+    rules:
+      - record: job:http_requests:rate5m
+        expr: sum by (job) (rate(http_requests_total[5m]))
+      - record: instance:cpu_usage:percent
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+  - name: lumenpulse-alerting-rules
+    interval: 1m
+    rules:
+      - alert: HighCPUUsage
+        expr: instance:cpu_usage:percent > 80
+        for: 5m
+        labels:
+          severity: warning
+          team: sre
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage exceeds 80% for >5m."
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: sre
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage exceeds 85% for >5m."
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 90
+        for: 10m
+        labels:
+          severity: critical
+          team: sre
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Root FS >90% usage."
+      - alert: InstanceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: sre
+        annotations:
+          summary: "Instance {{ $labels.instance }} is down"
+          description: "No metrics for 2m."
+      - alert: HTTPRequestErrorRate
+        expr: sum by (job) (rate(http_requests_total{status=~"5.."}[5m])) / sum by (job) (rate(http_requests_total[5m])) * 100 > 5
+        for: 3m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High 5xx error rate for {{ $labels.job }}"
+          description: "5xx >5% over 5m."

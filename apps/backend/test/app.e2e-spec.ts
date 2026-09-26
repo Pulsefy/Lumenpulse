@@ -1,62 +1,48 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-// import request from 'supertest';
-import { AppModule } from './../src/app.module';
+import request from 'supertest';
+import { App } from 'supertest/types';
+import { AppModule } from '../src/app.module';
 import { GlobalExceptionFilter } from '../src/filters/global-exception.filter';
-// import type { Server } from 'http';
+import { ErrorCode } from '../src/common/enums/error-code.enum';
+import { ErrorResponse } from '../src/interfaces/error-response.interface';
+
+const makeRequest = (app: INestApplication) =>
+  request(app.getHttpServer() as unknown as App);
 
 describe('AppController (e2e)', () => {
   let app: INestApplication;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    // Apply the global exception filter for testing
     app.useGlobalFilters(new GlobalExceptionFilter());
     await app.init();
   });
 
-  // it('/ (GET)', () => {
-  //   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  //   return request(app.getHttpServer());
+  afterAll(async () => {
+    await app.close();
+  });
 
-  //   return request(app.getHttpServer() as unknown as Server)
-  //     .get('/')
-  //     .expect(200)
-  //     .expect('Hello World!');
-  // });
+  it('/ (GET)', async () => {
+    const res = await makeRequest(app).get('/').expect(200);
+    expect(res.text).toBe('Hello World!');
+  });
 
-  // it('/nonexistent (GET) - should return standardized error response', () => {
-  //   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  //   return request(app.getHttpServer());
+  it('/nonexistent (GET) - should return standardized 404 error response', async () => {
+    const res = await makeRequest(app).get('/nonexistent').expect(404);
+    const body = res.body as ErrorResponse;
 
-  //   interface ErrorResponse {
-  //     statusCode: number;
-  //     message: string;
-  //     error: string;
-  //     timestamp: string;
-  //     path: string;
-  //   }
+    expect(body.code).toBe(ErrorCode.SYS_NOT_FOUND);
+    expect(body.message).toBeTruthy();
+  });
 
-  //   return request(app.getHttpServer() as unknown as Server)
-  //     .get('/nonexistent')
-  //     .expect(404)
-  //     .then((response) => {
-  //       const body = response.body as ErrorResponse;
-
-  //       expect(body).toHaveProperty('statusCode');
-  //       expect(body).toHaveProperty('message');
-  //       expect(body).toHaveProperty('error');
-  //       expect(body).toHaveProperty('timestamp');
-  //       expect(body).toHaveProperty('path');
-  //       expect(body.statusCode).toBe(404);
-  //       expect(typeof body.message).toBe('string');
-  //       expect(typeof body.error).toBe('string');
-  //       expect(typeof body.timestamp).toBe('string');
-  //       expect(body.path).toBe('/nonexistent');
-  //     });
-  // });
+  it('verifies test controller paths /test/* and /test-exception/* are not exposed', async () => {
+    await makeRequest(app).get('/test/hello').expect(404);
+    await makeRequest(app).get('/test-exception/http-exception').expect(404);
+    await makeRequest(app).get('/test-exception/all-tests').expect(404);
+  });
 });
