@@ -82,6 +82,7 @@ import { PriceAlertModule } from './price-alert/price-alert.module';
 import { ProfilingModule } from './common/profiling/profiling.module';
 import { QueryCountMiddleware } from './common/profiling/query-count.middleware';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { SavedSearchesModule } from './saved-searches/saved-searches.module';
 
 @Module({
   imports: [
@@ -224,6 +225,9 @@ import { DashboardModule } from './dashboard/dashboard.module';
 
     // Aggregated, cached dashboard read model
     DashboardModule,
+
+    // Saved searches & subscriptions
+    SavedSearchesModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
