@@ -2,6 +2,11 @@
   "network": "testnet",
   "rpc_url": "https://soroban-testnet.stellar.org:443",
   "admin_address": "GDPBZZDKZJTPFERPP65ATQWH2T6OIXQESPKXSTO6YY33TA2HTUTAPJI6",
+  "crate_coverage": {
+    "total_crates": 23,
+    "deployed": 7,
+    "not_deployed": 16
+  },
   "contracts": {
     "contributor_registry": {
       "id": "CCOVDGHF3XQ5RAFY6DJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLDGXQJSB",
@@ -36,41 +41,71 @@
     "pricing_adapter": {
       "id": "CCW2EF3M5GXWM2ZTOAUPKC3CY7W42T3QJEK72WO7VEOR5ONBUTCUWDVM",
       "wasm_hash": "477ccd47cbc96421dc872650ea2ab703b58195c3d16606b48813636cc669289f"
+    }
+  },
+  "not_deployed": {
+    "contract_registry": {
+      "crate_path": "contracts/contract_registry",
+      "reason": "Not deployed on testnet: the on-chain contract catalog builds and tests as a deployable contract, but no testnet deployment is tracked yet and its publication is deferred to the protocol catalog rollout."
+    },
+    "cross_contract_view": {
+      "crate_path": "contracts/cross-contract-view",
+      "reason": "Not deployed on testnet: this crate is a cross-contract read helper library compiled into the contracts that use it and has no standalone deployment surface."
+    },
+    "event_versioning": {
+      "crate_path": "contracts/event-versioning",
+      "reason": "Not deployed on testnet: lib-only crate holding the event-versioning convention (issue #1057) that contracts apply at compile time, so there is nothing to publish on chain."
     },
     "feature_flags": {
+      "crate_path": "contracts/feature_flags",
       "reason": "Not deployed on testnet: feature flags remain off-chain during the initial release and are not intended to be publicly deployed yet."
     },
     "idempotency_guard": {
+      "crate_path": "contracts/idempotency-guard",
       "reason": "Not deployed on testnet: the idempotency guard is a shared dependency and is intentionally kept internal rather than independently deployed."
     },
     "liquidity_pool": {
+      "crate_path": "contracts/liquidity_pool",
       "reason": "Not deployed on testnet: the automated market maker pool stays reserved for a later liquidity rollout and not part of the public launch set."
     },
     "lumenpulse_curation": {
+      "crate_path": "contracts/lumenpulse-curation",
       "reason": "Not deployed on testnet: community curation is still in design review and is not part of the current testnet deployment window."
     },
     "notification_broker": {
+      "crate_path": "contracts/notification_broker",
       "reason": "Not deployed on testnet: brokered notifications are still routed through the backend, so no standalone Soroban contract is published yet."
     },
     "notification_interface": {
+      "crate_path": "contracts/notification_interface",
       "reason": "Not deployed on testnet: this shared cross-contract interface is not a standalone deployment and is only consumed by other contracts."
     },
     "protocol_registry": {
+      "crate_path": "contracts/protocol_registry",
       "reason": "Not deployed on testnet: registry onboarding is intentionally deferred until the governance and protocol catalog workflow is finalized."
     },
     "reentrancy_guard": {
+      "crate_path": "contracts/reentrancy-guard",
       "reason": "Not deployed on testnet: the reentrancy guard is a library-style dependency and is intentionally not deployed independently."
     },
     "stable_swap_pool": {
+      "crate_path": "contracts/stable_swap_pool",
       "reason": "Not deployed on testnet: the stable-swap pool remains behind private validation and is excluded from the public testnet set."
     },
     "upgradable_contract": {
+      "crate_path": "contracts/upgradable-contract",
       "reason": "Not deployed on testnet: upgradeability is intentionally disabled for the current public deployment and will be introduced in a later phase."
     },
+    "version_interface": {
+      "crate_path": "contracts/version-interface",
+      "reason": "Not deployed on testnet: lib-only crate defining the shared contract version introspection types (issue #1046) that contracts implement, so it is never published as its own contract."
+    },
     "vesting_wallet": {
+      "crate_path": "contracts/vesting-wallet",
       "reason": "Not deployed on testnet: vesting flows are not active in the initial token release and are therefore intentionally omitted."
     },
     "yield_vault": {
+      "crate_path": "contracts/yield_vault",
       "reason": "Not deployed on testnet: the yield vault product is reserved for a future treasury expansion and is outside the current manifest."
     }
   }

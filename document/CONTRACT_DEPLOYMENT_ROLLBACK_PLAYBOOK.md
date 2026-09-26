@@ -280,6 +280,11 @@ The canonical source of truth for all active testnet contracts is [`apps/onchain
   "network": "testnet",
   "rpc_url": "https://soroban-testnet.stellar.org:443",
   "admin_address": "GDPBZZDKZJTPFERPP65ATQWH2T6OIXQESPKXSTO6YY33TA2HTUTAPJI6",
+  "crate_coverage": {
+    "total_crates": 23,
+    "deployed": 7,
+    "not_deployed": 16
+  },
   "contracts": {
     "contributor_registry": {
       "id": "CCOVDGHF3XQ5RAFY6DJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLDGXQJSB",
@@ -290,24 +295,32 @@ The canonical source of truth for all active testnet contracts is [`apps/onchain
       "wasm_hash": "6f7d6e1e68fb8f8fba6ec75919b1dcafb38f8cdcdf1d3db743fc5c0b14590988",
       "admin_address": "GDPBZZDKZJTPFERPP65ATQWH2T6OIXQESPKXSTO6YY33TA2HTUTAPJI6",
       "token_address": "CDAQQJHUVNQLSUDEXOTPT3V5GWGH5VFVGHMZRE5CCMHUTIORWWH6R3ZR"
-    },
+    }
+  },
+  "not_deployed": {
     "yield_vault": {
+      "crate_path": "contracts/yield_vault",
       "reason": "Not deployed on testnet: the yield vault product is reserved for a future treasury expansion and is outside the current manifest."
     }
   }
 }
 ```
 
-### 5.2 The 19 Canonical Contract Rules
+Manifest keys are crate directory names with dashes normalized to underscores (`contracts/idempotency-guard` becomes `idempotency_guard`), so every key maps back to a directory in `apps/onchain/contracts/`.
+
+### 5.2 The Crate Coverage Rules
 
 The manifest validator ([`apps/onchain/scripts/validate-manifest.js`](../apps/onchain/scripts/validate-manifest.js)) strictly enforces:
-1. **Exact 19 Contract Entries**: No missing and no undeclared keys.
-   - Deployed set: `contributor_registry`, `project_registry`, `crowdfund_vault`, `matching_pool`, `treasury`, `lumen_token`, `pricing_adapter`.
-   - Explicitly deferred / undeployed set: `feature_flags`, `idempotency_guard`, `liquidity_pool`, `lumenpulse_curation`, `notification_broker`, `notification_interface`, `protocol_registry`, `reentrancy_guard`, `stable_swap_pool`, `upgradable_contract`, `vesting_wallet`, `yield_vault`.
-2. **Format Validation**:
-   - Contract IDs must match Soroban address regex: `^C[0-9A-Z]{55}$`.
+1. **Total Crate Coverage**: every crate directory under `apps/onchain/contracts/` must appear in exactly one section, except `contracts/tests/` which the workspace excludes. Adding a crate without a manifest entry fails CI, so no crate can be invisible to the platform.
+   - Deployed set (7): `contributor_registry`, `project_registry`, `crowdfund_vault`, `matching_pool`, `treasury`, `lumen_token`, `pricing_adapter`.
+   - Explicitly deferred / undeployed set (16): `contract_registry`, `cross_contract_view`, `event_versioning`, `feature_flags`, `idempotency_guard`, `liquidity_pool`, `lumenpulse_curation`, `notification_broker`, `notification_interface`, `protocol_registry`, `reentrancy_guard`, `stable_swap_pool`, `upgradable_contract`, `version_interface`, `vesting_wallet`, `yield_vault`.
+2. **No Stale Keys**: entries that do not resolve to a crate directory are rejected, and a crate may not appear in both `contracts` and `not_deployed`.
+3. **Format Validation**:
+   - Contract IDs must match Soroban address regex: `^C[0-9A-Z]{55}$`, and no ID may be recorded twice.
    - WASM hashes must match 64-character hex regex: `^[A-Fa-f0-9]{64}$`.
-   - Undeployed contracts must specify a non-empty `reason` string and must not include `id` or `wasm_hash`.
+   - `*_address` fields and `init_params` addresses must match `^[CG][0-9A-Z]{55}$`.
+   - Undeployed crates must specify a `reason` of at least 20 characters and must not include `id` or `wasm_hash`. A `crate_path`, when present, must point at a real crate directory whose name matches the manifest key.
+4. **Header Counts**: `crate_coverage` must state the deployed and excluded crate counts and match the sections it summarizes.
 
 ### 5.3 Manifest Synchronization Workflow
 
@@ -659,7 +672,7 @@ flowchart TD
 | `HostError: Error(Contract, #2)` | **Unauthorized** | Ensure the transaction is signed with the registered admin keypair. |
 | `HostError: Error(Contract, #3)` | **Paused** / Circuit breaker active | Operation was rejected because the contract or scope is currently paused. |
 | `HostError: Error(Contract, #4)` | **MigrationRequired** | Contract bytecode was updated but `migrate(admin)` has not yet been invoked. |
-| `Missing contract entries` | `apps/onchain/scripts/validate-manifest.js` failure | Ensure all 19 canonical contracts are listed in `testnet-manifest.json`. |
+| `Crates are neither deployed nor explicitly excluded` | `apps/onchain/scripts/validate-manifest.js` failure | Add the new crate to `contracts` (with ID and WASM hash) or to `not_deployed` (with a reason) in `testnet-manifest.json`, then update `crate_coverage`. |
 | `Contract drift detected` | `npm run contract:drift` failure | Environment variable in backend, webapp, or mobile `.env` differs from `testnet-manifest.json`. Update client `.env` to match manifest. |
 | `Simulation error: account not found` | Deployer or smoke admin account unfunded | Run Friendbot curl command to fund the account with testnet XLM. |
 | `Expired entry / TTL error` | Storage instance TTL expired | Invoke `extend_ttl` on instance storage or trigger admin bump. |
@@ -670,7 +683,7 @@ flowchart TD
 
 Before submitting or merging any PR touching Soroban contracts, deployment scripts, or manifest configs:
 
-- [ ] All 19 contracts in `apps/onchain/testnet-manifest.json` have valid contract IDs or non-empty undeployed `reason` fields.
+- [ ] Every crate in `apps/onchain/contracts/` is either in `contracts` with a valid contract ID and WASM hash, or in `not_deployed` with a reason, and `crate_coverage` states the counts.
 - [ ] Manifest validation passes: `node apps/onchain/scripts/validate-manifest.js`.
 - [ ] Contract drift check passes: `npm run contract:drift --prefix apps/backend -- --fail-on-missing`.
 - [ ] Rust formatting check passes: `cargo fmt --all -- --check` in `apps/onchain`.

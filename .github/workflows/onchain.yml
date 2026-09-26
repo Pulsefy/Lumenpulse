@@ -6,11 +6,13 @@ on:
     branches: [ "main" ]
     paths:
       - 'apps/onchain/**'
+      - '.github/workflows/onchain.yml'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'apps/onchain/**'
       - 'apps/onchain/.ci-trigger'
+      - '.github/workflows/onchain.yml'
 
 jobs:
   onchain-checks:
@@ -29,6 +31,17 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Validate testnet manifest coverage
+      run: node scripts/validate-manifest.js
+
+    - name: Test manifest validator
+      run: node --test scripts/validate-manifest.test.js
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
@@ -45,8 +58,6 @@ jobs:
 
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
-
-  
 
     - name: Build Contracts
       run: cargo build --target wasm32-unknown-unknown --release
