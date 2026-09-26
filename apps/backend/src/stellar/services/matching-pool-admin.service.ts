@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import {
   Keypair,
-  Account,
   TransactionBuilder,
   BASE_FEE,
   Contract,
@@ -18,6 +17,7 @@ import {
   SorobanRpcClientService,
   SorobanRpcError,
 } from './soroban-rpc-client.service';
+import { SequenceManagerService } from './sequence-manager.service';
 import { config } from '../../lib/config';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { throwSorobanRpcError } from '../utils/soroban-error.mapper';
@@ -33,7 +33,10 @@ const NETWORK_PASSPHRASE = 'Test SDF Network ; September 2015';
 export class MatchingPoolAdminService {
   private readonly logger = new Logger(MatchingPoolAdminService.name);
 
-  constructor(private readonly sorobanRpc: SorobanRpcClientService) {}
+  constructor(
+    private readonly sorobanRpc: SorobanRpcClientService,
+    private readonly sequenceManager: SequenceManagerService,
+  ) {}
 
   async createRound(
     dto: CreateRoundDto,
@@ -51,29 +54,33 @@ export class MatchingPoolAdminService {
 
     try {
       const keypair = Keypair.fromSecret(config.stellar.serverSecret.reveal());
-      const account = await this.sorobanRpc.getAccount(keypair.publicKey());
 
-      const tx = new TransactionBuilder(
-        new Account(account.accountId(), account.sequenceNumber()),
-        { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE },
-      )
-        .addOperation(
-          new Contract(contractId).call(
-            'create_round',
-            nativeToScVal(dto.name, { type: 'string' }),
-            nativeToScVal(dto.matchingFunds, { type: 'i128' }),
-          ),
-        )
-        .setTimeout(30)
-        .build();
+      const result = await this.sequenceManager.withSequence(
+        keypair.publicKey(),
+        async ({ account }) => {
+          const tx = new TransactionBuilder(account, {
+            fee: BASE_FEE,
+            networkPassphrase: NETWORK_PASSPHRASE,
+          })
+            .addOperation(
+              new Contract(contractId).call(
+                'create_round',
+                nativeToScVal(dto.name, { type: 'string' }),
+                nativeToScVal(dto.matchingFunds, { type: 'i128' }),
+              ),
+            )
+            .setTimeout(30)
+            .build();
 
-      const simulation = await this.sorobanRpc.simulateTransaction(tx);
+          const simulation = await this.sorobanRpc.simulateTransaction(tx);
 
-      // Assemble and sign
-      const assembled = rpc.assembleTransaction(tx, simulation).build();
-      assembled.sign(keypair);
+          // Assemble and sign
+          const assembled = rpc.assembleTransaction(tx, simulation).build();
+          assembled.sign(keypair);
 
-      const result = await this.sorobanRpc.sendTransaction(assembled);
+          return this.sorobanRpc.sendTransaction(assembled);
+        },
+      );
 
       this.logger.log(
         { adminUserId, txHash: result.hash, roundName: dto.name },
@@ -108,34 +115,38 @@ export class MatchingPoolAdminService {
 
     try {
       const keypair = Keypair.fromSecret(config.stellar.serverSecret.reveal());
-      const account = await this.sorobanRpc.getAccount(keypair.publicKey());
 
-      const tx = new TransactionBuilder(
-        new Account(account.accountId(), account.sequenceNumber()),
-        { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE },
-      )
-        .addOperation(
-          new Contract(contractId).call(
-            'approve_project',
-            nativeToScVal(roundId, { type: 'string' }),
-            xdr.ScVal.scvAddress(
-              xdr.ScAddress.scAddressTypeAccount(
-                xdr.PublicKey.publicKeyTypeEd25519(
-                  Keypair.fromPublicKey(dto.projectAddress).rawPublicKey(),
+      const result = await this.sequenceManager.withSequence(
+        keypair.publicKey(),
+        async ({ account }) => {
+          const tx = new TransactionBuilder(account, {
+            fee: BASE_FEE,
+            networkPassphrase: NETWORK_PASSPHRASE,
+          })
+            .addOperation(
+              new Contract(contractId).call(
+                'approve_project',
+                nativeToScVal(roundId, { type: 'string' }),
+                xdr.ScVal.scvAddress(
+                  xdr.ScAddress.scAddressTypeAccount(
+                    xdr.PublicKey.publicKeyTypeEd25519(
+                      Keypair.fromPublicKey(dto.projectAddress).rawPublicKey(),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-        )
-        .setTimeout(30)
-        .build();
+            )
+            .setTimeout(30)
+            .build();
 
-      const simulation = await this.sorobanRpc.simulateTransaction(tx);
+          const simulation = await this.sorobanRpc.simulateTransaction(tx);
 
-      const assembled = rpc.assembleTransaction(tx, simulation).build();
-      assembled.sign(keypair);
+          const assembled = rpc.assembleTransaction(tx, simulation).build();
+          assembled.sign(keypair);
 
-      const result = await this.sorobanRpc.sendTransaction(assembled);
+          return this.sorobanRpc.sendTransaction(assembled);
+        },
+      );
 
       this.logger.log(
         {

@@ -16,9 +16,11 @@ import { config } from '../lib/config';
 import { BadRequestException } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import {
+  SorobanErrorCode,
   SorobanRpcError,
   SorobanRpcClientService,
 } from '../stellar/services/soroban-rpc-client.service';
+import { SequenceManagerService } from '../stellar/services/sequence-manager.service';
 import {
   VestingWalletNotConfiguredException,
   VestingWalletRpcUnavailableException,
@@ -59,7 +61,10 @@ export interface SubmittedTransaction {
 export class VestingWalletSorobanClient {
   private readonly logger = new Logger(VestingWalletSorobanClient.name);
 
-  constructor(private readonly sorobanRpc: SorobanRpcClientService) {}
+  constructor(
+    private readonly sorobanRpc: SorobanRpcClientService,
+    private readonly sequenceManager: SequenceManagerService,
+  ) {}
 
   private getContractId(): string {
     const contractId = config.stellar.contracts.contributorRegistry;
@@ -94,12 +99,6 @@ export class VestingWalletSorobanClient {
     const keypair = this.getAdminKeypair();
 
     try {
-      const sourceAccount = await this.sorobanRpc.getAccount(
-        keypair.publicKey(),
-      );
-      if (!(sourceAccount instanceof Account)) {
-        throw new Error('Failed to retrieve source account');
-      }
       const contract = new Contract(contractId);
 
       const operation = contract.call(
@@ -111,27 +110,32 @@ export class VestingWalletSorobanClient {
         nativeToScVal(BigInt(params.duration), { type: 'u64' }),
       );
 
-      const tx = new TransactionBuilder(sourceAccount, {
-        fee: BASE_INCLUSION_FEE,
-        networkPassphrase: this.getNetworkPassphrase(),
-      })
-        .addOperation(operation)
-        .setTimeout(30)
-        .build();
+      return await this.sequenceManager.withSequence(
+        keypair.publicKey(),
+        async ({ account }) => {
+          const tx = new TransactionBuilder(account, {
+            fee: BASE_INCLUSION_FEE,
+            networkPassphrase: this.getNetworkPassphrase(),
+          })
+            .addOperation(operation)
+            .setTimeout(30)
+            .build();
 
-      const simulation = await this.sorobanRpc.simulateTransaction(tx);
-      if (rpc.Api.isSimulationError(simulation)) {
-        const simError = simulation.error;
-        throw toVestingWalletException(
-          typeof simError === 'string' ? simError : String(simError),
-          params.beneficiary,
-        );
-      }
+          const simulation = await this.sorobanRpc.simulateTransaction(tx);
+          if (rpc.Api.isSimulationError(simulation)) {
+            const simError = simulation.error;
+            throw toVestingWalletException(
+              typeof simError === 'string' ? simError : String(simError),
+              params.beneficiary,
+            );
+          }
 
-      const prepared = rpc.assembleTransaction(tx, simulation).build();
-      prepared.sign(keypair);
+          const prepared = rpc.assembleTransaction(tx, simulation).build();
+          prepared.sign(keypair);
 
-      return await this.submitAndConfirm(prepared);
+          return await this.submitAndConfirm(prepared);
+        },
+      );
     } catch (error: unknown) {
       throw this.normalizeError(error);
     }
@@ -147,12 +151,6 @@ export class VestingWalletSorobanClient {
     const keypair = this.getAdminKeypair();
 
     try {
-      const sourceAccount = await this.sorobanRpc.getAccount(
-        keypair.publicKey(),
-      );
-      if (!(sourceAccount instanceof Account)) {
-        throw new Error('Failed to retrieve source account');
-      }
       const contract = new Contract(contractId);
 
       const milestoneLinkScVal = xdr.ScVal.scvVec([
@@ -171,27 +169,32 @@ export class VestingWalletSorobanClient {
         milestoneLinkScVal,
       );
 
-      const tx = new TransactionBuilder(sourceAccount, {
-        fee: BASE_INCLUSION_FEE,
-        networkPassphrase: this.getNetworkPassphrase(),
-      })
-        .addOperation(operation)
-        .setTimeout(30)
-        .build();
+      return await this.sequenceManager.withSequence(
+        keypair.publicKey(),
+        async ({ account }) => {
+          const tx = new TransactionBuilder(account, {
+            fee: BASE_INCLUSION_FEE,
+            networkPassphrase: this.getNetworkPassphrase(),
+          })
+            .addOperation(operation)
+            .setTimeout(30)
+            .build();
 
-      const simulation = await this.sorobanRpc.simulateTransaction(tx);
-      if (rpc.Api.isSimulationError(simulation)) {
-        const simError = simulation.error;
-        throw toVestingWalletException(
-          typeof simError === 'string' ? simError : String(simError),
-          params.beneficiary,
-        );
-      }
+          const simulation = await this.sorobanRpc.simulateTransaction(tx);
+          if (rpc.Api.isSimulationError(simulation)) {
+            const simError = simulation.error;
+            throw toVestingWalletException(
+              typeof simError === 'string' ? simError : String(simError),
+              params.beneficiary,
+            );
+          }
 
-      const prepared = rpc.assembleTransaction(tx, simulation).build();
-      prepared.sign(keypair);
+          const prepared = rpc.assembleTransaction(tx, simulation).build();
+          prepared.sign(keypair);
 
-      return await this.submitAndConfirm(prepared);
+          return await this.submitAndConfirm(prepared);
+        },
+      );
     } catch (error: unknown) {
       throw this.normalizeError(error);
     }
@@ -312,6 +315,14 @@ export class VestingWalletSorobanClient {
 
     if (error instanceof SorobanRpcError) {
       this.logger.error(`Soroban RPC error: ${error.message}`);
+
+      if (error.code === SorobanErrorCode.SUBMISSION_BAD_SEQUENCE) {
+        return new VestingWalletTransactionFailedException(
+          'Stellar sequence number contention persisted after retries',
+          { sorobanCode: error.code, resultCode: error.resultCode },
+        );
+      }
+
       return new VestingWalletRpcUnavailableException(error.message, {
         sorobanCode: error.code,
       });

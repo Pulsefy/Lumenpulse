@@ -9,6 +9,7 @@ import { StellarContractRotationService } from './services/stellar-contract-rota
 import { AuditModule } from '../audit/audit.module';
 import { AppConfigModule } from '../config/config.module';
 import { SorobanRpcClientService } from './services/soroban-rpc-client.service';
+import { SequenceManagerService } from './services/sequence-manager.service';
 import { HorizonClientService } from './services/horizon-client.service';
 import { MatchingPoolAdminController } from './controllers/matching-pool-admin.controller';
 import { TestnetBootstrapController } from './controllers/testnet-bootstrap.controller';
@@ -38,6 +39,7 @@ import { MatchingPoolAdminService } from './services/matching-pool-admin.service
   providers: [
     StellarService,
     SorobanRpcClientService,
+    SequenceManagerService,
     HorizonClientService,
     ContractRotationService,
     StellarContractRotationService,
@@ -47,6 +49,7 @@ import { MatchingPoolAdminService } from './services/matching-pool-admin.service
   exports: [
     StellarService,
     SorobanRpcClientService,
+    SequenceManagerService,
     HorizonClientService,
     ContractRotationService,
     StellarContractRotationService,
