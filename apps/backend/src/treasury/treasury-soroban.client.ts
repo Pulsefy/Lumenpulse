@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
-  Account,
   Address,
   Contract,
   Keypair,
@@ -16,9 +15,11 @@ import { config } from '../lib/config';
 import { BadRequestException } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import {
+  SorobanErrorCode,
   SorobanRpcError,
   SorobanRpcClientService,
 } from '../stellar/services/soroban-rpc-client.service';
+import { SequenceManagerService } from '../stellar/services/sequence-manager.service';
 import {
   TreasuryNotConfiguredException,
   TreasuryRpcUnavailableException,
@@ -72,7 +73,10 @@ export interface SubmittedTransaction {
 export class TreasurySorobanClient {
   private readonly logger = new Logger(TreasurySorobanClient.name);
 
-  constructor(private readonly sorobanRpc: SorobanRpcClientService) {}
+  constructor(
+    private readonly sorobanRpc: SorobanRpcClientService,
+    private readonly sequenceManager: SequenceManagerService,
+  ) {}
 
   /** Returns the configured treasury contract id, or throws if unusable. */
   private getContractId(): string {
@@ -114,13 +118,6 @@ export class TreasurySorobanClient {
     const keypair = this.getAdminKeypair();
 
     try {
-      const sourceAccount = await this.sorobanRpc.getAccount(
-        keypair.publicKey(),
-      );
-      if (!(sourceAccount instanceof Account)) {
-        throw new Error('Failed to retrieve source account');
-      }
-
       const contract = new Contract(contractId);
       const operation = contract.call(
         'allocate_budget',
@@ -131,27 +128,32 @@ export class TreasurySorobanClient {
         nativeToScVal(BigInt(params.duration), { type: 'u64' }),
       );
 
-      const tx = new TransactionBuilder(sourceAccount, {
-        fee: BASE_INCLUSION_FEE,
-        networkPassphrase: this.getNetworkPassphrase(),
-      })
-        .addOperation(operation)
-        .setTimeout(30)
-        .build();
+      return await this.sequenceManager.withSequence(
+        keypair.publicKey(),
+        async ({ account }) => {
+          const tx = new TransactionBuilder(account, {
+            fee: BASE_INCLUSION_FEE,
+            networkPassphrase: this.getNetworkPassphrase(),
+          })
+            .addOperation(operation)
+            .setTimeout(30)
+            .build();
 
-      const simulation = await this.sorobanRpc.simulateTransaction(tx);
-      if (rpc.Api.isSimulationError(simulation)) {
-        const errorMsg =
-          typeof simulation.error === 'string'
-            ? simulation.error
-            : String(simulation.error);
-        throw toTreasuryException(errorMsg, params.beneficiary);
-      }
+          const simulation = await this.sorobanRpc.simulateTransaction(tx);
+          if (rpc.Api.isSimulationError(simulation)) {
+            const errorMsg =
+              typeof simulation.error === 'string'
+                ? simulation.error
+                : String(simulation.error);
+            throw toTreasuryException(errorMsg, params.beneficiary);
+          }
 
-      const prepared = rpc.assembleTransaction(tx, simulation).build();
-      prepared.sign(keypair);
+          const prepared = rpc.assembleTransaction(tx, simulation).build();
+          prepared.sign(keypair);
 
-      return await this.submitAndConfirm(prepared);
+          return await this.submitAndConfirm(prepared);
+        },
+      );
     } catch (error: unknown) {
       throw this.normalizeError(error);
     }
@@ -172,13 +174,6 @@ export class TreasurySorobanClient {
     const keypair = this.getAdminKeypair();
 
     try {
-      const sourceAccount = await this.sorobanRpc.getAccount(
-        keypair.publicKey(),
-      );
-      if (!(sourceAccount instanceof Account)) {
-        throw new Error('Failed to retrieve source account');
-      }
-
       const contract = new Contract(contractId);
       const operation = contract.call(
         'rotate_beneficiary',
@@ -187,27 +182,32 @@ export class TreasurySorobanClient {
         Address.fromString(params.newBeneficiary).toScVal(),
       );
 
-      const tx = new TransactionBuilder(sourceAccount, {
-        fee: BASE_INCLUSION_FEE,
-        networkPassphrase: this.getNetworkPassphrase(),
-      })
-        .addOperation(operation)
-        .setTimeout(30)
-        .build();
+      return await this.sequenceManager.withSequence(
+        keypair.publicKey(),
+        async ({ account }) => {
+          const tx = new TransactionBuilder(account, {
+            fee: BASE_INCLUSION_FEE,
+            networkPassphrase: this.getNetworkPassphrase(),
+          })
+            .addOperation(operation)
+            .setTimeout(30)
+            .build();
 
-      const simulation = await this.sorobanRpc.simulateTransaction(tx);
-      if (rpc.Api.isSimulationError(simulation)) {
-        const errorMsg =
-          typeof simulation.error === 'string'
-            ? simulation.error
-            : String(simulation.error);
-        throw toTreasuryException(errorMsg, params.oldBeneficiary);
-      }
+          const simulation = await this.sorobanRpc.simulateTransaction(tx);
+          if (rpc.Api.isSimulationError(simulation)) {
+            const errorMsg =
+              typeof simulation.error === 'string'
+                ? simulation.error
+                : String(simulation.error);
+            throw toTreasuryException(errorMsg, params.oldBeneficiary);
+          }
 
-      const prepared = rpc.assembleTransaction(tx, simulation).build();
-      prepared.sign(keypair);
+          const prepared = rpc.assembleTransaction(tx, simulation).build();
+          prepared.sign(keypair);
 
-      return await this.submitAndConfirm(prepared);
+          return await this.submitAndConfirm(prepared);
+        },
+      );
     } catch (error: unknown) {
       throw this.normalizeError(error);
     }
@@ -333,6 +333,14 @@ export class TreasurySorobanClient {
 
     if (error instanceof SorobanRpcError) {
       this.logger.error(`Soroban RPC error: ${error.message}`);
+
+      if (error.code === SorobanErrorCode.SUBMISSION_BAD_SEQUENCE) {
+        return new TreasuryTransactionFailedException(
+          'Stellar sequence number contention persisted after retries',
+          { sorobanCode: error.code, resultCode: error.resultCode },
+        );
+      }
+
       return new TreasuryRpcUnavailableException(error.message, {
         sorobanCode: error.code,
       });
