@@ -513,3 +513,100 @@ export class ProjectApiService {
     return response.json();
   }
 }
+
+// ---------------------------------------------------------------------------
+// Export API — interfaces mirroring backend DTOs
+// ---------------------------------------------------------------------------
+
+export type ExportType = components['schemas']['CreateExportJobDto']['type'];
+export type ExportStatus = components['schemas']['ExportJobResponseDto']['status'];
+export type ExportJobResponse = components['schemas']['ExportJobResponseDto'];
+
+export class ExportApiService {
+  private static readonly BASE_URL = clientConfig.apiUrl;
+
+  private static getAuthHeaders(): Record<string, string> {
+    if (typeof document === 'undefined') return { 'Content-Type': 'application/json' };
+    const match = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith('auth-token='));
+    const token = match?.split('=')[1];
+    return {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }
+
+  /**
+   * Returns true when an auth token cookie is present.
+   * Used by the hook to skip fetching for unauthenticated visitors.
+   */
+  static isAuthenticated(): boolean {
+    if (typeof document === 'undefined') return false;
+    return document.cookie.split('; ').some((row) => row.startsWith('auth-token='));
+  }
+
+  /**
+   * POST /exports
+   * Create an async export job
+   */
+  static async createJob(type: ExportType): Promise<ExportJobResponse> {
+    const response = await fetch(`${this.BASE_URL}/exports`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ type }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as any).message || `Export job creation failed (${response.status})`);
+    }
+    return response.json();
+  }
+
+  /**
+   * GET /exports
+   * List recent export jobs for the current user
+   */
+  static async listJobs(): Promise<ExportJobResponse[]> {
+    const response = await fetch(`${this.BASE_URL}/exports`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as any).message || `Export jobs fetch failed (${response.status})`);
+    }
+    return response.json();
+  }
+
+  /**
+   * GET /exports/:id
+   * Get export job status
+   */
+  static async getJob(id: string): Promise<ExportJobResponse> {
+    const response = await fetch(`${this.BASE_URL}/exports/${id}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as any).message || `Export job fetch failed (${response.status})`);
+    }
+    return response.json();
+  }
+
+  /**
+   * GET /exports/:id/download
+   * Download the CSV for a completed export job
+   * Returns a blob for direct download without buffering in memory
+   */
+  static async downloadJob(id: string): Promise<Blob> {
+    const response = await fetch(`${this.BASE_URL}/exports/${id}/download`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as any).message || `Export download failed (${response.status})`);
+    }
+    return response.blob();
+  }
+}
