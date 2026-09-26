@@ -29,6 +29,9 @@ export function extractContractErrorCode(message: string): number | null {
 
 export function mapSorobanRpcErrorToApi(err: SorobanRpcError): SorobanApiError {
   const details: Record<string, unknown> = { sorobanCode: err.code };
+  if (err.resultCode) {
+    details.resultCode = err.resultCode;
+  }
   const contractErrorCode = extractContractErrorCode(err.message);
   if (contractErrorCode !== null) {
     details.contractErrorCode = contractErrorCode;
@@ -43,6 +46,7 @@ export function mapSorobanRpcErrorToApi(err: SorobanRpcError): SorobanApiError {
         details,
       };
     case SorobanErrorCode.SUBMISSION_FAILED:
+    case SorobanErrorCode.SUBMISSION_BAD_SEQUENCE:
       return {
         code: ErrorCode.STEL_TRANSACTION_FAILED,
         message: err.message,
