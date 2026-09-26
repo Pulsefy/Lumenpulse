@@ -13746,7 +13746,7 @@
         ],
         "summary": "Create a new matching round on-chain",
         "tags": [
-          "Admin — Matching Pool"
+          "Admin \u2014 Matching Pool"
         ]
       }
     },
@@ -13954,7 +13954,7 @@
         ],
         "summary": "Approve a project for a matching round",
         "tags": [
-          "Admin — Matching Pool"
+          "Admin \u2014 Matching Pool"
         ]
       }
     },
@@ -14717,7 +14717,7 @@
           {
             "name": "X-Webhook-Signature",
             "in": "header",
-            "description": "HMAC-SHA256 signature — format: sha256=<hex>",
+            "description": "HMAC-SHA256 signature \u2014 format: sha256=<hex>",
             "required": true,
             "schema": {
               "type": "string"
@@ -18115,7 +18115,7 @@
     },
     "/health/smoke": {
       "get": {
-        "description": "Single endpoint that confirms the backend and its testnet dependencies are ready to serve. Verifies required environment variables are present, core dependencies (database, Redis, Horizon) respond, and every configured Soroban contract ID is reachable. Returns a machine-readable report: `status` is \"pass\", \"warn\" or \"fail\", `ready` is false only when something failed, and every check carries a stable `id` so CI can assert on individual results. Safe to expose publicly — environment variables are reported by name and presence only, contract IDs are redacted, and dependency errors are replaced with fixed messages so no connection detail can leak.",
+        "description": "Single endpoint that confirms the backend and its testnet dependencies are ready to serve. Verifies required environment variables are present, core dependencies (database, Redis, Horizon) respond, and every configured Soroban contract ID is reachable. Returns a machine-readable report: `status` is \"pass\", \"warn\" or \"fail\", `ready` is false only when something failed, and every check carries a stable `id` so CI can assert on individual results. Safe to expose publicly \u2014 environment variables are reported by name and presence only, contract IDs are redacted, and dependency errors are replaced with fixed messages so no connection detail can leak.",
         "operationId": "HealthController_getDeploymentSmoke",
         "parameters": [],
         "responses": {
@@ -18167,7 +18167,7 @@
             }
           },
           "503": {
-            "description": "At least one check failed (status \"fail\") — the deployment is not ready.",
+            "description": "At least one check failed (status \"fail\") \u2014 the deployment is not ready.",
             "content": {
               "application/json": {
                 "schema": {
@@ -23860,7 +23860,7 @@
             }
           },
           "403": {
-            "description": "Forbidden – admin only",
+            "description": "Forbidden \u2013 admin only",
             "content": {
               "application/json": {
                 "schema": {
@@ -30866,7 +30866,7 @@
     },
     "/contributor-registry/register-with-sig": {
       "post": {
-        "description": "The contributor signs a SorobanAuthorizationEntry off-chain (no XLM required). The server (relayer) builds the transaction, attaches the signed entry, and submits it — paying the network fees. Obtain the current nonce first via GET /contributor-registry/nonce/:address.",
+        "description": "The contributor signs a SorobanAuthorizationEntry off-chain (no XLM required). The server (relayer) builds the transaction, attaches the signed entry, and submits it \u2014 paying the network fees. Obtain the current nonce first via GET /contributor-registry/nonce/:address.",
         "operationId": "ContributorRegistryController_registerWithSig",
         "parameters": [
           {
@@ -31391,7 +31391,7 @@
     },
     "/contributor-registry/nonce/{address}": {
       "get": {
-        "description": "Returns the current per-address nonce required when building the SorobanAuthorizationEntry for register_contributor_with_sig. Cached for 5 seconds only — always fetch immediately before signing.",
+        "description": "Returns the current per-address nonce required when building the SorobanAuthorizationEntry for register_contributor_with_sig. Cached for 5 seconds only \u2014 always fetch immediately before signing.",
         "operationId": "ContributorRegistryController_getNonce",
         "parameters": [
           {
@@ -34540,7 +34540,7 @@
             }
           },
           "403": {
-            "description": "Forbidden – admin role required",
+            "description": "Forbidden \u2013 admin role required",
             "content": {
               "application/json": {
                 "schema": {
@@ -34674,7 +34674,7 @@
     },
     "/demo-bootstrap/seed": {
       "post": {
-        "description": "Seeds demo-friendly testnet scenarios for contributor review and MVP walkthroughs. Only available when STELLAR_NETWORK=testnet and BOOTSTRAP_DEMO_DATA_ENABLED=true. Safe to repeat — pass resetBeforeSeed=true (default) to clear previous state first.",
+        "description": "Seeds demo-friendly testnet scenarios for contributor review and MVP walkthroughs. Only available when STELLAR_NETWORK=testnet and BOOTSTRAP_DEMO_DATA_ENABLED=true. Safe to repeat \u2014 pass resetBeforeSeed=true (default) to clear previous state first.",
         "operationId": "DemoBootstrapController_seed",
         "parameters": [
           {
@@ -34736,7 +34736,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized — admin JWT required",
+            "description": "Unauthorized \u2014 admin JWT required",
             "content": {
               "application/json": {
                 "schema": {
@@ -34754,7 +34754,7 @@
             }
           },
           "403": {
-            "description": "Forbidden — admin role required",
+            "description": "Forbidden \u2014 admin role required",
             "content": {
               "application/json": {
                 "schema": {
@@ -34909,7 +34909,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized — admin JWT required",
+            "description": "Unauthorized \u2014 admin JWT required",
             "content": {
               "application/json": {
                 "schema": {
@@ -34927,7 +34927,7 @@
             }
           },
           "403": {
-            "description": "Forbidden — admin role required",
+            "description": "Forbidden \u2014 admin role required",
             "content": {
               "application/json": {
                 "schema": {
@@ -35048,7 +35048,7 @@
     },
     "/demo-bootstrap/runs": {
       "get": {
-        "description": "Returns bootstrap runs newest-first with the identifier to pass to the teardown endpoint. Covers both demo seeds and Friendbot-funded testnet accounts. Resource identifiers are not included — fetch a teardown dry run to see exactly what a given run created.",
+        "description": "Returns bootstrap runs newest-first with the identifier to pass to the teardown endpoint. Covers both demo seeds and Friendbot-funded testnet accounts. Resource identifiers are not included \u2014 fetch a teardown dry run to see exactly what a given run created.",
         "operationId": "DemoBootstrapController_listRuns",
         "parameters": [
           {
@@ -35128,7 +35128,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized — admin JWT required",
+            "description": "Unauthorized \u2014 admin JWT required",
             "content": {
               "application/json": {
                 "schema": {
@@ -35146,7 +35146,7 @@
             }
           },
           "403": {
-            "description": "Forbidden — admin role required",
+            "description": "Forbidden \u2014 admin role required",
             "content": {
               "application/json": {
                 "schema": {
@@ -35213,7 +35213,7 @@
     },
     "/demo-bootstrap/runs/{runId}/teardown": {
       "post": {
-        "description": "Removes the data created by a single bootstrap run, identified by its run id. Pass { \"dryRun\": true } to list what would be removed without changing anything. Refused with 403 unless the environment is explicitly marked as testnet (STELLAR_NETWORK=testnet) or development (NODE_ENV=development|test); never permitted in production. Safe to call repeatedly — a run that is already torn down reports so.",
+        "description": "Removes the data created by a single bootstrap run, identified by its run id. Pass { \"dryRun\": true } to list what would be removed without changing anything. Refused with 403 unless the environment is explicitly marked as testnet (STELLAR_NETWORK=testnet) or development (NODE_ENV=development|test); never permitted in production. Safe to call repeatedly \u2014 a run that is already torn down reports so.",
         "operationId": "DemoBootstrapController_teardownRun",
         "parameters": [
           {
@@ -35284,7 +35284,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized — admin JWT required",
+            "description": "Unauthorized \u2014 admin JWT required",
             "content": {
               "application/json": {
                 "schema": {
@@ -35302,7 +35302,7 @@
             }
           },
           "403": {
-            "description": "Forbidden — admin role required, or the environment is not marked as testnet or development",
+            "description": "Forbidden \u2014 admin role required, or the environment is not marked as testnet or development",
             "content": {
               "application/json": {
                 "schema": {
@@ -37928,6 +37928,266 @@
         "summary": "Get the authenticated user dashboard in one request",
         "tags": [
           "dashboard"
+        ]
+      }
+    },
+    "/saved-searches": {
+      "post": {
+        "description": "Saves the provided discovery query for the authenticated user.  Set `isSubscribed: true` to enrol the search in the notification workflow so the user is alerted when new results appear.",
+        "operationId": "SavedSearchesController_create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Client-generated unique key (UUID recommended). Retrying with the same key and body replays the original response instead of repeating the write.",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSavedSearchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Saved search created successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedSearchResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "403": {
+            "description": "Saved search limit reached (max 100 per user)."
+          },
+          "404": {
+            "description": "Not found."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Create a saved search",
+        "tags": [
+          "saved-searches"
+        ]
+      },
+      "get": {
+        "description": "Returns all saved searches for the authenticated user, newest first.  Optionally filter by domain (`grants`, `projects`, or `news`).",
+        "operationId": "SavedSearchesController_findAll",
+        "parameters": [
+          {
+            "name": "domain",
+            "required": false,
+            "in": "query",
+            "description": "Filter results to a single domain.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "grants",
+                "projects",
+                "news"
+              ],
+              "example": "grants"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of saved searches.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedSearchListResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "List saved searches",
+        "tags": [
+          "saved-searches"
+        ]
+      }
+    },
+    "/saved-searches/{id}": {
+      "get": {
+        "description": "Returns a single saved search owned by the authenticated user.",
+        "operationId": "SavedSearchesController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID of the saved search",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved search details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedSearchResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "404": {
+            "description": "Saved search not found."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Get a saved search by ID",
+        "tags": [
+          "saved-searches"
+        ]
+      },
+      "patch": {
+        "description": "Partially update the name, domain, filters, or subscription status of a saved search.  Toggling `isSubscribed` from false to true triggers a subscription-confirmation notification.",
+        "operationId": "SavedSearchesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID of the saved search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Client-generated unique key (UUID recommended). Retrying with the same key and body replays the original response instead of repeating the write.",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSavedSearchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved search updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedSearchResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "404": {
+            "description": "Saved search not found."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Update a saved search",
+        "tags": [
+          "saved-searches"
+        ]
+      },
+      "delete": {
+        "description": "Permanently removes the saved search.  Any active subscription is also cancelled.",
+        "operationId": "SavedSearchesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID of the saved search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Client-generated unique key (UUID recommended). Retrying with the same key and body replays the original response instead of repeating the write.",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Saved search deleted."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "404": {
+            "description": "Saved search not found."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Delete a saved search",
+        "tags": [
+          "saved-searches"
         ]
       }
     }
@@ -41013,7 +41273,7 @@
             "type": "number",
             "minimum": 0,
             "maximum": 1,
-            "description": "Normalised severity score (0–1)",
+            "description": "Normalised severity score (0\u20131)",
             "example": 0.85
           },
           "current_value": {
@@ -41849,7 +42109,7 @@
           },
           "quorumProgress": {
             "type": "number",
-            "description": "Percentage of quorum reached (0–100)",
+            "description": "Percentage of quorum reached (0\u2013100)",
             "example": 80
           }
         },
@@ -43134,7 +43394,7 @@
           },
           "quorumProgress": {
             "type": "number",
-            "description": "Percentage of quorum reached (0–100)",
+            "description": "Percentage of quorum reached (0\u2013100)",
             "example": 0
           },
           "score": {
@@ -44655,7 +44915,7 @@
           "summary": {
             "type": "string",
             "description": "Human-readable summary of the operation",
-            "example": "Replayed 150 events for contract CA... in ledgers 1000–2000"
+            "example": "Replayed 150 events for contract CA... in ledgers 1000\u20132000"
           }
         },
         "required": [
@@ -45658,7 +45918,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Human-readable label for the bucket (e.g. \"< 1 day\", \"1–3 days\")."
+            "description": "Human-readable label for the bucket (e.g. \"< 1 day\", \"1\u20133 days\")."
           },
           "minHours": {
             "type": "number",
@@ -45862,7 +46122,7 @@
         "properties": {
           "runId": {
             "type": "string",
-            "description": "Run identifier — pass this to the teardown endpoint"
+            "description": "Run identifier \u2014 pass this to the teardown endpoint"
           },
           "kind": {
             "type": "object",
@@ -45911,7 +46171,7 @@
           "dryRun": {
             "type": "boolean",
             "default": false,
-            "description": "When true, nothing is removed — the response lists exactly what a real teardown would delete. Defaults to false."
+            "description": "When true, nothing is removed \u2014 the response lists exactly what a real teardown would delete. Defaults to false."
           }
         }
       },
@@ -45992,7 +46252,7 @@
           },
           "skipped": {
             "type": "number",
-            "description": "Resources the backend cannot remove — see per-resource reason"
+            "description": "Resources the backend cannot remove \u2014 see per-resource reason"
           }
         },
         "required": [
@@ -46685,6 +46945,146 @@
         },
         "required": [
           "message"
+        ]
+      },
+      "SavedSearchDomain": {
+        "type": "string",
+        "enum": [
+          "grants",
+          "projects",
+          "news"
+        ]
+      },
+      "CreateSavedSearchDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Human-readable name for this saved search",
+            "example": "Stellar DeFi grants \u2013 round 4",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "domain": {
+            "description": "Domain this search targets",
+            "example": "grants",
+            "$ref": "#/components/schemas/SavedSearchDomain"
+          },
+          "filters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Domain-specific filter parameters as a JSON object. These mirror the query parameters accepted by the corresponding discovery endpoint.",
+            "example": {
+              "status": "active",
+              "keyword": "DeFi"
+            }
+          },
+          "isSubscribed": {
+            "type": "boolean",
+            "description": "When true the user will receive notifications when new results match this search.",
+            "default": false
+          }
+        },
+        "required": [
+          "name",
+          "domain",
+          "filters"
+        ]
+      },
+      "UpdateSavedSearchDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "domain": {
+            "$ref": "#/components/schemas/SavedSearchDomain"
+          },
+          "filters": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "isSubscribed": {
+            "type": "boolean",
+            "description": "Toggle subscription on or off.",
+            "example": true
+          }
+        }
+      },
+      "SavedSearchResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the saved search"
+          },
+          "userId": {
+            "type": "string",
+            "description": "ID of the owning user"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable label for this saved search"
+          },
+          "domain": {
+            "$ref": "#/components/schemas/SavedSearchDomain"
+          },
+          "filters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Domain-specific filter parameters"
+          },
+          "isSubscribed": {
+            "type": "boolean",
+            "description": "Whether the user wants to receive notifications when new results match this search."
+          },
+          "lastNotifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Timestamp of the last notification dispatch for this search."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "domain",
+          "filters",
+          "isSubscribed",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "SavedSearchListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedSearchResponseDto"
+            },
+            "description": "List of saved searches"
+          },
+          "total": {
+            "type": "number",
+            "description": "Total number of saved searches for the user"
+          }
+        },
+        "required": [
+          "items",
+          "total"
         ]
       }
     }
