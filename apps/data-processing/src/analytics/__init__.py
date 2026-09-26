@@ -11,6 +11,7 @@ __all__ = [
     "CorrelationResult",
     "DataPoint",
     "NERService",
+    "EmbeddingService",
     # Attribution scorer
     "AttributionScorer",
     "AttributionTarget",
@@ -53,6 +54,11 @@ def __getattr__(name: str):
         from .ner_service import NERService
 
         return NERService
+
+    if name == "EmbeddingService":
+        from .embedding_service import EmbeddingService
+
+        return EmbeddingService
 
     if name in {
         "AttributionScorer",

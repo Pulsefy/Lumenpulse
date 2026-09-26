@@ -6119,6 +6119,195 @@
         ]
       }
     },
+    "/admin/audit-logs/export": {
+      "get": {
+        "description": "Produces a scoped extract of user-activity, audit-operation and admin blockchain-action records for an auditor, filtered by an inclusive date range and optionally by actor and record type. Returns JSON, or CSV with format=csv. Every export is itself recorded in the audit trail as an \"audit.export\" action.",
+        "operationId": "AuditController_exportAuditLogs",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "description": "Start of the range (ISO 8601, inclusive)",
+            "schema": {
+              "example": "2026-01-01T00:00:00.000Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "description": "End of the range (ISO 8601, inclusive)",
+            "schema": {
+              "example": "2026-03-31T23:59:59.999Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "actorId",
+            "required": false,
+            "in": "query",
+            "description": "Only records by this actor (user id for user activity, admin id for blockchain actions)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recordType",
+            "required": false,
+            "in": "query",
+            "description": "Only this record type; all types when omitted",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user_activity",
+                "audit_operation",
+                "admin_blockchain_action"
+              ]
+            }
+          },
+          {
+            "name": "format",
+            "required": false,
+            "in": "query",
+            "description": "Response format",
+            "schema": {
+              "default": "json",
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit extract (text/csv when format=csv)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditExportResponseDto"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditExportResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin only)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Export an audit extract (admin only)",
+        "tags": [
+          "admin-audit-logs"
+        ]
+      }
+    },
     "/users": {
       "get": {
         "operationId": "UsersController_findAll",
@@ -10358,6 +10547,84 @@
         "summary": "Disable 2FA",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/health/schedulers": {
+      "get": {
+        "description": "Each registered scheduled job reports its last start, last success, last failure, and duration. Jobs that have not succeeded within their expected interval are marked stale and cause HTTP 503.",
+        "operationId": "SchedulerHealthController_getSchedulerHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "All scheduled jobs succeeded within their expected intervals.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "One or more scheduled jobs have not succeeded within their expected interval.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reports last run times, outcomes, durations, and staleness of scheduled jobs",
+        "tags": [
+          "health"
         ]
       }
     },
@@ -16689,6 +16956,216 @@
         ]
       }
     },
+    "/notifications/drift-alerts": {
+      "post": {
+        "description": "Accepts model/metadata drift alerts raised by the data-processing alert engine and stores them as backend notifications. Requires HMAC authentication via the x-drift-alert-signature and x-drift-alert-timestamp headers, signed with DRIFT_ALERT_INGEST_SECRET.",
+        "operationId": "DriftAlertIngestionController_ingest",
+        "parameters": [
+          {
+            "name": "x-drift-alert-id",
+            "in": "header",
+            "description": "UUID identifying the alert (dedup key from the alert engine)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-drift-alert-timestamp",
+            "in": "header",
+            "description": "Epoch milliseconds when the request was signed",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-drift-alert-signature",
+            "in": "header",
+            "description": "Hex HMAC-SHA256 signature of \"<timestamp>.<raw body>\" computed with DRIFT_ALERT_INGEST_SECRET",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Client-generated unique key (UUID recommended). Retrying with the same key and body replays the original response instead of repeating the write.",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriftAlertRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Alert accepted and stored as notification(s)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriftAlertResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing/invalid signature, or timestamp outside tolerance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A request with the same Idempotency-Key is still in progress, or the resource is in a conflicting state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Idempotency-Key was reused with a different request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "webhook-signature": []
+          }
+        ],
+        "summary": "Ingest a drift alert from the data-processing service",
+        "tags": [
+          "notification-fanout"
+        ]
+      }
+    },
     "/notification-devices": {
       "post": {
         "operationId": "PushTokenController_register",
@@ -17709,84 +18186,6 @@
           }
         },
         "summary": "Deployment smoke check for CI and Vercel",
-        "tags": [
-          "health"
-        ]
-      }
-    },
-    "/health/schedulers": {
-      "get": {
-        "description": "Each registered scheduled job reports its last start, last success, last failure, and duration. Jobs that have not succeeded within their expected interval are marked stale and cause HTTP 503.",
-        "operationId": "SchedulerHealthController_getSchedulerHealth",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "All scheduled jobs succeeded within their expected intervals.",
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "One or more scheduled jobs have not succeeded within their expected interval.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Reports last run times, outcomes, durations, and staleness of scheduled jobs",
         "tags": [
           "health"
         ]
@@ -23966,6 +24365,73 @@
         ]
       }
     },
+    "/analytics/chart-meta": {
+      "get": {
+        "description": "Returns series, axis and time-range labels for the data served by /analytics/chart-data.",
+        "operationId": "AnalyticsController_getChartMeta",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Chart series metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChartMetaDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Describe the chart series",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
     "/analytics/chart-data": {
       "get": {
         "description": "Returns sentiment data bucketed by hour or day for time-series charts (e.g., Recharts).",
@@ -24094,7 +24560,7 @@
     },
     "/telegram-bot/broadcast": {
       "post": {
-        "description": "Broadcasts a price, news, or security alert to all active chats subscribed to that category.",
+        "description": "Broadcasts a price, news, or security alert to all active chats subscribed to that category. Requires admin role.",
         "operationId": "TelegramBotController_broadcast",
         "parameters": [
           {
@@ -24148,6 +24614,42 @@
           },
           "400": {
             "description": "Malformed request or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin only)",
             "content": {
               "application/json": {
                 "schema": {
@@ -24237,7 +24739,12 @@
             }
           }
         },
-        "summary": "Broadcast alert to Telegram subscribers",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Broadcast alert to Telegram subscribers (admin only)",
         "tags": [
           "telegram-bot"
         ]
@@ -25538,7 +26045,7 @@
         ]
       },
       "post": {
-        "description": "Creates a new feature flag or modifies the active state of an existing one.",
+        "description": "Creates a new feature flag or modifies the active state of an existing one. Requires admin role.",
         "operationId": "FeatureFlagsController_upsert",
         "parameters": [
           {
@@ -25601,6 +26108,42 @@
           },
           "400": {
             "description": "Malformed request or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin only)",
             "content": {
               "application/json": {
                 "schema": {
@@ -25690,7 +26233,12 @@
             }
           }
         },
-        "summary": "Create or update feature flag configuration",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Create or update feature flag configuration (admin only)",
         "tags": [
           "feature-flags"
         ]
@@ -26044,7 +26592,7 @@
         ]
       },
       "delete": {
-        "description": "Removes a feature flag from the system configuration.",
+        "description": "Removes a feature flag from the system configuration. Requires admin role.",
         "operationId": "FeatureFlagsController_remove",
         "parameters": [
           {
@@ -26080,6 +26628,42 @@
           },
           "400": {
             "description": "Malformed request or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin only)",
             "content": {
               "application/json": {
                 "schema": {
@@ -26187,7 +26771,12 @@
             }
           }
         },
-        "summary": "Delete feature flag",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Delete feature flag (admin only)",
         "tags": [
           "feature-flags"
         ]
@@ -37233,6 +37822,114 @@
           "price-alerts"
         ]
       }
+    },
+    "/dashboard": {
+      "get": {
+        "description": "Loads portfolio, watchlist, signals, and latest news concurrently. Each section degrades independently when its backing service is unavailable. Responses are cached per user for 15 seconds.",
+        "operationId": "DashboardController_getDashboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Aggregated dashboard payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Get the authenticated user dashboard in one request",
+        "tags": [
+          "dashboard"
+        ]
+      }
     }
   },
   "info": {
@@ -38489,6 +39186,125 @@
           "targetId",
           "targetType",
           "decisionType"
+        ]
+      },
+      "AuditExportFiltersDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actorId": {
+            "type": "string",
+            "nullable": true
+          },
+          "recordTypes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "user_activity",
+                "audit_operation",
+                "admin_blockchain_action"
+              ]
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "actorId",
+          "recordTypes"
+        ]
+      },
+      "AuditExportRecordDto": {
+        "type": "object",
+        "properties": {
+          "recordType": {
+            "enum": [
+              "user_activity",
+              "audit_operation",
+              "admin_blockchain_action"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actorId": {
+            "type": "string",
+            "nullable": true,
+            "description": "User or admin who performed the action"
+          },
+          "action": {
+            "type": "string",
+            "description": "Action name, or \"METHOD /path\" for blockchain actions",
+            "example": "login"
+          },
+          "ipAddress": {
+            "type": "string",
+            "nullable": true,
+            "example": "127.0.0.1"
+          },
+          "details": {
+            "type": "object",
+            "nullable": true,
+            "description": "Type-specific fields (request metadata, tx hash, ...)",
+            "additionalProperties": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "recordType",
+          "id",
+          "actorId",
+          "action",
+          "ipAddress",
+          "details",
+          "createdAt"
+        ]
+      },
+      "AuditExportResponseDto": {
+        "type": "object",
+        "properties": {
+          "filters": {
+            "$ref": "#/components/schemas/AuditExportFiltersDto"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "count": {
+            "type": "number",
+            "description": "Number of records in this extract"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True when more records matched than the export row limit; narrow the range and export again"
+          },
+          "records": {
+            "description": "Matching records, oldest first",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditExportRecordDto"
+            }
+          }
+        },
+        "required": [
+          "filters",
+          "generatedAt",
+          "count",
+          "truncated",
+          "records"
         ]
       },
       "ProfileResponseDto": {
@@ -40605,6 +41421,7 @@
           "type": {
             "enum": [
               "anomaly",
+              "drift",
               "sentiment_spike",
               "system",
               "project",
@@ -40774,6 +41591,118 @@
           "reason",
           "metadata",
           "createdAt"
+        ]
+      },
+      "DriftAlertRequestDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "anomaly",
+              "drift",
+              "sentiment_spike",
+              "system",
+              "project",
+              "contribution",
+              "milestone",
+              "governance",
+              "token",
+              "pool",
+              "price",
+              "module",
+              "admin",
+              "reputation"
+            ],
+            "type": "string",
+            "description": "Notification type for the drift alert",
+            "example": "drift"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Notification title"
+          },
+          "message": {
+            "type": "string",
+            "description": "Notification message body"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string",
+            "description": "Priority/severity of the notification (backend priority model: low | medium | high | critical)",
+            "example": "high"
+          },
+          "eventCategory": {
+            "enum": [
+              "project",
+              "contribution",
+              "milestone",
+              "governance",
+              "token",
+              "pool",
+              "liquidity",
+              "price",
+              "module",
+              "admin",
+              "reputation",
+              "system"
+            ],
+            "type": "string",
+            "description": "Event category for preference matching",
+            "example": "system"
+          },
+          "alertId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Idempotency identifier for this alert (dedup key produced by the alert suppression engine). Repeat deliveries with the same alertId are acknowledged but not re-created."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Metadata context for the alert (drift findings, run id, ...)"
+          },
+          "targetUserIds": {
+            "description": "Optional specific user IDs to target. If omitted the notification is created as a broadcast (visible to all users).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "message",
+          "severity"
+        ]
+      },
+      "DriftAlertResponseDto": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "boolean",
+            "description": "Whether a notification was created"
+          },
+          "notificationIds": {
+            "description": "IDs of notifications created (empty when deduplicated)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "duplicate": {
+            "type": "boolean",
+            "description": "Whether this delivery was a duplicate of a previously accepted alert"
+          }
+        },
+        "required": [
+          "created",
+          "notificationIds",
+          "duplicate"
         ]
       },
       "RegisterPushTokenDto": {
@@ -41586,6 +42515,11 @@
             "type": "object",
             "description": "Serialised event payload"
           },
+          "correlationId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Correlation ID carrying end-to-end trace across hops"
+          },
           "status": {
             "enum": [
               "pending",
@@ -41625,6 +42559,7 @@
           "id",
           "eventType",
           "payload",
+          "correlationId",
           "status",
           "attempts",
           "lastError",
@@ -41752,6 +42687,105 @@
           "userId",
           "generatedAt",
           "signals"
+        ]
+      },
+      "ChartAxisMetaDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable identifier that series reference via `axisId`."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable axis title."
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ]
+      },
+      "ChartSeriesMetaDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Property of ChartDataPointDto that holds this series' values."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable series name for legends, tooltips and table headers."
+          },
+          "axisId": {
+            "type": "string",
+            "description": "Id of the y-axis this series is plotted against."
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "axisId"
+        ]
+      },
+      "ChartRangeOptionDto": {
+        "type": "object",
+        "properties": {
+          "range": {
+            "enum": [
+              "7d",
+              "30d"
+            ],
+            "type": "string"
+          },
+          "interval": {
+            "enum": [
+              "1h",
+              "1d"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label for the time-range selector."
+          }
+        },
+        "required": [
+          "range",
+          "interval",
+          "label"
+        ]
+      },
+      "ChartMetaDto": {
+        "type": "object",
+        "properties": {
+          "xAxis": {
+            "$ref": "#/components/schemas/ChartAxisMetaDto"
+          },
+          "yAxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartAxisMetaDto"
+            }
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartSeriesMetaDto"
+            }
+          },
+          "ranges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartRangeOptionDto"
+            }
+          }
+        },
+        "required": [
+          "xAxis",
+          "yAxes",
+          "series",
+          "ranges"
         ]
       },
       "ChartDataPointDto": {
@@ -45621,12 +46655,18 @@
             "type": "string",
             "description": "Correlation id for this request, also sent as the `X-Request-Id` response header.",
             "example": "4b7c7a8e-3f0e-4c7a-9d0b-2a1f7e2c9b11"
+          },
+          "correlationId": {
+            "type": "string",
+            "description": "Correlation id for this request, also sent as the `X-Correlation-ID` response header. Currently mirrors `requestId`.",
+            "example": "4b7c7a8e-3f0e-4c7a-9d0b-2a1f7e2c9b11"
           }
         },
         "required": [
           "code",
           "message",
-          "requestId"
+          "requestId",
+          "correlationId"
         ]
       },
       "ErrorDetailDto": {

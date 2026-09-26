@@ -9,6 +9,7 @@ import WatchlistPanel from "@/components/watchlist-panel";
 import ContributionInsightsWidget from "@/components/contribution-insights-widget";
 import PortfolioOverviewCard from "@/components/portfolio-overview-card";
 import MarketInsightsCard from "@/components/market-insights-card";
+import AnalyticsChartsSection from "@/components/analytics-charts-section";
 
 import { useStellarAccount } from "@/hooks/useStellarAccount";
 import { useStellarWallet } from "@/app/providers";
@@ -303,27 +304,6 @@ export default function DashboardPage() {
                   isFresh={portfolioIsFresh}
                   lastUpdatedLabel={portfolioLastUpdatedLabel}
                   refresh={refreshPortfolio}
-                />
-              </div>
-
-              {/* Market Signals Panel — backed by the signals API */}
-              <div className="bg-gray-900/50 backdrop-blur-sm p-6 rounded-xl border border-white/10 shadow-xl col-span-1 md:col-span-2">
-                <SignalsPanel
-                  data={signalsData}
-                  isLoading={isSignalsLoading}
-                  error={signalsError}
-                  isFresh={signalsIsFresh}
-                  ageLabel={signalsAgeLabel}
-                  refresh={refreshSignals}
-                  isAuthenticated={signalsAuthenticated}
-                  assets={portfolioAssetCodes}
-                  onAssetSelect={(asset) =>
-                    setSelectedAsset({
-                      code: asset.code,
-                      issuer: asset.issuer,
-                      balance: "0",
-                    })
-                  }
                 />
               </div>
             </div>

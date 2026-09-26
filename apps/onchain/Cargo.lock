@@ -281,7 +281,7 @@ checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
 name = "contract_registry"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "soroban-sdk",
 ]
@@ -653,6 +653,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
+name = "event-versioning"
+version = "0.0.0"
+
+[[package]]
 name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1006,6 +1010,7 @@ dependencies = [
 name = "lumenpulse-community-curation"
 version = "0.1.0"
 dependencies = [
+ "event-versioning",
  "soroban-sdk",
 ]
 
@@ -1924,6 +1929,7 @@ dependencies = [
 name = "treasury"
 version = "0.1.0"
 dependencies = [
+ "event-versioning",
  "idempotency-guard",
  "proptest",
  "reentrancy-guard",

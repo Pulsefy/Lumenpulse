@@ -386,11 +386,10 @@ It uses Expo and React Native.
 
 ## 8.1 CI checks
 
-The repository has mobile workflows under:
+The repository has a mobile workflow under:
 
 ```text
 .github/workflows/mobile.yml
-.github/workflows/mobile-ci.yml
 ```
 
 The primary mobile workflow runs:

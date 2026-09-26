@@ -675,6 +675,7 @@ export default function ProjectDetailScreen() {
             style={[styles.contributeButton, { backgroundColor: colors.accent }]}
             onPress={() => setShowContributeModal(true)}
             activeOpacity={0.8}
+            testID="project-contribute-button"
           >
             <Ionicons name="wallet-outline" size={20} color="#ffffff" style={{ marginRight: 8 }} />
             <Text style={styles.contributeButtonText}>Contribute</Text>

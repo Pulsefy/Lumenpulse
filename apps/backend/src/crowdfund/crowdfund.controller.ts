@@ -15,9 +15,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
 import { CrowdfundService } from './crowdfund.service';
-import { getCrowdfundReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 import {
   BootstrapDemoDataResponseDto,
   ContributeDto,
@@ -33,7 +32,7 @@ import { config } from '../lib/config';
 
 @ApiTags('crowdfund')
 @Controller('crowdfund')
-@Throttle(getCrowdfundReadThrottleOverride())
+@RateLimitPolicy('crowdfundRead')
 export class CrowdfundController {
   constructor(private readonly svc: CrowdfundService) {}
 

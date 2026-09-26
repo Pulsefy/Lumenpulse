@@ -1,8 +1,12 @@
 import os
 import time
+import logging
+
 import requests
+
 from src.utils.http_client import RobustHTTPClient
 
+logger = logging.getLogger(__name__)
 
 class AlertNotifier:
     def __init__(self):
@@ -88,6 +92,19 @@ class AlertNotifier:
         self._send_telegram_text("\n".join(lines))
         self._send_webhooks(payload)
 
+        # Route the drift alert into the backend notification system (#1447).
+        self._notify_backend(
+            alert_type="feature_drift",
+            title=f"Feature drift detected: {payload['feature_set']}",
+            message="\n".join(lines),
+            severity=(
+                "critical"
+                if payload.get("schema_mismatch")
+                else "warning"
+            ),
+            payload=payload,
+        )
+
     def _send_telegram(self, payload):
         text = (
             "🚨 High-Priority Insight\n"
@@ -123,6 +140,35 @@ class AlertNotifier:
     def _send_webhooks(self, payload):
         for url in self.webhook_urls:
             self._post_with_retry(url, payload)
+
+    def _notify_backend(self, alert_type, title, message, severity, payload):
+        """Deliver an alert to the backend notification service (#1447).
+
+        Uses the shared drift-alert dispatcher so suppression/dedup rules
+        apply and delivery failures are retried and spooled, never silently
+        dropped. Failures are logged; they never break the alerting path.
+        """
+        try:
+            from src.notifications.drift_alert_dispatcher import dispatch_drift_alert
+
+            delivered = dispatch_drift_alert(
+                alert_type=alert_type,
+                title=title,
+                message=message,
+                severity=severity,
+                payload=payload,
+            )
+            if not delivered:
+                logger.warning(
+                    "Backend notification not delivered for %s alert "
+                    "(suppressed or spooled)",
+                    alert_type,
+                )
+        except Exception:
+            logger.exception(
+                "Backend notification dispatch failed for %s alert",
+                alert_type,
+            )
 
     def _post_with_retry(self, url, payload):
         for attempt in range(self.max_retries):

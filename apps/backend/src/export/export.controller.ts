@@ -25,6 +25,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles, UserRole } from '../auth/decorators/auth.decorators';
 import { CreateExportJobDto, ExportJobResponseDto } from './dto/export-job.dto';
 import { ExportStatus, ExportType } from './entities/export-job.entity';
+import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 
 const ANALYTICS_TYPES = new Set<ExportType>([
   ExportType.ONCHAIN_ANALYTICS,
@@ -40,6 +41,7 @@ export class ExportController {
 
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
+  @RateLimitPolicy('exportJob')
   @ApiOperation({ summary: 'Create an async export job' })
   @ApiResponse({ status: 202, type: ExportJobResponseDto })
   @ApiResponse({
@@ -68,6 +70,7 @@ export class ExportController {
 
   @Post('admin/analytics')
   @HttpCode(HttpStatus.ACCEPTED)
+  @RateLimitPolicy('exportJob')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({
@@ -128,6 +131,7 @@ export class ExportController {
   }
 
   @Get(':id/download')
+  @RateLimitPolicy('exportJob')
   @ApiOperation({ summary: 'Download the CSV for a completed export job' })
   @ApiResponse({ status: 200, description: 'CSV file download' })
   async downloadJob(

@@ -54,5 +54,13 @@ export class ErrorResponseDto implements ErrorResponse {
       'Correlation id for this request, also sent as the `X-Request-Id` response header.',
     example: '4b7c7a8e-3f0e-4c7a-9d0b-2a1f7e2c9b11',
   })
+  requestId: string;
+
+  @ApiProperty({
+    description:
+      'Correlation id for this request, also sent as the `X-Correlation-ID` response header. ' +
+      'Currently mirrors `requestId`.',
+    example: '4b7c7a8e-3f0e-4c7a-9d0b-2a1f7e2c9b11',
+  })
   correlationId: string;
 }

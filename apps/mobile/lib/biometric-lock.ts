@@ -1,5 +1,5 @@
 import * as LocalAuthentication from 'expo-local-authentication';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from './secure-storage';
 import { Platform } from 'react-native';
 
 const BIOMETRIC_LOCK_ENABLED_KEY = 'biometric_lock_enabled';

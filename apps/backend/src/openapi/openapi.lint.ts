@@ -25,6 +25,7 @@ export const GUARD_SECURITY_SCHEMES: Record<string, string> = {
   ContractAdminTrustedCallerGuard: API_KEY_SECURITY_SCHEME,
   WebhookVerificationGuard: WEBHOOK_SIGNATURE_SECURITY_SCHEME,
   SorobanEventIngestionGuard: WEBHOOK_SIGNATURE_SECURITY_SCHEME,
+  DriftAlertIngestionGuard: WEBHOOK_SIGNATURE_SECURITY_SCHEME,
 };
 
 /** Guards that gate a route without asking the client for credentials. */

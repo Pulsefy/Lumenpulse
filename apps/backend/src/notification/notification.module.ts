@@ -10,10 +10,12 @@ import { NotificationService } from './notification.service';
 import { NotificationPreferenceService } from './notification-preference.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { NotificationFanoutService } from './notification-fanout.service';
+import { DriftAlertIngestionService } from './drift-alert-ingestion.service';
 import { PushTokenService } from './push-token.service';
 import { PushTokenController } from './push-token.controller';
 import { NotificationPreferenceController } from './notification-preference.controller';
 import { NotificationFanoutController } from './notification-fanout.controller';
+import { DriftAlertIngestionController } from './drift-alert-ingestion.controller';
 import { ProfilingModule } from '../common/profiling/profiling.module';
 import { MetricsModule } from '../metrics/metrics.module';
 
@@ -35,6 +37,7 @@ import { MetricsModule } from '../metrics/metrics.module';
     NotificationPreferenceService,
     NotificationDeliveryService,
     NotificationFanoutService,
+    DriftAlertIngestionService,
     PushTokenService,
   ],
   exports: [
@@ -47,6 +50,7 @@ import { MetricsModule } from '../metrics/metrics.module';
   controllers: [
     NotificationPreferenceController,
     NotificationFanoutController,
+    DriftAlertIngestionController,
     PushTokenController,
   ],
 })
