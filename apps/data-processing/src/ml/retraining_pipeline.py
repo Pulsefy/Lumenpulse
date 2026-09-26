@@ -21,6 +21,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
+from src.ml import model_registry as _model_registry
 from src.ml.model_registry import (
     save_model,
     promote_model,
@@ -31,6 +32,17 @@ from src.ml.price_predictor import PricePredictor
 from src.ml.feature_schema import current_feature_schema, schema_metadata
 from src.ml.feature_drift_detector import compute_distribution_baseline
 from src.ml.sentiment_evaluation import classification_metrics, seed_sentiment_labels
+from src.ml.training_data_snapshot import (
+    get_retention_policy,
+    load_snapshot,
+    write_snapshot,
+)
+from src.ml.model_card import (
+    TrainingDataInfo,
+    EvaluationMetrics,
+    FeatureSchema,
+    create_model_card,
+)
 from src.utils.logger import setup_logger
 from src.utils.metrics import JOBS_RUN_TOTAL, MODEL_RETRAINING_TOTAL, MODEL_RETRAINING_DURATION
 
@@ -120,36 +132,76 @@ def _fetch_training_data(
     db_session=None,
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
-    seed: Optional[int] = None
-) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    seed: Optional[int] = None,
+    snapshot_ref: Optional[Dict[str, Any]] = None,
+) -> Tuple[pd.DataFrame, Dict[str, Any], Dict[str, Any]]:
     """
-    Fetch recent feature data for the price predictor.
+    Fetch (or reload) feature data for the price predictor.
 
-    In production this queries the feature store; falls back to a
-    synthetic dataset so the pipeline never hard-fails in CI/dev.
+    When ``snapshot_ref`` is provided (typically from a recorded training
+    manifest), the immutable snapshot is loaded and live tables are skipped.
+    Otherwise live/synthetic data is fetched and immediately frozen via
+    :func:`write_snapshot` so the run records an immutable dataset reference.
+
+    Returns:
+        (dataframe, query_bounds, snapshot_ref)
     """
+    if snapshot_ref:
+        sid = snapshot_ref.get("snapshot_id") if isinstance(snapshot_ref, dict) else None
+        if not sid and isinstance(snapshot_ref, str):
+            sid = snapshot_ref
+        if not sid:
+            raise ValueError("snapshot_ref must include snapshot_id")
+        df, manifest = load_snapshot(snapshot_ref if isinstance(snapshot_ref, dict) else sid)
+        query_bounds = dict(manifest.get("data_query_bounds") or {})
+        if start_time is not None:
+            query_bounds.setdefault("start_time", start_time.isoformat())
+        if end_time is not None:
+            query_bounds.setdefault("end_time", end_time.isoformat())
+        ref = dict(manifest)
+        ref.setdefault("snapshot_id", sid)
+        logger.info(
+            "Loaded immutable training snapshot %s (%d rows) — skipping live query",
+            sid,
+            len(df),
+        )
+        return df, query_bounds, ref
+
     if start_time is None:
         end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(days=30)
 
     query_bounds = {
         "start_time": start_time.isoformat(),
-        "end_time": end_time.isoformat() if end_time else None
+        "end_time": end_time.isoformat() if end_time else None,
     }
 
+    source = "synthetic"
     if db_session is not None:
         try:
             from src.ml.feature_store import FeatureStore
             store = FeatureStore(db_session)
-            df = store.get_features_for_asset("XLM", window=None, start_time=start_time, end_time=end_time)
+            df = store.get_features_for_asset(
+                "XLM", window=None, start_time=start_time, end_time=end_time
+            )
             if not df.empty and len(df) >= 20:
                 # Create a simple target: next-period sentiment shift
+                df = df.copy()
                 df["target"] = df["sentiment_score"].shift(-1)
                 df.dropna(inplace=True)
-                logger.info(f"Fetched {len(df)} rows from feature store for retraining")
-                return df, query_bounds
+                logger.info(
+                    "Fetched %d rows from feature store for retraining", len(df)
+                )
+                source = "feature_store"
+                snapshot = write_snapshot(
+                    df,
+                    source=source,
+                    query_bounds=query_bounds,
+                    seed=seed,
+                )
+                return df, query_bounds, snapshot
         except Exception as exc:
-            logger.warning(f"Feature store unavailable, using synthetic data: {exc}")
+            logger.warning("Feature store unavailable, using synthetic data: %s", exc)
 
     # Synthetic fallback — keeps the pipeline runnable without a live DB
     import numpy as np
@@ -162,15 +214,22 @@ def _fetch_training_data(
         "volatility": rng.uniform(0, 0.5, n),
         "target": rng.uniform(-1, 1, n),
     })
-    logger.info(f"Using synthetic training data (seed={synth_seed})")
-    return df, query_bounds
+    logger.info("Using synthetic training data (seed=%s)", synth_seed)
+    snapshot = write_snapshot(
+        df,
+        source=source,
+        query_bounds=query_bounds,
+        seed=synth_seed,
+    )
+    return df, query_bounds, snapshot
 
 
 def _build_price_predictor(
     db_session=None,
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
-    seed: Optional[int] = None
+    seed: Optional[int] = None,
+    snapshot_ref: Optional[Dict[str, Any]] = None,
 ) -> Tuple[
     PricePredictor,
     Dict[str, Any],
@@ -188,7 +247,9 @@ def _build_price_predictor(
     per-feature training distribution baseline used later for train-vs-serve
     drift detection (#1239).
     """
-    df, query_bounds = _fetch_training_data(db_session, start_time, end_time, seed)
+    df, query_bounds, snapshot = _fetch_training_data(
+        db_session, start_time, end_time, seed, snapshot_ref=snapshot_ref
+    )
     predictor = PricePredictor(model_name="linear_regression")
     training_set, evaluation_set = train_test_split(
         df, test_size=0.2, random_state=42
@@ -221,6 +282,19 @@ def _build_price_predictor(
         "data_query_bounds": query_bounds,
         "row_count": len(df),
         "library_versions": library_versions,
+        # Immutable dataset pointer (Issue #1449)
+        "snapshot_ref": {
+            "snapshot_id": snapshot.get("snapshot_id"),
+            "content_hash": snapshot.get("content_hash"),
+            "uri": snapshot.get("uri"),
+            "source": snapshot.get("source"),
+            "row_count": snapshot.get("row_count"),
+            "retention_days": snapshot.get("retention_days"),
+            "cost_estimate": snapshot.get("cost_estimate"),
+        },
+        "snapshot_id": snapshot.get("snapshot_id"),
+        "snapshot_hash": snapshot.get("content_hash"),
+        "training_data_retention": get_retention_policy(),
     }
     return (
         predictor,
@@ -276,6 +350,7 @@ def run_retraining(
         start_time = None
         end_time = None
         
+        snapshot_ref = None
         if manifest:
             run_seed = manifest.get("seed", run_seed)
             bounds = manifest.get("data_query_bounds", {})
@@ -283,6 +358,12 @@ def run_retraining(
                 start_time = datetime.fromisoformat(bounds["start_time"])
             if "end_time" in bounds and bounds["end_time"]:
                 end_time = datetime.fromisoformat(bounds["end_time"])
+            # Prefer the immutable snapshot recorded on the original run.
+            snapshot_ref = manifest.get("snapshot_ref") or (
+                {"snapshot_id": manifest["snapshot_id"]}
+                if manifest.get("snapshot_id")
+                else None
+            )
         else:
             if run_seed is None:
                 run_seed = int(datetime.utcnow().timestamp()) % 10_000
@@ -330,7 +411,11 @@ def run_retraining(
                 price_metadata,
                 price_evaluation_set,
             ) = _build_price_predictor(
-                db_session, start_time=start_time, end_time=end_time, seed=run_seed
+                db_session,
+                start_time=start_time,
+                end_time=end_time,
+                seed=run_seed,
+                snapshot_ref=snapshot_ref,
             )
 
         passes_price_gate = force or price_metrics.get("r2", -999) >= _MIN_PRICE_R2
@@ -338,6 +423,58 @@ def run_retraining(
         if passes_price_gate:
             p_version = save_model(
                 "price_predictor", price_model, metadata=price_metadata
+            )
+            # Persist model card including the immutable snapshot reference (#1449).
+            snap = price_metadata.get("snapshot_ref") or {}
+            bounds = price_metadata.get("data_query_bounds") or {}
+            card = create_model_card(
+                version=p_version,
+                model_type="price_predictor",
+                training_data=TrainingDataInfo(
+                    data_start_date=bounds.get("start_time"),
+                    data_end_date=bounds.get("end_time"),
+                    row_count=price_metadata.get("row_count"),
+                    source=snap.get("source"),
+                    description=(
+                        f"Immutable training snapshot {snap.get('snapshot_id')}"
+                    ),
+                    features=price_metadata.get("feature_names"),
+                    snapshot_id=snap.get("snapshot_id"),
+                    snapshot_hash=snap.get("content_hash"),
+                    snapshot_uri=snap.get("uri"),
+                ),
+                metrics=EvaluationMetrics(
+                    r2_score=price_metrics.get("r2"),
+                    additional_metrics={
+                        k: float(v)
+                        for k, v in price_metrics.items()
+                        if isinstance(v, (int, float))
+                    },
+                ),
+                feature_schema=FeatureSchema(
+                    version=str(price_metadata.get("schema_version", "1.0")),
+                    features=[
+                        {"name": n, "type": "float"}
+                        for n in (price_metadata.get("feature_names") or [])
+                    ],
+                    target="target",
+                ),
+                training_script="src/ml/retraining_pipeline.py",
+                custom={
+                    "snapshot_ref": snap,
+                    "training_data_retention": price_metadata.get(
+                        "training_data_retention"
+                    ),
+                    "seed": price_metadata.get("seed"),
+                },
+            )
+            card_path = _model_registry._MODELS_ROOT / "price_predictor" / f"{p_version}.card.json"
+            card_path.parent.mkdir(parents=True, exist_ok=True)
+            card.save(card_path)
+            logger.info(
+                "Model card saved with snapshot_id=%s path=%s",
+                snap.get("snapshot_id"),
+                card_path,
             )
             promoted = promote_model(
                 "price_predictor",
