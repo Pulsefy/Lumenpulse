@@ -1,5 +1,5 @@
 import * as Device from 'expo-device';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from './secure-storage';
 import { apiClient, ApiResponse } from './api-client';
 
 const DEVICE_ID_KEY = 'lumenpulse.push.device-id';

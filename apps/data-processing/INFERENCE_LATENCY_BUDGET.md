@@ -29,7 +29,13 @@ each request and exports the result to Prometheus:
 | `POST /correlation/lag-analysis` | 1000 | `CORRELATION_LAG_LATENCY_BUDGET_MS` |
 | `GET /analytics/forecast` | 2000 | `FORECAST_LATENCY_BUDGET_MS` |
 | `POST /retrain` | 30000 | `RETRAIN_LATENCY_BUDGET_MS` |
+| `GET /search/similar` | 300 | `SEARCH_SIMILAR_LATENCY_BUDGET_MS` |
 | any other endpoint | 1000 | `LATENCY_BUDGET_MS` (global fallback) |
+
+The `/search/similar` budget (issue #1455) excludes the fixed cost of loading
+the vendored spaCy embedding pipeline (done once at first use) and covers the
+embedding of the query plus the cosine ranking pass over stored 300-dim
+article vectors.
 
 Budgets are resolved in `src/config/latency_budget.py`:
 

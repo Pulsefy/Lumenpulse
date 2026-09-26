@@ -411,7 +411,7 @@ The pull request template (`/.github/pull_request_template.md`) already lists a 
 |------------------------------|-------------------------------------|:-----------------------:|---------------------------------------------------------------------------------------------------------------------|
 | `backend.yml`                | `apps/backend/**` + `.ci-trigger`   |           YES           | Lint (`eslint`) · Type-check (conditional script) · Tests (`jest`) · Build (`nest build`)                           |
 | **Webapp** (new workflow)    | `apps/webapp/**` (tracked below)    |           YES           | `next lint` · Vitest (`npm run test`) · `next build`                                                                |
-| `mobile.yml` + `mobile-ci.yml` | `apps/mobile/**` + `.ci-trigger` | YES (both combined)   | Typecheck (`tsc --noEmit`) · Unit tests w/ coverage floor (`npm run test:coverage`)                                 |
+| `mobile.yml`                  | `apps/mobile/**` + `.ci-trigger`    |           YES           | Typecheck (`tsc --noEmit`) · Unit tests w/ coverage floor (`npm run test:coverage`)                                 |
 | `data-processing.yml`        | `apps/data-processing/**` + trigger |           YES           | flake8 syntax gate · flake8 style gate · pytest                                                                     |
 | `onchain.yml`                | `apps/onchain/**` + `.ci-trigger`   |           YES           | `cargo fmt` · `cargo clippy -- -Dw` · `cargo build --release wasm32` · `cargo test`                                 |
 
@@ -441,12 +441,18 @@ jobs:
 
 Until the workflow above is present, reviewers **must ask** the author to confirm they ran `lint` + `test` + `build` locally and paste evidence, before approving.
 
-### 6.3 Mobile Workflow — Combining Both Files
+### 6.3 Mobile Workflow
 
-Two workflows touch mobile (`mobile.yml` and `mobile-ci.yml`). Reviewers should treat them as a single required gate:
+`mobile.yml` (triggered on push to `main` and on pull requests touching `apps/mobile/**`
+or `apps/mobile/.ci-trigger`) is the single required gate for mobile changes:
 
-- **Type safety:** `npx tsc --noEmit --project apps/mobile/tsconfig.json` (from `mobile-ci.yml`).
-- **Tests + coverage floors:** `npm run test:coverage` from `mobile.yml` in the `apps/mobile` directory — must pass *without* raising thresholds or lowering them.
+- **Type safety:** `npm run tsc -- --noEmit` in `apps/mobile`.
+- **Tests + coverage floors:** `npm run test:coverage` in `apps/mobile` — must pass *without*
+  raising thresholds or lowering them.
+
+`mobile-ci.yml`, a duplicate `Mobile CI` workflow that ran a weaker, PR-only, failure-swallowing
+typecheck (`|| true`), has been removed — it made check results ambiguous in the PR UI without
+adding any coverage `mobile.yml` didn't already have.
 
 ### 6.4 Bypassing Tests
 

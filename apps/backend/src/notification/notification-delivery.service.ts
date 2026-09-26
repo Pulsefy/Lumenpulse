@@ -121,10 +121,15 @@ export class NotificationDeliveryService implements OnModuleInit {
       }
 
       // Fallback for critical notifications
-      if (!anySuccess && notification.severity === NotificationSeverity.CRITICAL) {
+      if (
+        !anySuccess &&
+        notification.severity === NotificationSeverity.CRITICAL
+      ) {
         const fallbackChannel = NotificationChannel.EMAIL; // or SMS
         if (!enabledChannels.includes(fallbackChannel)) {
-          this.logger.warn(`All preferred channels failed for critical notification ${notification.id}, using fallback: ${fallbackChannel}`);
+          this.logger.warn(
+            `All preferred channels failed for critical notification ${notification.id}, using fallback: ${fallbackChannel}`,
+          );
           const fallbackLog = await this.deliverToChannel(
             notification,
             userId,
@@ -145,7 +150,6 @@ export class NotificationDeliveryService implements OnModuleInit {
     }
   }
 
-  
   private async deliverWithRetry(
     channelFn: () => Promise<void>,
     maxRetries: number = 3,
@@ -181,10 +185,13 @@ export class NotificationDeliveryService implements OnModuleInit {
     });
 
     try {
-      this.metricsService.incrementCounter('notification_delivery_attempts_total', { channel });
-      
+      this.metricsService.incrementCounter(
+        'notification_delivery_attempts_total',
+        { channel },
+      );
+
       let deliveryFn: () => Promise<void>;
-      
+
       switch (channel) {
         case NotificationChannel.IN_APP:
           deliveryFn = () => this.deliverInApp(notification, userId);
@@ -212,20 +219,32 @@ export class NotificationDeliveryService implements OnModuleInit {
       }, 3);
 
       deliveryLog.status = DeliveryStatus.DELIVERED;
-      this.metricsService.incrementCounter('notification_delivery_successes_total', { channel });
+      this.metricsService.incrementCounter(
+        'notification_delivery_successes_total',
+        { channel },
+      );
     } catch (error) {
       deliveryLog.status = DeliveryStatus.PERMANENT_FAILURE;
-      deliveryLog.errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      deliveryLog.metadata = { error: error instanceof Error ? error.stack : undefined };
-      
-      this.metricsService.incrementCounter('notification_delivery_permanent_failures_total', { channel });
+      deliveryLog.errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      deliveryLog.metadata = {
+        error: error instanceof Error ? error.stack : undefined,
+      };
 
-      this.logger.error(`Permanent failure delivering via ${channel} to user ${userId}`, error);
+      this.metricsService.incrementCounter(
+        'notification_delivery_permanent_failures_total',
+        { channel },
+      );
+
+      this.logger.error(
+        `Permanent failure delivering via ${channel} to user ${userId}`,
+        error,
+      );
     }
 
     return this.deliveryLogRepository.save(deliveryLog);
   }
-/**
+  /**
    * Deliver notification in-app (already stored in database)
    */
   private async deliverInApp(

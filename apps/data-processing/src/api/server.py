@@ -175,6 +175,34 @@ except Exception as exc:
     logger.warning("PostgreSQL service unavailable for /news endpoint: %s", exc)
 
 
+# Lazy pinned embedding pipeline for /search/similar (#1455). The model is
+# loaded once on first use; when it is not vendored the endpoint returns 503
+# instead of silently searching over empty vectors.
+_embedding_service: Any = None
+
+
+def _get_embedding_service() -> Any:
+    global _embedding_service
+    if _embedding_service is None:
+        from src.analytics.embedding_service import (
+            EmbeddingService,
+            MissingEmbeddingModelError,
+        )
+
+        try:
+            _embedding_service = EmbeddingService()
+        except MissingEmbeddingModelError as exc:
+            logger.warning(
+                "Semantic search embedding model unavailable: %s", exc
+            )
+            _embedding_service = exc
+    return (
+        None
+        if isinstance(_embedding_service, MissingEmbeddingModelError)
+        else _embedding_service
+    )
+
+
 @app.on_event("startup")
 async def _reconcile_orphaned_analytics_jobs() -> None:
     """
@@ -303,6 +331,20 @@ class NewsArticleResponse(BaseModel):
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
 
 
+class SemanticSearchResult(BaseModel):
+    """One ranked result from the semantic news search (#1455)."""
+
+    article_id: str
+    title: str
+    url: Optional[str] = None
+    source: Optional[str] = None
+    summary: Optional[str] = None
+    categories: List[str] = []
+    primary_asset: Optional[str] = None
+    published_at: Optional[str] = None
+    similarity_score: float
+
+
 class ContributorActivityEventResponse(BaseModel):
     event_id: str
     contract_id: str
@@ -343,6 +385,7 @@ async def root(request: Request) -> Dict[str, Any]:
             "GET /health": "Health check (no auth required)",
             "GET /metrics": "Prometheus metrics (no auth required)",
             "GET /news": "Get recent news with optional ?entity=... filter (requires X-API-Key header)",
+"GET /search/similar": "Rank news by semantic similarity to a query (#1455) (requires X-API-Key header)",
             "POST /analyze": "Analyze text sentiment (requires X-API-Key header; set explain=true to include token-level attribution #1456)",
             "GET /analyze": "Get asset-specific sentiment analysis (requires X-API-Key header)",
             "POST /analyze-batch": "Batch analyze multiple texts (requires X-API-Key header)",
@@ -456,6 +499,58 @@ async def get_news(
     except Exception as exc:
         logger.error("Error retrieving news: %s", str(exc), exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch news articles")
+
+
+@app.get("/search/similar", response_model=List[SemanticSearchResult])
+@limiter.limit("30/minute") if limiter else lambda x: x
+async def search_similar(
+    request: Request,
+    q: str = Query(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Natural-language query embedded with the pinned model",
+    ),
+    limit: int = Query(10, ge=1, le=50),
+    model_version: Optional[str] = Query(
+        None,
+        description="Scope search to a stored pinned model version (defaults to "
+        "the latest version present in the store)",
+    ),
+) -> List[SemanticSearchResult]:
+    """Rank ingested news articles by semantic similarity to a query (#1455)."""
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    embedding_service = _get_embedding_service()
+    if embedding_service is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Semantic search model unavailable; run "
+            "`python scripts/fetch_embedding_model.py` and rebuild the image.",
+        )
+
+    try:
+        query_vector = embedding_service.embed(q)
+    except Exception as exc:
+        logger.error("Failed to embed search query: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=503, detail="Semantic search model unavailable"
+        )
+
+    results = postgres_service.search_articles_by_embedding(
+        query_vector=query_vector,
+        model_version=model_version,
+        limit=limit,
+    )
+    logger.info(
+        "Semantic search q=%r | limit=%d | model_version=%r | hits=%d",
+        q,
+        limit,
+        model_version,
+        len(results),
+    )
+    return results
 
 
 @app.get(

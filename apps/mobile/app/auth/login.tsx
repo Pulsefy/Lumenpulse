@@ -106,6 +106,7 @@ const LoginScreen = () => {
                 ]}
                 value={email}
                 onChangeText={setEmail}
+                testID="login-email-input"
                 placeholder={t('auth.login.email_placeholder')}
                 placeholderTextColor={colors.textSecondary}
                 keyboardType="email-address"
@@ -134,6 +135,7 @@ const LoginScreen = () => {
                 ]}
                 value={password}
                 onChangeText={setPassword}
+                testID="login-password-input"
                 placeholder={t('auth.login.password_placeholder')}
                 placeholderTextColor={colors.textSecondary}
                 secureTextEntry
@@ -154,6 +156,7 @@ const LoginScreen = () => {
               ]}
               onPress={handleLogin}
               disabled={loading}
+              testID="login-submit-button"
               accessibilityRole="button"
               accessibilityState={{ disabled: loading }}
               accessibilityLabel={t('auth.login.sign_in_button')}

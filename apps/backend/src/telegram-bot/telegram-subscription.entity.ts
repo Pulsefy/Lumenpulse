@@ -4,7 +4,6 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  Index,
 } from 'typeorm';
 
 export enum TelegramAlertType {
@@ -16,7 +15,6 @@ export enum TelegramAlertType {
 }
 
 @Entity('telegram_subscriptions')
-@Index(['chatId'], { unique: true })
 export class TelegramSubscription {
   @PrimaryGeneratedColumn('uuid')
   id: string;

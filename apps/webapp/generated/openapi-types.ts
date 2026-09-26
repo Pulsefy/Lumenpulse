@@ -92,6 +92,17 @@ export interface components {
       hasLinkedAccount: boolean;
       exchangeRate: number;
     };
+    ChartMetaDto: {
+      xAxis: components['schemas']['ChartAxisMetaDto'];
+      yAxes: components['schemas']['ChartAxisMetaDto'][];
+      series: components['schemas']['ChartSeriesMetaDto'][];
+      ranges: components['schemas']['ChartRangeOptionDto'][];
+    };
+    ChartDataPointDto: {
+      timestamp: string;
+      sentiment: number;
+      count: number;
+    };
     User: {
       id: string;
       email: string;
@@ -120,6 +131,20 @@ export interface components {
       isActive: boolean;
       createdAt: string;
       updatedAt: string;
+    };
+    ChartAxisMetaDto: {
+      id: string;
+      label: string;
+    };
+    ChartSeriesMetaDto: {
+      key: string;
+      label: string;
+      axisId: string;
+    };
+    ChartRangeOptionDto: {
+      range: "7d" | "30d";
+      interval: "1h" | "1d";
+      label: string;
     };
   };
 }

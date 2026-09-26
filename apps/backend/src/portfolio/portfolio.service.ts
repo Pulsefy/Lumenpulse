@@ -498,7 +498,7 @@ export class PortfolioService {
                 ? result.reason.message
                 : 'Unknown error';
             this.logger.warn(
-              `Failed to refresh materialized snapshot for user ${batch[j]!.userId}: ${message}`,
+              `Failed to refresh materialized snapshot for user ${batch[j].userId}: ${message}`,
             );
           }
         }
@@ -655,13 +655,14 @@ export class PortfolioService {
 
     // FIX (N+1 → 1): batch-compute USD values for all aggregated assets in a
     // single price fetch instead of calling getAssetValueUsd() once per asset.
-    const allocationWithValue = await this.stellarBalanceService.getAssetValuesUsd(
-      Array.from(aggregatedBalances.values()).map((asset) => ({
-        assetCode: asset.assetCode,
-        assetIssuer: asset.assetIssuer,
-        amount: asset.amount.toString(),
-      })),
-    );
+    const allocationWithValue =
+      await this.stellarBalanceService.getAssetValuesUsd(
+        Array.from(aggregatedBalances.values()).map((asset) => ({
+          assetCode: asset.assetCode,
+          assetIssuer: asset.assetIssuer,
+          amount: asset.amount.toString(),
+        })),
+      );
 
     // Calculate total value from the results
     const totalValueUsd = allocationWithValue.reduce(

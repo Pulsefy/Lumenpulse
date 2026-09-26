@@ -55,6 +55,9 @@ export class MetricsService implements OnModuleInit {
   private readonly schedulerJobDuration: Histogram<string>;
   private readonly schedulerLockContention: Counter<string>;
 
+  // Rate limiting //
+  private readonly rateLimitRejections: Counter<string>;
+
   // Running totals for the rolling-average sentiment gauge
   private sentimentSum = 0;
   private sentimentCount = 0;
@@ -246,6 +249,14 @@ export class MetricsService implements OnModuleInit {
       name: 'lumenpulse_scheduler_lock_contention_total',
       help: 'Total advisory-lock acquisition failures, per scheduled job',
       labelNames: ['job'] as const,
+      registers: [this.registry],
+    });
+
+    // Rate limiting //
+    this.rateLimitRejections = new Counter({
+      name: 'rate_limit_rejections_total',
+      help: 'Total number of requests rejected by the rate limiter (HTTP 429)',
+      labelNames: ['endpoint_class', 'principal_type'] as const,
       registers: [this.registry],
     });
   }
@@ -484,6 +495,23 @@ export class MetricsService implements OnModuleInit {
   /** Count a failed advisory-lock acquisition (another instance held the lock). */
   recordSchedulerLockContention(job: string): void {
     this.schedulerLockContention.inc({ job });
+  }
+
+  // Rate limiting //
+
+  /**
+   * Records a rate-limit rejection.
+   *
+   * @param endpointClass Low-cardinality endpoint class label
+   *                      (e.g. `default`, `search`, `export`, `analytics`,
+   *                      `contract_simulation`).
+   * @param principalType `user` | `bot` | `service` | `anonymous`.
+   */
+  recordRateLimitRejection(endpointClass: string, principalType: string): void {
+    this.rateLimitRejections.inc({
+      endpoint_class: endpointClass,
+      principal_type: principalType,
+    });
   }
 
   // Dynamic metric helpers (legacy API)

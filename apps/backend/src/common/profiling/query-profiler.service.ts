@@ -141,9 +141,7 @@ export class QueryProfilerService {
     const ctx: QueryRequestContext = { callCount: 0, requestLabel };
     const result = await this.store.run(ctx, fn);
 
-    this.logger.log(
-      `[QUERY COUNT] ${requestLabel} → ${ctx.callCount} call(s)`,
-    );
+    this.logger.log(`[QUERY COUNT] ${requestLabel} → ${ctx.callCount} call(s)`);
 
     return result;
   }

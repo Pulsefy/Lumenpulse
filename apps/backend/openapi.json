@@ -6119,6 +6119,195 @@
         ]
       }
     },
+    "/admin/audit-logs/export": {
+      "get": {
+        "description": "Produces a scoped extract of user-activity, audit-operation and admin blockchain-action records for an auditor, filtered by an inclusive date range and optionally by actor and record type. Returns JSON, or CSV with format=csv. Every export is itself recorded in the audit trail as an \"audit.export\" action.",
+        "operationId": "AuditController_exportAuditLogs",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "description": "Start of the range (ISO 8601, inclusive)",
+            "schema": {
+              "example": "2026-01-01T00:00:00.000Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "description": "End of the range (ISO 8601, inclusive)",
+            "schema": {
+              "example": "2026-03-31T23:59:59.999Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "actorId",
+            "required": false,
+            "in": "query",
+            "description": "Only records by this actor (user id for user activity, admin id for blockchain actions)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recordType",
+            "required": false,
+            "in": "query",
+            "description": "Only this record type; all types when omitted",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user_activity",
+                "audit_operation",
+                "admin_blockchain_action"
+              ]
+            }
+          },
+          {
+            "name": "format",
+            "required": false,
+            "in": "query",
+            "description": "Response format",
+            "schema": {
+              "default": "json",
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit extract (text/csv when format=csv)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditExportResponseDto"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditExportResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin only)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Export an audit extract (admin only)",
+        "tags": [
+          "admin-audit-logs"
+        ]
+      }
+    },
     "/users": {
       "get": {
         "operationId": "UsersController_findAll",
@@ -10358,6 +10547,84 @@
         "summary": "Disable 2FA",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/health/schedulers": {
+      "get": {
+        "description": "Each registered scheduled job reports its last start, last success, last failure, and duration. Jobs that have not succeeded within their expected interval are marked stale and cause HTTP 503.",
+        "operationId": "SchedulerHealthController_getSchedulerHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "All scheduled jobs succeeded within their expected intervals.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "One or more scheduled jobs have not succeeded within their expected interval.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reports last run times, outcomes, durations, and staleness of scheduled jobs",
+        "tags": [
+          "health"
         ]
       }
     },
@@ -17924,84 +18191,6 @@
         ]
       }
     },
-    "/health/schedulers": {
-      "get": {
-        "description": "Each registered scheduled job reports its last start, last success, last failure, and duration. Jobs that have not succeeded within their expected interval are marked stale and cause HTTP 503.",
-        "operationId": "SchedulerHealthController_getSchedulerHealth",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "All scheduled jobs succeeded within their expected intervals.",
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "One or more scheduled jobs have not succeeded within their expected interval.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Reports last run times, outcomes, durations, and staleness of scheduled jobs",
-        "tags": [
-          "health"
-        ]
-      }
-    },
     "/verification/config": {
       "get": {
         "description": "Retrieve current quorum settings and voting weight calculation mode.",
@@ -24173,6 +24362,73 @@
         "summary": "Get the latest risk and activity signals for the current user",
         "tags": [
           "signals"
+        ]
+      }
+    },
+    "/analytics/chart-meta": {
+      "get": {
+        "description": "Returns series, axis and time-range labels for the data served by /analytics/chart-data.",
+        "operationId": "AnalyticsController_getChartMeta",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Chart series metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChartMetaDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Describe the chart series",
+        "tags": [
+          "analytics"
         ]
       }
     },
@@ -37566,6 +37822,114 @@
           "price-alerts"
         ]
       }
+    },
+    "/dashboard": {
+      "get": {
+        "description": "Loads portfolio, watchlist, signals, and latest news concurrently. Each section degrades independently when its backing service is unavailable. Responses are cached per user for 15 seconds.",
+        "operationId": "DashboardController_getDashboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Aggregated dashboard payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Get the authenticated user dashboard in one request",
+        "tags": [
+          "dashboard"
+        ]
+      }
     }
   },
   "info": {
@@ -38822,6 +39186,125 @@
           "targetId",
           "targetType",
           "decisionType"
+        ]
+      },
+      "AuditExportFiltersDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actorId": {
+            "type": "string",
+            "nullable": true
+          },
+          "recordTypes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "user_activity",
+                "audit_operation",
+                "admin_blockchain_action"
+              ]
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "actorId",
+          "recordTypes"
+        ]
+      },
+      "AuditExportRecordDto": {
+        "type": "object",
+        "properties": {
+          "recordType": {
+            "enum": [
+              "user_activity",
+              "audit_operation",
+              "admin_blockchain_action"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actorId": {
+            "type": "string",
+            "nullable": true,
+            "description": "User or admin who performed the action"
+          },
+          "action": {
+            "type": "string",
+            "description": "Action name, or \"METHOD /path\" for blockchain actions",
+            "example": "login"
+          },
+          "ipAddress": {
+            "type": "string",
+            "nullable": true,
+            "example": "127.0.0.1"
+          },
+          "details": {
+            "type": "object",
+            "nullable": true,
+            "description": "Type-specific fields (request metadata, tx hash, ...)",
+            "additionalProperties": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "recordType",
+          "id",
+          "actorId",
+          "action",
+          "ipAddress",
+          "details",
+          "createdAt"
+        ]
+      },
+      "AuditExportResponseDto": {
+        "type": "object",
+        "properties": {
+          "filters": {
+            "$ref": "#/components/schemas/AuditExportFiltersDto"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "count": {
+            "type": "number",
+            "description": "Number of records in this extract"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True when more records matched than the export row limit; narrow the range and export again"
+          },
+          "records": {
+            "description": "Matching records, oldest first",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditExportRecordDto"
+            }
+          }
+        },
+        "required": [
+          "filters",
+          "generatedAt",
+          "count",
+          "truncated",
+          "records"
         ]
       },
       "ProfileResponseDto": {
@@ -42204,6 +42687,105 @@
           "userId",
           "generatedAt",
           "signals"
+        ]
+      },
+      "ChartAxisMetaDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable identifier that series reference via `axisId`."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable axis title."
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ]
+      },
+      "ChartSeriesMetaDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Property of ChartDataPointDto that holds this series' values."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable series name for legends, tooltips and table headers."
+          },
+          "axisId": {
+            "type": "string",
+            "description": "Id of the y-axis this series is plotted against."
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "axisId"
+        ]
+      },
+      "ChartRangeOptionDto": {
+        "type": "object",
+        "properties": {
+          "range": {
+            "enum": [
+              "7d",
+              "30d"
+            ],
+            "type": "string"
+          },
+          "interval": {
+            "enum": [
+              "1h",
+              "1d"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label for the time-range selector."
+          }
+        },
+        "required": [
+          "range",
+          "interval",
+          "label"
+        ]
+      },
+      "ChartMetaDto": {
+        "type": "object",
+        "properties": {
+          "xAxis": {
+            "$ref": "#/components/schemas/ChartAxisMetaDto"
+          },
+          "yAxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartAxisMetaDto"
+            }
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartSeriesMetaDto"
+            }
+          },
+          "ranges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartRangeOptionDto"
+            }
+          }
+        },
+        "required": [
+          "xAxis",
+          "yAxes",
+          "series",
+          "ranges"
         ]
       },
       "ChartDataPointDto": {

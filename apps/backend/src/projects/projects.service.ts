@@ -91,7 +91,7 @@ export class ProjectsService {
           projectId: project.projectId,
           owner: project.owner,
           metadata: this.parseMetadata(project),
-          onChainStatus: onChainStates[idx]!,
+          onChainStatus: onChainStates[idx],
           createdAt: project.createdAt,
           updatedAt: project.updatedAt,
         }),

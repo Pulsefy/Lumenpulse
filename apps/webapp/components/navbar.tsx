@@ -14,6 +14,7 @@ import {
   Bell,
   UserCircle,
   Shield,
+  TrendingUp,
 } from "lucide-react";
 import { WalletButton } from "./wallet-button";
 import { ThemeSelector } from "./theme-selector";
@@ -128,6 +129,16 @@ export function Navbar() {
               <Bell className="w-4 h-4 text-primary group-hover:text-white transition-colors" />
               <span className="group-hover:translate-x-0.5 transition-transform">
                 Alerts
+              </span>
+              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
+            </Link>
+            <Link
+              href="/price-alerts"
+              className="px-3 py-2 text-sm font-medium text-white hover:text-white transition-all flex items-center gap-2 group relative"
+            >
+              <TrendingUp className="w-4 h-4 text-primary group-hover:text-white transition-colors" />
+              <span className="group-hover:translate-x-0.5 transition-transform">
+                Price Alerts
               </span>
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
@@ -266,6 +277,15 @@ export function Navbar() {
             >
               <Bell className="w-5 h-5 text-primary" />
               <span>Alerts</span>
+              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
+            </Link>
+            <Link
+              href="/price-alerts"
+              className="flex items-center gap-3 p-3 rounded-lg text-white hover:bg-white/5 transition-all relative group"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              <TrendingUp className="w-5 h-5 text-primary" />
+              <span>Price Alerts</span>
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#db74cf] transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100"></span>
             </Link>
             <Link

@@ -99,6 +99,7 @@ function ProjectCard({
       accessibilityRole="button"
       accessibilityLabel={`${project.name}, ${status}, ${progress}% funded, ${project.contributorCount} contributors`}
       accessibilityHint="Double tap to view project details"
+      testID={`project-card-${project.id}`}
     >
       <View style={styles.cardHeader}>
         <Text
