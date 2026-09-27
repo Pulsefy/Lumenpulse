@@ -477,7 +477,7 @@ class TestWalkForwardBacktesterFullRun:
             max_windows=0,
         )
         bt = WalkForwardBacktester(cfg)
-        df = _make_df(30)
+        df = _make_df(60)
         result = bt.run(df)
         assert result.n_windows > 0
 
@@ -548,7 +548,7 @@ class TestWalkForwardBacktesterFullRun:
     def test_result_contains_config_snapshot(self):
         cfg = BacktestConfig(min_train_points=5, random_seed=77, max_windows=5)
         bt = WalkForwardBacktester(cfg)
-        df = _make_df(30)
+        df = _make_df(60)
         result = bt.run(df)
         snap = result.config_snapshot
         assert snap["random_seed"] == 77
