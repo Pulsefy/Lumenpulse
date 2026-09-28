@@ -387,36 +387,53 @@ def main():
         command = sys.argv[1].lower()
 
         if command == "check-models":
-            # Verifies the pinned NER model (and other baked artifacts) are
-            # present at the expected version, failing fast on mismatch. Used
-            # as a container startup readiness gate.
-            from src.analytics.ner_service import check_model_available
+            # Verifies the pinned NER and embedding models (and other baked
+            # artifacts) are present at the expected version, failing fast on
+            # mismatch. Used as a container startup readiness gate.
+            from src.analytics.ner_service import (
+                check_model_available as check_ner_model,
+            )
+            from src.analytics.embedding_service import (
+                check_model_available as check_embedding_model,
+            )
 
-            logger.info("Checking pinned NER model availability...")
-            try:
-                check_model_available()
-            except Exception as exc:
-                logger.error("Model startup check failed: %s", exc)
-                print(f"❌ Model check failed: {exc}")
-                return {
-                    "success": False,
-                    "checks": {"ner_model": False},
-                    "error": str(exc),
-                }
-            logger.info("Pinned NER model check passed.")
-            print("✓ Pinned NER model present and matches the pinned version.")
-            return {"success": True, "checks": {"ner_model": True}}
+            checks = {}
+            for label, gate in (
+                ("ner_model", check_ner_model),
+                ("embedding_model", check_embedding_model),
+            ):
+                logger.info("Checking pinned %s availability...", label)
+                try:
+                    gate()
+                except Exception as exc:
+                    logger.error("Model startup check failed (%s): %s", label, exc)
+                    print(f"❌ {label} check failed: {exc}")
+                    return {
+                        "success": False,
+                        "checks": {**checks, label: False},
+                        "error": str(exc),
+                    }
+                checks[label] = True
+                logger.info("Pinned %s check passed.", label)
+            print("✓ Pinned NER and embedding models present, versions match.")
+            return {"success": True, "checks": checks}
 
         if command == "serve":
-            # Run the startup model gate before starting the scheduler so the
-            # service fails fast instead of running with a broken/unpinned model.
-            from src.analytics.ner_service import check_model_available
+            # Run the startup model gates before starting the scheduler so the
+            # service fails fast instead of running with broken/unpinned models.
+            from src.analytics.ner_service import (
+                check_model_available as check_ner_model,
+            )
+            from src.analytics.embedding_service import (
+                check_model_available as check_embedding_model,
+            )
 
             try:
-                check_model_available()
+                check_ner_model()
+                check_embedding_model()
             except Exception as exc:
                 logger.error(
-                    "Pinned NER model gate failed at startup; aborting: %s", exc
+                    "Pinned model gate failed at startup; aborting: %s", exc
                 )
                 print(f"❌ {exc}")
                 return {"success": False, "error": str(exc)}
@@ -425,11 +442,19 @@ def main():
         elif command == "run":
             # Run pipeline once and exit
             return run_data_pipeline()
+        elif command == "replay-quarantined":
+            from src.ingestion.quarantine_replay_cli import main as replay_main
+
+            exit_code = replay_main(sys.argv[2:])
+            return {"success": exit_code == 0, "exit_code": exit_code}
         elif command == "help":
             print("Usage:")
             print("  python pipeline.py run          - Run pipeline once")
             print("  python pipeline.py serve        - Start scheduled service")
-            print("  python pipeline.py check-models - Verify pinned model artifacts")
+            print(
+                "  python pipeline.py check-models - Verify pinned "
+                "NER + embedding model artifacts"
+            )
             print("  python pipeline.py help         - Show this help")
             return {"help": True}
         else:

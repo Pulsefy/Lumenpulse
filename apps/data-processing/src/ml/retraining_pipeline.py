@@ -381,7 +381,28 @@ def run_retraining(
             }
             logger.warning("PricePredictor did NOT pass quality gate — skipping promotion")
 
-        # ── 3. Finalise ─────────────────────────────────────────────────────
+        # ── 3. Anomaly detector evaluation (issue #1450) ────────────────────
+        # Re-measures precision/recall/false-positive-rate on every retraining
+        # run against the labelled seed set, so a threshold or logic change
+        # elsewhere in AnomalyDetector can't silently regress the
+        # suspicious-contribution flow's false-positive rate unnoticed.
+        try:
+            from src.anomaly_detector import AnomalyDetector
+            from src.ml.anomaly_evaluation import evaluate_detector
+
+            anomaly_report = evaluate_detector(lambda: AnomalyDetector(use_ml=False))
+            result["anomaly_detector_evaluation"] = anomaly_report
+            logger.info(
+                "Anomaly detector evaluation: precision=%.3f recall=%.3f false_positive_rate=%.3f",
+                anomaly_report["overall"]["precision"],
+                anomaly_report["overall"]["recall"],
+                anomaly_report["overall"]["false_positive_rate"],
+            )
+        except Exception as exc:
+            logger.warning(f"Anomaly detector evaluation failed: {exc}")
+            result["anomaly_detector_evaluation"] = {"status": "failed", "error": str(exc)}
+
+        # ── 4. Finalise ─────────────────────────────────────────────────────
         finished_at = datetime.utcnow()
         result.update(
             {

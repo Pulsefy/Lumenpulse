@@ -1,0 +1,9 @@
+[package]
+name = "event-versioning"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["lib"]
+doctest = false

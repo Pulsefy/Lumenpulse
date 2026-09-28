@@ -1,204 +1,156 @@
 import { HttpService } from '@nestjs/axios';
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
-import { HealthIndicatorService } from '@nestjs/terminus';
 import { of, throwError } from 'rxjs';
 import { CacheService } from '../cache/cache.service';
-import { StellarService } from '../stellar/stellar.service';
 import { HealthService } from './health.service';
 import { LatencyBudgetHealthService } from './latency-budget.health.service';
 
 describe('HealthService', () => {
   let service: HealthService;
-  let dataSource: { query: jest.Mock };
-  let cacheService: { checkHealth: jest.Mock };
-  let stellarService: { checkHealth: jest.Mock };
-  let httpService: { get: jest.Mock };
-  let latencyBudgetHealthService: {
-    getLatencyBudgetReport: jest.Mock;
-  };
-
-  const mockHealthIndicatorService = {
-    check: jest.fn((key: string) => ({
-      up: (data: Record<string, unknown> = {}) => ({
-        [key]: { status: 'up', ...data },
-      }),
-      down: (data: Record<string, unknown> = {}) => ({
-        [key]: { status: 'down', ...data },
-      }),
-    })),
-  };
-
-  const okLatencyReport = {
-    overallState: 'ok' as const,
-    checkedAt: new Date().toISOString(),
-    dependencies: [],
-  };
+  const database = { query: jest.fn() };
+  const cache = { checkHealth: jest.fn() };
+  const http = { get: jest.fn() };
+  const latency = { getLatencyBudgetReport: jest.fn() };
+  const budget = (
+    horizon: 'ok' | 'degraded' | 'hard_down' = 'ok',
+    rpc: 'ok' | 'degraded' | 'hard_down' = 'ok',
+  ) => ({
+    overallState:
+      horizon === 'hard_down' || rpc === 'hard_down'
+        ? 'hard_down'
+        : horizon === 'degraded' || rpc === 'degraded'
+          ? 'degraded'
+          : 'ok',
+    checkedAt: '2026-09-25T00:00:00.000Z',
+    dependencies: [
+      {
+        name: 'horizon',
+        state: horizon,
+        latencyMs: 10,
+        url: '',
+        thresholds: { degradedMs: 1000, hardDownMs: 4000 },
+      },
+      {
+        name: 'sorobanRpc',
+        state: rpc,
+        latencyMs: 20,
+        url: '',
+        thresholds: { degradedMs: 1500, hardDownMs: 5000 },
+      },
+    ],
+  });
 
   beforeEach(async () => {
-    dataSource = {
-      query: jest.fn(),
-    };
-    cacheService = {
-      checkHealth: jest.fn(),
-    };
-    stellarService = {
-      checkHealth: jest.fn(),
-    };
-    httpService = {
-      get: jest.fn(),
-    };
-    latencyBudgetHealthService = {
-      getLatencyBudgetReport: jest.fn().mockResolvedValue(okLatencyReport),
-    };
-
-    const module: TestingModule = await Test.createTestingModule({
+    jest.clearAllMocks();
+    database.query.mockResolvedValue([{ '?column?': 1 }]);
+    cache.checkHealth.mockResolvedValue(true);
+    http.get.mockReturnValue(of({ data: { status: 'healthy' } }));
+    latency.getLatencyBudgetReport.mockResolvedValue(budget());
+    const module = await Test.createTestingModule({
       providers: [
         HealthService,
-        {
-          provide: HealthIndicatorService,
-          useValue: mockHealthIndicatorService,
-        },
-        {
-          provide: getDataSourceToken(),
-          useValue: dataSource,
-        },
-        {
-          provide: CacheService,
-          useValue: cacheService,
-        },
-        {
-          provide: StellarService,
-          useValue: stellarService,
-        },
-        {
-          provide: HttpService,
-          useValue: httpService,
-        },
-        {
-          provide: LatencyBudgetHealthService,
-          useValue: latencyBudgetHealthService,
-        },
+        { provide: getDataSourceToken(), useValue: database },
+        { provide: CacheService, useValue: cache },
+        { provide: HttpService, useValue: http },
+        { provide: LatencyBudgetHealthService, useValue: latency },
       ],
     }).compile();
-
-    service = module.get<HealthService>(HealthService);
-    jest.clearAllMocks();
-
-    // Re-apply the default latency mock after clearAllMocks
-    latencyBudgetHealthService.getLatencyBudgetReport.mockResolvedValue(
-      okLatencyReport,
-    );
+    service = module.get(HealthService);
   });
 
-  it('returns healthy when all critical and non-critical checks pass', async () => {
-    dataSource.query.mockResolvedValue([{ '?column?': 1 }]);
-    cacheService.checkHealth.mockResolvedValue(true);
-    stellarService.checkHealth.mockResolvedValue(true);
-    httpService.get.mockReturnValue(of({ data: { ok: true } }));
-
+  it('reports every dependency with status and latency', async () => {
     const report = await service.getHealthReport();
-
     expect(report.status).toBe('ok');
     expect(report.summary).toBe('healthy');
-    expect(report.details.database.status).toBe('up');
-    expect(report.details.redis.status).toBe('up');
-    expect(report.details.horizon.status).toBe('up');
-    expect(report.details.externalApis.status).toBe('up');
-    expect(report.latencyBudget).toBeDefined();
-    expect(report.latencyBudget.overallState).toBe('ok');
+    for (const name of [
+      'database',
+      'redis',
+      'horizon',
+      'sorobanRpc',
+      'python',
+      'coinGecko',
+      'exchangeRateApi',
+    ]) {
+      expect(report.dependencies[name]).toEqual(
+        expect.objectContaining({
+          status: 'up',
+          latencyMs: expect.any(Number),
+        }),
+      );
+    }
+    expect(http.get).toHaveBeenCalledWith(
+      expect.stringMatching(/\/health$/),
+      expect.any(Object),
+    );
   });
 
-  it('returns degraded when a non-critical dependency fails', async () => {
-    dataSource.query.mockResolvedValue([{ '?column?': 1 }]);
-    cacheService.checkHealth.mockResolvedValue(false);
-    stellarService.checkHealth.mockResolvedValue(true);
-    httpService.get.mockReturnValue(of({ data: { ok: true } }));
-
+  it('marks Redis and Python failures as degraded without failing readiness', async () => {
+    cache.checkHealth.mockResolvedValue(false);
+    http.get.mockImplementation((url: string) =>
+      url.endsWith('/health')
+        ? throwError(() => new Error('unavailable'))
+        : of({ data: {} }),
+    );
     const report = await service.getHealthReport();
-
     expect(report.status).toBe('ok');
     expect(report.summary).toBe('degraded');
-    expect(report.error!.redis).toEqual({
-      status: 'down',
-      message: 'Redis cache is unavailable',
-    });
+    expect(report.dependencies.redis.status).toBe('down');
+    expect(report.dependencies.python.status).toBe('down');
   });
 
-  it('returns down when the database check fails', async () => {
-    dataSource.query.mockRejectedValue(new Error('connect ECONNREFUSED'));
-    cacheService.checkHealth.mockResolvedValue(true);
-    stellarService.checkHealth.mockResolvedValue(true);
-    httpService.get.mockReturnValue(of({ data: { ok: true } }));
-
+  it('fails readiness when Postgres or Soroban RPC is down', async () => {
+    database.query.mockRejectedValue(new Error('database unavailable'));
+    latency.getLatencyBudgetReport.mockResolvedValue(budget('ok', 'hard_down'));
     const report = await service.getHealthReport();
-
     expect(report.status).toBe('error');
     expect(report.summary).toBe('down');
-    expect(report.error!.database).toEqual({
-      status: 'down',
-      message: 'connect ECONNREFUSED',
-    });
+    expect(report.dependencies.database.status).toBe('down');
+    expect(report.dependencies.sorobanRpc.status).toBe('down');
   });
 
-  it('reports external APIs as down when their checks fail', async () => {
-    dataSource.query.mockResolvedValue([{ '?column?': 1 }]);
-    cacheService.checkHealth.mockResolvedValue(true);
-    stellarService.checkHealth.mockResolvedValue(true);
-    httpService.get.mockImplementationOnce(() =>
-      throwError(() => new Error('CoinGecko timeout')),
-    );
-    httpService.get.mockImplementationOnce(() =>
-      throwError(() => new Error('ExchangeRate timeout')),
-    );
-
+  it('marks slow but reachable Horizon as degraded', async () => {
+    latency.getLatencyBudgetReport.mockResolvedValue(budget('degraded'));
     const report = await service.getHealthReport();
-
     expect(report.status).toBe('ok');
     expect(report.summary).toBe('degraded');
-    expect(report.error!.externalApis).toEqual(
-      expect.objectContaining({
-        status: 'down',
-        message: 'One or more external APIs are unavailable',
-      }),
-    );
+    expect(report.dependencies.horizon.status).toBe('up');
   });
 
-  // ── Latency budget integration ─────────────────────────────────────────────
-
-  it('returns status=error and summary=down when latency is hard_down', async () => {
-    dataSource.query.mockResolvedValue([{ '?column?': 1 }]);
-    cacheService.checkHealth.mockResolvedValue(true);
-    stellarService.checkHealth.mockResolvedValue(true);
-    httpService.get.mockReturnValue(of({ data: {} }));
-    latencyBudgetHealthService.getLatencyBudgetReport.mockResolvedValue({
-      overallState: 'hard_down',
-      checkedAt: new Date().toISOString(),
-      dependencies: [],
-    });
-
+  it('fails readiness when Horizon is down', async () => {
+    latency.getLatencyBudgetReport.mockResolvedValue(budget('hard_down'));
     const report = await service.getHealthReport();
-
     expect(report.status).toBe('error');
-    expect(report.summary).toBe('down');
-    expect(report.latencyBudget.overallState).toBe('hard_down');
+    expect(report.dependencies.horizon.status).toBe('down');
   });
 
-  it('returns status=ok and summary=degraded when latency is degraded', async () => {
-    dataSource.query.mockResolvedValue([{ '?column?': 1 }]);
-    cacheService.checkHealth.mockResolvedValue(true);
-    stellarService.checkHealth.mockResolvedValue(true);
-    httpService.get.mockReturnValue(of({ data: {} }));
-    latencyBudgetHealthService.getLatencyBudgetReport.mockResolvedValue({
-      overallState: 'degraded',
-      checkedAt: new Date().toISOString(),
-      dependencies: [],
-    });
-
+  it('reports both network probes as down if the budget service fails', async () => {
+    latency.getLatencyBudgetReport.mockRejectedValue(
+      new Error('probe failure'),
+    );
     const report = await service.getHealthReport();
+    expect(report.status).toBe('error');
+    expect(report.dependencies.horizon.status).toBe('down');
+    expect(report.dependencies.sorobanRpc.status).toBe('down');
+  });
 
-    expect(report.status).toBe('ok');
-    expect(report.summary).toBe('degraded');
-    expect(report.latencyBudget.overallState).toBe('degraded');
+  it('times out an individual hanging dependency', async () => {
+    jest.useFakeTimers();
+    try {
+      cache.checkHealth.mockReturnValue(new Promise(() => undefined));
+      const reportPromise = service.getHealthReport();
+      await jest.advanceTimersByTimeAsync(3000);
+      const report = await reportPromise;
+      expect(report.dependencies.redis).toEqual(
+        expect.objectContaining({
+          status: 'down',
+          latencyMs: 3000,
+          message: 'redis timed out',
+        }),
+      );
+      expect(report.status).toBe('ok');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

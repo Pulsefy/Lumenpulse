@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ShieldCheck,
   Clock,
@@ -11,7 +11,9 @@ import {
   AlertTriangle,
   Lock,
   Loader2,
+  X,
 } from "lucide-react";
+import { ReviewAgingPanel } from "@/components/review/ReviewAgingPanel";
 import { SubmissionApiService } from "@/lib/submission-service";
 import type { ProjectSubmission, SubmissionStatus } from "@/types/submission";
 
@@ -84,10 +86,32 @@ function formatDate(timestamp: number): string {
   return date.toLocaleDateString();
 }
 
+function parseStatus(value: string | null): SubmissionStatus | "ALL" {
+  return FILTER_TABS.some((t) => t.value === value)
+    ? (value as SubmissionStatus | "ALL")
+    : "ALL";
+}
+
+function parseHours(value: string | null): number | null {
+  if (value === null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+function formatHours(hours: number): string {
+  return hours >= 24 && hours % 24 === 0 ? `${hours / 24}d` : `${hours}h`;
+}
+
 export default function ReviewPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const minAgeHours = parseHours(searchParams?.get("minAgeHours") ?? null);
+  const maxAgeHours = parseHours(searchParams?.get("maxAgeHours") ?? null);
+  const hasAgeFilter = minAgeHours !== null || maxAgeHours !== null;
   const [submissions, setSubmissions] = useState<ProjectSubmission[]>([]);
-  const [filter, setFilter] = useState<SubmissionStatus | "ALL">("ALL");
+  const [filter, setFilter] = useState<SubmissionStatus | "ALL">(() =>
+    parseStatus(searchParams?.get("status") ?? null),
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthed, setIsAuthed] = useState(false);
@@ -115,6 +139,24 @@ export default function ReviewPage() {
   useEffect(() => {
     fetchSubmissions(filter === "ALL" ? undefined : filter);
   }, [filter]);
+
+  useEffect(() => {
+    setFilter(parseStatus(searchParams?.get("status") ?? null));
+  }, [searchParams]);
+
+  const nowSeconds = Date.now() / 1000;
+  const visibleSubmissions = hasAgeFilter
+    ? submissions.filter((s) => {
+        const ageHours = (nowSeconds - s.updatedAt) / 3600;
+        if (minAgeHours !== null && ageHours < minAgeHours) return false;
+        if (maxAgeHours !== null && ageHours >= maxAgeHours) return false;
+        return true;
+      })
+    : submissions;
+
+  const clearAgeFilter = () => {
+    router.push(filter === "ALL" ? "/review" : `/review?status=${filter}`);
+  };
 
   const counts = {
     ALL: submissions.length,
@@ -162,6 +204,8 @@ export default function ReviewPage() {
             </div>
           )}
 
+          <ReviewAgingPanel />
+
           {/* Stats */}
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
             {([
@@ -202,6 +246,27 @@ export default function ReviewPage() {
             ))}
           </div>
 
+          {hasAgeFilter && (
+            <div className="flex items-center gap-2 text-xs text-foreground/50">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary">
+                Age{" "}
+                {minAgeHours !== null && maxAgeHours !== null
+                  ? `${formatHours(minAgeHours)}–${formatHours(maxAgeHours)}`
+                  : minAgeHours !== null
+                    ? `≥ ${formatHours(minAgeHours)}`
+                    : `< ${formatHours(maxAgeHours as number)}`}
+                <button
+                  type="button"
+                  onClick={clearAgeFilter}
+                  aria-label="Clear age filter"
+                  className="hover:text-foreground"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            </div>
+          )}
+
           {/* Error state */}
           {error && (
             <div className="text-center py-12 text-red-400">
@@ -224,7 +289,7 @@ export default function ReviewPage() {
           )}
 
           {/* Empty state */}
-          {!isLoading && !error && submissions.length === 0 && (
+          {!isLoading && !error && visibleSubmissions.length === 0 && (
             <div className="text-center py-16 text-foreground/40">
               <FileText className="w-12 h-12 mx-auto mb-4 opacity-20" />
               <p>No submissions found for this filter.</p>
@@ -232,9 +297,9 @@ export default function ReviewPage() {
           )}
 
           {/* Submission list */}
-          {!isLoading && !error && submissions.length > 0 && (
+          {!isLoading && !error && visibleSubmissions.length > 0 && (
             <div className="space-y-4">
-              {submissions.map((s) => {
+              {visibleSubmissions.map((s) => {
                 const style = STATUS_STYLES[s.status];
                 return (
                   <Link

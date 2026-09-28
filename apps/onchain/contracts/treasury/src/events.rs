@@ -1,16 +1,27 @@
+use event_versioning::{versioned_event, VersionedEvent};
 use soroban_sdk::{contractevent, Address, Env};
 
 use crate::storage::{ProposalAction, ProposalStatus};
 
+// Every event below follows the canonical event-versioning convention
+// (issue #1057, `event-versioning` crate): a `#[topic] pub version: u32`
+// field as the first field, an `EVENT_VERSION` constant via
+// `versioned_event!`, and a publish helper that sets `version` from that
+// constant rather than a literal. See `event-versioning`'s crate docs for
+// the full rationale and the rule for when to bump a version.
+
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StreamCreatedEvent {
+    #[topic]
+    pub version: u32,
     #[topic]
     pub beneficiary: Address,
     pub amount: i128,
     pub start_time: u64,
     pub duration: u64,
 }
+versioned_event!(StreamCreatedEvent, 1);
 
 /// Emitted by `allocate_budget_with_cliff`. Carries the cliff timestamp so
 /// indexers and admin tooling can render cliff-aware schedules.
@@ -18,25 +29,33 @@ pub struct StreamCreatedEvent {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CliffStreamCreatedEvent {
     #[topic]
+    pub version: u32,
+    #[topic]
     pub beneficiary: Address,
     pub amount: i128,
     pub start_time: u64,
     pub duration: u64,
     pub cliff_time: u64,
 }
+versioned_event!(CliffStreamCreatedEvent, 1);
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TokensClaimedEvent {
     #[topic]
+    pub version: u32,
+    #[topic]
     pub beneficiary: Address,
     pub amount_claimed: i128,
     pub remaining: i128,
 }
+versioned_event!(TokensClaimedEvent, 1);
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BeneficiaryRotatedEvent {
+    #[topic]
+    pub version: u32,
     #[topic]
     pub old_beneficiary: Address,
     #[topic]
@@ -44,6 +63,7 @@ pub struct BeneficiaryRotatedEvent {
     pub claimed_amount: i128,
     pub remaining_amount: i128,
 }
+versioned_event!(BeneficiaryRotatedEvent, 1);
 
 // ── Multisig proposal events ─────────────────────────────────
 
@@ -51,16 +71,21 @@ pub struct BeneficiaryRotatedEvent {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProposalCreatedEvent {
     #[topic]
+    pub version: u32,
+    #[topic]
     pub proposal_id: u64,
     pub proposer: Address,
     pub action: ProposalAction,
     pub weight_collected: u32,
     pub threshold: u32,
 }
+versioned_event!(ProposalCreatedEvent, 1);
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SignatureCollectedEvent {
+    #[topic]
+    pub version: u32,
     #[topic]
     pub proposal_id: u64,
     pub signer: Address,
@@ -68,67 +93,89 @@ pub struct SignatureCollectedEvent {
     pub threshold: u32,
     pub status: ProposalStatus,
 }
+versioned_event!(SignatureCollectedEvent, 1);
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProposalExecutedEvent {
     #[topic]
+    pub version: u32,
+    #[topic]
     pub proposal_id: u64,
     pub executor: Address,
     pub action: ProposalAction,
 }
+versioned_event!(ProposalExecutedEvent, 1);
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProposalCancelledEvent {
     #[topic]
+    pub version: u32,
+    #[topic]
     pub proposal_id: u64,
     pub cancelled_by: Address,
 }
+versioned_event!(ProposalCancelledEvent, 1);
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MultisigConfiguredEvent {
     #[topic]
+    pub version: u32,
+    #[topic]
     pub configured_by: Address,
     pub threshold: u32,
     pub signer_count: u32,
 }
+versioned_event!(MultisigConfiguredEvent, 1);
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProposalExpiredEvent {
     #[topic]
+    pub version: u32,
+    #[topic]
     pub proposal_id: u64,
     pub expired_at: u64,
 }
+versioned_event!(ProposalExpiredEvent, 1);
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminChangedEvent {
     #[topic]
+    pub version: u32,
+    #[topic]
     pub old_admin: Address,
     pub new_admin: Address,
 }
+versioned_event!(AdminChangedEvent, 1);
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StreamCancelledEvent {
+    #[topic]
+    pub version: u32,
     #[topic]
     pub beneficiary: Address,
     pub total_unlocked: i128,
     pub refundable: i128,
     pub cancelled_at: u64,
 }
+versioned_event!(StreamCancelledEvent, 1);
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EmergencyStopEvent {
     #[topic]
+    pub version: u32,
+    #[topic]
     pub beneficiary: Address,
     pub reason: soroban_sdk::String,
     pub full_refund: i128,
 }
+versioned_event!(EmergencyStopEvent, 1);
 
 // ── Publish helpers ──────────────────────────────────────────
 
@@ -140,6 +187,7 @@ pub fn publish_stream_created(
     duration: u64,
 ) {
     StreamCreatedEvent {
+        version: StreamCreatedEvent::EVENT_VERSION,
         beneficiary,
         amount,
         start_time,
@@ -157,6 +205,7 @@ pub fn publish_cliff_stream_created(
     cliff_time: u64,
 ) {
     CliffStreamCreatedEvent {
+        version: CliffStreamCreatedEvent::EVENT_VERSION,
         beneficiary,
         amount,
         start_time,
@@ -173,6 +222,7 @@ pub fn publish_tokens_claimed(
     remaining: i128,
 ) {
     TokensClaimedEvent {
+        version: TokensClaimedEvent::EVENT_VERSION,
         beneficiary,
         amount_claimed,
         remaining,
@@ -188,6 +238,7 @@ pub fn publish_beneficiary_rotated(
     remaining_amount: i128,
 ) {
     BeneficiaryRotatedEvent {
+        version: BeneficiaryRotatedEvent::EVENT_VERSION,
         old_beneficiary,
         new_beneficiary,
         claimed_amount,
@@ -205,6 +256,7 @@ pub fn publish_proposal_created(
     threshold: u32,
 ) {
     ProposalCreatedEvent {
+        version: ProposalCreatedEvent::EVENT_VERSION,
         proposal_id,
         proposer,
         action,
@@ -223,6 +275,7 @@ pub fn publish_signature_collected(
     status: ProposalStatus,
 ) {
     SignatureCollectedEvent {
+        version: SignatureCollectedEvent::EVENT_VERSION,
         proposal_id,
         signer,
         weight_collected,
@@ -239,6 +292,7 @@ pub fn publish_proposal_executed(
     action: ProposalAction,
 ) {
     ProposalExecutedEvent {
+        version: ProposalExecutedEvent::EVENT_VERSION,
         proposal_id,
         executor,
         action,
@@ -248,6 +302,7 @@ pub fn publish_proposal_executed(
 
 pub fn publish_proposal_cancelled(env: &Env, proposal_id: u64, cancelled_by: Address) {
     ProposalCancelledEvent {
+        version: ProposalCancelledEvent::EVENT_VERSION,
         proposal_id,
         cancelled_by,
     }
@@ -261,6 +316,7 @@ pub fn publish_multisig_configured(
     signer_count: u32,
 ) {
     MultisigConfiguredEvent {
+        version: MultisigConfiguredEvent::EVENT_VERSION,
         configured_by,
         threshold,
         signer_count,
@@ -270,6 +326,7 @@ pub fn publish_multisig_configured(
 
 pub fn publish_proposal_expired(env: &Env, proposal_id: u64, expired_at: u64) {
     ProposalExpiredEvent {
+        version: ProposalExpiredEvent::EVENT_VERSION,
         proposal_id,
         expired_at,
     }
@@ -278,6 +335,7 @@ pub fn publish_proposal_expired(env: &Env, proposal_id: u64, expired_at: u64) {
 
 pub fn publish_admin_changed(env: &Env, old_admin: Address, new_admin: Address) {
     AdminChangedEvent {
+        version: AdminChangedEvent::EVENT_VERSION,
         old_admin,
         new_admin,
     }
@@ -292,6 +350,7 @@ pub fn publish_stream_cancelled(
     cancelled_at: u64,
 ) {
     StreamCancelledEvent {
+        version: StreamCancelledEvent::EVENT_VERSION,
         beneficiary,
         total_unlocked,
         refundable,
@@ -307,6 +366,7 @@ pub fn publish_emergency_stop(
     full_refund: i128,
 ) {
     EmergencyStopEvent {
+        version: EmergencyStopEvent::EVENT_VERSION,
         beneficiary,
         reason,
         full_refund,

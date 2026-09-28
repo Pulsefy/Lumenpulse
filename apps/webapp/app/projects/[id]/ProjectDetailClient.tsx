@@ -30,7 +30,6 @@ import { useWalletReadiness } from "@/hooks/useWalletReadiness";
 import { WalletReadinessBanner } from "@/components/WalletReadinessBanner";
 import { TransactionReceiptModal } from "@/components/TransactionReceiptModal";
 import { ReportButton } from "@/components/report/report-button";
-import { signTransaction } from "@stellar/freighter-api";
 import {
   Address,
   Contract,
@@ -414,6 +413,7 @@ function ContributionForm({
     publicKey,
     status: walletStatus,
     connect: connectWallet,
+    signXdr,
   } = useStellarWallet();
   const buildExplorerUrl = useExplorerUrl();
 
@@ -501,15 +501,17 @@ function ContributionForm({
 
       const preparedTx = rpc.assembleTransaction(tx, simulation).build();
       setTxState("signing");
-      const signingResult = await signTransaction(preparedTx.toXDR(), {
+      const signingResult = await signXdr(preparedTx.toXDR(), {
         networkPassphrase,
       });
-      if (signingResult.error) {
-        throw new Error(`Signing failed: ${signingResult.error}`);
+      if (signingResult.status !== "success" || !signingResult.signedXdr) {
+        throw new Error(
+          `Signing failed: ${signingResult.error?.message ?? signingResult.status}`,
+        );
       }
 
       const signedTx = TransactionBuilder.fromXDR(
-        signingResult.signedTxXdr,
+        signingResult.signedXdr,
         networkPassphrase,
       );
       setTxState("submitting");

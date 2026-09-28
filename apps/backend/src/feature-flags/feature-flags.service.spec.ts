@@ -12,6 +12,7 @@ describe('FeatureFlagsService', () => {
   let auditRepo: Partial<Repository<FlagAuditLog>>;
   let hitsCounter: { inc: jest.Mock };
   let missesCounter: { inc: jest.Mock };
+  let reasonCounter: { inc: jest.Mock };
   let latencyHistogram: { startTimer: jest.Mock };
   let metricsService: Partial<MetricsService>;
 
@@ -46,12 +47,16 @@ describe('FeatureFlagsService', () => {
 
     hitsCounter = { inc: jest.fn() };
     missesCounter = { inc: jest.fn() };
+    reasonCounter = { inc: jest.fn() };
     latencyHistogram = { startTimer: jest.fn(() => jest.fn()) };
 
     metricsService = {
       getOrCreateCounter: jest.fn().mockImplementation((name: string) => {
         if (name === 'feature_flag_cache_hits_total') return hitsCounter;
         if (name === 'feature_flag_cache_misses_total') return missesCounter;
+        if (name === 'feature_flag_evaluations_by_reason_total') {
+          return reasonCounter;
+        }
         return { inc: jest.fn() };
       }),
       getOrCreateHistogram: jest.fn().mockReturnValue(latencyHistogram),
@@ -150,6 +155,9 @@ describe('FeatureFlagsService', () => {
         id: 'existing-id',
         key: 'flag.exists',
         enabled: false,
+        rolloutPercentage: null,
+        allowList: null,
+        denyList: null,
         conditions: null,
         changedBy: null,
         createdAt: new Date(),
@@ -231,6 +239,477 @@ describe('FeatureFlagsService', () => {
 
       expect(latencyHistogram.startTimer).toHaveBeenCalled();
       expect(endTimer).toHaveBeenCalled();
+    });
+
+    it('registers a counter split by evaluation reason', () => {
+      expect(metricsService.getOrCreateCounter).toHaveBeenCalledWith(
+        'feature_flag_evaluations_by_reason_total',
+        expect.any(String),
+        ['reason'],
+      );
+    });
+
+    it('counts each evaluation against the rule that resolved it', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue({
+        id: 'id',
+        key: 'flag.reason',
+        enabled: true,
+        rolloutPercentage: null,
+        allowList: null,
+        denyList: null,
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await service.isEnabled('flag.reason', { principalId: 'user-1' });
+
+      expect(reasonCounter.inc).toHaveBeenCalledWith({
+        reason: 'default_state',
+      });
+    });
+  });
+
+  describe('Percentage targeting', () => {
+    const storedFlag = (overrides: Partial<FeatureFlag>): FeatureFlag =>
+      ({
+        id: 'id',
+        key: 'risky.migration',
+        enabled: false,
+        rolloutPercentage: null,
+        allowList: null,
+        denyList: null,
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...overrides,
+      }) as FeatureFlag;
+
+    beforeEach(() => {
+      (repo.findOne as jest.Mock).mockReset();
+    });
+
+    it('enables the flag for every principal at 100%', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue(
+        storedFlag({ rolloutPercentage: 100 }),
+      );
+
+      await expect(
+        service.isEnabled('risky.migration', { principalId: 'user-1' }),
+      ).resolves.toBe(true);
+    });
+
+    it('excludes every principal at 0% even when the flag is on', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue(
+        storedFlag({ enabled: true, rolloutPercentage: 0 }),
+      );
+
+      await expect(
+        service.isEnabled('risky.migration', { principalId: 'user-1' }),
+      ).resolves.toBe(false);
+    });
+
+    it('applies allow and deny lists ahead of the percentage', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue(
+        storedFlag({
+          rolloutPercentage: 0,
+          allowList: ['allowed-user'],
+          denyList: ['blocked-user'],
+        }),
+      );
+
+      await expect(
+        service.isEnabled('risky.migration', { principalId: 'allowed-user' }),
+      ).resolves.toBe(true);
+      await expect(
+        service.isEnabled('risky.migration', { principalId: 'blocked-user' }),
+      ).resolves.toBe(false);
+    });
+
+    it('ignores percentage targeting when no principal is supplied', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue(
+        storedFlag({ enabled: true, rolloutPercentage: 100 }),
+      );
+
+      // No principal means no bucket, so the flag's own state is used.
+      await expect(service.isEnabled('risky.migration')).resolves.toBe(true);
+    });
+
+    it('keeps a principal on the same side of the rollout across evaluations', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue(
+        storedFlag({ rolloutPercentage: 50 }),
+      );
+
+      const first = await service.isEnabled('risky.migration', {
+        principalId: 'user-77',
+      });
+      for (let i = 0; i < 50; i++) {
+        await expect(
+          service.isEnabled('risky.migration', { principalId: 'user-77' }),
+        ).resolves.toBe(first);
+      }
+    });
+
+    it('only ever widens the served set as the percentage is raised', async () => {
+      const servedAt = async (percentage: number) => {
+        (repo.findOne as jest.Mock).mockResolvedValue(
+          storedFlag({ rolloutPercentage: percentage }),
+        );
+        const served = new Set<string>();
+        for (let i = 0; i < 100; i++) {
+          const principal = `user-${i}`;
+          if (
+            await service.isEnabled('risky.migration', {
+              principalId: principal,
+            })
+          ) {
+            served.add(principal);
+          }
+        }
+        return served;
+      };
+
+      let previous = await servedAt(10);
+      for (const percentage of [25, 50, 100]) {
+        const current = await servedAt(percentage);
+        for (const principal of previous) {
+          expect(current.has(principal)).toBe(true);
+        }
+        previous = current;
+      }
+    });
+  });
+
+  describe('Targeting persistence', () => {
+    it('stores the rollout percentage and lists on create', async () => {
+      const saved = await service.upsert(
+        'flag.rollout',
+        false,
+        undefined,
+        'admin',
+        {
+          rolloutPercentage: 5,
+          allowList: ['qa'],
+          denyList: ['banned'],
+        },
+      );
+
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: 'flag.rollout',
+          rolloutPercentage: 5,
+          allowList: ['qa'],
+          denyList: ['banned'],
+        }),
+      );
+      expect(saved.rolloutPercentage).toBe(5);
+    });
+
+    it('applies targeting to an existing flag', async () => {
+      const existing = {
+        id: 'id',
+        key: 'flag.rollout',
+        enabled: true,
+        rolloutPercentage: null,
+        allowList: null,
+        denyList: null,
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as FeatureFlag;
+      (repo.findOne as jest.Mock).mockResolvedValue(existing);
+
+      await service.upsert('flag.rollout', true, undefined, 'admin', {
+        rolloutPercentage: 25,
+      });
+
+      expect(existing.rolloutPercentage).toBe(25);
+    });
+
+    it('leaves an existing rollout untouched when targeting is omitted', async () => {
+      // An on/off-only update must not silently clear a live canary.
+      const existing = {
+        id: 'id',
+        key: 'flag.rollout',
+        enabled: true,
+        rolloutPercentage: 5,
+        allowList: ['qa'],
+        denyList: null,
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as FeatureFlag;
+      (repo.findOne as jest.Mock).mockResolvedValue(existing);
+
+      await service.upsert('flag.rollout', false, undefined, 'admin');
+
+      expect(existing.rolloutPercentage).toBe(5);
+      expect(existing.allowList).toEqual(['qa']);
+    });
+
+    it('sanitizes an out-of-range percentage on write', async () => {
+      await service.upsert('flag.rollout', false, undefined, 'admin', {
+        rolloutPercentage: 900,
+      });
+
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ rolloutPercentage: null }),
+      );
+    });
+
+    it('serves nobody when the rollout is cleared to 0 and the flag is off', async () => {
+      const existing = {
+        id: 'id',
+        key: 'flag.rollout',
+        enabled: true,
+        rolloutPercentage: 50,
+        allowList: null,
+        denyList: null,
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as FeatureFlag;
+      (repo.findOne as jest.Mock).mockResolvedValue(existing);
+
+      await service.upsert('flag.rollout', false, undefined, 'admin', {
+        rolloutPercentage: 0,
+      });
+
+      for (const principal of ['user-1', 'user-2', 'user-3']) {
+        await expect(
+          service.isEnabled('flag.rollout', { principalId: principal }),
+        ).resolves.toBe(false);
+      }
+    });
+  });
+
+  describe('evaluate', () => {
+    beforeEach(() => {
+      (repo.findOne as jest.Mock).mockReset();
+    });
+
+    it('reports the result, reason and bucket for a principal', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue({
+        id: 'id',
+        key: 'risky.migration',
+        enabled: false,
+        rolloutPercentage: 100,
+        allowList: [],
+        denyList: [],
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as FeatureFlag);
+
+      const result = await service.evaluate('risky.migration', 'user-1');
+
+      expect(result).toEqual({
+        key: 'risky.migration',
+        principalId: 'user-1',
+        enabled: true,
+        reason: 'percentage_included',
+        bucket: expect.any(Number),
+        rolloutPercentage: 100,
+        allowList: [],
+        denyList: [],
+      });
+      expect(result.bucket).toBeGreaterThanOrEqual(0);
+      expect(result.bucket).toBeLessThan(10_000);
+    });
+
+    it('explains why a principal is not in a canary', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue({
+        id: 'id',
+        key: 'risky.migration',
+        enabled: false,
+        rolloutPercentage: 0,
+        allowList: null,
+        denyList: null,
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as FeatureFlag);
+
+      const result = await service.evaluate('risky.migration', 'user-1');
+
+      expect(result.reason).toBe('percentage_excluded');
+      expect(result.enabled).toBe(false);
+    });
+
+    it('reports flag_not_found for an unknown key', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue(undefined);
+
+      await expect(service.evaluate('nope.flag', 'user-1')).resolves.toEqual({
+        key: 'nope.flag',
+        principalId: 'user-1',
+        enabled: false,
+        reason: 'flag_not_found',
+        bucket: null,
+        rolloutPercentage: null,
+        allowList: [],
+        denyList: [],
+      });
+    });
+
+    it('exposes the configured targeting for debugging', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue({
+        id: 'id',
+        key: 'risky.migration',
+        enabled: false,
+        rolloutPercentage: 5,
+        allowList: ['qa'],
+        denyList: ['banned'],
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as FeatureFlag);
+
+      const result = await service.evaluate('risky.migration', 'someone');
+
+      expect(result.rolloutPercentage).toBe(5);
+      expect(result.allowList).toEqual(['qa']);
+      expect(result.denyList).toEqual(['banned']);
+    });
+
+    it('is stable for the same principal across repeated calls', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue({
+        id: 'id',
+        key: 'risky.migration',
+        enabled: false,
+        rolloutPercentage: 37,
+        allowList: null,
+        denyList: null,
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as FeatureFlag);
+
+      const first = await service.evaluate('risky.migration', 'user-42');
+      for (let i = 0; i < 25; i++) {
+        expect(await service.evaluate('risky.migration', 'user-42')).toEqual(
+          first,
+        );
+      }
+    });
+  });
+
+  describe('Targeting audit logging', () => {
+    it('records the new targeting snapshot on upsert', async () => {
+      await service.upsert('flag.audit.targeting', false, undefined, 'admin', {
+        rolloutPercentage: 10,
+        allowList: ['qa'],
+        denyList: [],
+      });
+
+      expect(auditRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          flagKey: 'flag.audit.targeting',
+          action: 'upsert',
+          previousTargeting: null,
+          newTargeting: {
+            rolloutPercentage: 10,
+            allowList: ['qa'],
+            denyList: [],
+          },
+        }),
+      );
+    });
+
+    it('records the previous targeting snapshot when a rollout changes', async () => {
+      const existing = {
+        id: 'id',
+        key: 'flag.audit.targeting',
+        enabled: true,
+        rolloutPercentage: 5,
+        allowList: ['qa'],
+        denyList: [],
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as FeatureFlag;
+      (repo.findOne as jest.Mock).mockResolvedValue(existing);
+
+      await service.upsert('flag.audit.targeting', true, undefined, 'admin', {
+        rolloutPercentage: 50,
+      });
+
+      expect(auditRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          previousTargeting: {
+            rolloutPercentage: 5,
+            allowList: ['qa'],
+            denyList: [],
+          },
+          newTargeting: {
+            rolloutPercentage: 50,
+            allowList: [],
+            denyList: [],
+          },
+        }),
+      );
+    });
+
+    it('records the discarded targeting snapshot on remove', async () => {
+      const existing = {
+        id: 'id',
+        key: 'flag.audit.targeting',
+        enabled: true,
+        rolloutPercentage: 5,
+        allowList: null,
+        denyList: ['banned'],
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as FeatureFlag;
+      (repo.findOne as jest.Mock).mockResolvedValue(existing);
+
+      await service.remove('flag.audit.targeting');
+
+      expect(auditRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'remove',
+          previousTargeting: {
+            rolloutPercentage: 5,
+            allowList: [],
+            denyList: ['banned'],
+          },
+          newTargeting: null,
+        }),
+      );
+    });
+
+    it('keeps the targeting snapshot detached from later flag mutations', async () => {
+      const existing = {
+        id: 'id',
+        key: 'flag.audit.targeting',
+        enabled: true,
+        rolloutPercentage: 5,
+        allowList: ['qa'],
+        denyList: null,
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as FeatureFlag;
+      (repo.findOne as jest.Mock).mockResolvedValue(existing);
+
+      await service.upsert('flag.audit.targeting', true, undefined, 'admin', {
+        rolloutPercentage: 75,
+      });
+
+      const call = (auditRepo.create as jest.Mock).mock.calls.at(-1)?.[0];
+      expect(call.previousTargeting.allowList).toEqual(['qa']);
     });
   });
 });

@@ -11,7 +11,15 @@ import { QueryCountMiddleware } from './query-count.middleware';
  * the QUERY_PROFILING environment variable is set to "true".
  */
 @Module({
-  providers: [QueryProfilerService, QueryProfilerInterceptor, QueryCountMiddleware],
-  exports: [QueryProfilerService, QueryProfilerInterceptor, QueryCountMiddleware],
+  providers: [
+    QueryProfilerService,
+    QueryProfilerInterceptor,
+    QueryCountMiddleware,
+  ],
+  exports: [
+    QueryProfilerService,
+    QueryProfilerInterceptor,
+    QueryCountMiddleware,
+  ],
 })
 export class ProfilingModule {}

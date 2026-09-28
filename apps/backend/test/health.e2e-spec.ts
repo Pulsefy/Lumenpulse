@@ -180,6 +180,17 @@ describe('Health Check (e2e)', () => {
     await request(getHttpServer()).get('/health').expect(503);
   });
 
+  it('keeps liveness up while readiness fails on a critical dependency', async () => {
+    healthService.getHealthReport.mockResolvedValue({
+      status: 'error',
+      summary: 'down',
+    });
+    await request(getHttpServer())
+      .get('/health/live')
+      .expect(200, { status: 'ok', summary: 'healthy' });
+    await request(getHttpServer()).get('/health/ready').expect(503);
+  });
+
   describe('GET /health/smoke', () => {
     const passingReport = {
       status: 'pass',

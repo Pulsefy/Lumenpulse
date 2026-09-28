@@ -1716,6 +1716,84 @@
         }
       }
     },
+    "/search/similar": {
+      "get": {
+        "summary": "Search Similar",
+        "description": "Rank ingested news articles by semantic similarity to a query (#1455).",
+        "operationId": "search_similar_search_similar_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "description": "Natural-language query embedded with the pinned model",
+              "title": "Q"
+            },
+            "description": "Natural-language query embedded with the pinned model"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "model_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Scope search to a stored pinned model version (defaults to the latest version present in the store)",
+              "title": "Model Version"
+            },
+            "description": "Scope search to a stored pinned model version (defaults to the latest version present in the store)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SemanticSearchResult"
+                  },
+                  "title": "Response Search Similar Search Similar Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/contributors/{contributor}/timeline": {
       "get": {
         "summary": "Get Contributor Activity Timeline",
@@ -5093,6 +5171,93 @@
           "message"
         ],
         "title": "RollbackResponse"
+      },
+      "SemanticSearchResult": {
+        "properties": {
+          "article_id": {
+            "type": "string",
+            "title": "Article Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Categories",
+            "default": []
+          },
+          "primary_asset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Asset"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "similarity_score": {
+            "type": "number",
+            "title": "Similarity Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "article_id",
+          "title",
+          "similarity_score"
+        ],
+        "title": "SemanticSearchResult",
+        "description": "One ranked result from the semantic news search (#1455)."
       },
       "SentimentExplanationResponse": {
         "properties": {

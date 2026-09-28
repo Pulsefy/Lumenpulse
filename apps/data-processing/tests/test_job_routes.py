@@ -5,6 +5,7 @@ Route-level tests for the async analytics job queue (#1248): submitting
 and GET /api/jobs/{job_id} reports the outcome.
 """
 
+import threading
 import time
 
 import pytest
@@ -74,19 +75,33 @@ def test_retrain_submits_job_and_can_be_polled(client, monkeypatch):
 
 
 def test_concurrent_retrain_submissions_collapse(client, monkeypatch):
-    monkeypatch.setattr(
-        server_module, "run_retraining", lambda force=False: {"status": "completed"}
-    )
+    # Hold the first job in flight until the second request has been submitted.
+    # With an instant mock the first job can finish (clearing its dedupe key)
+    # before the second POST arrives, and the two then correctly do not
+    # collapse, which made this test fail depending on timing.
+    release = threading.Event()
 
-    resp1 = client.post("/retrain", json={"force": False}, headers=_HEADERS)
-    resp2 = client.post("/retrain", json={"force": True}, headers=_HEADERS)
-    assert resp1.status_code == 202
-    assert resp2.status_code == 202
+    def _blocking_retrain(force=False):
+        release.wait(timeout=10)
+        return {"status": "completed"}
 
-    body1, body2 = resp1.json(), resp2.json()
-    # Both requests are the same conceptual job (only one retrain runs at a
-    # time), so the second collapses onto the first regardless of `force`.
-    assert body1["job_id"] == body2["job_id"] or body2["created"] is False
+    monkeypatch.setattr(server_module, "run_retraining", _blocking_retrain)
+
+    try:
+        resp1 = client.post("/retrain", json={"force": False}, headers=_HEADERS)
+        resp2 = client.post("/retrain", json={"force": True}, headers=_HEADERS)
+        assert resp1.status_code == 202
+        assert resp2.status_code == 202
+
+        body1, body2 = resp1.json(), resp2.json()
+        # Both requests are the same conceptual job (only one retrain runs at a
+        # time), so the second collapses onto the first regardless of `force`.
+        assert body1["created"] is True
+        assert body2["created"] is False
+        assert body1["job_id"] == body2["job_id"]
+    finally:
+        release.set()
+
     _poll_until_terminal(client, body1["job_id"])
 
 

@@ -83,4 +83,9 @@ USER appuser
 # Fails the build if the pinned model cannot be fetched.
 RUN python scripts/fetch_ner_model.py && python scripts/fetch_ner_model.py --check-only
 
+# Same build-time vendoring for the pinned embedding model (#1455). Serves
+# /search/similar without any runtime outbound network access for model
+# resolution and gates the image on version-exactness.
+RUN python scripts/fetch_embedding_model.py && python scripts/fetch_embedding_model.py --check-only
+
 CMD ["python", "src/main.py"]

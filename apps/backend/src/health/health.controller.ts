@@ -51,10 +51,9 @@ export class HealthController {
     summary:
       'Liveness probe (returns healthy even during graceful shutdown drain)',
   })
-  async getLiveness(@Res({ passthrough: true }) response: Response) {
-    const healthReport = await this.healthService.getHealthReport();
-    response.status(healthReport.status === 'error' ? 503 : 200);
-    return healthReport;
+  getLiveness(@Res({ passthrough: true }) response: Response) {
+    response.status(200);
+    return { status: 'ok', summary: 'healthy' };
   }
 
   @Get('health/ready')

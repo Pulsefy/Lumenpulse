@@ -12,9 +12,10 @@ import {
   ActivityIndicator,
   StatusBar,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocalization } from '../../src/context';
+import { sanitizeRedirectPath } from '../../lib/deep-links';
 
 const LoginScreen = () => {
   const { colors, resolvedMode } = useLocalization();
@@ -24,6 +25,11 @@ const LoginScreen = () => {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { login } = useAuth();
+  // Deep-link continuation (issue #1410): when a notification tap lands here
+  // because the target requires auth, `?redirect=` carries the original
+  // destination; we continue to it after a successful login.
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
+  const continueTo = sanitizeRedirectPath(redirect) ?? '/';
 
   const validateInputs = () => {
     if (!email.trim()) {
@@ -58,7 +64,7 @@ const LoginScreen = () => {
     setLoading(true);
     try {
       await login(email, password);
-      router.replace('/');
+      router.replace(continueTo as any);
     } catch (error: any) {
       console.error('Login error:', error);
       Alert.alert(
@@ -106,6 +112,7 @@ const LoginScreen = () => {
                 ]}
                 value={email}
                 onChangeText={setEmail}
+                testID="login-email-input"
                 placeholder={t('auth.login.email_placeholder')}
                 placeholderTextColor={colors.textSecondary}
                 keyboardType="email-address"
@@ -134,6 +141,7 @@ const LoginScreen = () => {
                 ]}
                 value={password}
                 onChangeText={setPassword}
+                testID="login-password-input"
                 placeholder={t('auth.login.password_placeholder')}
                 placeholderTextColor={colors.textSecondary}
                 secureTextEntry
@@ -154,6 +162,7 @@ const LoginScreen = () => {
               ]}
               onPress={handleLogin}
               disabled={loading}
+              testID="login-submit-button"
               accessibilityRole="button"
               accessibilityState={{ disabled: loading }}
               accessibilityLabel={t('auth.login.sign_in_button')}

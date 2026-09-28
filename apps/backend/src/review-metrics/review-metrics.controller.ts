@@ -18,7 +18,7 @@ import {
 @ApiTags('review metrics')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.REVIEWER)
 @Controller('review-metrics')
 export class ReviewMetricsController {
   constructor(private readonly reviewMetricsService: ReviewMetricsService) {}
@@ -28,14 +28,14 @@ export class ReviewMetricsController {
     summary: 'Get review aging metrics',
     description:
       'Returns aging distribution and latency statistics for pending/in-review items ' +
-      'across moderation reports and portfolio anomalies. Requires admin role.',
+      'across moderation reports and portfolio anomalies. Requires reviewer or admin role.',
   })
   @ApiResponse({
     status: 200,
     description: 'Aging metrics computed successfully',
     type: ReviewMetricsResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Forbidden – admin role required' })
+  @ApiResponse({ status: 403, description: 'Forbidden – reviewer or admin role required' })
   async getAgingMetrics(
     @Query() query: ReviewMetricsQueryDto,
   ): Promise<ReviewMetricsResponseDto> {

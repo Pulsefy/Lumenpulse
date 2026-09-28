@@ -246,7 +246,7 @@ eas build --platform ios --profile production
 
 ## Related Files
 
-- Architecture: [ARCHITECTURE.md](document/ARCHITECTURE.md)
+- Architecture: [ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Cache Implementation: [CACHING_IMPLEMENTATION.md](apps/mobile/CACHING_IMPLEMENTATION.md)
 - Setup Guide: [SETUP_GUIDE.md](apps/mobile/SETUP_GUIDE.md)
 - Contributing: [CONTRIBUTOR_README.md](apps/mobile/CONTRIBUTOR_README.md)

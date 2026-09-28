@@ -99,15 +99,37 @@ function findChangedMigrationFiles(): ChangedMigrationFiles {
     // no diff available
   }
 
+  try {
+    const untracked = execSync(
+      'git ls-files --others --exclude-standard -- apps/backend/src/database/migrations/',
+      {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        cwd: REPO_ROOT,
+      },
+    );
+    for (const line of untracked.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+      const fullPath = resolve(REPO_ROOT, trimmed);
+      added.add(fullPath);
+      changed.add(fullPath);
+    }
+  } catch {
+    // untracked check failed
+  }
+
   return { changed, added };
 }
 
 function extractMethodBody(source: string, method: 'up' | 'down'): string {
-  const signature = new RegExp(
-    `(?:public\\s+)?async\\s+${method}\\s*\\([^)]*\\)[^\\{]*\\{`,
-    'm',
-  );
-  const match = signature.exec(source);
+  const methodRegex =
+    method === 'up'
+      ? /(?:public\s+)?async\s+up\s*\([^)]*\)[^{]*\{/m
+      : /(?:public\s+)?async\s+down\s*\([^)]*\)[^{]*\{/m;
+  const match = methodRegex.exec(source);
   if (!match) {
     return '';
   }
@@ -117,12 +139,11 @@ function extractMethodBody(source: string, method: 'up' | 'down'): string {
     return '';
   }
 
-  const other = method === 'up' ? 'down' : 'up';
-  const otherSig = new RegExp(
-    `(?:public\\s+)?async\\s+${other}\\s*\\([^)]*\\)[^\\{]*\\{`,
-    'm',
-  );
-  const otherMatch = otherSig.exec(source);
+  const otherRegex =
+    method === 'up'
+      ? /(?:public\s+)?async\s+down\s*\([^)]*\)[^{]*\{/m
+      : /(?:public\s+)?async\s+up\s*\([^)]*\)[^{]*\{/m;
+  const otherMatch = otherRegex.exec(source);
 
   let end = source.length;
   if (otherMatch) {

@@ -16,6 +16,8 @@ import {
   NotificationSeverity,
 } from '../notification/notification.entity';
 import { EventCategory } from '../common/event-catalog';
+import { MessageTemplateService } from '../message-template/message-template.service';
+import { MessageTemplateKey } from '../message-template/message-template.keys';
 
 const JOB_NAME = 'price-alert-evaluation';
 
@@ -32,6 +34,7 @@ export class PriceAlertEvaluationService {
     private readonly fanoutService: NotificationFanoutService,
     private readonly jobLockService: JobLockService,
     private readonly jobHistoryService: JobHistoryService,
+    private readonly messageTemplateService: MessageTemplateService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -114,11 +117,25 @@ export class PriceAlertEvaluationService {
       }
 
       try {
+        const directionPhrase =
+          rule.condition === PriceAlertCondition.ABOVE
+            ? 'risen above'
+            : 'fallen below';
+        const rendered = await this.messageTemplateService.render(
+          MessageTemplateKey.NOTIFICATION_PRICE_ALERT,
+          {
+            symbol: rule.symbol,
+            directionPhrase,
+            targetPrice: rule.targetPrice,
+            currentPrice,
+          },
+        );
+
         const notificationResult = await this.fanoutService.fanout({
           notification: {
             type: NotificationType.PRICE,
-            title: `Price Alert: ${rule.symbol}`,
-            message: `${rule.symbol} has ${rule.condition === PriceAlertCondition.ABOVE ? 'risen above' : 'fallen below'} ${rule.targetPrice}. Current price: ${currentPrice}.`,
+            title: rendered.title ?? '',
+            message: rendered.message ?? '',
             severity: NotificationSeverity.MEDIUM,
             eventCategory: EventCategory.PRICE,
             metadata: {

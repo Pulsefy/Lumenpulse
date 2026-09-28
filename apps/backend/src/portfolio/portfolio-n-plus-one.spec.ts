@@ -46,7 +46,11 @@ const makeRepo = (entity?: unknown) => ({
   findOne: jest.fn().mockResolvedValue(entity ?? null),
   find: jest.fn().mockResolvedValue([]),
   create: jest.fn().mockImplementation((dto: unknown) => dto),
-  save: jest.fn().mockImplementation((e: unknown) => Promise.resolve({ id: 'snap-1', ...e as object })),
+  save: jest
+    .fn()
+    .mockImplementation((e: unknown) =>
+      Promise.resolve({ id: 'snap-1', ...(e as object) }),
+    ),
   findAndCount: jest.fn().mockResolvedValue([[], 0]),
   createQueryBuilder: jest.fn().mockReturnValue({
     select: jest.fn().mockReturnThis(),
@@ -108,7 +112,12 @@ describe('PortfolioService – N+1 regression guard', () => {
           provide: PriceService,
           useValue: {
             getCurrentPrice: jest.fn().mockResolvedValue(0.12),
-            getPricesForAssets: jest.fn().mockResolvedValue(new Map([['XLM', 0.12], ['USDC', 1.0]])),
+            getPricesForAssets: jest.fn().mockResolvedValue(
+              new Map([
+                ['XLM', 0.12],
+                ['USDC', 1.0],
+              ]),
+            ),
           },
         },
         {
@@ -136,7 +145,9 @@ describe('PortfolioService – N+1 regression guard', () => {
         {
           provide: QueryProfilerService,
           useValue: {
-            profile: jest.fn().mockImplementation((fn: () => Promise<unknown>) => fn()),
+            profile: jest
+              .fn()
+              .mockImplementation((fn: () => Promise<unknown>) => fn()),
             trackCall: jest.fn(),
             getCallCount: jest.fn().mockReturnValue(-1),
             isEnabled: false,
@@ -147,7 +158,9 @@ describe('PortfolioService – N+1 regression guard', () => {
 
     service = module.get<PortfolioService>(PortfolioService);
     priceService = module.get<PriceService>(PriceService);
-    stellarBalanceService = module.get<StellarBalanceService>(StellarBalanceService);
+    stellarBalanceService = module.get<StellarBalanceService>(
+      StellarBalanceService,
+    );
 
     getPricesForAssetsSpy = jest.spyOn(priceService, 'getPricesForAssets');
   });
@@ -257,18 +270,12 @@ describe('PortfolioService – N+1 regression guard', () => {
 
         // Return a user with one linked account
         jest
-          .spyOn(
-            service['userRepository'],
-            'findOne',
-          )
+          .spyOn(service['userRepository'], 'findOne')
           .mockResolvedValue(userWithAccounts as unknown as User);
 
         // No materialized snapshot → falls back to live computation
         jest
-          .spyOn(
-            service['materializedSnapshotService'],
-            'getForUser',
-          )
+          .spyOn(service['materializedSnapshotService'], 'getForUser')
           .mockResolvedValue(null);
 
         const balances = makeBalancesForAssets(n);

@@ -5,6 +5,7 @@ Database package for analytics data persistence
 from .models import (
     Base,
     Article,
+    ArticleEmbedding,
     ArticleOnchainEntityLink,
     SocialPost,
     AnalyticsRecord,
@@ -31,6 +32,7 @@ from .postgres_service import PostgresService
 __all__ = [
     "Base",
     "Article",
+    "ArticleEmbedding",
     "ArticleOnchainEntityLink",
     "SocialPost",
     "AnalyticsRecord",

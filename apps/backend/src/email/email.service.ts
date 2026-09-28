@@ -1,11 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MessageTemplateService } from '../message-template/message-template.service';
+import { MessageTemplateKey } from '../message-template/message-template.keys';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly messageTemplateService: MessageTemplateService,
+  ) {}
 
   /**
    * Mocked email sending function.
@@ -18,13 +23,15 @@ export class EmailService {
       'http://localhost:3000',
     );
     const resetLink = `${frontendUrl}/auth/reset-password?token=${token}`;
+    const rendered = await this.messageTemplateService.render(
+      MessageTemplateKey.EMAIL_PASSWORD_RESET,
+      { resetLink },
+    );
 
     this.logger.log('--- MOCK EMAIL SENT ---');
     this.logger.log(`To: ${email}`);
-    this.logger.log(`Subject: Reset Your Passkey`);
-    this.logger.log(
-      `Message: Please use the following link to reset your passkey: ${resetLink}`,
-    );
+    this.logger.log(`Subject: ${rendered.subject ?? ''}`);
+    this.logger.log(`Message: ${rendered.body ?? ''}`);
     this.logger.log(`Raw Token: ${token}`);
     this.logger.log('------------------------');
 

@@ -1,10 +1,22 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  Optional,
+} from '@nestjs/common';
 import { ThrottlerStorage } from '@nestjs/throttler';
 import Keyv from 'keyv';
 import KeyvRedis from '@keyv/redis';
 import { getRateLimitSettings } from './rate-limit.config';
 
-interface RateLimitEntry {
+/**
+ * Optional DI token for supplying a pre-built Keyv store (e.g. an in-memory
+ * store in tests). When absent, Redis is used if configured, else memory.
+ */
+export const RATE_LIMIT_KEYV_STORE = Symbol('RATE_LIMIT_KEYV_STORE');
+
+export interface RateLimitEntry {
   totalHits: number;
   expiresAt: number;
   blockedUntil: number;
@@ -24,18 +36,24 @@ export class RateLimitStorageService
   private readonly logger = new Logger(RateLimitStorageService.name);
   private readonly store: Keyv<RateLimitEntry>;
 
-  constructor() {
+  constructor(
+    @Optional()
+    @Inject(RATE_LIMIT_KEYV_STORE)
+    store?: Keyv<RateLimitEntry>,
+  ) {
     const settings = getRateLimitSettings();
     const useRedis = Boolean(settings.redisUrl);
 
-    this.store = useRedis
-      ? new Keyv<RateLimitEntry>({
-          store: new KeyvRedis(settings.redisUrl),
-          namespace: settings.redisNamespace,
-        })
-      : new Keyv<RateLimitEntry>({
-          namespace: settings.redisNamespace,
-        });
+    this.store = store
+      ? store
+      : useRedis
+        ? new Keyv<RateLimitEntry>({
+            store: new KeyvRedis(settings.redisUrl),
+            namespace: settings.redisNamespace,
+          })
+        : new Keyv<RateLimitEntry>({
+            namespace: settings.redisNamespace,
+          });
 
     this.store.on('error', (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -54,19 +72,28 @@ export class RateLimitStorageService
 
     const now = Date.now();
     const cachedEntry = await this.store.get(key);
-    const baseEntry =
-      cachedEntry && cachedEntry.expiresAt > now
+
+    // An active block must be honoured for its full duration even when it
+    // outlives the counting window (e.g. auth: ttl=60s, blockDuration=300s);
+    // otherwise the advertised Retry-After would be wrong and the block would
+    // silently lapse when the window rolled over.
+    if (cachedEntry && cachedEntry.blockedUntil > now) {
+      return this.toRecord(cachedEntry, now);
+    }
+
+    // Start a fresh window when there is no entry, the window has elapsed, or
+    // a previous block has just expired (so the caller is not re-blocked on
+    // the very next request because of hits counted before the block).
+    const baseEntry: RateLimitEntry =
+      cachedEntry &&
+      cachedEntry.expiresAt > now &&
+      cachedEntry.blockedUntil === 0
         ? cachedEntry
         : {
             totalHits: 0,
             expiresAt: now + ttl,
             blockedUntil: 0,
           };
-
-    if (baseEntry.blockedUntil > now) {
-      await this.persistEntry(key, baseEntry, now);
-      return this.toRecord(baseEntry, now);
-    }
 
     const updatedEntry: RateLimitEntry = {
       ...baseEntry,

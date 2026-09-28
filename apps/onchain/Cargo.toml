@@ -13,6 +13,7 @@ members = [
   "contracts/reentrancy-guard",
   "contracts/upgradable-contract",
   "contracts/version-interface",
+  "contracts/event-versioning",
   "contracts/vesting-wallet",
   "contracts/lumenpulse-curation",
   "contracts/pricing_adapter",

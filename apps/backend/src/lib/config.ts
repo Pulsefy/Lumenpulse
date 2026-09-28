@@ -94,6 +94,13 @@ import { z } from 'zod';
  * - RATE_LIMIT_WATCHLIST_WRITE_LIMIT
  * - RATE_LIMIT_WATCHLIST_WRITE_TTL_MS
  * - RATE_LIMIT_WATCHLIST_WRITE_BLOCK_MS
+ * - RATE_LIMIT_EXPORT_JOB_LIMIT / _TTL_MS / _BLOCK_MS
+ * - RATE_LIMIT_CONTRACT_SIMULATION_LIMIT / _TTL_MS / _BLOCK_MS
+ * - RATE_LIMIT_BOT_<CLASS>_LIMIT / _TTL_MS / _BLOCK_MS
+ *     (CLASS = GLOBAL | SEARCH_READ | ANALYTICS_READ | EXPORT_JOB | CONTRACT_SIMULATION)
+ * - RATE_LIMIT_SERVICE_<CLASS>_LIMIT / _TTL_MS / _BLOCK_MS (same classes)
+ * - BOT_AUTH_BOT_TOKENS      (SECRET — `botId:token,...`)
+ * - BOT_AUTH_SERVICE_TOKENS  (SECRET — `serviceId:token,...`)
  * - IDEMPOTENCY_RETENTION_MS
  * - IDEMPOTENCY_LEASE_MS
  * - IDEMPOTENCY_CONCURRENCY_TIMEOUT_MS
@@ -161,6 +168,8 @@ const RATE_LIMIT_DEFAULTS = {
     stellarRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    exportJob: { limit: 20, ttl: 60_000, blockDuration: 120_000 },
+    contractSimulation: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     friendbotBootstrap: { limit: 5, ttl: 3_600_000, blockDuration: 3_600_000 },
   },
   staging: {
@@ -176,6 +185,8 @@ const RATE_LIMIT_DEFAULTS = {
     stellarRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    exportJob: { limit: 10, ttl: 60_000, blockDuration: 180_000 },
+    contractSimulation: { limit: 15, ttl: 60_000, blockDuration: 120_000 },
     friendbotBootstrap: { limit: 3, ttl: 3_600_000, blockDuration: 3_600_000 },
   },
   production: {
@@ -191,6 +202,8 @@ const RATE_LIMIT_DEFAULTS = {
     stellarRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     searchRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
     analyticsRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
+    exportJob: { limit: 5, ttl: 60_000, blockDuration: 300_000 },
+    contractSimulation: { limit: 10, ttl: 60_000, blockDuration: 120_000 },
     friendbotBootstrap: { limit: 2, ttl: 3_600_000, blockDuration: 3_600_000 },
   },
 } as const;
@@ -434,6 +447,31 @@ const envSchema = z
       .min(1)
       .optional(),
 
+    RATE_LIMIT_EXPORT_JOB_LIMIT: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_EXPORT_JOB_TTL_MS: z.coerce.number().int().min(1).optional(),
+    RATE_LIMIT_EXPORT_JOB_BLOCK_MS: z.coerce.number().int().min(1).optional(),
+
+    RATE_LIMIT_CONTRACT_SIMULATION_LIMIT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .optional(),
+    RATE_LIMIT_CONTRACT_SIMULATION_TTL_MS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .optional(),
+    RATE_LIMIT_CONTRACT_SIMULATION_BLOCK_MS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .optional(),
+
+    // Bot / service principal credentials used by bot-auth (SECRET — never log).
+    // Format: comma-separated `principalId:token` pairs.
+    BOT_AUTH_BOT_TOKENS: z.string().trim().optional(),
+    BOT_AUTH_SERVICE_TOKENS: z.string().trim().optional(),
+
     IP_ALLOWLIST: z.string().trim().optional(),
     IP_DENYLIST: z.string().trim().optional(),
 
@@ -569,6 +607,14 @@ const envSchema = z
       .min(1)
       .default(30_000),
     IDEMPOTENCY_CLEANUP_CRON: z.string().trim().default('0 3 * * *'),
+
+    // Runtime secret rotation (see config/secret-rotation.service.ts)
+    SECRET_ROTATION_TRIGGER_TOKEN: z.string().trim().optional(),
+    SECRET_ROTATION_OVERLAP_MS: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .default(86_400_000),
 
     SHUTDOWN_GRACE_PERIOD_MS: z.coerce.number().int().min(0).default(15_000),
   })
@@ -749,6 +795,27 @@ const resolvedRateLimit = {
       parsedEnv.RATE_LIMIT_ANALYTICS_READ_BLOCK_MS ??
       rateLimitDefaults.analyticsRead.blockDuration,
   },
+  exportJob: {
+    limit:
+      parsedEnv.RATE_LIMIT_EXPORT_JOB_LIMIT ??
+      rateLimitDefaults.exportJob.limit,
+    ttl:
+      parsedEnv.RATE_LIMIT_EXPORT_JOB_TTL_MS ?? rateLimitDefaults.exportJob.ttl,
+    blockDuration:
+      parsedEnv.RATE_LIMIT_EXPORT_JOB_BLOCK_MS ??
+      rateLimitDefaults.exportJob.blockDuration,
+  },
+  contractSimulation: {
+    limit:
+      parsedEnv.RATE_LIMIT_CONTRACT_SIMULATION_LIMIT ??
+      rateLimitDefaults.contractSimulation.limit,
+    ttl:
+      parsedEnv.RATE_LIMIT_CONTRACT_SIMULATION_TTL_MS ??
+      rateLimitDefaults.contractSimulation.ttl,
+    blockDuration:
+      parsedEnv.RATE_LIMIT_CONTRACT_SIMULATION_BLOCK_MS ??
+      rateLimitDefaults.contractSimulation.blockDuration,
+  },
   friendbotBootstrap: {
     limit:
       parsedEnv.RATE_LIMIT_FRIENDBOT_BOOTSTRAP_LIMIT ??
@@ -915,6 +982,32 @@ const optionalSummary = [
     'RATE_LIMIT_FRIENDBOT_BOOTSTRAP_BLOCK_MS',
     String(resolvedRateLimit.friendbotBootstrap.blockDuration),
   ],
+  ['RATE_LIMIT_EXPORT_JOB_LIMIT', String(resolvedRateLimit.exportJob.limit)],
+  ['RATE_LIMIT_EXPORT_JOB_TTL_MS', String(resolvedRateLimit.exportJob.ttl)],
+  [
+    'RATE_LIMIT_EXPORT_JOB_BLOCK_MS',
+    String(resolvedRateLimit.exportJob.blockDuration),
+  ],
+  [
+    'RATE_LIMIT_CONTRACT_SIMULATION_LIMIT',
+    String(resolvedRateLimit.contractSimulation.limit),
+  ],
+  [
+    'RATE_LIMIT_CONTRACT_SIMULATION_TTL_MS',
+    String(resolvedRateLimit.contractSimulation.ttl),
+  ],
+  [
+    'RATE_LIMIT_CONTRACT_SIMULATION_BLOCK_MS',
+    String(resolvedRateLimit.contractSimulation.blockDuration),
+  ],
+  [
+    'BOT_AUTH_BOT_TOKENS',
+    parsedEnv.BOT_AUTH_BOT_TOKENS ? '[REDACTED]' : '(not set)',
+  ],
+  [
+    'BOT_AUTH_SERVICE_TOKENS',
+    parsedEnv.BOT_AUTH_SERVICE_TOKENS ? '[REDACTED]' : '(not set)',
+  ],
   ['IP_ALLOWLIST', parsedEnv.IP_ALLOWLIST ?? '(not set)'],
   ['IP_DENYLIST', parsedEnv.IP_DENYLIST ?? '(not set)'],
   ['STELLAR_NETWORK', parsedEnv.STELLAR_NETWORK],
@@ -1045,6 +1138,11 @@ const optionalSummary = [
     String(parsedEnv.IDEMPOTENCY_CONCURRENCY_TIMEOUT_MS),
   ],
   ['IDEMPOTENCY_CLEANUP_CRON', parsedEnv.IDEMPOTENCY_CLEANUP_CRON],
+  [
+    'SECRET_ROTATION_TRIGGER_TOKEN',
+    parsedEnv.SECRET_ROTATION_TRIGGER_TOKEN ? '[REDACTED]' : '(not set)',
+  ],
+  ['SECRET_ROTATION_OVERLAP_MS', String(parsedEnv.SECRET_ROTATION_OVERLAP_MS)],
 ] as const;
 
 const wasDefaulted = (key: string): boolean => {
@@ -1246,6 +1344,18 @@ export const config = Object.freeze({
      */
     cleanupCron: parsedEnv.IDEMPOTENCY_CLEANUP_CRON,
   }),
+  secretRotation: Object.freeze({
+    /**
+     * Shared token required by the rotation trigger. When unset the trigger
+     * endpoint is disabled (503).
+     */
+    triggerToken: parsedEnv.SECRET_ROTATION_TRIGGER_TOKEN ?? null,
+    /**
+     * Default window during which a rotated secret's previous value is still
+     * accepted. Default 24h.
+     */
+    overlapMs: parsedEnv.SECRET_ROTATION_OVERLAP_MS,
+  }),
   rateLimit: Object.freeze({
     tracker: Object.freeze({
       useIp: parsedEnv.RATE_LIMIT_TRACK_BY_IP,
@@ -1319,6 +1429,20 @@ export const config = Object.freeze({
       ttl: resolvedRateLimit.friendbotBootstrap.ttl,
       blockDuration: resolvedRateLimit.friendbotBootstrap.blockDuration,
     }),
+    exportJob: Object.freeze({
+      limit: resolvedRateLimit.exportJob.limit,
+      ttl: resolvedRateLimit.exportJob.ttl,
+      blockDuration: resolvedRateLimit.exportJob.blockDuration,
+    }),
+    contractSimulation: Object.freeze({
+      limit: resolvedRateLimit.contractSimulation.limit,
+      ttl: resolvedRateLimit.contractSimulation.ttl,
+      blockDuration: resolvedRateLimit.contractSimulation.blockDuration,
+    }),
+  }),
+  botAuth: Object.freeze({
+    botTokens: parsedEnv.BOT_AUTH_BOT_TOKENS,
+    serviceTokens: parsedEnv.BOT_AUTH_SERVICE_TOKENS,
   }),
   ipAccess: Object.freeze({
     allowlist: parsedEnv.IP_ALLOWLIST ?? null,

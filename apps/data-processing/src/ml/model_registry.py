@@ -76,6 +76,11 @@ def _current_pointer_path(model_type: str) -> Path:
     return _model_dir(model_type) / "current.json"
 
 
+def _previous_pointer_path(model_type: str) -> Path:
+    """Pointer to the version that was live before the current one (#1457)."""
+    return _model_dir(model_type) / "previous.json"
+
+
 def _legacy_symlink_path(model_type: str) -> Path:
     return _model_dir(model_type) / "current"
 
@@ -146,7 +151,11 @@ def _read_current_version(model_type: str) -> Optional[str]:
 
 def _write_current_version(model_type: str, version: str) -> None:
     """Atomically persist the live model version in a JSON pointer."""
-    pointer = _current_pointer_path(model_type)
+    _write_pointer(_current_pointer_path(model_type), version)
+
+
+def _write_pointer(pointer: Path, version: str) -> None:
+    """Atomically write ``{"version": ...}`` to ``pointer`` via rename."""
     temporary_name = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -440,6 +449,10 @@ def promote_model(
             )
 
     with _lock:
+        previous_version = _read_current_version(model_type)
+        if previous_version and previous_version != version:
+            # Kept so retention GC (#1457) never removes the rollback target.
+            _write_pointer(_previous_pointer_path(model_type), previous_version)
         _write_current_version(model_type, version)
 
     # Hot-swap in memory

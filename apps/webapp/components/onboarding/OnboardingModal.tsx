@@ -4,7 +4,6 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useOnboarding } from '@/lib/onboarding';
 import { useStellarWallet } from '@/app/providers';
 import { useStellarConfig } from '@/contexts/StellarConfigContext';
-import { signTransaction } from '@stellar/freighter-api';
 import { StellarApiService } from '@/lib/api-services';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -39,7 +38,7 @@ const steps = [
 
 export default function OnboardingModal() {
   const { state, nextStep, prevStep, closeOnboarding, completeOnboarding, skipOnboarding } = useOnboarding();
-  const { status: walletStatus, connect: connectWallet, publicKey } = useStellarWallet();
+  const { status: walletStatus, connect: connectWallet, publicKey, signXdr } = useStellarWallet();
   const { config } = useStellarConfig();
   const modalRef = useRef<HTMLDivElement>(null);
   const stepRef = useRef<HTMLDivElement>(null);
@@ -87,14 +86,14 @@ export default function OnboardingModal() {
 
       setLinkingState('signing');
       const networkPassphrase = config?.networkPassphrase;
-      const result = await signTransaction(challengeXDR, { networkPassphrase });
-      
-      if (result.error) {
-        throw new Error(result.error);
+      const result = await signXdr(challengeXDR, { networkPassphrase });
+
+      if (result.status !== 'success' || !result.signedXdr) {
+        throw new Error(result.error?.message ?? 'Failed to sign challenge.');
       }
 
       setLinkingState('linking');
-      await StellarApiService.linkAccount(publicKey, result.signedTxXdr, "Onboarding Wallet");
+      await StellarApiService.linkAccount(publicKey, result.signedXdr, "Onboarding Wallet");
 
       setLinkingState('success');
       setTimeout(() => {
@@ -106,7 +105,7 @@ export default function OnboardingModal() {
       setLinkingState('error');
       setLinkingError(err.message || 'Failed to sign or verify challenge.');
     }
-  }, [publicKey, config, nextStep]);
+  }, [publicKey, config, nextStep, signXdr]);
 
   const handleNextOrConnect = useCallback(() => {
     if (state.step === 2) {

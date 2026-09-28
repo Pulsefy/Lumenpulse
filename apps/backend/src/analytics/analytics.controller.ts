@@ -1,8 +1,7 @@
 import { Controller, Get, Query, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
 import { AnalyticsService } from './analytics.service';
-import { getAnalyticsReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 import {
   ChartDataQueryDto,
   ChartDataPointDto,
@@ -11,7 +10,7 @@ import {
 
 @ApiTags('analytics')
 @Controller('analytics')
-@Throttle(getAnalyticsReadThrottleOverride())
+@RateLimitPolicy('analyticsRead')
 export class AnalyticsController {
   private readonly logger = new Logger(AnalyticsController.name);
 
