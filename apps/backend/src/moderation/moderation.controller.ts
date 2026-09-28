@@ -25,6 +25,7 @@ import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 import { QueryReportsDto } from './dto/query-reports.dto';
 import { AssignReviewerDto } from './dto/assign-reviewer.dto';
+import { BulkModerationDecisionDto } from './dto/bulk-moderation-decision.dto';
 import { ContentReport } from './entities/content-report.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -153,5 +154,44 @@ export class ModerationController {
       req.user.id,
       assignReviewerDto.reviewerId,
     );
+  }
+
+  // ─── BULK ENDPOINTS ───────────────────────────────────────────────────
+
+  /**
+   * POST /moderation/queue/bulk-decide
+   *
+   * Apply moderation decisions to multiple reports in one request.
+   * Per-item atomicity: each report is processed independently.
+   * Partial failures are reported clearly so operators can retry only what failed.
+   */
+  @Post('queue/bulk-decide')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @HttpCode(HttpStatus.MULTI_STATUS)
+  @ApiOperation({
+    summary: 'Bulk apply moderation decisions (Admin only)',
+    description:
+      'Process up to 100 moderation decisions in a single request. ' +
+      'Each item is handled independently — one failure does not abort the batch. ' +
+      'A shared bulkOperationId is recorded in every audit entry.',
+  })
+  @ApiResponse({
+    status: 207,
+    description: 'Multi-status: per-item results returned for every decision',
+  })
+  @ApiResponse({ status: 400, description: 'Validation error or batch too large' })
+  @ApiResponse({ status: 403, description: 'Admin role required' })
+  async bulkDecide(
+    @Req() req: RequestWithUser,
+    @Body() dto: BulkModerationDecisionDto,
+  ) {
+    const ip =
+      (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ??
+      req.socket?.remoteAddress ??
+      null;
+
+    return this.moderationService.bulkUpdateReports(req.user.id, ip, dto);
   }
 }

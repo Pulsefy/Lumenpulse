@@ -15,6 +15,12 @@ import {
   DeadLetterEventDto,
   DeadLetterStatsDto,
 } from './dto/dead-letter.dto';
+import { BulkDeadLetterReplayDto } from './dto/bulk-dead-letter-replay.dto';
+import {
+  executeBulkOperation,
+  BulkOperationResult,
+} from '../common/bulk/bulk-operation.helper';
+import { AdminAuditService } from '../admin-audit/admin-audit.service';
 import {
   SOROBAN_EVENTS_QUEUE,
   PROCESS_EVENT_JOB,
@@ -43,6 +49,8 @@ export class SorobanEventsDeadLetterService {
 
     @InjectQueue(SOROBAN_EVENTS_QUEUE)
     private readonly queue: Queue,
+
+    private readonly auditService: AdminAuditService,
   ) {}
 
   /**
@@ -461,6 +469,48 @@ export class SorobanEventsDeadLetterService {
       mostCommonError: mostCommonErrorRow?.errorMessage ?? null,
       oldestUnresolvedAt: oldestUnresolved?.createdAt ?? null,
     };
+  }
+
+  /**
+   * Replay multiple dead-letter entries in a single request.
+   *
+   * Per-item atomicity: each entry is replayed independently.
+   * Failures on individual items are captured and returned in the result
+   * without aborting the rest of the batch.
+   *
+   * Each successful replay is recorded via AdminAuditService with the shared
+   * {@code bulkOperationId} so the whole operation can be traced.
+   *
+   * @param actorId    Admin user performing the operation.
+   * @param actorEmail Admin email for audit records (may be null).
+   * @param dto        Payload with per-item ids and optional reasons.
+   */
+  async bulkReplay(
+    actorId: string,
+    actorEmail: string | null,
+    dto: BulkDeadLetterReplayDto,
+  ): Promise<BulkOperationResult<{ message: string; jobId: string; replayCount: number }>> {
+    const ids = dto.items.map((item) => item.id);
+
+    return executeBulkOperation(ids, async (id, bulkOperationId) => {
+      const item = dto.items.find((i) => i.id === id)!;
+
+      const result = await this.replayEvent(id, item.reason);
+
+      await this.auditService.create({
+        actorId,
+        actorEmail,
+        endpoint: 'POST /soroban-events/dead-letter/bulk-replay',
+        params: { bulkOperationId, dlqId: id, reason: item.reason, jobId: result.jobId },
+        responseStatus: 202,
+      });
+
+      return {
+        message: result.message,
+        jobId: result.jobId,
+        replayCount: result.replayCount,
+      };
+    });
   }
 
   /**

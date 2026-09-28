@@ -10,7 +10,14 @@ import { ContentReport, ReportStatus } from './entities/content-report.entity';
 import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 import { QueryReportsDto } from './dto/query-reports.dto';
+import {
+  BulkModerationDecisionDto,
+} from './dto/bulk-moderation-decision.dto';
 import { ModerationEventPublisherService } from './services/moderation-event-publisher.service';
+import {
+  executeBulkOperation,
+  BulkOperationResult,
+} from '../common/bulk/bulk-operation.helper';
 
 import { AuditService } from '../audit/audit.service';
 
@@ -327,5 +334,47 @@ export class ModerationService {
       resolvedReports,
       dismissedReports,
     };
+  }
+
+  /**
+   * Apply moderation decisions to multiple reports in a single request.
+   *
+   * Each item is processed independently — a failure on one report never
+   * prevents others from being updated.  Every successful update produces its
+   * own audit record referencing the shared {@code bulkOperationId}.
+   *
+   * @param reviewerId  ID of the admin performing the bulk action.
+   * @param ipAddress   IP address for audit logging (may be null).
+   * @param dto         Payload containing the per-item decisions.
+   */
+  async bulkUpdateReports(
+    reviewerId: string,
+    ipAddress: string | null,
+    dto: BulkModerationDecisionDto,
+  ): Promise<BulkOperationResult<ContentReport>> {
+    const ids = dto.items.map((item) => item.id);
+
+    return executeBulkOperation<ContentReport>(ids, async (id, bulkOperationId) => {
+      const item = dto.items.find((i) => i.id === id)!;
+
+      const updated = await this.updateReport(id, reviewerId, {
+        status: item.status,
+        reviewNotes: item.reviewNotes,
+      });
+
+      await this.auditService.log(
+        'bulk_moderation_decision',
+        reviewerId,
+        ipAddress,
+        {
+          bulkOperationId,
+          reportId: id,
+          status: item.status,
+          reviewNotes: item.reviewNotes ?? null,
+        },
+      );
+
+      return updated;
+    });
   }
 }

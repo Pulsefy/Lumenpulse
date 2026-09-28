@@ -11,6 +11,8 @@ import {
   Logger,
   HttpCode,
   HttpStatus,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -30,6 +32,7 @@ import {
   ResolveDeadLetterResponseDto,
   DeadLetterStatsDto,
 } from './dto/dead-letter.dto';
+import { BulkDeadLetterReplayDto } from './dto/bulk-dead-letter-replay.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
@@ -290,5 +293,43 @@ export class SorobanEventsDeadLetterController {
       status: result.status,
       resolvedAt: result.resolvedAt,
     };
+  }
+
+  // ─── BULK ENDPOINTS ───────────────────────────────────────────────────
+
+  /**
+   * POST /soroban-events/dead-letter/bulk-replay
+   *
+   * Replay multiple dead-letter queue entries in a single request.
+   * Per-item atomicity: each entry is replayed independently.
+   * Partial failures are reported without aborting the rest of the batch.
+   */
+  @Post('bulk-replay')
+  @HttpCode(HttpStatus.MULTI_STATUS)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({
+    summary: 'Bulk replay dead letter queue events (Admin only)',
+    description:
+      'Queue up to 100 failed events for reprocessing in a single request. ' +
+      'Each item is handled independently — one failure does not abort others. ' +
+      'A shared bulkOperationId is recorded in every audit entry.',
+  })
+  @ApiResponse({
+    status: 207,
+    description: 'Multi-status: per-item replay results',
+  })
+  @ApiResponse({ status: 400, description: 'Validation error or batch too large' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async bulkReplay(
+    @Body() dto: BulkDeadLetterReplayDto,
+    @Req() request: Request & { user: User },
+  ) {
+    this.logger.log({ count: dto.items.length }, 'Bulk replaying dead letter events');
+
+    return this.dlqService.bulkReplay(
+      request.user.id,
+      request.user.email ?? null,
+      dto,
+    );
   }
 }

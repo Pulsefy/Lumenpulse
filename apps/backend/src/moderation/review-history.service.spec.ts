@@ -11,6 +11,7 @@ import {
   DecisionType,
 } from './entities/review-decision-history.entity';
 import { UserRole } from '../users/entities/user.entity';
+import { AuditService } from '../audit/audit.service';
 
 describe('ReviewHistoryService', () => {
   let service: ReviewHistoryService;
@@ -82,6 +83,10 @@ describe('ReviewHistoryService', () => {
         {
           provide: getRepositoryToken(ReviewDecisionHistory),
           useValue: mockDecisionsRepository,
+        },
+        {
+          provide: 'AuditService',
+          useValue: { log: jest.fn().mockResolvedValue({}) },
         },
       ],
     }).compile();
