@@ -5125,6 +5125,11 @@
               }
             ],
             "title": "Target Version"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": "Operator-requested rollback"
           }
         },
         "type": "object",

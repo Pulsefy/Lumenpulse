@@ -1,6 +1,7 @@
 import json
 
 import pandas as pd
+import pytest
 
 import src.ml.model_registry as registry
 
@@ -59,3 +60,40 @@ def test_force_promote_records_override(monkeypatch, tmp_path):
     with open(tmp_path / "test" / "promotion_log.jsonl", encoding="utf-8") as fh:
         events = [json.loads(line) for line in fh]
     assert events[-1]["status"] == "forced"
+
+
+def test_rollback_loads_target_and_records_audit(monkeypatch, tmp_path):
+    monkeypatch.setattr(registry, "_MODELS_ROOT", tmp_path)
+    previous = registry.save_model("test", FakeModel([1, 2, 3]))
+    current = registry.save_model("test", FakeModel([3, 2, 1]))
+    registry.promote_model("test", current)
+
+    assert registry.rollback_model(
+        "test", actor="on-call", reason="Candidate regressed in production"
+    ) == previous
+    assert registry.get_current_version("test") == previous
+    assert registry.get_live_model("test").predictions == [1, 2, 3]
+
+    with open(tmp_path / "test" / "promotion_log.jsonl", encoding="utf-8") as fh:
+        event = json.loads(fh.readlines()[-1])
+    assert event["status"] == "rolled_back"
+    assert event["actor"] == "on-call"
+    assert event["reason"] == "Candidate regressed in production"
+    assert event["from_version"] == current
+    assert event["to_version"] == previous
+    assert "timestamp" in event
+
+
+def test_rollback_does_not_move_pointer_when_target_cannot_load(monkeypatch, tmp_path):
+    monkeypatch.setattr(registry, "_MODELS_ROOT", tmp_path)
+    previous = registry.save_model("test", FakeModel([1, 2, 3]))
+    current = registry.save_model("test", FakeModel([3, 2, 1]))
+    registry.promote_model("test", current)
+    (tmp_path / "test" / f"{previous}.pkl").write_bytes(b"not a pickle")
+
+    with pytest.raises(Exception):
+        registry.rollback_model(
+            "test", previous, actor="on-call", reason="Bad candidate"
+        )
+
+    assert registry.get_current_version("test") == current

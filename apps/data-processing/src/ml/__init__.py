@@ -20,6 +20,7 @@ from .model_registry import (
     log_comparison,
     promote_model,
     promote_shadow,
+    rollback_model,
     read_comparison_log,
     # Shadow-mode deployment (Issue #1256)
     register_shadow,
@@ -36,6 +37,7 @@ __all__ = [
     "load_model",
     "load_metadata",
     "promote_model",
+    "rollback_model",
     "get_live_model",
     "list_versions",
     "get_current_version",

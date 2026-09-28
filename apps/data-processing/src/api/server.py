@@ -49,6 +49,7 @@ from src.ml.model_registry import (
     clear_comparison_log,
     flush_all_comparisons,
     get_live_model,
+    rollback_model,
 )
 from src.analytics.correlation_engine import CorrelationEngine
 from src.db import PostgresService
@@ -977,6 +978,7 @@ class ComparisonLogResponse(BaseModel):
 class RollbackRequest(BaseModel):
     model_type: str
     target_version: Optional[str] = None  # If omitted, rollback to previous version
+    reason: str = "Operator-requested rollback"
 
 
 class RollbackResponse(BaseModel):
@@ -1142,49 +1144,16 @@ async def model_rollback(
     Requires X-API-Key header.
     """
     previous_live = get_current_version(body.model_type)
-    available = list_versions(body.model_type)
-
-    if len(available) < 2:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Only one version available for '{body.model_type}'. "
-                f"Cannot rollback."
-            ),
+    actor = request.headers.get("X-Actor", "api-operator")
+    try:
+        target = rollback_model(
+            body.model_type,
+            body.target_version,
+            actor=actor,
+            reason=body.reason,
         )
-
-    target = body.target_version
-    if target is None:
-        # Auto-select: the version just before current
-        if previous_live and previous_live in available:
-            idx = available.index(previous_live)
-            if idx > 0:
-                target = available[idx - 1]
-            else:
-                target = available[1] if len(available) > 1 else available[0]
-        else:
-            target = available[0]
-
-    if target == previous_live:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Target version '{target}' is already the current live version."
-            ),
-        )
-
-    if target not in available:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Target version '{target}' not found for '{body.model_type}'. "
-                f"Available: {available}"
-            ),
-        )
-
-    # Promote the targeted version
-    from src.ml.model_registry import promote_model
-    promote_model(body.model_type, target)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Also clear any shadow so it doesn't conflict
     if get_shadow_version(body.model_type):
