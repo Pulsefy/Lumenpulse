@@ -1,0 +1,8 @@
+# grafana-provisioning/dashboards.yaml
+apiVersion: 1
+providers:
+  - name: "Lumenpulse"
+    folder: "Lumenpulse"
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

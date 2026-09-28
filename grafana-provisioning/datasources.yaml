@@ -1,0 +1,13 @@
+# Grafana datasources provisioning
+apiVersion: 1
+providers:
+  - name: "Postgres Exporter"
+    type: prometheus
+    access: proxy
+    url: http://postgres_exporter:9187
+    isDefault: false
+  - name: "Redis Exporter"
+    type: prometheus
+    access: proxy
+    url: http://redis_exporter:9121
+    isDefault: false

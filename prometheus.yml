@@ -16,8 +16,7 @@ global:
 alerting:
   alertmanagers:
     - static_configs:
-        - targets:
-            # - 'alertmanager:9093'
+        - targets: ['alertmanager:9093']
 
 # Rule files
 rule_files:
@@ -52,3 +51,10 @@ scrape_configs:
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
+  - job_name: 'postgres_exporter'
+    static_configs:
+      - targets: ['postgres_exporter:9187']
+
+  - job_name: 'redis_exporter'
+    static_configs:
+      - targets: ['redis_exporter:9121']
