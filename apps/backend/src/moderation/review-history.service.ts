@@ -14,7 +14,13 @@ import { ReviewDecisionHistory } from './entities/review-decision-history.entity
 import { CreateReviewCommentDto } from './dto/create-review-comment.dto';
 import { CreateReviewDecisionDto } from './dto/create-review-decision.dto';
 import { QueryReviewHistoryDto } from './dto/query-review-history.dto';
+import { BulkReviewTriageDto } from './dto/bulk-review-triage.dto';
 import { UserRole } from '../users/entities/user.entity';
+import {
+  executeBulkOperation,
+  BulkOperationResult,
+} from '../common/bulk/bulk-operation.helper';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class ReviewHistoryService {
@@ -25,6 +31,7 @@ export class ReviewHistoryService {
     private commentsRepository: Repository<ReviewComment>,
     @InjectRepository(ReviewDecisionHistory)
     private decisionsRepository: Repository<ReviewDecisionHistory>,
+    private readonly auditService: AuditService,
   ) {}
 
   /**
@@ -247,5 +254,55 @@ export class ReviewHistoryService {
     }
 
     return decision;
+  }
+
+  /**
+   * Record review decisions for multiple targets in a single request.
+   *
+   * Per-item atomicity: each decision is persisted independently.
+   * Every successful item produces its own audit record that includes the
+   * shared {@code bulkOperationId} for easy cross-referencing in the audit log.
+   *
+   * @param reviewerId  Admin/reviewer performing the bulk action.
+   * @param ipAddress   IP address for audit logging (may be null).
+   * @param dto         Payload containing per-item decisions.
+   */
+  async bulkTriage(
+    reviewerId: string,
+    ipAddress: string | null,
+    dto: BulkReviewTriageDto,
+  ): Promise<BulkOperationResult<ReviewDecisionHistory>> {
+    // Use the compound (targetType + targetId) as the "id" key in bulk results
+    const ids = dto.items.map((item) => `${item.targetType}:${item.targetId}`);
+
+    return executeBulkOperation<ReviewDecisionHistory>(
+      ids,
+      async (compoundId, bulkOperationId) => {
+        const item = dto.items.find(
+          (i) => `${i.targetType}:${i.targetId}` === compoundId,
+        )!;
+
+        const decision = await this.createDecision(reviewerId, UserRole.ADMIN, {
+          targetId: item.targetId,
+          targetType: item.targetType,
+          decisionType: item.decisionType,
+          rationale: item.rationale,
+        });
+
+        await this.auditService.log(
+          'bulk_review_triage_decision',
+          reviewerId,
+          ipAddress,
+          {
+            bulkOperationId,
+            targetId: item.targetId,
+            targetType: item.targetType,
+            decisionType: item.decisionType,
+          },
+        );
+
+        return decision;
+      },
+    );
   }
 }

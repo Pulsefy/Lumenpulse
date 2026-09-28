@@ -23,6 +23,7 @@ import { ReviewHistoryService } from './review-history.service';
 import { CreateReviewCommentDto } from './dto/create-review-comment.dto';
 import { CreateReviewDecisionDto } from './dto/create-review-decision.dto';
 import { QueryReviewHistoryDto } from './dto/query-review-history.dto';
+import { BulkReviewTriageDto } from './dto/bulk-review-triage.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
@@ -145,5 +146,43 @@ export class ReviewHistoryController {
   @ApiResponse({ status: 404, description: 'Decision not found' })
   async getDecision(@Param('id') id: string) {
     return this.reviewHistoryService.getDecisionById(id);
+  }
+
+  // ─── BULK ENDPOINTS ───────────────────────────────────────────────────
+
+  /**
+   * POST /review-history/bulk-triage
+   *
+   * Record review decisions for multiple targets in a single request.
+   * Per-item atomicity: each decision is saved independently.
+   */
+  @Post('bulk-triage')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @HttpCode(HttpStatus.MULTI_STATUS)
+  @ApiOperation({
+    summary: 'Bulk record review triage decisions (Admin only)',
+    description:
+      'Record up to 100 review decisions in a single request. ' +
+      'Items are processed independently — one failure does not abort others. ' +
+      'A shared bulkOperationId appears in every audit entry.',
+  })
+  @ApiResponse({
+    status: 207,
+    description: 'Multi-status: per-item results for every decision',
+  })
+  @ApiResponse({ status: 400, description: 'Validation error or batch too large' })
+  @ApiResponse({ status: 403, description: 'Admin role required' })
+  async bulkTriage(
+    @Req() req: RequestWithUser,
+    @Body() dto: BulkReviewTriageDto,
+  ) {
+    const ip =
+      (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ??
+      req.socket?.remoteAddress ??
+      null;
+
+    return this.reviewHistoryService.bulkTriage(req.user.id, ip, dto);
   }
 }
