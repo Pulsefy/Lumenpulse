@@ -81,6 +81,53 @@ export async function mockContribute(page: Page): Promise<void> {
   });
 }
 
+export async function mockExports(page: Page): Promise<void> {
+  const mockJob = {
+    id: 'e2e-export-job-1',
+    type: 'tax_transactions',
+    status: 'completed',
+    createdAt: '2026-09-28T00:00:00.000Z',
+    updatedAt: '2026-09-28T00:01:00.000Z',
+  };
+
+  await page.route(`${API_BASE}/exports`, async (route) => {
+    if (route.request().method() === 'POST') {
+      const data = route.request().postDataJSON() || {};
+      await route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...mockJob,
+          type: data.type || 'tax_transactions',
+          status: 'pending',
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([mockJob]),
+    });
+  });
+
+  await page.route(`${API_BASE}/exports/${mockJob.id}`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockJob),
+    });
+  });
+
+  await page.route(`${API_BASE}/exports/${mockJob.id}/download`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/csv',
+      body: 'id,date,amount\n1,2026-09-28,100',
+    });
+  });
+}
+
 /** Catch-all so any endpoint the suite doesn't explicitly care about degrades gracefully. */
 export async function mockRemaining(page: Page): Promise<void> {
   await page.route(`${API_BASE}/**`, async (route) => {
@@ -107,4 +154,5 @@ export async function mockAll(page: Page): Promise<void> {
   await mockAuth(page);
   await mockProjects(page);
   await mockContribute(page);
+  await mockExports(page);
 }

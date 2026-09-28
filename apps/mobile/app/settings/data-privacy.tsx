@@ -428,6 +428,48 @@ export default function DataPrivacyScreen() {
         <Text style={[styles.footnote, { color: colors.textSecondary }]} accessible>
           {t('settings.data_privacy.preferences_survive_clear')}
         </Text>
+
+        {/* ── Data Portability ─────────────────────────────────────────── */}
+        <Text
+          style={[styles.sectionTitle, { color: colors.text, marginTop: 24 }]}
+          accessible
+          accessibilityRole="header"
+        >
+          {t('settings.exports.title', 'Data Exports')}
+        </Text>
+
+        <TouchableOpacity
+          testID="data-privacy-export-link"
+          style={[
+            styles.preferenceCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.cardBorder,
+              padding: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            },
+          ]}
+          onPress={() => router.push('/settings/exports')}
+          activeOpacity={0.75}
+          accessibilityRole="link"
+          accessibilityLabel={t('settings.exports.title', 'Data Exports')}
+          accessibilityHint={t('settings.exports.description')}
+        >
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={[styles.categoryTitle, { color: colors.text }]} accessible>
+              {t('settings.exports.title', 'Data Exports')}
+            </Text>
+            <Text style={[styles.categoryMeta, { color: colors.textSecondary }]} accessible>
+              {t(
+                'settings.exports.description',
+                'Request and download your transaction and portfolio history',
+              )}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
