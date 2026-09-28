@@ -23,6 +23,7 @@ import {
   validateContributionAmount,
 } from '../lib/stellar';
 import { evaluateContributionDraft } from '../lib/contribution-drafts';
+import { requireStepUpAuthentication } from '../lib/biometric-lock';
 import { isTestnetConfigReady } from '../lib/config';
 import { storage } from '../lib/storage';
 
@@ -194,6 +195,13 @@ export default function ContributionModal({
     }
 
     try {
+      const authenticated = await requireStepUpAuthentication(
+        t('contribution_modal.confirm_biometric_prompt', { defaultValue: 'Authenticate to confirm contribution' })
+      );
+      if (!authenticated) {
+        return;
+      }
+
       setTxStatus('submitting');
 
       const result = await onSubmit(amount.trim());

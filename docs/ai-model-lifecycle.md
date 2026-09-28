@@ -8,10 +8,10 @@ This document describes the complete lifecycle of AI models in the Lumenpulse sy
 
 The system manages two distinct model types:
 
-| Model Type | Description | Implementation |
-|---|---|---|
-| `sentiment` | VADER lexicon-based sentiment analyzer enriched with a custom crypto-slang dictionary | [retraining_pipeline.py#L78-L98](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/retraining_pipeline.py#L78-L98) |
-| `price_predictor` | scikit-learn LinearRegression pipeline with StandardScaler preprocessing | [price_predictor.py#L19-L146](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/price_predictor.py#L19-L146) |
+| Model Type        | Description                                                                           | Implementation                                                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sentiment`       | VADER lexicon-based sentiment analyzer enriched with a custom crypto-slang dictionary | [retraining_pipeline.py#L78-L98](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/retraining_pipeline.py#L78-L98) |
+| `price_predictor` | scikit-learn LinearRegression pipeline with StandardScaler preprocessing              | [price_predictor.py#L19-L146](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/price_predictor.py#L19-L146)       |
 
 ---
 
@@ -129,6 +129,23 @@ Data Selection → Training → Registration → Evaluation → Promotion → Se
 - Source: [model_registry.py#L330-L459](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/model_registry.py#L330-L459)
 - Responsible file: [model_registry.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/model_registry.py) (`promote_model`, `_write_current_version`)
 
+### Rollback
+
+Rollback reuses a saved model artefact and does not retrain or re-register it.
+Run the supported operator command from `apps/data-processing`:
+
+```bash
+python scripts/rollback_model.py price_predictor --actor on-call --reason "Live error rate increased after promotion"
+```
+
+Use `--target-version v1.0` to select a specific saved version. When omitted,
+the command selects the nearest earlier version. The target is loaded before
+the atomic `current.json` pointer is replaced, so an unavailable or corrupt
+artefact cannot become live. Successful rollbacks append an audit event to
+`promotion_log.jsonl` with the UTC timestamp, actor, reason, `from_version`,
+and `to_version`; the in-memory model and inference cache are updated as part
+of the same operation.
+
 ### Stage 6: Serving
 
 **What happens:** Live production models serve inference requests with schema skew protection, caching, and optional shadow-mode comparison.
@@ -174,15 +191,15 @@ Data Selection → Training → Registration → Evaluation → Promotion → Se
 
 ### How Models Are Stored
 
-| Storage Layer | Format | Field / Mechanism |
-|---|---|---|
-| Model artifact | Pickle file (`v*.pkl`) | `pickle.dump(..., protocol=pickle.HIGHEST_PROTOCOL)` |
-| Metadata sidecar | JSON file (`v*.meta.json`) | Keys: `model_type`, `version`, `saved_at`, feature schema fields, `metrics`, `feature_baseline` |
-| Model card (optional) | JSON file (`v*.card.json`) | Full `ModelCard` dataclass: training data, hyperparameters, evaluation metrics, feature schema, provenance |
-| Version pointer | `current.json` | JSON file with single key: `{"version": "v1.2"}` — updated atomically via temp file + `os.replace()` |
-| Legacy pointer | `current` symlink | Auto-migrated to `current.json` on first read; symlink deleted after migration |
-| Promotion audit log | `promotion_log.jsonl` | Each line: `{timestamp, model_type, version, metric, candidate_metrics, incumbent_metrics, status, reasons, evaluation_error}` |
-| In-memory hot cache | Python dicts + `RLock` | `_live_models: dict[str, Any]`, `_live_versions: dict[str, str]` — guarded by `threading.RLock()` |
+| Storage Layer         | Format                     | Field / Mechanism                                                                                                              |
+| --------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Model artifact        | Pickle file (`v*.pkl`)     | `pickle.dump(..., protocol=pickle.HIGHEST_PROTOCOL)`                                                                           |
+| Metadata sidecar      | JSON file (`v*.meta.json`) | Keys: `model_type`, `version`, `saved_at`, feature schema fields, `metrics`, `feature_baseline`                                |
+| Model card (optional) | JSON file (`v*.card.json`) | Full `ModelCard` dataclass: training data, hyperparameters, evaluation metrics, feature schema, provenance                     |
+| Version pointer       | `current.json`             | JSON file with single key: `{"version": "v1.2"}` — updated atomically via temp file + `os.replace()`                           |
+| Legacy pointer        | `current` symlink          | Auto-migrated to `current.json` on first read; symlink deleted after migration                                                 |
+| Promotion audit log   | `promotion_log.jsonl`      | Each line: `{timestamp, model_type, version, metric, candidate_metrics, incumbent_metrics, status, reasons, evaluation_error}` |
+| In-memory hot cache   | Python dicts + `RLock`     | `_live_models: dict[str, Any]`, `_live_versions: dict[str, str]` — guarded by `threading.RLock()`                              |
 
 ### What "Current" Means
 
@@ -222,6 +239,7 @@ The system does **not** have an explicit "pinned version" label in the tradition
 ### Model Cards
 
 In addition to metadata sidecars, the registry supports structured `ModelCard` JSON documents (`v*.card.json`) containing:
+
 - Training data range, row count, source, feature list
 - Hyperparameters and tuning notes
 - Full evaluation metrics (accuracy, precision, recall, f1, auc, mae, rmse, r2, plus custom metrics)
@@ -242,12 +260,12 @@ In addition to metadata sidecars, the registry supports structured `ModelCard` J
 
 There are **four independent trigger paths** (all safe to fire concurrently due to deduplication):
 
-| Trigger | Implementation | Schedule | Notes |
-|---|---|---|---|
-| **Python APScheduler cron** | [scheduler.py#L173-L191](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/scheduler.py#L173-L191) `_retraining_job` | Daily at **02:00 UTC** (`CronTrigger(hour=2, minute=0, timezone="UTC")`) | Primary trigger; runs in the data-processing background scheduler process |
-| **NestJS fallback cron** | [model-retraining.scheduler.ts#L30-L61](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/backend/src/model-retraining/model-retraining.scheduler.ts#L30-L61) `handleDailyRetraining` | Daily at **02:30 UTC** (`@Cron('30 2 * * *', {timeZone: 'UTC'})`) | Redundant fallback, fires 30 minutes after Python's own job in case the Python process missed its window. Uses `JobLockService.tryAcquire("model-retraining-daily")` (advisory lock) to prevent multiple NestJS instances from firing simultaneously. Records job history via `JobHistoryService`. |
-| **FastAPI HTTP endpoint** | [server.py#L638-L665](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/api/server.py#L638-L665) `POST /retrain` | On demand | Runs synchronously in a thread pool; response returns only after retraining completes. Rate-limited to 5/min. Requires `X-API-Key` header. Accepts `{ force: boolean }` body. |
-| **NestJS admin HTTP endpoint** | [model-retraining.controller.ts#L108-L126](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/backend/src/model-retraining/model-retraining.controller.ts#L108-L126) `POST /admin/models/retrain` | On demand | Proxies to Python `/retrain` endpoint via `ModelRetrainingService`. Requires JWT auth + `ADMIN` role (guarded by `JwtAuthGuard` + `RolesGuard`). |
+| Trigger                        | Implementation                                                                                                                                                                                        | Schedule                                                                 | Notes                                                                                                                                                                                                                                                                                              |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Python APScheduler cron**    | [scheduler.py#L173-L191](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/scheduler.py#L173-L191) `_retraining_job`                                                         | Daily at **02:00 UTC** (`CronTrigger(hour=2, minute=0, timezone="UTC")`) | Primary trigger; runs in the data-processing background scheduler process                                                                                                                                                                                                                          |
+| **NestJS fallback cron**       | [model-retraining.scheduler.ts#L30-L61](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/backend/src/model-retraining/model-retraining.scheduler.ts#L30-L61) `handleDailyRetraining`            | Daily at **02:30 UTC** (`@Cron('30 2 * * *', {timeZone: 'UTC'})`)        | Redundant fallback, fires 30 minutes after Python's own job in case the Python process missed its window. Uses `JobLockService.tryAcquire("model-retraining-daily")` (advisory lock) to prevent multiple NestJS instances from firing simultaneously. Records job history via `JobHistoryService`. |
+| **FastAPI HTTP endpoint**      | [server.py#L638-L665](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/api/server.py#L638-L665) `POST /retrain`                                                             | On demand                                                                | Runs synchronously in a thread pool; response returns only after retraining completes. Rate-limited to 5/min. Requires `X-API-Key` header. Accepts `{ force: boolean }` body.                                                                                                                      |
+| **NestJS admin HTTP endpoint** | [model-retraining.controller.ts#L108-L126](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/backend/src/model-retraining/model-retraining.controller.ts#L108-L126) `POST /admin/models/retrain` | On demand                                                                | Proxies to Python `/retrain` endpoint via `ModelRetrainingService`. Requires JWT auth + `ADMIN` role (guarded by `JwtAuthGuard` + `RolesGuard`).                                                                                                                                                   |
 
 ### Schedule Logic
 
@@ -264,10 +282,10 @@ There are **four independent trigger paths** (all safe to fire concurrently due 
 
 Each model type has its own quality gate before auto-promotion:
 
-| Model | Quality Gate | Default Threshold | Env Var | Fail Behavior |
-|---|---|---|---|---|
-| sentiment | `coverage_ratio >= threshold` | `0.0` (always passes) | `MIN_SENTIMENT_COVERAGE` | Model saved, **not promoted**, reason=`quality_gate_failed` |
-| price_predictor | `r2 >= MIN_PRICE_R2` (pre-register) | `-1.0` (always passes) | `MIN_PRICE_R2` | Model not saved, not promoted |
+| Model           | Quality Gate                                                                                                 | Default Threshold                                 | Env Var                                      | Fail Behavior                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| sentiment       | `coverage_ratio >= threshold`                                                                                | `0.0` (always passes)                             | `MIN_SENTIMENT_COVERAGE`                     | Model saved, **not promoted**, reason=`quality_gate_failed`                                                                       |
+| price_predictor | `r2 >= MIN_PRICE_R2` (pre-register)                                                                          | `-1.0` (always passes)                            | `MIN_PRICE_R2`                               | Model not saved, not promoted                                                                                                     |
 | price_predictor | `candidate_score >= PROMOTION_THRESHOLD` AND `candidate >= incumbent + PROMOTION_MIN_DELTA` (promotion eval) | `threshold=-inf`, `delta=0.0` (no delta required) | `PROMOTION_THRESHOLD`, `PROMOTION_MIN_DELTA` | Model saved, **not promoted**, reason=`promotion_evaluation_failed` with codes `threshold_failed` / `regressed_against_incumbent` |
 
 - **`force=True` flag:** Bypasses all quality gates and evaluation checks. Logged as `status: "forced"` in the promotion audit log. Useful for emergency promotion or reproducing from a manifest.
@@ -310,11 +328,11 @@ There are **multiple safe methods** — choose whichever is appropriate for your
 
 There are **three promotion paths**:
 
-| Promoter | Mechanism | Guarded by Eval? |
-|---|---|---|
-| **Automated retraining pipeline** | `retraining_pipeline.py` calls `promote_model()` directly after passing quality gates | Yes (unless `force=True`) |
-| **Shadow → Live promotion (API)** | `POST /model/shadow/promote` → calls `promote_shadow()` → internally calls `promote_model()` then `unregister_shadow()` | No — by registering a shadow, the operator asserts evaluation has been done via the comparison report |
-| **Direct API call (via rollback)** | `POST /model/rollback` with `target_version` → calls `promote_model(target_version)` directly | No — rollback is an operator override action |
+| Promoter                           | Mechanism                                                                                                               | Guarded by Eval?                                                                                      |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Automated retraining pipeline**  | `retraining_pipeline.py` calls `promote_model()` directly after passing quality gates                                   | Yes (unless `force=True`)                                                                             |
+| **Shadow → Live promotion (API)**  | `POST /model/shadow/promote` → calls `promote_shadow()` → internally calls `promote_model()` then `unregister_shadow()` | No — by registering a shadow, the operator asserts evaluation has been done via the comparison report |
+| **Direct API call (via rollback)** | `POST /model/rollback` with `target_version` → calls `promote_model(target_version)` directly                           | No — rollback is an operator override action                                                          |
 
 ### What Checks Happen Before Promotion
 
@@ -360,17 +378,21 @@ Follow these steps **in order** to revert a bad model version. The steps reflect
 ### Step 1: Identify the Bad Model
 
 1. **Check prediction logs for the suspect version:**
+
    ```
    GET /model/prediction-logs?model_version=v1.5&model_type=sentiment&limit=100
    ```
+
    - Endpoint: [server.py#L1086-L1114](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/api/server.py#L1086-L1114)
    - Filters by `model_version` and optional `model_type`. Each log includes `request_id`, `input_hash`, `output`, `latency_ms`, and optionally `raw_input` (if `LOG_PREDICTION_RAW_INPUT=true`).
 
 2. **Check registry status to confirm current version and available versions:**
+
    ```
    GET /model/status               (Python API, X-API-Key required)
    GET /admin/models/status        (NestJS admin proxy, JWT + ADMIN required)
    ```
+
    - Response includes: `registry.<type>.current_version`, `available_versions: []`, `current_metadata`, `shadow` status.
    - Endpoint: [server.py#L668-L679](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/api/server.py#L668-L679)
 
@@ -423,17 +445,21 @@ The rollback endpoint already updates the registry via `promote_model()`, which:
 Verify that the rollback took effect and the service is healthy:
 
 1. **Confirm the current version changed:**
+
    ```
    GET /model/status
    ```
+
    Verify `registry.<model_type>.current_version === <target_version>`.
    Also verify `live_in_memory: true` (the hot cache was warmed).
 
 2. **Run a smoke test inference:**
+
    ```
    POST /analyze       (for sentiment)
    Body: { "text": "Bitcoin looks bullish today" }
    ```
+
    - Verify HTTP 200.
    - Note the returned `X-Correlation-ID` header for tracing.
    - Then immediately query:
@@ -443,9 +469,11 @@ Verify that the rollback took effect and the service is healthy:
    - Confirm the most recent log entry shows `model_version: <target_version>`.
 
 3. **Clear comparison log (if shadow model was in play during rollback):**
+
    ```
    DELETE /model/shadow/comparison-log?model_type=price_predictor
    ```
+
    Rollback already unregistered the shadow, but old comparison log entries remain; clear them to avoid stale reports.
 
 4. **Feature drift sanity check (optional but recommended):**
@@ -529,23 +557,24 @@ Every `FEATURE_DRIFT_INTERVAL_HOURS` hours (default: 6), the scheduler runs `Fea
      - Threshold: `FEATURE_DRIFT_PSI_THRESHOLD` (default: `0.25`, industry convention for "major shift").
 4. If drift detected: raises an alert via `AlertNotifier.notify_feature_drift(report_dict)`. Also increments `FEATURE_DRIFT_ALERTS_TOTAL` with reason codes `"schema"` or `"distribution"`.
 5. The detector is **strictly read-only and defensive**. All exceptions are caught and logged; a failed drift check never crashes the scheduler.
+
 - Source: [feature_drift_detector.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/feature_drift_detector.py)
 - Scheduler integration: [scheduler.py#L323-L345](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/scheduler.py#L323-L345)
 
 ### Files Responsible for Inference or Loading Models
 
-| Purpose | File | Key Functions / Classes |
-|---|---|---|
-| Model registry (load, hot cache, promote) | [model_registry.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/model_registry.py) | `get_live_model()`, `load_model()`, `load_metadata()`, `get_current_version()` |
-| Sentiment inference | [sentiment.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/sentiment.py) | `SentimentAnalyzer.analyze()`, `.analyze_batch()`, `.analyze_batch_parallel()` |
-| Price predictor inference + skew guard | [price_predictor.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/price_predictor.py) | `PricePredictor.predict()` |
-| Feature set assembly for serving | [feature_store.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/feature_store.py) | `FeatureStore.get_features_for_asset()` |
-| Schema skew guard enforcement | [feature_schema.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/feature_schema.py) | `check_serving_schema()`, `SchemaVersionMismatch` |
-| Shadow-mode dual inference | [shadow_predictor.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/shadow_predictor.py) | `ShadowPredictor.predict()`, `create_shadow_predictor()` |
-| Serving distribution drift detection | [feature_drift_detector.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/feature_drift_detector.py) | `FeatureDriftDetector.detect()` |
-| HTTP serving endpoints | [server.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/api/server.py) | `/analyze`, `/analyze-batch`, `/model/*` endpoints |
-| Backend proxy to model service | [model-retraining.service.ts](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/backend/src/model-retraining/model-retraining.service.ts) | `triggerRetraining()`, `getModelStatus()` |
-| Backend admin endpoints | [model-retraining.controller.ts](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/backend/src/model-retraining/model-retraining.controller.ts) | `POST /admin/models/retrain`, `GET /admin/models/status` |
+| Purpose                                   | File                                                                                                                                                 | Key Functions / Classes                                                        |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Model registry (load, hot cache, promote) | [model_registry.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/model_registry.py)                                 | `get_live_model()`, `load_model()`, `load_metadata()`, `get_current_version()` |
+| Sentiment inference                       | [sentiment.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/sentiment.py)                                              | `SentimentAnalyzer.analyze()`, `.analyze_batch()`, `.analyze_batch_parallel()` |
+| Price predictor inference + skew guard    | [price_predictor.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/price_predictor.py)                               | `PricePredictor.predict()`                                                     |
+| Feature set assembly for serving          | [feature_store.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/feature_store.py)                                   | `FeatureStore.get_features_for_asset()`                                        |
+| Schema skew guard enforcement             | [feature_schema.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/feature_schema.py)                                 | `check_serving_schema()`, `SchemaVersionMismatch`                              |
+| Shadow-mode dual inference                | [shadow_predictor.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/shadow_predictor.py)                             | `ShadowPredictor.predict()`, `create_shadow_predictor()`                       |
+| Serving distribution drift detection      | [feature_drift_detector.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/ml/feature_drift_detector.py)                 | `FeatureDriftDetector.detect()`                                                |
+| HTTP serving endpoints                    | [server.py](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/data-processing/src/api/server.py)                                                | `/analyze`, `/analyze-batch`, `/model/*` endpoints                             |
+| Backend proxy to model service            | [model-retraining.service.ts](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/backend/src/model-retraining/model-retraining.service.ts)       | `triggerRetraining()`, `getModelStatus()`                                      |
+| Backend admin endpoints                   | [model-retraining.controller.ts](file:///C:/Users/USER/Documents/GitHub/Lumenpulse/apps/backend/src/model-retraining/model-retraining.controller.ts) | `POST /admin/models/retrain`, `GET /admin/models/status`                       |
 
 ---
 

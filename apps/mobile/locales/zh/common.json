@@ -64,6 +64,7 @@
     "news": "新闻",
     "settings": "设置",
     "watchlist": "关注列表",
+    "search": "搜索",
     "notifications": "通知",
     "manage_accounts": "管理账户",
     "notification_settings": "通知设置",
@@ -78,6 +79,24 @@
     "test_connection": "测试连接",
     "get_started": "开始使用",
     "coming_soon": "投资组合和新闻聚合即将上线。"
+  },
+  "search": {
+    "title": "搜索",
+    "placeholder": "搜索项目、资产和生态",
+    "clear_query": "清除搜索",
+    "prompt": "搜索项目、Stellar 资产和生态内容。",
+    "recent_title": "最近搜索",
+    "recent_load_error": "无法加载最近搜索。",
+    "repeat_search": "搜索 {{query}}",
+    "projects": "项目",
+    "assets": "资产",
+    "ecosystem": "生态",
+    "entity_links": "关联实体",
+    "tag": "标签",
+    "category": "类别",
+    "matched_mention": "匹配：{{mention}}",
+    "no_results": "未找到结果。",
+    "error_message": "暂时无法搜索，请重试。"
   },
   "projects": {
     "title": "项目",
@@ -363,7 +382,7 @@
       "category_cleared": "已清除{{category}}。",
       "clear_failed": "无法清除该数据，请重试。",
       "clear_all_title": "清除所有本地数据",
-      "clear_all_message": "这将从本设备删除缓存内容、已保存的新闻、自选列表、缓存图片、草稿和诊断数据。您仍将保持登录状态。",
+      "clear_all_message": "这将从本设备删除缓存内容、已保存的新闻、自选列表、缓存图片、草稿、诊断数据和最近搜索。您仍将保持登录状态。",
       "clear_all_hint": "您将保持登录状态，等待同步的更改也会保留。",
       "clear_all_success": "已清除所有本地数据，您仍处于登录状态。",
       "clear_all_partial_other": "已清除大部分数据，但有 {{count}} 个类别未能清除，请重试。",
@@ -402,6 +421,10 @@
         "diagnostics": {
           "title": "诊断数据",
           "description": "本设备上收集的本地分析和诊断状态。"
+        },
+        "recent_searches": {
+          "title": "最近搜索",
+          "description": "保存在本设备上，便于再次搜索的记录。"
         }
       }
     }

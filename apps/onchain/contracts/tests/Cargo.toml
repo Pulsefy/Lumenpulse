@@ -13,7 +13,8 @@ lumen_token = { path = "../lumen_token", features = ["testutils"] }
 contributor_registry = { path = "../contributor_registry", features = ["testutils"] }
 crowdfund_vault = { path = "../crowdfund_vault", features = ["testutils"] }
 matching_pool = { path = "../matching_pool", features = ["testutils"] }
-treasury = { path = "../treasury" }
+treasury = { path = "../treasury", features = ["testutils"] }
 project_registry = { path = "../project_registry", features = ["testutils"] }
 idempotency-guard = { path = "../idempotency-guard" }
 notification_interface = { path = "../notification_interface" }
+proptest = { version = "1", default-features = false, features = ["std"] }

@@ -17,7 +17,7 @@ models/
 The live pointer is a small JSON file named `current.json`:
 
 ```json
-{"version":"v1.0"}
+{ "version": "v1.0" }
 ```
 
 Promotion writes a temporary pointer in the same directory and replaces
@@ -25,6 +25,21 @@ Promotion writes a temporary pointer in the same directory and replaces
 complete pointer. On first resolution, a legacy `current` symlink is read,
 converted to this JSON format, and removed. Model files remain versioned and
 are never overwritten by promotion.
+
+## Rollback
+
+Rollback uses an existing saved artefact; it does not retrain or register a
+model. Run it from `apps/data-processing`:
+
+```bash
+python scripts/rollback_model.py price_predictor --actor on-call --reason "Live error rate increased after promotion"
+```
+
+Use `--target-version v1.0` to select a specific saved version. If omitted,
+the command selects the nearest earlier version. The target is loaded and
+verified before `current.json` is atomically replaced. Each successful
+rollback appends an audit event to `promotion_log.jsonl` containing the UTC
+timestamp, actor, reason, `from_version`, and `to_version`.
 
 ## Retention and garbage collection
 

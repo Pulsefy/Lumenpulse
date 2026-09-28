@@ -472,6 +472,75 @@ def promote_model(
     return True
 
 
+def rollback_model(
+    model_type: str,
+    target_version: Optional[str] = None,
+    *,
+    actor: str,
+    reason: str,
+) -> str:
+    """Move the live pointer to a verified saved model version."""
+    if not actor.strip():
+        raise ValueError("Rollback actor must not be empty")
+    if not reason.strip():
+        raise ValueError("Rollback reason must not be empty")
+
+    with _lock:
+        from_version = _read_current_version(model_type)
+        available = list_versions(model_type)
+        if from_version is None:
+            raise ValueError(f"No current model for '{model_type}'. Cannot rollback.")
+        if len(available) < 2:
+            raise ValueError(
+                f"Only one version available for '{model_type}'. Cannot rollback."
+            )
+
+        if target_version is None:
+            prior_versions = [version for version in available if version < from_version]
+            if not prior_versions:
+                raise ValueError(
+                    f"No earlier version available for '{model_type}'. "
+                    "Specify a target version to rollback."
+                )
+            target_version = prior_versions[-1]
+        if target_version == from_version:
+            raise ValueError(
+                f"Target version '{target_version}' is already the current live version."
+            )
+        if target_version not in available:
+            raise ValueError(
+                f"Target version '{target_version}' not found for '{model_type}'. "
+                f"Available: {available}"
+            )
+
+        # Deserialize before moving the atomic pointer.
+        target_model = load_model(model_type, target_version)
+        _write_current_version(model_type, target_version)
+        _live_models[model_type] = target_model
+        _live_versions[model_type] = target_version
+
+    _record_promotion_event(
+        model_type,
+        {
+            "status": "rolled_back",
+            "model_type": model_type,
+            "actor": actor,
+            "reason": reason,
+            "from_version": from_version,
+            "to_version": target_version,
+        },
+    )
+    _invalidate_cached_inference(model_type)
+    logger.info(
+        "Model rolled back: type=%s from=%s to=%s actor=%s",
+        model_type,
+        from_version,
+        target_version,
+        actor,
+    )
+    return target_version
+
+
 def _invalidate_cached_inference(model_type: str) -> None:
     """
     Best-effort invalidation of cached inference results for a model type.
@@ -978,7 +1047,13 @@ def save_model_with_card(
     Returns:
         The version string that was saved.
     """
-    from model_card import ModelCard, TrainingDataInfo, HyperparametersInfo, EvaluationMetrics, FeatureSchema
+    from src.ml.model_card import (
+        ModelCard,
+        TrainingDataInfo,
+        HyperparametersInfo,
+        EvaluationMetrics,
+        FeatureSchema,
+    )
 
     # Parse card data
     training = TrainingDataInfo(**card_data.get("training_data", {}))

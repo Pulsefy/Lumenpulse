@@ -49,10 +49,12 @@ from src.ml.model_registry import (
     clear_comparison_log,
     flush_all_comparisons,
     get_live_model,
+    rollback_model,
 )
 from src.analytics.correlation_engine import CorrelationEngine
 from src.db import PostgresService
 from src.ingestion.stellar_ingestion_checks import run_all_checks
+from src.privacy import scrub_record, scrub_text
 
 from src.analytics.sentiment_indicators import SentimentIndicatorMapper, get_legend as sentiment_legend
 from src.api.rebuild_routes import router as rebuild_router
@@ -231,16 +233,21 @@ def _log_prediction(
         return
         
     try:
+        # Prediction request logging follows the same personal-data rules as
+        # ingestion: both the stored copy and its hash are derived from the
+        # scrubbed text (#1452, docs/personal-data-policy.md).
+        scrubbed_input = scrub_text(input_text)
+        scrubbed_output = scrub_record(output)
         store_raw_input = os.getenv("LOG_PREDICTION_RAW_INPUT", "false").lower() == "true"
-        raw_input = input_text if store_raw_input else None
-        input_hash = hashlib.sha256(input_text.encode("utf-8")).hexdigest()
+        raw_input = scrubbed_input if store_raw_input else None
+        input_hash = hashlib.sha256(scrubbed_input.encode("utf-8")).hexdigest()
         
         postgres_service.log_prediction(
             request_id=request_id,
             model_type=model_type,
             model_version=model_version,
             input_hash=input_hash,
-            output=output,
+            output=scrubbed_output,
             latency_ms=latency_ms,
             raw_input=raw_input,
         )
@@ -988,6 +995,7 @@ class ComparisonLogResponse(BaseModel):
 class RollbackRequest(BaseModel):
     model_type: str
     target_version: Optional[str] = None  # If omitted, rollback to previous version
+    reason: str = "Operator-requested rollback"
 
 
 class RollbackResponse(BaseModel):
@@ -1153,49 +1161,16 @@ async def model_rollback(
     Requires X-API-Key header.
     """
     previous_live = get_current_version(body.model_type)
-    available = list_versions(body.model_type)
-
-    if len(available) < 2:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Only one version available for '{body.model_type}'. "
-                f"Cannot rollback."
-            ),
+    actor = request.headers.get("X-Actor", "api-operator")
+    try:
+        target = rollback_model(
+            body.model_type,
+            body.target_version,
+            actor=actor,
+            reason=body.reason,
         )
-
-    target = body.target_version
-    if target is None:
-        # Auto-select: the version just before current
-        if previous_live and previous_live in available:
-            idx = available.index(previous_live)
-            if idx > 0:
-                target = available[idx - 1]
-            else:
-                target = available[1] if len(available) > 1 else available[0]
-        else:
-            target = available[0]
-
-    if target == previous_live:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Target version '{target}' is already the current live version."
-            ),
-        )
-
-    if target not in available:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Target version '{target}' not found for '{body.model_type}'. "
-                f"Available: {available}"
-            ),
-        )
-
-    # Promote the targeted version
-    from src.ml.model_registry import promote_model
-    promote_model(body.model_type, target)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Also clear any shadow so it doesn't conflict
     if get_shadow_version(body.model_type):

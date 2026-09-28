@@ -24,11 +24,18 @@ import { cache } from './cache';
 import { CONTRIBUTION_DRAFT_STORAGE_KEY } from './contribution-drafts';
 import { imageCache } from './image-cache';
 import { PRIVACY_KEY_PREFIX } from './privacy-preferences';
+import { RECENT_SEARCHES_STORAGE_KEY } from './search-history';
 
 // ── Categories ─────────────────────────────────────────────────────────────
 
 export type LocalDataCategoryId =
-  'cached_content' | 'saved_news' | 'watchlists' | 'image_cache' | 'drafts' | 'diagnostics';
+  | 'cached_content'
+  | 'saved_news'
+  | 'watchlists'
+  | 'image_cache'
+  | 'drafts'
+  | 'diagnostics'
+  | 'recent_searches';
 
 /** Ordered as the settings screen renders them. */
 export const LOCAL_DATA_CATEGORY_IDS: LocalDataCategoryId[] = [
@@ -38,6 +45,7 @@ export const LOCAL_DATA_CATEGORY_IDS: LocalDataCategoryId[] = [
   'image_cache',
   'drafts',
   'diagnostics',
+  'recent_searches',
 ];
 
 /**
@@ -92,6 +100,7 @@ export function categorizeKey(key: string): LocalDataCategoryId | null {
   if (key === SAVED_ARTICLES_KEY) return 'saved_news';
   if (key === IMAGE_CACHE_META_KEY) return 'image_cache';
   if (key === CONTRIBUTION_DRAFT_STORAGE_KEY) return 'drafts';
+  if (key === RECENT_SEARCHES_STORAGE_KEY) return 'recent_searches';
   if (key.startsWith(WATCHLIST_LOCAL_PREFIX) || key.startsWith(WATCHLIST_LAST_SYNCED_PREFIX)) {
     return 'watchlists';
   }
@@ -251,6 +260,7 @@ export async function clearLocalDataCategory(id: LocalDataCategoryId): Promise<v
     case 'watchlists':
     case 'drafts':
     case 'diagnostics':
+    case 'recent_searches':
       await removeKeysForCategory(id);
       return;
   }

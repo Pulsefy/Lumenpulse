@@ -64,6 +64,7 @@
     "news": "News",
     "settings": "Settings",
     "watchlist": "Watchlist",
+    "search": "Search",
     "notifications": "Notifications",
     "manage_accounts": "Manage Accounts",
     "notification_settings": "Notification Settings",
@@ -79,6 +80,24 @@
     "test_connection": "Test Connection",
     "get_started": "Get Started",
     "coming_soon": "Portfolio & News aggregation coming soon."
+  },
+  "search": {
+    "title": "Search",
+    "placeholder": "Search projects, assets, and ecosystem",
+    "clear_query": "Clear search",
+    "prompt": "Search across projects, Stellar assets, and the ecosystem.",
+    "recent_title": "Recent searches",
+    "recent_load_error": "Couldn't load recent searches.",
+    "repeat_search": "Search for {{query}}",
+    "projects": "Projects",
+    "assets": "Assets",
+    "ecosystem": "Ecosystem",
+    "entity_links": "Linked entities",
+    "tag": "Tag",
+    "category": "Category",
+    "matched_mention": "Matched: {{mention}}",
+    "no_results": "No results found.",
+    "error_message": "Couldn't search right now. Please try again."
   },
   "projects": {
     "title": "Projects",
@@ -405,7 +424,7 @@
       "category_cleared": "{{category}} cleared.",
       "clear_failed": "Couldn't clear that data. Please try again.",
       "clear_all_title": "Clear all local data",
-      "clear_all_message": "This removes cached content, saved news, watchlists, cached images, drafts, and diagnostics data from this device. You will stay signed in.",
+      "clear_all_message": "This removes cached content, saved news, watchlists, cached images, drafts, diagnostics data, and recent searches from this device. You will stay signed in.",
       "clear_all_hint": "You stay signed in, and any changes waiting to sync are kept.",
       "clear_all_success": "All local data cleared. You are still signed in.",
       "clear_all_partial_one": "Cleared most data, but {{count}} category couldn't be cleared. Please try again.",
@@ -446,6 +465,10 @@
         "diagnostics": {
           "title": "Diagnostics data",
           "description": "Local analytics and diagnostics state collected on this device."
+        },
+        "recent_searches": {
+          "title": "Recent searches",
+          "description": "Searches saved on this device to make them easy to repeat."
         }
       }
     }

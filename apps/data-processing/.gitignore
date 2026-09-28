@@ -168,3 +168,9 @@ data/undelivered_notifications.jsonl
 # Keep the README but ignore the downloaded model files.
 models/embeddings/*
 !models/embeddings/README.md
+
+# Experiment CLI artefacts (issue #1459).  Run manifests are machine-local
+# (absolute paths, timestamps) and this model type's registry output is
+# reproduced from the committed config by `scripts/experiment.py run`.
+runs/
+models/anomaly_detector/

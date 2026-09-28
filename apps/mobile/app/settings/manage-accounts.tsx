@@ -13,10 +13,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
+import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
 import { LinkedStellarAccount, usersApi } from '../../lib/api';
 import { storage } from '../../lib/storage';
-import { requireBiometricConfirmation } from '../../lib/biometric-lock';
+import { requireStepUpAuthentication } from '../../lib/biometric-lock';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
 import { useWallet } from '../../contexts/WalletContext';
@@ -55,6 +55,7 @@ export default function ManageAccountsScreen() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [scanLocked, setScanLocked] = useState(false);
+  const [, requestCameraPermission] = useCameraPermissions();
   const {
     publicKey,
     status,
@@ -118,7 +119,7 @@ export default function ManageAccountsScreen() {
   }, [loadAccounts]);
 
   const openScanner = async () => {
-    const permission = await BarCodeScanner.requestPermissionsAsync();
+    const permission = await requestCameraPermission();
     const granted = permission.status === 'granted';
     setPermissionGranted(granted);
 
@@ -134,7 +135,7 @@ export default function ManageAccountsScreen() {
     setScannerOpen(true);
   };
 
-  const handleScanned = async ({ data }: BarCodeScannerResult) => {
+  const handleScanned = async ({ data }: BarcodeScanningResult) => {
     if (scanLocked || submitting) {
       return;
     }
@@ -197,7 +198,7 @@ export default function ManageAccountsScreen() {
           style: 'destructive' as const,
           onPress: () => {
             void (async () => {
-              const isConfirmed = await requireBiometricConfirmation(
+              const isConfirmed = await requireStepUpAuthentication(
                 'Confirm your identity to remove account',
               );
               if (!isConfirmed) return;
@@ -546,10 +547,10 @@ export default function ManageAccountsScreen() {
                 </Text>
               </View>
             ) : (
-              <BarCodeScanner
-                onBarCodeScanned={handleScanned}
+              <CameraView
+                onBarcodeScanned={handleScanned}
                 style={StyleSheet.absoluteFillObject}
-                barCodeTypes={[BarCodeScanner.Constants.BarCodeType.qr]}
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
               />
             )}
 

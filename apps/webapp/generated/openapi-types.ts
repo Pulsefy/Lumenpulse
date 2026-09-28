@@ -103,6 +103,16 @@ export interface components {
       sentiment: number;
       count: number;
     };
+    CreateExportJobDto: {
+      type: "portfolio_history" | "tax_transactions" | "onchain_analytics" | "round_analytics";
+    };
+    ExportJobResponseDto: {
+      id: string;
+      type: "portfolio_history" | "tax_transactions" | "onchain_analytics" | "round_analytics";
+      status: "pending" | "processing" | "completed" | "failed";
+      createdAt: string;
+      updatedAt: string;
+    };
     User: {
       id: string;
       email: string;

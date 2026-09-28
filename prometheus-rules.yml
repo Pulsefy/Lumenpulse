@@ -96,20 +96,33 @@ groups:
           severity: warning
           team: sre
         annotations:
-          summary: "High memory usage on {{ $labels.instance }}"
-          description: "Memory usage exceeds 85% for >5m."
-      - alert: DiskSpaceLow
-        expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 90
-        for: 10m
+          summary: 'Reconciliation drift warning'
+          description: '{{ .Labels.dataset }} has recorded warning-level drift breaches in the last 10 minutes'
+          runbook: 'docs/RECONCILIATION_ALERTING_RUNBOOK.md'
+
+      - alert: ReconciliationDriftCritical
+        expr: |
+          sum by (dataset) (
+            increase(lumenpulse_reconciliation_drift_total{severity="critical"}[10m])
+          ) > 0
+        for: 1m
         labels:
           severity: critical
           team: sre
         annotations:
-          summary: "Low disk space on {{ $labels.instance }}"
-          description: "Root FS >90% usage."
-      - alert: InstanceDown
-        expr: up == 0
-        for: 2m
+          summary: 'Critical reconciliation drift'
+          description: '{{ .Labels.dataset }} has recorded critical drift breaches in the last 10 minutes'
+          runbook: 'docs/RECONCILIATION_ALERTING_RUNBOOK.md'
+
+      # ====================
+      # Ingestion Dataset SLA Alerts
+      # ====================
+
+      - alert: IngestionDatasetFreshnessSLABreach
+        expr: |
+          lumenpulse_ingestion_dataset_freshness_seconds
+            > on(dataset) lumenpulse_ingestion_dataset_freshness_target_seconds
+        for: 5m
         labels:
           severity: critical
           team: sre
