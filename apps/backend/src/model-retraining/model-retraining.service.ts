@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataProcessingClientService } from '../data-processing/data-processing-client.service';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -50,9 +51,8 @@ const TERMINAL_STATUSES = new Set(['succeeded', 'failed']);
 @Injectable()
 export class ModelRetrainingService {
   private readonly logger = new Logger(ModelRetrainingService.name);
-  private readonly pythonApiUrl: string;
-  private readonly apiKey: string;
 
+  constructor(private readonly dataProcessing: DataProcessingClientService) {}
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
@@ -84,6 +84,15 @@ export class ModelRetrainingService {
    */
   async triggerRetraining(force = false): Promise<JobSubmission> {
     try {
+      this.logger.log(`Triggering model retraining (force=${force})`);
+      const result = await this.dataProcessing.post<RetrainResult>(
+        '/retrain',
+        { force },
+        { timeoutMs: 300_000, maxRetries: 0 },
+      );
+      this.logger.log(
+        `Retraining completed: status=${result.status} ` +
+          `duration=${result.duration_seconds?.toFixed(1)}s`,
       this.logger.log(`Submitting model retraining (force=${force})`);
       const response = await firstValueFrom(
         this.httpService.post<JobSubmission>(
@@ -95,8 +104,11 @@ export class ModelRetrainingService {
       this.logger.log(
         `Retraining submitted: job_id=${response.data.job_id} status=${response.data.status}`,
       );
-      return response.data;
+      return result;
     } catch (err) {
+      this.logger.error(
+        `Retraining request failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       const msg = err instanceof AxiosError ? err.message : String(err);
       this.logger.error(`Retraining submission failed: ${msg}`);
       throw err;
@@ -152,16 +164,14 @@ export class ModelRetrainingService {
    */
   async getModelStatus(): Promise<ModelStatusResult> {
     try {
-      const response = await firstValueFrom(
-        this.httpService.get<ModelStatusResult>(
-          `${this.pythonApiUrl}/model/status`,
-          { headers: this.headers, timeout: 10_000 },
-        ),
+      return await this.dataProcessing.get<ModelStatusResult>(
+        '/model/status',
+        { timeoutMs: 10_000 },
       );
-      return response.data;
     } catch (err) {
-      const msg = err instanceof AxiosError ? err.message : String(err);
-      this.logger.error(`Model status request failed: ${msg}`);
+      this.logger.error(
+        `Model status request failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       throw err;
     }
   }

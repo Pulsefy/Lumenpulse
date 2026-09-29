@@ -1,8 +1,9 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { HttpException } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
-import { of, throwError } from 'rxjs';
+import { Test, TestingModule } from '@nestjs/testing';
+import {
+  DataProcessingClientError,
+  DataProcessingClientService,
+} from '../data-processing/data-processing-client.service';
 import { SentimentService } from './sentiment.service';
 import { AxiosError } from 'axios';
 import { Logger } from '@nestjs/common';
@@ -54,63 +55,42 @@ const createMockAxiosError = (options: {
 
 describe('SentimentService', () => {
   let service: SentimentService;
-  let httpService: HttpService;
-  let configService: ConfigService;
-
-  // Mock objects
-  const mockHttpService = {
+  const dataProcessing = {
     post: jest.fn(),
-    get: jest.fn(),
-  };
-
-  const mockConfigService = {
     get: jest.fn(),
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
-
-    // Ensure default URL is always defined before service is constructed
-    mockConfigService.get.mockImplementation(
-      (key: string, defaultValue?: string) => {
-        if (key === 'PYTHON_API_URL') return 'http://localhost:8000';
-        return defaultValue;
-      },
-    );
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SentimentService,
-        { provide: HttpService, useValue: mockHttpService },
-        { provide: ConfigService, useValue: mockConfigService },
+        { provide: DataProcessingClientService, useValue: dataProcessing },
       ],
     }).compile();
 
     service = module.get<SentimentService>(SentimentService);
-
-    httpService = module.get<HttpService>(HttpService);
-    configService = module.get<ConfigService>(ConfigService);
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
+  it('uses the shared client for sentiment analysis', async () => {
+    dataProcessing.post.mockResolvedValue({ sentiment: 0.85 });
 
-  describe('constructor', () => {
-    it('should initialize with default Python API URL', () => {
-      mockConfigService.get.mockReturnValue('http://localhost:8000');
-      const newService = new SentimentService(httpService, configService);
-      expect(newService).toBeDefined();
+    await expect(service.analyzeSentiment('good news')).resolves.toEqual({
+      sentiment: 0.85,
     });
-
-    it('should initialize with custom Python API URL from config', () => {
-      const customUrl = 'http://python-api:8080';
-      mockConfigService.get.mockReturnValue(customUrl);
-      const newService = new SentimentService(httpService, configService);
-      expect(newService).toBeDefined();
-    });
+    expect(dataProcessing.post).toHaveBeenCalledWith(
+      '/analyze',
+      { text: 'good news' },
+      { timeoutMs: 10_000 },
+    );
   });
 
+  it('rejects empty input before calling the service', async () => {
+    await expect(service.analyzeSentiment('  ')).rejects.toThrow(
+      'Text cannot be empty',
+    );
+    expect(dataProcessing.post).not.toHaveBeenCalled();
+  });
   describe('analyzeSentiment', () => {
     const mockSuccessResponse = {
       data: { sentiment: 0.85 },
@@ -206,87 +186,70 @@ describe('SentimentService', () => {
 
       mockHttpService.post.mockReturnValue(throwError(() => mockError));
 
-      await expect(service.analyzeSentiment(text)).rejects.toThrow(
-        HttpException,
-      );
-      await expect(service.analyzeSentiment(text)).rejects.toThrow(
-        'Python API error: Invalid text format',
-      );
-    });
+  it('preserves upstream validation errors', async () => {
+    dataProcessing.post.mockRejectedValue(
+      new DataProcessingClientError(
+        'REQUEST_FAILED',
+        'Invalid text format',
+        400,
+        undefined,
+        { detail: 'Invalid text format' },
+      ),
+    );
 
-    it('should handle connection refused error', async () => {
-      const text = 'Test text';
-      const mockError = createMockAxiosError({
-        code: 'ECONNREFUSED',
-        message: 'Connection refused',
-        isAxiosError: true,
-      });
+    await expect(service.analyzeSentiment('bad input')).rejects.toThrow(
+      new HttpException('Python API error: Invalid text format', 400),
+    );
+  });
 
-      mockHttpService.post.mockReturnValue(throwError(() => mockError));
+  it('maps client availability errors to a service-unavailable response', async () => {
+    dataProcessing.post.mockRejectedValue(
+      new DataProcessingClientError(
+        'CIRCUIT_OPEN',
+        'Data-processing service circuit is open',
+      ),
+    );
 
-      await expect(service.analyzeSentiment(text)).rejects.toThrow(
-        HttpException,
-      );
-      await expect(service.analyzeSentiment(text)).rejects.toThrow(
-        'Python sentiment service is unavailable',
-      );
-    });
-
-    it('should handle network timeout error', async () => {
-      const text = 'Test text';
-      const mockError = createMockAxiosError({
-        code: 'ECONNABORTED',
-        message: 'Request timeout',
-        isAxiosError: true,
-      });
-
-      mockHttpService.post.mockReturnValue(throwError(() => mockError));
-
-      await expect(service.analyzeSentiment(text)).rejects.toThrow(
-        HttpException,
-      );
-      // await expect(service.analyzeSentiment(text)).rejects.toThrow('Failed to analyze sentiment: Request timeout');
-      await expect(service.analyzeSentiment(text)).rejects.toThrow(
-        'Python sentiment service is unavailable',
-      );
-    });
-
-    it('should handle generic error', async () => {
-      const text = 'Test text';
-      const mockError = new Error('Some unexpected error');
-      mockHttpService.post.mockReturnValue(throwError(() => mockError));
-
-      await expect(service.analyzeSentiment(text)).rejects.toThrow(
-        HttpException,
-      );
-      await expect(service.analyzeSentiment(text)).rejects.toThrow(
-        'Failed to analyze sentiment: Some unexpected error',
-      );
-    });
-
-    it('should handle long text by logging substring', async () => {
-      const longText = 'A'.repeat(100); // 100 characters
-      mockHttpService.post.mockReturnValue(of(mockSuccessResponse));
-
-      const result = await service.analyzeSentiment(longText);
-
-      expect(result).toEqual({ sentiment: 0.85 });
+    await expect(service.analyzeSentiment('hello')).rejects.toMatchObject({
+      code: 'CIRCUIT_OPEN',
     });
   });
 
-  describe('checkHealth', () => {
-    const mockHealthResponse = {
-      data: {
-        status: 'healthy',
-        timestamp: '2024-01-01T12:00:00Z',
-        service: 'sentiment-analysis',
-      },
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      config: {},
-    };
+  it.each([-1, 1])('returns the sentiment boundary score %s', async (score) => {
+    dataProcessing.post.mockResolvedValue({ sentiment: score });
 
+    await expect(service.analyzeSentiment('boundary input')).resolves.toEqual({
+      sentiment: score,
+    });
+  });
+
+  it('accepts long text without changing the returned score', async () => {
+    dataProcessing.post.mockResolvedValue({ sentiment: 0.1 });
+
+    await expect(service.analyzeSentiment('A'.repeat(10_000))).resolves.toEqual(
+      { sentiment: 0.1 },
+    );
+  });
+
+  it('maps unexpected client failures to an internal server error', async () => {
+    dataProcessing.post.mockRejectedValue(new Error('unexpected failure'));
+
+    await expect(service.analyzeSentiment('hello')).rejects.toThrow(
+      'Failed to analyze sentiment: unexpected failure',
+    );
+  });
+
+  it('uses the shared client for health checks', async () => {
+    const health = {
+      status: 'healthy',
+      timestamp: '2026-09-29T00:00:00Z',
+      service: 'sentiment-analysis',
+    };
+    dataProcessing.get.mockResolvedValue(health);
+
+    await expect(service.checkHealth()).resolves.toEqual(health);
+    expect(dataProcessing.get).toHaveBeenCalledWith('/health', {
+      timeoutMs: 5_000,
     beforeEach(() => {
       mockConfigService.get.mockReturnValue('http://localhost:8000');
     });
@@ -339,57 +302,26 @@ describe('SentimentService', () => {
     });
   });
 
-  describe('edge cases', () => {
-    it('should handle negative sentiment scores', async () => {
-      const text = 'This is terrible';
-      const mockResponse = {
-        data: { sentiment: -0.75 },
-        status: 200,
-        statusText: 'OK',
-        headers: {},
-        config: {},
-      };
-      mockHttpService.post.mockReturnValue(of(mockResponse));
-      mockConfigService.get.mockReturnValue('http://localhost:8000');
+  it('degrades failed health checks as service unavailable', async () => {
+    dataProcessing.get.mockRejectedValue(
+      new DataProcessingClientError('TIMEOUT', 'request timed out'),
+    );
 
-      const result = await service.analyzeSentiment(text);
+    await expect(service.checkHealth()).rejects.toThrow(
+      'Python sentiment service is unhealthy',
+    );
+  });
 
-      expect(result.sentiment).toBeLessThan(0);
-      expect(result.sentiment).toBe(-0.75);
-    });
+  it('preserves the typed breaker error from health checks', async () => {
+    dataProcessing.get.mockRejectedValue(
+      new DataProcessingClientError(
+        'CIRCUIT_OPEN',
+        'Data-processing service circuit is open',
+      ),
+    );
 
-    it('should handle neutral sentiment scores', async () => {
-      const text = 'The weather is normal';
-      const mockResponse = {
-        data: { sentiment: 0.02 },
-        status: 200,
-        statusText: 'OK',
-        headers: {},
-        config: {},
-      };
-      mockHttpService.post.mockReturnValue(of(mockResponse));
-      mockConfigService.get.mockReturnValue('http://localhost:8000');
-
-      const result = await service.analyzeSentiment(text);
-
-      expect(result.sentiment).toBe(0.02);
-    });
-
-    it('should handle very long text input', async () => {
-      const veryLongText = 'A'.repeat(10000);
-      const mockResponse = {
-        data: { sentiment: 0.1 },
-        status: 200,
-        statusText: 'OK',
-        headers: {},
-        config: {},
-      };
-      mockHttpService.post.mockReturnValue(of(mockResponse));
-      mockConfigService.get.mockReturnValue('http://localhost:8000');
-
-      const result = await service.analyzeSentiment(veryLongText);
-
-      expect(result.sentiment).toBe(0.1);
+    await expect(service.checkHealth()).rejects.toMatchObject({
+      code: 'CIRCUIT_OPEN',
     });
   });
 });

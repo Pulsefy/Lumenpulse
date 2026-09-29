@@ -10,6 +10,7 @@ import { NewsSentimentService } from './news-sentiment.services';
 import { AppCacheModule } from '../cache/cache.module';
 import { ProfilingModule } from '../common/profiling/profiling.module';
 import { SchedulerModule } from '../scheduler/scheduler.module';
+import { DataProcessingModule } from '../data-processing/data-processing.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { SchedulerModule } from '../scheduler/scheduler.module';
     AppCacheModule,
     ProfilingModule,
     SchedulerModule,
+    DataProcessingModule,
   ],
   controllers: [NewsController],
   providers: [NewsProviderService, NewsService, NewsSentimentService],

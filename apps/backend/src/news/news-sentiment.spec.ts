@@ -1,9 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
-import { of, throwError } from 'rxjs';
-import { AxiosResponse } from 'axios';
 import { News } from './news.entity';
 import { NewsService } from './news.service';
 import { NewsSentimentService } from './news-sentiment.services';
@@ -12,6 +8,7 @@ import { CacheService } from '../cache/cache.service';
 import { QueryProfilerService } from '../common/profiling/query-profiler.service';
 import { JobLockService } from '../scheduler/job-lock.service';
 import { JobHistoryService } from '../scheduler/job-history.service';
+import { DataProcessingClientService } from '../data-processing/data-processing-client.service';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -32,14 +29,8 @@ interface RawSourceResult {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeAxiosResponse<T>(data: T): AxiosResponse<T> {
-  return {
-    data,
-    status: 200,
-    statusText: 'OK',
-    headers: {},
-    config: { headers: {} } as AxiosResponse['config'],
-  };
+function makeAxiosResponse<T>(data: T): T {
+  return data;
 }
 
 function makeArticle(overrides: Partial<News> = {}): News {
@@ -65,21 +56,15 @@ describe('NewsSentimentService', () => {
   let newsService: jest.Mocked<
     Pick<NewsService, 'findUnscoredArticles' | 'update'>
   >;
-  let httpService: jest.Mocked<Pick<HttpService, 'post'>>;
+  let dataProcessing: jest.Mocked<Pick<DataProcessingClientService, 'post'>>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NewsSentimentService,
         {
-          provide: HttpService,
+          provide: DataProcessingClientService,
           useValue: { post: jest.fn() },
-        },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn().mockReturnValue('http://localhost:8000'),
-          },
         },
         {
           provide: NewsService,
@@ -113,9 +98,9 @@ describe('NewsSentimentService', () => {
     ) as unknown as jest.Mocked<
       Pick<NewsService, 'findUnscoredArticles' | 'update'>
     >;
-    httpService = module.get<HttpService>(
-      HttpService,
-    ) as unknown as jest.Mocked<Pick<HttpService, 'post'>>;
+    dataProcessing = module.get<DataProcessingClientService>(
+      DataProcessingClientService,
+    ) as jest.Mocked<Pick<DataProcessingClientService, 'post'>>;
   });
 
   // ── analyzeSentiment ───────────────────────────────────────────────────────
@@ -125,25 +110,21 @@ describe('NewsSentimentService', () => {
       const mockResponse = makeAxiosResponse<SentimentApiResponse>({
         sentiment: 0.75,
       });
-      (httpService.post as jest.Mock).mockReturnValue(of(mockResponse));
+      dataProcessing.post.mockResolvedValue(mockResponse);
 
       const score = await sentimentService.analyzeSentiment('Bitcoin is up!');
       expect(score).toBe(0.75);
     });
 
     it('should return null when Python service is down (non-blocking)', async () => {
-      (httpService.post as jest.Mock).mockReturnValue(
-        throwError(() => new Error('ECONNREFUSED')),
-      );
+      dataProcessing.post.mockRejectedValue(new Error('ECONNREFUSED'));
 
       const score = await sentimentService.analyzeSentiment('some text');
       expect(score).toBeNull();
     });
 
     it('should return null on timeout', async () => {
-      (httpService.post as jest.Mock).mockReturnValue(
-        throwError(() => ({ code: 'ECONNABORTED' })),
-      );
+      dataProcessing.post.mockRejectedValue({ code: 'ECONNABORTED' });
 
       const score = await sentimentService.analyzeSentiment('some text');
       expect(score).toBeNull();
@@ -157,10 +138,10 @@ describe('NewsSentimentService', () => {
         sentiment: 1,
       });
 
-      (httpService.post as jest.Mock).mockReturnValueOnce(of(negResponse));
+      dataProcessing.post.mockResolvedValueOnce(negResponse);
       expect(await sentimentService.analyzeSentiment('terrible news')).toBe(-1);
 
-      (httpService.post as jest.Mock).mockReturnValueOnce(of(posResponse));
+      dataProcessing.post.mockResolvedValueOnce(posResponse);
       expect(await sentimentService.analyzeSentiment('great news')).toBe(1);
     });
   });
@@ -177,7 +158,7 @@ describe('NewsSentimentService', () => {
       (newsService.findUnscoredArticles as jest.Mock).mockResolvedValue(
         articles,
       );
-      (httpService.post as jest.Mock).mockReturnValue(of(mockResponse));
+      dataProcessing.post.mockResolvedValue(mockResponse);
 
       await sentimentService.updateMissingSentiments();
 
@@ -195,9 +176,7 @@ describe('NewsSentimentService', () => {
       (newsService.findUnscoredArticles as jest.Mock).mockResolvedValue(
         articles,
       );
-      (httpService.post as jest.Mock).mockReturnValue(
-        throwError(() => new Error('service down')),
-      );
+      dataProcessing.post.mockRejectedValue(new Error('service down'));
 
       await sentimentService.updateMissingSentiments();
 
@@ -209,9 +188,7 @@ describe('NewsSentimentService', () => {
       (newsService.findUnscoredArticles as jest.Mock).mockResolvedValue(
         articles,
       );
-      (httpService.post as jest.Mock).mockReturnValue(
-        throwError(() => new Error('down')),
-      );
+      dataProcessing.post.mockRejectedValue(new Error('down'));
 
       await expect(
         sentimentService.updateMissingSentiments(),

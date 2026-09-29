@@ -6,9 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere, In, IsNull, MoreThan } from 'typeorm';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
-import { isAxiosError } from 'axios';
+import { DataProcessingClientService } from '../data-processing/data-processing-client.service';
 import {
   ReadModelRebuildJob,
   RebuildStatus,
@@ -51,11 +49,10 @@ interface ErrorDetails {
 }
 
 function getErrorDetails(error: unknown): ErrorDetails {
-  if (isAxiosError(error)) {
-    return { message: error.message, stack: error.stack, code: error.code };
-  }
   if (error instanceof Error) {
-    return { message: error.message, stack: error.stack };
+    const code =
+      'code' in error && typeof error.code === 'string' ? error.code : undefined;
+    return { message: error.message, stack: error.stack, code };
   }
   return { message: String(error) };
 }
@@ -79,7 +76,7 @@ export class ReadModelRebuildService {
   constructor(
     @InjectRepository(ReadModelRebuildJob)
     private readonly jobRepo: Repository<ReadModelRebuildJob>,
-    private readonly httpService: HttpService,
+    private readonly dataProcessing: DataProcessingClientService,
     private readonly jobLockService: JobLockService,
     private readonly jobHistoryService: JobHistoryService,
     private readonly adminAuditService: AdminAuditService,
@@ -255,13 +252,21 @@ export class ReadModelRebuildService {
       // Update progress
       job.progressDetails = {
         phase: 'calling_data_processing',
-        url,
+        endpoint,
         payload,
       };
       await this.jobRepo.save(job);
 
-      this.logger.log(`Calling data-processing: ${url}`);
+      this.logger.log(`Calling data-processing: ${endpoint}`);
 
+      const result = await this.dataProcessing.post<RebuildResultResponse>(
+        endpoint,
+        payload,
+        {
+          timeoutMs: 300_000,
+          maxRetries: payload.idempotency_key ? 2 : 0,
+          headers: { 'X-Correlation-ID': `rebuild-${job.id}` },
+        },
       const correlationId =
         RequestContextService.getCorrelationId() !== 'unknown'
           ? RequestContextService.getCorrelationId()
@@ -279,8 +284,6 @@ export class ReadModelRebuildService {
       );
 
       // Update job with results
-      const result = response.data;
-
       job.status = RebuildStatus.COMPLETED;
       job.completedAt = new Date();
       job.totalItems = result.totalItems || 0;
