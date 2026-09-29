@@ -1,10 +1,8 @@
-#![cfg(test)]
-
 use crate::errors::RegistryError;
 use crate::{ContractRegistry, ContractRegistryClient};
 use soroban_sdk::{testutils::Address as _, Address, Env, Symbol};
 
-fn setup_test<'a>(env: &Env) -> (ContractRegistryClient<'a>, Address) {
+fn setup_test(env: &Env) -> (ContractRegistryClient<'_>, Address) {
     let admin = Address::generate(env);
     let contract_id = env.register(ContractRegistry, ());
     let client = ContractRegistryClient::new(env, &contract_id);

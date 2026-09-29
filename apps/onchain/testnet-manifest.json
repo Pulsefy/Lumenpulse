@@ -2,6 +2,13 @@
   "network": "testnet",
   "rpc_url": "https://soroban-testnet.stellar.org:443",
   "admin_address": "GDPBZZDKZJTPFERPP65ATQWH2T6OIXQESPKXSTO6YY33TA2HTUTAPJI6",
+  "build_metadata": {
+    "toolchain": "1.85.0",
+    "target": "wasm32-unknown-unknown",
+    "profile": "release",
+    "cargo_flags": "--locked",
+    "note": "Hashes in this file were produced with the pinned toolchain declared in apps/onchain/rust-toolchain.toml. To regenerate after a source change, run: cd apps/onchain && ./scripts/build-reproducible.sh && node scripts/verify-hashes.js --update"
+  },
   "contracts": {
     "contributor_registry": {
       "id": "CCOVDGHF3XQ5RAFY6DJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLDGXQJSB",

@@ -22,14 +22,14 @@ fn create_token_contract<'a>(
     )
 }
 
-fn setup_test<'a>(
+fn setup_test(
     env: &Env,
 ) -> (
-    CrowdfundVaultContractClient<'a>,
+    CrowdfundVaultContractClient<'_>,
     Address,
     Address,
     Address,
-    TokenClient<'a>,
+    TokenClient<'_>,
 ) {
     let admin = Address::generate(env);
     let owner = Address::generate(env);
@@ -48,15 +48,15 @@ fn setup_test<'a>(
     (client, admin, owner, user, token_client)
 }
 
-fn setup_test_with_admin<'a>(
+fn setup_test_with_admin(
     env: &Env,
 ) -> (
-    CrowdfundVaultContractClient<'a>,
+    CrowdfundVaultContractClient<'_>,
     Address,
     Address,
     Address,
-    TokenClient<'a>,
-    StellarAssetClient<'a>,
+    TokenClient<'_>,
+    StellarAssetClient<'_>,
     Address,
 ) {
     let admin = Address::generate(env);

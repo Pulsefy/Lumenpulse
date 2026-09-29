@@ -44,7 +44,7 @@ fn extreme_amount() -> impl Strategy<Value = i128> {
     prop_oneof![amount(), (i128::MAX / 2)..=i128::MAX]
 }
 
-fn create_token<'a>(env: &Env, admin: &Address) -> (TokenClient<'a>, StellarAssetClient<'a>) {
+fn create_token(env: &Env, admin: &Address) -> (TokenClient<'_>, StellarAssetClient<'_>) {
     let addr = env.register_stellar_asset_contract_v2(admin.clone());
     (
         TokenClient::new(env, &addr.address()),
@@ -53,13 +53,13 @@ fn create_token<'a>(env: &Env, admin: &Address) -> (TokenClient<'a>, StellarAsse
 }
 
 /// Fresh Env + initialized contract + token, admin set as `Address`.
-fn setup<'a>(
+fn setup(
     env: &Env,
 ) -> (
-    MatchingPoolContractClient<'a>,
+    MatchingPoolContractClient<'_>,
     Address,
-    TokenClient<'a>,
-    StellarAssetClient<'a>,
+    TokenClient<'_>,
+    StellarAssetClient<'_>,
 ) {
     let admin = Address::generate(env);
     let (token, token_admin) = create_token(env, &admin);

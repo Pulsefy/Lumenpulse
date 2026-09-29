@@ -45,7 +45,7 @@ struct MultisigFixture<'a> {
     _token_admin: Address,
 }
 
-impl<'a> MultisigFixture<'a> {
+impl MultisigFixture<'_> {
     fn new() -> Self {
         let env = Env::default();
         env.mock_all_auths();

@@ -20,7 +20,7 @@ use soroban_sdk::{
 
 /// Create a Stellar asset contract and return both a TokenClient and a
 /// StellarAssetClient (the latter is used to mint tokens in tests).
-fn create_token<'a>(env: &Env, admin: &Address) -> (TokenClient<'a>, StellarAssetClient<'a>) {
+fn create_token(env: &Env, admin: &Address) -> (TokenClient<'_>, StellarAssetClient<'_>) {
     let addr = env.register_stellar_asset_contract_v2(admin.clone());
     (
         TokenClient::new(env, &addr.address()),

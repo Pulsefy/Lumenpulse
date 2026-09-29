@@ -110,7 +110,7 @@ fn test_normalize_amount_different_decimals() {
 
 // ── Staleness windows & invalidation flags ────────────────────────────────
 
-fn setup<'a>(env: &Env) -> (PricingAdapterContractClient<'a>, Address, Address) {
+fn setup(env: &Env) -> (PricingAdapterContractClient<'_>, Address, Address) {
     let admin = Address::generate(env);
     let asset = Address::generate(env);
     let contract_id = env.register(PricingAdapterContract, ());

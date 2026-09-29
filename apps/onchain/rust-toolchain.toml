@@ -1,0 +1,17 @@
+# Pinned Rust toolchain for reproducible WASM builds.
+#
+# Any machine or CI runner that builds contracts in this workspace will
+# automatically use this exact toolchain, ensuring byte-identical output
+# regardless of what rustup version is installed locally.
+#
+# Constraints:
+#  - >= 1.84.0 required: wasm32v1-none target first appeared in 1.84
+#  - Rust 1.81–1.83 and 1.91 are known to produce broken/non-deterministic
+#    WebAssembly output and are therefore excluded from valid pinning choices.
+#
+# To update: change the version here AND re-run the reproducible build script
+# to regenerate the wasm_hash values in testnet-manifest.json.
+[toolchain]
+channel  = "1.85.0"
+targets  = ["wasm32-unknown-unknown"]
+components = ["rustc", "cargo", "rustfmt", "clippy", "rust-src"]

@@ -39,7 +39,7 @@ use soroban_sdk::{
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-fn create_token<'a>(env: &Env, admin: &Address) -> (TokenClient<'a>, StellarAssetClient<'a>) {
+fn create_token(env: &Env, admin: &Address) -> (TokenClient<'_>, StellarAssetClient<'_>) {
     let addr = env.register_stellar_asset_contract_v2(admin.clone());
     (
         TokenClient::new(env, &addr.address()),
@@ -48,13 +48,13 @@ fn create_token<'a>(env: &Env, admin: &Address) -> (TokenClient<'a>, StellarAsse
 }
 
 /// Deploys a fresh vault, initializes it, returns client + helpers.
-fn setup<'a>(
+fn setup(
     env: &Env,
 ) -> (
-    CrowdfundVaultContractClient<'a>,
+    CrowdfundVaultContractClient<'_>,
     Address, // admin
-    TokenClient<'a>,
-    StellarAssetClient<'a>,
+    TokenClient<'_>,
+    StellarAssetClient<'_>,
 ) {
     let admin = Address::generate(env);
     let (token, token_admin) = create_token(env, &admin);

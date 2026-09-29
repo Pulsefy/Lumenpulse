@@ -29,11 +29,22 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+    # Read the exact toolchain version from rust-toolchain.toml so that every
+    # CI run uses the same compiler as local reproducible builds.  This is the
+    # primary mechanism that ensures byte-identical WASM output across machines.
+    - name: Read pinned toolchain version
+      id: toolchain-version
+      run: |
+        VERSION=$(grep '^channel' rust-toolchain.toml | sed 's/.*=\s*"\(.*\)"/\1/')
+        echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        echo "Pinned Rust toolchain: ${VERSION}"
+
+    - name: Install pinned Rust toolchain
+      uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: stable
+        toolchain: ${{ steps.toolchain-version.outputs.version }}
         targets: wasm32-unknown-unknown
+        components: rustc,cargo,rustfmt,clippy,rust-src
 
     - name: Cache dependencies
       uses: Swatinem/rust-cache@v2
@@ -46,10 +57,54 @@ jobs:
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
 
-  
-
     - name: Build Contracts
-      run: cargo build --target wasm32-unknown-unknown --release
+      run: cargo build --target wasm32-unknown-unknown --release --locked
+
+    # ── Reproducibility gate ──────────────────────────────────────────────
+    # Rebuild with the same flags a second time and verify that the SHA-256
+    # hashes of the resulting WASM files are identical to the first build.
+    # A non-deterministic compiler or build flag would surface here.
+    - name: Rebuild contracts (reproducibility check)
+      run: |
+        # Copy first-build artefacts for comparison
+        mkdir -p /tmp/wasm-first
+        cp target/wasm32-unknown-unknown/release/*.wasm /tmp/wasm-first/
+
+        # Second independent build
+        cargo build --target wasm32-unknown-unknown --release --locked
+
+        echo "=== Comparing first vs second build hashes ==="
+        MISMATCH=0
+        for wasm in target/wasm32-unknown-unknown/release/*.wasm; do
+          name=$(basename "$wasm")
+          hash1=$(sha256sum "/tmp/wasm-first/${name}" | awk '{print $1}')
+          hash2=$(sha256sum "${wasm}"                  | awk '{print $1}')
+          if [ "$hash1" = "$hash2" ]; then
+            echo "✅  ${name}  ${hash1}"
+          else
+            echo "❌  ${name}  MISMATCH"
+            echo "    build-1: ${hash1}"
+            echo "    build-2: ${hash2}"
+            MISMATCH=1
+          fi
+        done
+
+        if [ "$MISMATCH" -ne 0 ]; then
+          echo ""
+          echo "ERROR: Builds are not reproducible — byte-identical output required."
+          exit 1
+        fi
+
+        echo ""
+        echo "All contracts produce byte-identical WASM across two independent builds."
+
+    # ── Manifest hash gate ────────────────────────────────────────────────
+    # Compare the SHA-256 of every built WASM file against the wasm_hash
+    # recorded in testnet-manifest.json.  A mismatch means either the
+    # source changed without updating the manifest, or the manifest was
+    # updated without a matching source change.
+    - name: Verify WASM hashes match testnet-manifest.json
+      run: node scripts/verify-hashes.js
 
     - name: Build base contracts for size comparison
       if: github.event_name == 'pull_request'

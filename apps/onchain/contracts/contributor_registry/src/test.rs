@@ -2,7 +2,7 @@ use crate::errors::ContributorError;
 use crate::{ContributorRegistryContract, ContributorRegistryContractClient};
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
-fn setup_test<'a>(env: &Env) -> (ContributorRegistryContractClient<'a>, Address, Address) {
+fn setup_test(env: &Env) -> (ContributorRegistryContractClient<'_>, Address, Address) {
     let admin = Address::generate(env);
     let contributor = Address::generate(env);
 
