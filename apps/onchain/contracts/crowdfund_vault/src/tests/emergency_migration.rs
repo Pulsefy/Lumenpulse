@@ -34,7 +34,7 @@ use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Ledger as _},
     token::{StellarAssetClient, TokenClient},
-    Address, Env, Symbol,
+    Address, BytesN, Env, Symbol,
 };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -66,6 +66,7 @@ fn setup<'a>(
 
 /// Creates a project, mints `deposit` tokens to `user`, deposits them,
 /// pauses the contract, and returns the project_id.
+#[allow(clippy::needless_borrow)]
 fn setup_paused_round_with_deposit(
     env: &Env,
     client: &CrowdfundVaultContractClient,
@@ -85,7 +86,12 @@ fn setup_paused_round_with_deposit(
     );
 
     token_admin.mint(&user, &deposit);
-    client.deposit(&user, &project_id, &deposit);
+    client.deposit(
+        &user,
+        &project_id,
+        &deposit,
+        &BytesN::from_array(&env, &[63u8; 32]),
+    );
 
     // Pause the contract — prerequisite for emergency migration.
     client.pause(admin);
@@ -111,7 +117,12 @@ fn test_emi1_proposal_requires_pause() {
         &token.address,
     );
     token_admin.mint(&owner, &500_000);
-    client.deposit(&owner, &project_id, &500_000);
+    client.deposit(
+        &owner,
+        &project_id,
+        &500_000,
+        &BytesN::from_array(&env, &[64u8; 32]),
+    );
 
     // Contract is NOT paused — should fail.
     let result = client.try_propose_emergency_migration(
@@ -147,7 +158,12 @@ fn test_emi2_proposal_is_admin_only() {
         &token.address,
     );
     token_admin.mint(&owner, &500_000);
-    client.deposit(&owner, &project_id, &500_000);
+    client.deposit(
+        &owner,
+        &project_id,
+        &500_000,
+        &BytesN::from_array(&env, &[65u8; 32]),
+    );
     client.pause(&admin);
 
     let result = client.try_propose_emergency_migration(
@@ -542,8 +558,18 @@ fn test_emi11_partial_migration_contributor_clawback() {
     );
     token_admin.mint(&user_a, &300_000);
     token_admin.mint(&user_b, &200_000);
-    client.deposit(&user_a, &project_id, &300_000);
-    client.deposit(&user_b, &project_id, &200_000);
+    client.deposit(
+        &user_a,
+        &project_id,
+        &300_000,
+        &BytesN::from_array(&env, &[66u8; 32]),
+    );
+    client.deposit(
+        &user_b,
+        &project_id,
+        &200_000,
+        &BytesN::from_array(&env, &[67u8; 32]),
+    );
 
     let recipient = Address::generate(&env);
     client.pause(&admin);
@@ -784,9 +810,24 @@ fn test_emi18_partial_round_migration() {
     token_admin.mint(&user_a, &amt_a);
     token_admin.mint(&user_b, &amt_b);
     token_admin.mint(&user_c, &amt_c);
-    client.deposit(&user_a, &project_id, &amt_a);
-    client.deposit(&user_b, &project_id, &amt_b);
-    client.deposit(&user_c, &project_id, &amt_c);
+    client.deposit(
+        &user_a,
+        &project_id,
+        &amt_a,
+        &BytesN::from_array(&env, &[68u8; 32]),
+    );
+    client.deposit(
+        &user_b,
+        &project_id,
+        &amt_b,
+        &BytesN::from_array(&env, &[69u8; 32]),
+    );
+    client.deposit(
+        &user_c,
+        &project_id,
+        &amt_c,
+        &BytesN::from_array(&env, &[70u8; 32]),
+    );
 
     // Pause mid-round — simulates an operational halt.
     client.pause(&admin);

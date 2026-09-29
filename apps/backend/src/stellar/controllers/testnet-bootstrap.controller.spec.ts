@@ -74,7 +74,10 @@ describe('TestnetBootstrapController', () => {
     );
 
     expect(result).toEqual(mockResponse);
-    expect(service.fundTestnetAccount).toHaveBeenCalledWith(VALID_TESTNET_KEY);
+    expect(service.fundTestnetAccount).toHaveBeenCalledWith(
+      VALID_TESTNET_KEY,
+      adminUser.id,
+    );
   });
 
   it('rejects when the feature flag is disabled', async () => {

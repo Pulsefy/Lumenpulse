@@ -352,6 +352,37 @@
           "refId": "A"
         }
       ]
+    },
+
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Reconciliation Drift Breaches",
+      "description": "Drift breaches by reconciled dataset and severity",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 34 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum by (dataset, severity) (increase(lumenpulse_reconciliation_drift_total[10m]))",
+          "legendFormat": "{{dataset}} / {{severity}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "lumenpulse_reconciliation_drift_delta",
+          "legendFormat": "{{dataset}} max delta ({{severity}})",
+          "refId": "B"
+        }
+      ]
     }
 
   ],

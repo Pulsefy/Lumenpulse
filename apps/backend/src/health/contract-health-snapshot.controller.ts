@@ -16,6 +16,7 @@ import {
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ContractHealthSnapshotService } from './contract-health-snapshot.service';
+import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 
 /**
  * Exposes persisted contract-health snapshot data.
@@ -169,6 +170,8 @@ export class ContractHealthSnapshotController {
   // -------------------------------------------------------------------------
 
   @Post()
+  // Runs live contract simulations against every configured contract.
+  @RateLimitPolicy('contractSimulation')
   @ApiOperation({
     summary: 'Trigger a manual contract health snapshot capture',
     description:

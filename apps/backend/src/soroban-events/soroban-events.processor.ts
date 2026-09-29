@@ -17,6 +17,7 @@ import { SorobanEventsDeadLetterService } from './soroban-events-dead-letter.ser
 import { mapSorobanEvent } from './soroban-event-mapper';
 import { CrowdfundSyncService } from '../crowdfund-sync/crowdfund-sync.service';
 import { CrowdfundVaultProject } from '../crowdfund-sync/entities/crowdfund-vault-project.entity';
+import { RequestContextService } from '../common/services/request-context.service';
 
 // Event types that are relevant to crowdfund vaults
 const CROWDFUND_VAULT_EVENT_TYPES = [
@@ -72,82 +73,92 @@ export class SorobanEventsProcessor extends WorkerHost {
     }
 
     const { txHash, eventIndex, contractId, eventType, rawPayload } = job.data;
+    const correlationId =
+      (job.data as { correlationId?: string }).correlationId ||
+      txHash ||
+      String(job.id) ||
+      'unknown';
 
-    // Idempotency check: find existing event
-    const existing = await this.eventRepo.findOneBy({ txHash, eventIndex });
+    return RequestContextService.run(
+      { correlationId, requestId: correlationId },
+      async () => {
+        // Idempotency check: find existing event
+        const existing = await this.eventRepo.findOneBy({ txHash, eventIndex });
 
-    // Skip if already processed successfully
-    if (existing && existing.status !== SorobanEventStatus.FAILED) {
-      this.logger.debug(
-        { txHash, eventIndex, status: existing.status },
-        'Soroban event already processed, skipping',
-      );
-      return;
-    }
+        // Skip if already processed successfully
+        if (existing && existing.status !== SorobanEventStatus.FAILED) {
+          this.logger.debug(
+            { txHash, eventIndex, status: existing.status },
+            'Soroban event already processed, skipping',
+          );
+          return;
+        }
 
-    // Map event to canonical type for consistent handling
-    const mapping = mapSorobanEvent(eventType ?? null);
+        // Map event to canonical type for consistent handling
+        const mapping = mapSorobanEvent(eventType ?? null);
 
-    // Create or update event record
-    const event =
-      existing ??
-      this.eventRepo.create({
-        txHash,
-        eventIndex,
-        contractId: contractId ?? null,
-        eventType: eventType ?? null,
-        canonicalType: mapping?.canonicalType ?? null,
-        category: mapping?.category ?? null,
-        rawPayload,
-        ledgerSequence:
-          (job.data as { ledgerSequence?: number }).ledgerSequence ?? null,
-        status: SorobanEventStatus.PENDING,
-        processedAt: null,
-        errorMessage: null,
-      });
+        // Create or update event record
+        const event =
+          existing ??
+          this.eventRepo.create({
+            txHash,
+            eventIndex,
+            contractId: contractId ?? null,
+            eventType: eventType ?? null,
+            canonicalType: mapping?.canonicalType ?? null,
+            category: mapping?.category ?? null,
+            rawPayload,
+            ledgerSequence:
+              (job.data as { ledgerSequence?: number }).ledgerSequence ?? null,
+            status: SorobanEventStatus.PENDING,
+            processedAt: null,
+            errorMessage: null,
+          });
 
-    // Reset status for retry
-    if (existing) {
-      event.status = SorobanEventStatus.PENDING;
-      event.errorMessage = null;
-    }
+        // Reset status for retry
+        if (existing) {
+          event.status = SorobanEventStatus.PENDING;
+          event.errorMessage = null;
+        }
 
-    await this.eventRepo.save(event);
+        await this.eventRepo.save(event);
 
-    try {
-      // Handle Project Registry events
-      if (contractId === process.env.PROJECT_REGISTRY_CONTRACT_ID) {
-        await this.handleProjectRegistryEvent(txHash, rawPayload);
-      }
+        try {
+          // Handle Project Registry events
+          if (contractId === process.env.PROJECT_REGISTRY_CONTRACT_ID) {
+            await this.handleProjectRegistryEvent(txHash, rawPayload);
+          }
 
-      // Handle Crowdfund Vault events
-      if (this.isCrowdfundVaultEvent(eventType ?? null)) {
-        await this.handleCrowdfundVaultEvent(
-          txHash,
-          eventIndex,
-          contractId ?? null,
-          rawPayload,
+          // Handle Crowdfund Vault events
+          if (this.isCrowdfundVaultEvent(eventType ?? null)) {
+            await this.handleCrowdfundVaultEvent(
+              txHash,
+              eventIndex,
+              contractId ?? null,
+              rawPayload,
+            );
+          }
+
+          // Mark as processed
+          event.status = SorobanEventStatus.PROCESSED;
+          event.processedAt = new Date();
+
+          // If this event was replayed from dead letter queue, mark it as successful
+          await this.dlqService.markReplayed(txHash, eventIndex);
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          event.status = SorobanEventStatus.FAILED;
+          event.errorMessage = errorMessage;
+          await this.eventRepo.save(event);
+          throw err; // let BullMQ retry
+        }
+
+        await this.eventRepo.save(event);
+        this.logger.log(
+          { txHash, eventIndex, eventType },
+          'Processed soroban event',
         );
-      }
-
-      // Mark as processed
-      event.status = SorobanEventStatus.PROCESSED;
-      event.processedAt = new Date();
-
-      // If this event was replayed from dead letter queue, mark it as successful
-      await this.dlqService.markReplayed(txHash, eventIndex);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      event.status = SorobanEventStatus.FAILED;
-      event.errorMessage = errorMessage;
-      await this.eventRepo.save(event);
-      throw err; // let BullMQ retry
-    }
-
-    await this.eventRepo.save(event);
-    this.logger.log(
-      { txHash, eventIndex, eventType },
-      'Processed soroban event',
+      },
     );
   }
 

@@ -5,15 +5,21 @@
 #           produced so contributors can trace lineage, avoid
 #           accidental drift, and know who to contact.
 #
-# Schema version : 1.0
-# Last updated   : 2026-07-24
+# Schema version : 1.1
+# Last updated   : 2026-08-24
 # Maintainer     : data-team@lumenpulse.io
 #
 # How to validate this file:
 #   python scripts/validate_lineage.py
+#
+# Feature-set schema versioning (#1239):
+#   ML feature sets now carry an explicit `schema_version` and derived
+#   `schema_fingerprint`. The single source of truth for these values is
+#   src/ml/feature_schema.py — keep the values below in sync with it (the
+#   fingerprint is the sha256(name:dtype|…)[:12] of the ordered features).
 # ============================================================
 
-manifest_version: "1.0"
+manifest_version: "1.1"
 project: lumenpulse
 module: data-processing
 
@@ -37,6 +43,39 @@ ml_feature_sets:
     registry_key: price_predictor          # key used in src/ml/model_registry.py
     update_cadence: on-demand (retraining pipeline)
     storage: models/price_predictor/current -> v<major>.<minor>.pkl
+
+    # ── Versioned schema (#1239) ──────────────────────────────────────────
+    # Source of truth: src/ml/feature_schema.py::_PRICE_PREDICTOR_SCHEMA.
+    # `schema_version` is bumped deliberately when the feature set's meaning or
+    # composition changes; `schema_fingerprint` is derived from the ordered
+    # (name, dtype) pairs and catches accidental structural drift even if the
+    # version is not bumped. Both are recorded in each trained model's registry
+    # metadata sidecar (models/price_predictor/<version>.meta.json) so serving
+    # can refuse/warn on train-vs-serve schema skew.
+    schema_version: "1.0"
+    schema_fingerprint: "859b0372d5c0"
+    schema_source: src/ml/feature_schema.py
+    schema_enforcement:
+      env: FEATURE_SCHEMA_ENFORCEMENT     # strict | warn (default: warn)
+      strict: PricePredictor.predict raises SchemaVersionMismatch
+      warn: logs a loud warning and continues serving
+
+    # ── Training-vs-serving drift detection (#1239) ───────────────────────
+    drift_detection:
+      detector_file: src/ml/feature_drift_detector.py
+      scheduled_job: scheduler.py::_feature_drift_detection_job
+      cadence: every FEATURE_DRIFT_INTERVAL_HOURS hours (default 6)
+      metric: Population Stability Index (PSI) per feature
+      threshold_env: FEATURE_DRIFT_PSI_THRESHOLD   # default 0.25
+      baseline: >
+        Per-feature training distribution (quantile bins + proportions, mean,
+        std, min, max) captured at retraining time and stored in the model's
+        metadata sidecar under `feature_baseline`.
+      alerting: src/alert_notifier.py::AlertNotifier.notify_feature_drift
+      metrics:
+        - lumenpulse_feature_drift_psi{feature_set,feature}
+        - lumenpulse_feature_drift_alerts_total{feature_set,reason}
+        - lumenpulse_feature_schema_mismatch_total{feature_set}
 
     features:
       - name: sentiment_score

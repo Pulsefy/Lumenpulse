@@ -1,0 +1,28 @@
+{
+  "name": "anomaly-pump-and-dump",
+  "description": "Pump-and-dump detector experiment: Isolation Forest over volume/sentiment, evaluated against the labelled snapshot. Replaces the old demo_anomaly_detection.py / demo_ml_anomaly_detection.py scripts.",
+  "model_type": "anomaly_detector",
+  "seed": 42,
+  "data": {
+    "snapshot_ref": "anomaly-pump-and-dump/v1",
+    "path": "data/experiments/anomaly_pump_and_dump_v1.json",
+    "sha256": "288530a45c4d845bee66c2a9393be4325a8c27cf238502dd6b360942cc5cb14f",
+    "train_fraction": 0.7
+  },
+  "train": {
+    "kind": "isolation_forest",
+    "params": {
+      "contamination": 0.15,
+      "n_estimators": 200,
+      "feature_columns": ["volume", "sentiment", "volume_change_rate", "sentiment_change_rate"]
+    }
+  },
+  "evaluation": {
+    "kind": "anomaly_detection",
+    "metric": "f1_score",
+    "threshold": 0.5
+  },
+  "registry": {
+    "promote": false
+  }
+}

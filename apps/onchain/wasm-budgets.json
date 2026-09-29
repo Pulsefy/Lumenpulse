@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "unit": "bytes",
+  "contracts": {
+    "contributor_registry": 1048576,
+    "crowdfund_vault": 1048576,
+    "feature_flags": 1048576,
+    "idempotency-guard": 1048576,
+    "liquidity-pool": 1048576,
+    "lumen_token": 1048576,
+    "lumenpulse-community-curation": 1048576,
+    "matching_pool": 1048576,
+    "notification-broker": 1048576,
+    "notification_interface": 1048576,
+    "pricing_adapter": 1048576,
+    "project_registry": 1048576,
+    "protocol_registry": 1048576,
+    "reentrancy-guard": 1048576,
+    "stable-swap-pool": 1048576,
+    "treasury": 1048576,
+    "upgradable-contract": 1048576,
+    "vesting-wallet": 1048576,
+    "yield-vault": 1048576
+  }
+}

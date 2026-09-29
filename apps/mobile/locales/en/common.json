@@ -64,6 +64,7 @@
     "news": "News",
     "settings": "Settings",
     "watchlist": "Watchlist",
+    "search": "Search",
     "notifications": "Notifications",
     "manage_accounts": "Manage Accounts",
     "notification_settings": "Notification Settings",
@@ -79,6 +80,24 @@
     "test_connection": "Test Connection",
     "get_started": "Get Started",
     "coming_soon": "Portfolio & News aggregation coming soon."
+  },
+  "search": {
+    "title": "Search",
+    "placeholder": "Search projects, assets, and ecosystem",
+    "clear_query": "Clear search",
+    "prompt": "Search across projects, Stellar assets, and the ecosystem.",
+    "recent_title": "Recent searches",
+    "recent_load_error": "Couldn't load recent searches.",
+    "repeat_search": "Search for {{query}}",
+    "projects": "Projects",
+    "assets": "Assets",
+    "ecosystem": "Ecosystem",
+    "entity_links": "Linked entities",
+    "tag": "Tag",
+    "category": "Category",
+    "matched_mention": "Matched: {{mention}}",
+    "no_results": "No results found.",
+    "error_message": "Couldn't search right now. Please try again."
   },
   "projects": {
     "title": "Projects",
@@ -126,6 +145,17 @@
     "success_message": "You contributed {{amount}} XLM to {{project}}.",
     "failed": "Contribution Failed",
     "transaction_hash": "Transaction Hash"
+  },
+  "contribution_draft": {
+    "banner_title": "Unfinished contribution",
+    "banner_body": "You started contributing {{amount}} XLM to {{project}}.",
+    "saved_at": "Saved {{date}}",
+    "resume": "Resume",
+    "discard": "Discard",
+    "restored_notice": "Draft restored — review the amount and confirm when you're ready.",
+    "stale_notice": "This saved draft has expired and can no longer be resumed.",
+    "invalid_amount_notice": "This draft's amount is no longer valid and cannot be resumed.",
+    "config_missing_notice": "Testnet configuration is unavailable, so this draft can't be resumed right now."
   },
   "report_modal": {
     "title": "Report Content",
@@ -230,7 +260,8 @@
     "recent_transactions": "Recent Transactions",
     "login_required": "Login required",
     "showing_cached": "Showing cached data - Pull to refresh",
-    "no_assets": "No assets"
+    "no_assets": "No assets",
+    "analytics_title": "Portfolio trend"
   },
   "transactions": {
     "title": "Transactions",
@@ -323,7 +354,10 @@
       "mainnet": "Mainnet",
       "endpoint_not_configured": "Endpoint not configured",
       "mainnet_unavailable": "Mainnet Unavailable",
-      "mainnet_unavailable_message": "Configure mainnet API and Soroban RPC endpoints before switching."
+      "mainnet_unavailable_message": "Configure mainnet API and Soroban RPC endpoints before switching.",
+      "mainnet_confirmation_title": "Switch to Mainnet?",
+      "mainnet_confirmation_message": "You are about to switch to the Mainnet where real assets are at stake. All cached data will be cleared and your wallet will require re-selection. This action cannot be undone.",
+      "mainnet_confirmation_confirm": "Switch to Mainnet"
     },
     "version": "Version",
     "environment": "Environment",
@@ -348,6 +382,96 @@
       "version_prefix": "Version {{version}}",
       "published": "Published: {{date}}",
       "testing": "Testing..."
+    },
+    "cache": {
+      "title": "Cache & Storage",
+      "data_management": "Data Management",
+      "data_management_desc": "Pre-download data for offline use or free up storage by clearing cached content.",
+      "preload_data": "Preload Data",
+      "preload_data_desc": "Download the latest news, portfolio, and asset data for offline access.",
+      "clear_cache": "Clear All Cache",
+      "clear_cache_desc": "Remove all locally cached data. You will need a connection to reload content.",
+      "clear_cache_message": "This will remove all cached data including news, portfolio, and image cache. Are you sure?",
+      "cleared_successfully": "Cache cleared successfully.",
+      "preloaded_successfully": "Data preloaded successfully.",
+      "preload_failed": "Failed to preload data. Check your connection and try again.",
+      "clear_failed": "Failed to clear cache. Please try again.",
+      "image_cache": "Image Cache",
+      "image_cache_desc": "Remote images are cached to disk to avoid re-downloading on every visit. The cache is automatically trimmed when it exceeds the limit using a least-recently-used policy.",
+      "image_cache_used": "Used",
+      "image_cache_count": "Cached images",
+      "image_cache_limit": "Limit",
+      "clear_image_cache": "Clear Image Cache",
+      "clear_image_cache_desc": "Remove all cached images from disk. Images will be re-downloaded on next view.",
+      "clear_image_cache_message": "Remove all cached images? They will be re-fetched when needed.",
+      "image_cache_cleared": "Image cache cleared.",
+      "how_caching_works": "How Caching Works",
+      "caching_info": "LumenPulse stores recent news, portfolio snapshots, and asset prices locally so the app works without a connection. Images are cached separately on disk with a 50 MB limit and automatically evict least-recently-used entries when the limit is reached.",
+      "cache_status": "Network Status",
+      "online": "Online",
+      "offline": "Offline"
+    },
+    "data_privacy": {
+      "title": "Data & Privacy",
+      "description": "Review everything LumenPulse stores on this device, clear it by category or all at once, and choose what diagnostics you share.",
+      "stored_data": "Stored on this device",
+      "privacy_controls": "Privacy controls",
+      "total_stored": "Total stored",
+      "clear": "Clear",
+      "item_count_one": "{{count}} item",
+      "item_count_other": "{{count}} items",
+      "clear_category_title": "Clear {{category}}?",
+      "clear_category_message": "This removes all {{category}} stored on this device. It can be downloaded again when you are online.",
+      "category_cleared": "{{category}} cleared.",
+      "clear_failed": "Couldn't clear that data. Please try again.",
+      "clear_all_title": "Clear all local data",
+      "clear_all_message": "This removes cached content, saved news, watchlists, cached images, drafts, diagnostics data, and recent searches from this device. You will stay signed in.",
+      "clear_all_hint": "You stay signed in, and any changes waiting to sync are kept.",
+      "clear_all_success": "All local data cleared. You are still signed in.",
+      "clear_all_partial_one": "Cleared most data, but {{count}} category couldn't be cleared. Please try again.",
+      "clear_all_partial_other": "Cleared most data, but {{count}} categories couldn't be cleared. Please try again.",
+      "queued_preserved_warning_one": "{{count}} change is still waiting to sync and will be kept.",
+      "queued_preserved_warning_other": "{{count}} changes are still waiting to sync and will be kept.",
+      "preference_save_failed": "Couldn't save that preference. Please try again.",
+      "preferences_survive_clear": "Your analytics and crash-reporting choices are kept when you clear data — clearing never opts you back in.",
+      "analytics": {
+        "title": "Usage analytics",
+        "description": "Share anonymous usage data to help improve the app. Turn this off to stop collection on this device."
+      },
+      "crash_reporting": {
+        "title": "Crash reporting",
+        "description": "Automatically report crashes and errors. Wallet addresses are always removed before a report is sent."
+      },
+      "categories": {
+        "cached_content": {
+          "title": "Cached content",
+          "description": "News, portfolio snapshots, projects, and asset prices kept for offline use."
+        },
+        "saved_news": {
+          "title": "Saved news",
+          "description": "Articles you bookmarked to read later."
+        },
+        "watchlists": {
+          "title": "Watchlists",
+          "description": "Your locally cached watchlist and its last sync time."
+        },
+        "image_cache": {
+          "title": "Cached images",
+          "description": "Remote images stored on disk so they don't re-download."
+        },
+        "drafts": {
+          "title": "Drafts",
+          "description": "An unfinished contribution saved so you can resume it."
+        },
+        "diagnostics": {
+          "title": "Diagnostics data",
+          "description": "Local analytics and diagnostics state collected on this device."
+        },
+        "recent_searches": {
+          "title": "Recent searches",
+          "description": "Searches saved on this device to make them easy to repeat."
+        }
+      }
     }
   },
   "transaction_receipt": {
@@ -401,6 +525,33 @@
     "tier": "Tier",
     "github_handle": "GitHub Handle",
     "registered_date": "Registered Date",
+    "registry_section": "Contributor Registry",
+    "registry_status": "Registry Status",
+    "registered": "Registered",
+    "unregistered": "Not registered",
+    "registered_on": "Registered on {{date}}",
+    "github_linked": "(linked)",
+    "github_not_linked": "No GitHub handle linked",
+    "requirements_checklist": "Registry Requirements Checklist",
+    "reputation_section": "Reputation Breakdown",
+    "reputation_progress": "Progress to {{tier}}",
+    "reputation_max_tier": "Top tier reached",
+    "reputation_to_next": "{{points}} points to {{tier}}",
+    "reputation_top_tier": "You are at the highest reputation tier.",
+    "reputation_tiers": "Tier thresholds",
+    "reputation_tier_threshold": "Reach {{points}} points",
+    "reputation_factors": "What contributes to your score",
+    "registration": {
+      "title": "Register this wallet",
+      "hint": "Your wallet signs a registration request bound to a one-time code issued by the registry. Nothing is submitted if you decline.",
+      "handle_placeholder": "GitHub handle (e.g. octocat)",
+      "stage_nonce": "Fetching your one-time registration code\u2026",
+      "stage_signature": "Waiting for your wallet to sign\u2026",
+      "stage_revalidate": "Checking the registration code is still valid\u2026",
+      "stage_submit": "Submitting your registration\u2026",
+      "stage_verify": "Confirming your registration\u2026",
+      "success": "Registration submitted. Your on-chain record is now live."
+    },
     "quorum_progress": "Quorum Approval Progress",
     "quorum_votes": "{{votesFor}} / {{quorumThreshold}} Votes",
     "verification_checklist": "Verification Requirements Checklist",

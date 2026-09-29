@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { clientConfig } from '@/lib/config';
+
+const API_BASE = clientConfig.apiUrl;
 
 export interface ContributionRecord {
   projectId: number;

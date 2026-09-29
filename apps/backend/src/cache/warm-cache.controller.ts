@@ -21,6 +21,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
+import { JWT_SECURITY_SCHEME } from '../openapi/openapi.constants';
 
 class ForceRefreshDto {
   /** Optional identifier for audit logs. */
@@ -43,7 +44,7 @@ export class WarmCacheController {
   @Post('warm')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth()
+  @ApiBearerAuth(JWT_SECURITY_SCHEME)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Manually trigger a warm-cache preload cycle',
@@ -72,7 +73,7 @@ export class WarmCacheController {
   @Get('warm/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth()
+  @ApiBearerAuth(JWT_SECURITY_SCHEME)
   @ApiOperation({
     summary: 'Get the last warm-cache refresh report',
     description:

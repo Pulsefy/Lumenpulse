@@ -9,13 +9,20 @@ import {
   BadRequestException,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiHeader,
+  ApiSecurity,
+} from '@nestjs/swagger';
 import { WebhookService } from './webhook.service';
 import { DataProcessingWebhookDto } from './dto/webhook-payload.dto';
 import {
   WebhookVerificationGuard,
   WebhookProvider,
 } from './webhook-verification.guard';
+import { WEBHOOK_SIGNATURE_SECURITY_SCHEME } from '../openapi/openapi.constants';
 
 interface RawRequest {
   rawBody?: Buffer;
@@ -29,6 +36,7 @@ export class WebhookController {
   @Post('data-processing')
   @HttpCode(HttpStatus.OK)
   @UseGuards(WebhookVerificationGuard)
+  @ApiSecurity(WEBHOOK_SIGNATURE_SECURITY_SCHEME)
   @WebhookProvider('data-processing')
   @ApiOperation({
     summary: 'Receive data-processing intelligence events',

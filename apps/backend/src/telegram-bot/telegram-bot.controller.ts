@@ -5,6 +5,7 @@ import {
   Logger,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -12,9 +13,14 @@ import {
   ApiOperation,
   ApiResponse,
   ApiProperty,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { TelegramBotService } from './telegram-bot.service';
 import { TelegramAlertType } from './telegram-subscription.entity';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/decorators/auth.decorators';
+import { UserRole } from '../users/entities/user.entity';
 
 class SendAlertDto {
   @ApiProperty({
@@ -43,14 +49,17 @@ export class TelegramBotController {
 
   /**
    * Admin endpoint to broadcast an alert to all subscribed chats.
-   * In production, this should be protected by admin authentication.
+   * Protected by admin authentication.
    */
   @Post('broadcast')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Broadcast alert to Telegram subscribers',
+    summary: 'Broadcast alert to Telegram subscribers (admin only)',
     description:
-      'Broadcasts a price, news, or security alert to all active chats subscribed to that category.',
+      'Broadcasts a price, news, or security alert to all active chats subscribed to that category. Requires admin role.',
   })
   @ApiResponse({
     status: 200,
@@ -62,6 +71,8 @@ export class TelegramBotController {
       },
     },
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   async broadcast(@Body() dto: SendAlertDto) {
     await this.telegramBotService.broadcastAlert(dto.alertType, dto.message);
     return { success: true, message: 'Broadcast sent' };

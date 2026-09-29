@@ -8,8 +8,9 @@ mod storage;
 use errors::ContributorError;
 use events::{
     AdminChangedEvent, AttestationRestoredEvent, AttestationRevokedEvent,
-    AttestationSuspendedEvent, BadgeGrantedEvent, BadgeRevokedEvent, ContributorProfileChangedEvt,
-    GaslessRegistrationEvent, MultisigConfiguredEvent, ReputationPenaltyAppliedEvent,
+    AttestationSuspendedEvent, BadgeGrantedEvent, BadgeRevokedEvent, ContributorDeregisteredEvent,
+    ContributorProfileChangedEvt, ContributorRegisteredEvent, GaslessRegistrationEvent,
+    MultisigConfiguredEvent, ReputationPenaltyAppliedEvent, ReputationUpdatedEvent,
     ScopePauseChangedEvent, UpgradedEvent,
 };
 use multisig::{
@@ -25,6 +26,11 @@ use storage::{
     AttestationStatus, Badge, ContribPauseScope, ContributorData, ContributorTier, DataKey,
     PenaltyRecord, PenaltySeverity, LEDGER_BUMP, LEDGER_THRESHOLD,
 };
+use version_interface::{ContractVersion, VersionedContract};
+
+/// Bumped on storage-layout or interface changes that break compatibility
+/// with prior deployments; see [`version_interface::ContractVersion`].
+const CONTRACT_VERSION: ContractVersion = ContractVersion::new(1, 0, 0);
 
 #[contract]
 pub struct ContributorRegistryContract;
@@ -275,7 +281,12 @@ impl ContributorRegistryContract {
         Self::ensure_initialized(&env)?;
         Self::require_contribution_not_paused(&env)?;
         address.require_auth();
-        Self::write_contributor(&env, &address, &github_handle)
+        Self::write_contributor(&env, &address, &github_handle)?;
+        ContributorRegisteredEvent {
+            contributor: address,
+        }
+        .publish(&env);
+        Ok(())
     }
 
     /// Gasless / meta-transaction registration.
@@ -477,13 +488,19 @@ impl ContributorRegistryContract {
         // State compaction: remove all three related entries atomically.
         env.storage()
             .persistent()
-            .remove(&DataKey::GitHubIndex(contributor.github_handle));
+            .remove(&DataKey::GitHubIndex(contributor.github_handle.clone()));
         env.storage()
             .persistent()
             .remove(&DataKey::Contributor(address.clone()));
         env.storage()
             .persistent()
-            .remove(&DataKey::RegistrationNonce(address));
+            .remove(&DataKey::RegistrationNonce(address.clone()));
+
+        ContributorDeregisteredEvent {
+            contributor: address,
+            freed_github_handle: contributor.github_handle,
+        }
+        .publish(&env);
 
         Ok(())
     }
@@ -515,6 +532,7 @@ impl ContributorRegistryContract {
             LEDGER_BUMP,
         );
 
+        let old_score = contributor.reputation_score;
         let new_score = if delta > 0 {
             contributor
                 .reputation_score
@@ -530,10 +548,18 @@ impl ContributorRegistryContract {
             &contributor,
         );
         env.storage().persistent().extend_ttl(
-            &DataKey::Contributor(contributor_address),
+            &DataKey::Contributor(contributor_address.clone()),
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
+
+        ReputationUpdatedEvent {
+            contributor: contributor_address,
+            old_reputation: old_score,
+            new_reputation: new_score,
+        }
+        .publish(&env);
+
         Ok(())
     }
 
@@ -1054,6 +1080,15 @@ impl ContributorRegistryContract {
     }
 }
 
+// ── Version introspection ─────────────────────────────────────
+
+#[contractimpl]
+impl VersionedContract for ContributorRegistryContract {
+    fn contract_version(_env: Env) -> ContractVersion {
+        CONTRACT_VERSION
+    }
+}
+
 // ── Notification receiver ─────────────────────────────────────
 
 #[contractimpl]
@@ -1086,12 +1121,28 @@ impl NotificationReceiverTrait for ContributorRegistryContract {
 mod test {
     use super::*;
     use soroban_sdk::{
-        testutils::{Address as TestAddress, Ledger}, // Ledger trait for set_timestamp
+        testutils::{Address as TestAddress, Events, Ledger}, // Ledger trait for set_timestamp
         Address,
         Bytes,
         Env,
+        IntoVal,
         Vec,
     };
+
+    /// Asserts that some event emitted by `contract_id` in the most recent
+    /// invocation tree (`env.events().all()` reflects only that, not an
+    /// accumulated history) has `topic_name` as its first topic.
+    fn assert_event_emitted(env: &Env, contract_id: &Address, topic_name: &str) {
+        let events = env.events().all();
+        let found = events.iter().any(|(cid, topics, _)| {
+            cid == *contract_id
+                && topics.get(0).is_some_and(|t| {
+                    let sym: soroban_sdk::Symbol = t.into_val(env);
+                    sym == soroban_sdk::Symbol::new(env, topic_name)
+                })
+        });
+        assert!(found, "expected event `{topic_name}` was not emitted");
+    }
 
     struct Setup {
         env: Env,
@@ -2518,5 +2569,65 @@ mod test {
         client.register_contributor(&contributor, &handle);
         client.grant_badge(&s.alice, &pid, &contributor, &Badge::BugHunter);
         assert_eq!(client.get_badges(&contributor).len(), 1);
+    }
+
+    // ── Event emission coverage (issue #1231) ───────────────────────────
+
+    #[test]
+    fn test_register_contributor_emits_event() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "evt_register");
+        client.register_contributor(&contributor, &handle);
+
+        assert_event_emitted(&s.env, &s.contract, "contributor_registered_event");
+    }
+
+    #[test]
+    fn test_deregister_contributor_emits_event() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "evt_deregister");
+        client.register_contributor(&contributor, &handle);
+
+        client.deregister_contributor(&contributor);
+
+        assert_event_emitted(&s.env, &s.contract, "contributor_deregistered_event");
+    }
+
+    #[test]
+    fn test_expire_proposal_emits_event() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        s.env.ledger().set_timestamp(1_000_000);
+        let id = client.propose(&s.alice, &ProposalAction::Upgrade);
+
+        s.env
+            .ledger()
+            .set_timestamp(1_000_000 + multisig::PROPOSAL_TTL_SECS + 1);
+        client.expire_proposal(&id);
+
+        assert_event_emitted(&s.env, &s.contract, "proposal_expired_event");
+    }
+
+    #[test]
+    fn test_update_reputation_emits_event() {
+        let s = setup();
+        let client = ContributorRegistryContractClient::new(&s.env, &s.contract);
+
+        let contributor = Address::generate(&s.env);
+        let handle = soroban_sdk::String::from_str(&s.env, "evt_reputation");
+        client.register_contributor(&contributor, &handle);
+
+        let id = client.propose(&s.alice, &ProposalAction::UpdateReputation);
+        client.sign(&s.bob, &id);
+        client.update_reputation(&s.alice, &id, &contributor, &50i64);
+
+        assert_event_emitted(&s.env, &s.contract, "reputation_updated_event");
     }
 }

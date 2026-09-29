@@ -1,5 +1,5 @@
 import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum ChartInterval {
   ONE_HOUR = '1h',
@@ -42,4 +42,41 @@ export class ChartDataPointDto {
   timestamp: string;
   sentiment: number;
   count: number;
+}
+
+export class ChartAxisMetaDto {
+  /** Stable identifier that series reference via `axisId`. */
+  id: string;
+
+  /** Human-readable axis title. */
+  label: string;
+}
+
+export class ChartSeriesMetaDto {
+  /** Property of ChartDataPointDto that holds this series' values. */
+  key: string;
+
+  /** Human-readable series name for legends, tooltips and table headers. */
+  label: string;
+
+  /** Id of the y-axis this series is plotted against. */
+  axisId: string;
+}
+
+export class ChartRangeOptionDto {
+  @ApiProperty({ enum: ChartRange })
+  range: ChartRange;
+
+  /** Human-readable label for the time-range selector. */
+  label: string;
+
+  @ApiProperty({ enum: ChartInterval })
+  interval: ChartInterval;
+}
+
+export class ChartMetaDto {
+  xAxis: ChartAxisMetaDto;
+  yAxes: ChartAxisMetaDto[];
+  series: ChartSeriesMetaDto[];
+  ranges: ChartRangeOptionDto[];
 }

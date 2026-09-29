@@ -6,8 +6,13 @@ import { Trophy, Bookmark, ChevronDown, Check } from "lucide-react";
 import { GrantRound, RoundCard, RoundTable } from "./components";
 import { DependencyStatusBanner } from "@/components/DependencyStatusBanner";
 import { useWatchlist } from "@/hooks/use-watchlist";
+import { ListSkeleton } from "@/components/ui/list-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ListError } from "@/components/ui/list-error";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { clientConfig } from '@/lib/config';
+
+const API_BASE = clientConfig.apiUrl;
 
 const STATUS_OPTIONS = [
   { label: "All", value: "ALL" },
@@ -146,16 +151,20 @@ export default function GrantsPageClient() {
       <section className="px-4 pb-20">
         <div className="container mx-auto max-w-4xl">
           {isLoading ? (
-            <div className="flex justify-center py-20">
-              <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            <div className="py-20">
+              <ListSkeleton count={4} rowHeight={180} variant="grid" gridCols={2} />
             </div>
           ) : error ? (
-            <div className="text-center py-20 text-foreground/40">{error}</div>
+            <ListError
+              message={error}
+              onRetry={() => window.location.reload()}
+            />
           ) : rounds.length === 0 ? (
-            <div className="text-center py-20">
-              <Trophy className="w-12 h-12 text-foreground/20 mx-auto mb-4" />
-              <p className="text-foreground/40">No grant rounds available yet.</p>
-            </div>
+            <EmptyState
+              icon={Trophy}
+              title="No grant rounds available"
+              description="Grant rounds will appear here once they are created. Check back later!"
+            />
           ) : (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
@@ -231,14 +240,17 @@ export default function GrantsPageClient() {
               </div>
 
               {filtered.length === 0 && (
-                <div className="w-full text-center py-20 border border-white/5 rounded-2xl bg-white/[0.02]">
-                  <Bookmark className="w-10 h-10 text-foreground/20 mx-auto mb-4" />
-                  <p className="text-foreground/40">
-                    {showSavedOnly
-                      ? "Your watchlist is empty."
-                      : `No rounds with status "${STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status}".`}
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Bookmark}
+                  title={showSavedOnly ? "Watchlist is empty" : "No matching rounds"}
+                  description={showSavedOnly
+                    ? "Save grant rounds to your watchlist to see them here."
+                    : `No rounds with status "${STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status}".`}
+                  action={showSavedOnly ? {
+                    label: "Browse all rounds",
+                    onClick: () => setShowSavedOnly(false),
+                  } : undefined}
+                />
               )}
             </div>
           )}

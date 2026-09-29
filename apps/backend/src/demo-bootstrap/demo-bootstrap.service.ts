@@ -4,6 +4,12 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { config } from '../lib/config';
+import { BootstrapRunRegistryService } from '../bootstrap-runs/bootstrap-run-registry.service';
+import {
+  BootstrapResourceRecord,
+  BootstrapResourceType,
+  BootstrapRunKind,
+} from '../bootstrap-runs/entities/bootstrap-run.entity';
 import {
   DemoScenario,
   SeedResultDto,
@@ -25,6 +31,8 @@ import {
  *  - All seed operations are idempotent — callers can pass resetBeforeSeed=true
  *    (the default) to clear previous state before re-seeding.
  *  - No real on-chain transactions are submitted; data is held in-memory.
+ *  - Every seed is recorded as a bootstrap run so it can later be undone by
+ *    identifier through the teardown endpoint. See BootstrapTeardownService.
  */
 interface SeededContributor {
   address: string;
@@ -54,6 +62,8 @@ interface SeededState {
 export class DemoBootstrapService {
   private readonly logger = new Logger(DemoBootstrapService.name);
   private state: SeededState | null = null;
+
+  constructor(private readonly runRegistry: BootstrapRunRegistryService) {}
 
   /**
    * Returns true when the bootstrap endpoints are permitted:
@@ -89,11 +99,16 @@ export class DemoBootstrapService {
   /**
    * POST /demo-bootstrap/seed
    * Seeds demo data. Idempotent — safe to call repeatedly.
+   *
+   * The returned `runId` identifies everything this call created and is the
+   * handle the teardown endpoint takes. It is absent only when the registry
+   * write failed, which is logged but never fails the seed itself.
    */
-  seed(
+  async seed(
     scenario: DemoScenario = DemoScenario.FULL,
     resetBeforeSeed = true,
-  ): SeedResultDto {
+    createdBy: string | null = null,
+  ): Promise<SeedResultDto> {
     this.assertEnvironmentAllowed();
 
     if (resetBeforeSeed) {
@@ -120,14 +135,22 @@ export class DemoBootstrapService {
 
     this.state = { contributors, grantRounds, seededAt };
 
+    const runId = await this.runRegistry.recordSafely({
+      kind: BootstrapRunKind.DEMO_SEED,
+      createdBy,
+      resources: this.describeSeededResources(contributors, grantRounds),
+    });
+
     this.logger.log(
-      `Demo data seeded: scenario=${scenario} contributors=${contributors.length} grantRounds=${grantRounds.length}`,
+      `Demo data seeded: scenario=${scenario} contributors=${contributors.length} ` +
+        `grantRounds=${grantRounds.length} runId=${runId ?? 'untracked'}`,
     );
 
     return {
       success: true,
       message: `Successfully seeded demo scenario '${scenario}'`,
       seededAt,
+      runId: runId ?? undefined,
       details: {
         scenario,
         contributorsSeeded: contributors.length,
@@ -138,7 +161,8 @@ export class DemoBootstrapService {
 
   /**
    * POST /demo-bootstrap/reset
-   * Clears all seeded demo data.
+   * Clears all seeded demo data regardless of which run produced it. Use the
+   * teardown endpoint instead when only one run should be undone.
    */
   reset(): ResetResultDto {
     this.assertEnvironmentAllowed();
@@ -153,6 +177,67 @@ export class DemoBootstrapService {
         ? 'Demo data has been cleared'
         : 'No demo data was present — nothing to clear',
     };
+  }
+
+  /**
+   * Whether a resource recorded by a bootstrap run is still present in the
+   * seeded state. Used by the teardown dry run.
+   */
+  hasSeededResource(type: BootstrapResourceType, identifier: string): boolean {
+    if (!this.state) {
+      return false;
+    }
+
+    if (type === BootstrapResourceType.DEMO_CONTRIBUTOR) {
+      return this.state.contributors.some(
+        (contributor) => contributor.address === identifier,
+      );
+    }
+
+    if (type === BootstrapResourceType.DEMO_GRANT_ROUND) {
+      return this.state.grantRounds.some(
+        (round) => String(round.id) === identifier,
+      );
+    }
+
+    return false;
+  }
+
+  /**
+   * Removes a single seeded resource. Returns true when something was
+   * actually removed, false when it was already gone — teardown relies on
+   * that distinction to report `removed` versus `not_found`.
+   */
+  removeSeededResource(
+    type: BootstrapResourceType,
+    identifier: string,
+  ): boolean {
+    if (!this.state || !this.hasSeededResource(type, identifier)) {
+      return false;
+    }
+
+    if (type === BootstrapResourceType.DEMO_CONTRIBUTOR) {
+      this.state.contributors = this.state.contributors.filter(
+        (contributor) => contributor.address !== identifier,
+      );
+    } else if (type === BootstrapResourceType.DEMO_GRANT_ROUND) {
+      this.state.grantRounds = this.state.grantRounds.filter(
+        (round) => String(round.id) !== identifier,
+      );
+    } else {
+      return false;
+    }
+
+    // Drop the state object entirely once the last resource is gone so
+    // getStatus() reports isSeeded=false rather than an empty seed.
+    if (
+      this.state.contributors.length === 0 &&
+      this.state.grantRounds.length === 0
+    ) {
+      this.resetInternal();
+    }
+
+    return true;
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────
@@ -173,6 +258,24 @@ export class DemoBootstrapService {
           'Set STELLAR_NETWORK=testnet and BOOTSTRAP_DEMO_DATA_ENABLED=true to enable.',
       );
     }
+  }
+
+  private describeSeededResources(
+    contributors: SeededContributor[],
+    grantRounds: SeededGrantRound[],
+  ): BootstrapResourceRecord[] {
+    return [
+      ...contributors.map((contributor) => ({
+        type: BootstrapResourceType.DEMO_CONTRIBUTOR,
+        identifier: contributor.address,
+        label: `Demo contributor ${contributor.githubHandle}`,
+      })),
+      ...grantRounds.map((round) => ({
+        type: BootstrapResourceType.DEMO_GRANT_ROUND,
+        identifier: String(round.id),
+        label: round.name,
+      })),
+    ];
   }
 
   private resetInternal(): void {

@@ -19,7 +19,7 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
-  ApiBearerAuth,
+  ApiSecurity,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ContractAdminGuard } from '../common/guards/contract-admin.guard';
@@ -36,6 +36,10 @@ import {
 } from './dto/deployment-manifest.dto';
 import { CustomValidationPipe } from '../common/pipes/validation.pipe';
 import { Request as ExpressRequest } from 'express';
+import {
+  API_KEY_SECURITY_SCHEME,
+  JWT_SECURITY_SCHEME,
+} from '../openapi/openapi.constants';
 
 interface RequestUser {
   id: string;
@@ -131,7 +135,7 @@ export class DeploymentManifestController {
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard, ContractAdminGuard, ContractAdminTrustedCallerGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth('JWT-auth')
+  @ApiSecurity({ [JWT_SECURITY_SCHEME]: [], [API_KEY_SECURITY_SCHEME]: [] })
   @ApiOperation({
     summary: 'Create a new contract deployment manifest record (admin only)',
     description:
@@ -157,7 +161,7 @@ export class DeploymentManifestController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, ContractAdminGuard, ContractAdminTrustedCallerGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth('JWT-auth')
+  @ApiSecurity({ [JWT_SECURITY_SCHEME]: [], [API_KEY_SECURITY_SCHEME]: [] })
   @ApiOperation({
     summary: 'Update contract deployment manifest record (admin only)',
     description:
@@ -188,7 +192,7 @@ export class DeploymentManifestController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(JwtAuthGuard, ContractAdminGuard, ContractAdminTrustedCallerGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth('JWT-auth')
+  @ApiSecurity({ [JWT_SECURITY_SCHEME]: [], [API_KEY_SECURITY_SCHEME]: [] })
   @ApiOperation({
     summary: 'Delete contract deployment manifest record (admin only)',
     description: 'Deletes a deployment manifest entry by ID.',

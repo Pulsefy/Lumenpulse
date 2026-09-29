@@ -18,7 +18,9 @@ interface ProjectVerification {
   quorumProgress: number;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { clientConfig } from '@/lib/config';
+
+const API_BASE = clientConfig.apiUrl;
 
 const FILTER_TABS: { label: string; value: Status | "ALL"; icon: typeof ShieldCheck }[] = [
   { label: "All", value: "ALL", icon: Users },

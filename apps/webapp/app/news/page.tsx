@@ -1,8 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { CryptoTable } from "@/components/crypto-table";
 import { NewsSection } from "@/components/news-section";
+import { Tags } from "lucide-react";
+
+function EcosystemBanner() {
+  const searchParams = useSearchParams();
+  const tag = searchParams.get("tag");
+  const category = searchParams.get("category");
+  if (!tag && !category) return null;
+  return (
+    <div className="mb-6 flex items-center gap-3 rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-white">
+      <Tags className="h-4 w-4 text-primary" />
+      <span>
+        Showing ecosystem {tag ? "tag" : "category"}{" "}
+        <strong className="text-primary">{tag || category}</strong> from global
+        search.
+      </span>
+    </div>
+  );
+}
 
 export default function NewsPage() {
   const formatNumber = (num: number): string => {
@@ -22,13 +41,12 @@ export default function NewsPage() {
   return (
     <div className="bg-background pt-20">
       <div className="container mx-auto px-4 py-4">
-        {/* Crypto Market Rankings (full width) */}
+        <Suspense fallback={null}>
+          <EcosystemBanner />
+        </Suspense>
         <div className="w-full mb-6">
           <CryptoTable formatNumberAction={formatNumber} />
         </div>
-        {/* End of Crypto Market Rankings */}
-
-        {/* News Section (full width) */}
         <div className="w-full">
           <NewsSection />
         </div>

@@ -56,9 +56,11 @@ export class SorobanEventIngestionGuard implements CanActivate {
     }
 
     const signature = request.headers[SOROBAN_SIGNATURE_HEADER] as
-      string | undefined;
+      | string
+      | undefined;
     const timestampHeader = request.headers[SOROBAN_TIMESTAMP_HEADER] as
-      string | undefined;
+      | string
+      | undefined;
     const nonce = request.headers[SOROBAN_NONCE_HEADER] as string | undefined;
 
     if (!signature) {

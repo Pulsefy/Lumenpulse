@@ -28,6 +28,9 @@ import { CACHE_CONFIGS } from '../../lib/cache';
 import { useWalletAutoRefresh } from '../../hooks/useWalletAutoRefresh';
 import { storage } from '../../lib/storage';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
+import NetworkBadge from '../../components/NetworkBadge';
+import { PortfolioAnalyticsChart } from '../../components/PortfolioAnalyticsChart';
+import { requireStepUpAuthentication } from '../../lib/biometric-lock';
 
 const truncateKey = (value: string) => `${value.slice(0, 6)}...${value.slice(-6)}`;
 
@@ -89,7 +92,7 @@ function AssetRow({
     <View
       style={[styles.assetRow, { borderBottomColor: colors.border }]}
       accessible
-      accessibilityRole="listitem"
+      accessibilityRole="button"
     >
       <View
         style={[styles.assetIcon, { backgroundColor: `${color}22` }]}
@@ -129,7 +132,7 @@ function RecentTransactionItem({
     <View
       style={[styles.assetRow, { borderBottomColor: colors.border }]}
       accessible
-      accessibilityRole="listitem"
+      accessibilityRole="button"
     >
       <Ionicons
         name={getTransactionIcon(tx.type) as any}
@@ -315,11 +318,16 @@ export default function PortfolioScreen() {
   );
 
   const handleSelectAccount = useCallback(
-    (publicKey: string) => {
+    async (publicKey: string) => {
+      const isConfirmed = await requireStepUpAuthentication(
+        t('portfolio.confirm_biometric_switch', { defaultValue: 'Confirm identity to switch active account' })
+      );
+      if (!isConfirmed) return;
+
       setActivePublicKey(publicKey);
       void storage.setActiveWalletPublicKey(publicKey, environmentConfig.id);
     },
-    [environmentConfig.id],
+    [environmentConfig.id, t],
   );
 
   const {
@@ -409,6 +417,7 @@ export default function PortfolioScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <NetworkBadge />
       {isStale && (
         <View
           style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}
@@ -461,6 +470,10 @@ export default function PortfolioScreen() {
                     accessibilityLabel={t('common.loading')}
                   />
                 </View>
+              ) : null}
+
+              {activePublicKey ? (
+                <PortfolioAnalyticsChart publicKey={activePublicKey} enabled={isAuthenticated} />
               ) : null}
 
               {summary && (

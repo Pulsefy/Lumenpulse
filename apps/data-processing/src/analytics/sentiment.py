@@ -2,9 +2,22 @@ import logging
 import os
 import re
 import unicodedata
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from vaderSentiment.vaderSentiment import (
+    BOOSTER_DICT,
+    NEGATE,
+    SentimentIntensityAnalyzer,
+)
+
+from src.analytics.explanation import (
+    LEXICON_FEATURE_KIND,
+    MODEL_FEATURE_KIND,
+    FeatureContribution,
+    SentimentExplanation,
+    empty_explanation,
+    leave_one_out_explanation,
+)
 
 try:
     from langdetect import DetectorFactory, LangDetectException, detect
@@ -25,11 +38,16 @@ _DEFAULT_FINBERT_MODEL = "ProsusAI/finbert"
 class SentimentScore(float):
     """
     Float sentiment score enriched with language metadata.
+
+    When an explanation is requested (``explain=True``) the instance also
+    carries an optional :class:`SentimentExplanation` describing which tokens
+    drove the score.
     """
 
     language: str
     language_supported: bool
     language_unsupported: bool
+    explanation: Optional[SentimentExplanation]
 
     def __new__(
         cls,
@@ -37,20 +55,25 @@ class SentimentScore(float):
         language: str,
         language_supported: bool,
         language_unsupported: bool,
+        explanation: Optional[SentimentExplanation] = None,
     ) -> "SentimentScore":
         instance = float.__new__(cls, value)
         instance.language = language
         instance.language_supported = language_supported
         instance.language_unsupported = language_unsupported
+        instance.explanation = explanation
         return instance
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "score": float(self),
             "language": self.language,
             "language_supported": self.language_supported,
             "language_unsupported": self.language_unsupported,
         }
+        if self.explanation is not None:
+            data["explanation"] = self.explanation.to_dict()
+        return data
 
     @property
     def score(self) -> float:
@@ -212,20 +235,183 @@ class SentimentAnalyzer:
             return None
 
     def _vader_english_compound(self, text: str) -> float:
+        """VADER compound with the crypto-slang fallback (float only)."""
+        score, _ = self._vader_english_explained(text, explain=False)
+        return score
+
+    def _vader_english_explained(
+        self, text: str, explain: bool
+    ) -> Tuple[float, Optional[SentimentExplanation]]:
         cleaned = text.lower()
         scores = self.analyzer.polarity_scores(cleaned)
         compound = float(scores.get("compound", 0.0))
 
-        if compound == 0.0:
-            if any(word in cleaned for word in self.negative_keywords_en):
-                return -0.4
-            if any(word in cleaned for word in self.positive_keywords_en):
-                return 0.4
+        negative_matches = [
+            word for word in self.negative_keywords_en if word in cleaned
+        ]
+        positive_matches = [
+            word for word in self.positive_keywords_en if word in cleaned
+        ]
 
-        return compound
+        if compound == 0.0:
+            if negative_matches:
+                score = -0.4
+                explanation = (
+                    self._crypto_fallback_explanation(
+                        score, negative_matches, positive_matches
+                    )
+                    if explain
+                    else None
+                )
+                return score, explanation
+            if positive_matches:
+                score = 0.4
+                explanation = (
+                    self._crypto_fallback_explanation(
+                        score, [], positive_matches
+                    )
+                    if explain
+                    else None
+                )
+                return score, explanation
+            if explain:
+                return compound, empty_explanation("vader", compound)
+            return compound, None
+
+        if explain:
+            explanation = self._explain_vader_leave_one_out(cleaned, compound)
+        else:
+            explanation = None
+        return compound, explanation
+
+    def _crypto_lexicon_polarity_dict(self) -> Dict[str, str]:
+        polarity: Dict[str, str] = {}
+        for word in self.positive_keywords_en:
+            polarity[word] = "positive"
+        for word in self.negative_keywords_en:
+            polarity[word] = "negative"
+        return polarity
+
+    def _crypto_fallback_explanation(
+        self,
+        score: float,
+        negative_matches: List[str],
+        positive_matches: List[str],
+    ) -> SentimentExplanation:
+        """Explain the crypto-slang fallback that replaced a zero VADER score."""
+        negative_took_precedence = bool(negative_matches)
+        contributions: List[FeatureContribution] = []
+        for word in negative_matches:
+            contributions.append(FeatureContribution(
+                token=word,
+                contribution=score / len(negative_matches),
+                feature=f"lexicon:crypto:negative:{word}",
+                kind=LEXICON_FEATURE_KIND,
+                note="crypto slang fallback for a zero VADER compound",
+            ))
+        for word in positive_matches:
+            active = not negative_took_precedence
+            contributions.append(FeatureContribution(
+                token=word,
+                contribution=(
+                    (score / len(positive_matches)) if active else 0.0
+                ),
+                feature=f"lexicon:crypto:positive:{word}",
+                kind=LEXICON_FEATURE_KIND,
+                note=(
+                    "crypto slang fallback for a zero VADER compound"
+                    if active
+                    else (
+                        "matched but inactive: negative crypto entries take "
+                        "precedence in the zero-compound fallback"
+                    )
+                ),
+            ))
+        return SentimentExplanation(
+            method="vader+crypto_fallback",
+            score=score,
+            contributions=tuple(contributions),
+        )
+
+    def _vader_feature_for(self, token: str) -> Optional[Tuple[str, str]]:
+        """Map a token to the lexicon entry responsible for its valence."""
+        low = token.lower()
+        if low in self.positive_keywords_en:
+            return f"lexicon:crypto:positive:{low}", LEXICON_FEATURE_KIND
+        if low in self.negative_keywords_en:
+            return f"lexicon:crypto:negative:{low}", LEXICON_FEATURE_KIND
+        if low in self.analyzer.lexicon:
+            return f"lexicon:vader:{low}", LEXICON_FEATURE_KIND
+        if low in BOOSTER_DICT:
+            return f"lexicon:vader:booster:{low}", LEXICON_FEATURE_KIND
+        if low in NEGATE:
+            return f"lexicon:vader:negator:{low}", LEXICON_FEATURE_KIND
+        return None
+
+    def _pure_vader_compound(self, text: str) -> float:
+        """Raw VADER compound without the crypto-slang fallback."""
+        return float(
+            self.analyzer.polarity_scores(text.lower()).get("compound", 0.0)
+        )
+
+    def _explain_vader_leave_one_out(
+        self, cleaned: str, compound: float
+    ) -> SentimentExplanation:
+        """Decorrelate a non-zero VADER compound onto its driving tokens."""
+        explanation = leave_one_out_explanation(
+            method="vader",
+            text=cleaned,
+            base_score=compound,
+            scorer=self._pure_vader_compound,
+            feature_for=self._vader_feature_for,
+            prioritize=tuple(self._crypto_lexicon_polarity_dict().keys()),
+        )
+
+        # Surface crypto slang entries that matched but could not move the
+        # score (the fallback only fires when VADER's compound is exactly 0).
+        resolved = {
+            c.feature for c in explanation.contributions
+        }
+        inactive: List[FeatureContribution] = []
+        for word, polarity in self._crypto_lexicon_polarity_dict().items():
+            feature = f"lexicon:crypto:{polarity}:{word}"
+            if word in cleaned and feature not in resolved:
+                inactive.append(FeatureContribution(
+                    token=word,
+                    contribution=0.0,
+                    feature=feature,
+                    kind=LEXICON_FEATURE_KIND,
+                    note=(
+                        "matched but inactive: crypto fallback only applies "
+                        "when the VADER compound is exactly 0"
+                    ),
+                ))
+        explanation.contributions = explanation.contributions + tuple(inactive)
+        return explanation
+
+    def _explain_finbert(
+        self, text: str, score: float
+    ) -> SentimentExplanation:
+        """Bounded leave-one-out attribution for the FinBERT path."""
+        return leave_one_out_explanation(
+            method="finbert",
+            text=text,
+            base_score=score,
+            scorer=lambda t: self._finbert_compound(t) or 0.0,
+            feature_for=lambda token: (
+                f"model:finbert:{token.lower()}",
+                MODEL_FEATURE_KIND,
+            ),
+            model=self._transformer_model_name,
+            prioritize=tuple(self._crypto_lexicon_polarity_dict().keys()),
+        )
 
     def analyze_text(
-        self, text: Optional[str], lang_hint: Optional[str] = None
+        self,
+        text: Optional[str],
+        lang_hint: Optional[str] = None,
+        *,
+        explain: bool = False,
     ) -> SentimentScore:
         """
         Analyze the sentiment of the given text.
@@ -233,53 +419,103 @@ class SentimentAnalyzer:
         Args:
             text (str): Input text (headline or article)
             lang_hint (str, optional): Optional ISO language hint (e.g. "en", "es").
+            explain (bool): When True, attach a per-token
+                :class:`SentimentExplanation` to the returned score.  The
+                explanation references the lexicon entry or model feature
+                responsible for each contribution.  Off by default; when
+                enabled it adds bounded leave-one-out work (see
+                ``MAX_EXPLAIN_TOKENS`` and ``SENTIMENT_EXPLANATIONS.md``).
 
         Returns:
             SentimentScore: Float-like score with language metadata.
         """
         if not text or not isinstance(text, str):
-            return SentimentScore(0.0, "unknown", False, False)
+            explanation = empty_explanation("none", 0.0) if explain else None
+            return SentimentScore(0.0, "unknown", False, False, explanation)
 
         cleaned = text.strip()
         if not cleaned:
-            return SentimentScore(0.0, "unknown", False, False)
+            explanation = empty_explanation("none", 0.0) if explain else None
+            return SentimentScore(0.0, "unknown", False, False, explanation)
 
         language = self._resolve_language(cleaned, lang_hint)
         if language not in self.supported_languages:
-            return SentimentScore(0.0, language, False, True)
+            explanation = empty_explanation("none", 0.0) if explain else None
+            return SentimentScore(0.0, language, False, True, explanation)
 
         if language == "en":
-            score = self._analyze_english(cleaned)
+            score, explanation = self._analyze_english(cleaned, explain=explain)
         elif language == "es":
-            score = self._keyword_sentiment_score(
-                cleaned, self.positive_keywords_es, self.negative_keywords_es
+            score, explanation = self._keyword_sentiment_score(
+                cleaned, self.positive_keywords_es, self.negative_keywords_es,
+                lang=language, explain=explain,
             )
         else:
-            score = self._keyword_sentiment_score(
-                cleaned, self.positive_keywords_pt, self.negative_keywords_pt
+            score, explanation = self._keyword_sentiment_score(
+                cleaned, self.positive_keywords_pt, self.negative_keywords_pt,
+                lang=language, explain=explain,
             )
 
-        return SentimentScore(score, language, True, False)
+        return SentimentScore(score, language, True, False, explanation)
 
-    def _analyze_english(self, text: str) -> float:
+    def _analyze_english(
+        self, text: str, explain: bool = False
+    ) -> Tuple[float, Optional[SentimentExplanation]]:
+        """Score English text, optionally explaining which tokens drove it."""
         finbert_score = self._finbert_compound(text)
         if finbert_score is not None:
-            return finbert_score
-        return self._vader_english_compound(text)
+            explanation = self._explain_finbert(text, finbert_score) if explain else None
+            return finbert_score, explanation
+        return self._vader_english_explained(text, explain)
 
     def _keyword_sentiment_score(
-        self, text: str, positive_keywords: Set[str], negative_keywords: Set[str]
-    ) -> float:
+        self,
+        text: str,
+        positive_keywords: Set[str],
+        negative_keywords: Set[str],
+        lang: str = "en",
+        explain: bool = False,
+    ) -> Tuple[float, Optional[SentimentExplanation]]:
         normalized_text = self._normalize_text(text)
         positive_hits = sum(1 for word in positive_keywords if word in normalized_text)
         negative_hits = sum(1 for word in negative_keywords if word in normalized_text)
 
         total_hits = positive_hits + negative_hits
         if total_hits == 0:
-            return 0.0
+            explanation = empty_explanation(f"keyword:{lang}", 0.0) if explain else None
+            return 0.0, explanation
 
         score = (positive_hits - negative_hits) / total_hits
-        return max(-1.0, min(1.0, float(score)))
+        score = max(-1.0, min(1.0, float(score)))
+
+        if explain:
+            contributions = []
+            step = 1.0 / total_hits
+            for word in positive_keywords:
+                if word in normalized_text:
+                    contributions.append(FeatureContribution(
+                        token=word,
+                        contribution=step,
+                        feature=f"lexicon:{lang}:positive:{word}",
+                        kind=LEXICON_FEATURE_KIND,
+                    ))
+            for word in negative_keywords:
+                if word in normalized_text:
+                    contributions.append(FeatureContribution(
+                        token=word,
+                        contribution=-step,
+                        feature=f"lexicon:{lang}:negative:{word}",
+                        kind=LEXICON_FEATURE_KIND,
+                    ))
+            explanation = SentimentExplanation(
+                method=f"keyword:{lang}",
+                score=score,
+                contributions=tuple(contributions),
+            )
+        else:
+            explanation = None
+
+        return score, explanation
 
     def _normalize_text(self, text: str) -> str:
         normalized = unicodedata.normalize("NFKD", text).encode("ascii", "ignore")

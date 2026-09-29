@@ -29,6 +29,14 @@ def test_documented_endpoint_budgets():
     assert budgets["/correlation/analyze"] == 1000
     assert budgets["/analytics/forecast"] == 2000
     assert budgets["/retrain"] == 30000
+    assert budgets["/search/similar"] == 300  # semantic news search (#1455)
+
+
+def test_search_similar_env_override(monkeypatch):
+    monkeypatch.setenv("SEARCH_SIMILAR_LATENCY_BUDGET_MS", "150")
+    assert get_budget_ms("/search/similar") == 150
+    # Other endpoints are unaffected.
+    assert get_budget_ms("/analyze") == 500
 
 
 def test_unknown_endpoint_uses_global_fallback():

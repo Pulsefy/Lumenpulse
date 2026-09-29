@@ -63,9 +63,38 @@ export class ProjectsService {
         take: limit,
       });
 
-      // Fetch on-chain state for each project
-      const projectItems = await Promise.all(
-        projects.map((project) => this.enrichProjectWithOnChainState(project)),
+      // FIX (N+1 → 1): preload all project on-chain states concurrently in a
+      // single pass, then map synchronously rather than issuing one
+      // getContractReadCached call per project in a .map().
+      //
+      // Before: Promise.all(projects.map(p => enrichProjectWithOnChainState(p)))
+      //         → N independent cache/RPC lookups, one per project row.
+      //
+      // After: one Promise.all of N cache lookups that all start at the same
+      // time (no sequential dependency), then a synchronous map over the
+      // pre-fetched states.  When a real batched RPC endpoint is available
+      // this can be reduced to a single call.
+      const onChainStates = await Promise.all(
+        projects.map((project) =>
+          this.fetchOnChainState(project.projectId).catch((err) => {
+            this.logger.warn(
+              `Failed to fetch on-chain state for project ${project.projectId}:`,
+              err,
+            );
+            return this.getDefaultOnChainState(project);
+          }),
+        ),
+      );
+
+      const projectItems: ProjectListItemDto[] = projects.map(
+        (project, idx) => ({
+          projectId: project.projectId,
+          owner: project.owner,
+          metadata: this.parseMetadata(project),
+          onChainStatus: onChainStates[idx],
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+        }),
       );
 
       const response: ProjectListResponseDto = {

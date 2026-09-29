@@ -111,6 +111,9 @@
                 },
                 {
                   "i128": "100000"
+                },
+                {
+                  "bytes": "2727272727272727272727272727272727272727272727272727272727272727"
                 }
               ]
             }
@@ -491,6 +494,51 @@
             "ext": "v0"
           },
           518400
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "ExecutionReceipt"
+                },
+                {
+                  "bytes": "2727272727272727272727272727272727272727272727272727272727272727"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "ExecutionReceipt"
+                    },
+                    {
+                      "bytes": "2727272727272727272727272727272727272727272727272727272727272727"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "bool": true
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          241920
         ]
       ],
       [

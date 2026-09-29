@@ -44,6 +44,14 @@ export class SeedResultDto {
   seededAt: string;
 
   @ApiPropertyOptional({
+    description:
+      'Identifier of the recorded bootstrap run. Pass it to ' +
+      'POST /demo-bootstrap/runs/{runId}/teardown to undo exactly this seed. ' +
+      'Absent when the run could not be recorded (the seed still applied).',
+  })
+  runId?: string;
+
+  @ApiPropertyOptional({
     description: 'Details about seeded entities',
   })
   details?: Record<string, unknown>;

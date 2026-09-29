@@ -1,6 +1,7 @@
 import { Providers } from "./providers";
 import { StarsAnimation } from "@/components/stars-animation";
 import { PWAInstaller } from "@/components/pwa-installer";
+import { Navbar } from "@/components/navbar";
 import { getThemeInitScriptHTML } from "@/lib/theme-init-script";
 import "./globals.css";
 
@@ -164,6 +165,7 @@ export default function RootLayout({
       >
         <Providers>
           <StarsAnimation />
+          <Navbar />
           {children}
           <PWAInstaller />
         </Providers>

@@ -54,7 +54,7 @@ function WatchlistItemRow({
     <View
       style={[styles.itemRow, { borderBottomColor: colors.border }]}
       accessible
-      accessibilityRole="listitem"
+      accessibilityRole="button"
       accessibilityLabel={`${item.name || item.symbol}`}
     >
       <View style={[styles.itemIcon, { backgroundColor: `${color}22` }]}>
@@ -185,7 +185,7 @@ export default function WatchlistScreen() {
               <View
                 style={[styles.banner, { backgroundColor: colors.warning + '22' }]}
                 accessible
-                accessibilityRole="status"
+                accessibilityRole="alert"
               >
                 <Ionicons name="refresh-outline" size={16} color={colors.warning} />
                 <Text style={[styles.bannerText, { color: colors.warning }]}>
@@ -198,7 +198,7 @@ export default function WatchlistScreen() {
               <View
                 style={[styles.banner, { backgroundColor: colors.warning + '22' }]}
                 accessible
-                accessibilityRole="status"
+                accessibilityRole="alert"
               >
                 <Ionicons name="sync-outline" size={16} color={colors.warning} />
                 <Text style={[styles.bannerText, { color: colors.warning }]}>

@@ -24,10 +24,50 @@ The LumenPulse backend now exposes application performance and health metrics th
 
 ### Intelligent Route Normalization
 
-The metrics system automatically normalizes routes to prevent metric cardinality explosion:
-- `/users/123/posts/456` → `/users/:id/posts/:id`
-- `@example.com-uuid-value` → `:id`
-- Query parameters are stripped for cleaner metrics
+The metrics system automatically normalizes routes to prevent metric cardinality explosion. Every path segment is classified as either **static** (kept as-is) or **dynamic** (collapsed onto the `:id` template):
+
+| Segment shape | Example | Becomes |
+| --- | --- | --- |
+| UUID (`8-4-4-4-12`) | `/users/550e8400-e29b-41d4-a716-446655440000` | `/users/:id` |
+| Numeric ID | `/users/42/posts/7` | `/users/:id/posts/:id` |
+| Stellar wallet address (`G…`, 56-char base32 StrKey) | `/v1/portfolio/accounts/GBXX…/summary` | `/v1/portfolio/accounts/:id/summary` |
+| Stellar contract ID (`C…`, 56-char base32 StrKey) | `/v1/contracts/capabilities/CCE…` | `/v1/contracts/capabilities/:id` |
+| Hex hash (64 chars) | `/transactions/0f2c…cafe` | `/transactions/:id` |
+| Any other long machine token (≥ 24 chars) | `/verification/submissions/eyJhbG…` | `/verification/submissions/:id` |
+
+Notes:
+- API version prefixes (`v1`, `v2`, …) are **preserved** so versioned routes stay distinguishable (`/v1/news` stays `/v1/news`).
+- Static segments such as `/news/coin/btc` or `/metrics/health` are never rewritten.
+- Query strings and trailing slashes are stripped.
+- The 24-char fallback is a hard ceiling: it sits above the longest static route keyword in the codebase, so even unforeseen identifier formats cannot create unbounded series.
+
+## Metric Inventory & Cardinality Ceilings
+
+Every metric family exported on `/metrics` and its label set is inventoried below. The **series ceiling** is the maximum number of distinct label combinations the family can realistically produce; it is bounded and does not scale with users, wallets, contracts, or articles.
+
+| Metric family | Type | Labels | Series ceiling | Rationale |
+| --- | --- | --- | --- | --- |
+| `http_requests_total` | Counter | `method`, `route`, `status` | ≤ 5 000 | Route is normalized to the route template (`:id` for dynamic segments); methods and status codes are small fixed sets |
+| `http_request_duration_seconds` | Histogram | `method`, `route`, `status` | ≤ 5 000 (× 8 histogram buckets) | Same bounded labels as above |
+| `http_errors_total` | Counter | `method`, `route`, `status` | ≤ 5 000 | Subset of `http_requests_total` (4xx/5xx only) |
+| `job_queue_size` | Gauge | `queue_name` | ≤ 10 | Known fixed queues (e.g. `portfolio-snapshot`) |
+| `jobs_processed_total` | Counter | `queue_name`, `status` | ≤ 20 | 2 statuses × known queues |
+| `jobs_failed_total` | Counter | `queue_name` | ≤ 10 | Known fixed queues |
+| `lumenpulse_articles_processed_total` | Counter | `source`, `status` | ≤ 100 | Fixed feed list × 3 statuses (`success`/`skipped`/`duplicate`) |
+| `lumenpulse_sentiment_score` | Gauge | `source` | ≤ 25 | Fixed feed list + `all` aggregate |
+| `lumenpulse_model_inference_duration_seconds` | Histogram | `model`, `task` | ≤ 10 | Small model registry × 2 tasks (`sentiment`/`anomaly`) |
+| `lumenpulse_anomalies_detected_total` | Counter | `type`, `severity` | ≤ 50 | Fixed anomaly-type enum × 4 severities |
+| `lumenpulse_fetch_errors_total` | Counter | `source`, `error_code` | ≤ 500 | Fixed feed list × a small set of error codes |
+| `horizon_http_latency_ms` | Histogram | `method`, `status` | ≤ 100 | Fixed Horizon method list × statuses |
+| `horizon_http_errors_total` | Counter | `method`, `status_code` | ≤ 100 | Fixed Horizon method list × status codes |
+| `horizon_http_requests_total` | Counter | `method` | ≤ 25 | Fixed Horizon method list |
+| `lumenpulse_reconciliation_drift_total` | Counter | `dataset`, `severity` | ≤ 10 | Fixed dataset(s) × 2 severities (`warning`/`critical`) |
+| `lumenpulse_reconciliation_drift_delta` | Gauge | `dataset`, `severity` | ≤ 10 | Same fixed label set |
+| `lumenpulse_reconciliation_threshold` | Gauge | `dataset`, `severity` | ≤ 10 | Same fixed label set |
+
+**Dynamic (legacy) helpers** — `getOrCreateGauge`, `getOrCreateCounter`, `getOrCreateHistogram` and the `incrementCounter`/`recordHistogram` shortcuts create metric families at runtime. All current call sites (`cache_hits_total`, `cache_misses_total`, `cache_fetch_duration_ms`, `warm_cache_preload_*`, `projects_*_errors_total`, `wallet_readiness_errors_total`) use **constant names and bounded label values** (e.g. `key_type` ∈ {`account_balance`, `account_operations`, `contract_read`, `stellar_assets`, `news`, `other`}, `route` = fixed registry names). Keep this property when adding new call sites: never pass user-supplied values (wallet addresses, contract IDs, article IDs) as labels.
+
+**Scrape payload size guardrail** — the interceptor test suite (`metrics.interceptor.spec.ts`) records 5 000 requests carrying distinct wallet addresses, contract IDs, hex hashes and numeric IDs and asserts the normalized payload stays small (< 10% of the raw-path payload and ≤ 10 series for `http_requests_total`). Measured on CI: raw paths ≈ 2.9 MB → normalized ≈ 15.6 KB (**~99.5% reduction**).
 
 ## Endpoints
 

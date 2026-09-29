@@ -11,6 +11,7 @@ import { ReportReason, ReportType } from '../entities/content-report.entity';
 export class CreateReportDto {
   @ApiProperty({
     enum: ReportType,
+    enumName: 'ReportType',
     description: 'Type of content being reported',
     example: ReportType.PROJECT,
   })
@@ -28,6 +29,7 @@ export class CreateReportDto {
 
   @ApiProperty({
     enum: ReportReason,
+    enumName: 'ReportReason',
     description: 'Reason for reporting',
     example: ReportReason.SPAM,
   })

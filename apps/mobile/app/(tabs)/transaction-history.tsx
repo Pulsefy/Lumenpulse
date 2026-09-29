@@ -10,6 +10,7 @@ import { Transaction, TransactionType, TransactionStatus } from '../../lib/types
 import StandardList from '@/components/StandardList';
 import { CACHE_CONFIGS } from '../../lib/cache';
 import { useWalletAutoRefresh } from '../../hooks/useWalletAutoRefresh';
+import NetworkBadge from '../../components/NetworkBadge';
 
 function formatAmount(amount: string, assetCode: string): string {
   const num = parseFloat(amount);
@@ -182,6 +183,7 @@ export default function TransactionHistoryScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <NetworkBadge />
       <StandardList
         data={transactions}
         keyExtractor={(item) => item.id}
@@ -197,6 +199,11 @@ export default function TransactionHistoryScreen() {
         onRefresh={() => fetchTransactions(true)}
         loading={isLoading}
         onEndReached={handleLoadMore}
+        // Transaction rows have fixed height (icon 22 + padding 16*2 + border 1).
+        // Providing itemHeight unlocks the getItemLayout fast path in StandardList,
+        // eliminating per-item measurement on long transaction histories.
+        itemHeight={55}
+        estimatedItemSize={55}
         error={error}
         onRetry={() => fetchTransactions(true)}
         ListEmptyComponent={

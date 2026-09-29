@@ -41,6 +41,7 @@ export class ContributorFeedQueryDto {
   @ApiPropertyOptional({
     description: 'Filter by activity type',
     enum: FeedActivityType,
+    enumName: 'FeedActivityType',
   })
   @IsOptional()
   @IsEnum(FeedActivityType)
@@ -74,6 +75,7 @@ export class FeedActivityItemDto {
   @ApiProperty({
     description: 'Type of activity',
     enum: FeedActivityType,
+    enumName: 'FeedActivityType',
   })
   activityType: FeedActivityType;
 

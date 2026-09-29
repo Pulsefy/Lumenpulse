@@ -16,6 +16,9 @@ jobs:
   onchain-checks:
     name: Test Suite
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     defaults:
       run:
         working-directory: ./apps/onchain
@@ -23,6 +26,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -41,8 +46,38 @@ jobs:
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
 
+  
+
     - name: Build Contracts
       run: cargo build --target wasm32-unknown-unknown --release
+
+    - name: Build base contracts for size comparison
+      if: github.event_name == 'pull_request'
+      run: |
+        git worktree add --detach "$RUNNER_TEMP/lumenpulse-base" "origin/${{ github.base_ref }}"
+        cargo build --manifest-path "$RUNNER_TEMP/lumenpulse-base/apps/onchain/Cargo.toml" --target wasm32-unknown-unknown --release
+
+    - name: Report and enforce contract WASM sizes
+      env:
+        BASELINE_ROOT: ${{ github.event_name == 'pull_request' && format('{0}/lumenpulse-base/apps/onchain/target/wasm32-unknown-unknown/release', runner.temp) || '' }}
+      run: |
+        baseline_args=()
+        if [ -n "$BASELINE_ROOT" ]; then
+          baseline_args=(--baseline-root "$BASELINE_ROOT")
+        fi
+        node ../../scripts/check-wasm-size.mjs "${baseline_args[@]}" | tee wasm-size.md >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Add WASM size report to pull request
+      if: github.event_name == 'pull_request'
+      uses: marocchino/sticky-pull-request-comment@v2
+      continue-on-error: true
+      with:
+        header: wasm-size
+        path: apps/onchain/wasm-size.md
+
+    - name: Remove base worktree
+      if: always() && github.event_name == 'pull_request'
+      run: git worktree remove --force "$RUNNER_TEMP/lumenpulse-base"
 
     - name: Run tests
       if: env.SKIP_TESTS != 'true'

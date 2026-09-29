@@ -7,11 +7,20 @@ import os
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from concurrent.futures import ProcessPoolExecutor
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from vaderSentiment.vaderSentiment import (
+    BOOSTER_DICT,
+    NEGATE,
+    SentimentIntensityAnalyzer,
+)
 from dataclasses import dataclass
 
 # Import keyword extractor for asset filtering
 from src.analytics.keywords import KeywordExtractor
+from src.analytics.explanation import (
+    LEXICON_FEATURE_KIND,
+    empty_explanation,
+    leave_one_out_explanation,
+)
 
 try:
     from src.ml.model_registry import get_current_version as _get_current_version
@@ -102,13 +111,14 @@ class SentimentResult:
     neutral: float  # 0 to 1
     sentiment_label: str  # 'positive', 'negative', 'neutral'
     asset_codes: List[str] = None  # List of asset codes mentioned in text
+    explanation: Optional[Dict[str, Any]] = None  # Token-level explanation (#1456)
 
     def __post_init__(self):
         if self.asset_codes is None:
             self.asset_codes = []
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        data = {
             "text": self.text,
             "compound_score": self.compound_score,
             "positive": self.positive,
@@ -117,6 +127,9 @@ class SentimentResult:
             "sentiment_label": self.sentiment_label,
             "asset_codes": self.asset_codes,
         }
+        if self.explanation is not None:
+            data["explanation"] = self.explanation
+        return data
 
 
 class SentimentAnalyzer:
@@ -155,13 +168,52 @@ class SentimentAnalyzer:
             (content_hash, _current_sentiment_model_version(), asset_filter or "")
         )
 
-    def analyze(self, text: str, asset_filter: Optional[str] = None) -> SentimentResult:
+    def _raw_compound(self, text: str) -> float:
+        """VADER compound for ``text`` without any fallback logic."""
+        return float(self.analyzer.polarity_scores(text).get("compound", 0.0))
+
+    def _vader_feature_for(self, token: str) -> Optional[Tuple[str, str]]:
+        """Map a token to the VADER lexicon entry responsible for its valence."""
+        low = token.lower()
+        if low in self.analyzer.lexicon:
+            return f"lexicon:vader:{low}", LEXICON_FEATURE_KIND
+        if low in BOOSTER_DICT:
+            return f"lexicon:vader:booster:{low}", LEXICON_FEATURE_KIND
+        if low in NEGATE:
+            return f"lexicon:vader:negator:{low}", LEXICON_FEATURE_KIND
+        return None
+
+    def explain(self, text: str, compound: float) -> Dict[str, Any]:
+        """
+        Return a token-level explanation for a VADER compound score (#1456).
+
+        Off by default — callers must opt in.  The explanation decomposes the
+        compound via leave-one-out re-scoring, attributing each contributing
+        token to its VADER lexicon entry or modifier feature.
+        """
+        return leave_one_out_explanation(
+            method="vader",
+            text=text,
+            base_score=compound,
+            scorer=self._raw_compound,
+            feature_for=self._vader_feature_for,
+        ).to_dict()
+
+    def analyze(
+        self,
+        text: str,
+        asset_filter: Optional[str] = None,
+        *,
+        explain: bool = False,
+    ) -> SentimentResult:
         """
         Analyze sentiment of a single text
 
         Args:
             text: Text to analyze
             asset_filter: Optional asset code to filter results (e.g., 'XLM', 'USDC')
+            explain: When True, attach per-token contributions referencing the
+                VADER lexicon/marker responsible for the score (off by default).
 
         Returns:
             SentimentResult object
@@ -173,6 +225,11 @@ class SentimentAnalyzer:
         if asset_filter:
             asset_filter = asset_filter.upper()
             if asset_filter not in asset_codes:
+                explanation = (
+                    empty_explanation("asset_filter", 0.0).to_dict()
+                    if explain
+                    else None
+                )
                 # Return neutral result if asset not mentioned
                 return SentimentResult(
                     text=text[:100],
@@ -182,13 +239,17 @@ class SentimentAnalyzer:
                     neutral=1.0,
                     sentiment_label="neutral",
                     asset_codes=[],
+                    explanation=explanation,
                 )
         
         cache_key = self._cache_key_for(text, asset_filter)
         if self.cache:
             cached = self.cache.get(cache_key)
             if cached:
-                return SentimentResult(**cached)
+                result = SentimentResult(**cached)
+                if explain:
+                    result.explanation = self.explain(text, result.compound_score)
+                return result
 
         scores = self.analyzer.polarity_scores(text)
         compound = scores["compound"]
@@ -207,10 +268,13 @@ class SentimentAnalyzer:
             neutral=scores["neu"],
             sentiment_label=label,
             asset_codes=asset_codes,
+            explanation=self.explain(text, compound) if explain else None,
         )
 
         if self.cache:
-            self.cache.set(cache_key, result.to_dict())
+            payload = result.to_dict()
+            payload.pop("explanation", None)
+            self.cache.set(cache_key, payload)
 
         return result
 

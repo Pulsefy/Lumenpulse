@@ -4,6 +4,7 @@ import {
   ChartDataPointDto,
   ChartDataQueryDto,
   ChartInterval,
+  ChartMetaDto,
   ChartRange,
 } from './dto/chart-data.dto';
 
@@ -24,6 +25,36 @@ export class AnalyticsService {
   private readonly logger = new Logger(AnalyticsService.name);
 
   constructor(private readonly dataSource: DataSource) {}
+
+  /**
+   * Describes the series returned by getChartData so clients can render
+   * labels, axes and range options without hard-coding them.
+   */
+  getChartMeta(): ChartMetaDto {
+    return {
+      xAxis: { id: 'timestamp', label: 'Time (UTC)' },
+      yAxes: [
+        { id: 'sentiment', label: 'Average sentiment (-1 to 1)' },
+        { id: 'count', label: 'Signals analysed' },
+      ],
+      series: [
+        { key: 'sentiment', label: 'Average sentiment', axisId: 'sentiment' },
+        { key: 'count', label: 'Signal count', axisId: 'count' },
+      ],
+      ranges: [
+        {
+          range: ChartRange.SEVEN_DAYS,
+          label: 'Last 7 days',
+          interval: ChartInterval.ONE_HOUR,
+        },
+        {
+          range: ChartRange.THIRTY_DAYS,
+          label: 'Last 30 days',
+          interval: ChartInterval.ONE_DAY,
+        },
+      ],
+    };
+  }
 
   async getChartData(query: ChartDataQueryDto): Promise<ChartDataPointDto[]> {
     const { interval, range, asset } = query;

@@ -6,7 +6,7 @@ mod storage;
 
 use errors::RegistryError;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
-use storage::{DataKey, ModuleEntry};
+use storage::{DataKey, ModuleEntry, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 #[contract]
 pub struct ProtocolRegistryContract;
@@ -14,6 +14,26 @@ pub struct ProtocolRegistryContract;
 #[contractimpl]
 impl ProtocolRegistryContract {
     // ── Internal guards ───────────────────────────────────────────────────────
+
+    /// Extends the shared instance-storage TTL (covers `Admin` and `Paused`
+    /// at once). Called from both `require_admin` and `require_not_paused`,
+    /// and directly from the hot `resolve`/`get_module`/`is_active` read
+    /// paths, since a lookup-heavy registry may go long stretches between
+    /// admin writes while still being read constantly.
+    fn touch_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+    }
+
+    /// Extends the TTL of a module's persistent record.
+    fn touch_module(env: &Env, name: &Symbol) {
+        env.storage().persistent().extend_ttl(
+            &DataKey::Module(name.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+    }
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), RegistryError> {
         let admin: Address = env
@@ -25,6 +45,7 @@ impl ProtocolRegistryContract {
             return Err(RegistryError::Unauthorized);
         }
         caller.require_auth();
+        Self::touch_instance(env);
         Ok(())
     }
 
@@ -37,6 +58,7 @@ impl ProtocolRegistryContract {
         {
             return Err(RegistryError::ContractPaused);
         }
+        Self::touch_instance(env);
         Ok(())
     }
 
@@ -51,6 +73,7 @@ impl ProtocolRegistryContract {
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
+        Self::touch_instance(&env);
 
         events::InitializedEvent { admin }.publish(&env);
         Ok(())
@@ -92,6 +115,7 @@ impl ProtocolRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Module(name.clone()), &entry);
+        Self::touch_module(&env, &name);
 
         events::ModuleRegisteredEvent {
             name,
@@ -138,6 +162,7 @@ impl ProtocolRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Module(name.clone()), &entry);
+        Self::touch_module(&env, &name);
 
         events::ModuleUpdatedEvent {
             name,
@@ -167,6 +192,7 @@ impl ProtocolRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Module(name.clone()), &entry);
+        Self::touch_module(&env, &name);
 
         events::ModuleDeactivatedEvent { name, admin }.publish(&env);
 
@@ -189,6 +215,7 @@ impl ProtocolRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Module(name.clone()), &entry);
+        Self::touch_module(&env, &name);
 
         events::ModuleActivatedEvent { name, admin }.publish(&env);
 
@@ -199,23 +226,30 @@ impl ProtocolRegistryContract {
 
     /// Return the full `ModuleEntry` for a module, including inactive ones.
     pub fn get_module(env: Env, name: Symbol) -> Result<ModuleEntry, RegistryError> {
-        env.storage()
+        let entry = env
+            .storage()
             .persistent()
-            .get(&DataKey::Module(name))
-            .ok_or(RegistryError::ModuleNotFound)
+            .get(&DataKey::Module(name.clone()))
+            .ok_or(RegistryError::ModuleNotFound)?;
+        Self::touch_module(&env, &name);
+        Ok(entry)
     }
 
     /// Resolve the active address for a module.
     ///
     /// Returns `ModuleInactive` if the module exists but has been deactivated,
     /// and `ModuleNotFound` if it was never registered. Clients should prefer
-    /// this over `get_module` when they just need an address to call.
+    /// this over `get_module` when they just need an address to call. This is
+    /// the hottest read path in the contract, so it also re-bumps the shared
+    /// instance TTL (`Admin`/`Paused`) alongside the module's own record.
     pub fn resolve(env: Env, name: Symbol) -> Result<Address, RegistryError> {
         let entry: ModuleEntry = env
             .storage()
             .persistent()
-            .get(&DataKey::Module(name))
+            .get(&DataKey::Module(name.clone()))
             .ok_or(RegistryError::ModuleNotFound)?;
+        Self::touch_module(&env, &name);
+        Self::touch_instance(&env);
 
         if !entry.is_active {
             return Err(RegistryError::ModuleInactive);
@@ -226,18 +260,24 @@ impl ProtocolRegistryContract {
 
     /// Returns true only if the module is registered and currently active.
     pub fn is_active(env: Env, name: Symbol) -> bool {
-        env.storage()
+        let entry: Option<ModuleEntry> = env
+            .storage()
             .persistent()
-            .get::<_, ModuleEntry>(&DataKey::Module(name))
-            .map(|e| e.is_active)
-            .unwrap_or(false)
+            .get(&DataKey::Module(name.clone()));
+        if entry.is_some() {
+            Self::touch_module(&env, &name);
+        }
+        entry.map(|e| e.is_active).unwrap_or(false)
     }
 
     pub fn get_admin(env: Env) -> Result<Address, RegistryError> {
-        env.storage()
+        let admin = env
+            .storage()
             .instance()
             .get(&DataKey::Admin)
-            .ok_or(RegistryError::NotInitialized)
+            .ok_or(RegistryError::NotInitialized)?;
+        Self::touch_instance(&env);
+        Ok(admin)
     }
 
     // ── Admin controls ────────────────────────────────────────────────────────

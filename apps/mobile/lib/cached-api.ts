@@ -3,6 +3,7 @@ import { portfolioApi, stellarApi } from './api';
 import { apiClient } from './api-client';
 import { crowdfundApi, CrowdfundProject } from './crowdfund';
 import { grantsApi, GrantRound, RoundSummary } from './grants';
+import { fetchSignals, SignalsFeed } from './signals';
 import { Article } from './types/news';
 
 /**
@@ -243,6 +244,38 @@ export class CachedApi {
     }
 
     return { success: false, error: { message: 'No grant round summary available offline' } };
+  }
+
+  // Signals feed with caching, so the discover tab still renders the latest
+  // computed signals when the device is offline.
+  static async getSignals() {
+    const cacheKey = 'signals_latest';
+
+    const cached = await cache.get<SignalsFeed>(cacheKey, CACHE_CONFIGS.SIGNALS);
+    if (
+      cached &&
+      (!cache.isOnlineStatus() || Date.now() - cached.timestamp < CACHE_CONFIGS.SIGNALS.ttl)
+    ) {
+      return { success: true, data: cached.data, fromCache: true };
+    }
+
+    if (cache.isOnlineStatus()) {
+      try {
+        const response = await fetchSignals();
+        if (response.success && response.data) {
+          await cache.set(cacheKey, response.data, CACHE_CONFIGS.SIGNALS);
+          return { ...response, fromCache: false };
+        }
+      } catch (error) {
+        console.warn('Failed to fetch fresh signals data:', error);
+      }
+    }
+
+    if (cached) {
+      return { success: true, data: cached.data, fromCache: true, isStale: true };
+    }
+
+    return { success: false, error: { message: 'No signals available offline' } };
   }
 
   // Clear all cached data

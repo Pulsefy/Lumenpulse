@@ -27,6 +27,8 @@ pub enum DataKey {
     /// pre-existing variants stay stable across upgrades (Soroban assigns
     /// discriminants in declaration order).
     StreamV2(Address),
+    /// Total unreleased obligations across all streams.
+    TotalObligations,
 }
 
 #[contracttype]

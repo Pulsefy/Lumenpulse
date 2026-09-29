@@ -26,11 +26,16 @@ export class LoggerMiddleware implements NestMiddleware {
       encoding?: unknown,
       callback?: unknown,
     ): void => {
+      const correlationId =
+        (typeof (request as { correlationId?: string }).correlationId ===
+          'string' &&
+          (request as { correlationId?: string }).correlationId) ||
+        (typeof request.requestId === 'string' ? request.requestId : 'unknown');
+      const requestId = correlationId;
       const duration = Date.now() - startTime;
-      const requestId =
-        typeof request.requestId === 'string' ? request.requestId : 'unknown';
       const message = JSON.stringify({
         event: 'http_request_completed',
+        correlationId,
         requestId,
         method: req.method,
         url: req.originalUrl ?? req.url,

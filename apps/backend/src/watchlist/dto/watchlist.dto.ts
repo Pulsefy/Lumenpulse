@@ -31,6 +31,7 @@ export class AddToWatchlistDto {
   @ApiProperty({
     description: 'Type of watchlist item',
     enum: WatchlistItemType,
+    enumName: 'WatchlistItemType',
     example: WatchlistItemType.ASSET,
   })
   @IsEnum(WatchlistItemType)
@@ -128,6 +129,7 @@ export class WatchlistItemResponseDto {
   @ApiProperty({
     description: 'Type of watchlist item',
     enum: WatchlistItemType,
+    enumName: 'WatchlistItemType',
   })
   type: WatchlistItemType;
 

@@ -68,8 +68,8 @@ export class StellarBalanceService {
   }
 
   /**
-   * Get USD value for an asset
-   * Fetches real-time price from PriceService
+   * Get USD value for an asset.
+   * Fetches real-time price from PriceService.
    */
   async getAssetValueUsd(
     assetCode: string,
@@ -86,5 +86,52 @@ export class StellarBalanceService {
     }
     const numAmount = parseFloat(amount);
     return numAmount * price;
+  }
+
+  /**
+   * Batch-compute USD values for multiple asset balances in a single
+   * price fetch instead of calling `getAssetValueUsd()` once per asset.
+   *
+   * Replaces the N+1 pattern:
+   *   `await Promise.all(balances.map(b => getAssetValueUsd(...)))`
+   *
+   * @param assets Array of balance descriptors.
+   * @returns Array of `{ ...asset, valueUsd }` in the same order.
+   */
+  async getAssetValuesUsd(
+    assets: Array<{
+      assetCode: string;
+      assetIssuer: string | null;
+      amount: string;
+    }>,
+  ): Promise<
+    Array<{
+      assetCode: string;
+      assetIssuer: string | null;
+      amount: string;
+      valueUsd: number;
+    }>
+  > {
+    if (assets.length === 0) return [];
+
+    // Single batched price lookup – O(1) round-trips regardless of asset count.
+    const assetCodes = assets.map((a) => a.assetCode);
+    let priceMap: Map<string, number>;
+    try {
+      priceMap = await this.priceService.getPricesForAssets(assetCodes);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to batch-fetch prices: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+      priceMap = new Map();
+    }
+
+    return assets.map((asset) => {
+      const price = priceMap.get(asset.assetCode) ?? 0;
+      const valueUsd = parseFloat(asset.amount) * price;
+      return { ...asset, valueUsd };
+    });
   }
 }

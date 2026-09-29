@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { serverConfig } from '@/lib/config';
 
-const BACKEND_API_URL = process.env.BACKEND_API_URL ?? 'http://localhost:3001';
+const BACKEND_API_URL = serverConfig.backendApiUrl;
 const REQUEST_TIMEOUT_MS = 10_000;
 
 /**

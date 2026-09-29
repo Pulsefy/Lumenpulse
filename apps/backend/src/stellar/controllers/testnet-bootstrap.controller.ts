@@ -21,6 +21,7 @@ import { RolesGuard } from '../../auth/roles.guard';
 import { GetUser, Roles } from '../../auth/decorators/auth.decorators';
 import { User, UserRole } from '../../users/entities/user.entity';
 import { getFriendbotBootstrapThrottleOverride } from '../../common/rate-limit/rate-limit.config';
+import { RateLimitEndpointClass } from '../../common/rate-limit/rate-limit.decorator';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { config } from '../../lib/config';
 import {
@@ -52,6 +53,7 @@ export class TestnetBootstrapController {
   @Post('fund')
   @HttpCode(HttpStatus.OK)
   @Throttle(getFriendbotBootstrapThrottleOverride())
+  @RateLimitEndpointClass('friendbotBootstrap')
   @ApiOperation({
     summary: 'Fund a testnet account via Friendbot (testnet-only)',
     description:
@@ -101,6 +103,6 @@ export class TestnetBootstrapController {
       `Admin ${user.id} requesting testnet bootstrap for ${dto.publicKey}`,
     );
 
-    return this.bootstrapService.fundTestnetAccount(dto.publicKey);
+    return this.bootstrapService.fundTestnetAccount(dto.publicKey, user.id);
   }
 }

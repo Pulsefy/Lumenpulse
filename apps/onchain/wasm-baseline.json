@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "unit": "bytes",
+  "contracts": {
+    "contributor_registry": null,
+    "crowdfund_vault": null,
+    "feature_flags": null,
+    "idempotency-guard": null,
+    "liquidity-pool": null,
+    "lumen_token": null,
+    "lumenpulse-community-curation": null,
+    "matching_pool": null,
+    "notification-broker": null,
+    "notification_interface": null,
+    "pricing_adapter": null,
+    "project_registry": null,
+    "protocol_registry": null,
+    "reentrancy-guard": null,
+    "stable-swap-pool": null,
+    "treasury": null,
+    "upgradable-contract": null,
+    "vesting-wallet": null,
+    "yield-vault": null
+  }
+}

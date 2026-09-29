@@ -12,6 +12,7 @@ import {
   Contract,
   nativeToScVal,
   xdr,
+  rpc,
 } from '@stellar/stellar-sdk';
 import {
   SorobanRpcClientService,
@@ -69,8 +70,7 @@ export class MatchingPoolAdminService {
       const simulation = await this.sorobanRpc.simulateTransaction(tx);
 
       // Assemble and sign
-      const { rpc: rpcSdk } = await import('@stellar/stellar-sdk');
-      const assembled = rpcSdk.assembleTransaction(tx, simulation).build();
+      const assembled = rpc.assembleTransaction(tx, simulation).build();
       assembled.sign(keypair);
 
       const result = await this.sorobanRpc.sendTransaction(assembled);
@@ -86,7 +86,7 @@ export class MatchingPoolAdminService {
         status: result.status,
         createdAt: new Date(),
       };
-    } catch (err) {
+    } catch (err: unknown) {
       this.handleError(err, 'createRound');
     }
   }
@@ -132,8 +132,7 @@ export class MatchingPoolAdminService {
 
       const simulation = await this.sorobanRpc.simulateTransaction(tx);
 
-      const { rpc: rpcSdk } = await import('@stellar/stellar-sdk');
-      const assembled = rpcSdk.assembleTransaction(tx, simulation).build();
+      const assembled = rpc.assembleTransaction(tx, simulation).build();
       assembled.sign(keypair);
 
       const result = await this.sorobanRpc.sendTransaction(assembled);
@@ -154,7 +153,7 @@ export class MatchingPoolAdminService {
         status: result.status,
         createdAt: new Date(),
       };
-    } catch (err) {
+    } catch (err: unknown) {
       this.handleError(err, 'approveProject');
     }
   }

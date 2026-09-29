@@ -36,6 +36,42 @@
     "pricing_adapter": {
       "id": "CCW2EF3M5GXWM2ZTOAUPKC3CY7W42T3QJEK72WO7VEOR5ONBUTCUWDVM",
       "wasm_hash": "477ccd47cbc96421dc872650ea2ab703b58195c3d16606b48813636cc669289f"
+    },
+    "feature_flags": {
+      "reason": "Not deployed on testnet: feature flags remain off-chain during the initial release and are not intended to be publicly deployed yet."
+    },
+    "idempotency_guard": {
+      "reason": "Not deployed on testnet: the idempotency guard is a shared dependency and is intentionally kept internal rather than independently deployed."
+    },
+    "liquidity_pool": {
+      "reason": "Not deployed on testnet: the automated market maker pool stays reserved for a later liquidity rollout and not part of the public launch set."
+    },
+    "lumenpulse_curation": {
+      "reason": "Not deployed on testnet: community curation is still in design review and is not part of the current testnet deployment window."
+    },
+    "notification_broker": {
+      "reason": "Not deployed on testnet: brokered notifications are still routed through the backend, so no standalone Soroban contract is published yet."
+    },
+    "notification_interface": {
+      "reason": "Not deployed on testnet: this shared cross-contract interface is not a standalone deployment and is only consumed by other contracts."
+    },
+    "protocol_registry": {
+      "reason": "Not deployed on testnet: registry onboarding is intentionally deferred until the governance and protocol catalog workflow is finalized."
+    },
+    "reentrancy_guard": {
+      "reason": "Not deployed on testnet: the reentrancy guard is a library-style dependency and is intentionally not deployed independently."
+    },
+    "stable_swap_pool": {
+      "reason": "Not deployed on testnet: the stable-swap pool remains behind private validation and is excluded from the public testnet set."
+    },
+    "upgradable_contract": {
+      "reason": "Not deployed on testnet: upgradeability is intentionally disabled for the current public deployment and will be introduced in a later phase."
+    },
+    "vesting_wallet": {
+      "reason": "Not deployed on testnet: vesting flows are not active in the initial token release and are therefore intentionally omitted."
+    },
+    "yield_vault": {
+      "reason": "Not deployed on testnet: the yield vault product is reserved for a future treasury expansion and is outside the current manifest."
     }
   }
 }

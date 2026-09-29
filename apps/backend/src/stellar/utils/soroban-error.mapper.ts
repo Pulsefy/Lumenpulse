@@ -15,6 +15,9 @@ export interface SorobanApiError {
 }
 
 const CONTRACT_ERROR_PATTERN = /Error\(Contract,\s*#(\d+)\)/;
+const MATCHING_POOL_CONTRIBUTION_SCOPE_PAUSED = 19;
+export const CONTRIBUTIONS_PAUSED_MESSAGE =
+  'Contributions are temporarily paused. Please try again after the operator resumes them.';
 
 export function extractContractErrorCode(message: string): number | null {
   const match = CONTRACT_ERROR_PATTERN.exec(message);
@@ -92,7 +95,7 @@ export function throwSorobanRpcError(err: SorobanRpcError): never {
 
 export function mapContractDiagnosticToError(
   message: string,
-  domain: 'treasury' | 'vesting' | 'generic',
+  domain: 'treasury' | 'vesting' | 'matching-pool' | 'generic',
   beneficiary?: string,
 ): HttpException {
   switch (domain) {
@@ -100,6 +103,29 @@ export function mapContractDiagnosticToError(
       return toTreasuryException(message, beneficiary);
     case 'vesting':
       return toVestingWalletException(message, beneficiary);
+    case 'matching-pool': {
+      const contractErrorCode = extractContractErrorCode(message);
+      if (contractErrorCode === MATCHING_POOL_CONTRIBUTION_SCOPE_PAUSED) {
+        return new HttpException(
+          {
+            code: ErrorCode.STEL_CONTRIBUTIONS_PAUSED,
+            message: CONTRIBUTIONS_PAUSED_MESSAGE,
+            details: { contractErrorCode },
+          },
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
+      return new HttpException(
+        {
+          code: ErrorCode.STEL_SIMULATION_FAILED,
+          message,
+          details:
+            contractErrorCode !== null ? { contractErrorCode } : undefined,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     default: {
       const contractErrorCode = extractContractErrorCode(message);
       const details =

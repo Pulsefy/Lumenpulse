@@ -386,17 +386,76 @@ def main():
     if len(sys.argv) > 1:
         command = sys.argv[1].lower()
 
-        if command == "run":
+        if command == "check-models":
+            # Verifies the pinned NER and embedding models (and other baked
+            # artifacts) are present at the expected version, failing fast on
+            # mismatch. Used as a container startup readiness gate.
+            from src.analytics.ner_service import (
+                check_model_available as check_ner_model,
+            )
+            from src.analytics.embedding_service import (
+                check_model_available as check_embedding_model,
+            )
+
+            checks = {}
+            for label, gate in (
+                ("ner_model", check_ner_model),
+                ("embedding_model", check_embedding_model),
+            ):
+                logger.info("Checking pinned %s availability...", label)
+                try:
+                    gate()
+                except Exception as exc:
+                    logger.error("Model startup check failed (%s): %s", label, exc)
+                    print(f"❌ {label} check failed: {exc}")
+                    return {
+                        "success": False,
+                        "checks": {**checks, label: False},
+                        "error": str(exc),
+                    }
+                checks[label] = True
+                logger.info("Pinned %s check passed.", label)
+            print("✓ Pinned NER and embedding models present, versions match.")
+            return {"success": True, "checks": checks}
+
+        if command == "serve":
+            # Run the startup model gates before starting the scheduler so the
+            # service fails fast instead of running with broken/unpinned models.
+            from src.analytics.ner_service import (
+                check_model_available as check_ner_model,
+            )
+            from src.analytics.embedding_service import (
+                check_model_available as check_embedding_model,
+            )
+
+            try:
+                check_ner_model()
+                check_embedding_model()
+            except Exception as exc:
+                logger.error(
+                    "Pinned model gate failed at startup; aborting: %s", exc
+                )
+                print(f"❌ {exc}")
+                return {"success": False, "error": str(exc)}
+
+            start_scheduler()
+        elif command == "run":
             # Run pipeline once and exit
             return run_data_pipeline()
-        elif command == "serve":
-            # Start scheduled service
-            start_scheduler()
+        elif command == "replay-quarantined":
+            from src.ingestion.quarantine_replay_cli import main as replay_main
+
+            exit_code = replay_main(sys.argv[2:])
+            return {"success": exit_code == 0, "exit_code": exit_code}
         elif command == "help":
             print("Usage:")
-            print("  python pipeline.py run     - Run pipeline once")
-            print("  python pipeline.py serve   - Start scheduled service")
-            print("  python pipeline.py help    - Show this help")
+            print("  python pipeline.py run          - Run pipeline once")
+            print("  python pipeline.py serve        - Start scheduled service")
+            print(
+                "  python pipeline.py check-models - Verify pinned "
+                "NER + embedding model artifacts"
+            )
+            print("  python pipeline.py help         - Show this help")
             return {"help": True}
         else:
             print(f"Unknown command: {command}")

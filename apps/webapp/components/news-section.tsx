@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, User, ExternalLink, Wifi, WifiOff, TrendingUp, TrendingDown, Minus, DollarSign } from "lucide-react";
+import { Clock, User, ExternalLink, Wifi, WifiOff, TrendingUp, TrendingDown, Minus, DollarSign, Newspaper } from "lucide-react";
 import Image from "next/image";
 import { NewsCarousel } from "@/components/news-carousel";
 import { Web3NewsFallback } from "@/components/web3-news-fallback";
@@ -8,6 +8,8 @@ import { useState, useEffect, useMemo } from "react";
 import { fetchCryptoNews } from "@/lib/news-client";
 import { ExploreFilters } from "./explore-filters";
 import { ReportButton } from "@/components/report/report-button";
+import { ListSkeleton } from "@/components/ui/list-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface NewsData {
   id: number;
@@ -173,36 +175,19 @@ export function NewsSection({ newsData: propNewsData, isLoading: propIsLoading, 
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="bg-black/50 border border-white/10 rounded-lg p-4 relative overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 animate-pulse"></div>
-                <div className="relative z-10">
-                  <div className="h-32 bg-gradient-to-r from-white/5 to-white/10 rounded-lg mb-2 animate-pulse"></div>
-                  <div className="h-4 bg-gradient-to-r from-white/5 to-white/10 rounded w-3/4 mb-2 animate-pulse"></div>
-                  <div className="h-3 bg-gradient-to-r from-white/5 to-white/10 rounded w-full mb-2 animate-pulse"></div>
-                  <div className="h-3 bg-gradient-to-r from-white/5 to-white/10 rounded w-5/6 animate-pulse"></div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <ListSkeleton count={6} variant="grid" gridCols={3} />
         ) : isUsingFallback ? (
           <Web3NewsFallback filters={filters} sortOrder={sortOrder} />
         ) : filteredAndSortedNews.length === 0 ? (
-          <div className="py-20 text-center">
-            <p className="text-gray-400 text-lg">No results found for the selected filters.</p>
-            <button 
-              onClick={() => {
-                setFilters({ category: "All", sentiment: "All", funding: "All" });
-              }}
-              className="mt-4 text-primary hover:underline"
-            >
-              Clear all filters
-            </button>
-          </div>
+          <EmptyState
+            icon={Newspaper}
+            title="No results found"
+            description="No articles match your current filters. Try adjusting your filter criteria."
+            action={{
+              label: "Clear all filters",
+              onClick: () => setFilters({ category: "All", sentiment: "All", funding: "All" }),
+            }}
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAndSortedNews.map((news) => (

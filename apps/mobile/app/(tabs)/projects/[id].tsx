@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -20,7 +20,13 @@ import {
   RoadmapItem,
   OnChainStatus,
 } from '../../../lib/crowdfund';
-import { computeFundingProgress, formatTokenAmount } from '../../../lib/stellar';
+import {
+  computeFundingProgress,
+  formatTokenAmount,
+  validateContributionAmount,
+} from '../../../lib/stellar';
+import { ContributionDraft, evaluateContributionDraft } from '../../../lib/contribution-drafts';
+import { isTestnetConfigReady } from '../../../lib/config';
 import ContributionModal from '../../../components/ContributionModal';
 import { requireBiometricConfirmation } from '../../../lib/biometric-lock';
 import VerificationPanel from '../../../components/VerificationPanel';
@@ -29,6 +35,7 @@ import { storage } from '../../../lib/storage';
 import { ReportType } from '../../../lib/moderation';
 import ReportContentModal from '../../../components/ReportContentModal';
 import { useWallet } from '../../../contexts/WalletContext';
+import { useLocalization } from '../../../src/context';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -206,6 +213,7 @@ function RoadmapCard({
 export default function ProjectDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
+  const { t } = useLocalization();
   const { isAuthenticated } = useAuth();
 
   const [project, setProject] = useState<CrowdfundProject | null>(null);
@@ -213,6 +221,7 @@ export default function ProjectDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showContributeModal, setShowContributeModal] = useState(false);
+  const [contributionDraft, setContributionDraft] = useState<ContributionDraft | null>(null);
   const { publicKey: stellarPublicKey, signAndSubmitXdr } = useWallet();
   const [showReportModal, setShowReportModal] = useState(false);
 
@@ -251,6 +260,39 @@ export default function ProjectDetailScreen() {
     void fetchProject();
     void fetchContributors();
   }, [fetchProject, fetchContributors, isAuthenticated]);
+
+  // ── Offline contribution draft (resume / discard) ────────────────────────
+  const refreshContributionDraft = useCallback(async () => {
+    try {
+      const stored = await storage.getContributionDraft();
+      setContributionDraft(stored && stored.projectId === projectId ? stored : null);
+    } catch {
+      setContributionDraft(null);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    void refreshContributionDraft();
+  }, [refreshContributionDraft]);
+
+  /**
+   * Discarding only ever removes the locally saved draft — it never touches
+   * the chain or any account state, so it is always safe.
+   */
+  const handleDiscardDraft = useCallback(async () => {
+    await storage.clearContributionDraft();
+    setContributionDraft(null);
+  }, []);
+
+  const draftEvaluation = useMemo(() => {
+    if (!contributionDraft) {
+      return null;
+    }
+    return evaluateContributionDraft(contributionDraft, {
+      isTestnetConfigReady: isTestnetConfigReady(),
+      isValidAmount: validateContributionAmount,
+    });
+  }, [contributionDraft]);
 
   const handleContribute = async (
     amount: string,
@@ -364,6 +406,118 @@ export default function ProjectDetailScreen() {
           status={project.onChainStatus ?? (project.isActive ? 'ACTIVE' : 'COMPLETED')}
           colors={colors}
         />
+
+        {/* Offline draft — resume or discard an interrupted contribution */}
+        {contributionDraft && draftEvaluation && (
+          <View
+            style={[
+              styles.draftBanner,
+              {
+                backgroundColor:
+                  (draftEvaluation.resumable ? colors.accent : colors.warning) + '18',
+                borderColor: (draftEvaluation.resumable ? colors.accent : colors.warning) + '55',
+              },
+            ]}
+            accessible
+            accessibilityLabel={
+              draftEvaluation.resumable
+                ? `${t('contribution_draft.banner_title')}: ${contributionDraft.amount} XLM`
+                : t('contribution_draft.banner_title')
+            }
+          >
+            <View style={styles.draftBannerHeader}>
+              <Ionicons
+                name={draftEvaluation.resumable ? 'time-outline' : 'alert-circle-outline'}
+                size={16}
+                color={draftEvaluation.resumable ? colors.accent : colors.warning}
+              />
+              <Text
+                style={[
+                  styles.draftBannerTitle,
+                  { color: draftEvaluation.resumable ? colors.accent : colors.warning },
+                ]}
+              >
+                {t('contribution_draft.banner_title')}
+              </Text>
+            </View>
+
+            {draftEvaluation.resumable ? (
+              <>
+                <Text style={[styles.draftBannerBody, { color: colors.textSecondary }]}>
+                  {t('contribution_draft.banner_body', {
+                    amount: contributionDraft.amount,
+                    project: project.name,
+                  })}
+                </Text>
+                <Text style={[styles.draftBannerMeta, { color: colors.textSecondary }]}>
+                  {t('contribution_draft.saved_at', {
+                    date: new Date(contributionDraft.savedAt).toLocaleDateString(),
+                  })}
+                </Text>
+                <View style={styles.draftBannerActions}>
+                  <TouchableOpacity
+                    style={[styles.draftResumeButton, { backgroundColor: colors.accent }]}
+                    onPress={() => setShowContributeModal(true)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('contribution_draft.resume')}
+                  >
+                    <Ionicons name="play-forward-outline" size={14} color="#ffffff" />
+                    <Text style={styles.draftResumeButtonText}>
+                      {t('contribution_draft.resume')}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.draftDiscardButton,
+                      {
+                        borderColor: colors.danger + '55',
+                        backgroundColor: colors.danger + '18',
+                      },
+                    ]}
+                    onPress={() => void handleDiscardDraft()}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('contribution_draft.discard')}
+                  >
+                    <Text style={[styles.draftDiscardButtonText, { color: colors.danger }]}>
+                      {t('contribution_draft.discard')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.draftBannerBody, { color: colors.textSecondary }]}>
+                  {draftEvaluation.blocker === 'stale'
+                    ? t('contribution_draft.stale_notice')
+                    : draftEvaluation.blocker === 'invalid_amount'
+                      ? t('contribution_draft.invalid_amount_notice')
+                      : t('contribution_draft.config_missing_notice')}
+                </Text>
+                <View style={styles.draftBannerActions}>
+                  <TouchableOpacity
+                    style={[
+                      styles.draftDiscardButton,
+                      {
+                        borderColor: colors.danger + '55',
+                        backgroundColor: colors.danger + '18',
+                      },
+                    ]}
+                    onPress={() => void handleDiscardDraft()}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('contribution_draft.discard')}
+                  >
+                    <Text style={[styles.draftDiscardButtonText, { color: colors.danger }]}>
+                      {t('contribution_draft.discard')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        )}
 
         {/* Description */}
         {project.description && (
@@ -521,6 +675,7 @@ export default function ProjectDetailScreen() {
             style={[styles.contributeButton, { backgroundColor: colors.accent }]}
             onPress={() => setShowContributeModal(true)}
             activeOpacity={0.8}
+            testID="project-contribute-button"
           >
             <Ionicons name="wallet-outline" size={20} color="#ffffff" style={{ marginRight: 8 }} />
             <Text style={styles.contributeButtonText}>Contribute</Text>
@@ -531,8 +686,13 @@ export default function ProjectDetailScreen() {
       {/* Contribution modal */}
       <ContributionModal
         visible={showContributeModal}
+        projectId={projectId}
         projectName={project.name}
-        onClose={() => setShowContributeModal(false)}
+        onClose={() => {
+          setShowContributeModal(false);
+          // Re-sync the banner in case the draft was consumed or updated.
+          void refreshContributionDraft();
+        }}
         onSubmit={handleContribute}
       />
 
@@ -597,6 +757,63 @@ const styles = StyleSheet.create({
   statusChipDesc: {
     fontSize: 12,
     marginTop: 1,
+  },
+
+  // Offline contribution draft banner
+  draftBanner: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+  },
+  draftBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  draftBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  draftBannerBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  draftBannerMeta: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  draftBannerActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  draftResumeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  draftResumeButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  draftDiscardButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+  },
+  draftDiscardButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   // Section

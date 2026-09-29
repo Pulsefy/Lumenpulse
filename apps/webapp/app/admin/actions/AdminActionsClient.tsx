@@ -22,7 +22,9 @@ import { useStellarWallet } from '@/app/providers';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { useExplorerUrl } from '@/hooks/useExplorerUrl';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+import { clientConfig } from '@/lib/config';
+
+const API_BASE = clientConfig.apiUrl;
 
 interface ActionDefinition {
   id: string;

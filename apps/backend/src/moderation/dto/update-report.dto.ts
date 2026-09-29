@@ -5,6 +5,7 @@ import { ReportStatus } from '../entities/content-report.entity';
 export class UpdateReportDto {
   @ApiPropertyOptional({
     enum: ReportStatus,
+    enumName: 'ReportStatus',
     description: 'New status for the report',
     example: ReportStatus.UNDER_REVIEW,
   })

@@ -14,6 +14,10 @@ import { MatchingPoolAdminController } from './controllers/matching-pool-admin.c
 import { TestnetBootstrapController } from './controllers/testnet-bootstrap.controller';
 import { TestnetBootstrapService } from './services/testnet-bootstrap.service';
 import { AppCacheModule } from '../cache/cache.module';
+import { BootstrapRunsModule } from '../bootstrap-runs/bootstrap-runs.module';
+import { ContractAdminModule } from '../contract-admin/contract-admin.module';
+import { AccessControlModule } from '../common/access-control.module';
+import { MatchingPoolAdminService } from './services/matching-pool-admin.service';
 
 @Module({
   imports: [
@@ -22,6 +26,9 @@ import { AppCacheModule } from '../cache/cache.module';
     AuditModule,
     AppConfigModule,
     AppCacheModule,
+    BootstrapRunsModule,
+    ContractAdminModule,
+    AccessControlModule,
   ],
   controllers: [
     StellarController,
@@ -35,6 +42,7 @@ import { AppCacheModule } from '../cache/cache.module';
     ContractRotationService,
     StellarContractRotationService,
     TestnetBootstrapService,
+    MatchingPoolAdminService,
   ],
   exports: [
     StellarService,

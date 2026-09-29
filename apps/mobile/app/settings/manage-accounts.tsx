@@ -13,14 +13,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
+import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
 import { LinkedStellarAccount, usersApi } from '../../lib/api';
 import { storage } from '../../lib/storage';
-import { requireBiometricConfirmation } from '../../lib/biometric-lock';
+import { requireStepUpAuthentication } from '../../lib/biometric-lock';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
 import { useWallet } from '../../contexts/WalletContext';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
+import { useNotifications } from '../../contexts/NotificationsContext';
 
 const STELLAR_PUBLIC_KEY_REGEX = /\bG[A-Z2-7]{55}\b/;
 
@@ -44,6 +45,7 @@ const extractPublicKey = (payload: string): string | null => {
 export default function ManageAccountsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { retryRegistration } = useNotifications();
   const { t } = useLocalization();
   const [accounts, setAccounts] = useState<LinkedStellarAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +55,7 @@ export default function ManageAccountsScreen() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [scanLocked, setScanLocked] = useState(false);
+  const [, requestCameraPermission] = useCameraPermissions();
   const {
     publicKey,
     status,
@@ -116,7 +119,7 @@ export default function ManageAccountsScreen() {
   }, [loadAccounts]);
 
   const openScanner = async () => {
-    const permission = await BarCodeScanner.requestPermissionsAsync();
+    const permission = await requestCameraPermission();
     const granted = permission.status === 'granted';
     setPermissionGranted(granted);
 
@@ -132,7 +135,7 @@ export default function ManageAccountsScreen() {
     setScannerOpen(true);
   };
 
-  const handleScanned = async ({ data }: BarCodeScannerResult) => {
+  const handleScanned = async ({ data }: BarcodeScanningResult) => {
     if (scanLocked || submitting) {
       return;
     }
@@ -174,6 +177,8 @@ export default function ManageAccountsScreen() {
     // state so screens that read useWallet() (e.g. contributor profile)
     // reflect the newly linked account immediately.
     await adoptLinkedAccount(publicKey, environmentConfig.id);
+    // Re-register so the backend associates this device with the current account session.
+    void retryRegistration();
     Alert.alert(
       t('settings.manage_accounts.account_linked'),
       `${truncateKey(publicKey)} ${t('settings.manage_accounts.account_linked_message')}`,
@@ -193,8 +198,8 @@ export default function ManageAccountsScreen() {
           style: 'destructive' as const,
           onPress: () => {
             void (async () => {
-              const isConfirmed = await requireBiometricConfirmation(
-                'Confirm your identity to remove account'
+              const isConfirmed = await requireStepUpAuthentication(
+                'Confirm your identity to remove account',
               );
               if (!isConfirmed) return;
 
@@ -335,10 +340,7 @@ export default function ManageAccountsScreen() {
               accessible
               accessibilityLabel={t('wallet.reconnect.restoring')}
             >
-              <ActivityIndicator
-                color={colors.accent}
-                accessibilityLabel={t('common.loading')}
-              />
+              <ActivityIndicator color={colors.accent} accessibilityLabel={t('common.loading')} />
               <Text style={[styles.accountKey, { color: colors.textSecondary, marginLeft: 10 }]}>
                 {t('wallet.reconnect.restoring')}
               </Text>
@@ -366,17 +368,13 @@ export default function ManageAccountsScreen() {
               <Text style={[styles.helperText, { color: colors.warning }]} accessible>
                 {t('wallet.network_mismatch.message', { network: environmentLabel })}
               </Text>
-              {lastConnectedNetwork &&
-                lastConnectedNetwork !== environmentConfig.id && (
-                  <Text
-                    style={[styles.helperText, { color: colors.textSecondary }]}
-                    accessible
-                  >
-                    {t('wallet.network_mismatch.last_network_label', {
-                      network: lastConnectedNetwork,
-                    })}
-                  </Text>
-                )}
+              {lastConnectedNetwork && lastConnectedNetwork !== environmentConfig.id && (
+                <Text style={[styles.helperText, { color: colors.textSecondary }]} accessible>
+                  {t('wallet.network_mismatch.last_network_label', {
+                    network: lastConnectedNetwork,
+                  })}
+                </Text>
+              )}
               <TouchableOpacity
                 style={[styles.primaryButton, { backgroundColor: colors.warning }]}
                 onPress={reconnect}
@@ -549,10 +547,10 @@ export default function ManageAccountsScreen() {
                 </Text>
               </View>
             ) : (
-              <BarCodeScanner
-                onBarCodeScanned={handleScanned}
+              <CameraView
+                onBarcodeScanned={handleScanned}
                 style={StyleSheet.absoluteFillObject}
-                barCodeTypes={[BarCodeScanner.Constants.BarCodeType.qr]}
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
               />
             )}
 

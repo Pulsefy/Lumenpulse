@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import GrantRoundDetailClient from "./GrantRoundDetailClient";
 import type { RoundSummary } from "../components";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { clientConfig } from '@/lib/config';
+
+const API_BASE = clientConfig.apiUrl;
 
 interface GrantRoundDetailPageProps {
   params: {

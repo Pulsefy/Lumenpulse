@@ -5,6 +5,8 @@ import {
   SorobanRpcError,
 } from '../services/soroban-rpc-client.service';
 import {
+  CONTRIBUTIONS_PAUSED_MESSAGE,
+  mapContractDiagnosticToError,
   mapSorobanRpcErrorToApi,
   throwSorobanRpcError,
 } from './soroban-error.mapper';
@@ -69,6 +71,36 @@ describe('mapSorobanRpcErrorToApi', () => {
     expect(mapped.status).toBe(HttpStatus.BAD_GATEWAY);
     expect(mapped.details).toEqual({
       sorobanCode: SorobanErrorCode.SUBMISSION_FAILED,
+    });
+  });
+});
+
+describe('mapContractDiagnosticToError', () => {
+  it('maps matching-pool contribution pause to a stable user-facing error', () => {
+    const mapped = mapContractDiagnosticToError(
+      'Simulation failed: HostError: Error(Contract, #19)',
+      'matching-pool',
+    );
+
+    expect(mapped.getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE);
+    expect(mapped.getResponse()).toEqual({
+      code: ErrorCode.STEL_CONTRIBUTIONS_PAUSED,
+      message: CONTRIBUTIONS_PAUSED_MESSAGE,
+      details: { contractErrorCode: 19 },
+    });
+  });
+
+  it('keeps other matching-pool contract failures distinguishable', () => {
+    const mapped = mapContractDiagnosticToError(
+      'HostError: Error(Contract, #20)',
+      'matching-pool',
+    );
+
+    expect(mapped.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+    expect(mapped.getResponse()).toEqual({
+      code: ErrorCode.STEL_SIMULATION_FAILED,
+      message: 'HostError: Error(Contract, #20)',
+      details: { contractErrorCode: 20 },
     });
   });
 });

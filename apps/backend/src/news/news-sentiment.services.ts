@@ -4,6 +4,12 @@ import { NewsService } from './news.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { JobLockService } from '../scheduler/job-lock.service';
 import { JobHistoryService } from '../scheduler/job-history.service';
+import { config } from '../lib/config';
+import {
+  CORRELATION_ID_HEADER,
+  REQUEST_ID_HEADER,
+} from '../common/constants/request.constants';
+import { RequestContextService } from '../common/services/request-context.service';
 
 const SENTIMENT_JOB_NAME = 'news-sentiment-update';
 
@@ -25,6 +31,24 @@ export class NewsSentimentService {
       const response = await this.dataProcessing.post<SentimentApiResponse>(
         '/analyze',
         { text },
+      const baseUrl =
+        this.configService.get<string>('PYTHON_API_URL') ||
+        config.python.apiUrl;
+      const response = await firstValueFrom<
+        AxiosResponse<SentimentApiResponse>
+      >(
+        this.httpService.post<SentimentApiResponse>(
+          `${baseUrl}/analyze`,
+          {
+            text,
+          },
+          {
+            headers: {
+              [CORRELATION_ID_HEADER]: RequestContextService.getCorrelationId(),
+              [REQUEST_ID_HEADER]: RequestContextService.getRequestId(),
+            },
+          },
+        ),
       );
       return response.sentiment;
     } catch {

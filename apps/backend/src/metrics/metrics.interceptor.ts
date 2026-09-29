@@ -18,8 +18,10 @@ import { MetricsService } from './metrics.service';
  * route handled by NestJS — no per-controller decoration needed.
  *
  * Route normalisation prevents label cardinality explosion:
- *   GET /articles/123          → /articles/:id
- *   GET /articles/550e8400-…   → /articles/:id
+ *   GET /articles/123                                      → /articles/:id
+ *   GET /articles/550e8400-…                               → /articles/:id
+ *   GET /portfolio/accounts/GABC…/summary                  → /portfolio/accounts/:id/summary
+ *   GET /contracts/capabilities/CCE…                       → /contracts/capabilities/:id
  */
 @Injectable()
 export class MetricsInterceptor implements NestInterceptor {
@@ -54,24 +56,77 @@ export class MetricsInterceptor implements NestInterceptor {
    * Replace dynamic path segments with placeholders.
    * Prevents an unbounded number of time-series labels in Prometheus.
    *
+   * Every segment is inspected individually so identifiers of any shape
+   * (UUIDs, numeric IDs, Stellar wallet addresses, contract IDs, hashes and
+   * other long machine-generated tokens) collapse onto the `:id` template.
+   * Static segments — including API version prefixes such as `v1` — are kept
+   * untouched, so the resulting label set is bounded by the number of routes.
+   *
    * Examples:
-   *   /users/42/posts/7        → /users/:id/posts/:id
-   *   /orders/550e8400-e29b-…  → /orders/:id
+   *   /users/42/posts/7                                    → /users/:id/posts/:id
+   *   /orders/550e8400-e29b-…                              → /orders/:id
+   *   /v1/portfolio/accounts/GBXX…/summary                 → /v1/portfolio/accounts/:id/summary
    */
   private normalizeRoute(path: string): string {
-    const clean = path.split('?')[0]; // strip query-string
-    return (
-      clean
-        // UUIDs (8-4-4-4-12)
-        .replace(
-          /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
-          ':id',
-        )
-        // Pure numeric segments
-        .replace(/\/\d+([/?#]|$)/g, '/:id$1')
-        // Trailing slash
-        .replace(/\/$/, '') || '/'
+    // strip query-string, then normalize segment-by-segment
+    const segments = path.split('?')[0].split('/');
+    const normalized = segments.map((segment) =>
+      this.normalizeSegment(segment),
     );
+    // Collapse duplicate slashes and drop the trailing slash
+    const joined = normalized
+      .join('/')
+      .replace(/\/{2,}/g, '/')
+      .replace(/\/$/, '');
+    return joined || '/';
+  }
+
+  /**
+   * Classify a single path segment as dynamic (`:id`) or static.
+   *
+   * A segment is treated as dynamic when it is an identifier rather than a
+   * route keyword: UUIDs, numbers, Stellar StrKeys (wallet addresses, contract
+   * IDs, hashes), 64-char hex hashes, or any other long machine-generated
+   * token. The 24-char fallback acts as a hard ceiling that guarantees the
+   * `route` label cardinality stays bounded even for identifiers we have not
+   * enumerated explicitly.
+   */
+  private normalizeSegment(segment: string): string {
+    if (segment === '') {
+      return segment;
+    }
+    // API version prefixes (v1, v2, …) are static route keywords
+    if (/^v\d+$/i.test(segment)) {
+      return segment;
+    }
+    // UUIDs (8-4-4-4-12)
+    if (
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        segment,
+      )
+    ) {
+      return ':id';
+    }
+    // Pure numeric segments
+    if (/^\d+$/.test(segment)) {
+      return ':id';
+    }
+    // Stellar StrKeys — wallet public keys (G…), contract IDs (C…), muxed
+    // accounts (M…), pre-auth / hash / signed payloads (P, T, X, S…):
+    // 56-char base32 (A–Z, 2–7)
+    if (/^[GCMPTXS][A-Z2-7]{55}$/.test(segment)) {
+      return ':id';
+    }
+    // 64-char hex hashes (e.g. Soroban transaction hashes)
+    if (/^[0-9a-f]{64}$/i.test(segment)) {
+      return ':id';
+    }
+    // Final ceiling: any other long machine-generated token (>= 24 chars).
+    // 24 is safely above the longest static route keyword in this codebase.
+    if (segment.length >= 24 && /^[A-Za-z0-9._~-]+$/.test(segment)) {
+      return ':id';
+    }
+    return segment;
   }
 
   private record(

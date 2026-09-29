@@ -16,9 +16,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
 import { GrantsService } from './grants.service';
-import { getProjectReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 import {
   ApproveProjectDto,
   CreateRoundDto,
@@ -40,7 +39,7 @@ import { AdminAuditInterceptor } from '../admin-audit/interceptors/admin-audit.i
 
 @ApiTags('grants')
 @Controller('grants')
-@Throttle(getProjectReadThrottleOverride())
+@RateLimitPolicy('projectRead')
 export class GrantsController {
   constructor(private readonly grantsService: GrantsService) {}
 

@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { CROWDFUND_VAULT_QUEUE } from './crowdfund-sync.module';
+import { CROWDFUND_VAULT_QUEUE } from './crowdfund-sync.constants';
 import { CrowdfundSyncService } from './crowdfund-sync.service';
 import { SyncVaultDto } from './dto/crowdfund-sync.dto';
 

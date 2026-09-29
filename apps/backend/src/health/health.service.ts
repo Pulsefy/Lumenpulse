@@ -1,94 +1,119 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import {
-  HealthCheckResult,
-  HealthIndicatorResult,
-  HealthIndicatorService,
-} from '@nestjs/terminus';
-import { DataSource } from 'typeorm';
+import { HealthCheckResult } from '@nestjs/terminus';
 import { firstValueFrom } from 'rxjs';
+import { DataSource } from 'typeorm';
 import { CacheService } from '../cache/cache.service';
-import { StellarService } from '../stellar/stellar.service';
+import { config } from '../lib/config';
 import {
   LatencyBudgetHealthService,
   LatencyBudgetReport,
 } from './latency-budget.health.service';
 
-interface DependencyCheckResult {
-  name: string;
-  result: HealthIndicatorResult;
-  isUp: boolean;
-}
-
-interface ExternalDependencyStatus {
+export interface DependencyStatus {
   status: 'up' | 'down';
-  responseTimeMs?: number;
+  latencyMs: number;
+  critical: boolean;
   message?: string;
 }
 
-type HealthPayload = {
-  status: 'up' | 'down';
-  [key: string]: unknown;
-};
-
 export interface LumenpulseHealthReport extends HealthCheckResult {
   summary: 'healthy' | 'degraded' | 'down';
+  dependencies: Record<string, DependencyStatus>;
   latencyBudget: LatencyBudgetReport;
 }
+
+const CHECK_TIMEOUT_MS = 3000;
+const LATENCY_BUDGET_TIMEOUT_MS = 6000;
 
 @Injectable()
 export class HealthService {
   constructor(
-    private readonly healthIndicatorService: HealthIndicatorService,
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly cacheService: CacheService,
-    private readonly stellarService: StellarService,
     private readonly httpService: HttpService,
     private readonly latencyBudgetHealthService: LatencyBudgetHealthService,
   ) {}
 
   async getHealthReport(): Promise<LumenpulseHealthReport> {
-    const [database, latencyBudget, ...dependencyChecks] = await Promise.all([
-      this.checkDatabase(),
-      this.latencyBudgetHealthService.getLatencyBudgetReport(),
-      this.checkRedis(),
-      this.checkHorizon(),
-      this.checkExternalApis(),
-    ]);
+    const [database, redis, latencyBudget, coinGecko, exchangeRateApi, python] =
+      await Promise.all([
+        this.probe('database', true, () => this.dataSource.query('SELECT 1')),
+        this.probe('redis', false, () => this.cacheService.checkHealth()),
+        this.getLatencyBudget(),
+        this.probe('coinGecko', false, () =>
+          this.get('https://api.coingecko.com/api/v3/ping'),
+        ),
+        this.probe('exchangeRateApi', false, () =>
+          this.get('https://api.exchangerate-api.com/v4/latest/USD'),
+        ),
+        this.probe('python', false, () =>
+          this.get(config.python.apiUrl.replace(/\/$/, '') + '/health'),
+        ),
+      ]);
 
-    const checks = [database, ...dependencyChecks];
-    const info: Record<string, HealthPayload> = {};
-    const error: Record<string, HealthPayload> = {};
-    const details: Record<string, HealthPayload> = {};
-
-    for (const check of checks) {
-      const payload = check.result[check.name];
-      details[check.name] = payload;
-
-      if (check.isUp) {
-        info[check.name] = payload;
-      } else {
-        error[check.name] = payload;
-      }
+    const fromLatency = (name: string): DependencyStatus => {
+      const result = latencyBudget.dependencies.find(
+        (entry) => entry.name === name,
+      );
+      return {
+        status:
+          result?.state === 'ok' || result?.state === 'degraded'
+            ? 'up'
+            : 'down',
+        latencyMs: result?.latencyMs ?? LATENCY_BUDGET_TIMEOUT_MS,
+        critical: true,
+        ...(result?.message && { message: result.message }),
+      };
+    };
+    const horizon = fromLatency('horizon');
+    const sorobanRpc = fromLatency('sorobanRpc');
+    const dependencies = {
+      database,
+      redis,
+      horizon,
+      sorobanRpc,
+      python,
+      coinGecko,
+      exchangeRateApi,
+    };
+    const info: Record<
+      string,
+      { status: 'up' | 'down'; latencyMs: number; message?: string }
+    > = {};
+    const error: typeof info = {};
+    const details: typeof info = {};
+    for (const [name, dependency] of Object.entries(dependencies)) {
+      const { status, latencyMs, message } = dependency;
+      const value = { status, latencyMs, ...(message && { message }) };
+      details[name] = value;
+      (status === 'up' ? info : error)[name] = value;
     }
+    const externalApis =
+      coinGecko.status === 'up' && exchangeRateApi.status === 'up'
+        ? {
+            status: 'up' as const,
+            latencyMs: Math.max(coinGecko.latencyMs, exchangeRateApi.latencyMs),
+          }
+        : {
+            status: 'down' as const,
+            latencyMs: Math.max(coinGecko.latencyMs, exchangeRateApi.latencyMs),
+            message: 'One or more external APIs are unavailable',
+          };
+    details.externalApis = externalApis;
+    (externalApis.status === 'up' ? info : error).externalApis = externalApis;
 
-    // A hard_down latency result is treated as a critical failure (503).
-    const latencyIsHardDown = latencyBudget.overallState === 'hard_down';
-    const latencyIsDegraded = latencyBudget.overallState === 'degraded';
-
-    const status = !database.isUp || latencyIsHardDown ? 'error' : 'ok';
-
-    const summary: LumenpulseHealthReport['summary'] =
-      status === 'error'
-        ? 'down'
-        : Object.keys(error).length > 0 || latencyIsDegraded
-          ? 'degraded'
-          : 'healthy';
-
+    const hardDown = Object.values(dependencies).some(
+      (entry) => entry.critical && entry.status === 'down',
+    );
+    const degraded =
+      Object.values(dependencies).some((entry) => entry.status === 'down') ||
+      latencyBudget.overallState === 'degraded';
     return {
-      status,
-      summary,
+      status: hardDown ? 'error' : 'ok',
+      summary: hardDown ? 'down' : degraded ? 'degraded' : 'healthy',
+      dependencies,
       latencyBudget,
       info,
       error,
@@ -96,121 +121,72 @@ export class HealthService {
     };
   }
 
-  private async checkDatabase(): Promise<DependencyCheckResult> {
-    const indicator = this.healthIndicatorService.check('database');
-
+  private async probe(
+    name: string,
+    critical: boolean,
+    check: () => Promise<unknown>,
+  ): Promise<DependencyStatus> {
+    const start = Date.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await this.dataSource.query('SELECT 1');
-
-      return {
-        name: 'database',
-        result: indicator.up(),
-        isUp: true,
-      };
-    } catch (error) {
-      return {
-        name: 'database',
-        result: indicator.down({
-          message: this.getErrorMessage(error, 'Database is unavailable'),
+      const result = await Promise.race([
+        Promise.resolve().then(check),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(name + ' timed out')),
+            CHECK_TIMEOUT_MS,
+          );
         }),
-        isUp: false,
-      };
-    }
-  }
-
-  private async checkRedis(): Promise<DependencyCheckResult> {
-    const indicator = this.healthIndicatorService.check('redis');
-    const isHealthy = await this.cacheService.checkHealth();
-
-    return {
-      name: 'redis',
-      result: isHealthy
-        ? indicator.up()
-        : indicator.down({
-            message: 'Redis cache is unavailable',
-          }),
-      isUp: isHealthy,
-    };
-  }
-
-  private async checkHorizon(): Promise<DependencyCheckResult> {
-    const indicator = this.healthIndicatorService.check('horizon');
-    const isHealthy = await this.stellarService.checkHealth();
-
-    return {
-      name: 'horizon',
-      result: isHealthy
-        ? indicator.up()
-        : indicator.down({
-            message: 'Stellar Horizon is unavailable',
-          }),
-      isUp: isHealthy,
-    };
-  }
-
-  private async checkExternalApis(): Promise<DependencyCheckResult> {
-    const indicator = this.healthIndicatorService.check('externalApis');
-    const [coinGecko, exchangeRateApi] = await Promise.all([
-      this.checkExternalEndpoint('https://api.coingecko.com/api/v3/ping'),
-      this.checkExternalEndpoint(
-        'https://api.exchangerate-api.com/v4/latest/USD',
-      ),
-    ]);
-    const dependencies = { coinGecko, exchangeRateApi };
-
-    const failedDependencies = Object.entries(dependencies)
-      .filter(([, dependency]) => dependency.status === 'down')
-      .map(([name, dependency]) => ({
-        name,
-        message: dependency.message ?? 'Dependency is unavailable',
-      }));
-
-    return {
-      name: 'externalApis',
-      result:
-        failedDependencies.length === 0
-          ? indicator.up({ dependencies })
-          : indicator.down({
-              dependencies,
-              message: 'One or more external APIs are unavailable',
-              failedDependencies,
-            }),
-      isUp: failedDependencies.length === 0,
-    };
-  }
-
-  private async checkExternalEndpoint(
-    url: string,
-  ): Promise<ExternalDependencyStatus> {
-    const startedAt = Date.now();
-
-    try {
-      await firstValueFrom(
-        this.httpService.get(url, {
-          timeout: 3000,
-          headers: {
-            Accept: 'application/json',
-          },
-        }),
-      );
-
-      return {
-        status: 'up',
-        responseTimeMs: Date.now() - startedAt,
-      };
+      ]);
+      if (result === false) throw new Error(name + ' is unavailable');
+      return { status: 'up', latencyMs: Date.now() - start, critical };
     } catch (error) {
       return {
         status: 'down',
-        message: this.getErrorMessage(error, 'Request failed'),
+        latencyMs: Date.now() - start,
+        critical,
+        message:
+          error instanceof Error ? error.message : name + ' is unavailable',
       };
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 
-  private getErrorMessage(error: unknown, fallbackMessage: string): string {
-    if (error instanceof Error) {
-      return error.message;
-    }
+  private async get(url: string): Promise<void> {
+    await firstValueFrom(
+      this.httpService.get(url, { timeout: CHECK_TIMEOUT_MS }),
+    );
+  }
 
-    return fallbackMessage;
+  private async getLatencyBudget(): Promise<LatencyBudgetReport> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        this.latencyBudgetHealthService.getLatencyBudgetReport(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('Latency probes timed out')),
+            LATENCY_BUDGET_TIMEOUT_MS,
+          );
+        }),
+      ]);
+    } catch (error) {
+      return {
+        overallState: 'hard_down',
+        checkedAt: new Date().toISOString(),
+        dependencies: ['horizon', 'sorobanRpc'].map((name) => ({
+          name,
+          url: '',
+          latencyMs: LATENCY_BUDGET_TIMEOUT_MS,
+          thresholds: { degradedMs: 0, hardDownMs: LATENCY_BUDGET_TIMEOUT_MS },
+          state: 'hard_down' as const,
+          message:
+            error instanceof Error ? error.message : 'Latency probes failed',
+        })),
+      };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 }

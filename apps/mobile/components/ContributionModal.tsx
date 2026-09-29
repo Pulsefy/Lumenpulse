@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -22,9 +22,17 @@ import {
   TransactionStatus,
   validateContributionAmount,
 } from '../lib/stellar';
+import { evaluateContributionDraft } from '../lib/contribution-drafts';
+import { requireStepUpAuthentication } from '../lib/biometric-lock';
+import { isTestnetConfigReady } from '../lib/config';
+import { storage } from '../lib/storage';
+
+/** How long to wait after the last keystroke before persisting the draft. */
+const DRAFT_SAVE_DEBOUNCE_MS = 400;
 
 interface ContributionModalProps {
   visible: boolean;
+  projectId: number;
   projectName: string;
   onClose: () => void;
   onSubmit: (amount: string) => Promise<{ transactionHash?: string; errorMessage?: string }>;
@@ -32,6 +40,7 @@ interface ContributionModalProps {
 
 export default function ContributionModal({
   visible,
+  projectId,
   projectName,
   onClose,
   onSubmit,
@@ -40,10 +49,14 @@ export default function ContributionModal({
   const { t } = useLocalization();
   const router = useRouter();
   const inputRef = useRef<TextInput>(null);
+  const draftLoadRequestIdRef = useRef(0);
 
   const [amount, setAmount] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<TransactionStatus>('idle');
+  const [draftRestored, setDraftRestored] = useState(false);
+  /** Set once a confirmed contribution consumes the draft. */
+  const draftConsumedRef = useRef(false);
 
   const sanitizeContributionAmount = (text: string) => {
     const cleaned = text.replace(/[^0-9.\-]/g, '');
@@ -86,11 +99,91 @@ export default function ContributionModal({
     isSubmitting || !trimmedAmount || Boolean(validateContributionAmount(trimmedAmount));
 
   const handleShow = useCallback(() => {
+    const requestId = ++draftLoadRequestIdRef.current;
+
+    setTxStatus('idle');
+    setDraftRestored(false);
+    draftConsumedRef.current = false;
     setAmount('');
     setValidationError(null);
-    setTxStatus('idle');
-    setTimeout(() => inputRef.current?.focus(), 300);
-  }, []);
+
+    // Restore a saved draft for this project, if one exists. Restoration
+    // only prefills the amount — the user must still review and confirm
+    // explicitly; nothing is ever submitted automatically.
+    void (async () => {
+      try {
+        const stored = await storage.getContributionDraft();
+
+        if (requestId !== draftLoadRequestIdRef.current) {
+          return;
+        }
+        if (!stored || stored.projectId !== projectId) {
+          return;
+        }
+
+        const evaluation = evaluateContributionDraft(stored, {
+          isTestnetConfigReady: isTestnetConfigReady(),
+          isValidAmount: validateContributionAmount,
+        });
+        if (!evaluation.resumable) {
+          return;
+        }
+
+        setAmount(stored.amount);
+        setDraftRestored(true);
+      } catch {
+        // Draft restore is best-effort — fall back to an empty form.
+      } finally {
+        if (requestId === draftLoadRequestIdRef.current) {
+          setTimeout(() => inputRef.current?.focus(), 300);
+        }
+      }
+    })();
+  }, [projectId]);
+
+  // Persist (or drop) the draft as the amount changes. A debounced write
+  // keeps typing smooth while guaranteeing the draft survives an app restart.
+  useEffect(() => {
+    const persistDraft = () =>
+      storage.storeContributionDraft({
+        projectId,
+        amount: amount.trim(),
+        savedAt: new Date().toISOString(),
+      });
+
+    if (!visible || txStatus === 'submitting') {
+      // Dismissed mid-typing (before the debounced write fired): flush now so
+      // nothing the user entered is lost. After a confirmed contribution the
+      // draft was already consumed and must NOT be resurrected here.
+      if (!visible && txStatus !== 'submitting' && !draftConsumedRef.current && amount.trim()) {
+        void persistDraft();
+      }
+      return;
+    }
+
+    const trimmedAmount = amount.trim();
+    if (!trimmedAmount) {
+      // Drop immediately (not debounced) so an emptied field can never
+      // silently resurrect an old draft after a quick dismissal. Only this
+      // project's draft is touched — typing nothing here must not wipe
+      // another project's saved draft.
+      void storage.getContributionDraft().then((existing) => {
+        if (!existing || existing.projectId === projectId) {
+          return storage.clearContributionDraft();
+        }
+        return undefined;
+      });
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      if (!draftConsumedRef.current) {
+        void persistDraft();
+      }
+    }, DRAFT_SAVE_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [amount, visible, projectId, txStatus]);
 
   const handleConfirm = async () => {
     Keyboard.dismiss();
@@ -102,11 +195,25 @@ export default function ContributionModal({
     }
 
     try {
+      const authenticated = await requireStepUpAuthentication(
+        t('contribution_modal.confirm_biometric_prompt', { defaultValue: 'Authenticate to confirm contribution' })
+      );
+      if (!authenticated) {
+        return;
+      }
+
       setTxStatus('submitting');
-      setTxError(null);
 
       const result = await onSubmit(amount.trim());
       const timestamp = new Date().toISOString();
+
+      // A confirmed contribution no longer needs its draft; failed or
+      // rejected attempts keep it so the user can resume later.
+      if (result.transactionHash) {
+        draftConsumedRef.current = true;
+        await storage.clearContributionDraft();
+        setDraftRestored(false);
+      }
 
       onClose();
 
@@ -194,6 +301,19 @@ export default function ContributionModal({
                   {projectName}
                 </Text>
 
+                {draftRestored && (
+                  <View
+                    style={styles.draftNoticeRow}
+                    accessible
+                    accessibilityLabel={t('contribution_draft.restored_notice')}
+                  >
+                    <Ionicons name="save-outline" size={14} color={colors.textSecondary} />
+                    <Text style={[styles.draftNoticeText, { color: colors.textSecondary }]}>
+                      {t('contribution_draft.restored_notice')}
+                    </Text>
+                  </View>
+                )}
+
                 <View
                   style={[
                     styles.inputWrapper,
@@ -212,6 +332,7 @@ export default function ContributionModal({
                   <TextInput
                     ref={inputRef}
                     style={[styles.amountInput, { color: colors.text }]}
+                    testID="contribution-amount-input"
                     placeholder="0.00"
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="decimal-pad"
@@ -336,6 +457,18 @@ const styles = StyleSheet.create({
   projectLabel: {
     fontSize: 14,
     marginBottom: 20,
+  },
+  draftNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: -12,
+    marginBottom: 14,
+  },
+  draftNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
   },
   inputWrapper: {
     flexDirection: 'row',

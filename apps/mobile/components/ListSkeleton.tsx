@@ -1,9 +1,9 @@
 import { View } from 'react-native';
 
-export default function ListSkeleton() {
+export default function ListSkeleton({ count = 5 }: { count?: number }) {
   return (
     <View style={{ padding: 16 }}>
-      {[...Array(5)].map((_, i) => (
+      {[...Array(count)].map((_, i) => (
         <View
           key={i}
           style={{

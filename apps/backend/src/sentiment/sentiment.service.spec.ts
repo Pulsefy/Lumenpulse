@@ -5,6 +5,53 @@ import {
   DataProcessingClientService,
 } from '../data-processing/data-processing-client.service';
 import { SentimentService } from './sentiment.service';
+import { AxiosError } from 'axios';
+import { Logger } from '@nestjs/common';
+import { RequestContextService } from '../common/services/request-context.service';
+
+jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+
+// Simple solution: Mock console methods to silence them
+global.console.error = jest.fn();
+global.console.warn = jest.fn();
+global.console.log = jest.fn();
+global.console.debug = jest.fn();
+
+// Helper to create proper AxiosError instances for testing
+const createMockAxiosError = (options: {
+  response?: {
+    data?: { detail?: string };
+    status?: number;
+    statusText?: string;
+    headers?: Record<string, string>;
+    config?: unknown;
+  };
+  code?: string;
+  message?: string;
+  isAxiosError?: boolean;
+  config?: unknown;
+}): AxiosError => {
+  const error = new Error(options.message) as AxiosError;
+
+  // Set all required AxiosError properties
+  Object.assign(error, {
+    isAxiosError: options.isAxiosError ?? true,
+    code: options.code,
+    response: options.response,
+    config: options.config || {},
+    name: 'AxiosError',
+    toJSON: () => ({
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+      config: error.config,
+      code: error.code,
+      status: options.response?.status,
+    }),
+  });
+
+  return error;
+};
 
 describe('SentimentService', () => {
   let service: SentimentService;
@@ -44,6 +91,100 @@ describe('SentimentService', () => {
     );
     expect(dataProcessing.post).not.toHaveBeenCalled();
   });
+  describe('analyzeSentiment', () => {
+    const mockSuccessResponse = {
+      data: { sentiment: 0.85 },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {},
+    };
+
+    beforeEach(() => {
+      mockConfigService.get.mockReturnValue('http://localhost:8000');
+    });
+
+    it('should successfully analyze sentiment with valid text', async () => {
+      const text = 'This is absolutely amazing!';
+      mockHttpService.post.mockReturnValue(of(mockSuccessResponse));
+
+      const result = await service.analyzeSentiment(text);
+
+      expect(result).toEqual({ sentiment: 0.85 });
+      expect(mockHttpService.post).toHaveBeenCalledWith(
+        'http://localhost:8000/analyze',
+        { text },
+        {
+          timeout: 10000,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Correlation-ID': 'unknown',
+            'X-Request-Id': 'unknown',
+          },
+        },
+      );
+    });
+
+    it('should propagate active correlation ID in request headers', async () => {
+      const text = 'Testing correlation propagation';
+      mockHttpService.post.mockReturnValue(of(mockSuccessResponse));
+
+      await RequestContextService.run(
+        { correlationId: 'corr-sentiment-123' },
+        async () => {
+          await service.analyzeSentiment(text);
+        },
+      );
+
+      expect(mockHttpService.post).toHaveBeenCalledWith(
+        'http://localhost:8000/analyze',
+        { text },
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'X-Correlation-ID': 'corr-sentiment-123',
+            'X-Request-Id': 'corr-sentiment-123',
+          }),
+        }),
+      );
+    });
+
+    it('should throw HttpException when text is empty', async () => {
+      const text = '';
+
+      await expect(service.analyzeSentiment(text)).rejects.toThrow(
+        HttpException,
+      );
+      await expect(service.analyzeSentiment(text)).rejects.toThrow(
+        'Text cannot be empty',
+      );
+    });
+
+    it('should throw HttpException when text is only whitespace', async () => {
+      const text = '   ';
+
+      await expect(service.analyzeSentiment(text)).rejects.toThrow(
+        HttpException,
+      );
+      await expect(service.analyzeSentiment(text)).rejects.toThrow(
+        'Text cannot be empty',
+      );
+    });
+
+    it('should handle Python API error response', async () => {
+      const text = 'Test text';
+      const mockError = createMockAxiosError({
+        response: {
+          data: { detail: 'Invalid text format' },
+          status: 400,
+          statusText: 'Bad Request',
+          headers: {},
+          config: {},
+        },
+        message: 'Request failed with status code 400',
+        isAxiosError: true,
+      });
+
+      mockHttpService.post.mockReturnValue(throwError(() => mockError));
 
   it('preserves upstream validation errors', async () => {
     dataProcessing.post.mockRejectedValue(
@@ -109,6 +250,55 @@ describe('SentimentService', () => {
     await expect(service.checkHealth()).resolves.toEqual(health);
     expect(dataProcessing.get).toHaveBeenCalledWith('/health', {
       timeoutMs: 5_000,
+    beforeEach(() => {
+      mockConfigService.get.mockReturnValue('http://localhost:8000');
+    });
+
+    it('should return health status when Python API is healthy', async () => {
+      mockHttpService.get.mockReturnValue(of(mockHealthResponse));
+
+      const result = await service.checkHealth();
+
+      expect(result).toEqual(mockHealthResponse.data);
+      expect(mockHttpService.get).toHaveBeenCalledWith(
+        'http://localhost:8000/health',
+        {
+          timeout: 5000,
+          headers: {
+            'X-Correlation-ID': 'unknown',
+            'X-Request-Id': 'unknown',
+          },
+        },
+      );
+    });
+
+    it('should throw HttpException when Python API health check fails', async () => {
+      const mockError = createMockAxiosError({
+        message: 'Connection failed',
+        isAxiosError: true,
+      });
+
+      mockHttpService.get.mockReturnValue(throwError(() => mockError));
+
+      await expect(service.checkHealth()).rejects.toThrow(HttpException);
+      await expect(service.checkHealth()).rejects.toThrow(
+        'Python sentiment service is unhealthy',
+      );
+    });
+
+    it('should handle timeout during health check', async () => {
+      const mockError = createMockAxiosError({
+        code: 'ECONNABORTED',
+        message: 'Request timeout',
+        isAxiosError: true,
+      });
+
+      mockHttpService.get.mockReturnValue(throwError(() => mockError));
+
+      await expect(service.checkHealth()).rejects.toThrow(HttpException);
+      await expect(service.checkHealth()).rejects.toThrow(
+        'Python sentiment service is unhealthy',
+      );
     });
   });
 

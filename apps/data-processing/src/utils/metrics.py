@@ -113,6 +113,34 @@ CACHE_HIT_RATE = Gauge(
     ["namespace"],
 )
 
+# ── Feature-store schema versioning & drift (#1239) ─────────────────────────
+FEATURE_DRIFT_PSI = Gauge(
+    "lumenpulse_feature_drift_psi",
+    "Population Stability Index between the training-time baseline and the "
+    "current serving distribution, per feature",
+    ["feature_set", "feature"],
+)
+
+FEATURE_DRIFT_ALERTS_TOTAL = Counter(
+    "lumenpulse_feature_drift_alerts_total",
+    "Total number of training-vs-serving feature drift alerts raised",
+    ["feature_set", "reason"],  # reason: distribution | schema_version | schema_fingerprint
+)
+
+FEATURE_SCHEMA_MISMATCH_TOTAL = Counter(
+    "lumenpulse_feature_schema_mismatch_total",
+    "Total number of times serving detected a feature schema version mismatch "
+    "against the version a model was trained on",
+    ["feature_set"],
+)
+
+# ── Backend notification delivery of drift alerts (#1447) ───────────────
+DRIFT_ALERTS_DELIVERED_TOTAL = Counter(
+    "lumenpulse_drift_alerts_delivered_total",
+    "Total number of drift alerts accepted by the backend notification service",
+    ["alert_type", "outcome"],  # outcome: delivered | spooled | suppressed
+)
+
 
 def start_metrics_server(port: int = 9090):
     """Start standalone prometheus metrics server (for background workers)"""

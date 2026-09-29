@@ -29,15 +29,30 @@ class AlertSuppressionEngine:
         self,
         rules: Optional[List[SuppressionRule]] = None,
         storage_path: Optional[str] = None,
+        dry_run: bool = False,
     ):
         self._rules = rules if rules is not None else load_rules_from_yaml()
-        store_path = storage_path or os.getenv(
+        # Use in‑memory store when dry_run is True
+        store_path = None if dry_run else (storage_path or os.getenv(
             "ALERT_SUPPRESSION_STORE_PATH",
             "./data/alert_suppression.json",
-        )
+        ))
         self._store = SuppressionStore(storage_path=store_path)
         self._suppressions_total = 0
         self._emissions_total = 0
+        self._dry_run = dry_run
+
+    def evaluate_dry_run(self, alerts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Run a dry‑run evaluation against historical alerts.
+
+        Returns the list of alerts that would be emitted, applying suppression
+        and deduplication logic. The internal store is in‑memory only and not
+        persisted.
+        """
+        # Create a temporary engine with the same rules but in‑memory store
+        temp_engine = AlertSuppressionEngine(rules=self._rules, dry_run=True)
+        return temp_engine.evaluate_batch(alerts)
+
 
     def evaluate(self, alert: Dict[str, Any]) -> SuppressionDecision:
         now = datetime.now(timezone.utc)

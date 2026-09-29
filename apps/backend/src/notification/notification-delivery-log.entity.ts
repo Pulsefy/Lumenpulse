@@ -16,6 +16,7 @@ export enum DeliveryStatus {
   SENT = 'sent',
   DELIVERED = 'delivered',
   FAILED = 'failed',
+  PERMANENT_FAILURE = 'permanent_failure',
   SKIPPED = 'skipped',
 }
 

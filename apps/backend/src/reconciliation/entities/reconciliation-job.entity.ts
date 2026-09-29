@@ -12,6 +12,8 @@ export enum ReconciliationStatus {
   FAILED = 'failed',
 }
 
+export type DriftSeverity = 'none' | 'warning' | 'critical';
+
 export interface DriftRecord {
   userId: string;
   assetCode: string;
@@ -20,6 +22,7 @@ export interface DriftRecord {
   upstreamAmount: string;
   delta: string;
   repaired: boolean;
+  severity: DriftSeverity;
 }
 
 @Entity('reconciliation_jobs')

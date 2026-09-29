@@ -23,9 +23,11 @@ class SuppressionRecord:
 
 
 class SuppressionStore:
-    def __init__(self, storage_path: str = "./data/alert_suppression.json"):
-        self.storage_path = Path(storage_path)
-        self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+    def __init__(self, storage_path: Optional[str] = "./data/alert_suppression.json"):
+        # If storage_path is None, operate purely in‑memory without persisting to disk.
+        self.storage_path = Path(storage_path) if storage_path is not None else None
+        if self.storage_path is not None:
+            self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         self._records: Dict[str, SuppressionRecord] = {}
         self._load()
 
@@ -46,6 +48,13 @@ class SuppressionStore:
 
     def get(self, dedup_key: str) -> Optional[SuppressionRecord]:
         return self._records.get(dedup_key)
+
+    def replace_records(self, raw: Dict[str, Dict[str, Any]]) -> None:
+        """Replace all records from a plain-dict snapshot (rollback helper)."""
+        self._records = {
+            key: SuppressionRecord(**data) for key, data in raw.items()
+        }
+        self._save()
 
     def record_emitted(self, dedup_key: str, rule_name: str, alert: Dict[str, Any]) -> SuppressionRecord:
         now = datetime.now(timezone.utc).isoformat()

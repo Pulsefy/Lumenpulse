@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X, Check, Loader2, AlertCircle, ExternalLink, Copy, CheckCheck } from "lucide-react";
 import { useState } from "react";
 import { getExplorerUrl } from "@/lib/utils";
+import { getContributionErrorMessage } from "@/lib/contribution-pause";
 
 export interface TransactionReceiptModalProps {
   isOpen: boolean;
@@ -40,6 +41,7 @@ export function TransactionReceiptModal({
 
   const isError = status === "error";
   const isPending = status === "pending";
+  const displayErrorMessage = getContributionErrorMessage(errorMessage);
 
   const iconBg = isError
     ? "bg-red-500/20 text-red-400"
@@ -54,7 +56,7 @@ export function TransactionReceiptModal({
     : "Contribution Confirmed!";
 
   const description = isError
-    ? (errorMessage ?? "The transaction could not be completed. Please try again.")
+    ? (displayErrorMessage ?? "The transaction could not be completed. Please try again.")
     : isPending
     ? "Your Stellar transaction is currently being processed on the network."
     : `You have successfully contributed to Project #${projectId}.`;

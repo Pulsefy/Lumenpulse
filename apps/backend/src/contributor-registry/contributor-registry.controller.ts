@@ -18,11 +18,7 @@ import {
   ApiTags,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
-import {
-  getRegistryReadThrottleOverride,
-  getRegistryWriteThrottleOverride,
-} from '../common/rate-limit/rate-limit.config';
+import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ContractAdminGuard } from '../common/guards/contract-admin.guard';
 import { ContractAdminAuditService } from '../contract-admin/contract-admin-audit.service';
@@ -69,7 +65,7 @@ export class ContributorRegistryController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @Throttle(getRegistryWriteThrottleOverride())
+  @RateLimitPolicy('contractSimulation')
   @UseGuards(JwtAuthGuard, ContractAdminGuard)
   @Roles(UserRole.ADMIN)
   @AuditBlockchainAction({ contractField: 'address' })
@@ -126,7 +122,7 @@ export class ContributorRegistryController {
 
   @Post('register-with-sig')
   @HttpCode(HttpStatus.CREATED)
-  @Throttle(getRegistryWriteThrottleOverride())
+  @RateLimitPolicy('contractSimulation')
   @UseGuards(JwtAuthGuard, ContractAdminGuard)
   @Roles(UserRole.ADMIN)
   @AuditBlockchainAction({ contractField: 'address' })
@@ -186,7 +182,7 @@ export class ContributorRegistryController {
   // ── Lookups (Public - No Auth Required) ───────────────────────────────────
 
   @Get('wallet/:address')
-  @Throttle(getRegistryReadThrottleOverride())
+  @RateLimitPolicy('contractSimulation')
   @ApiOperation({
     summary: 'Look up contributor by Stellar wallet address',
     description:
@@ -210,7 +206,7 @@ export class ContributorRegistryController {
   }
 
   @Get('github/:handle')
-  @Throttle(getRegistryReadThrottleOverride())
+  @RateLimitPolicy('contractSimulation')
   @ApiOperation({
     summary: 'Look up contributor by GitHub handle',
     description:
@@ -236,7 +232,7 @@ export class ContributorRegistryController {
   // ── Reputation (Public - No Auth Required) ──────────────────────────────
 
   @Get('reputation/:address')
-  @Throttle(getRegistryReadThrottleOverride())
+  @RateLimitPolicy('contractSimulation')
   @ApiOperation({
     summary: 'Read contributor reputation score and tier',
     description:
@@ -263,7 +259,7 @@ export class ContributorRegistryController {
   // ── Nonce (Public - No Auth Required) ────────────────────────────────────
 
   @Get('nonce/:address')
-  @Throttle(getRegistryReadThrottleOverride())
+  @RateLimitPolicy('contractSimulation')
   @ApiOperation({
     summary: 'Get registration nonce for off-chain signing',
     description:
