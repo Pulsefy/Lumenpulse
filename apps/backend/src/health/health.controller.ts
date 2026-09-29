@@ -16,9 +16,11 @@ import { ContractHealthService } from './contract-health.service';
 import { DeploymentSmokeService } from './deployment-smoke.service';
 import { HealthService } from './health.service';
 import { ShutdownService } from './shutdown.service';
+import { SkipResponseEnvelope } from '../common/decorators/skip-response-envelope.decorator';
 
 @ApiTags('health')
 @Controller()
+@SkipResponseEnvelope()
 export class HealthController {
   constructor(
     private readonly healthService: HealthService,

@@ -22,6 +22,10 @@ export const REQUEST_ID_RESPONSE_HEADER = 'X-Request-Id';
 /** Component names for the shared error schemas. */
 export const ERROR_RESPONSE_SCHEMA = 'ErrorResponseDto';
 
+/** Component names for the shared success envelope schemas. */
+export const SUCCESS_RESPONSE_SCHEMA = 'ApiResponseDto';
+export const PAGINATED_RESPONSE_SCHEMA = 'PaginatedResponseDto';
+
 /** HTTP methods that go through the idempotency interceptor. */
 export const IDEMPOTENT_METHODS = ['post', 'put', 'patch', 'delete'] as const;
 

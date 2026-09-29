@@ -21,6 +21,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
+import { SkipResponseEnvelope } from '../common/decorators/skip-response-envelope.decorator';
 
 class SendAlertDto {
   @ApiProperty({
@@ -39,6 +40,7 @@ class SendAlertDto {
 
 @ApiTags('telegram-bot')
 @Controller('telegram-bot')
+@SkipResponseEnvelope()
 export class TelegramBotController {
   private readonly logger = new Logger(TelegramBotController.name);
 

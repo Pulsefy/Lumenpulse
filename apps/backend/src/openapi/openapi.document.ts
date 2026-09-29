@@ -10,6 +10,12 @@ import {
   WEBHOOK_SIGNATURE_SECURITY_SCHEME,
 } from './openapi.constants';
 import { ErrorDetailDto, ErrorResponseDto } from './error-response.dto';
+import {
+  ApiResponseDto,
+  ApiResponseMetaDto,
+  PaginatedResponseDto,
+  PaginationMetaDto,
+} from '../common/dto/api-response.dto';
 
 type OperationObject = OpenAPIObject['paths'][string]['get'] & object;
 type ResponsesObject = OperationObject['responses'];
@@ -35,6 +41,19 @@ const API_DESCRIPTION = `Comprehensive API documentation for LumenPulse - A dece
 - **${JWT_SECURITY_SCHEME}**: \`Authorization: Bearer <jwt>\` obtained from \`POST /auth/login\`. Required on every operation that lists it under *security*.
 - **${API_KEY_SECURITY_SCHEME}**: \`X-API-Key: <key>\` for trusted service callers (contract admin operations).
 - **${WEBHOOK_SIGNATURE_SECURITY_SCHEME}**: HMAC signature headers on inbound webhook deliveries; see the individual operations for the timestamp and nonce headers they also require.
+
+## Response Envelope
+Every 2xx response body is wrapped in a standard envelope:
+\`\`\`json
+{
+  "data": <payload>,
+  "meta": {
+    "requestId": "uuid",
+    "timestamp": "ISO-8601"
+  }
+}
+\`\`\`
+Paginated list endpoints additionally include \`pagination: { page, limit, total, totalPages }\`. 204 No Content responses have no body. Health and metrics endpoints are exempt.
 
 ## Idempotency
 Every \`POST\`, \`PUT\`, \`PATCH\` and \`DELETE\` accepts an optional \`${IDEMPOTENCY_KEY_HEADER}\` header. A repeated key with the same body replays the stored response for 24h; the same key with a different body returns **422**; a key still executing after the wait window returns **409**.
@@ -113,7 +132,14 @@ export function buildSwaggerConfig(): Omit<OpenAPIObject, 'paths'> {
  */
 export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
   const document = SwaggerModule.createDocument(app, buildSwaggerConfig(), {
-    extraModels: [ErrorResponseDto, ErrorDetailDto],
+    extraModels: [
+      ErrorResponseDto,
+      ErrorDetailDto,
+      ApiResponseDto,
+      ApiResponseMetaDto,
+      PaginatedResponseDto,
+      PaginationMetaDto,
+    ],
     operationIdFactory: (controllerKey, methodKey) =>
       `${controllerKey}_${methodKey}`,
   });

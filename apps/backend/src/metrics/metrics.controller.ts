@@ -12,6 +12,7 @@ import { MetricsService } from './metrics.service';
 import { IpAllowlistGuard } from './ip-allowlist.guard';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ErrorCode } from '../common/enums/error-code.enum';
+import { SkipResponseEnvelope } from '../common/decorators/skip-response-envelope.decorator';
 
 /**
  * Controller for exposing application metrics
@@ -20,6 +21,7 @@ import { ErrorCode } from '../common/enums/error-code.enum';
 @ApiTags('metrics')
 @Controller('metrics')
 @UseGuards(IpAllowlistGuard)
+@SkipResponseEnvelope()
 export class MetricsController {
   private readonly logger = new Logger(MetricsController.name);
 
