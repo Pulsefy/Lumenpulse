@@ -1,8 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
-import { AxiosResponse } from 'axios';
-import { firstValueFrom } from 'rxjs';
+import { DataProcessingClientService } from '../data-processing/data-processing-client.service';
 import { NewsService } from './news.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { JobLockService } from '../scheduler/job-lock.service';
@@ -10,33 +7,26 @@ import { JobHistoryService } from '../scheduler/job-history.service';
 
 const SENTIMENT_JOB_NAME = 'news-sentiment-update';
 
-interface SentimentApiResponse {
-  sentiment: number;
-}
+interface SentimentApiResponse { sentiment: number }
 
 @Injectable()
 export class NewsSentimentService {
   private readonly logger = new Logger(NewsSentimentService.name);
 
   constructor(
-    private readonly httpService: HttpService,
+    private readonly dataProcessing: DataProcessingClientService,
     private readonly newsService: NewsService,
-    private readonly configService: ConfigService,
     private readonly jobLock: JobLockService,
     private readonly jobHistory: JobHistoryService,
   ) {}
 
   async analyzeSentiment(text: string): Promise<number | null> {
     try {
-      const baseUrl = this.configService.get<string>('PYTHON_SERVICE_URL');
-      const response = await firstValueFrom<
-        AxiosResponse<SentimentApiResponse>
-      >(
-        this.httpService.post<SentimentApiResponse>(`${baseUrl}/analyze`, {
-          text,
-        }),
+      const response = await this.dataProcessing.post<SentimentApiResponse>(
+        '/analyze',
+        { text },
       );
-      return response.data.sentiment;
+      return response.sentiment;
     } catch {
       // Non-blocking: return null if service is down
       this.logger.error('Sentiment service unavailable');

@@ -455,6 +455,8 @@ const envSchema = z
     STELLAR_CONTRACT_TREASURY: z.string().trim().optional(),
     STELLAR_CONTRACT_VESTING_WALLET: z.string().trim().optional(),
 
+    DATA_PROCESSING_URL: z.string().trim().optional(),
+    DATA_PROCESSING_API_KEY: z.string().trim().optional(),
     PYTHON_API_URL: z.string().trim().default('http://localhost:8000'),
     PYTHON_SERVICE_URL: z.string().trim().optional(),
     PYTHON_API_KEY: z.string().trim().optional(),
@@ -900,10 +902,18 @@ const optionalSummary = [
   ],
   ['PYTHON_API_URL', parsedEnv.PYTHON_API_URL],
   [
+    'DATA_PROCESSING_URL',
+    parsedEnv.DATA_PROCESSING_URL ?? '(defaults to PYTHON_API_URL)',
+  ],
+  [
     'PYTHON_SERVICE_URL',
     parsedEnv.PYTHON_SERVICE_URL ?? '(defaults to PYTHON_API_URL)',
   ],
   ['PYTHON_API_KEY', parsedEnv.PYTHON_API_KEY ? '[REDACTED]' : '(not set)'],
+  [
+    'DATA_PROCESSING_API_KEY',
+    parsedEnv.DATA_PROCESSING_API_KEY ? '[REDACTED]' : '(defaults to PYTHON_API_KEY)',
+  ],
   ['COINDESK_API_KEY', parsedEnv.COINDESK_API_KEY ? '[REDACTED]' : '(not set)'],
   ['JWT_EXPIRES_IN', parsedEnv.JWT_EXPIRES_IN],
   ['DOMAIN', parsedEnv.DOMAIN],
@@ -1089,9 +1099,12 @@ export const config = Object.freeze({
     domain: parsedEnv.DOMAIN,
   }),
   python: Object.freeze({
-    apiUrl: parsedEnv.PYTHON_API_URL,
-    serviceUrl: parsedEnv.PYTHON_SERVICE_URL || parsedEnv.PYTHON_API_URL,
-    apiKey: parsedEnv.PYTHON_API_KEY,
+    apiUrl: parsedEnv.DATA_PROCESSING_URL || parsedEnv.PYTHON_API_URL,
+    serviceUrl:
+      parsedEnv.DATA_PROCESSING_URL ||
+      parsedEnv.PYTHON_SERVICE_URL ||
+      parsedEnv.PYTHON_API_URL,
+    apiKey: parsedEnv.DATA_PROCESSING_API_KEY || parsedEnv.PYTHON_API_KEY,
   }),
   apiKeys: Object.freeze({
     coindesk: parsedEnv.COINDESK_API_KEY,

@@ -1,8 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
-import { firstValueFrom } from 'rxjs';
-import { AxiosError } from 'axios';
+import { DataProcessingClientService } from '../data-processing/data-processing-client.service';
 
 export interface RetrainResult {
   status: string;
@@ -22,23 +19,8 @@ export interface ModelStatusResult {
 @Injectable()
 export class ModelRetrainingService {
   private readonly logger = new Logger(ModelRetrainingService.name);
-  private readonly pythonApiUrl: string;
-  private readonly apiKey: string;
 
-  constructor(
-    private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
-  ) {
-    this.pythonApiUrl = this.configService.get<string>(
-      'PYTHON_API_URL',
-      'http://localhost:8000',
-    );
-    this.apiKey = this.configService.get<string>('PYTHON_API_KEY', '');
-  }
-
-  private get headers() {
-    return this.apiKey ? { 'X-API-Key': this.apiKey } : {};
-  }
+  constructor(private readonly dataProcessing: DataProcessingClientService) {}
 
   /**
    * Trigger a retraining run on the Python service.
@@ -47,21 +29,20 @@ export class ModelRetrainingService {
   async triggerRetraining(force = false): Promise<RetrainResult> {
     try {
       this.logger.log(`Triggering model retraining (force=${force})`);
-      const response = await firstValueFrom(
-        this.httpService.post<RetrainResult>(
-          `${this.pythonApiUrl}/retrain`,
-          { force },
-          { headers: this.headers, timeout: 300_000 }, // 5 min timeout
-        ),
+      const result = await this.dataProcessing.post<RetrainResult>(
+        '/retrain',
+        { force },
+        { timeoutMs: 300_000, maxRetries: 0 },
       );
       this.logger.log(
-        `Retraining completed: status=${response.data.status} ` +
-          `duration=${response.data.duration_seconds?.toFixed(1)}s`,
+        `Retraining completed: status=${result.status} ` +
+          `duration=${result.duration_seconds?.toFixed(1)}s`,
       );
-      return response.data;
+      return result;
     } catch (err) {
-      const msg = err instanceof AxiosError ? err.message : String(err);
-      this.logger.error(`Retraining request failed: ${msg}`);
+      this.logger.error(
+        `Retraining request failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       throw err;
     }
   }
@@ -71,16 +52,14 @@ export class ModelRetrainingService {
    */
   async getModelStatus(): Promise<ModelStatusResult> {
     try {
-      const response = await firstValueFrom(
-        this.httpService.get<ModelStatusResult>(
-          `${this.pythonApiUrl}/model/status`,
-          { headers: this.headers, timeout: 10_000 },
-        ),
+      return await this.dataProcessing.get<ModelStatusResult>(
+        '/model/status',
+        { timeoutMs: 10_000 },
       );
-      return response.data;
     } catch (err) {
-      const msg = err instanceof AxiosError ? err.message : String(err);
-      this.logger.error(`Model status request failed: ${msg}`);
+      this.logger.error(
+        `Model status request failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       throw err;
     }
   }

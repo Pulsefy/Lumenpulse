@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { HttpModule } from '@nestjs/axios';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ReadModelRebuildController } from './read-model-rebuild.controller';
 import { ReadModelRebuildService } from './read-model-rebuild.service';
@@ -9,6 +8,7 @@ import { ReadModelRebuildJob } from './entities/read-model-rebuild-job.entity';
 import { SchedulerModule } from '../scheduler/scheduler.module';
 import { AdminAuditModule } from '../admin-audit/admin-audit.module';
 import { AuthModule } from '../auth/auth.module';
+import { DataProcessingModule } from '../data-processing/data-processing.module';
 
 @Module({
   imports: [
@@ -17,10 +17,7 @@ import { AuthModule } from '../auth/auth.module';
     SchedulerModule,
     AdminAuditModule,
     AuthModule,
-    HttpModule.register({
-      timeout: 300000, // 5 minutes for long-running rebuilds
-      maxRedirects: 5,
-    }),
+    DataProcessingModule,
   ],
   controllers: [ReadModelRebuildController],
   providers: [ReadModelRebuildService, ReadModelRebuildScheduler],

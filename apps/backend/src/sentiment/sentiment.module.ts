@@ -1,18 +1,9 @@
 import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios';
 import { SentimentService } from './sentiment.service';
-import { ConfigModule } from '@nestjs/config';
+import { DataProcessingModule } from '../data-processing/data-processing.module';
 
 @Module({
-  imports: [
-    HttpModule.registerAsync({
-      useFactory: () => ({
-        timeout: 10000,
-        maxRedirects: 5,
-      }),
-    }),
-    ConfigModule,
-  ],
+  imports: [DataProcessingModule],
   providers: [SentimentService],
   exports: [SentimentService],
 })

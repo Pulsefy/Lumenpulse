@@ -1,8 +1,8 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
-import { ConfigService } from '@nestjs/config';
-import { AxiosError } from 'axios';
+import {
+  DataProcessingClientError,
+  DataProcessingClientService,
+} from '../data-processing/data-processing-client.service';
 
 export interface SentimentRequest {
   text: string;
@@ -18,65 +18,11 @@ export interface HealthResponse {
   service: string;
 }
 
-interface PythonApiErrorResponse {
-  detail?: string;
-  [key: string]: unknown;
-}
-
-interface HttpErrorResponse {
-  data?: PythonApiErrorResponse;
-  status?: number;
-}
-
-// Helper function to check if an error is an AxiosError
-function isAxiosError(error: unknown): error is AxiosError {
-  return (
-    error instanceof AxiosError ||
-    (typeof error === 'object' &&
-      error !== null &&
-      'isAxiosError' in error &&
-      (error as { isAxiosError?: boolean }).isAxiosError === true)
-  );
-}
-
-// Helper function to check if error has response data
-function hasResponseData(
-  error: unknown,
-): error is { response?: HttpErrorResponse } {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'response' in error &&
-    typeof (error as { response?: unknown }).response === 'object'
-  );
-}
-
-// Helper function to check if error has code property
-function hasErrorCode(error: unknown): error is { code?: string } {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    typeof (error as { code?: unknown }).code === 'string'
-  );
-}
-
 @Injectable()
 export class SentimentService {
   private readonly logger = new Logger(SentimentService.name);
-  private readonly pythonApiUrl: string;
 
-  constructor(
-    private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
-  ) {
-    // Get Python API URL from environment or use default
-    this.pythonApiUrl = this.configService.get<string>(
-      'PYTHON_API_URL',
-      'http://localhost:8000',
-    );
-    this.logger.log(`Python API URL: ${this.pythonApiUrl}`);
-  }
+  constructor(private readonly dataProcessing: DataProcessingClientService) {}
 
   async analyzeSentiment(text: string): Promise<SentimentResponse> {
     try {
@@ -90,57 +36,36 @@ export class SentimentService {
         `Sending sentiment analysis request for text: "${text.substring(0, 50)}..."`,
       );
 
-      const response = await firstValueFrom(
-        this.httpService.post<SentimentResponse>(
-          `${this.pythonApiUrl}/analyze`,
-          request,
-          {
-            timeout: 10000, // 10 second timeout
-            headers: { 'Content-Type': 'application/json' },
-          },
-        ),
+      const response = await this.dataProcessing.post<SentimentResponse>(
+        '/analyze',
+        request,
+        { timeoutMs: 10_000 },
       );
 
       this.logger.debug(`Received sentiment score: ${response.data.sentiment}`);
       return response.data;
     } catch (error: unknown) {
-      // Check for AxiosError first (including mocked ones)
-      if (isAxiosError(error) || hasResponseData(error)) {
-        const axiosError = error as AxiosError<PythonApiErrorResponse>;
-        const errorMessage = axiosError.message || 'Unknown Axios error';
-        const errorStack = axiosError.stack || 'No stack trace available';
-
+      if (error instanceof DataProcessingClientError) {
         this.logger.error(
-          `Failed to analyze sentiment: ${errorMessage}`,
-          errorStack,
+          `Failed to analyze sentiment: ${error.message}`,
+          error.stack,
         );
 
-        if (axiosError.response?.data) {
-          const errorDetail =
-            axiosError.response.data.detail || 'Unknown error';
-          const statusCode =
-            axiosError.response.status || HttpStatus.INTERNAL_SERVER_ERROR;
-
-          throw new HttpException(
-            `Python API error: ${errorDetail}`,
-            statusCode,
-          );
+        if (error.code === 'CIRCUIT_OPEN') {
+          throw error;
         }
 
-        if (
-          hasErrorCode(error) &&
-          (error.code === 'ECONNREFUSED' || error.code === 'ECONNABORTED')
-        ) {
+        if (error.getStatus() === HttpStatus.SERVICE_UNAVAILABLE) {
           throw new HttpException(
             'Python sentiment service is unavailable',
             HttpStatus.SERVICE_UNAVAILABLE,
           );
         }
 
+        const responseData = error.responseData as { detail?: string } | undefined;
         throw new HttpException(
-          `Failed to analyze sentiment: ${errorMessage}`,
-          // (axiosError as { status?: number }).status || HttpStatus.INTERNAL_SERVER_ERROR,
-          axiosError.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+          `Python API error: ${responseData?.detail || error.message}`,
+          error.getStatus(),
         );
       } else if (error instanceof HttpException) {
         // Re-throw HttpException as-is
@@ -169,16 +94,19 @@ export class SentimentService {
 
   async checkHealth(): Promise<HealthResponse> {
     try {
-      const response = await firstValueFrom(
-        this.httpService.get<HealthResponse>(`${this.pythonApiUrl}/health`, {
-          timeout: 5000,
-        }),
-      );
-      return response.data;
+      return await this.dataProcessing.get<HealthResponse>('/health', {
+        timeoutMs: 5_000,
+      });
     } catch (error: unknown) {
-      if (isAxiosError(error) || error instanceof Error) {
+      if (
+        error instanceof DataProcessingClientError &&
+        error.code === 'CIRCUIT_OPEN'
+      ) {
+        throw error;
+      }
+      if (error instanceof Error) {
         const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error';
+          error.message || 'Unknown error';
         this.logger.warn(`Python API health check failed: ${errorMessage}`);
         throw new HttpException(
           'Python sentiment service is unhealthy',
