@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use crate::errors::RegistryError;
 use crate::{ContractRegistry, ContractRegistryClient};
 use soroban_sdk::{testutils::Address as _, Address, Env, Symbol};

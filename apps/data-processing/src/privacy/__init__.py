@@ -1,7 +1,7 @@
 """
 Privacy controls for ingested data (#1452).
 
-See ``doc/personal-data-policy.md`` for the policy this package enforces.
+See ``docs/personal-data-policy.md`` for the policy this package enforces.
 """
 
 from .scrubbing import (

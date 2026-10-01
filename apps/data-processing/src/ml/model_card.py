@@ -214,7 +214,7 @@ def create_model_card(
 
 def model_card_path(model_type: str, version: str) -> Path:
     """Return the path to the model card file."""
-    from model_registry import _MODELS_ROOT
+    from src.ml.model_registry import _MODELS_ROOT
     return _MODELS_ROOT / model_type / f"{version}.card.json"
 
 
@@ -230,7 +230,7 @@ def save_model_with_card(
     This is a convenience wrapper that saves both the pickled model
     and the model card in the same directory.
     """
-    from model_registry import save_model
+    from src.ml.model_registry import save_model
     
     # Save the model
     saved_version = save_model(model_type, model_obj, version)

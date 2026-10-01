@@ -5,7 +5,7 @@ News, social and prediction text pulled by ``src/ingestion/`` can carry
 personal data (contact details, social handles, wallet addresses) that
 would otherwise propagate into the feature store, training data and
 prediction logs.  This module is the single implementation of the rules
-documented in ``doc/personal-data-policy.md``:
+documented in ``docs/personal-data-policy.md``:
 
 * :data:`PERSONAL_DATA_INVENTORY` — which ingested fields can contain
   personal data and how each one is treated.

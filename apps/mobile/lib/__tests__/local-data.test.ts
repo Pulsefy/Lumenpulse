@@ -81,6 +81,7 @@ describe('categorizeKey', () => {
     ['img_cache_meta', 'image_cache'],
     ['contribution_draft', 'drafts'],
     ['lumenpulse.analytics.session', 'diagnostics'],
+    ['lumenpulse.search.recent', 'recent_searches'],
   ])('classifies %s as %s', (key, expected) => {
     expect(categorizeKey(key)).toBe(expected);
   });
@@ -156,7 +157,7 @@ describe('getLocalDataInventory', () => {
 
     const inventory = await getLocalDataInventory();
 
-    expect(inventory.categories).toHaveLength(6);
+    expect(inventory.categories).toHaveLength(7);
     expect(inventory.totalBytes).toBe(0);
   });
 
@@ -200,7 +201,7 @@ describe('getLocalDataInventory', () => {
 
     const inventory = await getLocalDataInventory();
 
-    expect(inventory.categories).toHaveLength(6);
+    expect(inventory.categories).toHaveLength(7);
     expect(inventory.totalBytes).toBe(0);
   });
 });
@@ -226,6 +227,14 @@ describe('clearLocalDataCategory', () => {
     await clearLocalDataCategory('saved_news');
 
     expect(mockedStorage.multiRemove).toHaveBeenCalledWith(['saved_articles']);
+  });
+
+  it('clears recent searches from the privacy data category', async () => {
+    primeStorage({ 'lumenpulse.search.recent': '["Stellar"]' });
+
+    await clearLocalDataCategory('recent_searches');
+
+    expect(mockedStorage.multiRemove).toHaveBeenCalledWith(['lumenpulse.search.recent']);
   });
 
   it('preserves pending watchlist syncs when clearing watchlists', async () => {
@@ -279,7 +288,7 @@ describe('clearAllLocalData', () => {
 
     const result = await clearAllLocalData();
 
-    expect(result.cleared).toHaveLength(6);
+    expect(result.cleared).toHaveLength(7);
     expect(result.failed).toHaveLength(0);
   });
 
@@ -324,6 +333,6 @@ describe('clearAllLocalData', () => {
     const result = await clearAllLocalData();
 
     expect(result.failed).toEqual(['image_cache']);
-    expect(result.cleared).toHaveLength(5);
+    expect(result.cleared).toHaveLength(6);
   });
 });

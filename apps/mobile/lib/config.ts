@@ -141,6 +141,7 @@ export const config = {
     variant: process.env.EXPO_PUBLIC_APP_VARIANT || 'development',
     name: Constants.expoConfig?.name || 'Lumenpulse',
     version: Constants.expoConfig?.version || '1.0.0',
+    stepUpGracePeriodMs: parseInt(process.env.EXPO_PUBLIC_STEP_UP_GRACE_PERIOD_MS || '300000', 10),
   },
 
   /**

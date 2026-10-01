@@ -10,7 +10,6 @@ import { TransactionReceiptModal } from "@/components/TransactionReceiptModal";
 import { WalletReadinessBanner } from "@/components/WalletReadinessBanner";
 import { useWalletReadiness } from "@/hooks/useWalletReadiness";
 import { ReportButton } from "@/components/report/report-button";
-import { signTransaction } from "@stellar/freighter-api";
 import { Address, Contract, TransactionBuilder, nativeToScVal, rpc } from "@stellar/stellar-sdk";
 import { useExplorerUrl } from "@/hooks/useExplorerUrl";
 
@@ -219,7 +218,7 @@ export function ProjectAllocationRow({
   const rankColors = ["text-amber-400", "text-slate-400", "text-amber-700"];
 
   const { config } = useStellarConfig();
-  const { publicKey, status: walletStatus, connect: connectWallet } = useStellarWallet();
+  const { publicKey, status: walletStatus, connect: connectWallet, signXdr } = useStellarWallet();
   const buildExplorerUrl = useExplorerUrl();
 
   const [isExpanded, setIsExpanded] = useState(false);
@@ -304,12 +303,12 @@ export function ProjectAllocationRow({
 
       const preparedTx = rpc.assembleTransaction(tx, simulation).build();
       setTxState("signing");
-      const signingResult = await signTransaction(preparedTx.toXDR(), { networkPassphrase });
-      if (signingResult.error) {
-        throw new Error(`Signing failed: ${signingResult.error}`);
+      const signingResult = await signXdr(preparedTx.toXDR(), { networkPassphrase });
+      if (signingResult.status !== "success" || !signingResult.signedXdr) {
+        throw new Error(`Signing failed: ${signingResult.error?.message ?? signingResult.status}`);
       }
 
-      const signedTx = TransactionBuilder.fromXDR(signingResult.signedTxXdr, networkPassphrase);
+      const signedTx = TransactionBuilder.fromXDR(signingResult.signedXdr, networkPassphrase);
       setTxState("submitting");
       const sendResponse = await server.sendTransaction(signedTx);
       if (sendResponse.status === "ERROR") {

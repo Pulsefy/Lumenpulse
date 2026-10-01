@@ -1,0 +1,23 @@
+# Reproducible configuration for walk-forward backtesting of SentimentForecaster.
+# All parameters here fully determine a backtest run.
+
+# Number of rows used in the first training window.
+initial_train_size: 20
+
+# Number of rows to advance per walk-forward fold.
+step_size: 1
+
+# Forecast horizons to evaluate (in hours).
+horizons:
+  - 24
+  - 48
+
+# MAE thresholds for API confidence indication.
+# mae <= mae_good_threshold  => "high"
+# mae <= mae_warn_threshold  => "medium"
+# mae >  mae_warn_threshold  => "low"
+mae_good_threshold: 0.10
+mae_warn_threshold: 0.25
+
+# Seed for any randomised operations, ensuring reproducibility.
+random_seed: 42

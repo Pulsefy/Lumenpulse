@@ -37,6 +37,7 @@ const CATEGORY_ICONS: Record<LocalDataCategoryId, string> = {
   image_cache: 'images-outline',
   drafts: 'create-outline',
   diagnostics: 'pulse-outline',
+  recent_searches: 'search-outline',
 };
 
 /**

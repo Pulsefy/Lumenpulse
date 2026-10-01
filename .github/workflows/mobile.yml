@@ -39,6 +39,112 @@ jobs:
       - name: Run unit tests with coverage
         run: npm run test:coverage
 
+  # Issue #1413: keep the shipped payload inside a budget. `expo export` output
+  # is what the installed app loads, so it is measured on every pull request
+  # that touches apps/mobile/**.
+  mobile-size:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/mobile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # The base branch is installed as well on pull requests, so both
+          # lockfiles feed the dependency cache.
+          cache: 'npm'
+          cache-dependency-path: |
+            ./apps/mobile/package-lock.json
+            ./base/apps/mobile/package-lock.json
+          node-version: '20.x'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `expo export` runs Metro, and Metro resolves this as a monorepo from
+      # apps/mobile/package.json's "lumenpulse": "file:../.." dependency, then
+      # looks for node_modules at the repo root. Without that install the export
+      # dies with `ENOENT ... stat '<root>/node_modules'`. mobile-checks does not
+      # hit this (tsc/jest do not invoke Metro); mobile-e2e and this job do.
+      - name: Install root workspace dependencies (for Metro's monorepo resolution)
+        working-directory: .
+        run: npm install --no-audit --no-fund
+
+      - name: Export the app payload
+        run: npm run size:export
+
+      # The reported delta is against the base branch, so the base branch is
+      # exported the same way. These steps are allowed to fail: if the base
+      # branch cannot be built, the check falls back to the recorded baseline
+      # rather than blocking the pull request on unrelated infrastructure.
+      - name: Checkout the base branch
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+
+      - name: Install base branch dependencies
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        working-directory: ./base/apps/mobile
+        run: npm ci
+
+      - name: Install base branch root workspace dependencies
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        working-directory: ./base
+        run: npm install --no-audit --no-fund
+
+      # Called through `npx` rather than the npm script: the base branch
+      # predates the `size:export` script, and may predate the whole check.
+      - name: Export the base branch payload
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        working-directory: ./base/apps/mobile
+        run: npx expo export --platform android --platform ios --platform web --output-dir dist
+
+      - name: Check against the size budgets
+        id: size
+        continue-on-error: true
+        run: |
+          args=(--report "$RUNNER_TEMP/mobile-size.md")
+          if [ -d "$GITHUB_WORKSPACE/base/apps/mobile/dist" ]; then
+            args+=(--baseline-root "$GITHUB_WORKSPACE/base/apps/mobile")
+          else
+            echo "::warning::Base branch export unavailable; reporting against the recorded baseline."
+          fi
+          node scripts/check-mobile-size.mjs "${args[@]}"
+
+      - name: Add the report to the job summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/mobile-size.md" ]; then
+            cat "$RUNNER_TEMP/mobile-size.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'No size report was produced; see the export step above.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the size report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-size-report
+          path: ${{ runner.temp }}/mobile-size.md
+          retention-days: 14
+
+      - name: Fail when a budget is exceeded
+        if: steps.size.outcome == 'failure'
+        run: |
+          echo "::error::apps/mobile exceeds its size budget. See the run summary for the per-metric breakdown."
+          exit 1
+
   # Issue #1402: end-to-end smoke suite, run headlessly against the Expo web
   # build (the one Expo platform that needs no emulator/simulator in CI).
   mobile-e2e:

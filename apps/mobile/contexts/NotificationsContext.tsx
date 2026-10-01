@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from './AuthContext';
 import { getNotifications, markAsRead as markAsReadApi } from '../lib/notifications-api';
 import { getStableDeviceId, registerPushToken, deregisterCurrentDevice } from '../lib/push-token';
+import { LOGIN_ROUTE, resolveNotificationTarget } from '../lib/deep-links';
 
 export type Notification = {
   id: number;
@@ -190,19 +191,18 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         const { notification } = response;
         const { data } = notification.request.content;
 
-        // Handle deep linking based on notification data
+        // Issue #1410: deep-link resolution is centralized in lib/deep-links.ts
+        // so every notification payload maps to a real screen, and unknown or
+        // malformed payloads land on +not-found instead of a dead route.
         if (data) {
-          // Example: if notification data contains a screen to navigate to
-          if (typeof data.screen === 'string') {
-            router.push(data.screen as any);
-          } else if (data.type === 'alert' && data.alertId) {
-            // Navigate to alert details screen
-            router.push(`/alerts/${data.alertId}` as any);
-          } else if (data.type === 'transaction' && data.transactionId) {
-            // Navigate to transaction details screen
-            router.push(`/transactions/${data.transactionId}` as any);
+          const target = resolveNotificationTarget(data);
+          if (isAuthenticated) {
+            router.push(target as any);
+          } else {
+            // Authenticated-only target while logged out: go to login first,
+            // then continue to the target after a successful login.
+            router.push(`${LOGIN_ROUTE}?redirect=${encodeURIComponent(target)}` as any);
           }
-          // Add more deep link handling as needed
         }
       },
     );
@@ -216,7 +216,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         responseListenerRef.current.remove();
       }
     };
-  }, [handleNotification, router]);
+  }, [handleNotification, isAuthenticated, router]);
 
   return (
     <NotificationsContext.Provider

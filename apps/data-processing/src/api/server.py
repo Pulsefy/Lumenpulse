@@ -9,6 +9,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException, Request, Response, Query
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, Optional, List
@@ -49,8 +50,15 @@ from src.ml.model_registry import (
     clear_comparison_log,
     flush_all_comparisons,
     get_live_model,
+    rollback_model,
 )
 from src.analytics.correlation_engine import CorrelationEngine
+from src.utils.pagination import (
+    DEFAULT_PAGE_SIZE,
+    MAX_CORRELATION_POINTS,
+    MAX_PAGE_SIZE,
+    pagination_headers,
+)
 from src.db import PostgresService
 from src.ingestion.stellar_ingestion_checks import run_all_checks
 from src.privacy import scrub_record, scrub_text
@@ -140,6 +148,7 @@ from src.api.kpi_routes import router as kpi_router
 from src.api.account_operation_routes import router as account_operation_router
 from src.api.lineage_routes import router as lineage_router
 from src.api.job_routes import router as job_router
+from src.api.pipeline_topology_routes import router as pipeline_topology_router
 
 app.include_router(ingestion_quality_router)
 app.include_router(review_queue_router)
@@ -150,6 +159,7 @@ app.include_router(rebuild_router)  # Rebuild routes for admin
 app.include_router(sentiment_label_router)
 app.include_router(lineage_router)  # Feature/KPI lineage graph (#1254)
 app.include_router(job_router)  # Async analytics job status (#1248)
+app.include_router(pipeline_topology_router)  # Pipeline topology (#1451)
 
 
 try:
@@ -217,7 +227,7 @@ def _log_prediction(
     try:
         # Prediction request logging follows the same personal-data rules as
         # ingestion: both the stored copy and its hash are derived from the
-        # scrubbed text (#1452, doc/personal-data-policy.md).
+        # scrubbed text (#1452, docs/personal-data-policy.md).
         scrubbed_input = scrub_text(input_text)
         scrubbed_output = scrub_record(output)
         store_raw_input = os.getenv("LOG_PREDICTION_RAW_INPUT", "false").lower() == "true"
@@ -382,7 +392,9 @@ async def root(request: Request) -> Dict[str, Any]:
             "GET /sentiment/legend": "Get colour legend for sentiment indicators (no auth required)",
             # KPI endpoints (Issue #734)
             "GET /api/kpi/latest": "Get latest KPI snapshot (TVL, Volume) (requires X-API-Key header)",
-            "GET /api/kpi/series": "Get KPI time series data (requires X-API-Key header)",
+            "GET /api/kpi/series": "Get paginated KPI time series (limit/offset; max page size enforced) (requires X-API-Key header)",
+            "GET /analytics/kpis/daily-snapshots": "Get paginated daily KPI snapshots (limit/offset; stable ordering) (requires X-API-Key header)",
+            "GET /analytics/kpis/daily-snapshots/stream": "Stream daily KPI snapshots as NDJSON for large exports (requires X-API-Key header)",
             "POST /api/kpi/recompute": "Trigger KPI recompute from events (Admin only, requires X-API-Key header)",
             "POST /api/kpi/recompute-async": "Trigger async KPI recompute (Admin only, requires X-API-Key header)",
             # Account operation endpoints (Issue #743)
@@ -977,6 +989,7 @@ class ComparisonLogResponse(BaseModel):
 class RollbackRequest(BaseModel):
     model_type: str
     target_version: Optional[str] = None  # If omitted, rollback to previous version
+    reason: str = "Operator-requested rollback"
 
 
 class RollbackResponse(BaseModel):
@@ -1142,49 +1155,16 @@ async def model_rollback(
     Requires X-API-Key header.
     """
     previous_live = get_current_version(body.model_type)
-    available = list_versions(body.model_type)
-
-    if len(available) < 2:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Only one version available for '{body.model_type}'. "
-                f"Cannot rollback."
-            ),
+    actor = request.headers.get("X-Actor", "api-operator")
+    try:
+        target = rollback_model(
+            body.model_type,
+            body.target_version,
+            actor=actor,
+            reason=body.reason,
         )
-
-    target = body.target_version
-    if target is None:
-        # Auto-select: the version just before current
-        if previous_live and previous_live in available:
-            idx = available.index(previous_live)
-            if idx > 0:
-                target = available[idx - 1]
-            else:
-                target = available[1] if len(available) > 1 else available[0]
-        else:
-            target = available[0]
-
-    if target == previous_live:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Target version '{target}' is already the current live version."
-            ),
-        )
-
-    if target not in available:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Target version '{target}' not found for '{body.model_type}'. "
-                f"Available: {available}"
-            ),
-        )
-
-    # Promote the targeted version
-    from src.ml.model_registry import promote_model
-    promote_model(body.model_type, target)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Also clear any shadow so it doesn't conflict
     if get_shadow_version(body.model_type):
@@ -1365,6 +1345,7 @@ class ForecastResponse(BaseModel):
     model_backend: str
     data_points_used: int
     generated_at: str
+    confidence_indication: str = "low"  # "high" | "medium" | "low" — derived from backtest
 
 
 @app.get("/analytics/forecast", response_model=ForecastResponse)
@@ -1387,18 +1368,36 @@ async def get_forecast(request: Request) -> ForecastResponse:
 
     def _run_forecast():
         from src.analytics.forecaster import SentimentForecaster
+        from src.analytics.backtester import BacktestHarness, load_config
 
         forecaster = SentimentForecaster()
-        return forecaster.run()
+        df = forecaster.load_history()
+        if not forecaster._is_trained:
+            forecaster.train(df)
+        result = forecaster.predict(df)
+
+        # Derive confidence indication from backtest (best-effort)
+        confidence_indication = "low"
+        try:
+            cfg = load_config()
+            harness = BacktestHarness(cfg)
+            if df is not None and len(df) >= cfg.initial_train_size + max(cfg.horizons):
+                report = harness.run(df)
+                confidence_indication = report.confidence_indication
+        except Exception as bt_exc:
+            logger.warning(f"Backtest skipped during forecast: {bt_exc}")
+
+        return result, confidence_indication
 
     loop = asyncio.get_event_loop()
     try:
-        result = await loop.run_in_executor(None, _run_forecast)
+        result, confidence_indication = await loop.run_in_executor(None, _run_forecast)
     except Exception as exc:
         logger.error(f"Forecast failed: {exc}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Forecast error: {exc}")
 
     output_dict = result.to_dict()
+    output_dict["confidence_indication"] = confidence_indication
     _log_prediction(
         request_id=correlation_id_ctx.get(generate_correlation_id()),
         model_type="forecast",
@@ -1432,12 +1431,43 @@ class CorrelationRequest(BaseModel):
     volume_data: Optional[List[MetricDataPoint]] = None
     lag_hours: int = 0
 
+    def enforce_size_limits(self) -> None:
+        """Reject uncapped correlation payloads larger than MAX_CORRELATION_POINTS (#1458)."""
+        for name, series in (
+            ("sentiment_data", self.sentiment_data),
+            ("price_data", self.price_data or []),
+            ("volume_data", self.volume_data or []),
+        ):
+            if len(series) > MAX_CORRELATION_POINTS:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        f"{name} exceeds maximum uncapped size of "
+                        f"{MAX_CORRELATION_POINTS} points; paginate or downsample the series"
+                    ),
+                )
+
 
 class LagAnalysisRequest(BaseModel):
     sentiment_data: List[CorrelationDataPoint]
     metric_data: List[MetricDataPoint]
     metric_type: str = "volume"
     max_lag_hours: int = 24
+
+    def enforce_size_limits(self) -> None:
+        """Reject uncapped lag-analysis payloads larger than MAX_CORRELATION_POINTS (#1458)."""
+        for name, series in (
+            ("sentiment_data", self.sentiment_data),
+            ("metric_data", self.metric_data),
+        ):
+            if len(series) > MAX_CORRELATION_POINTS:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        f"{name} exceeds maximum uncapped size of "
+                        f"{MAX_CORRELATION_POINTS} points; paginate or downsample the series"
+                    ),
+                )
 
 
 @app.post("/correlation/analyze", response_model=JobSubmitResponse, status_code=202)
@@ -1453,8 +1483,12 @@ async def analyze_correlation(
     Poll GET /api/jobs/{job_id} for the result: price_correlation,
     volume_correlation, and summary (correlation scores -1 to 1 and scatter
     plot data points). Requires X-API-Key header.
+
+    Input series are capped at MAX_CORRELATION_POINTS (#1458).
     """
     from src.jobs.manager import submit_job
+
+    body.enforce_size_limits()
 
     sentiment_list = [{"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data]
     price_list = (
@@ -1482,6 +1516,13 @@ async def analyze_correlation(
             volume_data=volume_list,
             lag_hours=body.lag_hours,
         )
+        # Cap scatter payloads so job results stay within the uncapped max (#1458).
+        for key in ("price_correlation", "volume_correlation"):
+            corr = result.get(key) if isinstance(result, dict) else None
+            if isinstance(corr, dict) and isinstance(corr.get("scatter_data"), list):
+                if len(corr["scatter_data"]) > MAX_CORRELATION_POINTS:
+                    corr["scatter_data"] = corr["scatter_data"][:MAX_CORRELATION_POINTS]
+                    corr["scatter_truncated"] = True
         _log_prediction(
             request_id=correlation_id_ctx.get(generate_correlation_id()),
             model_type="correlation_analysis",
@@ -1516,8 +1557,12 @@ async def analyze_lag_correlation(
     Poll GET /api/jobs/{job_id} for the result: best_lag_hours,
     best_correlation, lag_analysis, and recommendation. Requires X-API-Key
     header.
+
+    Input series are capped at MAX_CORRELATION_POINTS (#1458).
     """
     from src.jobs.manager import submit_job
+
+    body.enforce_size_limits()
 
     sentiment_list = [{"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data]
     metric_list = [{"timestamp": dp.timestamp, "value": dp.value} for dp in body.metric_data]
@@ -1573,43 +1618,116 @@ class DailyKPISnapshotResponse(BaseModel):
     created_at: Optional[str] = None
 
 
+def _serialize_daily_kpi_snapshot(s) -> DailyKPISnapshotResponse:
+    return DailyKPISnapshotResponse(
+        snapshot_date=s.snapshot_date,
+        period=s.period,
+        tvl=s.tvl,
+        volume=s.volume,
+        active_rounds=s.active_rounds,
+        contribution_count=s.contribution_count,
+        unique_contributors=s.unique_contributors,
+        extra_data=s.extra_data,
+        created_at=s.created_at.isoformat() if s.created_at else None,
+    )
+
+
 @app.get("/analytics/kpis/daily-snapshots", response_model=List[DailyKPISnapshotResponse])
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def get_daily_kpi_snapshots(
     request: Request,
+    response: Response,
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     period: str = Query("daily", description="Period type (default: daily)"),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(
+        DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=MAX_PAGE_SIZE,
+        description=f"Page size (max {MAX_PAGE_SIZE}; uncapped responses are rejected)",
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Number of rows to skip (stable snapshot_date DESC, id DESC order)",
+    ),
 ) -> List[DailyKPISnapshotResponse]:
     """
-    Retrieve historical daily on-chain KPI snapshots.
+    Retrieve historical daily on-chain KPI snapshots with pagination (#1458).
+
+    Stable ordering: snapshot_date DESC, id DESC.
+    Response headers: X-Total-Count, X-Limit, X-Offset, X-Has-More, X-Max-Page-Size.
+    For genuinely large exports use GET /analytics/kpis/daily-snapshots/stream.
     Requires X-API-Key header.
     """
     if postgres_service is None:
         raise HTTPException(status_code=503, detail="Database service unavailable")
 
-    snapshots = postgres_service.get_daily_onchain_kpi_snapshots(
+    snapshots, total = postgres_service.get_daily_onchain_kpi_snapshots(
         start_date=start_date,
         end_date=end_date,
         period=period,
         limit=limit,
+        offset=offset,
     )
 
-    return [
-        DailyKPISnapshotResponse(
-            snapshot_date=s.snapshot_date,
-            period=s.period,
-            tvl=s.tvl,
-            volume=s.volume,
-            active_rounds=s.active_rounds,
-            contribution_count=s.contribution_count,
-            unique_contributors=s.unique_contributors,
-            extra_data=s.extra_data,
-            created_at=s.created_at.isoformat() if s.created_at else None,
-        )
-        for s in snapshots
-    ]
+    items = [_serialize_daily_kpi_snapshot(s) for s in snapshots]
+    for key, value in pagination_headers(
+        total=total, limit=limit, offset=offset, returned=len(items)
+    ).items():
+        response.headers[key] = value
+    return items
+
+
+@app.get("/analytics/kpis/daily-snapshots/stream")
+@limiter.limit("10/minute") if limiter else lambda x: x
+async def stream_daily_kpi_snapshots(
+    request: Request,
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    period: str = Query("daily", description="Period type (default: daily)"),
+    page_size: int = Query(
+        DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=MAX_PAGE_SIZE,
+        description="Internal page size used while streaming",
+    ),
+):
+    """
+    Stream daily on-chain KPI snapshots as NDJSON for large exports (#1458).
+
+    Walks pages server-side with stable ordering so callers never need an
+    uncapped in-memory response. Requires X-API-Key header.
+    """
+    import json as _json
+
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    def _generate():
+        offset = 0
+        while True:
+            snapshots, total = postgres_service.get_daily_onchain_kpi_snapshots(
+                start_date=start_date,
+                end_date=end_date,
+                period=period,
+                limit=page_size,
+                offset=offset,
+            )
+            if not snapshots:
+                break
+            for s in snapshots:
+                payload = _serialize_daily_kpi_snapshot(s).model_dump()
+                yield _json.dumps(payload, default=str) + "\n"
+            offset += len(snapshots)
+            if offset >= total:
+                break
+
+    return StreamingResponse(
+        _generate(),
+        media_type="application/x-ndjson",
+        headers={"X-Stream-Format": "ndjson", "X-Max-Page-Size": str(MAX_PAGE_SIZE)},
+    )
 
 
 @app.post("/analytics/kpis/daily-snapshots/run", response_model=JobSubmitResponse, status_code=202)

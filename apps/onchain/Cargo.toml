@@ -22,12 +22,20 @@ members = [
   "contracts/yield_vault",
   "contracts/feature_flags",
   "contracts/contract_registry",
-  "contracts/liquidity_pool"
+  "contracts/liquidity_pool",
+  "contracts/error-registry"
 ]
-exclude = ["contracts/tests"]
+# `contracts/stable_swap_pool` is intentionally not a workspace member: its
+# sources still target the pre-v23 Soroban API (`Env::invoker`,
+# `storage::Persistent::bump`, `Symbol` as the error type), so it does not
+# build against soroban-sdk 23. Its test suite (#1220) is in-tree under
+# `contracts/stable_swap_pool/src/test.rs` and will move into CI once the
+# contract itself is migrated.
+exclude = ["contracts/tests", "contracts/stable_swap_pool"]
 
 [workspace.dependencies]
 soroban-sdk = "23"
+soroban-sdk-macros = "23"
 
 [profile.release]
 opt-level = "z"

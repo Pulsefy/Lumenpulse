@@ -35,6 +35,18 @@ export class FlagAuditLog {
   newEnabled: boolean | null;
 
   /**
+   * Targeting configuration before this mutation (null if the flag did not
+   * exist). Lets an auditor see who was in the allow/deny lists and what
+   * share of users the rollout covered, not just whether it was on.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  previousTargeting: Record<string, unknown> | null;
+
+  /** Targeting configuration after this mutation (null for remove). */
+  @Column({ type: 'jsonb', nullable: true })
+  newTargeting: Record<string, unknown> | null;
+
+  /**
    * Actor who requested the change — corresponds to FeatureFlag#changedBy
    * (typically an email or user ID).  Null if not provided.
    */

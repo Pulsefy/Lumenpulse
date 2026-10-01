@@ -79,14 +79,20 @@ class AnomalyResult:
 - Statistical accuracy verification
 - Performance testing with various spike magnitudes
 
-### Demonstration Script (`demo_anomaly_detection.py`)
-- Interactive demos showing:
-  - Normal market behavior (no false positives)
-  - 500% volume spike detection
-  - Extreme sentiment shift detection
-  - Combined anomaly detection scenarios
-  - Severity scaling with deviation magnitude
-  - Graceful handling of insufficient data
+### Experiment CLI (`scripts/experiment.py`)
+Reproducible, config-driven runs (issue #1459) — replaces the old
+`demo_anomaly_detection.py` / `demo_ml_anomaly_detection.py` scripts:
+- Normal market behaviour (no false positives)
+- 500% volume spike detection
+- Extreme sentiment shift detection
+- Combined pump-and-dump scenarios, with precision/recall/FPR recorded against
+  the labelled snapshot
+
+```bash
+python scripts/experiment.py run experiments/anomaly_pump_and_dump.json
+```
+
+See [docs/experiment-cli.md](../docs/experiment-cli.md) for the full walkthrough.
 
 ### Test Results
 - **500% Volume Spike**: Correctly identified as high-severity anomaly (severity > 0.8)

@@ -12,6 +12,7 @@ Models:
 
 import os
 import json
+import hashlib
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -40,6 +41,10 @@ logger = setup_logger(__name__)
 _SLANG_LEXICON_PATH = Path(
     os.getenv("CRYPTO_SLANG_LEXICON", "./data/crypto_slang_lexicon.json")
 )
+
+# Training data snapshot storage
+_SNAPSHOT_DIR = Path(os.getenv("TRAINING_SNAPSHOT_DIR", "./data/training_snapshots"))
+_SNAPSHOT_RETENTION_DAYS = int(os.getenv("SNAPSHOT_RETENTION_DAYS", "90"))  # Retention policy
 
 # Quality gates: minimum acceptable metrics before promotion
 _MIN_SENTIMENT_COVERAGE = float(os.getenv("MIN_SENTIMENT_COVERAGE", "0.0"))
@@ -116,6 +121,117 @@ def _build_sentiment_model() -> Tuple[SentimentIntensityAnalyzer, Dict[str, Any]
 # Price predictor retraining
 # ---------------------------------------------------------------------------
 
+def _ensure_snapshot_dir() -> None:
+    """Ensure the snapshot directory exists."""
+    _SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _compute_data_hash(df: pd.DataFrame) -> str:
+    """Compute a deterministic hash of the training data for integrity verification."""
+    # Use a stable serialization: sort columns, reset index, then hash
+    df_sorted = df.sort_index(axis=1).reset_index(drop=True)
+    data_bytes = df_sorted.to_json(orient="split", date_format="iso").encode("utf-8")
+    return hashlib.sha256(data_bytes).hexdigest()[:16]
+
+
+def _save_training_snapshot(
+    df: pd.DataFrame,
+    snapshot_id: str,
+    metadata: Dict[str, Any],
+) -> Path:
+    """
+    Save training data snapshot to disk with metadata.
+
+    Returns the path to the saved snapshot directory.
+    """
+    _ensure_snapshot_dir()
+
+    snapshot_path = _SNAPSHOT_DIR / snapshot_id
+    snapshot_path.mkdir(parents=True, exist_ok=True)
+
+    # Save data as parquet for efficient storage
+    data_path = snapshot_path / "training_data.parquet"
+    df.to_parquet(data_path, index=False)
+
+    # Save metadata
+    meta_path = snapshot_path / "metadata.json"
+    snapshot_metadata = {
+        **metadata,
+        "snapshot_id": snapshot_id,
+        "created_at": datetime.utcnow().isoformat(),
+        "row_count": len(df),
+        "column_count": len(df.columns),
+        "columns": list(df.columns),
+        "data_hash": _compute_data_hash(df),
+        "size_bytes": data_path.stat().st_size,
+    }
+    with open(meta_path, "w") as f:
+        json.dump(snapshot_metadata, f, indent=2)
+
+    logger.info(f"Saved training snapshot: {snapshot_id} ({len(df)} rows, {data_path.stat().st_size} bytes)")
+    return snapshot_path
+
+
+def _load_training_snapshot(snapshot_id: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """
+    Load a training data snapshot by ID.
+
+    Returns (dataframe, metadata).
+    """
+    snapshot_path = _SNAPSHOT_DIR / snapshot_id
+    data_path = snapshot_path / "training_data.parquet"
+    meta_path = snapshot_path / "metadata.json"
+
+    if not data_path.exists() or not meta_path.exists():
+        raise FileNotFoundError(f"Snapshot {snapshot_id} not found")
+
+    df = pd.read_parquet(data_path)
+    with open(meta_path) as f:
+        metadata = json.load(f)
+
+    # Verify integrity
+    current_hash = _compute_data_hash(df)
+    if current_hash != metadata.get("data_hash"):
+        logger.warning(f"Snapshot {snapshot_id} data hash mismatch! Expected {metadata['data_hash']}, got {current_hash}")
+
+    return df, metadata
+
+
+def _cleanup_old_snapshots() -> int:
+    """
+    Remove snapshots older than the retention period.
+
+    Returns the number of snapshots removed.
+    """
+    if not _SNAPSHOT_DIR.exists():
+        return 0
+
+    cutoff = datetime.utcnow() - timedelta(days=_SNAPSHOT_RETENTION_DAYS)
+    removed = 0
+
+    for snapshot_dir in _SNAPSHOT_DIR.iterdir():
+        if not snapshot_dir.is_dir():
+            continue
+
+        meta_path = snapshot_dir / "metadata.json"
+        if not meta_path.exists():
+            continue
+
+        try:
+            with open(meta_path) as f:
+                metadata = json.load(f)
+            created_at = datetime.fromisoformat(metadata.get("created_at", ""))
+            if created_at < cutoff:
+                import shutil
+                shutil.rmtree(snapshot_dir)
+                removed += 1
+                logger.info(f"Removed expired snapshot: {snapshot_dir.name}")
+        except Exception as exc:
+            logger.warning(f"Failed to process snapshot {snapshot_dir.name} for cleanup: {exc}")
+
+    return removed
+
+
 def _fetch_training_data(
     db_session=None,
     start_time: Optional[datetime] = None,
@@ -127,6 +243,9 @@ def _fetch_training_data(
 
     In production this queries the feature store; falls back to a
     synthetic dataset so the pipeline never hard-fails in CI/dev.
+
+    Returns a tuple of (dataframe, query_bounds) where query_bounds includes
+    snapshot information for reproducibility.
     """
     if start_time is None:
         end_time = datetime.now(timezone.utc)
@@ -147,6 +266,18 @@ def _fetch_training_data(
                 df["target"] = df["sentiment_score"].shift(-1)
                 df.dropna(inplace=True)
                 logger.info(f"Fetched {len(df)} rows from feature store for retraining")
+
+                # Save snapshot for reproducibility
+                snapshot_id = f"training_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{hashlib.sha256(str(start_time).encode()).hexdigest()[:8]}"
+                snapshot_metadata = {
+                    "source": "feature_store",
+                    "query_bounds": query_bounds,
+                    "seed": seed,
+                }
+                _save_training_snapshot(df, snapshot_id, snapshot_metadata)
+                query_bounds["snapshot_id"] = snapshot_id
+                query_bounds["snapshot_hash"] = _compute_data_hash(df)
+
                 return df, query_bounds
         except Exception as exc:
             logger.warning(f"Feature store unavailable, using synthetic data: {exc}")
@@ -163,6 +294,18 @@ def _fetch_training_data(
         "target": rng.uniform(-1, 1, n),
     })
     logger.info(f"Using synthetic training data (seed={synth_seed})")
+
+    # Save synthetic snapshot too for reproducibility
+    snapshot_id = f"synthetic_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_seed{synth_seed}"
+    snapshot_metadata = {
+        "source": "synthetic",
+        "query_bounds": query_bounds,
+        "seed": synth_seed,
+    }
+    _save_training_snapshot(df, snapshot_id, snapshot_metadata)
+    query_bounds["snapshot_id"] = snapshot_id
+    query_bounds["snapshot_hash"] = _compute_data_hash(df)
+
     return df, query_bounds
 
 
@@ -250,7 +393,9 @@ def run_retraining(
         db_session: Optional SQLAlchemy session for the feature store.
         force:      Skip quality gates and always promote.
         manifest:   Optional manifest from a previous run to reproduce it.
-        seed:       Optional seed for randomness.
+                    If manifest contains 'snapshot_id', the exact training data
+                    from that snapshot will be loaded for reproducibility.
+        seed:       Optional seed for randomness (used only if no manifest).
 
     Returns:
         A result dict with versions, metrics, and status.
@@ -271,10 +416,13 @@ def run_retraining(
     try:
         if db_session is not None:
             seed_sentiment_labels(db_session)
+
         # Determine run parameters from manifest or defaults
         run_seed = seed
         start_time = None
         end_time = None
+        snapshot_id = None
+        snapshot_data = None
         
         if manifest:
             run_seed = manifest.get("seed", run_seed)
@@ -283,6 +431,22 @@ def run_retraining(
                 start_time = datetime.fromisoformat(bounds["start_time"])
             if "end_time" in bounds and bounds["end_time"]:
                 end_time = datetime.fromisoformat(bounds["end_time"])
+            # Check for snapshot reference for exact reproducibility
+            if "snapshot_id" in bounds:
+                snapshot_id = bounds["snapshot_id"]
+                try:
+                    snapshot_data, snap_meta = _load_training_snapshot(snapshot_id)
+                    logger.info(f"Loaded training snapshot for reproducibility: {snapshot_id}")
+                    # Verify hash if provided
+                    if "snapshot_hash" in bounds:
+                        current_hash = _compute_data_hash(snapshot_data)
+                        if current_hash != bounds["snapshot_hash"]:
+                            logger.warning(
+                                f"Snapshot hash mismatch! Expected {bounds['snapshot_hash']}, got {current_hash}"
+                            )
+                except Exception as exc:
+                    logger.error(f"Failed to load snapshot {snapshot_id}: {exc}")
+                    raise
         else:
             if run_seed is None:
                 run_seed = int(datetime.utcnow().timestamp()) % 10_000
@@ -290,6 +454,8 @@ def run_retraining(
         logger.info("=" * 60)
         logger.info("Automated Model Retraining Pipeline — START")
         logger.info(f"Timestamp: {started_at.isoformat()}, Seed: {run_seed}")
+        if snapshot_id:
+            logger.info(f"Reproducing from snapshot: {snapshot_id}")
 
         # ── 1. Sentiment model ──────────────────────────────────────────────
         logger.info("Step 1: Retraining sentiment model …")
@@ -310,6 +476,7 @@ def run_retraining(
                 "version": s_version,
                 "metrics": sentiment_metrics,
                 "promoted": True,
+                "training_snapshot": snapshot_id,
             }
             logger.info(f"Sentiment model promoted: {s_version}")
         else:
@@ -324,20 +491,60 @@ def run_retraining(
         # ── 2. Price predictor ──────────────────────────────────────────────
         logger.info("Step 2: Retraining price predictor …")
         with MODEL_RETRAINING_DURATION.labels(model_type="price_predictor").time():
-            (
-                price_model,
-                price_metrics,
-                price_metadata,
-                price_evaluation_set,
-            ) = _build_price_predictor(
-                db_session, start_time=start_time, end_time=end_time, seed=run_seed
-            )
+            if snapshot_data is not None:
+                # Use snapshot data directly for exact reproducibility
+                predictor = PricePredictor(model_name="linear_regression")
+                training_set, evaluation_set = train_test_split(
+                    snapshot_data, test_size=0.2, random_state=42
+                )
+                price_metrics = predictor.fit(training_set, target_column="target")
+                
+                # Build metadata with snapshot reference
+                schema = current_feature_schema(predictor.feature_set)
+                feature_names = [f for f in schema.feature_names if f in snapshot_data.columns]
+                baseline = compute_distribution_baseline(snapshot_data, feature_names)
+                
+                import sklearn
+                price_metadata: Dict[str, Any] = {
+                    **schema_metadata(predictor.feature_set),
+                    "trained_at": datetime.utcnow().isoformat(),
+                    "metrics": price_metrics,
+                    "feature_names": feature_names,
+                    "feature_baseline": baseline,
+                    "seed": run_seed,
+                    "data_query_bounds": {
+                        "start_time": start_time.isoformat() if start_time else None,
+                        "end_time": end_time.isoformat() if end_time else None,
+                        "snapshot_id": snapshot_id,
+                        "snapshot_hash": _compute_data_hash(snapshot_data),
+                    },
+                    "row_count": len(snapshot_data),
+                    "library_versions": {
+                        "pandas": pd.__version__,
+                        "scikit-learn": sklearn.__version__,
+                    },
+                }
+                price_evaluation_set = (
+                    evaluation_set.drop(columns=["target"]),
+                    evaluation_set["target"],
+                )
+                logger.info(f"PricePredictor retrained from snapshot: {price_metrics}")
+            else:
+                # Normal training path
+                (
+                    predictor,
+                    price_metrics,
+                    price_metadata,
+                    price_evaluation_set,
+                ) = _build_price_predictor(
+                    db_session, start_time=start_time, end_time=end_time, seed=run_seed
+                )
 
         passes_price_gate = force or price_metrics.get("r2", -999) >= _MIN_PRICE_R2
 
         if passes_price_gate:
             p_version = save_model(
-                "price_predictor", price_model, metadata=price_metadata
+                "price_predictor", predictor, metadata=price_metadata
             )
             promoted = promote_model(
                 "price_predictor",
@@ -356,6 +563,7 @@ def run_retraining(
                     "promoted": True,
                     "schema_version": price_metadata.get("schema_version"),
                     "schema_fingerprint": price_metadata.get("schema_fingerprint"),
+                    "training_snapshot": snapshot_id or price_metadata.get("data_query_bounds", {}).get("snapshot_id"),
                 }
                 logger.info(
                     f"PricePredictor promoted: {p_version} "
@@ -370,6 +578,7 @@ def run_retraining(
                     "reason": "promotion_evaluation_failed",
                     "schema_version": price_metadata.get("schema_version"),
                     "schema_fingerprint": price_metadata.get("schema_fingerprint"),
+                    "training_snapshot": snapshot_id or price_metadata.get("data_query_bounds", {}).get("snapshot_id"),
                 }
                 logger.warning("PricePredictor promotion refused: %s", p_version)
         else:
@@ -402,7 +611,12 @@ def run_retraining(
             logger.warning(f"Anomaly detector evaluation failed: {exc}")
             result["anomaly_detector_evaluation"] = {"status": "failed", "error": str(exc)}
 
-        # ── 4. Finalise ─────────────────────────────────────────────────────
+        # ── 4. Cleanup old snapshots (retention policy) ──────────────────────
+        removed = _cleanup_old_snapshots()
+        if removed:
+            logger.info(f"Cleaned up {removed} expired training snapshots (retention: {_SNAPSHOT_RETENTION_DAYS} days)")
+
+        # ── 5. Finalise ─────────────────────────────────────────────────────
         finished_at = datetime.utcnow()
         result.update(
             {
@@ -410,6 +624,8 @@ def run_retraining(
                 "finished_at": finished_at.isoformat(),
                 "duration_seconds": (finished_at - started_at).total_seconds(),
                 "registry": get_registry_status(),
+                "snapshot_retention_days": _SNAPSHOT_RETENTION_DAYS,
+                "snapshots_cleaned": removed,
             }
         )
 
@@ -437,3 +653,63 @@ def run_retraining(
 def get_last_run_status() -> Dict[str, Any]:
     """Return metadata from the most recent retraining run."""
     return _last_run or {"status": "never_run"}
+
+
+def verify_reproducibility(manifest: Dict[str, Any], db_session=None) -> Dict[str, Any]:
+    """
+    Verify that a training run can be reproduced from its manifest.
+
+    Runs the retraining pipeline twice with the same manifest and compares
+    the resulting model artifacts for bitwise equality.
+
+    Args:
+        manifest: The manifest from a previous run (must contain snapshot_id).
+        db_session: Optional database session.
+
+    Returns:
+        Dict with verification results including whether models match.
+    """
+    if "models" not in manifest or "price_predictor" not in manifest["models"]:
+        return {"status": "error", "reason": "Manifest missing price_predictor info"}
+
+    snapshot_id = manifest["models"]["price_predictor"].get("training_snapshot")
+    if not snapshot_id:
+        return {"status": "error", "reason": "Manifest missing training_snapshot reference"}
+
+    logger.info(f"Verifying reproducibility for snapshot: {snapshot_id}")
+
+    # Run 1
+    result1 = run_retraining(db_session=db_session, manifest=manifest, force=True)
+
+    # Run 2 (with same manifest)
+    result2 = run_retraining(db_session=db_session, manifest=manifest, force=True)
+
+    # Compare model versions and metrics
+    models_match = True
+    differences = []
+
+    for model_type in ["sentiment", "price_predictor"]:
+        m1 = result1["models"].get(model_type, {})
+        m2 = result2["models"].get(model_type, {})
+
+        if m1.get("version") != m2.get("version"):
+            models_match = False
+            differences.append(f"{model_type}: version mismatch ({m1.get('version')} vs {m2.get('version')})")
+
+        # Compare metrics (allow small floating point differences)
+        for key in ["r2", "mae", "mse", "coverage_ratio"]:
+            v1 = m1.get("metrics", {}).get(key)
+            v2 = m2.get("metrics", {}).get(key)
+            if v1 is not None and v2 is not None:
+                if abs(v1 - v2) > 1e-10:
+                    models_match = False
+                    differences.append(f"{model_type}.{key}: {v1} vs {v2}")
+
+    return {
+        "status": "verified" if models_match else "mismatch",
+        "snapshot_id": snapshot_id,
+        "run1_version": result1["models"].get("price_predictor", {}).get("version"),
+        "run2_version": result2["models"].get("price_predictor", {}).get("version"),
+        "models_match": models_match,
+        "differences": differences,
+    }

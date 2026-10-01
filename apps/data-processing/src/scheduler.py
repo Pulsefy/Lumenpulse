@@ -29,6 +29,7 @@ from src.ingestion.rpc_benchmark import RPCProviderBenchmark
 from src.round_analyzer import _round_analyzer_job
 from src.metadata_drift_detector import MetadataDriftDetector
 from src.kpi_reconciliation import KPIReconciler
+from src.pipeline_run_registry import attach_scheduler_listener
 
 
 
@@ -555,6 +556,10 @@ class AnalyticsScheduler:
                 replace_existing=True,
             )
 
+
+            # Record per-stage run start/duration/outcome for the pipeline
+            # topology API (#1451) before the scheduler begins firing jobs.
+            attach_scheduler_listener(self.scheduler)
 
             self.scheduler.start()
             logger.info("✓ Analytics scheduler started")
