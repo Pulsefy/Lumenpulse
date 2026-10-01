@@ -43,6 +43,7 @@ const NON_TAPPABLE_ROUTES = [
   '/contributor/profile',
   '/settings/cache',
   '/settings/data-privacy',
+  '/settings/exports',
   '/settings/manage-accounts',
   '/settings/mutation-queue',
   '/settings/notification-settings',
