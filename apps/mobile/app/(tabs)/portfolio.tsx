@@ -29,6 +29,7 @@ import { useWalletAutoRefresh } from '../../hooks/useWalletAutoRefresh';
 import { storage } from '../../lib/storage';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
 import NetworkBadge from '../../components/NetworkBadge';
+import { PortfolioAnalyticsChart } from '../../components/PortfolioAnalyticsChart';
 import { requireStepUpAuthentication } from '../../lib/biometric-lock';
 
 const truncateKey = (value: string) => `${value.slice(0, 6)}...${value.slice(-6)}`;
@@ -469,6 +470,10 @@ export default function PortfolioScreen() {
                     accessibilityLabel={t('common.loading')}
                   />
                 </View>
+              ) : null}
+
+              {activePublicKey ? (
+                <PortfolioAnalyticsChart publicKey={activePublicKey} enabled={isAuthenticated} />
               ) : null}
 
               {summary && (

@@ -12,7 +12,11 @@
     "tsc": "tsc",
     "test": "jest --runInBand",
     "test:coverage": "jest --coverage --runInBand",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "size:export": "expo export --platform android --platform ios --platform web --output-dir dist",
+    "size:check": "node scripts/check-mobile-size.mjs",
+    "size:baseline": "npm run size:export && node scripts/check-mobile-size.mjs --write-baseline",
+    "size:record-binary": "node scripts/check-mobile-size.mjs --record-binary"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -33,7 +37,6 @@
     "expo-secure-store": "^15.0.8",
     "expo-status-bar": "~3.0.9",
     "i18next": "^25.10.10",
-    "i18next-resources-to-backend": "^1.2.1",
     "lumenpulse": "file:../..",
     "react": "19.1.0",
     "react-dom": "19.1.0",

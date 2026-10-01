@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "unit": "bytes",
+  "description": "Size budgets for the payload that ships from apps/mobile. Enforced by scripts/check-mobile-size.mjs on every pull request that touches apps/mobile/**; see .github/workflows/mobile.yml.",
+  "notes": [
+    "Sizes are measured from the output of `npm run size:export` (`expo export`), which is what the installed app actually loads: one Hermes/JS bundle per platform plus the bundled assets.",
+    "`expo export` is not bit-for-bit reproducible. Measured on the same tree, the web bundle is byte-identical between runs but Hermes emits .hbc bytecode whose size can shift by tens of bytes run to run. Budgets are therefore set a few percent above the recorded baseline in mobile-baseline.json, never a few bytes above it.",
+    "Keep the export output directory (dist/) out of the project listing while measuring - a previous export left inside apps/mobile is picked up as an asset and inflates the next run. dist/ is gitignored for the same reason.",
+    "`assets` covers everything in the export that is not a per-platform JS bundle: fonts, images, index.html and the export metadata.",
+    "`total` is the sum of the three platform bundles plus `assets`.",
+    "Native binary sizes (.aab/.ipa) are not covered by these budgets because producing them needs a full native build. Record one with `npm run size:record-binary -- android=path/to/app.aab`; it is stored under `binary` in mobile-baseline.json.",
+    "`warningBytes` reports a non-blocking warning; `maxBytes` fails the pull request. Values are deliberately duplicated per metric rather than derived from a single percentage so that a metric with a known reason to grow (for example a new asset-heavy screen) can be given explicit headroom without loosening every other budget."
+  ],
+  "platforms": {
+    "android": {
+      "baselineBytes": 3927172,
+      "warningBytes": 4100000,
+      "maxBytes": 4300000
+    },
+    "ios": {
+      "baselineBytes": 3930385,
+      "warningBytes": 4100000,
+      "maxBytes": 4300000
+    },
+    "web": {
+      "baselineBytes": 2186900,
+      "warningBytes": 2300000,
+      "maxBytes": 2450000
+    }
+  },
+  "assets": {
+    "baselineBytes": 8221716,
+    "warningBytes": 8600000,
+    "maxBytes": 9000000
+  },
+  "total": {
+    "baselineBytes": 18266173,
+    "warningBytes": 19100000,
+    "maxBytes": 20000000
+  }
+}

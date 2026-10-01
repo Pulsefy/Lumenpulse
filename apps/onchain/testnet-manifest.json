@@ -5,23 +5,23 @@
   "contracts": {
     "contributor_registry": {
       "id": "CCOVDGHF3XQ5RAFY6DJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLDGXQJSB",
-      "wasm_hash": "4a25619b8fea02f3447e7b700e2f2b0ed575f62679006ddc981009b26d9d5e71"
+      "wasm_hash": "0c28d872ab66df921f27e018058ef2591c6e399f4ba19ef1d887ea2cbf4ac6d5"
     },
     "project_registry": {
       "id": "CBYFZU7C5TV2J56PEOXI5Q53HNFYFOW4USEBG4M6BCV7RUIMJI7JISLC",
-      "wasm_hash": "847355767f5f67e68eb46cd2533c16718ac4cd5f37ae298227bb2e98419579cf"
+      "wasm_hash": "9fbdd594211a97ca9b7c5798e0b0eb14e6499f6bcb43cf7888f56524e15b7a8d"
     },
     "crowdfund_vault": {
       "id": "CBBQW7T65XBDPIPXEIIPJVJEEIBSPC566HMEU2LTBAULLKCNUFRFBKRO",
-      "wasm_hash": "0ee5515ec21d8ff0b7f9d1620c343d866f29a146a7789d330327b1df8753ac38"
+      "wasm_hash": "556694e01aab127cc3ac97e83181f146587f7b29041419ed2c4c3440d946c2b6"
     },
     "matching_pool": {
       "id": "CBQJ2E2MPYRCQDHZZYJXHRKUTCTIJFO55AVGHB2WDZSLS2OOENUDC6HH",
-      "wasm_hash": "c917f2f45736cbd7854a33ec68bf59e591dd0c830cf1203ffb780ed88498247f"
+      "wasm_hash": "7a2a0423ee857885b5e5f6ad5b0f279c2bd5c5946706cc40693271e28300991f"
     },
     "treasury": {
       "id": "CB6FRSAWOGVLH5GD4ITATNZNLVTQ3TKDOWAXJVGUG77AKCO5UKHH5H3O",
-      "wasm_hash": "6f7d6e1e68fb8f8fba6ec75919b1dcafb38f8cdcdf1d3db743fc5c0b14590988",
+      "wasm_hash": "edd99a0d5ad358aec5a560b9df433a4f94fc7f68a6efe221cd89454ae9695299",
       "admin_address": "GDPBZZDKZJTPFERPP65ATQWH2T6OIXQESPKXSTO6YY33TA2HTUTAPJI6",
       "token_address": "CDAQQJHUVNQLSUDEXOTPT3V5GWGH5VFVGHMZRE5CCMHUTIORWWH6R3ZR",
       "init_params": {
@@ -31,11 +31,11 @@
     },
     "lumen_token": {
       "id": "CDAQQJHUVNQLSUDEXOTPT3V5GWGH5VFVGHMZRE5CCMHUTIORWWH6R3ZR",
-      "wasm_hash": "143ce02a24f71f8a0423d49dce69f9f4cee7a23abb01a4153207ecdb4545c731"
+      "wasm_hash": "dfef93f0f15cc999c6b71453b948380bb4c346fcaa3ff069fd6d521b2ebdf2d5"
     },
     "pricing_adapter": {
       "id": "CCW2EF3M5GXWM2ZTOAUPKC3CY7W42T3QJEK72WO7VEOR5ONBUTCUWDVM",
-      "wasm_hash": "477ccd47cbc96421dc872650ea2ab703b58195c3d16606b48813636cc669289f"
+      "wasm_hash": "5520afef74693a866f967b338e3f32bae58927967235e4f81c362b4a515f2207"
     },
     "feature_flags": {
       "reason": "Not deployed on testnet: feature flags remain off-chain during the initial release and are not intended to be publicly deployed yet."

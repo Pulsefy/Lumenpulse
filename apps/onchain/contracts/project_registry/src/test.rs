@@ -7,11 +7,11 @@ use soroban_sdk::{
     Address, Env,
 };
 
-fn setup<'a>(
-    env: &'a Env,
+fn setup(
+    env: &Env,
     quorum: i128,
     mode: WeightMode,
-) -> (ProjectRegistryContractClient<'a>, Address) {
+) -> (ProjectRegistryContractClient<'_>, Address) {
     let admin = Address::generate(env);
     let id = env.register(ProjectRegistryContract, ());
     let client = ProjectRegistryContractClient::new(env, &id);
