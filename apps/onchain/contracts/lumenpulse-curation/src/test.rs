@@ -208,7 +208,7 @@ struct Fixture<'a> {
     proposer: Address,
 }
 
-impl<'a> Fixture<'a> {
+impl Fixture<'_> {
     fn new() -> Self {
         let env = Env::default();
         env.mock_all_auths();

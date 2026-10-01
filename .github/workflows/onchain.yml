@@ -30,10 +30,16 @@ jobs:
         fetch-depth: 0
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: stable
+        # The toolchain version is pinned in rust-toolchain.toml so that
+        # every contributor and CI run uses the same compiler and produces
+        # byte-identical WASM.  1.85.0 is the minimum because soroban-sdk 23
+        # pulls in zeroize_derive 1.5.0 which uses Cargo edition 2024,
+        # stabilised in Rust 1.85.0.
+        toolchain: 1.85.0
         targets: wasm32-unknown-unknown
+        components: rustfmt,clippy
 
     - name: Cache dependencies
       uses: Swatinem/rust-cache@v2
@@ -46,10 +52,14 @@ jobs:
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
 
-  
+    - name: Validate manifest
+      run: node scripts/validate-manifest.js
 
     - name: Build Contracts
       run: cargo build --target wasm32-unknown-unknown --release
+
+    - name: Verify WASM hashes against manifest
+      run: node scripts/verify-wasm-hashes.mjs
 
     - name: Build base contracts for size comparison
       if: github.event_name == 'pull_request'

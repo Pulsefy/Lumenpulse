@@ -6,6 +6,13 @@ import os
 
 # Skip FinBERT download/load in default test runs (CI and local pytest).
 os.environ.setdefault("SENTIMENT_DISABLE_TRANSFORMER", "1")
+# Configure the app before any test module imports ``src.api.server``.  The
+# security middleware is initialized at import time, so setting this in an
+# individual test module is order-dependent when pytest collects the full
+# suite.
+os.environ.setdefault(
+    "API_KEYS", '[{"id":"test","value":"test-key-123","scopes":["default"]}]'
+)
 
 import pytest
 import sys
@@ -214,6 +221,27 @@ for _mod in _HEAVY_MODULES:
             return True
         chk_impl.check_build = check_build
         sys.modules['sklearn.__check_build._check_build'] = chk_impl
+
+    # redis: provide Redis class so tests can mock it via patch.object,
+    # but raise on ping() so tests that require a live Redis server skip.
+    if _mod == 'redis':
+        class _StubRedisClient:
+            def __init__(self, *a, **k):
+                pass
+            def ping(self):
+                raise OSError("Redis not available in test environment")
+            def get(self, key):
+                return None
+            def setex(self, key, ttl, value):
+                return False
+            def delete(self, *keys):
+                return 0
+            def scan_iter(self, match=None):
+                return iter([])
+        m.Redis = _StubRedisClient
+        m.RedisError = Exception
+        m.ConnectionError = OSError
+        m.TimeoutError = OSError
 
     # langdetect: provide detect() helper
     if _mod == 'langdetect':

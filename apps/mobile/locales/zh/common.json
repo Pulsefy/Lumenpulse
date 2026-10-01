@@ -255,7 +255,8 @@
     "recent_transactions": "最近交易",
     "login_required": "需要登录",
     "showing_cached": "显示缓存数据 - 下拉刷新",
-    "no_assets": "暂无资产"
+    "no_assets": "暂无资产",
+    "analytics_title": "投资组合走势"
   },
   "transactions": {
     "title": "交易",

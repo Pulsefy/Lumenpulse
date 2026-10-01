@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { View } from 'react-native';
 import { applyPrivacyPreferences } from '../lib/privacy-preferences';
+import { OfflineIndicator } from '../lib/offline-indicator';
+import { startMutationQueueReplayOnReconnect } from '../lib/mutation-queue';
 import { AuthProvider } from '../contexts/AuthContext';
 import { DeepLinkProvider } from '../contexts/DeepLinkContext';
 import { EnvironmentProvider } from '../contexts/EnvironmentContext';
@@ -18,6 +20,11 @@ export default function RootLayout() {
   useEffect(() => {
     void applyPrivacyPreferences();
   }, []);
+
+  // Replay queued offline mutations whenever connectivity returns. The queue
+  // records replay failures and conflicts instead of dropping them, and the
+  // mounted OfflineIndicator links the user to the review screen.
+  useEffect(() => startMutationQueueReplayOnReconnect(), []);
 
   return (
     <LocalizationProvider>
@@ -39,6 +46,7 @@ export default function RootLayout() {
                 <NotificationsProvider>
                   <DeepLinkProvider>
                     <View style={{ flex: 1 }}>
+                      <OfflineIndicator />
                       <Stack
                         screenOptions={{
                           headerShown: false,

@@ -32,13 +32,13 @@ fn create_token<'a>(env: &Env, admin: &Address) -> (TokenClient<'a>, StellarAsse
 /// (client, admin, token_client, token_admin_client).
 ///
 /// The caller is responsible for creating projects and minting tokens as needed.
-pub fn setup_vault<'a>(
-    env: &'a Env,
+pub fn setup_vault(
+    env: &Env,
 ) -> (
-    CrowdfundVaultContractClient<'a>,
+    CrowdfundVaultContractClient<'_>,
     Address,
-    TokenClient<'a>,
-    StellarAssetClient<'a>,
+    TokenClient<'_>,
+    StellarAssetClient<'_>,
 ) {
     let admin = Address::generate(env);
     let (token_client, token_admin_client) = create_token(env, &admin);

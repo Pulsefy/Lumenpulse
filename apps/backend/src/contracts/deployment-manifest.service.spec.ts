@@ -3,9 +3,20 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { DeploymentManifestService } from './deployment-manifest.service';
 import { ContractDeploymentManifest } from './entities/contract-deployment-manifest.entity';
+import { ConfigService } from '../config/config.service';
+import { ContractCapabilityService } from './contract-capability.service';
 
 describe('DeploymentManifestService', () => {
   let service: DeploymentManifestService;
+
+  const mockConfigService = {
+    setStellarContractOverrides: jest.fn(),
+    invalidateCache: jest.fn(),
+  };
+
+  const mockContractCapabilityService = {
+    invalidateCache: jest.fn(),
+  };
 
   const mockRepo = {
     create: jest.fn(
@@ -42,6 +53,14 @@ describe('DeploymentManifestService', () => {
         {
           provide: getRepositoryToken(ContractDeploymentManifest),
           useValue: mockRepo,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
+        },
+        {
+          provide: ContractCapabilityService,
+          useValue: mockContractCapabilityService,
         },
       ],
     }).compile();

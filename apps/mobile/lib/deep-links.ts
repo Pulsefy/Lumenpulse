@@ -46,6 +46,7 @@ export interface RouteConfig {
 /** Keys of the deep link route table. */
 export type DeepLinkRouteKey =
   | 'receipt'
+  | 'discover'
   | 'notifications'
   | 'vestingClaim'
   | 'grants'
@@ -60,6 +61,11 @@ export type DeepLinkRouteKey =
 export const DEEP_LINK_ROUTES: Record<DeepLinkRouteKey, RouteConfig> = {
   /** Transaction receipt — reachable while logged out (no ProtectedRoute). */
   receipt: { path: '/transaction-receipt', authRequired: false },
+  /**
+   * Asset discovery. Public, and carries an optional `asset` query param so a
+   * signal can open the tab with the asset it is about already selected.
+   */
+  discover: { path: '/discover', authRequired: false },
   /** In-app notification inbox — wrapped in ProtectedRoute. */
   notifications: { path: '/notifications', authRequired: true },
   /**

@@ -44,3 +44,6 @@ yarn-error.*
 /test-results
 /playwright-report
 /e2e-results.xml
+
+# Size budget report (issue #1413)
+/mobile-size.md

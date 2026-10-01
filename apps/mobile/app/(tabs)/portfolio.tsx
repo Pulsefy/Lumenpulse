@@ -29,6 +29,7 @@ import { useWalletAutoRefresh } from '../../hooks/useWalletAutoRefresh';
 import { storage } from '../../lib/storage';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
 import NetworkBadge from '../../components/NetworkBadge';
+import { PortfolioAnalyticsChart } from '../../components/PortfolioAnalyticsChart';
 import { requireStepUpAuthentication } from '../../lib/biometric-lock';
 
 const truncateKey = (value: string) => `${value.slice(0, 6)}...${value.slice(-6)}`;
@@ -472,31 +473,33 @@ export default function PortfolioScreen() {
                 </View>
               ) : null}
 
-              {activePublicKey && (
-                <TouchableOpacity
-                  style={[
-                    styles.vestingCard,
-                    { backgroundColor: colors.surface, borderColor: colors.cardBorder },
-                  ]}
-                  onPress={() => router.push('/vesting-claim')}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Vesting and treasury claims"
-                  accessibilityHint="Opens your vesting schedule and claimable balance"
-                >
-                  <Ionicons name="hourglass-outline" size={20} color={colors.accent} />
-                  <View style={styles.vestingCopy}>
-                    <Text style={[styles.vestingTitle, { color: colors.text }]}>
-                      Vesting &amp; treasury
-                    </Text>
-                    <Text style={[styles.vestingSubtitle, { color: colors.textSecondary }]}>
-                      View your schedule and claim what has vested.
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-
+{activePublicKey && (
+  <TouchableOpacity
+    style={[
+      styles.vestingCard,
+      { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+    ]}
+    onPress={() => router.push('/vesting-claim')}
+    activeOpacity={0.8}
+    accessibilityRole="button"
+    accessibilityLabel="Vesting and treasury claims"
+    accessibilityHint="Opens your vesting schedule and claimable balance"
+  >
+    <Ionicons name="hourglass-outline" size={20} color={colors.accent} />
+    <View style={styles.vestingCopy}>
+      <Text style={[styles.vestingTitle, { color: colors.text }]}>
+        Vesting &amp; treasury
+      </Text>
+      <Text style={[styles.vestingSubtitle, { color: colors.textSecondary }]}>
+        View your schedule and claim what has vested.
+      </Text>
+    </View>
+    <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+  </TouchableOpacity>
+)}
+{activePublicKey ? (
+  <PortfolioAnalyticsChart publicKey={activePublicKey} enabled={isAuthenticated} />
+) : null}
               {summary && (
                 <>
                   <Text
