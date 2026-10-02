@@ -6,11 +6,13 @@ on:
     branches: [ "main" ]
     paths:
       - 'apps/onchain/**'
+      - '.github/workflows/onchain.yml'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'apps/onchain/**'
       - 'apps/onchain/.ci-trigger'
+      - '.github/workflows/onchain.yml'
 
 jobs:
   onchain-checks:
@@ -28,6 +30,17 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Validate testnet manifest coverage
+      run: node scripts/validate-manifest.js
+
+    - name: Test manifest validator
+      run: node --test scripts/validate-manifest.test.js
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
@@ -51,9 +64,6 @@ jobs:
 
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
-
-    - name: Validate manifest
-      run: node scripts/validate-manifest.js
 
     - name: Build Contracts
       run: cargo build --target wasm32-unknown-unknown --release
@@ -87,7 +97,10 @@ jobs:
 
     - name: Remove base worktree
       if: always() && github.event_name == 'pull_request'
-      run: git worktree remove --force "$RUNNER_TEMP/lumenpulse-base"
+      run: |
+        if git worktree list | grep -q lumenpulse-base; then
+          git worktree remove --force "$RUNNER_TEMP/lumenpulse-base"
+        fi
 
     - name: Run tests
       if: env.SKIP_TESTS != 'true'

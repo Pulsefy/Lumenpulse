@@ -624,10 +624,12 @@ cd apps/onchain
 node scripts/validate-manifest.js
 ```
 
-The validator requires every expected contract to have either:
+The validator discovers the crates in `apps/onchain/contracts/` and requires each one to be recorded either:
 
-1. valid deployment metadata containing a Soroban contract ID and WASM hash; or
-2. a non-empty `reason` explaining why the contract is intentionally not deployed.
+1. in `contracts`, with a valid Soroban contract ID and WASM hash; or
+2. in `not_deployed`, with a `reason` explaining why the crate is intentionally not deployed.
+
+Crates that are in neither section fail validation, and the `crate_coverage` header must state the deployed and excluded counts. `contracts/tests/` is the only directory exempt from this, because the cargo workspace excludes it.
 
 The manifest currently identifies the Stellar testnet RPC as:
 
