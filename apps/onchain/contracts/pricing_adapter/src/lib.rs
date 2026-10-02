@@ -17,7 +17,7 @@ pub const DEFAULT_MAX_PRICE_AGE: u64 = 3600;
 #[contracttype]
 pub struct PriceData {
     pub price: i128,
-    pub source: u32,
+    pub source: Address,
     pub age: u64,
 }
 
@@ -47,7 +47,7 @@ impl PricingAdapterContract {
         env: Env,
         admin: Address,
         asset: Address,
-        sources: Vec<u32>,
+        sources: Vec<Address>,
     ) -> Result<(), PricingAdapterError> {
         Self::require_admin(&env, &admin)?;
         env.storage()
@@ -66,7 +66,7 @@ impl PricingAdapterContract {
         env: Env,
         admin: Address,
         asset: Address,
-        source: u32,
+        source: Address,
         price: i128,
         asset_decimals: u32,
     ) -> Result<(), PricingAdapterError> {
@@ -108,7 +108,7 @@ impl PricingAdapterContract {
     /// provided to `set_sources`. The first source that is Fresh is returned.
     /// If no sources are configured or all are stale/invalidated, reverts with `NoValidSource`.
     pub fn get_price(env: Env, asset: Address) -> Result<PriceData, PricingAdapterError> {
-        let sources: Vec<u32> = env
+        let sources: Vec<Address> = env
             .storage()
             .persistent()
             .get(&DataKey::AssetSources(asset.clone()))
@@ -146,7 +146,7 @@ impl PricingAdapterContract {
         env: Env,
         admin: Address,
         asset: Address,
-        source: u32,
+        source: Address,
     ) -> Result<(), PricingAdapterError> {
         Self::require_admin(&env, &admin)?;
         if !env
@@ -198,7 +198,7 @@ impl PricingAdapterContract {
     }
 
     /// Freshness classification of an asset's stored price for a specific source.
-    pub fn get_price_state(env: Env, asset: Address, source: u32) -> Result<PriceState, PricingAdapterError> {
+    pub fn get_price_state(env: Env, asset: Address, source: Address) -> Result<PriceState, PricingAdapterError> {
         if !env
             .storage()
             .persistent()
@@ -210,14 +210,14 @@ impl PricingAdapterContract {
     }
 
     /// The ledger timestamp an asset's price was last set at for a specific source.
-    pub fn get_price_timestamp(env: Env, asset: Address, source: u32) -> Result<u64, PricingAdapterError> {
+    pub fn get_price_timestamp(env: Env, asset: Address, source: Address) -> Result<u64, PricingAdapterError> {
         env.storage()
             .persistent()
             .get(&DataKey::AssetPriceTimestamp(asset, source))
             .ok_or(PricingAdapterError::PriceNotFound)
     }
 
-    fn price_state(env: &Env, asset: &Address, source: u32) -> PriceState {
+    fn price_state(env: &Env, asset: &Address, source: Address) -> PriceState {
         // Touches instance storage (`MaxPriceAge`, alongside `Admin`) on
         // every price read, since this is the hottest read path in the
         // contract and admin writes alone may be too infrequent to keep the
@@ -312,7 +312,7 @@ impl PricingAdapterContract {
                 .persistent()
                 .extend_ttl(&sources_key, LEDGER_THRESHOLD, LEDGER_BUMP);
             
-            let sources: Vec<u32> = env
+            let sources: Vec<Address> = env
                 .storage()
                 .persistent()
                 .get(&sources_key)

@@ -11,13 +11,13 @@ pub const LEDGER_BUMP: u32 = 518_400;
 #[contracttype]
 pub enum DataKey {
     Admin,
-    AssetPrice(Address, u32),
+    AssetPrice(Address, Address),
     AssetOracle(Address), // not used but kept for backward compat? I'll leave it
     AssetDecimals(Address), // Stores decimals if needed for normalization
-    AssetPriceTimestamp(Address, u32), // ledger timestamp the price was last set
-    AssetPriceInvalidated(Address, u32), // explicit admin-set invalidation flag
+    AssetPriceTimestamp(Address, Address), // ledger timestamp the price was last set
+    AssetPriceInvalidated(Address, Address), // explicit admin-set invalidation flag
     MaxPriceAge,            // instance: u64 seconds; unset = DEFAULT_MAX_PRICE_AGE
-    AssetSources(Address),  // Vec<u32> for ordered sources
+    AssetSources(Address),  // Vec<Address> for ordered sources
 }
 
 /// Freshness classification for a stored price, exposed to consumers so

@@ -10,7 +10,7 @@ pub struct PriceUpdatedEvent {
     #[topic]
     pub asset: Address,
     pub admin: Address,
-    pub source: u32,
+    pub source: Address,
     pub price: i128,
 }
 
@@ -28,7 +28,7 @@ pub struct PriceInvalidatedEvent {
     #[topic]
     pub asset: Address,
     pub admin: Address,
-    pub source: u32,
+    pub source: Address,
 }
 
 #[contractevent]
@@ -43,5 +43,5 @@ pub struct SourcesUpdatedEvent {
     #[topic]
     pub asset: Address,
     pub admin: Address,
-    pub sources: Vec<u32>,
+    pub sources: Vec<Address>,
 }
