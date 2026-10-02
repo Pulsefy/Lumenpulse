@@ -24,10 +24,16 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import {
   AddToWatchlistDto,
   UpdateWatchlistDto,
+  GetWatchlistQueryDto,
   WatchlistItemResponseDto,
   WatchlistResponseDto,
 } from './dto/watchlist.dto';
 import { WatchlistItemType } from './watchlist-item.entity';
+import { DEFAULT_PAGE_SIZE } from '../common/pagination';
+import {
+  getWatchlistReadThrottleOverride,
+  getWatchlistWriteThrottleOverride,
+} from '../common/rate-limit/rate-limit.config';
 import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 
 @ApiTags('watchlist')
@@ -40,8 +46,9 @@ export class WatchlistController {
   @Get()
   @RateLimitPolicy('watchlistRead')
   @ApiOperation({
-    summary: 'Get user watchlist',
+    summary: 'Get a page of the user watchlist',
     description:
+      "Returns a paginated page of the authenticated user's watchlist, optionally filtered by type. Supports the standard pagination parameters (page, limit, cursor) and returns standard pagination metadata.",
       "Returns all items in the authenticated user's watchlist, optionally filtered by type",
   })
   @ApiQuery({
@@ -59,11 +66,14 @@ export class WatchlistController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getWatchlist(
     @Request() req: any,
-    @Query('type') type?: WatchlistItemType,
+    @Query() query: GetWatchlistQueryDto,
   ): Promise<WatchlistResponseDto> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const userId = req.user.sub as string;
-    return this.watchlistService.getWatchlist(userId, type);
+    return this.watchlistService.getWatchlist(userId, query.type, {
+      page: query.page ?? 1,
+      limit: query.limit ?? DEFAULT_PAGE_SIZE,
+    });
   }
 
   @Post()

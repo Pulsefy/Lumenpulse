@@ -160,8 +160,9 @@ export const mockTransactions: TransactionDto[] = [
 export const getMockTransactions = (
   limit: number = 50,
   cursor?: string,
+  source: TransactionDto[] = mockTransactions,
 ): { transactions: TransactionDto[]; nextPage?: string } => {
-  let transactions = [...mockTransactions];
+  let transactions = [...source];
 
   // Sort by date descending (newest first)
   transactions.sort(

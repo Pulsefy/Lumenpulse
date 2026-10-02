@@ -1,3 +1,6 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { PaginationQueryDto, PaginationMetaDto } from '../../common/pagination';
 import { ApiProperty } from '@nestjs/swagger';
 import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
@@ -45,32 +48,33 @@ export class AssetDto {
   };
 }
 
-export class AssetDiscoveryQueryDto {
-  @ApiProperty({
+export class AssetDiscoveryQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({
     description: 'Asset code to search for (exact match)',
     example: 'USDC',
-    required: false,
   })
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   assetCode?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Asset issuer to search for (exact match)',
     example: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
-    required: false,
   })
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   issuer?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'General search query (partial match on asset code)',
     example: 'USD',
-    required: false,
   })
   @IsOptional()
   @IsString()
+  @MaxLength(64)
+  q?: string;
   q?: string;
 
   @ApiProperty({
@@ -121,4 +125,10 @@ export class AssetDiscoveryResponseDto {
     example: true,
   })
   hasMore: boolean;
+
+  @ApiProperty({
+    description: 'Standard pagination metadata',
+    type: PaginationMetaDto,
+  })
+  meta: PaginationMetaDto;
 }
