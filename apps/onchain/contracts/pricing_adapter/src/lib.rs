@@ -77,19 +77,19 @@ impl PricingAdapterContract {
 
         env.storage()
             .persistent()
-            .set(&DataKey::AssetPrice(asset.clone(), source), &price);
+            .set(&DataKey::AssetPrice(asset.clone(), source.clone()), &price);
         env.storage()
             .persistent()
             .set(&DataKey::AssetDecimals(asset.clone()), &asset_decimals);
         env.storage().persistent().set(
-            &DataKey::AssetPriceTimestamp(asset.clone(), source),
+            &DataKey::AssetPriceTimestamp(asset.clone(), source.clone()),
             &env.ledger().timestamp(),
         );
         // A freshly admin-provided price always supersedes any prior
         // invalidation.
         env.storage()
             .persistent()
-            .set(&DataKey::AssetPriceInvalidated(asset.clone(), source), &false);
+            .set(&DataKey::AssetPriceInvalidated(asset.clone(), source.clone()), &false);
         Self::bump_asset_ttl(&env, &asset);
 
         let event = events::PriceUpdatedEvent {
@@ -119,14 +119,14 @@ impl PricingAdapterContract {
         }
 
         for source in sources.into_iter() {
-            if let Ok(state) = Self::get_price_state(env.clone(), asset.clone(), source) {
+            if let Ok(state) = Self::get_price_state(env.clone(), asset.clone(), source.clone()) {
                 if state == PriceState::Fresh {
                     let price: i128 = env
                         .storage()
                         .persistent()
-                        .get(&DataKey::AssetPrice(asset.clone(), source))
+                        .get(&DataKey::AssetPrice(asset.clone(), source.clone()))
                         .unwrap();
-                    let timestamp: u64 = Self::get_price_timestamp(env.clone(), asset.clone(), source).unwrap();
+                    let timestamp: u64 = Self::get_price_timestamp(env.clone(), asset.clone(), source.clone()).unwrap();
                     let age = env.ledger().timestamp().saturating_sub(timestamp);
                     return Ok(PriceData {
                         price,
@@ -152,13 +152,13 @@ impl PricingAdapterContract {
         if !env
             .storage()
             .persistent()
-            .has(&DataKey::AssetPrice(asset.clone(), source))
+            .has(&DataKey::AssetPrice(asset.clone(), source.clone()))
         {
             return Err(PricingAdapterError::PriceNotFound);
         }
         env.storage()
             .persistent()
-            .set(&DataKey::AssetPriceInvalidated(asset.clone(), source), &true);
+            .set(&DataKey::AssetPriceInvalidated(asset.clone(), source.clone()), &true);
         Self::bump_asset_ttl(&env, &asset);
 
         let event = events::PriceInvalidatedEvent { admin, asset, source };
@@ -202,7 +202,7 @@ impl PricingAdapterContract {
         if !env
             .storage()
             .persistent()
-            .has(&DataKey::AssetPrice(asset.clone(), source))
+            .has(&DataKey::AssetPrice(asset.clone(), source.clone()))
         {
             return Err(PricingAdapterError::PriceNotFound);
         }
@@ -213,7 +213,7 @@ impl PricingAdapterContract {
     pub fn get_price_timestamp(env: Env, asset: Address, source: Address) -> Result<u64, PricingAdapterError> {
         env.storage()
             .persistent()
-            .get(&DataKey::AssetPriceTimestamp(asset, source))
+            .get(&DataKey::AssetPriceTimestamp(asset, source.clone()))
             .ok_or(PricingAdapterError::PriceNotFound)
     }
 
@@ -230,7 +230,7 @@ impl PricingAdapterContract {
         let invalidated: bool = env
             .storage()
             .persistent()
-            .get(&DataKey::AssetPriceInvalidated(asset.clone(), source))
+            .get(&DataKey::AssetPriceInvalidated(asset.clone(), source.clone()))
             .unwrap_or(false);
         if invalidated {
             return PriceState::Invalidated;
@@ -239,7 +239,7 @@ impl PricingAdapterContract {
         let timestamp: u64 = env
             .storage()
             .persistent()
-            .get(&DataKey::AssetPriceTimestamp(asset.clone(), source))
+            .get(&DataKey::AssetPriceTimestamp(asset.clone(), source.clone()))
             .unwrap_or(0);
         let max_age: u64 = env
             .storage()
@@ -320,9 +320,9 @@ impl PricingAdapterContract {
             
             for source in sources.into_iter() {
                 for key in [
-                    DataKey::AssetPrice(asset.clone(), source),
-                    DataKey::AssetPriceTimestamp(asset.clone(), source),
-                    DataKey::AssetPriceInvalidated(asset.clone(), source),
+                    DataKey::AssetPrice(asset.clone(), source.clone()),
+                    DataKey::AssetPriceTimestamp(asset.clone(), source.clone()),
+                    DataKey::AssetPriceInvalidated(asset.clone(), source.clone()),
                 ] {
                     if env.storage().persistent().has(&key) {
                         env.storage()
