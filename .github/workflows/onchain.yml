@@ -55,7 +55,11 @@ jobs:
       if: github.event_name == 'pull_request'
       run: |
         git worktree add --detach "$RUNNER_TEMP/lumenpulse-base" "origin/${{ github.base_ref }}" || true
-        [ -d "$RUNNER_TEMP/lumenpulse-base" ] && cargo build --manifest-path "$RUNNER_TEMP/lumenpulse-base/apps/onchain/Cargo.toml" --target wasm32-unknown-unknown --release || echo "Base worktree not created, skipping base build"
+        if [ -f "$RUNNER_TEMP/lumenpulse-base/apps/onchain/Cargo.toml" ]; then
+          cargo build --manifest-path "$RUNNER_TEMP/lumenpulse-base/apps/onchain/Cargo.toml" --target wasm32-unknown-unknown --release || true
+        else
+          echo "Base worktree or Cargo.toml not found, skipping base build"
+        fi
 
     - name: Report and enforce contract WASM sizes
       env:
@@ -78,9 +82,8 @@ jobs:
     - name: Remove base worktree
       if: always() && github.event_name == 'pull_request'
       run: |
-        if [ -d "$RUNNER_TEMP/lumenpulse-base" ]; then
-          git worktree remove --force "$RUNNER_TEMP/lumenpulse-base"
-        fi
+        git worktree remove --force "$RUNNER_TEMP/lumenpulse-base" || true
+        rm -rf "$RUNNER_TEMP/lumenpulse-base"
 
     - name: Run tests
       if: env.SKIP_TESTS != 'true'
