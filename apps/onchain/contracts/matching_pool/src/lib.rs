@@ -5,6 +5,9 @@ mod events;
 mod math;
 mod storage;
 
+#[cfg(test)]
+mod cost_benchmarks;
+
 use errors::MatchingPoolError;
 use math::{sqrt_scaled, unscale};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};

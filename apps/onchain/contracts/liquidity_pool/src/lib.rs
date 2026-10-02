@@ -4,6 +4,9 @@ mod events;
 mod storage;
 
 #[cfg(test)]
+mod cost_benchmarks;
+
+#[cfg(test)]
 mod test;
 
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};

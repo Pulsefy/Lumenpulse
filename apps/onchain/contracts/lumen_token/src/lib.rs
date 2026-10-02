@@ -3,6 +3,8 @@
 mod admin;
 mod allowance;
 mod balance;
+#[cfg(test)]
+mod cost_benchmarks;
 mod events;
 mod metadata;
 mod storage;

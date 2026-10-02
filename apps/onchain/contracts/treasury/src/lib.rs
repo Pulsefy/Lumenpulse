@@ -5,6 +5,9 @@ mod events;
 mod multisig;
 mod storage;
 
+#[cfg(test)]
+mod cost_benchmarks;
+
 use errors::TreasuryError;
 use multisig::{
     cancel as multisig_cancel, configure as multisig_configure, consume_approval,

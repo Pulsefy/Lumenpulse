@@ -279,4 +279,6 @@ impl PricingAdapterContract {
 }
 
 #[cfg(test)]
+mod cost_benchmarks;
+#[cfg(test)]
 mod test;

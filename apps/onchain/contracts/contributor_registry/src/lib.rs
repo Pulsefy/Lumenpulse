@@ -1,5 +1,7 @@
 #![no_std]
 
+#[cfg(test)]
+mod cost_benchmarks;
 mod errors;
 mod events;
 mod multisig;

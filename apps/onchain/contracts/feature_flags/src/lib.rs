@@ -213,4 +213,6 @@ impl FeatureFlagsContract {
 }
 
 #[cfg(test)]
+mod cost_benchmarks;
+#[cfg(test)]
 mod test;

@@ -61,6 +61,22 @@ This is the contract metadata contract used by the backend: `contracts` is a map
 
 For end-to-end deployment workflows, topological contract ordering, smoke verification, and emergency halt procedures, consult the [Contract Deployment & Rollback Playbook](../../docs/CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md).
 
+## Soroban Resource-Cost Baseline
+
+CI records CPU instructions and ledger reads/writes for every exported contract entrypoint. It compares pull-request measurements with the committed baseline in `scripts/cost-baseline.json`; the `COST_REGRESSION_THRESHOLD_PERCENT` repository variable controls the warning threshold (default: 15%). The baseline below was measured from main commit `a131d36f55f9f1c4fcd61634471e7e65e268cd44`.
+
+The five highest-CPU baseline entrypoints are:
+
+| Contract entrypoint | CPU instructions | Ledger reads | Ledger writes |
+|---|---:|---:|---:|
+| `crowdfund_vault.clawback_contribution` | 1,100,707 | 16 | 12 |
+| `crowdfund_vault.refund_contributors` | 1,017,606 | 19 | 14 |
+| `contributor_registry.upgrade` | 857,646 | 4 | 2 |
+| `crowdfund_vault.execute_emergency_migration` | 795,905 | 14 | 9 |
+| `matching_pool.distribute_matching_funds` | 753,579 | 20 | 8 |
+
+These are native Soroban SDK test-environment estimates, not production WASM measurements; they exclude some VM instantiation, serialization, and transaction-level resource costs. The report is intended for consistent regression comparisons, not as a fee quote.
+
 ### Retired contracts
 
 - **`aave_lending_pool`** — removed from the repository. Decision rationale: it was never a cargo workspace member, it had zero integration in the repo, it pinned an older `soroban-sdk 21`, and it only implemented a prototype lending flow rather than the current protocol stack. Its “mock Aave” narrative remains as documentation of how to integrate an external lending provider via `YieldProviderTrait` (see `YIELD_VAULT_IMPLEMENTATION.md`).

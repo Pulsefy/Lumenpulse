@@ -6,6 +6,9 @@ mod storage;
 mod token;
 mod vault_interface;
 
+#[cfg(test)]
+mod cost_benchmarks;
+
 use cross_contract_view::admin_helpers;
 use errors::VestingError;
 use events::{AdminChangedEvent, UpgradedEvent};

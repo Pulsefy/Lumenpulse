@@ -1,0 +1,2002 @@
+{
+  "schemaVersion": 1,
+  "sdk": "soroban-sdk 23 (native Env testutils cost estimate)",
+  "sourceCommit": "a131d36f55f9f1c4fcd61634471e7e65e268cd44",
+  "measurements": [
+    {
+      "contract": "contract_registry",
+      "entrypoint": "initialize",
+      "cpu_instructions": 40128,
+      "ledger_reads": 3,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "contract_registry",
+      "entrypoint": "pause",
+      "cpu_instructions": 45867,
+      "ledger_reads": 3,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "contract_registry",
+      "entrypoint": "unpause",
+      "cpu_instructions": 47438,
+      "ledger_reads": 3,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "contract_registry",
+      "entrypoint": "register_contract",
+      "cpu_instructions": 80475,
+      "ledger_reads": 4,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "contract_registry",
+      "entrypoint": "update_contract",
+      "cpu_instructions": 72248,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "contract_registry",
+      "entrypoint": "get_contract",
+      "cpu_instructions": 34442,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contract_registry",
+      "entrypoint": "list_contracts",
+      "cpu_instructions": 46827,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "initialize",
+      "cpu_instructions": 71612,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "register_contributor",
+      "cpu_instructions": 148125,
+      "ledger_reads": 6,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "register_contributor_with_sig",
+      "cpu_instructions": 195777,
+      "ledger_reads": 7,
+      "ledger_writes": 4
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "update_contributor",
+      "cpu_instructions": 194931,
+      "ledger_reads": 7,
+      "ledger_writes": 4
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "propose",
+      "cpu_instructions": 153550,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "sign",
+      "cpu_instructions": 184795,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "cancel_proposal",
+      "cpu_instructions": 223318,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "set_multisig_config",
+      "cpu_instructions": 283962,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "update_reputation",
+      "cpu_instructions": 329300,
+      "ledger_reads": 4,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "grant_badge",
+      "cpu_instructions": 375808,
+      "ledger_reads": 5,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "revoke_badge",
+      "cpu_instructions": 413139,
+      "ledger_reads": 5,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "apply_reputation_penalty",
+      "cpu_instructions": 497650,
+      "ledger_reads": 5,
+      "ledger_writes": 4
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "suspend_attestation",
+      "cpu_instructions": 492068,
+      "ledger_reads": 4,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "restore_attestation",
+      "cpu_instructions": 528761,
+      "ledger_reads": 4,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "revoke_attestation",
+      "cpu_instructions": 569208,
+      "ledger_reads": 4,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "set_admin",
+      "cpu_instructions": 650605,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "pause_scope",
+      "cpu_instructions": 629757,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "is_paused",
+      "cpu_instructions": 321616,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "unpause_scope",
+      "cpu_instructions": 629961,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "get_registration_nonce",
+      "cpu_instructions": 216519,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "get_reputation",
+      "cpu_instructions": 217208,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "get_attestation_status",
+      "cpu_instructions": 217210,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "get_tier",
+      "cpu_instructions": 216756,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "get_badges",
+      "cpu_instructions": 211164,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "get_penalty_record",
+      "cpu_instructions": 219070,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "get_contributor",
+      "cpu_instructions": 222327,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "get_contributor_by_github",
+      "cpu_instructions": 243722,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "get_multisig_config",
+      "cpu_instructions": 420116,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "get_proposal",
+      "cpu_instructions": 328900,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "get_next_proposal_id",
+      "cpu_instructions": 417529,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "contract_version",
+      "cpu_instructions": 191308,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "on_notify",
+      "cpu_instructions": 190226,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "expire_proposal",
+      "cpu_instructions": 546299,
+      "ledger_reads": 1,
+      "ledger_writes": 1
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "deregister_contributor",
+      "cpu_instructions": 537937,
+      "ledger_reads": 7,
+      "ledger_writes": 4
+    },
+    {
+      "contract": "contributor_registry",
+      "entrypoint": "upgrade",
+      "cpu_instructions": 857646,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "initialize",
+      "cpu_instructions": 77254,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "migrate",
+      "cpu_instructions": 61536,
+      "ledger_reads": 3,
+      "ledger_writes": 1
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_storage_version",
+      "cpu_instructions": 44149,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "contract_version",
+      "cpu_instructions": 27836,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "create_project",
+      "cpu_instructions": 228496,
+      "ledger_reads": 8,
+      "ledger_writes": 7
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "deposit_with_sig",
+      "cpu_instructions": 597774,
+      "ledger_reads": 14,
+      "ledger_writes": 10
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "deposit",
+      "cpu_instructions": 545090,
+      "ledger_reads": 11,
+      "ledger_writes": 8
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "add_subscriber",
+      "cpu_instructions": 122498,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "remove_subscriber",
+      "cpu_instructions": 137365,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "approve_milestone",
+      "cpu_instructions": 168576,
+      "ledger_reads": 8,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "process_milestone_decisions",
+      "cpu_instructions": 215818,
+      "ledger_reads": 9,
+      "ledger_writes": 4
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "start_milestone_vote",
+      "cpu_instructions": 196642,
+      "ledger_reads": 9,
+      "ledger_writes": 4
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "vote_milestone",
+      "cpu_instructions": 261361,
+      "ledger_reads": 11,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "withdraw",
+      "cpu_instructions": 528592,
+      "ledger_reads": 14,
+      "ledger_writes": 8
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "dispute_milestone",
+      "cpu_instructions": 176241,
+      "ledger_reads": 8,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_milestone_dispute",
+      "cpu_instructions": 70074,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "is_milestone_disputed",
+      "cpu_instructions": 60340,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "resolve_milestone_dispute",
+      "cpu_instructions": 181235,
+      "ledger_reads": 7,
+      "ledger_writes": 4
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "register_contributor",
+      "cpu_instructions": 177905,
+      "ledger_reads": 5,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "register_contributor_with_sig",
+      "cpu_instructions": 246321,
+      "ledger_reads": 6,
+      "ledger_writes": 4
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "update_reputation",
+      "cpu_instructions": 153293,
+      "ledger_reads": 6,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_reputation",
+      "cpu_instructions": 71946,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "fund_matching_pool",
+      "cpu_instructions": 156362,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "calculate_match",
+      "cpu_instructions": 89854,
+      "ledger_reads": 4,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "distribute_match",
+      "cpu_instructions": 273237,
+      "ledger_reads": 7,
+      "ledger_writes": 4
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_matching_pool_balance",
+      "cpu_instructions": 65536,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "fund_reward_pool",
+      "cpu_instructions": 387337,
+      "ledger_reads": 8,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_reward_pool_balance",
+      "cpu_instructions": 61821,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "batch_payout",
+      "cpu_instructions": 441331,
+      "ledger_reads": 10,
+      "ledger_writes": 6
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "allocate_to_streaming_treasury",
+      "cpu_instructions": 529738,
+      "ledger_reads": 13,
+      "ledger_writes": 7
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_contribution",
+      "cpu_instructions": 83925,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_contributor_count",
+      "cpu_instructions": 84304,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_project_storage_summary",
+      "cpu_instructions": 163893,
+      "ledger_reads": 4,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_project",
+      "cpu_instructions": 84542,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_balance",
+      "cpu_instructions": 99468,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "is_milestone_approved",
+      "cpu_instructions": 118836,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_total_contributions",
+      "cpu_instructions": 50937,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_contributor_contribution",
+      "cpu_instructions": 84507,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_project_status",
+      "cpu_instructions": 101894,
+      "ledger_reads": 4,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_admin",
+      "cpu_instructions": 55592,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_refund_receipt_count",
+      "cpu_instructions": 77326,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "has_refund_claimed",
+      "cpu_instructions": 87969,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "set_fee_config",
+      "cpu_instructions": 154291,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "set_yield_provider",
+      "cpu_instructions": 152974,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "invest_idle_funds",
+      "cpu_instructions": 520337,
+      "ledger_reads": 12,
+      "ledger_writes": 6
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "divest_funds",
+      "cpu_instructions": 492904,
+      "ledger_reads": 11,
+      "ledger_writes": 6
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "pause",
+      "cpu_instructions": 175972,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "require_not_paused",
+      "cpu_instructions": 58902,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "unpause",
+      "cpu_instructions": 175964,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "propose_emergency_migration",
+      "cpu_instructions": 252082,
+      "ledger_reads": 7,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_emergency_migration_plan",
+      "cpu_instructions": 116481,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "veto_emergency_migration",
+      "cpu_instructions": 206136,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "execute_emergency_migration",
+      "cpu_instructions": 795905,
+      "ledger_reads": 14,
+      "ledger_writes": 9
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "cancel_project",
+      "cpu_instructions": 331751,
+      "ledger_reads": 6,
+      "ledger_writes": 4
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "refund_contributors",
+      "cpu_instructions": 1017606,
+      "ledger_reads": 19,
+      "ledger_writes": 14
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "get_refund_receipt",
+      "cpu_instructions": 110155,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "clawback_contribution",
+      "cpu_instructions": 1100707,
+      "ledger_reads": 16,
+      "ledger_writes": 12
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "set_admin",
+      "cpu_instructions": 207959,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "crowdfund_vault",
+      "entrypoint": "upgrade",
+      "cpu_instructions": 243550,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "feature_flags",
+      "entrypoint": "initialize",
+      "cpu_instructions": 46759,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "feature_flags",
+      "entrypoint": "set_flag",
+      "cpu_instructions": 101424,
+      "ledger_reads": 5,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "feature_flags",
+      "entrypoint": "is_enabled",
+      "cpu_instructions": 40059,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "feature_flags",
+      "entrypoint": "get_flag",
+      "cpu_instructions": 39512,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "feature_flags",
+      "entrypoint": "list_flags",
+      "cpu_instructions": 59549,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "feature_flags",
+      "entrypoint": "get_admin",
+      "cpu_instructions": 38184,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "feature_flags",
+      "entrypoint": "set_admin",
+      "cpu_instructions": 72435,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "feature_flags",
+      "entrypoint": "pause",
+      "cpu_instructions": 73067,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "feature_flags",
+      "entrypoint": "unpause",
+      "cpu_instructions": 72681,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "liquidity_pool",
+      "entrypoint": "initialize",
+      "cpu_instructions": 56072,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "liquidity_pool",
+      "entrypoint": "add_liquidity",
+      "cpu_instructions": 683069,
+      "ledger_reads": 19,
+      "ledger_writes": 13
+    },
+    {
+      "contract": "liquidity_pool",
+      "entrypoint": "lp_balance",
+      "cpu_instructions": 44361,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "liquidity_pool",
+      "entrypoint": "get_reserves",
+      "cpu_instructions": 57652,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "liquidity_pool",
+      "entrypoint": "swap_exact_in",
+      "cpu_instructions": 493200,
+      "ledger_reads": 12,
+      "ledger_writes": 8
+    },
+    {
+      "contract": "liquidity_pool",
+      "entrypoint": "get_accrued_fees",
+      "cpu_instructions": 67600,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "liquidity_pool",
+      "entrypoint": "remove_liquidity",
+      "cpu_instructions": 551938,
+      "ledger_reads": 14,
+      "ledger_writes": 9
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "initialize",
+      "cpu_instructions": 42543,
+      "ledger_reads": 2,
+      "ledger_writes": 1
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "contract_version",
+      "cpu_instructions": 23572,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "decimals",
+      "cpu_instructions": 42438,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "name",
+      "cpu_instructions": 41925,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "symbol",
+      "cpu_instructions": 42499,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "mint",
+      "cpu_instructions": 136576,
+      "ledger_reads": 6,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "balance",
+      "cpu_instructions": 40690,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "approve",
+      "cpu_instructions": 80335,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "allowance",
+      "cpu_instructions": 37489,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "transfer_from",
+      "cpu_instructions": 253261,
+      "ledger_reads": 10,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "burn_from",
+      "cpu_instructions": 150190,
+      "ledger_reads": 7,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "transfer",
+      "cpu_instructions": 200435,
+      "ledger_reads": 8,
+      "ledger_writes": 4
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "burn",
+      "cpu_instructions": 99018,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "freeze",
+      "cpu_instructions": 87537,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "unfreeze",
+      "cpu_instructions": 87965,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "set_admin",
+      "cpu_instructions": 99766,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "lumen_token",
+      "entrypoint": "upgrade",
+      "cpu_instructions": 102027,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "lumenpulse-curation",
+      "entrypoint": "initialize",
+      "cpu_instructions": 80449,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "lumenpulse-curation",
+      "entrypoint": "propose_project",
+      "cpu_instructions": 310230,
+      "ledger_reads": 9,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "lumenpulse-curation",
+      "entrypoint": "vote_to_verify",
+      "cpu_instructions": 498736,
+      "ledger_reads": 11,
+      "ledger_writes": 6
+    },
+    {
+      "contract": "lumenpulse-curation",
+      "entrypoint": "is_verified",
+      "cpu_instructions": 50407,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "lumenpulse-curation",
+      "entrypoint": "get_proposal_state",
+      "cpu_instructions": 62887,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "lumenpulse-curation",
+      "entrypoint": "get_vote",
+      "cpu_instructions": 48593,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "lumenpulse-curation",
+      "entrypoint": "admin_reject",
+      "cpu_instructions": 152704,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "lumenpulse-curation",
+      "entrypoint": "finalize_proposal",
+      "cpu_instructions": 110808,
+      "ledger_reads": 2,
+      "ledger_writes": 1
+    },
+    {
+      "contract": "lumenpulse-curation",
+      "entrypoint": "get_deposit_amount",
+      "cpu_instructions": 22074,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "lumenpulse-curation",
+      "entrypoint": "get_voting_window_ledgers",
+      "cpu_instructions": 22076,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "lumenpulse-curation",
+      "entrypoint": "get_verify_threshold_bps",
+      "cpu_instructions": 22076,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "initialize",
+      "cpu_instructions": 75286,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "create_round",
+      "cpu_instructions": 266750,
+      "ledger_reads": 9,
+      "ledger_writes": 7
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "fund_pool",
+      "cpu_instructions": 369115,
+      "ledger_reads": 10,
+      "ledger_writes": 6
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "approve_project",
+      "cpu_instructions": 315857,
+      "ledger_reads": 10,
+      "ledger_writes": 6
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "remove_project",
+      "cpu_instructions": 175956,
+      "ledger_reads": 6,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "set_round_cap",
+      "cpu_instructions": 158776,
+      "ledger_reads": 6,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "record_contribution",
+      "cpu_instructions": 400278,
+      "ledger_reads": 10,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "get_round",
+      "cpu_instructions": 63319,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "get_pool_balance",
+      "cpu_instructions": 75440,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "get_project_qf_score",
+      "cpu_instructions": 140174,
+      "ledger_reads": 5,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "preview_distribution",
+      "cpu_instructions": 278435,
+      "ledger_reads": 11,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "get_project_contributions",
+      "cpu_instructions": 82034,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "get_contributor_count",
+      "cpu_instructions": 84450,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "get_round_cap",
+      "cpu_instructions": 72318,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "get_contributor_round_total",
+      "cpu_instructions": 80920,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "get_round_status",
+      "cpu_instructions": 79754,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "get_admin",
+      "cpu_instructions": 56732,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "pause_scope",
+      "cpu_instructions": 114178,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "unpause_scope",
+      "cpu_instructions": 115161,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "pause",
+      "cpu_instructions": 113168,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "unpause",
+      "cpu_instructions": 113559,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "is_paused",
+      "cpu_instructions": 61739,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "finalize_round",
+      "cpu_instructions": 288233,
+      "ledger_reads": 7,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "get_finalized_at",
+      "cpu_instructions": 82384,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "distribute_matching_funds",
+      "cpu_instructions": 753579,
+      "ledger_reads": 20,
+      "ledger_writes": 8
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "set_admin",
+      "cpu_instructions": 136435,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "matching_pool",
+      "entrypoint": "upgrade",
+      "cpu_instructions": 151520,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "notification_broker",
+      "entrypoint": "initialize",
+      "cpu_instructions": 34250,
+      "ledger_reads": 2,
+      "ledger_writes": 1
+    },
+    {
+      "contract": "notification_broker",
+      "entrypoint": "admin",
+      "cpu_instructions": 26009,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "notification_broker",
+      "entrypoint": "subscribe",
+      "cpu_instructions": 97640,
+      "ledger_reads": 4,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "notification_broker",
+      "entrypoint": "notify",
+      "cpu_instructions": 127031,
+      "ledger_reads": 8,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "notification_broker",
+      "entrypoint": "is_subscribed",
+      "cpu_instructions": 31185,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "notification_broker",
+      "entrypoint": "get_listeners_for_source",
+      "cpu_instructions": 41062,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "notification_broker",
+      "entrypoint": "unsubscribe",
+      "cpu_instructions": 52911,
+      "ledger_reads": 2,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "pricing_adapter",
+      "entrypoint": "initialize",
+      "cpu_instructions": 43852,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "pricing_adapter",
+      "entrypoint": "set_price",
+      "cpu_instructions": 129279,
+      "ledger_reads": 8,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "pricing_adapter",
+      "entrypoint": "get_price",
+      "cpu_instructions": 85222,
+      "ledger_reads": 6,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "pricing_adapter",
+      "entrypoint": "invalidate_price",
+      "cpu_instructions": 93673,
+      "ledger_reads": 8,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "pricing_adapter",
+      "entrypoint": "set_staleness_window",
+      "cpu_instructions": 67509,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "pricing_adapter",
+      "entrypoint": "get_staleness_window",
+      "cpu_instructions": 25435,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "pricing_adapter",
+      "entrypoint": "get_price_state",
+      "cpu_instructions": 90610,
+      "ledger_reads": 6,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "pricing_adapter",
+      "entrypoint": "get_price_timestamp",
+      "cpu_instructions": 27632,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "pricing_adapter",
+      "entrypoint": "get_asset_decimals",
+      "cpu_instructions": 27046,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "pricing_adapter",
+      "entrypoint": "normalize_amount",
+      "cpu_instructions": 103531,
+      "ledger_reads": 6,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "initialize",
+      "cpu_instructions": 56736,
+      "ledger_reads": 3,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "register_project",
+      "cpu_instructions": 102885,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "cast_vote",
+      "cpu_instructions": 175139,
+      "ledger_reads": 7,
+      "ledger_writes": 4
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "archive_project",
+      "cpu_instructions": 127627,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "delist_project",
+      "cpu_instructions": 134763,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "override_verification",
+      "cpu_instructions": 134847,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "get_project",
+      "cpu_instructions": 59122,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "is_verified",
+      "cpu_instructions": 51675,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "has_voted",
+      "cpu_instructions": 38402,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "get_voter_weight",
+      "cpu_instructions": 47853,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "get_config",
+      "cpu_instructions": 66177,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "get_admin",
+      "cpu_instructions": 56827,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "update_config",
+      "cpu_instructions": 111022,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "pause",
+      "cpu_instructions": 100081,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "unpause",
+      "cpu_instructions": 100953,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "set_admin",
+      "cpu_instructions": 101409,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "project_registry",
+      "entrypoint": "upgrade",
+      "cpu_instructions": 115068,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "initialize",
+      "cpu_instructions": 46759,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "register_module",
+      "cpu_instructions": 77633,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "update_module",
+      "cpu_instructions": 96238,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "deactivate_module",
+      "cpu_instructions": 83275,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "activate_module",
+      "cpu_instructions": 92696,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "get_module",
+      "cpu_instructions": 34970,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "resolve",
+      "cpu_instructions": 39886,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "is_active",
+      "cpu_instructions": 32065,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "get_admin",
+      "cpu_instructions": 30224,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "set_admin",
+      "cpu_instructions": 62474,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "pause",
+      "cpu_instructions": 59583,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "unpause",
+      "cpu_instructions": 58711,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "protocol_registry",
+      "entrypoint": "upgrade",
+      "cpu_instructions": 70083,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "initialize",
+      "cpu_instructions": 38194,
+      "ledger_reads": 3,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "configure_multisig",
+      "cpu_instructions": 82444,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "get_multisig_config",
+      "cpu_instructions": 67160,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "propose",
+      "cpu_instructions": 135463,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "sign_proposal",
+      "cpu_instructions": 170936,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "get_proposal",
+      "cpu_instructions": 79815,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "get_next_proposal_id",
+      "cpu_instructions": 95192,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "allocate_budget",
+      "cpu_instructions": 459104,
+      "ledger_reads": 10,
+      "ledger_writes": 7
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "allocate_budget_with_cliff",
+      "cpu_instructions": 487615,
+      "ledger_reads": 9,
+      "ledger_writes": 7
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "get_unlocked",
+      "cpu_instructions": 75573,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "get_cliff",
+      "cpu_instructions": 69941,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "get_admin",
+      "cpu_instructions": 76745,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "get_token",
+      "cpu_instructions": 76745,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "get_financials",
+      "cpu_instructions": 146992,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "preview_unlocked_at",
+      "cpu_instructions": 75577,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "preview_schedule",
+      "cpu_instructions": 86321,
+      "ledger_reads": 3,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "claim",
+      "cpu_instructions": 388616,
+      "ledger_reads": 9,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "rotate_beneficiary",
+      "cpu_instructions": 233757,
+      "ledger_reads": 6,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "cancel_stream",
+      "cpu_instructions": 374411,
+      "ledger_reads": 9,
+      "ledger_writes": 6
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "emergency_stop",
+      "cpu_instructions": 388752,
+      "ledger_reads": 9,
+      "ledger_writes": 6
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "rotate_beneficiary_via_multisig",
+      "cpu_instructions": 350338,
+      "ledger_reads": 7,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "set_multisig_config",
+      "cpu_instructions": 294348,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "set_admin_via_multisig",
+      "cpu_instructions": 334954,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "cancel_proposal",
+      "cpu_instructions": 362085,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "treasury",
+      "entrypoint": "expire_proposal",
+      "cpu_instructions": 375001,
+      "ledger_reads": 2,
+      "ledger_writes": 1
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "init",
+      "cpu_instructions": 43508,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "increment",
+      "cpu_instructions": 36537,
+      "ledger_reads": 1,
+      "ledger_writes": 1
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "get_count",
+      "cpu_instructions": 25813,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "get_admin",
+      "cpu_instructions": 26448,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "propose_admin_rotation",
+      "cpu_instructions": 62036,
+      "ledger_reads": 3,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "accept_admin_rotation",
+      "cpu_instructions": 77485,
+      "ledger_reads": 3,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "cancel_admin_rotation",
+      "cpu_instructions": 74839,
+      "ledger_reads": 3,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "queue_operation",
+      "cpu_instructions": 111216,
+      "ledger_reads": 5,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "get_operation",
+      "cpu_instructions": 54231,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "get_operation_status",
+      "cpu_instructions": 46721,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "cancel_operation",
+      "cpu_instructions": 61343,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "execute_operation",
+      "cpu_instructions": 99163,
+      "ledger_reads": 4,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "contract_version",
+      "cpu_instructions": 20570,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "upgradable-contract",
+      "entrypoint": "version",
+      "cpu_instructions": 19084,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "initialize",
+      "cpu_instructions": 47148,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "create_vesting",
+      "cpu_instructions": 276912,
+      "ledger_reads": 9,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "get_claimable",
+      "cpu_instructions": 59254,
+      "ledger_reads": 2,
+      "ledger_writes": 1
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "get_vesting",
+      "cpu_instructions": 48508,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "get_available_amount",
+      "cpu_instructions": 59256,
+      "ledger_reads": 2,
+      "ledger_writes": 1
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "get_admin",
+      "cpu_instructions": 33157,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "get_token",
+      "cpu_instructions": 33731,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "approve_delegate",
+      "cpu_instructions": 68015,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "get_delegates",
+      "cpu_instructions": 38827,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "revoke_delegate",
+      "cpu_instructions": 61552,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "claim_for",
+      "cpu_instructions": 331551,
+      "ledger_reads": 10,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "claim",
+      "cpu_instructions": 320854,
+      "ledger_reads": 9,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "create_vesting_with_milestone",
+      "cpu_instructions": 425119,
+      "ledger_reads": 11,
+      "ledger_writes": 5
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "contract_version",
+      "cpu_instructions": 21012,
+      "ledger_reads": 1,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "set_admin",
+      "cpu_instructions": 79387,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "vesting-wallet",
+      "entrypoint": "upgrade",
+      "cpu_instructions": 95254,
+      "ledger_reads": 5,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "yield_vault",
+      "entrypoint": "initialize",
+      "cpu_instructions": 41121,
+      "ledger_reads": 2,
+      "ledger_writes": 1
+    },
+    {
+      "contract": "yield_vault",
+      "entrypoint": "set_paused",
+      "cpu_instructions": 69667,
+      "ledger_reads": 4,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "yield_vault",
+      "entrypoint": "is_paused",
+      "cpu_instructions": 40232,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "yield_vault",
+      "entrypoint": "register_provider",
+      "cpu_instructions": 114552,
+      "ledger_reads": 5,
+      "ledger_writes": 3
+    },
+    {
+      "contract": "yield_vault",
+      "entrypoint": "deposit",
+      "cpu_instructions": 492859,
+      "ledger_reads": 15,
+      "ledger_writes": 10
+    },
+    {
+      "contract": "yield_vault",
+      "entrypoint": "balance_of",
+      "cpu_instructions": 47532,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "yield_vault",
+      "entrypoint": "get_total_aum",
+      "cpu_instructions": 41527,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "yield_vault",
+      "entrypoint": "harvest_yield",
+      "cpu_instructions": 124070,
+      "ledger_reads": 7,
+      "ledger_writes": 2
+    },
+    {
+      "contract": "yield_vault",
+      "entrypoint": "get_total_yield_harvested",
+      "cpu_instructions": 38960,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "yield_vault",
+      "entrypoint": "get_provider",
+      "cpu_instructions": 48828,
+      "ledger_reads": 2,
+      "ledger_writes": 0
+    },
+    {
+      "contract": "yield_vault",
+      "entrypoint": "withdraw",
+      "cpu_instructions": 509904,
+      "ledger_reads": 14,
+      "ledger_writes": 10
+    }
+  ]
+}

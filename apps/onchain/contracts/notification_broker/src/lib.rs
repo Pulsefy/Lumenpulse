@@ -271,4 +271,6 @@ impl NotificationBrokerContract {
 }
 
 #[cfg(test)]
+mod cost_benchmarks;
+#[cfg(test)]
 mod test;
