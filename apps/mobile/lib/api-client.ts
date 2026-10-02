@@ -48,6 +48,10 @@ export interface RequestConfig {
    * Upper bound for a single backoff delay in milliseconds. Defaults to 8000.
    */
   maxDelay?: number;
+  /**
+   * Desired response format. Defaults to 'json'.
+   */
+  responseType?: 'json' | 'text';
 }
 
 /**
@@ -315,6 +319,19 @@ class ApiClient {
         };
       }
 
+      const contentType = response.headers?.get?.('content-type') || '';
+      if (
+        config.responseType === 'text' ||
+        contentType.includes('text/csv') ||
+        contentType.includes('text/plain')
+      ) {
+        const text = await response.text();
+        return {
+          success: true,
+          data: text as unknown as T,
+        };
+      }
+
       const data = await response.json();
       return {
         success: true,
@@ -469,6 +486,13 @@ class ApiClient {
     config?: RequestConfig,
   ): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { method: 'DELETE', body: JSON.stringify(body) }, config);
+  }
+
+  /**
+   * GET text request (e.g. for CSV downloads)
+   */
+  async getText(endpoint: string, config?: RequestConfig): Promise<ApiResponse<string>> {
+    return this.request<string>(endpoint, { method: 'GET' }, { ...config, responseType: 'text' });
   }
 }
 
