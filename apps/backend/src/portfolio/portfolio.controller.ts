@@ -143,18 +143,12 @@ export class PortfolioController {
     description: 'Snapshot created successfully',
     schema: {
       properties: {
-        success: { type: 'boolean', example: true },
-        snapshot: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              example: '123e4567-e89b-12d3-a456-426614174000',
-            },
-            createdAt: { type: 'string', format: 'date-time' },
-            totalValueUsd: { type: 'string', example: '15420.50' },
-          },
+        id: {
+          type: 'string',
+          example: '123e4567-e89b-12d3-a456-426614174000',
         },
+        createdAt: { type: 'string', format: 'date-time' },
+        totalValueUsd: { type: 'string', example: '15420.50' },
       },
     },
   })
@@ -164,12 +158,9 @@ export class PortfolioController {
     const userId = req.user.sub as string;
     const snapshot = await this.portfolioService.createSnapshot(userId);
     return {
-      success: true,
-      snapshot: {
-        id: snapshot.id,
-        createdAt: snapshot.createdAt,
-        totalValueUsd: snapshot.totalValueUsd,
-      },
+      id: snapshot.id,
+      createdAt: snapshot.createdAt,
+      totalValueUsd: snapshot.totalValueUsd,
     };
   }
 

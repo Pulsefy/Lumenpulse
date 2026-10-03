@@ -19,6 +19,7 @@ import {
   HealthResponse,
 } from './sentiment/sentiment.service';
 import { config } from './lib/config';
+import { SkipResponseEnvelope } from './common/decorators/skip-response-envelope.decorator';
 
 // DTO for sentiment analysis
 class AnalyzeDto {
@@ -197,6 +198,7 @@ class HealthResponseDto implements HealthResponse {
 
 @ApiTags('test-exception')
 @Controller('test-exception')
+@SkipResponseEnvelope()
 export class TestExceptionController {
   private readonly logger = new Logger(TestExceptionController.name);
 
