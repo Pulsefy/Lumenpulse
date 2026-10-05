@@ -328,7 +328,7 @@ export interface PriceAlertTransport {
 
 /** The subset of `mutationQueue` the repository uses. */
 export interface PriceAlertQueue {
-  enqueue(mutation: { type: string; payload: Record<string, unknown> }): Promise<void>;
+  enqueue(mutation: { type: string; payload: Record<string, unknown> }): Promise<PendingMutation>;
   dequeue(): Promise<PendingMutation | null>;
 }
 

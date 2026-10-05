@@ -53,7 +53,17 @@ function fakeQueue() {
   const queue: PriceAlertQueue = {
     enqueue: async (mutation) => {
       counter += 1;
-      items.push({ ...mutation, id: `m${counter}`, createdAt: new Date(0).toISOString() });
+      const queued: PendingMutation = {
+        ...mutation,
+        id: `m${counter}`,
+        createdAt: new Date(0).toISOString(),
+        state: 'pending',
+        attempts: 0,
+        lastError: null,
+        updatedAt: new Date(0).toISOString(),
+      };
+      items.push(queued);
+      return queued;
     },
     dequeue: async () => items.shift() ?? null,
   };
