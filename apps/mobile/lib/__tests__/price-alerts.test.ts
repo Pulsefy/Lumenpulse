@@ -434,7 +434,11 @@ describe('PriceAlertRepository', () => {
           localId: `${PENDING_RULE_PREFIX}abc`,
         },
         id: 'm1',
+        state: 'pending',
+        attempts: 0,
+        lastError: null,
         createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
       },
     ]);
   });
@@ -475,7 +479,11 @@ describe('PriceAlertRepository', () => {
         type: PRICE_ALERT_MUTATIONS.update,
         payload: { id: 'rule-1', patch: { isActive: false, targetPrice: 2 } },
         id: 'm1',
+        state: 'pending',
+        attempts: 0,
+        lastError: null,
         createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
       },
     ]);
   });
