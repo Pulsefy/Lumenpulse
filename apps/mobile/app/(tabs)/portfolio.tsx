@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
@@ -249,6 +249,7 @@ export default function PortfolioScreen() {
   const { isAuthenticated } = useAuth();
   const { colors } = useTheme();
   const { t } = useLocalization();
+  const router = useRouter();
   const { environmentConfig } = useEnvironment();
   const [accounts, setAccounts] = useState<LinkedStellarAccount[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
@@ -472,10 +473,33 @@ export default function PortfolioScreen() {
                 </View>
               ) : null}
 
-              {activePublicKey ? (
-                <PortfolioAnalyticsChart publicKey={activePublicKey} enabled={isAuthenticated} />
-              ) : null}
-
+{activePublicKey && (
+  <TouchableOpacity
+    style={[
+      styles.vestingCard,
+      { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+    ]}
+    onPress={() => router.push('/vesting-claim')}
+    activeOpacity={0.8}
+    accessibilityRole="button"
+    accessibilityLabel="Vesting and treasury claims"
+    accessibilityHint="Opens your vesting schedule and claimable balance"
+  >
+    <Ionicons name="hourglass-outline" size={20} color={colors.accent} />
+    <View style={styles.vestingCopy}>
+      <Text style={[styles.vestingTitle, { color: colors.text }]}>
+        Vesting &amp; treasury
+      </Text>
+      <Text style={[styles.vestingSubtitle, { color: colors.textSecondary }]}>
+        View your schedule and claim what has vested.
+      </Text>
+    </View>
+    <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+  </TouchableOpacity>
+)}
+{activePublicKey ? (
+  <PortfolioAnalyticsChart publicKey={activePublicKey} enabled={isAuthenticated} />
+) : null}
               {summary && (
                 <>
                   <Text
@@ -554,6 +578,19 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 26, fontWeight: '700', margin: 20 },
   section: { margin: 20, fontWeight: '600' },
+  vestingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  vestingCopy: { flex: 1, gap: 2 },
+  vestingTitle: { fontSize: 15, fontWeight: '700' },
+  vestingSubtitle: { fontSize: 13, lineHeight: 18 },
   switcherWrap: {
     marginBottom: 16,
   },

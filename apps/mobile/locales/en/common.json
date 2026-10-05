@@ -283,6 +283,29 @@
   "settings": {
     "title": "Settings",
     "account_preferences": "Account & Preferences",
+    "exports": {
+      "title": "Data Exports",
+      "description": "Request and download your transaction and portfolio history.",
+      "request_export": "Request Export",
+      "request_export_desc": "Request an asynchronous export of your transaction history or portfolio records. Completed files can be downloaded or shared directly via the system share sheet.",
+      "portfolio_history": "Portfolio History",
+      "portfolio_history_desc": "Portfolio snapshots with asset balances and valuations over time (CSV).",
+      "tax_transactions": "Transaction History",
+      "tax_transactions_desc": "Complete transaction history for tax and accounting (CSV).",
+      "export_in_progress": "Export in Progress",
+      "already_in_progress": "An export for this data is already in progress.",
+      "download": "Download",
+      "share_title": "Share File",
+      "status_pending": "Pending",
+      "status_processing": "Processing",
+      "status_completed": "Ready",
+      "status_failed": "Failed",
+      "status_expired": "Expired",
+      "history_title": "Export History",
+      "no_exports": "No exports yet. Request your first export above.",
+      "refresh": "Refresh",
+      "expired_desc": "Download expired (valid for 24h)"
+    },
     "contributor_profile": {
       "title": "Contributor Profile & Verification",
       "description": "View linked wallet status, verification progress, and key account details."

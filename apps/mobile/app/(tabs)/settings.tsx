@@ -271,6 +271,39 @@ export default function SettingsScreen() {
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
+          <TouchableOpacity
+            testID="settings-data-exports-nav"
+            style={styles.navRow}
+            activeOpacity={0.75}
+            onPress={() => router.push('/settings/exports')}
+            accessibilityRole="link"
+            accessibilityLabel={t('settings.exports.title', 'Data Exports')}
+            accessibilityHint={t(
+              'settings.exports.description',
+              'Request and download your transaction and portfolio history',
+            )}
+          >
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="cloud-download-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.exports.title', 'Data Exports')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t(
+                    'settings.exports.description',
+                    'Request and download your transaction and portfolio history',
+                  )}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
           <View style={styles.preferenceRow}>
             <View style={styles.navRowCopy}>
               <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
