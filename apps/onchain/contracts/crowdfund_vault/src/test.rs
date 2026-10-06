@@ -8,6 +8,10 @@ use soroban_sdk::{
     vec, Address, BytesN, Env, IntoVal,
 };
 
+#[cfg(test)]
+#[path = "cost_benchmarks.rs"]
+mod cost_benchmarks;
+
 fn request_id(env: &Env) -> BytesN<32> {
     BytesN::from_array(env, &[0; 32])
 }

@@ -4,6 +4,9 @@ mod errors;
 mod events;
 mod storage;
 
+#[cfg(test)]
+mod cost_benchmarks;
+
 use errors::YieldVaultError;
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;

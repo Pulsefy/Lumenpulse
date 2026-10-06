@@ -153,4 +153,6 @@ impl ContractRegistry {
 }
 
 #[cfg(test)]
+mod cost_benchmarks;
+#[cfg(test)]
 mod test;

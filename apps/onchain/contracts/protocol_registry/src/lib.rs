@@ -325,4 +325,6 @@ impl ProtocolRegistryContract {
 }
 
 #[cfg(test)]
+mod cost_benchmarks;
+#[cfg(test)]
 mod test;

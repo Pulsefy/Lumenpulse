@@ -4,6 +4,9 @@ mod errors;
 mod events;
 mod storage;
 
+#[cfg(test)]
+mod cost_benchmarks;
+
 use errors::ContractError;
 use events::{
     AdminChangedEvent, AdminRotationCancelledEvent, AdminRotationProposedEvent,
