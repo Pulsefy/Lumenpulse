@@ -228,6 +228,27 @@ export default function NotificationSettingsScreen() {
           )}
         </View>
 
+        <TouchableOpacity
+          style={[
+            styles.statusCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+          onPress={() => router.push('/settings/price-alerts')}
+          accessibilityRole="button"
+          accessibilityLabel="Manage price alerts"
+        >
+          <View style={styles.manageRow}>
+            <Ionicons name="pulse-outline" size={20} color={colors.accent} />
+            <View style={styles.headerCopy}>
+              <Text style={[styles.statusTitle, { color: colors.text }]}>Manage price alerts</Text>
+              <Text style={[styles.statusText, { color: colors.textSecondary }]}>
+                Create, edit and delete the rules that trigger price alerts.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </View>
+        </TouchableOpacity>
+
         <View
           style={[
             styles.statusCard,
@@ -345,6 +366,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 18,
     gap: 8,
+  },
+  manageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   statusTitle: {
     fontSize: 15,
