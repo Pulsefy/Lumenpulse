@@ -23,6 +23,7 @@ import { calculatePortfolioPerformance } from './utils/portfolio-performance.uti
 import { PortfolioSnapshotQueueService } from './queue/portfolio-snapshot.queue.service';
 import { PortfolioSnapshotBatchStatus } from './queue/portfolio-snapshot.types';
 import { ExchangeRatesService } from '../exchange-rates/exchange-rates.service';
+import { createOffsetMeta, DEFAULT_PAGE_SIZE } from '../common/pagination';
 import { MaterializedSnapshotService } from './materialized-snapshot.service';
 import { QueryProfilerService } from '../common/profiling/query-profiler.service';
 
@@ -166,10 +167,16 @@ export class PortfolioService {
   async getPortfolioHistory(
     userId: string,
     page: number = 1,
-    limit: number = 10,
+    limit: number = DEFAULT_PAGE_SIZE,
   ): Promise<PortfolioHistoryResponseDto> {
     const skip = (page - 1) * limit;
 
+    const [snapshots, total] = await this.snapshotRepository.findAndCount({
+      where: { userId },
+      order: { createdAt: 'DESC', id: 'ASC' },
+      skip,
+      take: limit,
+    });
     const [snapshots, total] = await this.profiler.profile(
       () =>
         this.snapshotRepository.findAndCount({
@@ -195,6 +202,7 @@ export class PortfolioService {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+      meta: createOffsetMeta({ page, limit, total }),
     };
   }
 

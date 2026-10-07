@@ -46,6 +46,32 @@ export class NewsService {
     return saved;
   }
 
+  /**
+   * Returns a page of articles matching the filters plus the total count so
+   * callers can build standard pagination metadata. Ordered by publication
+   * date with an id tiebreak so pages never overlap or skip rows when
+   * articles are inserted concurrently.
+   */
+  async findAll(
+    filters?: {
+      tag?: string;
+      category?: string;
+    },
+    pagination?: {
+      page: number;
+      limit: number;
+    },
+  ): Promise<{ articles: News[]; total: number }> {
+    const qb = this.newsRepository
+      .createQueryBuilder('news')
+      .orderBy('news.publishedAt', 'DESC')
+      .addOrderBy('news.id', 'DESC');
+
+    if (filters?.tag) {
+      qb.andWhere(':tag = ANY(news.tags)', {
+        tag: filters.tag.toLowerCase(),
+      });
+    }
   async findAll(filters?: {
     tag?: string;
     category?: string;
@@ -68,6 +94,12 @@ export class NewsService {
           });
         }
 
+    if (pagination) {
+      qb.skip((pagination.page - 1) * pagination.limit).take(pagination.limit);
+    }
+
+    const [articles, total] = await qb.getManyAndCount();
+    return { articles, total };
         return qb.getMany();
       },
       { label: 'NewsService.findAll', thresholdMs: 150 },

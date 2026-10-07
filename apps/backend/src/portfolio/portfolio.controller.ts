@@ -20,7 +20,6 @@ import {
 import { PortfolioService } from './portfolio.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import {
-  GetPortfolioHistoryDto,
   PortfolioHistoryResponseDto,
   PortfolioSnapshotBatchStatusDto,
   TriggerSnapshotBatchResponseDto,
@@ -31,6 +30,11 @@ import {
   CurrencyCode,
 } from './dto/portfolio-currency.dto';
 import { PortfolioPerformanceResponseDto } from './dto/portfolio-performance.dto';
+import {
+  getPortfolioReadThrottleOverride,
+  getPortfolioWriteThrottleOverride,
+} from '../common/rate-limit/rate-limit.config';
+import { PaginationQueryDto, DEFAULT_PAGE_SIZE } from '../common/pagination';
 import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 
 @ApiTags('portfolio')
@@ -107,10 +111,8 @@ export class PortfolioController {
   @ApiOperation({
     summary: 'Get portfolio history',
     description:
-      'Returns portfolio snapshots for the authenticated user with pagination',
+      'Returns a page of portfolio snapshots for the authenticated user. Supports the standard pagination parameters (page, limit, cursor) and returns standard pagination metadata.',
   })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
   @ApiResponse({
     status: 200,
     description: 'Portfolio history retrieved successfully',
@@ -119,14 +121,14 @@ export class PortfolioController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getPortfolioHistory(
     @Request() req: any,
-    @Query() query: GetPortfolioHistoryDto,
+    @Query() query: PaginationQueryDto,
   ): Promise<PortfolioHistoryResponseDto> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const userId = req.user.sub as string; // Extract user ID from JWT
     return this.portfolioService.getPortfolioHistory(
       userId,
-      query.page,
-      query.limit,
+      query.page ?? 1,
+      query.limit ?? DEFAULT_PAGE_SIZE,
     );
   }
 
