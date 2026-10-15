@@ -63,7 +63,15 @@ suppression_rules:
     window_seconds: 3600
     key_fields: ["alert_type", "schema_signature"]
     alert_types: ["metadata_drift"]
+
+  # Latency budget breach alert dedup rule
+  - type: alert_type
+    name: "dedup_inference_latency_breach"
+    window_seconds: 300
+    key_fields: ["alert_type", "endpoint", "method", "model_version"]
+    alert_types: ["inference_latency_breach"]
 """
+
 
 
 def load_rules_from_yaml(filepath: Optional[str] = None) -> List[SuppressionRule]:
@@ -206,4 +214,11 @@ def _default_rules() -> List[SuppressionRule]:
             key_fields=["alert_type", "schema_signature"],
             alert_types=["metadata_drift"],
         ),
+        AlertTypeRule(
+            name="dedup_inference_latency_breach",
+            window_seconds=300,
+            key_fields=["alert_type", "endpoint", "method", "model_version"],
+            alert_types=["inference_latency_breach"],
+        ),
     ]
+

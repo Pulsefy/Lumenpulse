@@ -48,3 +48,11 @@ suppression_rules:
     window_seconds: 3600
     key_fields: ["alert_type", "schema_signature"]
     alert_types: ["metadata_drift"]
+
+  # Latency budget breach alert dedup rule
+  - type: alert_type
+    name: "dedup_inference_latency_breach"
+    window_seconds: 300
+    key_fields: ["alert_type", "endpoint", "method", "model_version"]
+    alert_types: ["inference_latency_breach"]
+

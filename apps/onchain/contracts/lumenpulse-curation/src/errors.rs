@@ -4,14 +4,14 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum CurationError {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    ProjectNotFound = 3,
-    VotingClosed = 4,
-    VotingWindowExpired = 5,
-    VotingWindowNotExpired = 6,
-    AlreadyVoted = 7,
-    InsufficientReputation = 8,
-    InvalidMetadata = 9,
-    Unauthorized = 10,
+    AlreadyInitialized = 1500,
+    NotInitialized = 1501,
+    ProjectNotFound = 1502,
+    VotingClosed = 1503,
+    VotingWindowExpired = 1504,
+    VotingWindowNotExpired = 1505,
+    AlreadyVoted = 1506,
+    InsufficientReputation = 1507,
+    InvalidMetadata = 1508,
+    Unauthorized = 1509,
 }

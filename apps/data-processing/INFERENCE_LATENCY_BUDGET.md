@@ -16,21 +16,23 @@ each request and exports the result to Prometheus:
 
 | Metric | Type | Meaning |
 | --- | --- | --- |
-| `lumenpulse_inference_latency_seconds` | histogram | Request processing latency, labelled by `endpoint` and `method`. |
-| `lumenpulse_inference_latency_budget_breaches_total` | counter | Requests that exceeded their endpoint budget. |
+| `lumenpulse_inference_latency_seconds` | histogram | Request processing latency, labelled by `endpoint`, `method`, and `model_version`. |
+| `lumenpulse_inference_latency_budget_breaches_total` | counter | Requests that exceeded their endpoint budget, labelled by `endpoint`, `method`, and `model_version`. |
 
-### Budgets per endpoint
+### Documented Latency Targets per Endpoint
 
-| Endpoint | Default budget (ms) | Override env var |
-| --- | --- | --- |
-| `POST /analyze` | 500 | `ANALYZE_LATENCY_BUDGET_MS` |
-| `POST /analyze-batch` | 2000 | `ANALYZE_BATCH_LATENCY_BUDGET_MS` |
-| `POST /correlation/analyze` | 1000 | `CORRELATION_ANALYZE_LATENCY_BUDGET_MS` |
-| `POST /correlation/lag-analysis` | 1000 | `CORRELATION_LAG_LATENCY_BUDGET_MS` |
-| `GET /analytics/forecast` | 2000 | `FORECAST_LATENCY_BUDGET_MS` |
-| `POST /retrain` | 30000 | `RETRAIN_LATENCY_BUDGET_MS` |
-| `GET /search/similar` | 300 | `SEARCH_SIMILAR_LATENCY_BUDGET_MS` |
-| any other endpoint | 1000 | `LATENCY_BUDGET_MS` (global fallback) |
+Each endpoint has stated latency targets at the **50th (p50)** and **95th (p95)** percentiles. The p95 target serves as the maximum acceptable latency budget threshold.
+
+| Endpoint | p50 Target (ms) | p95 Budget (ms) | Override env var (p95) | Override env var (p50) |
+| --- | --- | --- | --- | --- |
+| `POST /analyze` | 150 | 500 | `ANALYZE_LATENCY_BUDGET_MS` | `ANALYZE_LATENCY_P50_MS` |
+| `POST /analyze-batch` | 800 | 2000 | `ANALYZE_BATCH_LATENCY_BUDGET_MS` | `ANALYZE_BATCH_LATENCY_P50_MS` |
+| `POST /correlation/analyze` | 350 | 1000 | `CORRELATION_ANALYZE_LATENCY_BUDGET_MS` | `CORRELATION_ANALYZE_LATENCY_P50_MS` |
+| `POST /correlation/lag-analysis` | 400 | 1000 | `CORRELATION_LAG_LATENCY_BUDGET_MS` | `CORRELATION_LAG_LATENCY_P50_MS` |
+| `GET /analytics/forecast` | 600 | 2000 | `FORECAST_LATENCY_BUDGET_MS` | `FORECAST_LATENCY_P50_MS` |
+| `POST /retrain` | 5000 | 30000 | `RETRAIN_LATENCY_BUDGET_MS` | `RETRAIN_LATENCY_P50_MS` |
+| `GET /search/similar` | 100 | 300 | `SEARCH_SIMILAR_LATENCY_BUDGET_MS` | `SEARCH_SIMILAR_LATENCY_P50_MS` |
+| any other endpoint | 500 | 1000 | `LATENCY_BUDGET_MS` (fallback) | - |
 
 The `/search/similar` budget (issue #1455) excludes the fixed cost of loading
 the vendored spaCy embedding pipeline (done once at first use) and covers the
@@ -45,8 +47,11 @@ Budgets are resolved in `src/config/latency_budget.py`:
 
 A request is a **breach** when its measured duration (in ms) is strictly
 greater than the configured budget. Breaches increment
-`lumenpulse_inference_latency_budget_breaches_total{endpoint,method}` and are
-therefore visible in `/metrics` and alertable via Prometheus.
+`lumenpulse_inference_latency_budget_breaches_total{endpoint,method,model_version}`
+and trigger alert evaluation through `src/alert_engine/` (with deduplication rule
+`dedup_inference_latency_breach`), in addition to Prometheus alerting rules in
+`prometheus-rules.yml`.
+
 
 ### Per-token explanations (`explain: true`)
 

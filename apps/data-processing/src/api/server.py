@@ -128,13 +128,30 @@ async def metrics_and_logging_middleware(request: Request, call_next):
         logger.error("Unhandled exception during request processing", exc_info=True)
         raise
     finally:
+        # Determine model version if applicable for the endpoint
+        model_ver = "unknown"
+        req_path = request.url.path
+        if req_path in ("/analyze", "/analyze-batch"):
+            try:
+                model_ver = get_current_version("sentiment") or "1.0.0"
+            except Exception:
+                model_ver = "1.0.0"
+        elif req_path == "/analytics/forecast":
+            model_ver = "1.0.0"
+        elif req_path.startswith("/correlation"):
+            model_ver = "1.0.0"
+        elif req_path == "/retrain":
+            model_ver = "1.0.0"
+
         # Enforce the documented per-endpoint inference latency budget:
         # breaches are exported as Prometheus metrics for alerting.
         record_latency(
-            path=request.url.path,
+            path=req_path,
             method=request.method,
             duration_seconds=time.monotonic() - start_time,
+            model_version=model_ver,
         )
+
 
 
 # Initialize your existing SentimentAnalyzer

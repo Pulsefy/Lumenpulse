@@ -64,6 +64,44 @@ groups:
           description: '{{ .Labels.instance }} P99 latency > 3s (current: {{ $value | humanizeDuration }})'
           runbook: 'https://wiki.example.com/runbooks/critical-latency'
 
+      # ==========================================
+      # AI Service Latency Targets & Breach Alerts
+      # ==========================================
+
+      - alert: AIServiceLatencyTargetBreachWarning
+        expr: |
+          histogram_quantile(0.95, sum by (le, endpoint, model_version) (rate(lumenpulse_inference_latency_seconds_bucket[5m])))
+            > on(endpoint) (
+              0.500 * (endpoint == "/analyze")
+              or 2.000 * (endpoint == "/analyze-batch")
+              or 1.000 * (endpoint == "/correlation/analyze")
+              or 1.000 * (endpoint == "/correlation/lag-analysis")
+              or 2.000 * (endpoint == "/analytics/forecast")
+              or 30.000 * (endpoint == "/retrain")
+              or 0.300 * (endpoint == "/search/similar")
+            )
+        for: 5m
+        labels:
+          severity: warning
+          service: data-processing
+        annotations:
+          summary: 'AI service endpoint p95 latency target breach'
+          description: 'Endpoint {{ .Labels.endpoint }} (model {{ .Labels.model_version }}) p95 latency is {{ $value | humanizeDuration }}, exceeding target'
+          runbook: 'apps/data-processing/INFERENCE_LATENCY_BUDGET.md'
+
+      - alert: AIServiceLatencyBudgetBreachRateCritical
+        expr: |
+          sum by (endpoint, model_version) (rate(lumenpulse_inference_latency_budget_breaches_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: data-processing
+        annotations:
+          summary: 'Critical AI service latency budget breach rate'
+          description: 'Endpoint {{ .Labels.endpoint }} (model {{ .Labels.model_version }}) breach rate is {{ $value | humanize }}/sec'
+          runbook: 'apps/data-processing/INFERENCE_LATENCY_BUDGET.md'
+
+
       # ====================
       # Job Queue Alerts
       # ====================

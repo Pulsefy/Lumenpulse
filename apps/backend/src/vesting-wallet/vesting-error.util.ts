@@ -13,17 +13,17 @@ import {
 } from './exceptions/vesting-wallet.exceptions';
 
 export enum VestingWalletContractError {
-  NotInitialized = 1,
-  AlreadyInitialized = 2,
-  Unauthorized = 3,
-  VestingNotFound = 4,
-  InvalidAmount = 5,
-  InvalidDuration = 6,
-  InvalidStartTime = 7,
-  NothingToClaim = 8,
-  InsufficientBalance = 9,
-  Reentrancy = 10,
-  DelegateNotAuthorized = 11,
+  NotInitialized = 2300,
+  AlreadyInitialized = 2301,
+  Unauthorized = 2302,
+  VestingNotFound = 2303,
+  InvalidAmount = 2304,
+  InvalidDuration = 2305,
+  InvalidStartTime = 2306,
+  NothingToClaim = 2307,
+  InsufficientBalance = 2308,
+  Reentrancy = 2309,
+  DelegateNotAuthorized = 2310,
 }
 
 export function mapVestingWalletContractErrorCode(
@@ -32,25 +32,25 @@ export function mapVestingWalletContractErrorCode(
   beneficiary?: string,
 ): VestingWalletException {
   switch (code) {
-    case 1: // VestingWalletContractError.NotInitialized
+    case 2300: // VestingWalletContractError.NotInitialized
       return new VestingWalletNotInitializedException();
-    case 3: // VestingWalletContractError.Unauthorized
+    case 2302: // VestingWalletContractError.Unauthorized
       return new VestingWalletUnauthorizedException();
-    case 5: // VestingWalletContractError.InvalidAmount
+    case 2304: // VestingWalletContractError.InvalidAmount
       return new VestingWalletInvalidAmountException();
-    case 6: // VestingWalletContractError.InvalidDuration
+    case 2305: // VestingWalletContractError.InvalidDuration
       return new VestingWalletInvalidDurationException();
-    case 7: // VestingWalletContractError.InvalidStartTime
+    case 2306: // VestingWalletContractError.InvalidStartTime
       return new VestingWalletInvalidStartTimeException();
-    case 4: // VestingWalletContractError.VestingNotFound
+    case 2303: // VestingWalletContractError.VestingNotFound
       return new VestingWalletNotFoundException(beneficiary ?? 'unknown');
-    case 8: // VestingWalletContractError.NothingToClaim
+    case 2307: // VestingWalletContractError.NothingToClaim
       return new VestingWalletNothingToClaimException();
-    case 10: // VestingWalletContractError.Reentrancy
+    case 2309: // VestingWalletContractError.Reentrancy
       return new VestingWalletReentrancyException();
-    case 9: // VestingWalletContractError.InsufficientBalance
+    case 2308: // VestingWalletContractError.InsufficientBalance
       return new VestingWalletInsufficientBalanceException();
-    case 11: // VestingWalletContractError.DelegateNotAuthorized
+    case 2310: // VestingWalletContractError.DelegateNotAuthorized
       return new VestingWalletUnauthorizedException();
     default:
       return new VestingWalletTransactionFailedException(fallbackMessage, {
