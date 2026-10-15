@@ -281,6 +281,26 @@ News APIs and social platforms push untrusted free text (articles, posts, predic
 | Beneficiary address hijacking | Low | High | `rotate_beneficiary` requires admin auth; via-multisig variant requires proposal approval |
 | Front-running on timelock | Low | Medium | Stellar's deterministic ledger order reduces front-running opportunity; operations are cancelled by admin if suspicious |
 | Direct upgrade bypassing timelock | Medium | High | `upgrade()` function retained for backwards compatibility but bypasses delay — see [Accepted Risks](#7-accepted-risks) |
+| Price source manipulation in `pricing_adapter` (fresh but wrong price) | Medium | Critical | Cross-source deviation bound in `get_aggregated_price`; see [B6.1](#b61--pricing-adapter-source-manipulation) |
+
+#### B6.1 — Pricing adapter source manipulation
+
+**Threat.** Staleness windows only reject *old* prices. A compromised or manipulated price source can report an extreme price (e.g. 10x or 0.1x) that is perfectly fresh, and any consumer pricing collateral or matching would accept it. This is the standard attack against protocols that depend on price feeds.
+
+**Mitigation.** `pricing_adapter` supports multiple admin-registered sources per asset (`add_source`, `report_price`). `get_aggregated_price(asset)` resolves a price as follows:
+
+1. Only *fresh* reports (within the staleness window) are considered; stale sources are ignored.
+2. At least `MIN_SOURCES` (2) fresh sources are required, otherwise `InsufficientSources`.
+3. The median of the fresh reports is the reference. A report is an *inlier* if it is within `max_deviation_bps` (default 500 = 5%, admin configurable via `set_max_deviation_bps`) of the median.
+4. A strict majority of the fresh sources must be inliers, otherwise `SourcesDisagree`. The returned price is the median of the inliers.
+
+**Properties.**
+
+- A single compromised source among three or more sources cannot move the returned price outside the deviation bound of the honest sources: an outlier is excluded, and an in-bound report can shift the result by no more than the bound.
+- When no majority agrees within the bound (including all sources disagreeing, or two sources diverging), the call fails closed with `SourcesDisagree`; no price is returned.
+- `normalize_amount` and `get_price` are unchanged; consumers wanting manipulation resistance must use `get_aggregated_price`.
+
+**Residual risk.** Compromise of a majority of sources (or of the admin key that registers them) defeats this control, so sources should be operationally independent. The bound also trades safety for availability: a legitimately volatile market may temporarily yield `SourcesDisagree`.
 
 ### B7 — Ingestion
 

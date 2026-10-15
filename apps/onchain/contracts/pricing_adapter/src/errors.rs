@@ -11,4 +11,10 @@ pub enum PricingAdapterError {
     InvalidPrice = 5,
     StalePrice = 6,
     PriceInvalidated = 7,
+    SourceNotRegistered = 8,
+    SourceAlreadyRegistered = 9,
+    TooManySources = 10,
+    InsufficientSources = 11,
+    SourcesDisagree = 12,
+    InvalidDeviationBound = 13,
 }
