@@ -1,4 +1,5 @@
 #!/usr/bin/env ts-node
+/* eslint-disable */
 /**
  * soroban-events-benchmark.ts
  * ---------------------------

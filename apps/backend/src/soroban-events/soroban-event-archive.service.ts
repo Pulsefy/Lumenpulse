@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, LessThan, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { SorobanEvent } from './entities/soroban-event.entity';
 import { SorobanEventArchive } from './entities/soroban-event-archive.entity';
@@ -19,9 +19,19 @@ export interface ArchivalStats {
   cutoff: Date;
 }
 
-export interface LedgerRangeQueryResult {
-  source: 'hot' | 'archive';
-  events: SorobanEvent[] | SorobanEventArchive[];
+interface TableSizeRow {
+  table_name: string;
+  total_size: string;
+}
+
+interface IndexSizeRow {
+  index_name: string;
+  index_size: string;
+}
+
+interface LedgerRangeRow {
+  min_ledger: string | null;
+  max_ledger: string | null;
 }
 
 /**
@@ -109,7 +119,11 @@ export class SorobanEventArchiveService {
     } catch (err) {
       await this.jobHistory.fail(run, err);
       this.logger.error('Soroban event archival failed', err);
-      return { archived: totalArchived, durationMs: Date.now() - start, cutoff };
+      return {
+        archived: totalArchived,
+        durationMs: Date.now() - start,
+        cutoff,
+      };
     }
   }
 
@@ -167,7 +181,11 @@ export class SorobanEventArchiveService {
    * Return the total event count across both hot and archive tables.
    * Useful for health checks and reporting.
    */
-  async totalEventCount(): Promise<{ hot: number; archive: number; total: number }> {
+  async totalEventCount(): Promise<{
+    hot: number;
+    archive: number;
+    total: number;
+  }> {
     const [hot, archive] = await Promise.all([
       this.eventRepo.count(),
       this.archiveRepo.count(),
@@ -183,12 +201,12 @@ export class SorobanEventArchiveService {
     maxLedger: number | null;
   }> {
     const [hotRange, archiveRange] = await Promise.all([
-      this.dataSource.query(`
+      this.dataSource.query<LedgerRangeRow[]>(`
         SELECT MIN(ledger_sequence) AS min_ledger, MAX(ledger_sequence) AS max_ledger
         FROM soroban_events
         WHERE ledger_sequence IS NOT NULL
       `),
-      this.dataSource.query(`
+      this.dataSource.query<LedgerRangeRow[]>(`
         SELECT MIN(ledger_sequence) AS min_ledger, MAX(ledger_sequence) AS max_ledger
         FROM soroban_events_archive
         WHERE ledger_sequence IS NOT NULL
@@ -196,16 +214,49 @@ export class SorobanEventArchiveService {
     ]);
 
     const allMins = [hotRange[0]?.min_ledger, archiveRange[0]?.min_ledger]
-      .filter((v) => v != null)
+      .filter((v): v is string => v != null)
       .map(Number);
     const allMaxes = [hotRange[0]?.max_ledger, archiveRange[0]?.max_ledger]
-      .filter((v) => v != null)
+      .filter((v): v is string => v != null)
       .map(Number);
 
     return {
       minLedger: allMins.length > 0 ? Math.min(...allMins) : null,
       maxLedger: allMaxes.length > 0 ? Math.max(...allMaxes) : null,
     };
+  }
+
+  /**
+   * Return per-table size info. Used by the benchmark and health endpoints.
+   */
+  async tableSizes(): Promise<Record<string, string>> {
+    const rows = await this.dataSource.query<TableSizeRow[]>(`
+      SELECT
+        relname AS table_name,
+        pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relkind IN ('r', 'p')
+        AND relname LIKE 'soroban_events%'
+      ORDER BY pg_total_relation_size(c.oid) DESC
+    `);
+    return Object.fromEntries(rows.map((r) => [r.table_name, r.total_size]));
+  }
+
+  /**
+   * Return per-index size info. Used by the benchmark.
+   */
+  async indexSizes(): Promise<Record<string, string>> {
+    const rows = await this.dataSource.query<IndexSizeRow[]>(`
+      SELECT
+        indexrelid::regclass::text AS index_name,
+        pg_size_pretty(pg_relation_size(indexrelid)) AS index_size
+      FROM pg_stat_user_indexes
+      WHERE relname LIKE 'soroban_events%'
+      ORDER BY pg_relation_size(indexrelid) DESC
+    `);
+    return Object.fromEntries(rows.map((r) => [r.index_name, r.index_size]));
   }
 
   // ---------------------------------------------------------------------------
@@ -221,7 +272,7 @@ export class SorobanEventArchiveService {
    * Returns the number of rows archived.
    */
   private async archiveBatch(cutoff: Date): Promise<number> {
-    const result: Array<{ count: string }> = await this.dataSource.query(
+    const result = await this.dataSource.query<Array<Record<string, unknown>>>(
       `
       WITH to_archive AS (
         DELETE FROM soroban_events

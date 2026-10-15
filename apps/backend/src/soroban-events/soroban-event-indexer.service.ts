@@ -73,8 +73,18 @@ export class SorobanEventIndexerService {
   async getEventsByLedgerRange(
     fromLedger: number,
     toLedger: number,
-  ): Promise<Array<{ txHash: string; eventIndex: number; ledgerSequence: number | null; source: 'hot' | 'archive' }>> {
-    const rows = await this.archiveService.findByLedgerRange(fromLedger, toLedger);
+  ): Promise<
+    Array<{
+      txHash: string;
+      eventIndex: number;
+      ledgerSequence: number | null;
+      source: 'hot' | 'archive';
+    }>
+  > {
+    const rows = await this.archiveService.findByLedgerRange(
+      fromLedger,
+      toLedger,
+    );
     return rows.map((r) => ({
       txHash: r.txHash,
       eventIndex: r.eventIndex,
