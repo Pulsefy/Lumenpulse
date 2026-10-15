@@ -90,6 +90,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       const { apiClient } = await import('../lib/api');
+      const { deregisterCurrentDevice } = await import('../lib/push-token');
+      try {
+        await deregisterCurrentDevice();
+      } catch (error) {
+        console.warn('Unable to deregister push token during logout:', error);
+      }
       await storage.clearAuthState();
       apiClient.setAuthToken(null);
       setIsAuthenticated(false);

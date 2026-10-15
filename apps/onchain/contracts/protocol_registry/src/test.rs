@@ -1,6 +1,11 @@
 use crate::errors::RegistryError;
+use crate::storage::LEDGER_THRESHOLD;
 use crate::{ProtocolRegistryContract, ProtocolRegistryContractClient};
-use soroban_sdk::{symbol_short, testutils::Address as _, Address, Env};
+use soroban_sdk::{
+    symbol_short,
+    testutils::{Address as _, Ledger},
+    Address, Env,
+};
 
 fn setup(env: &Env) -> (ProtocolRegistryContractClient<'_>, Address) {
     let admin = Address::generate(env);
@@ -322,4 +327,33 @@ fn test_set_admin() {
     // new admin can
     client.register_module(&new_admin, &symbol_short!("vault"), &addr, &1u32);
     assert!(client.is_active(&symbol_short!("vault")));
+}
+
+#[test]
+fn test_ttl_extended_after_read_write() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let addr = Address::generate(&env);
+    let name = symbol_short!("vault");
+    client.register_module(&admin, &name, &addr, &1u32);
+
+    // First threshold crossing: reads should re-bump both instance
+    // (Admin/Paused) and the module's own persistent record.
+    env.ledger().set_sequence_number(LEDGER_THRESHOLD + 1);
+    assert_eq!(client.get_admin(), admin);
+    assert_eq!(client.resolve(&name), addr);
+
+    // Second threshold crossing: only survives if the prior reads actually
+    // extended the TTL rather than leaving it to expire.
+    env.ledger().set_sequence_number(2 * LEDGER_THRESHOLD + 2);
+    assert_eq!(client.resolve(&name), addr);
+    assert!(client.is_active(&name));
+
+    // A write after a long gap must also succeed and keep protecting reads.
+    let new_addr = Address::generate(&env);
+    env.ledger().set_sequence_number(3 * LEDGER_THRESHOLD + 3);
+    client.update_module(&admin, &name, &new_addr, &2u32);
+    assert_eq!(client.resolve(&name), new_addr);
 }

@@ -33,6 +33,31 @@ export class MetricsService implements OnModuleInit {
   private readonly anomaliesDetectedCounter: Counter<string>;
   private readonly fetchErrorsCounter: Counter<string>;
 
+  // Outbound calls (Soroban RPC + Horizon) //
+  private readonly horizonLatency: Histogram<string>;
+  private readonly horizonErrors: Counter<string>;
+  private readonly horizonRequests: Counter<string>;
+
+  // Reconciliation monitoring //
+  private readonly reconciliationDriftCounter: Counter<string>;
+  private readonly reconciliationDriftDelta: Gauge<string>;
+  private readonly reconciliationThreshold: Gauge<string>;
+
+  // Outbox relay monitoring //
+  private readonly outboxRelayLag: Gauge<string>;
+  private readonly outboxAttempts: Counter<string>;
+  private readonly outboxDeadLetterVolume: Gauge<string>;
+
+  // Scheduled-job monitoring //
+  private readonly schedulerJobRuns: Counter<string>;
+  private readonly schedulerJobLastSuccess: Gauge<string>;
+  private readonly schedulerJobLastFailure: Gauge<string>;
+  private readonly schedulerJobDuration: Histogram<string>;
+  private readonly schedulerLockContention: Counter<string>;
+
+  // Rate limiting //
+  private readonly rateLimitRejections: Counter<string>;
+
   // Running totals for the rolling-average sentiment gauge
   private sentimentSum = 0;
   private sentimentCount = 0;
@@ -40,6 +65,8 @@ export class MetricsService implements OnModuleInit {
   // Escape-hatch maps for callers of the legacy getOrCreate* API
   private readonly customGauges = new Map<string, Gauge<string>>();
   private readonly customCounters = new Map<string, Counter<string>>();
+  private readonly customHistograms = new Map<string, Histogram<string>>();
+  private readonly counterTotals = new Map<string, number>();
 
   constructor() {
     collectDefaultMetrics({ register: this.registry });
@@ -125,6 +152,113 @@ export class MetricsService implements OnModuleInit {
       labelNames: ['source', 'error_code'] as const,
       registers: [this.registry],
     });
+
+    // Outbound calls (Horizon API) //
+    this.horizonLatency = new Histogram({
+      name: 'horizon_http_latency_ms',
+      help: 'Horizon API call latency in milliseconds',
+      labelNames: ['method', 'status'] as const,
+      buckets: [50, 100, 250, 500, 1000, 2500, 5000],
+      registers: [this.registry],
+    });
+
+    this.horizonErrors = new Counter({
+      name: 'horizon_http_errors_total',
+      help: 'Total Horizon API errors by method and status code',
+      labelNames: ['method', 'status_code'] as const,
+      registers: [this.registry],
+    });
+
+    this.horizonRequests = new Counter({
+      name: 'horizon_http_requests_total',
+      help: 'Total Horizon API requests by method',
+      labelNames: ['method'] as const,
+      registers: [this.registry],
+    });
+
+    this.reconciliationDriftCounter = new Counter({
+      name: 'lumenpulse_reconciliation_drift_total',
+      help: 'Total reconciliation drift breaches by dataset and severity',
+      labelNames: ['dataset', 'severity'] as const,
+      registers: [this.registry],
+    });
+
+    this.reconciliationDriftDelta = new Gauge({
+      name: 'lumenpulse_reconciliation_drift_delta',
+      help: 'Latest reconciliation drift delta observed by dataset and severity',
+      labelNames: ['dataset', 'severity'] as const,
+      registers: [this.registry],
+    });
+
+    this.reconciliationThreshold = new Gauge({
+      name: 'lumenpulse_reconciliation_threshold',
+      help: 'Configured reconciliation drift threshold by dataset and severity',
+      labelNames: ['dataset', 'severity'] as const,
+      registers: [this.registry],
+    });
+
+    this.outboxRelayLag = new Gauge({
+      name: 'lumenpulse_outbox_relay_lag_seconds',
+      help: 'Age in seconds of the oldest pending outbox event',
+      registers: [this.registry],
+    });
+
+    this.outboxAttempts = new Counter({
+      name: 'lumenpulse_outbox_attempts_total',
+      help: 'Outbox dispatch attempts by outcome',
+      labelNames: ['status'] as const,
+      registers: [this.registry],
+    });
+
+    this.outboxDeadLetterVolume = new Gauge({
+      name: 'lumenpulse_outbox_dead_letter_volume',
+      help: 'Current number of outbox events in the dead-letter queue',
+      registers: [this.registry],
+    });
+
+    this.schedulerJobRuns = new Counter({
+      name: 'lumenpulse_scheduler_job_runs_total',
+      help: 'Total scheduled-job runs by job and outcome status',
+      labelNames: ['job', 'status'] as const,
+      registers: [this.registry],
+    });
+
+    this.schedulerJobLastSuccess = new Gauge({
+      name: 'lumenpulse_scheduler_job_last_success_timestamp_seconds',
+      help: 'Unix timestamp of the last successful run, per scheduled job',
+      labelNames: ['job'] as const,
+      registers: [this.registry],
+    });
+
+    this.schedulerJobLastFailure = new Gauge({
+      name: 'lumenpulse_scheduler_job_last_failure_timestamp_seconds',
+      help: 'Unix timestamp of the last failed run, per scheduled job',
+      labelNames: ['job'] as const,
+      registers: [this.registry],
+    });
+
+    this.schedulerJobDuration = new Histogram({
+      name: 'lumenpulse_scheduler_job_duration_seconds',
+      help: 'Duration of completed scheduled-job runs, per job',
+      labelNames: ['job'] as const,
+      buckets: [1, 5, 10, 30, 60, 120, 300, 600, 1800, 3600],
+      registers: [this.registry],
+    });
+
+    this.schedulerLockContention = new Counter({
+      name: 'lumenpulse_scheduler_lock_contention_total',
+      help: 'Total advisory-lock acquisition failures, per scheduled job',
+      labelNames: ['job'] as const,
+      registers: [this.registry],
+    });
+
+    // Rate limiting //
+    this.rateLimitRejections = new Counter({
+      name: 'rate_limit_rejections_total',
+      help: 'Total number of requests rejected by the rate limiter (HTTP 429)',
+      labelNames: ['endpoint_class', 'principal_type'] as const,
+      registers: [this.registry],
+    });
   }
 
   onModuleInit(): void {
@@ -151,6 +285,7 @@ export class MetricsService implements OnModuleInit {
     this.registry.resetMetrics();
     this.sentimentSum = 0;
     this.sentimentCount = 0;
+    this.counterTotals.clear();
     this.logger.warn('All metrics reset');
   }
 
@@ -264,7 +399,122 @@ export class MetricsService implements OnModuleInit {
     this.fetchErrorsCounter.inc({ source, error_code: errorCode });
   }
 
-  //Dynamic metric helpers (legacy API)
+  // Outbound Horizon API instrumentation //
+
+  /**
+   * Record a completed Horizon API request.
+   *
+   * @param method      API method name, e.g. "getTransactions", "getOperations"
+   * @param statusCode  HTTP status code or 'success'/'error'
+   * @param latencyMs   Request duration in milliseconds
+   */
+  recordHorizonRequest(
+    method: string,
+    status: string,
+    latencyMs: number,
+  ): void {
+    this.horizonRequests.inc({ method });
+    this.horizonLatency.labels({ method, status }).observe(latencyMs);
+  }
+
+  /**
+   * Record a Horizon API error.
+   *
+   * @param method      API method name
+   * @param statusCode  HTTP status code or error identifier
+   */
+  recordHorizonError(method: string, statusCode: string): void {
+    this.horizonErrors.inc({ method, status_code: statusCode });
+  }
+
+  recordReconciliationDrift(
+    dataset: string,
+    severity: 'warning' | 'critical',
+    delta: number,
+  ): void {
+    const labels = { dataset, severity };
+    this.reconciliationDriftCounter.inc(labels);
+    this.reconciliationDriftDelta.labels(labels).set(delta);
+  }
+
+  setReconciliationThreshold(
+    dataset: string,
+    severity: 'warning' | 'critical',
+    threshold: number,
+  ): void {
+    this.reconciliationThreshold.labels({ dataset, severity }).set(threshold);
+  }
+
+  // Outbox relay instrumentation //
+
+  /** Record how old (in seconds) the oldest pending outbox event is. */
+  setOutboxRelayLagSeconds(lagSeconds: number): void {
+    this.outboxRelayLag.set(Math.max(0, lagSeconds));
+  }
+
+  /** Record a completed outbox dispatch attempt. */
+  recordOutboxAttempt(status: 'processed' | 'failed' | 'dead_letter'): void {
+    this.outboxAttempts.inc({ status });
+  }
+
+  /** Record the current number of dead-lettered outbox events. */
+  setOutboxDeadLetterVolume(volume: number): void {
+    this.outboxDeadLetterVolume.set(volume);
+  } // Scheduled-job instrumentation //
+
+  /**
+   * Record a scheduled-job run outcome.
+   *
+   * @param job        Logical job name, e.g. "reconciliation"
+   * @param status     "running" | "completed" | "failed" | "skipped"
+   * @param durationMs Wall-clock duration of the run (null while running)
+   * @param timestamp  When the outcome happened (startedAt for completed/failed)
+   */
+  recordSchedulerJobOutcome(
+    job: string,
+    status: 'running' | 'completed' | 'failed' | 'skipped',
+    durationMs: number | null,
+    timestamp: Date,
+  ): void {
+    this.schedulerJobRuns.inc({ job, status });
+
+    if (status === 'completed') {
+      this.schedulerJobLastSuccess
+        .labels({ job })
+        .set(timestamp.getTime() / 1000);
+      if (durationMs !== null) {
+        this.schedulerJobDuration.labels({ job }).observe(durationMs / 1000);
+      }
+    } else if (status === 'failed') {
+      this.schedulerJobLastFailure
+        .labels({ job })
+        .set(timestamp.getTime() / 1000);
+    }
+  }
+
+  /** Count a failed advisory-lock acquisition (another instance held the lock). */
+  recordSchedulerLockContention(job: string): void {
+    this.schedulerLockContention.inc({ job });
+  }
+
+  // Rate limiting //
+
+  /**
+   * Records a rate-limit rejection.
+   *
+   * @param endpointClass Low-cardinality endpoint class label
+   *                      (e.g. `default`, `search`, `export`, `analytics`,
+   *                      `contract_simulation`).
+   * @param principalType `user` | `bot` | `service` | `anonymous`.
+   */
+  recordRateLimitRejection(endpointClass: string, principalType: string): void {
+    this.rateLimitRejections.inc({
+      endpoint_class: endpointClass,
+      principal_type: principalType,
+    });
+  }
+
+  // Dynamic metric helpers (legacy API)
 
   getOrCreateGauge(
     name: string,
@@ -292,5 +542,63 @@ export class MetricsService implements OnModuleInit {
       );
     }
     return this.customCounters.get(name)!;
+  }
+
+  getOrCreateHistogram(
+    name: string,
+    help: string,
+    labelNames: string[] = [],
+    buckets?: number[],
+  ): Histogram<string> {
+    if (!this.customHistograms.has(name)) {
+      this.customHistograms.set(
+        name,
+        new Histogram({
+          name,
+          help,
+          labelNames,
+          buckets,
+          registers: [this.registry],
+        }),
+      );
+    }
+    return this.customHistograms.get(name)!;
+  }
+
+  incrementCounter(name: string, labels?: Record<string, string>): void {
+    const labelNames = labels ? Object.keys(labels) : [];
+    const counter = this.getOrCreateCounter(
+      name,
+      `${name} counter`,
+      labelNames,
+    );
+    if (labels) {
+      counter.inc(labels);
+    } else {
+      counter.inc();
+    }
+    this.counterTotals.set(name, (this.counterTotals.get(name) ?? 0) + 1);
+  }
+
+  recordHistogram(
+    name: string,
+    value: number,
+    labels?: Record<string, string>,
+  ): void {
+    const labelNames = labels ? Object.keys(labels) : [];
+    const histogram = this.getOrCreateHistogram(
+      name,
+      `${name} histogram`,
+      labelNames,
+    );
+    if (labels) {
+      histogram.observe(labels, value);
+    } else {
+      histogram.observe(value);
+    }
+  }
+
+  getCounterValue(name: string): number {
+    return this.counterTotals.get(name) ?? 0;
   }
 }

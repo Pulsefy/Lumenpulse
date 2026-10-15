@@ -68,10 +68,12 @@ class OnchainEntityLinker:
     def __init__(
         self,
         candidates: Optional[Sequence[OnchainEntityCandidate]] = None,
+        overrides: Optional[Dict[str, str]] = None,
     ) -> None:
         self.candidates = self._dedupe_candidates(
             list(candidates or []) + list(self.DEFAULT_ASSETS)
         )
+        self.overrides = overrides or {}
 
     def link_text(
         self,
@@ -88,6 +90,10 @@ class OnchainEntityLinker:
         links: Dict[str, OnchainEntityLink] = {}
 
         for candidate in self.candidates:
+            override_val = self.overrides.get(candidate.stable_id)
+            if override_val == "__REJECTED__":
+                continue
+
             match = self._first_alias_match(haystack, candidate.aliases)
             if not match:
                 continue
@@ -96,16 +102,26 @@ class OnchainEntityLinker:
             if candidate.entity_type == "asset" and match.upper() == candidate.asset_code:
                 confidence = 0.9
 
-            links[candidate.stable_id] = OnchainEntityLink(
-                stable_id=candidate.stable_id,
-                entity_type=candidate.entity_type,
-                display_name=candidate.display_name,
+            target_stable_id = candidate.stable_id
+            target_candidate = candidate
+            if override_val:
+                if override_val != candidate.stable_id:
+                    corrected_cand = next((c for c in self.candidates if c.stable_id == override_val), None)
+                    if corrected_cand:
+                        target_stable_id = override_val
+                        target_candidate = corrected_cand
+                confidence = 1.0
+
+            links[target_stable_id] = OnchainEntityLink(
+                stable_id=target_stable_id,
+                entity_type=target_candidate.entity_type,
+                display_name=target_candidate.display_name,
                 matched_text=match,
                 confidence=confidence,
                 source="onchain_entity_linker_v1",
-                asset_code=candidate.asset_code,
-                project_id=candidate.project_id,
-                contract_id=candidate.contract_id,
+                asset_code=target_candidate.asset_code,
+                project_id=target_candidate.project_id,
+                contract_id=target_candidate.contract_id,
             )
 
         return sorted(links.values(), key=lambda link: link.stable_id)

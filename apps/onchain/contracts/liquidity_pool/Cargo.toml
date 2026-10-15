@@ -4,11 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["lib", "cdylib"]
 
 [dependencies]
-soroban-sdk = "=21.5.1"
-soroban-sdk-macros = "=21.5.1"
+soroban-sdk = { workspace = true }
+reentrancy-guard = { path = "../reentrancy-guard" }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
 
 [profile.release]
 opt-level = "z"

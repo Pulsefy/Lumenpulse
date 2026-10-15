@@ -12,9 +12,10 @@ import {
   ActivityIndicator,
   StatusBar,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocalization } from '../../src/context';
+import { sanitizeRedirectPath } from '../../lib/deep-links';
 
 const LoginScreen = () => {
   const { colors, resolvedMode } = useLocalization();
@@ -24,6 +25,11 @@ const LoginScreen = () => {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { login } = useAuth();
+  // Deep-link continuation (issue #1410): when a notification tap lands here
+  // because the target requires auth, `?redirect=` carries the original
+  // destination; we continue to it after a successful login.
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
+  const continueTo = sanitizeRedirectPath(redirect) ?? '/';
 
   const validateInputs = () => {
     if (!email.trim()) {
@@ -58,7 +64,7 @@ const LoginScreen = () => {
     setLoading(true);
     try {
       await login(email, password);
-      router.replace('/');
+      router.replace(continueTo as any);
     } catch (error: any) {
       console.error('Login error:', error);
       Alert.alert(
@@ -79,7 +85,11 @@ const LoginScreen = () => {
       <StatusBar barStyle={resolvedMode === 'dark' ? 'light-content' : 'dark-content'} />
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
         <View style={styles.content}>
-          <Text style={[styles.title, { color: colors.text }]} accessible accessibilityRole="header">
+          <Text
+            style={[styles.title, { color: colors.text }]}
+            accessible
+            accessibilityRole="header"
+          >
             {t('auth.login.title')}
           </Text>
           <Text style={[styles.subtitle, { color: colors.accent }]} accessible>
@@ -102,6 +112,7 @@ const LoginScreen = () => {
                 ]}
                 value={email}
                 onChangeText={setEmail}
+                testID="login-email-input"
                 placeholder={t('auth.login.email_placeholder')}
                 placeholderTextColor={colors.textSecondary}
                 keyboardType="email-address"
@@ -130,6 +141,7 @@ const LoginScreen = () => {
                 ]}
                 value={password}
                 onChangeText={setPassword}
+                testID="login-password-input"
                 placeholder={t('auth.login.password_placeholder')}
                 placeholderTextColor={colors.textSecondary}
                 secureTextEntry
@@ -150,15 +162,22 @@ const LoginScreen = () => {
               ]}
               onPress={handleLogin}
               disabled={loading}
+              testID="login-submit-button"
               accessibilityRole="button"
               accessibilityState={{ disabled: loading }}
               accessibilityLabel={t('auth.login.sign_in_button')}
               accessibilityHint={t('auth.login.sign_in_button')}
             >
               {loading ? (
-                <ActivityIndicator color="#ffffff" accessible accessibilityLabel={t('common.loading')} />
+                <ActivityIndicator
+                  color="#ffffff"
+                  accessible
+                  accessibilityLabel={t('common.loading')}
+                />
               ) : (
-                <Text style={styles.buttonText} accessible>{t('auth.login.sign_in_button')}</Text>
+                <Text style={styles.buttonText} accessible>
+                  {t('auth.login.sign_in_button')}
+                </Text>
               )}
             </TouchableOpacity>
 
@@ -179,7 +198,10 @@ const LoginScreen = () => {
               accessibilityRole="button"
               accessibilityLabel={t('auth.login.bypass_login')}
             >
-              <Text style={[styles.linkText, { color: colors.textSecondary, fontSize: 14 }]} accessible>
+              <Text
+                style={[styles.linkText, { color: colors.textSecondary, fontSize: 14 }]}
+                accessible
+              >
                 (Debug){' '}
                 <Text style={{ color: colors.accent, fontWeight: 'bold' }}>
                   {t('auth.login.bypass_login')}
@@ -192,7 +214,6 @@ const LoginScreen = () => {
     </KeyboardAvoidingView>
   );
 };
-
 
 const styles = StyleSheet.create({
   container: {

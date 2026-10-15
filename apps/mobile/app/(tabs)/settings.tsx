@@ -87,7 +87,9 @@ export default function SettingsScreen() {
           return;
         }
 
-        const result = await authenticateBiometricPrompt(t('settings.biometric_lock.confirm_biometric'));
+        const result = await authenticateBiometricPrompt(
+          t('settings.biometric_lock.confirm_biometric'),
+        );
         if (!result.success) return;
       }
 
@@ -119,6 +121,30 @@ export default function SettingsScreen() {
       return;
     }
 
+    // For mainnet, require explicit confirmation due to the critical nature
+    // of switching to production network with real funds
+    if (value === 'mainnet') {
+      Alert.alert(
+        t('settings.network.mainnet_confirmation_title'),
+        t('settings.network.mainnet_confirmation_message'),
+        [
+          {
+            text: t('common.cancel'),
+            style: 'cancel',
+          },
+          {
+            text: t('settings.network.mainnet_confirmation_confirm'),
+            onPress: async () => {
+              await setEnvironment(value);
+            },
+            style: 'destructive',
+          },
+        ],
+      );
+      return;
+    }
+
+    // Testnet switch doesn't require confirmation
     await setEnvironment(value);
   };
 
@@ -140,6 +166,32 @@ export default function SettingsScreen() {
               {t('settings.account_preferences')}
             </Text>
           </View>
+
+          <TouchableOpacity
+            style={styles.navRow}
+            activeOpacity={0.75}
+            onPress={() => router.push('/contributor/profile')}
+            accessibilityRole="link"
+            accessibilityLabel={t('settings.contributor_profile.title')}
+            accessibilityHint={t('settings.contributor_profile.description')}
+          >
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="person-circle-outline" size={20} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.contributor_profile.title')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t('settings.contributor_profile.description')}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
           <TouchableOpacity
             style={styles.navRow}
@@ -185,6 +237,65 @@ export default function SettingsScreen() {
                 </Text>
                 <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
                   {t('settings.notification_settings.description')}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <TouchableOpacity
+            style={styles.navRow}
+            activeOpacity={0.75}
+            onPress={() => router.push('/settings/data-privacy')}
+            accessibilityRole="link"
+            accessibilityLabel={t('settings.data_privacy.title')}
+            accessibilityHint={t('settings.data_privacy.description')}
+          >
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="shield-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.data_privacy.title')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t('settings.data_privacy.description')}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <TouchableOpacity
+            testID="settings-data-exports-nav"
+            style={styles.navRow}
+            activeOpacity={0.75}
+            onPress={() => router.push('/settings/exports')}
+            accessibilityRole="link"
+            accessibilityLabel={t('settings.exports.title', 'Data Exports')}
+            accessibilityHint={t(
+              'settings.exports.description',
+              'Request and download your transaction and portfolio history',
+            )}
+          >
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="cloud-download-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.exports.title', 'Data Exports')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t(
+                    'settings.exports.description',
+                    'Request and download your transaction and portfolio history',
+                  )}
                 </Text>
               </View>
             </View>
@@ -266,10 +377,7 @@ export default function SettingsScreen() {
                     color={isActive ? '#ffffff' : colors.textSecondary}
                   />
                   <Text
-                    style={[
-                      styles.environmentLabel,
-                      { color: isActive ? '#ffffff' : colors.text },
-                    ]}
+                    style={[styles.environmentLabel, { color: isActive ? '#ffffff' : colors.text }]}
                     accessible
                   >
                     {option === 'testnet'
@@ -288,7 +396,10 @@ export default function SettingsScreen() {
               {t('settings.network.active')}
             </Text>
             <View
-              style={[styles.envBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+              style={[
+                styles.envBadge,
+                { backgroundColor: colors.card, borderColor: colors.cardBorder },
+              ]}
               accessible
               accessibilityLabel={`${t('settings.network.active')}: ${environmentConfig.label}`}
             >
@@ -339,7 +450,10 @@ export default function SettingsScreen() {
                     size={20}
                     color={isActive ? '#ffffff' : colors.textSecondary}
                   />
-                  <Text style={[styles.themeLabel, { color: isActive ? '#ffffff' : colors.text }]} accessible>
+                  <Text
+                    style={[styles.themeLabel, { color: isActive ? '#ffffff' : colors.text }]}
+                    accessible
+                  >
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
@@ -376,11 +490,16 @@ export default function SettingsScreen() {
               {t('settings.environment')}
             </Text>
             <View
-              style={[styles.envBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+              style={[
+                styles.envBadge,
+                { backgroundColor: colors.card, borderColor: colors.cardBorder },
+              ]}
               accessible
             >
               <Text style={[styles.envBadgeText, { color: colors.accent }]}>
-                {appEnv === 'production' ? t('settings.environment_production') : t('settings.environment_contributor')}
+                {appEnv === 'production'
+                  ? t('settings.environment_production')
+                  : t('settings.environment_contributor')}
               </Text>
             </View>
           </View>
@@ -395,6 +514,32 @@ export default function SettingsScreen() {
               Lumenpulse Mobile
             </Text>
           </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <TouchableOpacity
+            style={styles.navRow}
+            activeOpacity={0.75}
+            onPress={() => router.push('/settings/status')}
+            accessibilityRole="link"
+            accessibilityLabel={t('settings.status_info.title')}
+            accessibilityHint={t('settings.status_info.description')}
+          >
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="shield-checkmark-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.status_info.title')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t('settings.status_info.description')}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
         {isAuthenticated && (
@@ -407,7 +552,9 @@ export default function SettingsScreen() {
             accessibilityHint="Sign out of your account"
           >
             <Ionicons name="log-out-outline" size={20} color="#ffffff" style={{ marginRight: 8 }} />
-            <Text style={styles.logoutButtonText} accessible>{t('settings.logout')}</Text>
+            <Text style={styles.logoutButtonText} accessible>
+              {t('settings.logout')}
+            </Text>
           </TouchableOpacity>
         )}
       </ScrollView>

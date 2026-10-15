@@ -40,6 +40,7 @@ export {
   RequirePortfolioWrite,
   RequireWebhookVerification,
   RequireIpAllowlist,
+  RequireApiKey,
   GetAccessContext,
   GetResource,
   GetPermissionResult,
@@ -52,5 +53,6 @@ export {
   type TrustedCallerMetadata,
 } from './decorators/access-control.decorators';
 export * from './guards/access-control.guard';
+export * from './guards/contract-admin-trusted-caller.guard';
 export * from './utils/access-control.utils';
 export * from './access-control.module';

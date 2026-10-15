@@ -1,0 +1,504 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users API: Users API Paths 1`] = `
+{
+  "/users": {
+    "get": {
+      "operationId": "UsersController_findAll",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/User",
+                },
+                "type": "array",
+              },
+            },
+          },
+          "description": "List of all users",
+        },
+      },
+      "security": [
+        {
+          "JWT-auth": [],
+        },
+      ],
+      "summary": "Get all users",
+      "tags": [
+        "users",
+      ],
+    },
+  },
+  "/users/me": {
+    "get": {
+      "operationId": "UsersController_getProfile",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "",
+        },
+      },
+      "security": [
+        {
+          "JWT-auth": [],
+        },
+      ],
+      "summary": "Get current user profile",
+      "tags": [
+        "users",
+      ],
+    },
+    "patch": {
+      "operationId": "UsersController_updateProfile",
+      "parameters": [],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UpdateProfileDto",
+            },
+          },
+        },
+        "required": true,
+      },
+      "responses": {
+        "200": {
+          "description": "",
+        },
+      },
+      "security": [
+        {
+          "JWT-auth": [],
+        },
+      ],
+      "summary": "Update current user profile",
+      "tags": [
+        "users",
+      ],
+    },
+  },
+  "/users/me/accounts": {
+    "get": {
+      "operationId": "UsersController_getMyStellarAccounts",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/StellarAccountResponseDto",
+                },
+                "type": "array",
+              },
+            },
+          },
+          "description": "",
+        },
+      },
+      "security": [
+        {
+          "JWT-auth": [],
+        },
+      ],
+      "summary": "Get all linked Stellar accounts for current user",
+      "tags": [
+        "users",
+      ],
+    },
+    "post": {
+      "operationId": "UsersController_addStellarAccount",
+      "parameters": [],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/LinkStellarAccountDto",
+            },
+          },
+        },
+        "required": true,
+      },
+      "responses": {
+        "201": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StellarAccountResponseDto",
+              },
+            },
+          },
+          "description": "",
+        },
+      },
+      "security": [
+        {
+          "JWT-auth": [],
+        },
+      ],
+      "summary": "Link a new Stellar account to user profile",
+      "tags": [
+        "users",
+      ],
+    },
+  },
+  "/users/me/accounts/{id}": {
+    "delete": {
+      "operationId": "UsersController_removeMyStellarAccount",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+          },
+        },
+      ],
+      "responses": {
+        "204": {
+          "description": "",
+        },
+      },
+      "security": [
+        {
+          "JWT-auth": [],
+        },
+      ],
+      "summary": "Unlink a Stellar account from current user",
+      "tags": [
+        "users",
+      ],
+    },
+    "get": {
+      "operationId": "UsersController_getMyStellarAccount",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+          },
+        },
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StellarAccountResponseDto",
+              },
+            },
+          },
+          "description": "",
+        },
+      },
+      "security": [
+        {
+          "JWT-auth": [],
+        },
+      ],
+      "summary": "Get a specific Stellar account for current user",
+      "tags": [
+        "users",
+      ],
+    },
+  },
+  "/users/me/accounts/{id}/label": {
+    "patch": {
+      "operationId": "UsersController_updateMyStellarAccountLabel",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+          },
+        },
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UpdateStellarAccountLabelDto",
+            },
+          },
+        },
+        "required": true,
+      },
+      "responses": {
+        "200": {
+          "description": "",
+        },
+      },
+      "security": [
+        {
+          "JWT-auth": [],
+        },
+      ],
+      "summary": "Update account label for current user",
+      "tags": [
+        "users",
+      ],
+    },
+  },
+  "/users/me/accounts/{id}/primary": {
+    "post": {
+      "operationId": "UsersController_setMyPrimaryAccount",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+          },
+        },
+      ],
+      "responses": {
+        "200": {
+          "description": "",
+        },
+      },
+      "security": [
+        {
+          "JWT-auth": [],
+        },
+      ],
+      "summary": "Set as primary account for current user",
+      "tags": [
+        "users",
+      ],
+    },
+  },
+  "/users/me/avatar": {
+    "patch": {
+      "operationId": "UsersController_uploadAvatar",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+          },
+        },
+      ],
+      "responses": {
+        "200": {
+          "description": "",
+        },
+      },
+      "security": [
+        {
+          "JWT-auth": [],
+        },
+      ],
+      "summary": "Upload user profile image",
+      "tags": [
+        "users",
+      ],
+    },
+  },
+  "/users/{id}": {
+    "get": {
+      "operationId": "UsersController_findById",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+          },
+        },
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User",
+              },
+            },
+          },
+          "description": "User found",
+        },
+        "404": {
+          "description": "User not found",
+        },
+      },
+      "security": [
+        {
+          "JWT-auth": [],
+        },
+      ],
+      "summary": "Get user by ID",
+      "tags": [
+        "users",
+      ],
+    },
+  },
+}
+`;
+
+exports[`Users API Schema Snapshot should match the OpenAPI snapshot for Users API: Users API Schemas 1`] = `
+{
+  "LinkStellarAccountDto": {
+    "properties": {
+      "label": {
+        "description": "Optional label for the account",
+        "example": "Trading Wallet",
+        "type": "string",
+      },
+      "publicKey": {
+        "description": "Stellar public key (starts with G)",
+        "example": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHHF",
+        "type": "string",
+      },
+      "signedChallenge": {
+        "description": "Signed challenge transaction XDR proving ownership of public key",
+        "example": "AAAAA...",
+        "type": "string",
+      },
+    },
+    "required": [
+      "publicKey",
+      "signedChallenge",
+    ],
+    "type": "object",
+  },
+  "StellarAccountResponseDto": {
+    "properties": {
+      "createdAt": {
+        "format": "date-time",
+        "type": "string",
+      },
+      "id": {
+        "type": "string",
+      },
+      "isActive": {
+        "type": "boolean",
+      },
+      "isPrimary": {
+        "type": "boolean",
+      },
+      "label": {
+        "nullable": true,
+        "type": "object",
+      },
+      "publicKey": {
+        "type": "string",
+      },
+      "updatedAt": {
+        "format": "date-time",
+        "type": "string",
+      },
+    },
+    "required": [
+      "id",
+      "publicKey",
+      "isPrimary",
+      "isActive",
+      "createdAt",
+      "updatedAt",
+    ],
+    "type": "object",
+  },
+  "UpdateNotificationPreferencesDto": {
+    "properties": {
+      "newsAlerts": {
+        "description": "Enable news alert notifications",
+        "example": true,
+        "type": "boolean",
+      },
+      "priceAlerts": {
+        "description": "Enable price alert notifications",
+        "example": true,
+        "type": "boolean",
+      },
+      "securityAlerts": {
+        "description": "Enable security alert notifications",
+        "example": true,
+        "type": "boolean",
+      },
+    },
+    "type": "object",
+  },
+  "UpdatePreferencesDto": {
+    "properties": {
+      "notifications": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/UpdateNotificationPreferencesDto",
+          },
+        ],
+        "description": "Notification preference set",
+      },
+      "preferredCurrency": {
+        "description": "Preferred currency for portfolio valuation",
+        "enum": [
+          "USD",
+          "EUR",
+          "GBP",
+          "NGN",
+          "XLM",
+        ],
+        "example": "USD",
+        "type": "string",
+      },
+    },
+    "type": "object",
+  },
+  "UpdateProfileDto": {
+    "properties": {
+      "avatarUrl": {
+        "description": "URL to user avatar image",
+        "example": "https://example.com/avatar.jpg",
+        "type": "string",
+      },
+      "bio": {
+        "description": "User bio/description",
+        "example": "Software developer passionate about blockchain technology",
+        "type": "string",
+      },
+      "displayName": {
+        "description": "Display name for user",
+        "example": "John Doe",
+        "type": "string",
+      },
+      "preferences": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/UpdatePreferencesDto",
+          },
+        ],
+        "description": "User preference updates",
+      },
+    },
+    "type": "object",
+  },
+  "UpdateStellarAccountLabelDto": {
+    "properties": {
+      "label": {
+        "description": "New label for the account",
+        "example": "Savings Wallet",
+        "type": "string",
+      },
+    },
+    "required": [
+      "label",
+    ],
+    "type": "object",
+  },
+  "User": {
+    "properties": {},
+    "type": "object",
+  },
+}
+`;

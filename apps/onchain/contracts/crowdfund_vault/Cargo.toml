@@ -12,6 +12,8 @@ doctest = false
 soroban-sdk = { workspace = true }
 notification_interface = { path = "../notification_interface" }
 reentrancy-guard = { path = "../reentrancy-guard" }
+idempotency-guard = { path = "../idempotency-guard" }
+version-interface = { path = "../version-interface" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

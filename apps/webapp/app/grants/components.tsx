@@ -5,11 +5,13 @@ import Link from "next/link";
 import { Wallet, Info, Bookmark } from "lucide-react";
 import { useStellarConfig } from "@/contexts/StellarConfigContext";
 import { useStellarWallet } from "@/app/providers";
-import { useWatchlist } from "@/contexts/WatchlistContext";
+import { useWatchlist } from "@/hooks/use-watchlist";
 import { TransactionReceiptModal } from "@/components/TransactionReceiptModal";
-import { signTransaction } from "@stellar/freighter-api";
+import { WalletReadinessBanner } from "@/components/WalletReadinessBanner";
+import { useWalletReadiness } from "@/hooks/useWalletReadiness";
+import { ReportButton } from "@/components/report/report-button";
 import { Address, Contract, TransactionBuilder, nativeToScVal, rpc } from "@stellar/stellar-sdk";
-import { getExplorerUrl } from "@/lib/utils";
+import { useExplorerUrl } from "@/hooks/useExplorerUrl";
 
 export interface GrantRound {
   id: number;
@@ -122,6 +124,79 @@ export function RoundCard({ round }: { round: GrantRound }) {
   );
 }
 
+export function RoundTable({ rounds }: { rounds: GrantRound[] }) {
+  const { isProjectSaved, toggleSavedProject } = useWatchlist();
+
+  return (
+    <div className="hidden md:block w-full overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
+      <table className="w-full text-left text-sm whitespace-nowrap min-w-[800px]">
+        <thead className="bg-white/[0.02] border-b border-white/5">
+          <tr>
+            <th className="px-6 py-4 font-medium text-foreground/50 w-12"></th>
+            <th className="px-6 py-4 font-medium text-foreground/50">Name</th>
+            <th className="px-6 py-4 font-medium text-foreground/50">Status</th>
+            <th className="px-6 py-4 font-medium text-foreground/50 text-right">Matching Pool</th>
+            <th className="px-6 py-4 font-medium text-foreground/50">Ends</th>
+            <th className="px-6 py-4 font-medium text-foreground/50 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-white/5">
+          {rounds.map((round) => {
+            const endDate = new Date(round.endTime * 1000).toLocaleDateString();
+            const isSaved = isProjectSaved(round.id);
+
+            return (
+              <tr key={round.id} className="group hover:bg-white/[0.05] transition-colors relative">
+                <td className="px-6 py-4 relative z-10">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      toggleSavedProject(round.id);
+                    }}
+                    className={`p-2 -ml-2 rounded-full transition-colors ${
+                      isSaved ? "bg-primary/20 text-primary" : "text-white/40 hover:bg-white/10 hover:text-white"
+                    }`}
+                    aria-label={isSaved ? "Remove from watchlist" : "Add to watchlist"}
+                  >
+                    <Bookmark className="w-4 h-4" fill={isSaved ? "currentColor" : "none"} />
+                  </button>
+                </td>
+                <td className="px-6 py-4 font-semibold relative">
+                  <Link href={`/grants/${round.id}`} className="absolute inset-0 z-0" aria-label={`View ${round.name}`} />
+                  <div className="flex items-center gap-2 max-w-[200px] lg:max-w-xs xl:max-w-md truncate pointer-events-none relative z-10">
+                    {round.name}
+                  </div>
+                </td>
+                <td className="px-6 py-4 pointer-events-none relative z-10">
+                  <StatusBadge status={round.status} />
+                </td>
+                <td className="px-6 py-4 text-right pointer-events-none relative z-10">
+                  <div className="flex items-center justify-end gap-2">
+                    <Wallet className="w-4 h-4 text-primary flex-shrink-0" />
+                    <span className="font-bold">{formatAmount(round.totalPool)} XLM</span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-foreground/60 text-xs pointer-events-none relative z-10">
+                  {endDate}
+                </td>
+                <td className="px-6 py-4 text-right relative z-20">
+                  <Link 
+                    href={`/grants/${round.id}`} 
+                    className="inline-flex items-center justify-center px-4 py-2 text-xs font-bold rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                  >
+                    View Details
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function QfBar({ share }: { share: number }) {
   return (
     <div className="h-2 rounded-full bg-white/5 overflow-hidden">
@@ -143,7 +218,8 @@ export function ProjectAllocationRow({
   const rankColors = ["text-amber-400", "text-slate-400", "text-amber-700"];
 
   const { config } = useStellarConfig();
-  const { publicKey, status: walletStatus, connect: connectWallet } = useStellarWallet();
+  const { publicKey, status: walletStatus, connect: connectWallet, signXdr } = useStellarWallet();
+  const buildExplorerUrl = useExplorerUrl();
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [amount, setAmount] = useState("");
@@ -154,8 +230,23 @@ export function ProjectAllocationRow({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
 
+  // Single source of truth for whether the contribution can start. The
+  // submit handler short-circuits when `blocker` is set, and the banner
+  // surfaces `issues[0]` inline so the user knows what to fix.
+  const readiness = useWalletReadiness({ amount });
+  const isWalletReady = readiness.ready;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Early bailout: refuse to start building a transaction if any
+    // prerequisite is missing. Surface the first issue inline rather than
+    // bouncing through the RPC only to fail mid-flow.
+    if (readiness.blocker) {
+      setErrorMsg(readiness.blocker.guidance);
+      setTxState("error");
+      setShowReceiptModal(true);
+      return;
+    }
     if (!publicKey || !config) return;
 
     setTxState("building");
@@ -212,12 +303,12 @@ export function ProjectAllocationRow({
 
       const preparedTx = rpc.assembleTransaction(tx, simulation).build();
       setTxState("signing");
-      const signingResult = await signTransaction(preparedTx.toXDR(), { networkPassphrase });
-      if (signingResult.error) {
-        throw new Error(`Signing failed: ${signingResult.error}`);
+      const signingResult = await signXdr(preparedTx.toXDR(), { networkPassphrase });
+      if (signingResult.status !== "success" || !signingResult.signedXdr) {
+        throw new Error(`Signing failed: ${signingResult.error?.message ?? signingResult.status}`);
       }
 
-      const signedTx = TransactionBuilder.fromXDR(signingResult.signedTxXdr, networkPassphrase);
+      const signedTx = TransactionBuilder.fromXDR(signingResult.signedXdr, networkPassphrase);
       setTxState("submitting");
       const sendResponse = await server.sendTransaction(signedTx);
       if (sendResponse.status === "ERROR") {
@@ -252,8 +343,22 @@ export function ProjectAllocationRow({
     <div className="flex flex-col gap-3 p-4 rounded-xl border border-white/5 bg-white/[0.02]">
       <div className="flex items-center gap-3">
         <span className={`text-sm font-bold w-6 ${rankColors[rank] ?? "text-foreground/40"}`}>#{rank + 1}</span>
-        <span className="flex-1 font-medium text-sm">Project #{item.projectId}</span>
+        {/* Project name with link to project detail page */}
+        <Link
+          href={`/projects/${item.projectId}`}
+          className="flex-1 font-medium text-sm hover:text-primary transition-colors hover:underline"
+          title={`View Project #${item.projectId} details`}
+        >
+          Project #{item.projectId}
+        </Link>
         <span className="text-primary font-bold text-sm">~{formatAmount(item.estimatedMatch)} XLM</span>
+        <ReportButton
+          targetType="project"
+          targetId={String(item.projectId)}
+          targetLabel={`Project #${item.projectId}`}
+          variant="icon"
+          className="!p-1.5 bg-transparent hover:bg-red-500/10"
+        />
       </div>
 
       <QfBar share={share} />
@@ -285,8 +390,32 @@ export function ProjectAllocationRow({
       {isExpanded && (
         <div className="mt-2 p-4 rounded-xl border border-white/10 bg-white/[0.01] backdrop-blur-md space-y-4 transition-all duration-300">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-white/80">Contribute to Project #{item.projectId}</h4>
+            <h4 className="text-sm font-semibold text-white/80">
+              <Link
+                href={`/projects/${item.projectId}`}
+                className="hover:text-primary transition-colors hover:underline"
+              >
+                Contribute to Project #{item.projectId}
+              </Link>
+            </h4>
+            {config?.contracts?.crowdfundVault && (
+              <a
+                href={buildExplorerUrl("contract", config.contracts.crowdfundVault)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] text-primary/60 hover:text-primary underline underline-offset-2 transition-colors"
+                title="View Crowdfund Vault contract on explorer"
+              >
+                Vault ↗
+              </a>
+            )}
           </div>
+
+          {/* Readiness precheck: surface any missing prerequisite before the
+              user wastes time typing an amount or firing RPC calls. The
+              banner is non-blocking (a soft info / amber alert) so it can
+              coexist with the connect-wallet CTA below. */}
+          <WalletReadinessBanner issues={readiness.issues} />
 
           {!publicKey ? (
             <div className="flex flex-col items-center gap-2 py-4 text-center">
@@ -316,7 +445,14 @@ export function ProjectAllocationRow({
                     />
                     <button
                       type="submit"
-                      className="px-5 py-2 bg-primary hover:bg-primary/95 text-black text-sm font-bold rounded-lg transition-all"
+                      disabled={!isWalletReady}
+                      aria-disabled={!isWalletReady}
+                      title={
+                        readiness.blocker
+                          ? readiness.blocker.guidance
+                          : undefined
+                      }
+                      className="px-5 py-2 bg-primary hover:bg-primary/95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary text-black text-sm font-bold rounded-lg transition-all"
                     >
                       Send
                     </button>
@@ -461,7 +597,18 @@ export function RoundDetail({ summary, onBack }: { summary: RoundSummary; onBack
       </div>
 
       <div>
-        <h3 className="font-semibold text-base mb-3">Estimated Allocations</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-base">Estimated Allocations</h3>
+          <Link
+            href="/projects"
+            className="text-xs text-primary hover:underline flex items-center gap-1"
+          >
+            View all projects
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
+        </div>
         {projects.length === 0 ? (
           <p className="text-foreground/40 text-sm text-center py-8">No eligible projects yet.</p>
         ) : (

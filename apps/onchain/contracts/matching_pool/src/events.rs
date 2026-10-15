@@ -1,4 +1,4 @@
-use soroban_sdk::{contractevent, Address, Symbol};
+use soroban_sdk::{contractevent, Address, BytesN, Symbol};
 
 #[contractevent]
 pub struct InitializedEvent {
@@ -53,6 +53,7 @@ pub struct RoundFinalizedEvent {
     #[topic]
     pub round_id: u64,
     pub admin: Address,
+    pub finalized_at: u64,
 }
 
 #[contractevent]
@@ -68,4 +69,66 @@ pub struct AllMatchesDistributedEvent {
     #[topic]
     pub round_id: u64,
     pub total_distributed: i128,
+}
+
+#[contractevent]
+pub struct RoundCapUpdatedEvent {
+    #[topic]
+    pub admin: Address,
+    #[topic]
+    pub round_id: u64,
+    pub cap: i128,
+}
+
+/// Emitted whenever the pause state of a specific scope changes.
+///
+/// `scope` identifies which subsystem was affected:
+///  - `1` → Contribution (fund_pool, record_contribution)
+///  - `2` → Payout (distribute_matching_funds)
+///  - `3` → Governance (create_round, finalize_round, approve/remove project, …)
+///
+/// `paused` is the **new** state after the call.
+#[contractevent]
+pub struct ScopePauseChangedEvent {
+    #[topic]
+    pub admin: Address,
+    /// Numeric discriminant of `PauseScope`.
+    pub scope: u32,
+    /// `true` = scope is now paused; `false` = scope is now unpaused.
+    pub paused: bool,
+    pub timestamp: u64,
+}
+
+// ── Legacy whole-contract admin events (issue #1231) ──────────────────────
+
+#[contractevent]
+pub struct ContractPauseEvent {
+    #[topic]
+    pub admin: Address,
+    pub paused: bool,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct ContractUnpauseEvent {
+    #[topic]
+    pub admin: Address,
+    pub paused: bool,
+    pub timestamp: u64,
+}
+
+/// Emitted when the admin role is transferred to a new address.
+#[contractevent]
+pub struct AdminChangedEvent {
+    #[topic]
+    pub old_admin: Address,
+    pub new_admin: Address,
+}
+
+/// Emitted when the contract WASM is upgraded to a new hash.
+#[contractevent]
+pub struct UpgradedEvent {
+    #[topic]
+    pub admin: Address,
+    pub new_wasm_hash: BytesN<32>,
 }

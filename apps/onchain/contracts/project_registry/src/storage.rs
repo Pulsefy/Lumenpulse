@@ -1,12 +1,24 @@
 use soroban_sdk::{contracttype, Address, Symbol};
 
-/// Verification status of a project
+/// If an entry's remaining TTL drops below this many ledgers, the next
+/// touch extends it back out to `LEDGER_BUMP`. ~100_000 ledgers (~5.8 days
+/// at 5s/ledger).
+pub const LEDGER_THRESHOLD: u32 = 100_000;
+/// TTL applied when extending. ~518_400 ledgers (~30 days at 5s/ledger).
+pub const LEDGER_BUMP: u32 = 518_400;
+
+/// Verification status of a project.
+///
+/// `Pending` and `Verified`/`Rejected` represent the verification lifecycle.
+/// `Archived` is a terminal non-active state used for historical or removed
+/// records that must remain queryable by clients and registry consumers.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum VerificationStatus {
     Pending,
     Verified,
     Rejected,
+    Archived,
 }
 
 /// How voter weight is determined

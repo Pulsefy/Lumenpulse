@@ -15,9 +15,8 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import { CacheInterceptor, CacheKey, CacheTTL } from '@nestjs/cache-manager';
-import { Throttle } from '@nestjs/throttler';
 import { NEWS_CACHE_KEY } from '../cache/cache.service';
-import { getNewsReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 import { NewsProviderService } from './news-provider.service';
 import { NewsService } from './news.service';
 import {
@@ -29,7 +28,7 @@ import {
 
 @ApiTags('news')
 @Controller('news')
-@Throttle(getNewsReadThrottleOverride())
+@RateLimitPolicy('newsRead')
 export class NewsController {
   constructor(
     private readonly newsProviderService: NewsProviderService,

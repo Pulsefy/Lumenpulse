@@ -1,0 +1,50 @@
+suppression_rules:
+  - type: alert_type
+    name: "dedup_dataset_sla_breach"
+    window_seconds: 300
+    key_fields: ["dataset", "sla_type", "severity"]
+    alert_types: ["dataset_sla_breach"]
+
+  - type: repeat_alert
+    name: "dedup_indexer_lag"
+    window_seconds: 300
+    key_fields: ["metric_name", "source", "severity"]
+
+  - type: repeat_alert
+    name: "dedup_source_failures"
+    window_seconds: 60
+    key_fields: ["source", "failure_type"]
+
+  - type: noisy_condition
+    name: "rate_limit_source_failures"
+    window_seconds: 300
+    key_fields: ["source", "alert_type"]
+    rate_limit: 10
+    max_suppressions: 50
+
+  - type: severity_threshold
+    name: "suppress_healthy_alerts"
+    window_seconds: 0
+    key_fields: ["alert_type"]
+    min_severity: "warning"
+
+  - type: alert_type
+    name: "dedup_contract_lag"
+    window_seconds: 300
+    key_fields: ["domain", "severity"]
+    alert_types: ["contract_lag"]
+
+  # Drift alerts routed to backend notifications (#1447). A persistent drift
+  # re-notifies at most once per hour; repeated occurrences inside the window
+  # are suppressed (and counted) instead of spamming the backend.
+  - type: alert_type
+    name: "dedup_feature_drift"
+    window_seconds: 3600
+    key_fields: ["alert_type", "feature_set", "schema_signature"]
+    alert_types: ["feature_drift"]
+
+  - type: alert_type
+    name: "dedup_metadata_drift"
+    window_seconds: 3600
+    key_fields: ["alert_type", "schema_signature"]
+    alert_types: ["metadata_drift"]

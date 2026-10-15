@@ -1,0 +1,75 @@
+{
+  "tablename": "contract_events",
+  "columns": {
+    "id": {
+      "type": "INTEGER",
+      "nullable": false,
+      "primary_key": true
+    },
+    "contract_id": {
+      "type": "VARCHAR(255)",
+      "nullable": false,
+      "primary_key": false
+    },
+    "event_id": {
+      "type": "VARCHAR(255)",
+      "nullable": false,
+      "primary_key": false
+    },
+    "ledger": {
+      "type": "BIGINT",
+      "nullable": false,
+      "primary_key": false
+    },
+    "event_type": {
+      "type": "VARCHAR(100)",
+      "nullable": false,
+      "primary_key": false
+    },
+    "project_id": {
+      "type": "BIGINT",
+      "nullable": true,
+      "primary_key": false
+    },
+    "contributor": {
+      "type": "VARCHAR(255)",
+      "nullable": true,
+      "primary_key": false
+    },
+    "amount": {
+      "type": "FLOAT",
+      "nullable": true,
+      "primary_key": false
+    },
+    "milestone_id": {
+      "type": "INTEGER",
+      "nullable": true,
+      "primary_key": false
+    },
+    "status": {
+      "type": "VARCHAR(50)",
+      "nullable": true,
+      "primary_key": false
+    },
+    "topics": {
+      "type": "JSON",
+      "nullable": true,
+      "primary_key": false
+    },
+    "raw_data": {
+      "type": "JSON",
+      "nullable": true,
+      "primary_key": false
+    },
+    "timestamp": {
+      "type": "DATETIME",
+      "nullable": true,
+      "primary_key": false
+    },
+    "created_at": {
+      "type": "DATETIME",
+      "nullable": false,
+      "primary_key": false
+    }
+  }
+}

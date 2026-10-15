@@ -5,6 +5,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import {
   RoundDto,
   // ProjectQfDto,
@@ -18,7 +20,15 @@ import {
   ApproveProjectDto,
   RecordContributionDto,
   DistributeDto,
+  LeaderboardQueryDto,
+  LeaderboardResponseDto,
+  LeaderboardEntryDto,
 } from './dto/grants.dto';
+import {
+  CONTRIBUTION_QUEUE,
+  DETECTION_JOB,
+} from '../suspicious-contribution/types';
+import { RequestContextService } from '../common/services/request-context.service';
 
 /**
  * In-memory store for round and contribution data.
@@ -45,13 +55,40 @@ export class GrantsService {
   private rounds = new Map<number, RoundRecord>();
   private nextRoundId = 0;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    @InjectQueue(CONTRIBUTION_QUEUE) private readonly suspiciousQueue: Queue,
+  ) {
     if (
       process.env.NODE_ENV !== 'production' &&
       process.env.NODE_ENV !== 'test'
     ) {
       this.seedRounds();
     }
+  }
+
+  private computeRoundTotal(roundId: number): bigint {
+    const record = this.getRecord(roundId);
+    let total = 0n;
+    for (const contributors of record.contributions.values()) {
+      for (const amount of contributors.values()) {
+        total += amount;
+      }
+    }
+    return total;
+  }
+
+  private computeContributorTotal(
+    roundId: number,
+    contributor: string,
+  ): bigint {
+    const record = this.getRecord(roundId);
+    let total = 0n;
+    for (const contributors of record.contributions.values()) {
+      const amount = contributors.get(contributor) ?? 0n;
+      total += amount;
+    }
+    return total;
   }
 
   private seedRounds() {
@@ -258,6 +295,30 @@ export class GrantsService {
     this.logger.log(
       `Contribution recorded: round=${dto.roundId} project=${dto.projectId} contributor=${dto.contributorPublicKey} amount=${amount}`,
     );
+
+    const roundTotal = this.computeRoundTotal(dto.roundId);
+    const contributorTotal = this.computeContributorTotal(
+      dto.roundId,
+      dto.contributorPublicKey,
+    );
+
+    this.suspiciousQueue
+      .add(
+        DETECTION_JOB,
+        {
+          roundId: dto.roundId,
+          projectId: dto.projectId,
+          contributorPublicKey: dto.contributorPublicKey,
+          amount: dto.amount,
+          roundTotalContributions: roundTotal.toString(),
+          contributorTotalInRound: contributorTotal.toString(),
+          correlationId: RequestContextService.getCorrelationId(),
+        },
+        { attempts: 2, backoff: { type: 'exponential', delay: 2000 } },
+      )
+      .catch((err) => {
+        this.logger.error('Failed to queue fraud detection', err);
+      });
   }
 
   // ── Finalization ───────────────────────────────────────────────────────────
@@ -471,6 +532,86 @@ export class GrantsService {
       poolBalance: record.totalPool.toString(),
       participationMetrics,
       projects,
+    };
+  }
+
+  /**
+   * Return a ranked leaderboard of projects for a round.
+   *
+   * Projects are sorted by QF score descending (higher match = higher rank).
+   * Supports top-N and paginated responses. Returns an empty entries list
+   * when the round exists but has no eligible projects.
+   *
+   * @throws NotFoundException when the round does not exist.
+   */
+  getLeaderboard(query: LeaderboardQueryDto): LeaderboardResponseDto {
+    const { roundId, topN, page = 1, limit = 10 } = query;
+    const record = this.getRecord(roundId);
+
+    const scores = new Map<number, bigint>();
+    let totalQf = 0n;
+
+    for (const pid of record.eligibleProjects) {
+      const contribs =
+        record.contributions.get(pid) ?? new Map<string, bigint>();
+      const score = this.computeQfScore(contribs);
+      scores.set(pid, score);
+      totalQf += score;
+    }
+
+    // Build ranked entries sorted by QF score descending
+    const allEntries: LeaderboardEntryDto[] = Array.from(scores.entries())
+      .sort(([, a], [, b]) => (b > a ? 1 : b < a ? -1 : 0))
+      .map(([projectId, score], index) => {
+        const contribs =
+          record.contributions.get(projectId) ?? new Map<string, bigint>();
+        const totalContributions = Array.from(contribs.values()).reduce(
+          (sum, v) => sum + v,
+          0n,
+        );
+        const contributorCount = contribs.size;
+        const estimatedMatch =
+          totalQf > 0n ? (record.totalPool * score) / totalQf : 0n;
+        const matchPercentage =
+          totalQf > 0n ? ((score * 10000n) / totalQf).toString() : '0';
+
+        return {
+          rank: index + 1,
+          projectId,
+          totalContributions: totalContributions.toString(),
+          contributorCount,
+          qfScore: score.toString(),
+          estimatedMatch: estimatedMatch.toString(),
+          matchPercentage: (Number(matchPercentage) / 100).toFixed(2),
+        };
+      });
+
+    const totalProjects = allEntries.length;
+
+    // Apply top-N or pagination
+    let entries: LeaderboardEntryDto[];
+    let effectivePage: number;
+    let effectiveLimit: number;
+
+    if (topN !== undefined) {
+      const cap = Math.min(topN, 100);
+      entries = allEntries.slice(0, cap);
+      effectivePage = 1;
+      effectiveLimit = cap;
+    } else {
+      effectiveLimit = Math.min(limit, 100);
+      effectivePage = page;
+      const start = (effectivePage - 1) * effectiveLimit;
+      entries = allEntries.slice(start, start + effectiveLimit);
+    }
+
+    return {
+      round: this.toRoundDto(record),
+      entries,
+      totalProjects,
+      poolBalance: record.totalPool.toString(),
+      page: effectivePage,
+      limit: effectiveLimit,
     };
   }
 

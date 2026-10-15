@@ -1,0 +1,59 @@
+{
+  "network": "testnet",
+  "commit": "<git commit>",
+  "contract_name": "upgradable_contract",
+  "contract_id": "<C...>",
+  "original_wasm_hash": "<64-hex hash>",
+  "upgraded_wasm_hash": "<64-hex hash>",
+  "rollback_wasm_hash": "<64-hex hash>",
+  "timelock_delay_seconds": 86400,
+  "steps": [
+    {
+      "name": "baseline",
+      "output": "<captured command output>"
+    },
+    {
+      "name": "queued",
+      "output": "<transaction hash, operation ID, execute_after, expires_at>"
+    },
+    {
+      "name": "early_execution_rejected",
+      "output": "<OperationNotReady output>"
+    },
+    {
+      "name": "ready",
+      "output": "<Ready status output>"
+    },
+    {
+      "name": "executed",
+      "output": "<execution transaction and events>"
+    },
+    {
+      "name": "post_upgrade_verification",
+      "output": "<read-only state verification>"
+    },
+    {
+      "name": "manifest_updated",
+      "output": "<manifest validation output>"
+    },
+    {
+      "name": "backend_verification",
+      "output": "<drift, active-manifest, and smoke output>"
+    },
+    {
+      "name": "rollback_queued",
+      "output": "<rollback queue output>"
+    },
+    {
+      "name": "rollback_executed",
+      "output": "<rollback execution output>"
+    },
+    {
+      "name": "post_rollback_verification",
+      "output": "<read-only rollback verification>"
+    }
+  ],
+  "follow_up_issues": [
+    "UPGRADE-REHEARSAL-001"
+  ]
+}

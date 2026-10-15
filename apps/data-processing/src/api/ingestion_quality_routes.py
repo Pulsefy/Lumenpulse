@@ -9,10 +9,57 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from src.ingestion.stellar_ingestion_checks import run_all_checks
+from src.ingestion.ingestion_alerting import (
+    get_last_alerting_status,
+    run_ingestion_alerting_cycle,
+)
 
 
 router = APIRouter()
 
+
+# ---------------------------------------------------------------------------
+# Per-contract ingestion lag
+# ---------------------------------------------------------------------------
+
+class ContractLagSnapshotResponse(BaseModel):
+    domain: str
+    contract_id: Optional[str] = None
+    lag_seconds: Optional[float] = None
+    latest_onchain_ts: Optional[str] = None
+    latest_processed_ts: Optional[str] = None
+    severity: str
+    warning_threshold_seconds: float
+    critical_threshold_seconds: float
+    details: Dict[str, Any] = {}
+
+
+class ContractLagResponse(BaseModel):
+    checked_at: str
+    snapshots: list[ContractLagSnapshotResponse] = []
+    lag_alerts: list[Dict[str, Any]] = []
+    healthy: bool = True
+
+
+@router.get("/ingestion/contract-lag", response_model=ContractLagResponse)
+async def get_contract_lag() -> ContractLagResponse:
+    """Return current per-contract ingestion lag for all five domains."""
+    from src.ingestion.contract_lag_metrics import run_contract_lag_cycle
+
+    result = run_contract_lag_cycle()
+    return ContractLagResponse(**result)
+
+
+@router.post("/ingestion/contract-lag/run", response_model=ContractLagResponse)
+async def run_contract_lag() -> ContractLagResponse:
+    """Trigger an immediate per-contract lag measurement cycle."""
+    from src.ingestion.contract_lag_metrics import run_contract_lag_cycle
+
+    result = run_contract_lag_cycle()
+    return ContractLagResponse(**result)
+
+
+# ---------------------------------------------------------------------------
 
 class IngestionQualityRunRequest(BaseModel):
     network: str = "testnet"  # "testnet" only in MVP
@@ -56,4 +103,26 @@ async def run_ingestion_quality(req: IngestionQualityRunRequest) -> IngestionQua
     )
 
     return IngestionQualityRunResponse(**result)
+
+
+class IngestionAlertingStatusResponse(BaseModel):
+    checked_at: Optional[str] = None
+    metrics: list[Dict[str, Any]] = []
+    lag_alerts: list[Dict[str, Any]] = []
+    recent_source_failures: list[Dict[str, Any]] = []
+    healthy: bool = True
+
+
+@router.get("/ingestion/alerting/status", response_model=IngestionAlertingStatusResponse)
+async def get_ingestion_alerting_status() -> IngestionAlertingStatusResponse:
+    status = get_last_alerting_status()
+    if not status:
+        return IngestionAlertingStatusResponse()
+    return IngestionAlertingStatusResponse(**status)
+
+
+@router.post("/ingestion/alerting/run", response_model=IngestionAlertingStatusResponse)
+async def run_ingestion_alerting() -> IngestionAlertingStatusResponse:
+    result = run_ingestion_alerting_cycle()
+    return IngestionAlertingStatusResponse(**result)
 

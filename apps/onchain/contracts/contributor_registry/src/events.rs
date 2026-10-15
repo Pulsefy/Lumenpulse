@@ -99,3 +99,108 @@ pub struct ReputationPenaltyAppliedEvent {
     pub reason: String,
     pub executor: Address,
 }
+
+/// Emitted whenever a contributor's profile (currently `github_handle`) is
+/// mutated. Both self-service updates and admin-managed (multisig) updates
+/// emit this event so indexers can reconstruct the audit trail.
+///
+/// `proposal_id == 0` indicates a self-service update; a non-zero value
+/// indicates an admin-managed update via the multisig of that proposal.
+// NOTE: kept as `...Evt` (not `...Event`) — Soroban's `#[contractevent]`
+// macro panics at compile time on struct names past ~29 chars (confirmed
+// empirically under issue #1231); `ContributorProfileChangedEvent` (30
+// chars) fails where this 28-char name succeeds.
+#[contractevent]
+pub struct ContributorProfileChangedEvt {
+    #[topic]
+    pub contributor: Address,
+    /// Address that submitted the transaction. For admin updates this is the
+    /// multisig executor; for self updates this equals `contributor`.
+    pub actor: Address,
+    /// New handle after the mutation.
+    pub new_github_handle: String,
+    /// Proposal id when the change was admin-managed; 0 for self-service.
+    pub proposal_id: u64,
+}
+
+/// Emitted when a contributor's attestation is suspended via multisig.
+#[contractevent]
+pub struct AttestationSuspendedEvent {
+    #[topic]
+    pub contributor: Address,
+    pub executor: Address,
+    pub proposal_id: u64,
+}
+
+/// Emitted when a contributor's attestation is revoked via multisig.
+/// Revocation is terminal — there is no corresponding "un-revoke" event.
+#[contractevent]
+pub struct AttestationRevokedEvent {
+    #[topic]
+    pub contributor: Address,
+    pub executor: Address,
+    pub proposal_id: u64,
+}
+
+/// Emitted when a previously suspended attestation is restored to `Active`.
+#[contractevent]
+pub struct AttestationRestoredEvent {
+    #[topic]
+    pub contributor: Address,
+    pub executor: Address,
+    pub proposal_id: u64,
+}
+
+/// Emitted when a stale proposal is cleared via `expire_proposal`.
+#[contractevent]
+pub struct ProposalExpiredEvent {
+    #[topic]
+    pub proposal_id: u64,
+    pub expired_at: u64,
+}
+
+/// Emitted when a new contributor registers directly (non-gasless path).
+/// Reuses the same struct name `crowdfund_vault` uses for its own
+/// contributor registration, since both represent the same canonical event.
+#[contractevent]
+pub struct ContributorRegisteredEvent {
+    #[topic]
+    pub contributor: Address,
+}
+
+/// Emitted when a contributor removes their own registration, freeing their
+/// GitHub handle for reuse by someone else.
+#[contractevent]
+pub struct ContributorDeregisteredEvent {
+    #[topic]
+    pub contributor: Address,
+    pub freed_github_handle: String,
+}
+
+/// Emitted when a contributor's reputation score is adjusted via
+/// `update_reputation`.
+#[contractevent]
+pub struct ReputationUpdatedEvent {
+    #[topic]
+    pub contributor: Address,
+    pub old_reputation: u64,
+    pub new_reputation: u64,
+}
+
+/// Emitted whenever the pause state of a specific scope changes.
+///
+/// `scope` identifies which subsystem was affected:
+///  - `1` → Contribution (register_contributor, gasless_register)
+///  - `2` → Governance (multisig proposals, admin-gated mutations)
+///
+/// `paused` is the **new** state after the call.
+#[contractevent]
+pub struct ScopePauseChangedEvent {
+    #[topic]
+    pub admin: Address,
+    /// Numeric discriminant of `ContribPauseScope`.
+    pub scope: u32,
+    /// `true` = scope is now paused; `false` = scope is now unpaused.
+    pub paused: bool,
+    pub timestamp: u64,
+}

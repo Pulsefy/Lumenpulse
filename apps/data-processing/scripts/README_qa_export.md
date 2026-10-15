@@ -1,6 +1,8 @@
-# QA Dataset Export — Issue #742
+# Ledger-Range Export Generator for Incident Debugging — QA Dataset Export (Issue #742)
 
-Repeatable exports of raw events, materialized views, and KPIs for QA and contributor debugging.
+**Goal:** Export raw and normalized data for a specific ledger range when maintainers debug incidents.
+
+Repeatable exports of **raw payloads** and **normalized outputs** for QA and maintainer incident debugging. Safe for repeated use (idempotent, atomic writes, read-only).
 
 ## Quick Start
 
@@ -20,6 +22,24 @@ python scripts/export_qa_datasets.py --start-ledger 1000 --end-ledger 2000 \
 ```
 
 The script reads `DATABASE_URL` from the environment if `--database-url` is not provided.
+
+## Acceptance Criteria
+
+- [x] Accepts `start`/`end` ledger inputs (`--start-ledger` / `--end-ledger`, validated `start <= end`, `>=0`).
+- [x] Exports both **raw payloads** (`events`) and **normalized outputs** (`views` + `kpis`) for the same ledger interval.
+- [x] Safe for repeated use: deterministic filenames, atomic `*.tmp` → rename, read-only queries, re-running overwrites identically (idempotent).
+- [x] Documents file format and intended use (this file + module docstrings).
+
+## Intended Use
+
+For **maintainers on incident duty**: capture a deterministic snapshot of the ledger interval under investigation, attach exports to incident tickets, diff across runs, or hand to contributors for repro. Do **not** use for production ETL — use the Soroban indexer / backfill tooling for that. Exports are offline/debugging only and contain no secrets.
+
+## Safe for Repeated Use (Idempotency)
+
+- Filenames are deterministic: `<dataset>_<start>_<end>.json`. Re-running the same range overwrites the same files.
+- Writes are atomic: content is written to `*.tmp` then `rename()`; interrupted runs leave the previous completed file intact, never a partial JSON.
+- Queries are read-only; no DB mutation or deduplication state.
+- Re-running a completed range yields identical `count`/`records` unless the underlying DB rows changed between runs.
 
 ## Output Files
 

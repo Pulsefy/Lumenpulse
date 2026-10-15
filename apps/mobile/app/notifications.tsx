@@ -6,6 +6,7 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalization } from '../src/context';
+import { resolveNotificationTarget } from '../lib/deep-links';
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
@@ -23,7 +24,18 @@ export default function NotificationsScreen() {
             borderColor: item.read ? colors.cardBorder : 'transparent',
           },
         ]}
-        onPress={() => markAsRead(item.id)}
+        onPress={() => {
+          if (!item.read) {
+            markAsRead(item.id);
+          }
+          if (item.data) {
+            // Issue #1410: resolution is centralized in lib/deep-links.ts so
+            // every payload type lands on a real screen (or +not-found).
+            // This screen is ProtectedRoute-wrapped, so the user is
+            // authenticated here and can navigate straight to the target.
+            router.push(resolveNotificationTarget(item.data) as any);
+          }
+        }}
         accessibilityLabel={`${item.title}. ${
           item.read ? t('notifications.read') : t('notifications.unread')
         }. ${t('notifications.mark_as_read')}`}
@@ -42,25 +54,21 @@ export default function NotificationsScreen() {
           {item.title}
         </Text>
 
-        <Text style={[styles.itemMessage, { color: colors.text }]}>
-          {item.message}
-        </Text>
+        <Text style={[styles.itemMessage, { color: colors.text }]}>{item.message}</Text>
 
         <Text style={[styles.itemStatus, { color: colors.text }]}>
           {item.read ? '✓ Read' : '● Unread'}
         </Text>
       </TouchableOpacity>
     ),
-    [colors, markAsRead, t],
+    [colors, markAsRead, t, router],
   );
 
   return (
     <ProtectedRoute>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        
         {/* HEADER */}
         <View style={styles.headerRow}>
-          
           {/* Back button */}
           <TouchableOpacity
             onPress={() => router.back()}
@@ -79,9 +87,7 @@ export default function NotificationsScreen() {
 
             {unreadCount > 0 && (
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </Text>
+                <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
               </View>
             )}
           </View>

@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 import { SentimentService } from './sentiment.service';
 import { AxiosError } from 'axios';
 import { Logger } from '@nestjs/common';
+import { RequestContextService } from '../common/services/request-context.service';
 
 jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
 
@@ -135,8 +136,35 @@ describe('SentimentService', () => {
         { text },
         {
           timeout: 10000,
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Correlation-ID': 'unknown',
+            'X-Request-Id': 'unknown',
+          },
         },
+      );
+    });
+
+    it('should propagate active correlation ID in request headers', async () => {
+      const text = 'Testing correlation propagation';
+      mockHttpService.post.mockReturnValue(of(mockSuccessResponse));
+
+      await RequestContextService.run(
+        { correlationId: 'corr-sentiment-123' },
+        async () => {
+          await service.analyzeSentiment(text);
+        },
+      );
+
+      expect(mockHttpService.post).toHaveBeenCalledWith(
+        'http://localhost:8000/analyze',
+        { text },
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'X-Correlation-ID': 'corr-sentiment-123',
+            'X-Request-Id': 'corr-sentiment-123',
+          }),
+        }),
       );
     });
 
@@ -271,7 +299,13 @@ describe('SentimentService', () => {
       expect(result).toEqual(mockHealthResponse.data);
       expect(mockHttpService.get).toHaveBeenCalledWith(
         'http://localhost:8000/health',
-        { timeout: 5000 },
+        {
+          timeout: 5000,
+          headers: {
+            'X-Correlation-ID': 'unknown',
+            'X-Request-Id': 'unknown',
+          },
+        },
       );
     });
 

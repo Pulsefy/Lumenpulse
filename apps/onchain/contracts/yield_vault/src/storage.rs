@@ -1,5 +1,12 @@
 use soroban_sdk::{contracttype, Address, Symbol};
 
+/// If an entry's remaining TTL drops below this many ledgers, the next
+/// touch extends it back out to `LEDGER_BUMP`. ~100_000 ledgers (~5.8 days
+/// at 5s/ledger).
+pub const LEDGER_THRESHOLD: u32 = 100_000;
+/// TTL applied when extending. ~518_400 ledgers (~30 days at 5s/ledger).
+pub const LEDGER_BUMP: u32 = 518_400;
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct YieldProvider {
@@ -18,7 +25,7 @@ pub struct YieldProvider {
 pub struct ProviderMetrics {
     pub apy: u32, // In basis points (e.g., 500 = 5%)
     pub tvl: i128,
-    pub risk_rating: u8, // 1-10
+    pub risk_rating: u32, // 1-10
 }
 
 #[contracttype]
@@ -36,4 +43,6 @@ pub enum DataKey {
     // Metrics tracking
     TotalAUM,
     TotalYieldHarvested,
+    // Emergency pause switch (bool)
+    Paused,
 }

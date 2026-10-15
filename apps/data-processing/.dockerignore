@@ -7,17 +7,44 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .env
+.env.*
+!.env.example
 .venv
-env/
 venv/
+env/
 pip-log.txt
 pip-delete-this-directory.txt
+
+# Logs
+logs/
+*.log
+
+# Tests and test fixtures (never shipped in the runtime image)
+tests/
+test_pipeline.py
+test_security.py
+data/synthetic_test/
+
+# Demo scripts / examples
+demo_*.py
+examples/
+
+# Coverage / quality tooling artifacts
+.coverage
+htmlcov/
 
 # Distribution / Build
 dist/
 build/
 *.egg-info/
+
+# CI / dev tooling configs (not needed inside the image)
+.ci-trigger
+.pre-commit-config.yaml
+.flake8
 
 # Docker/System
 Dockerfile

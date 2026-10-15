@@ -15,7 +15,7 @@ export class TreasuryException extends HttpException {
     status: HttpStatus,
     details?: Record<string, unknown>,
   ) {
-    super({ code, message, error: 'Treasury Error', ...details }, status);
+    super({ code, message, details }, status);
   }
 }
 
@@ -121,11 +121,12 @@ export class TreasuryReentrancyException extends TreasuryException {
 
 /** The Soroban RPC endpoint is unavailable or unreachable. */
 export class TreasuryRpcUnavailableException extends TreasuryException {
-  constructor(cause?: string) {
+  constructor(cause?: string, details?: Record<string, unknown>) {
     super(
       ErrorCode.TREAS_RPC_UNAVAILABLE,
       `Soroban RPC is unavailable${cause ? `: ${cause}` : ''}.`,
       HttpStatus.SERVICE_UNAVAILABLE,
+      details,
     );
   }
 }

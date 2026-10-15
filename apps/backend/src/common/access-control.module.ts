@@ -3,13 +3,19 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { User } from '../users/entities/user.entity';
 import { WebhookModule } from '../webhook/webhook.module';
+import { AppConfigModule } from '../config/config.module';
 import { AccessControlService } from './services/access-control.service';
 
 /**
  * Module providing shared access control functionality
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([User]), ConfigModule, WebhookModule],
+  imports: [
+    TypeOrmModule.forFeature([User]),
+    ConfigModule,
+    WebhookModule,
+    AppConfigModule,
+  ],
   providers: [AccessControlService],
   exports: [AccessControlService],
 })

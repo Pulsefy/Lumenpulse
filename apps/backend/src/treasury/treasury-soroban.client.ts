@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  Account,
   Address,
   Contract,
   Keypair,
@@ -15,6 +16,10 @@ import { config } from '../lib/config';
 import { BadRequestException } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import {
+  SorobanRpcError,
+  SorobanRpcClientService,
+} from '../stellar/services/soroban-rpc-client.service';
+import {
   TreasuryNotConfiguredException,
   TreasuryRpcUnavailableException,
   TreasuryTransactionFailedException,
@@ -25,11 +30,6 @@ import { RawStreamData } from './treasury-stream.util';
 const NETWORK_PASSPHRASES = {
   testnet: Networks.TESTNET,
   mainnet: Networks.PUBLIC,
-} as const;
-
-const DEFAULT_SOROBAN_RPC_URLS = {
-  testnet: 'https://soroban-testnet.stellar.org',
-  mainnet: 'https://soroban.stellar.org',
 } as const;
 
 /** How long to poll for transaction confirmation before giving up. */
@@ -52,6 +52,11 @@ export interface AllocateBudgetParams {
   duration: number;
 }
 
+export interface RotateBeneficiaryParams {
+  oldBeneficiary: string;
+  newBeneficiary: string;
+}
+
 export interface SubmittedTransaction {
   hash: string;
   status: 'SUCCESS';
@@ -67,6 +72,8 @@ export interface SubmittedTransaction {
 export class TreasurySorobanClient {
   private readonly logger = new Logger(TreasurySorobanClient.name);
 
+  constructor(private readonly sorobanRpc: SorobanRpcClientService) {}
+
   /** Returns the configured treasury contract id, or throws if unusable. */
   private getContractId(): string {
     const contractId = config.stellar.contracts.treasury;
@@ -74,20 +81,6 @@ export class TreasurySorobanClient {
       throw new TreasuryNotConfiguredException();
     }
     return contractId;
-  }
-
-  private getRpcUrl(): string {
-    return (
-      config.stellar.sorobanRpcUrl ??
-      DEFAULT_SOROBAN_RPC_URLS[config.stellar.network]
-    );
-  }
-
-  private createServer(): rpc.Server {
-    return new rpc.Server(this.getRpcUrl(), {
-      timeout: config.stellar.timeout,
-      allowHttp: config.stellar.sorobanRpcUrl?.startsWith('http://') ?? false,
-    });
   }
 
   private getNetworkPassphrase(): string {
@@ -119,10 +112,14 @@ export class TreasurySorobanClient {
     this.validateAddressOrThrow(params.beneficiary, 'beneficiary');
 
     const keypair = this.getAdminKeypair();
-    const server = this.createServer();
 
     try {
-      const sourceAccount = await server.getAccount(keypair.publicKey());
+      const sourceAccount = await this.sorobanRpc.getAccount(
+        keypair.publicKey(),
+      );
+      if (!(sourceAccount instanceof Account)) {
+        throw new Error('Failed to retrieve source account');
+      }
 
       const contract = new Contract(contractId);
       const operation = contract.call(
@@ -142,26 +139,85 @@ export class TreasurySorobanClient {
         .setTimeout(30)
         .build();
 
-      const simulation = await server.simulateTransaction(tx);
+      const simulation = await this.sorobanRpc.simulateTransaction(tx);
       if (rpc.Api.isSimulationError(simulation)) {
-        throw toTreasuryException(simulation.error, params.beneficiary);
+        const errorMsg =
+          typeof simulation.error === 'string'
+            ? simulation.error
+            : String(simulation.error);
+        throw toTreasuryException(errorMsg, params.beneficiary);
       }
 
       const prepared = rpc.assembleTransaction(tx, simulation).build();
       prepared.sign(keypair);
 
-      return await this.submitAndConfirm(server, prepared);
-    } catch (error) {
+      return await this.submitAndConfirm(prepared);
+    } catch (error: unknown) {
+      throw this.normalizeError(error);
+    }
+  }
+
+  /**
+   * Builds, signs (as the treasury admin), and submits a `rotate_beneficiary`
+   * transaction. Contract-level validation errors are surfaced during
+   * simulation and mapped to the standard API error contract.
+   */
+  async rotateBeneficiary(
+    params: RotateBeneficiaryParams,
+  ): Promise<SubmittedTransaction> {
+    const contractId = this.getContractId();
+    this.validateAddressOrThrow(params.oldBeneficiary, 'oldBeneficiary');
+    this.validateAddressOrThrow(params.newBeneficiary, 'newBeneficiary');
+
+    const keypair = this.getAdminKeypair();
+
+    try {
+      const sourceAccount = await this.sorobanRpc.getAccount(
+        keypair.publicKey(),
+      );
+      if (!(sourceAccount instanceof Account)) {
+        throw new Error('Failed to retrieve source account');
+      }
+
+      const contract = new Contract(contractId);
+      const operation = contract.call(
+        'rotate_beneficiary',
+        Address.fromString(keypair.publicKey()).toScVal(),
+        Address.fromString(params.oldBeneficiary).toScVal(),
+        Address.fromString(params.newBeneficiary).toScVal(),
+      );
+
+      const tx = new TransactionBuilder(sourceAccount, {
+        fee: BASE_INCLUSION_FEE,
+        networkPassphrase: this.getNetworkPassphrase(),
+      })
+        .addOperation(operation)
+        .setTimeout(30)
+        .build();
+
+      const simulation = await this.sorobanRpc.simulateTransaction(tx);
+      if (rpc.Api.isSimulationError(simulation)) {
+        const errorMsg =
+          typeof simulation.error === 'string'
+            ? simulation.error
+            : String(simulation.error);
+        throw toTreasuryException(errorMsg, params.oldBeneficiary);
+      }
+
+      const prepared = rpc.assembleTransaction(tx, simulation).build();
+      prepared.sign(keypair);
+
+      return await this.submitAndConfirm(prepared);
+    } catch (error: unknown) {
       throw this.normalizeError(error);
     }
   }
 
   /** Sends a signed transaction and polls until it is confirmed or fails. */
   private async submitAndConfirm(
-    server: rpc.Server,
     transaction: ReturnType<TransactionBuilder['build']>,
   ): Promise<SubmittedTransaction> {
-    const sendResponse = await server.sendTransaction(transaction);
+    const sendResponse = await this.sorobanRpc.sendTransaction(transaction);
 
     if (sendResponse.status === 'ERROR') {
       throw new TreasuryTransactionFailedException(
@@ -172,14 +228,14 @@ export class TreasurySorobanClient {
 
     const hash = sendResponse.hash;
     const deadline = Date.now() + TX_CONFIRMATION_TIMEOUT_MS;
-    let getResponse = await server.getTransaction(hash);
+    let getResponse = await this.sorobanRpc.getTransaction(hash);
 
     while (
       getResponse.status === rpc.Api.GetTransactionStatus.NOT_FOUND &&
       Date.now() < deadline
     ) {
       await this.sleep(TX_POLL_INTERVAL_MS);
-      getResponse = await server.getTransaction(hash);
+      getResponse = await this.sorobanRpc.getTransaction(hash);
     }
 
     if (getResponse.status === rpc.Api.GetTransactionStatus.SUCCESS) {
@@ -207,8 +263,6 @@ export class TreasurySorobanClient {
     const contractId = this.getContractId();
     this.validateAddressOrThrow(beneficiary, 'beneficiary');
 
-    const server = this.createServer();
-
     try {
       const ledgerKey = xdr.LedgerKey.contractData(
         new xdr.LedgerKeyContractData({
@@ -222,14 +276,15 @@ export class TreasurySorobanClient {
         }),
       );
 
-      const response = await server.getLedgerEntries(ledgerKey);
+      const response =
+        await this.sorobanRpc.rawServer.getLedgerEntries(ledgerKey);
       if (response.entries.length === 0) {
         return null;
       }
 
       const scVal = response.entries[0].val.contractData().val();
       return this.decodeStreamData(scVal);
-    } catch (error) {
+    } catch (error: unknown) {
       throw this.normalizeError(error);
     }
   }
@@ -271,9 +326,16 @@ export class TreasurySorobanClient {
       error &&
       typeof error === 'object' &&
       'getStatus' in error &&
-      typeof (error as { getStatus: unknown }).getStatus === 'function'
+      typeof error.getStatus === 'function'
     ) {
       return error as unknown as Error;
+    }
+
+    if (error instanceof SorobanRpcError) {
+      this.logger.error(`Soroban RPC error: ${error.message}`);
+      return new TreasuryRpcUnavailableException(error.message, {
+        sorobanCode: error.code,
+      });
     }
 
     const message = error instanceof Error ? error.message : String(error);

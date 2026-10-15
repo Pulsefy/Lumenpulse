@@ -2,13 +2,55 @@
 Database models for analytics data persistence
 """
 
+import uuid
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Text, Index, BigInteger
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    DateTime,
+    JSON,
+    Text,
+    Index,
+    UniqueConstraint,
+    BigInteger,
+    Boolean,
+)
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
 Base = declarative_base()
+
+
+class PredictionLog(Base):
+    """
+    Stores prediction requests and responses for auditability (Issue #1245)
+    """
+
+    __tablename__ = "prediction_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    request_id = Column(String(255), nullable=False, index=True)
+    model_type = Column(String(100), nullable=False, index=True)
+    model_version = Column(String(50), nullable=False, index=True)
+    input_hash = Column(String(255), nullable=False)
+    output = Column(JSON, nullable=False)
+    latency_ms = Column(Float, nullable=False)
+    raw_input = Column(Text, nullable=True)  # Populated only if config allows
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    __table_args__ = (
+        Index("idx_prediction_logs_model_version", "model_version"),
+        Index("idx_prediction_logs_created_at", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<PredictionLog(request_id={self.request_id}, model={self.model_type}:{self.model_version})>"
 
 
 class Article(Base):
@@ -25,25 +67,33 @@ class Article(Base):
     summary = Column(Text, nullable=True)
     source = Column(String(100), nullable=True, index=True)
     url = Column(Text, nullable=True)
-    
+
     # Asset information
-    asset_codes = Column(JSON, nullable=True)  # Array of asset codes mentioned in article
-    primary_asset = Column(String(20), nullable=True, index=True)  # Primary asset being discussed
+    asset_codes = Column(
+        JSON, nullable=True
+    )  # Array of asset codes mentioned in article
+    primary_asset = Column(
+        String(20), nullable=True, index=True
+    )  # Primary asset being discussed
     categories = Column(JSON, nullable=True)  # Article categories
-    
+
     # Sentiment scores
     sentiment_score = Column(Float, nullable=True)  # compound score -1 to 1
     positive_score = Column(Float, nullable=True)
     negative_score = Column(Float, nullable=True)
     neutral_score = Column(Float, nullable=True)
-    sentiment_label = Column(String(20), nullable=True, index=True)  # positive/negative/neutral
-    
+    sentiment_label = Column(
+        String(20), nullable=True, index=True
+    )  # positive/negative/neutral
+
     # Keywords and metadata
     keywords = Column(JSON, nullable=True)  # Array of keywords
-    detected_entities = Column(JSON, nullable=True)  # NER entities detected in article text
+    detected_entities = Column(
+        JSON, nullable=True
+    )  # NER entities detected in article text
     onchain_entity_links = Column(JSON, nullable=True)  # Stable project/asset links
     language = Column(String(10), nullable=True)
-    
+
     # Timestamps
     published_at = Column(DateTime(timezone=True), nullable=True, index=True)
     fetched_at = Column(DateTime(timezone=True), nullable=True)
@@ -52,7 +102,10 @@ class Article(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     # Indexes for efficient querying
@@ -67,6 +120,54 @@ class Article(Base):
 
     def __repr__(self):
         return f"<Article(id={self.article_id}, title={self.title[:50]}, asset={self.primary_asset}, sentiment={self.sentiment_label})>"
+
+
+class ArticleEmbedding(Base):
+    """
+    Stores the versioned semantic embedding vector for a news article.
+
+    One row per ``(article_id, model_version)`` so a re-embedding with a newer
+    pinned model can coexist with the existing vectors; the similarity endpoint
+    always queries against a single model version. Keeping the exact model
+    reference on every row makes which model produced a vector auditable.
+    """
+
+    __tablename__ = "article_embeddings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    article_id = Column(String(255), nullable=False, index=True)
+    model_name = Column(String(100), nullable=False)
+    model_version = Column(String(100), nullable=False, index=True)
+    dimension = Column(Integer, nullable=False)
+    # Unit-normalised vector (ready for cosine similarity at query time).
+    embedding = Column(JSON, nullable=False)
+    # sha256 over the embedded text so stale rows can be detected cheaply
+    # without re-embedding every article during backfill.
+    text_hash = Column(String(64), nullable=False)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "article_id",
+            "model_version",
+            name="ux_article_embeddings_article_model",
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ArticleEmbedding(article_id={self.article_id}, "
+            f"model={self.model_name}:{self.model_version})>"
+        )
 
 
 class ArticleOnchainEntityLink(Base):
@@ -91,7 +192,10 @@ class ArticleOnchainEntityLink(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     __table_args__ = (
@@ -118,25 +222,25 @@ class SocialPost(Base):
     content = Column(Text, nullable=False)
     author = Column(String(255), nullable=True)
     url = Column(Text, nullable=True)
-    
+
     # Engagement metrics
     likes = Column(Integer, default=0)
     comments = Column(Integer, default=0)
     shares = Column(Integer, default=0)
-    
+
     # Asset information
     asset_codes = Column(JSON, nullable=True)  # Array of asset codes mentioned
     primary_asset = Column(String(20), nullable=True, index=True)
     hashtags = Column(JSON, nullable=True)  # Array of hashtags
     subreddit = Column(String(100), nullable=True)  # For Reddit posts
-    
+
     # Sentiment scores
     sentiment_score = Column(Float, nullable=True)  # compound score -1 to 1
     positive_score = Column(Float, nullable=True)
     negative_score = Column(Float, nullable=True)
     neutral_score = Column(Float, nullable=True)
     sentiment_label = Column(String(20), nullable=True, index=True)
-    
+
     # Timestamps
     posted_at = Column(DateTime(timezone=True), nullable=False, index=True)
     fetched_at = Column(DateTime(timezone=True), nullable=True)
@@ -145,7 +249,10 @@ class SocialPost(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     # Indexes for efficient querying
@@ -170,20 +277,26 @@ class AnalyticsRecord(Base):
     __tablename__ = "analytics_records"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    record_type = Column(String(50), nullable=False, index=True)  # sentiment_summary, trend, etc.
-    asset = Column(String(50), nullable=True, index=True)  # Asset symbol (e.g., 'XLM', 'BTC')
-    metric_name = Column(String(100), nullable=False)  # e.g., 'sentiment_score', 'volume'
+    record_type = Column(
+        String(50), nullable=False, index=True
+    )  # sentiment_summary, trend, etc.
+    asset = Column(
+        String(50), nullable=True, index=True
+    )  # Asset symbol (e.g., 'XLM', 'BTC')
+    metric_name = Column(
+        String(100), nullable=False
+    )  # e.g., 'sentiment_score', 'volume'
     window = Column(String(20), nullable=True)  # e.g., '1h', '24h', '7d'
-    
+
     # Metric values
     value = Column(Float, nullable=False)
     previous_value = Column(Float, nullable=True)
     change_percentage = Column(Float, nullable=True)
     trend_direction = Column(String(20), nullable=True)  # up/down/stable
-    
+
     # Additional data
     extra_data = Column(JSON, nullable=True)  # Additional metadata
-    
+
     # Timestamps
     timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
     created_at = Column(
@@ -244,6 +357,43 @@ class ContractEvent(Base):
         )
 
 
+class RawSorobanEvent(Base):
+    """
+    Stores raw Soroban contract events in an append-only format for debugging,
+    replay, and downstream reprocessing.
+    """
+
+    __tablename__ = "raw_soroban_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    contract_id = Column(String(255), nullable=False, index=True)
+    event_id = Column(String(255), nullable=False, index=True)
+    ledger = Column(BigInteger, nullable=False, index=True)
+    paging_token = Column(String(255), nullable=True)
+    event_type = Column(String(100), nullable=True, index=True)
+    source_rpc_url = Column(String(512), nullable=True, index=True)
+    raw_payload = Column(JSON, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_raw_soroban_events_contract_event",
+            "contract_id",
+            "event_id",
+            unique=True,
+        ),
+        Index("idx_raw_soroban_events_contract_ledger", "contract_id", "ledger"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<RawSorobanEvent(contract_id={self.contract_id}, event_id={self.event_id}, "
+            f"ledger={self.ledger}, source_rpc_url={self.source_rpc_url})>"
+        )
+
+
 class ProjectView(Base):
     """
     Stores aggregated project state for fast reads.
@@ -257,6 +407,7 @@ class ProjectView(Base):
     owner = Column(String(255), nullable=True, index=True)
     total_contributions = Column(Float, nullable=False, default=0.0)
     unique_contributors = Column(Integer, nullable=False, default=0)
+    funding_momentum_score = Column(Float, nullable=False, default=0.0)
     status = Column(String(50), nullable=True, index=True)
     last_event_ledger = Column(BigInteger, nullable=True, index=True)
     extra_data = Column(JSON, nullable=True)
@@ -264,18 +415,23 @@ class ProjectView(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     __table_args__ = (
         Index("idx_project_views_status", "status"),
         Index("idx_project_views_contract_id", "contract_id"),
+        Index("idx_project_views_funding_momentum_score", "funding_momentum_score"),
     )
 
     def __repr__(self):
         return (
             f"<ProjectView(project_id={self.project_id}, total_contributions={self.total_contributions}, "
-            f"unique_contributors={self.unique_contributors}, status={self.status})>"
+            f"unique_contributors={self.unique_contributors}, "
+            f"funding_momentum_score={self.funding_momentum_score}, status={self.status})>"
         )
 
 
@@ -297,7 +453,10 @@ class ProjectContributor(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     __table_args__ = (
@@ -313,6 +472,49 @@ class ProjectContributor(Base):
         return (
             f"<ProjectContributor(project_id={self.project_id}, contributor={self.contributor}, "
             f"total_contributed={self.total_contributed})>"
+        )
+
+
+class ProjectContributorReputationSnapshot(Base):
+    """
+    Stores the latest computed contributor reputation snapshot per project.
+    """
+
+    __tablename__ = "project_contributor_reputation_snapshots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(BigInteger, nullable=False, index=True)
+    contributor = Column(String(255), nullable=False, index=True)
+    total_contributed = Column(Float, nullable=False, default=0.0)
+    reputation_score = Column(Float, nullable=False, default=0.0)
+    rank = Column(Integer, nullable=False, default=0)
+    snapshot_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    extra_data = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_project_contributor_reputation_snapshot_project_contributor",
+            "project_id",
+            "contributor",
+            unique=True,
+        ),
+        Index("idx_project_contributor_reputation_snapshot_score", "reputation_score"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ProjectContributorReputationSnapshot(project_id={self.project_id}, "
+            f"contributor={self.contributor}, rank={self.rank}, "
+            f"reputation_score={self.reputation_score})>"
         )
 
 
@@ -334,7 +536,10 @@ class ProjectMilestone(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     __table_args__ = (
@@ -365,22 +570,26 @@ class NewsInsight(Base):
     article_title = Column(Text, nullable=True)
     article_url = Column(Text, nullable=True)
     source = Column(String(100), nullable=True)
-    
+
     # Asset information
-    asset_codes = Column(JSON, nullable=True)  # Array of asset codes mentioned in article
-    primary_asset = Column(String(20), nullable=True, index=True)  # Primary asset being discussed
-    
+    asset_codes = Column(
+        JSON, nullable=True
+    )  # Array of asset codes mentioned in article
+    primary_asset = Column(
+        String(20), nullable=True, index=True
+    )  # Primary asset being discussed
+
     # Sentiment scores
     sentiment_score = Column(Float, nullable=False)  # compound score -1 to 1
     positive_score = Column(Float, nullable=False)
     negative_score = Column(Float, nullable=False)
     neutral_score = Column(Float, nullable=False)
     sentiment_label = Column(String(20), nullable=False)  # positive/negative/neutral
-    
+
     # Keywords and metadata
     keywords = Column(JSON, nullable=True)  # Array of keywords
     language = Column(String(10), nullable=True)
-    
+
     # Timestamps
     article_published_at = Column(DateTime(timezone=True), nullable=True)
     analyzed_at = Column(
@@ -412,19 +621,21 @@ class AssetTrend(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     asset = Column(String(50), nullable=False, index=True)  # e.g., 'XLM', 'BTC'
-    metric_name = Column(String(100), nullable=False)  # e.g., 'sentiment_score', 'volume'
+    metric_name = Column(
+        String(100), nullable=False
+    )  # e.g., 'sentiment_score', 'volume'
     window = Column(String(20), nullable=False)  # e.g., '1h', '24h', '7d'
-    
+
     # Trend data
     trend_direction = Column(String(20), nullable=False)  # up/down/stable
     score = Column(Float, nullable=False)  # trend score/strength
     current_value = Column(Float, nullable=False)
     previous_value = Column(Float, nullable=False)
     change_percentage = Column(Float, nullable=False)
-    
+
     # Additional data (renamed from metadata to avoid SQLAlchemy conflict)
     extra_data = Column(JSON, nullable=True)  # Additional trend metadata
-    
+
     # Timestamps
     timestamp = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
@@ -442,3 +653,260 @@ class AssetTrend(Base):
 
     def __repr__(self):
         return f"<AssetTrend(asset={self.asset}, metric={self.metric_name}, trend={self.trend_direction})>"
+
+
+class MetadataDriftFinding(Base):
+    """
+    Stores individual drift findings produced by the metadata drift detector
+    (backend ProjectView/ProjectMilestone records vs. chain-derived state
+    recomputed from the immutable ContractEvent log).
+    """
+
+    __tablename__ = "metadata_drift_findings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String(64), nullable=False, index=True)
+    project_id = Column(BigInteger, nullable=False, index=True)
+    scope = Column(String(20), nullable=False, index=True)  # "project" or "milestone"
+    milestone_id = Column(Integer, nullable=True, index=True)
+    field = Column(String(100), nullable=False, index=True)
+    backend_value = Column(Text, nullable=True)
+    chain_derived_value = Column(Text, nullable=True)
+    severity = Column(String(20), nullable=False, default="warning", index=True)
+    detected_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Review status (consistent with RoundAnomalySignal review workflow)
+    reviewed = Column(Boolean, nullable=False, default=False)
+    review_notes = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_by = Column(String(255), nullable=True)
+
+    __table_args__ = (
+        Index("idx_metadata_drift_findings_run_id", "run_id"),
+        Index("idx_metadata_drift_findings_project_id", "project_id"),
+        Index("idx_metadata_drift_findings_scope", "scope"),
+        Index("idx_metadata_drift_findings_field", "field"),
+        Index("idx_metadata_drift_findings_severity", "severity"),
+        Index("idx_metadata_drift_findings_reviewed", "reviewed"),
+        Index(
+            "idx_metadata_drift_findings_project_field",
+            "project_id",
+            "field",
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<MetadataDriftFinding(project_id={self.project_id}, scope={self.scope}, "
+            f"field={self.field}, severity={self.severity}, reviewed={self.reviewed})>"
+        )
+
+
+class RoundAnomalySignal(Base):
+    """
+    Stores anomaly signals detected in quadratic funding rounds for maintainer review.
+    """
+
+    __tablename__ = "round_anomaly_signals"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    round_id = Column(BigInteger, nullable=False, index=True)
+    project_id = Column(BigInteger, nullable=True, index=True)
+
+    # Anomaly details
+    anomaly_type = Column(
+        String(50), nullable=False, index=True
+    )  # concentration_risk, sybil_suspicion, etc.
+    severity_score = Column(Float, nullable=False)  # 0.0 - 1.0
+    detection_rationale = Column(Text, nullable=False)
+
+    # Metric values and threshold used
+    metric_values = Column(JSON, nullable=True)
+    threshold_used = Column(Float, nullable=True)
+
+    # Review status
+    reviewed = Column(Boolean, nullable=False, default=False)
+    review_notes = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_by = Column(String(255), nullable=True)
+
+    # Timestamps
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Indexes for efficient querying
+    __table_args__ = (
+        Index("idx_round_anomaly_signals_round_id", "round_id"),
+        Index("idx_round_anomaly_signals_project_id", "project_id"),
+        Index("idx_round_anomaly_signals_anomaly_type", "anomaly_type"),
+        Index("idx_round_anomaly_signals_severity", "severity_score"),
+        Index("idx_round_anomaly_signals_reviewed", "reviewed"),
+        Index("idx_round_anomaly_signals_timestamp", "timestamp"),
+        Index("idx_round_anomaly_signals_round_type", "round_id", "anomaly_type"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<RoundAnomalySignal(id={self.id}, round_id={self.round_id}, "
+            f"type={self.anomaly_type}, severity={self.severity_score:.2f}, "
+            f"reviewed={self.reviewed})>"
+        )
+
+
+class EntityLinkingReview(Base):
+    """
+    Human-in-the-loop review queue for low-confidence entity linking and attribution.
+    """
+
+    __tablename__ = "entity_linking_review_queue"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    article_id = Column(String(255), nullable=False, index=True)
+    stable_entity_id = Column(String(255), nullable=False, index=True)
+    entity_type = Column(String(50), nullable=False, index=True)
+    display_name = Column(String(255), nullable=False)
+    matched_text = Column(String(255), nullable=False)
+    confidence = Column(Float, nullable=False)
+    supporting_evidence = Column(JSON, nullable=True)  # Context snippet, reason, candidates
+    status = Column(String(50), default="pending", nullable=False, index=True)  # pending, approved, rejected, corrected
+    corrected_entity_id = Column(String(255), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_entity_review_queue_article_entity",
+            "article_id",
+            "stable_entity_id",
+            unique=True,
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<EntityLinkingReview(id={self.id}, article_id='{self.article_id}', "
+            f"stable_entity_id='{self.stable_entity_id}', status='{self.status}')>"
+        )
+
+
+class SentimentLabel(Base):
+    """Human-labelled sentiment example used for evaluation and retraining."""
+
+    __tablename__ = "sentiment_labels"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    text = Column(Text, nullable=False)
+    label = Column(String(20), nullable=False, index=True)
+    labeller = Column(String(255), nullable=False)
+    labelled_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    is_held_out = Column(Boolean, nullable=False, default=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ux_sentiment_labels_text", "text", unique=True),
+        Index("idx_sentiment_labels_evaluation_split", "is_held_out", "label"),
+    )
+
+
+class DailyOnchainKPISnapshot(Base):
+    """
+    Stores daily aggregated snapshots of core on-chain KPIs
+    (TVL, volume, active rounds, contribution count, unique contributors)
+    for cheap and consistent trend analysis (#877).
+    """
+
+    __tablename__ = "daily_onchain_kpi_snapshots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    snapshot_date = Column(String(10), nullable=False)
+    period = Column(String(20), nullable=False, default="daily")
+    tvl = Column(Float, nullable=False, default=0.0)
+    volume = Column(Float, nullable=False, default=0.0)
+    active_rounds = Column(Integer, nullable=False, default=0)
+    contribution_count = Column(Integer, nullable=False, default=0)
+    unique_contributors = Column(Integer, nullable=False, default=0)
+    extra_data = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index(
+            "ux_daily_onchain_kpi_snapshots_date_period",
+            "snapshot_date",
+            "period",
+            unique=True,
+        ),
+        Index("idx_daily_onchain_kpi_snapshots_period", "period"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<DailyOnchainKPISnapshot(date='{self.snapshot_date}', period='{self.period}', "
+            f"tvl={self.tvl}, volume={self.volume}, active_rounds={self.active_rounds}, "
+            f"contribution_count={self.contribution_count})>"
+        )
+
+
+class AnalyticsJob(Base):
+    """
+    Tracks long-running analytics operations (retraining, correlation analysis,
+    daily KPI snapshots) submitted to the async job queue (#1248), so a caller
+    gets a job identifier immediately and can poll for the outcome instead of
+    blocking on the request.
+    """
+
+    __tablename__ = "analytics_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(
+        String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4())
+    )
+    job_type = Column(String(50), nullable=False, index=True)
+    # queued | running | succeeded | failed
+    status = Column(String(20), nullable=False, default="queued", index=True)
+    # Set to "<job_type>:<idempotency_hash>" while queued/running, and cleared
+    # to NULL on completion so a fresh submission can run again later. The
+    # unique index on this column is what collapses concurrent duplicates.
+    dedupe_key = Column(String(255), nullable=True, unique=True, index=True)
+    params = Column(JSON, nullable=True)
+    result = Column(JSON, nullable=True)
+    error = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    def __repr__(self):
+        return f"<AnalyticsJob(job_id='{self.job_id}', type='{self.job_type}', status='{self.status}')>"

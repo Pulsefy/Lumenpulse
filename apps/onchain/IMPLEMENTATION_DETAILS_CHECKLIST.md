@@ -114,38 +114,10 @@
 - [x] `WithdrawEvent`
 - [x] `YieldHarvestedEvent`
 
-### AaveLendingPool (Mock) ✅
-
-**File**: `contracts/aave_lending_pool/src/lib.rs`
-
-#### Implemented Functions
-- [x] `initialize(env, admin)` - Initialize pool
-- [x] `deposit(env, asset, amount, on_behalf_of)` - Deposit tokens
-- [x] `withdraw(env, asset, amount, to)` - Withdraw tokens
-- [x] `balance_of(env, user, asset)` - Get aToken balance
-- [x] `get_reserve(env, asset)` - Get total reserve
-- [x] `get_a_token_supply(env, asset)` - Get aToken supply
-
-#### Mechanics
-- [x] aToken (interest-bearing token) generation
-- [x] Interest accrual formula: `(atoken * reserve) / supply`
-- [x] Per-asset reserves tracking
-- [x] Per-user aToken balances
-- [x] Per-user deposit timestamps
-- [x] Variable APY simulation (5% in constants)
-
-**File**: `contracts/aave_lending_pool/src/storage.rs`
-- [x] `DataKey` enum with variants:
-  - [x] `Admin`
-  - [x] `Reserve(Address)` - Per-asset reserve
-  - [x] `ATokenSupply(Address)` - Per-asset aToken supply
-  - [x] `UserATokenBalance(Address, Address)` - Per-user per-asset
-  - [x] `UserDepositTimestamp(Address, Address)`
-
-**File**: `contracts/aave_lending_pool/src/events.rs`
-- [x] `PoolInitializedEvent`
-- [x] `DepositEvent`
-- [x] `WithdrawEvent`
+> **Note**: The `AaveLendingPool (Mock)` checklist section was removed — the
+> `aave_lending_pool` crate was retired from the repository (never a workspace member, no code
+> integration). Aave-style lending providers are now treated strictly as external integrations via
+> `YieldProviderTrait`.
 
 ### StableSwapPool (Mock - Curve-like) ✅
 
@@ -233,7 +205,6 @@
 - [x] `notification_broker/Cargo.toml` - Configured with dependencies
 - [x] `notification_interface/Cargo.toml` - Configured
 - [x] `yield_vault/Cargo.toml` - Configured
-- [x] `aave_lending_pool/Cargo.toml` - Configured
 - [x] `stable_swap_pool/Cargo.toml` - Configured
 - [x] `liquidity_pool/Cargo.toml` - Configured
 
@@ -422,7 +393,7 @@
 ## Summary Statistics
 
 ### Code Metrics
-- **Total Contracts**: 6
+- **Total Contracts**: 5
 - **Total Functions**: 50+
 - **Total Events**: 15+
 - **Total Error Types**: 3+
@@ -433,9 +404,11 @@
 - **NotificationBroker**: ✅ 100% complete
 - **NotificationInterface**: ✅ 100% complete
 - **YieldVault**: ✅ 100% complete
-- **AaveLendingPool**: ✅ 100% complete
 - **StableSwapPool**: ✅ 100% complete
 - **LiquidityPool**: ✅ 100% complete
+
+> Note: `AaveLendingPool` was retired from the repository and is excluded from the coverage list
+> above.
 
 ### Documentation
 - **Implementation Docs**: ✅ 4 files

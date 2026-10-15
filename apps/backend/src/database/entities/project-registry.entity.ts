@@ -4,7 +4,6 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  Index,
 } from 'typeorm';
 
 @Entity('project_registry')
@@ -13,7 +12,6 @@ export class ProjectRegistryEntity {
   id: string;
 
   @Column({ unique: true })
-  @Index()
   projectId: string;
 
   @Column()
@@ -27,6 +25,15 @@ export class ProjectRegistryEntity {
 
   @Column({ default: 'active' })
   status: string;
+
+  @Column({ nullable: true })
+  contractAddress: string;
+
+  @Column({ nullable: true })
+  tokenAddress: string;
+
+  @Column({ type: 'text', nullable: true })
+  targetAmount: string;
 
   @Column()
   lastLedgerSeq: number;

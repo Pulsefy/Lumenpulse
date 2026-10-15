@@ -18,6 +18,7 @@ export enum VerificationStatus {
   Pending = 'PENDING',
   Verified = 'VERIFIED',
   Rejected = 'REJECTED',
+  Archived = 'ARCHIVED',
 }
 
 export enum SubmissionStatus {
@@ -302,4 +303,15 @@ export class ProjectSubmissionDto {
 
   @ApiProperty({ example: 1775000000 })
   updatedAt: number;
+}
+
+export class AssignSubmissionReviewerDto {
+  @ApiProperty({
+    description: 'ID of the reviewer to assign (or null to unassign)',
+    required: false,
+    example: 'uuid-1234',
+  })
+  @IsOptional()
+  @IsString()
+  reviewerId?: string;
 }

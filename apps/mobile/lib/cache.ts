@@ -155,6 +155,16 @@ export const CACHE_CONFIGS = {
     staleWhileRevalidate: true,
     maxAge: 60 * 60 * 1000, // 1 hour max — list is safe to serve stale offline
   },
+  GRANTS: {
+    ttl: 5 * 60 * 1000, // 5 minutes
+    staleWhileRevalidate: true,
+    maxAge: 60 * 60 * 1000, // 1 hour max — rounds change infrequently
+  },
+  SIGNALS: {
+    ttl: 10 * 60 * 1000, // 10 minutes — signals are recomputed from a snapshot
+    staleWhileRevalidate: true,
+    maxAge: 2 * 60 * 60 * 1000, // 2 hours max — the discover tab stays usable offline
+  },
 } as const;
 
 export const cache = CacheManager.getInstance();

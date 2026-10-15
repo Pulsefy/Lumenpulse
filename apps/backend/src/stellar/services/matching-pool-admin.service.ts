@@ -12,12 +12,15 @@ import {
   Contract,
   nativeToScVal,
   xdr,
+  rpc,
 } from '@stellar/stellar-sdk';
 import {
   SorobanRpcClientService,
   SorobanRpcError,
 } from './soroban-rpc-client.service';
 import { config } from '../../lib/config';
+import { ErrorCode } from '../../common/enums/error-code.enum';
+import { throwSorobanRpcError } from '../utils/soroban-error.mapper';
 import {
   CreateRoundDto,
   ApproveProjectDto,
@@ -67,8 +70,7 @@ export class MatchingPoolAdminService {
       const simulation = await this.sorobanRpc.simulateTransaction(tx);
 
       // Assemble and sign
-      const { rpc: rpcSdk } = await import('@stellar/stellar-sdk');
-      const assembled = rpcSdk.assembleTransaction(tx, simulation).build();
+      const assembled = rpc.assembleTransaction(tx, simulation).build();
       assembled.sign(keypair);
 
       const result = await this.sorobanRpc.sendTransaction(assembled);
@@ -84,7 +86,7 @@ export class MatchingPoolAdminService {
         status: result.status,
         createdAt: new Date(),
       };
-    } catch (err) {
+    } catch (err: unknown) {
       this.handleError(err, 'createRound');
     }
   }
@@ -130,8 +132,7 @@ export class MatchingPoolAdminService {
 
       const simulation = await this.sorobanRpc.simulateTransaction(tx);
 
-      const { rpc: rpcSdk } = await import('@stellar/stellar-sdk');
-      const assembled = rpcSdk.assembleTransaction(tx, simulation).build();
+      const assembled = rpc.assembleTransaction(tx, simulation).build();
       assembled.sign(keypair);
 
       const result = await this.sorobanRpc.sendTransaction(assembled);
@@ -152,7 +153,7 @@ export class MatchingPoolAdminService {
         status: result.status,
         createdAt: new Date(),
       };
-    } catch (err) {
+    } catch (err: unknown) {
       this.handleError(err, 'approveProject');
     }
   }
@@ -163,11 +164,14 @@ export class MatchingPoolAdminService {
         { method, code: err.code, message: err.message },
         'Soroban RPC error',
       );
-      throw new BadRequestException(`On-chain call failed: ${err.message}`);
+      throwSorobanRpcError(err);
     }
     if (err instanceof BadRequestException) throw err;
 
     this.logger.error({ method, err }, 'Unexpected matching pool error');
-    throw new InternalServerErrorException('Matching pool operation failed');
+    throw new InternalServerErrorException({
+      code: ErrorCode.SYS_INTERNAL_ERROR,
+      message: 'Matching pool operation failed',
+    });
   }
 }

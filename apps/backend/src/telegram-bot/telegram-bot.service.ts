@@ -19,6 +19,9 @@ import { PriceService } from '../price/price.service';
 import { SentimentService } from '../sentiment/sentiment.service';
 import { NewsService } from '../news/news.service';
 
+import { BotAuthService } from '../bot-auth/bot-auth.service';
+import { BotCommandMapperService } from '../bot-auth/bot-command-mapper.service';
+
 @Injectable()
 export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TelegramBotService.name);
@@ -33,6 +36,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     private readonly priceService: PriceService,
     private readonly sentimentService: SentimentService,
     private readonly newsService: NewsService,
+    private readonly botAuthService: BotAuthService,
+    private readonly botCommandMapper: BotCommandMapperService,
   ) {}
 
   onModuleInit() {
@@ -58,51 +63,80 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
   private registerHandlers() {
     if (!this.bot) return;
+    // Register explicit handlers with the command mapper
+    this.botCommandMapper.register('SUBSCRIBE', (msg) => this.handleStart(msg));
+    this.botCommandMapper.register('CHECK_STATUS', (msg) =>
+      this.handleStatus(msg),
+    );
+    this.botCommandMapper.register('GET_PRICE', (msg, match) =>
+      this.handlePrice(msg, match),
+    );
+    this.botCommandMapper.register('GET_SENTIMENT', (msg) =>
+      this.handleSentiment(msg),
+    );
+    this.botCommandMapper.register('GET_TREND', (msg) => this.handleTrend(msg));
+    this.botCommandMapper.register('SUBSCRIBE_ALERT', (msg, match) =>
+      this.handleSubscribe(msg, match),
+    );
+    this.botCommandMapper.register('UNSUBSCRIBE_ALERT', (msg, match) =>
+      this.handleUnsubscribe(msg, match),
+    );
+    this.botCommandMapper.register('SILENCE_ALERTS', (msg, match) =>
+      this.handleSilence(msg, match),
+    );
+    this.botCommandMapper.register('UNSILENCE_ALERTS', (msg) =>
+      this.handleUnsilence(msg),
+    );
+    this.botCommandMapper.register('LIST_SUBSCRIPTIONS', (msg) =>
+      this.handleSubscriptions(msg),
+    );
+    this.botCommandMapper.register('HELP', (msg) => this.handleHelp(msg));
 
+    // Wire Telegram patterns to the authorisation + mapper
     this.bot.onText(/\/start/, (msg) => {
-      void this.handleStart(msg);
+      void this.withAuth(msg, null);
     });
     this.bot.onText(/\/status/, (msg) => {
-      void this.handleStatus(msg);
+      void this.withAuth(msg, null);
     });
     this.bot.onText(/\/price (.+)/, (msg, match) => {
-      void this.handlePrice(msg, match);
+      void this.withAuth(msg, match);
     });
     this.bot.onText(/\/price$/, (msg) => {
-      void this.handlePrice(msg, null);
+      void this.withAuth(msg, null);
     });
     this.bot.onText(/\/sentiment/, (msg) => {
-      void this.handleSentiment(msg);
+      void this.withAuth(msg, null);
     });
     this.bot.onText(/\/trend/, (msg) => {
-      void this.handleTrend(msg);
+      void this.withAuth(msg, null);
     });
     this.bot.onText(/\/subscribe (.+)/, (msg, match) => {
-      void this.handleSubscribe(msg, match);
+      void this.withAuth(msg, match);
     });
     this.bot.onText(/\/subscribe$/, (msg) => {
-      void this.handleSubscribe(msg, null);
+      void this.withAuth(msg, null);
     });
     this.bot.onText(/\/unsubscribe (.+)/, (msg, match) => {
-      void this.handleUnsubscribe(msg, match);
+      void this.withAuth(msg, match);
     });
     this.bot.onText(/\/unsubscribe$/, (msg) => {
-      void this.handleUnsubscribe(msg, null);
+      void this.withAuth(msg, null);
     });
     this.bot.onText(/\/silence (.+)/, (msg, match) => {
-      void this.handleSilence(msg, match);
+      void this.withAuth(msg, match);
     });
     this.bot.onText(/\/silence$/, (msg) => {
-      void this.handleSilence(msg, null);
+      void this.withAuth(msg, null);
     });
     this.bot.onText(/\/unsilence/, (msg) => {
-      void this.handleUnsilence(msg);
+      void this.withAuth(msg, null);
     });
     this.bot.onText(/\/subscriptions/, (msg) => {
-      void this.handleSubscriptions(msg);
+      void this.withAuth(msg, null);
     });
     this.bot.onText(/\/help/, (msg) => {
-      void this.handleHelp(msg);
+      void this.withAuth(msg, null);
     });
 
     this.bot.on('polling_error', (error) => {
@@ -120,6 +154,37 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       await this.bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
     } catch (error) {
       this.logger.error(`Failed to send message to ${chatId}`, error);
+    }
+  }
+
+  private async withAuth(
+    msg: Message,
+    match: RegExpExecArray | null | undefined,
+  ) {
+    const text = msg.text || '';
+    if (!text.startsWith('/')) return;
+    const chatId = this.getChatId(msg);
+    const username = (msg as any).from?.username ?? null;
+
+    const isAuthorized = await this.botAuthService.authorizeCommand(
+      text,
+      chatId,
+      username,
+    );
+    if (!isAuthorized) {
+      await this.sendMessage(chatId, '⛔ Unauthorized or unknown command.');
+      return;
+    }
+
+    // Execute via the explicit command mapper to ensure only registered
+    // and audited actions can run.
+    const executed = await this.botCommandMapper.executeCommand(
+      text,
+      msg,
+      match,
+    );
+    if (!executed) {
+      await this.sendMessage(chatId, '⛔ Command could not be executed.');
     }
   }
 
@@ -176,7 +241,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     await this.sendMessage(chatId, statusText);
   }
 
-  private async handlePrice(msg: Message, match: RegExpExecArray | null) {
+  private async handlePrice(
+    msg: Message,
+    match: RegExpExecArray | null | undefined,
+  ) {
     const chatId = this.getChatId(msg);
     const asset = match?.[1]?.trim().toUpperCase() ?? 'XLM';
 
@@ -271,7 +339,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async handleSubscribe(msg: Message, match: RegExpExecArray | null) {
+  private async handleSubscribe(
+    msg: Message,
+    match: RegExpExecArray | null | undefined,
+  ) {
     const chatId = this.getChatId(msg);
     const typeInput = match?.[1]?.trim().toLowerCase() ?? '';
 
@@ -308,7 +379,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     await this.sendMessage(chatId, `Subscribed to *${alertType}* alerts ✅`);
   }
 
-  private async handleUnsubscribe(msg: Message, match: RegExpExecArray | null) {
+  private async handleUnsubscribe(
+    msg: Message,
+    match: RegExpExecArray | null | undefined,
+  ) {
     const chatId = this.getChatId(msg);
     const typeInput = match?.[1]?.trim().toLowerCase() ?? '';
 
@@ -345,7 +419,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  private async handleSilence(msg: Message, match: RegExpExecArray | null) {
+  private async handleSilence(
+    msg: Message,
+    match: RegExpExecArray | null | undefined,
+  ) {
     const chatId = this.getChatId(msg);
     const hoursStr = match?.[1]?.trim() ?? '';
     const hours = parseInt(hoursStr, 10);

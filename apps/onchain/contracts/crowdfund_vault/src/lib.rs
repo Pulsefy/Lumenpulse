@@ -9,25 +9,72 @@ mod treasury_interface;
 mod yield_provider;
 
 use errors::CrowdfundError;
+use idempotency_guard::claim_request as idempotency_claim;
 use math::{sqrt_scaled, unscale};
 use notification_interface::{Notification, NotificationReceiverClient};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
-use storage::{
-    DataKey, MilestoneDispute, ProjectData, ProtocolStats, LEDGER_BUMP, LEDGER_THRESHOLD,
+use soroban_sdk::{
+    contract, contractimpl, contracttype, vec, Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
+use storage::{
+    DataKey, EmergencyMigrationPlan, MigrationPlanStatus, MilestoneDecision,
+    MilestoneDecisionOutcome, MilestoneDispute, ProjectData, ProjectStorageSummary, ProtocolStats,
+    RefundReceipt, LEDGER_BUMP, LEDGER_THRESHOLD, MAX_MILESTONE_DECISION_BATCH_SIZE,
+};
+use version_interface::{ContractVersion, VersionedContract};
 
 const CURRENT_STORAGE_VERSION: u32 = 1;
 const DEFAULT_MILESTONE_EXPIRY_SECONDS: u64 = 30 * 24 * 60 * 60;
 const DEFAULT_REFUND_WINDOW_SECONDS: u64 = 14 * 24 * 60 * 60;
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContributionIntent {
+    pub user: Address,
+    pub project_id: u64,
+    pub amount: i128,
+    pub nonce: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RegistrationIntent {
+    pub user: Address,
+    pub nonce: u64,
+}
+/// Bumped on storage-layout or interface changes that break compatibility
+/// with prior deployments; see [`version_interface::ContractVersion`].
+const CONTRACT_VERSION: ContractVersion = ContractVersion::new(1, 0, 0);
 
 #[contract]
 pub struct CrowdfundVaultContract;
 
 #[contractimpl]
 impl CrowdfundVaultContract {
+    fn deposit_nonce_of(env: &Env, user: &Address) -> u64 {
+        let key = DataKey::DepositNonce(user.clone());
+        let nonce = env.storage().persistent().get(&key).unwrap_or(0);
+        if env.storage().persistent().has(&key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        nonce
+    }
+
+    fn register_nonce_of(env: &Env, user: &Address) -> u64 {
+        let key = DataKey::RegistrationNonce(user.clone());
+        let nonce = env.storage().persistent().get(&key).unwrap_or(0);
+        if env.storage().persistent().has(&key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        nonce
+    }
+
     fn get_admin_address(env: &Env) -> Result<Address, CrowdfundError> {
         env.storage()
             .instance()
@@ -452,6 +499,12 @@ impl CrowdfundVaultContract {
             let contract_address = env.current_contract_address();
             let token_client = TokenClient::new(&env, &project.token_address);
             let mut total_refunded = 0i128;
+            let mut receipt_count: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::RefundReceiptCount(project_id))
+                .unwrap_or(0);
+            let refund_reason = status.clone();
 
             for i in 0..count {
                 let contrib_key = DataKey::Contributor(project_id, i);
@@ -465,9 +518,46 @@ impl CrowdfundVaultContract {
                 let amount: i128 = env.storage().persistent().get(&amount_key).unwrap_or(0);
 
                 if amount > 0 {
+                    // Check if already claimed (double-claim protection)
+                    let claimed_key = DataKey::RefundClaimed(project_id, contributor.clone());
+                    if env
+                        .storage()
+                        .persistent()
+                        .get(&claimed_key)
+                        .unwrap_or(false)
+                    {
+                        continue;
+                    }
+
                     env.storage().persistent().remove(&amount_key);
                     total_refunded += amount;
                     token_client.transfer(&contract_address, &contributor, &amount);
+
+                    // Store refund receipt
+                    let receipt = RefundReceipt {
+                        project_id,
+                        contributor: contributor.clone(),
+                        amount,
+                        reason: refund_reason.clone(),
+                        timestamp: env.ledger().timestamp(),
+                    };
+                    let receipt_key = DataKey::RefundReceipt(project_id, receipt_count);
+                    env.storage().persistent().set(&receipt_key, &receipt);
+                    env.storage().persistent().extend_ttl(
+                        &receipt_key,
+                        LEDGER_THRESHOLD,
+                        LEDGER_BUMP,
+                    );
+
+                    // Mark as claimed
+                    env.storage().persistent().set(&claimed_key, &true);
+                    env.storage().persistent().extend_ttl(
+                        &claimed_key,
+                        LEDGER_THRESHOLD,
+                        LEDGER_BUMP,
+                    );
+
+                    receipt_count += 1;
 
                     events::ContributionRefundedEvent {
                         project_id,
@@ -477,6 +567,11 @@ impl CrowdfundVaultContract {
                     .publish(&env);
                 }
             }
+
+            // Update receipt count
+            env.storage()
+                .persistent()
+                .set(&DataKey::RefundReceiptCount(project_id), &receipt_count);
 
             env.storage().persistent().remove(&count_key);
             let balance_key = DataKey::ProjectBalance(project_id, project.token_address);
@@ -542,6 +637,17 @@ impl CrowdfundVaultContract {
                 return Err(CrowdfundError::InsufficientBalance);
             }
 
+            // Check if already claimed (double-claim protection)
+            let claimed_key = DataKey::RefundClaimed(project_id, contributor.clone());
+            if env
+                .storage()
+                .persistent()
+                .get(&claimed_key)
+                .unwrap_or(false)
+            {
+                return Err(CrowdfundError::RefundFailed);
+            }
+
             let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
             let total_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
             let invested_key = DataKey::ProjectInvestedBalance(project_id);
@@ -567,6 +673,37 @@ impl CrowdfundVaultContract {
                 &amount,
             );
 
+            // Store refund receipt
+            let receipt = RefundReceipt {
+                project_id,
+                contributor: contributor.clone(),
+                amount,
+                reason: status.clone(),
+                timestamp: env.ledger().timestamp(),
+            };
+            let receipt_count: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::RefundReceiptCount(project_id))
+                .unwrap_or(0);
+            let receipt_key = DataKey::RefundReceipt(project_id, receipt_count);
+            env.storage().persistent().set(&receipt_key, &receipt);
+            env.storage()
+                .persistent()
+                .extend_ttl(&receipt_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            // Mark as claimed
+            env.storage().persistent().set(&claimed_key, &true);
+            env.storage()
+                .persistent()
+                .extend_ttl(&claimed_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            // Update receipt count
+            env.storage().persistent().set(
+                &DataKey::RefundReceiptCount(project_id),
+                &(receipt_count + 1),
+            );
+
             events::ContributionClawedBackEvent {
                 project_id,
                 contributor,
@@ -580,143 +717,210 @@ impl CrowdfundVaultContract {
     }
 
     /// Deposit funds into a project
+    pub fn deposit_with_sig(
+        env: Env,
+        user: Address,
+        project_id: u64,
+        amount: i128,
+        signature: soroban_sdk::Bytes,
+    ) -> Result<(), CrowdfundError> {
+        Self::with_reentrancy_guard(&env, || {
+            Self::require_current_storage_version(&env)?;
+
+            if signature.is_empty() {
+                return Err(CrowdfundError::InvalidSignature);
+            }
+
+            let nonce = Self::deposit_nonce_of(&env, &user);
+            let intent = ContributionIntent {
+                user: user.clone(),
+                project_id,
+                amount,
+                nonce,
+            };
+            user.require_auth_for_args(soroban_sdk::vec![
+                &env,
+                soroban_sdk::Symbol::new(&env, "deposit_with_sig").into_val(&env),
+                intent.into_val(&env),
+            ]);
+
+            let new_nonce = nonce + 1;
+            env.storage()
+                .persistent()
+                .set(&DataKey::DepositNonce(user.clone()), &new_nonce);
+            env.storage().persistent().extend_ttl(
+                &DataKey::DepositNonce(user.clone()),
+                LEDGER_THRESHOLD,
+                LEDGER_BUMP,
+            );
+
+            Self::deposit_internal(&env, &user, project_id, amount)
+        })
+    }
+
+    /// Deposit funds into a project.
+    ///
+    /// `request_id` is a caller-supplied 32-byte nonce that uniquely identifies
+    /// this deposit attempt.  The idempotency-guard stores a receipt for the
+    /// nonce so that a second submission with the *same* `request_id` is
+    /// rejected with `AlreadyExecuted` — protecting against double-spend from
+    /// network retries or frontend bugs.
+    ///
+    /// Callers MUST generate a fresh nonce per deposit (e.g. random bytes or a
+    /// deterministic hash of `(user, project_id, amount, timestamp)`).  Reusing
+    /// a nonce within the ~14-day TTL window will cause a rejection.
+    ///
+    /// # Storage cost
+    /// One persistent 32-byte key is written per unique `request_id`.
+    /// The key expires after ~14 days (241 920 ledgers at 5 s/ledger).
     pub fn deposit(
         env: Env,
         user: Address,
         project_id: u64,
         amount: i128,
+        request_id: BytesN<32>,
     ) -> Result<(), CrowdfundError> {
         Self::with_reentrancy_guard(&env, || {
             Self::require_current_storage_version(&env)?;
 
             user.require_auth();
+            // ── Idempotency check (must come before any state mutation) ──────
+            // Reject duplicate submissions that carry an already-seen request_id.
+            idempotency_claim(&env, &request_id).map_err(|_| CrowdfundError::AlreadyExecuted)?;
 
-            let is_paused: bool = env
+            Self::deposit_internal(&env, &user, project_id, amount)
+        })
+    }
+
+    fn deposit_internal(
+        env: &Env,
+        user: &Address,
+        project_id: u64,
+        amount: i128,
+    ) -> Result<(), CrowdfundError> {
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            return Err(CrowdfundError::ContractPaused);
+        }
+
+        if amount <= 0 {
+            return Err(CrowdfundError::InvalidAmount);
+        }
+
+        let mut project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        Self::fail_if_project_expired(env, project_id, &mut project)?;
+
+        if !project.is_active {
+            return Err(CrowdfundError::ProjectNotActive);
+        }
+
+        let contract_address = env.current_contract_address();
+        let user_balance = token::balance(env, &project.token_address, user);
+
+        let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+        let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&balance_key, &(current_balance + amount));
+        env.storage()
+            .persistent()
+            .extend_ttl(&balance_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        let contribution_key = DataKey::Contribution(project_id, user.clone());
+        let current_contribution: i128 = env
+            .storage()
+            .persistent()
+            .get(&contribution_key)
+            .unwrap_or(0);
+
+        if current_contribution == 0 {
+            let contributor_count_key = DataKey::ContributorCount(project_id);
+            let contributor_count: u32 = env
                 .storage()
-                .instance()
-                .get(&DataKey::Paused)
-                .unwrap_or(false);
-            if is_paused {
-                return Err(CrowdfundError::ContractPaused);
-            }
-
-            if amount <= 0 {
-                return Err(CrowdfundError::InvalidAmount);
-            }
-
-            let mut project: ProjectData = env
-                .storage()
                 .persistent()
-                .get(&DataKey::Project(project_id))
-                .ok_or(CrowdfundError::ProjectNotFound)?;
-
-            Self::fail_if_project_expired(&env, project_id, &mut project)?;
-
-            if !project.is_active {
-                return Err(CrowdfundError::ProjectNotActive);
-            }
-
-            let contract_address = env.current_contract_address();
-            let user_balance = token::balance(&env, &project.token_address, &user);
-
-            let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
-            let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
-            env.storage()
-                .persistent()
-                .set(&balance_key, &(current_balance + amount));
-            env.storage()
-                .persistent()
-                .extend_ttl(&balance_key, LEDGER_THRESHOLD, LEDGER_BUMP);
-
-            let contribution_key = DataKey::Contribution(project_id, user.clone());
-            let current_contribution: i128 = env
-                .storage()
-                .persistent()
-                .get(&contribution_key)
+                .get(&contributor_count_key)
                 .unwrap_or(0);
 
-            if current_contribution == 0 {
-                let contributor_count_key = DataKey::ContributorCount(project_id);
-                let contributor_count: u32 = env
-                    .storage()
-                    .persistent()
-                    .get(&contributor_count_key)
-                    .unwrap_or(0);
-
-                let contrib_idx_key = DataKey::Contributor(project_id, contributor_count);
-                env.storage().persistent().set(&contrib_idx_key, &user);
-                env.storage().persistent().extend_ttl(
-                    &contrib_idx_key,
-                    LEDGER_THRESHOLD,
-                    LEDGER_BUMP,
-                );
-
-                env.storage()
-                    .persistent()
-                    .set(&contributor_count_key, &(contributor_count + 1));
-                env.storage().persistent().extend_ttl(
-                    &contributor_count_key,
-                    LEDGER_THRESHOLD,
-                    LEDGER_BUMP,
-                );
-            }
+            let contrib_idx_key = DataKey::Contributor(project_id, contributor_count);
+            env.storage().persistent().set(&contrib_idx_key, &user);
+            env.storage()
+                .persistent()
+                .extend_ttl(&contrib_idx_key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
             env.storage()
                 .persistent()
-                .set(&contribution_key, &(current_contribution + amount));
-            env.storage()
-                .persistent()
-                .extend_ttl(&contribution_key, LEDGER_THRESHOLD, LEDGER_BUMP);
-
-            project.total_deposited += amount;
-            env.storage()
-                .persistent()
-                .set(&DataKey::Project(project_id), &project);
+                .set(&contributor_count_key, &(contributor_count + 1));
             env.storage().persistent().extend_ttl(
-                &DataKey::Project(project_id),
+                &contributor_count_key,
                 LEDGER_THRESHOLD,
                 LEDGER_BUMP,
             );
+        }
 
-            let mut stats: ProtocolStats = env
-                .storage()
-                .instance()
-                .get(&DataKey::ProtocolStats)
-                .unwrap_or(ProtocolStats {
-                    tvl: 0,
-                    cumulative_volume: 0,
-                });
-            stats.tvl += amount;
-            stats.cumulative_volume += amount;
-            env.storage()
-                .instance()
-                .set(&DataKey::ProtocolStats, &stats);
+        env.storage()
+            .persistent()
+            .set(&contribution_key, &(current_contribution + amount));
+        env.storage()
+            .persistent()
+            .extend_ttl(&contribution_key, LEDGER_THRESHOLD, LEDGER_BUMP);
 
-            if user_balance >= amount {
-                token::transfer(
-                    &env,
-                    &project.token_address,
-                    &user,
-                    &contract_address,
-                    &amount,
-                );
-            }
+        project.total_deposited += amount;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Project(project_id), &project);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Project(project_id),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
 
-            events::DepositEvent {
-                user: user.clone(),
-                project_id,
-                amount,
-            }
-            .publish(&env);
+        let mut stats: ProtocolStats = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProtocolStats)
+            .unwrap_or(ProtocolStats {
+                tvl: 0,
+                cumulative_volume: 0,
+            });
+        stats.tvl += amount;
+        stats.cumulative_volume += amount;
+        env.storage()
+            .instance()
+            .set(&DataKey::ProtocolStats, &stats);
 
-            Self::notify_subscribers(
-                &env,
-                Symbol::new(&env, "deposit"),
-                (user, project_id, amount).to_xdr(&env),
+        if user_balance >= amount {
+            token::transfer(
+                env,
+                &project.token_address,
+                user,
+                &contract_address,
+                &amount,
             );
+        }
 
-            Ok(())
-        })
+        events::DepositEvent {
+            user: user.clone(),
+            project_id,
+            amount,
+        }
+        .publish(env);
+
+        Self::notify_subscribers(
+            env,
+            Symbol::new(env, "deposit"),
+            (user.clone(), project_id, amount).to_xdr(env),
+        );
+
+        Ok(())
     }
 
     /// Add a notification subscriber (admin only)
@@ -732,10 +936,15 @@ impl CrowdfundVaultContract {
             .get(&DataKey::Subscribers)
             .unwrap_or(vec![&env]);
         if !subscribers.contains(&subscriber) {
-            subscribers.push_back(subscriber);
+            subscribers.push_back(subscriber.clone());
             env.storage()
                 .instance()
                 .set(&DataKey::Subscribers, &subscribers);
+            events::SubscriberChangedEvent {
+                subscriber,
+                added: true,
+            }
+            .publish(&env);
         }
         Ok(())
     }
@@ -757,6 +966,11 @@ impl CrowdfundVaultContract {
             env.storage()
                 .instance()
                 .set(&DataKey::Subscribers, &subscribers);
+            events::SubscriberChangedEvent {
+                subscriber,
+                added: false,
+            }
+            .publish(&env);
         }
         Ok(())
     }
@@ -825,6 +1039,90 @@ impl CrowdfundVaultContract {
         .publish(&env);
 
         Ok(())
+    }
+
+    /// Apply a bounded set of admin milestone approvals/rejections.
+    ///
+    /// The batch is validated before any milestone state is mutated. Repeated
+    /// `(project_id, milestone_id)` pairs are rejected because the final state
+    /// would depend on payload ordering rather than one clear decision.
+    pub fn process_milestone_decisions(
+        env: Env,
+        admin: Address,
+        decisions: Vec<MilestoneDecision>,
+    ) -> Result<Vec<MilestoneDecisionOutcome>, CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+
+        let len = decisions.len();
+        if len == 0 || len > MAX_MILESTONE_DECISION_BATCH_SIZE {
+            return Err(CrowdfundError::InvalidBatch);
+        }
+
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            return Err(CrowdfundError::ContractPaused);
+        }
+
+        for i in 0..len {
+            let current = decisions.get(i).ok_or(CrowdfundError::InvalidBatch)?;
+
+            for j in (i + 1)..len {
+                let next = decisions.get(j).ok_or(CrowdfundError::InvalidBatch)?;
+                if current.project_id == next.project_id
+                    && current.milestone_id == next.milestone_id
+                {
+                    return Err(CrowdfundError::InvalidBatch);
+                }
+            }
+
+            let mut project: ProjectData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Project(current.project_id))
+                .ok_or(CrowdfundError::ProjectNotFound)?;
+            Self::fail_if_project_expired(&env, current.project_id, &mut project)?;
+        }
+
+        let mut outcomes = Vec::new(&env);
+        for decision in decisions.iter() {
+            let approved_key =
+                DataKey::MilestoneApproved(decision.project_id, decision.milestone_id);
+            let disputed_key =
+                DataKey::MilestoneDisputed(decision.project_id, decision.milestone_id);
+            let dispute_key = DataKey::MilestoneDispute(decision.project_id, decision.milestone_id);
+
+            env.storage()
+                .persistent()
+                .set(&approved_key, &decision.approve);
+            env.storage()
+                .persistent()
+                .extend_ttl(&approved_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            env.storage().persistent().set(&disputed_key, &false);
+            env.storage()
+                .persistent()
+                .extend_ttl(&disputed_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            env.storage().persistent().remove(&dispute_key);
+
+            events::MilestoneDecisionEvent {
+                admin: admin.clone(),
+                project_id: decision.project_id,
+                milestone_id: decision.milestone_id,
+                approved: decision.approve,
+            }
+            .publish(&env);
+
+            outcomes.push_back(MilestoneDecisionOutcome {
+                project_id: decision.project_id,
+                milestone_id: decision.milestone_id,
+                approved: decision.approve,
+            });
+        }
+
+        Ok(outcomes)
     }
 
     /// Start a vote for a milestone approval
@@ -1168,6 +1466,7 @@ impl CrowdfundVaultContract {
 
     /// Allocate approved milestone funds to a streaming treasury for gradual unlocking.
     /// This allows projects to have their budget streamed over time instead of receiving it all at once.
+    #[allow(clippy::too_many_arguments)]
     pub fn allocate_to_streaming_treasury(
         env: Env,
         admin: Address,
@@ -1176,8 +1475,14 @@ impl CrowdfundVaultContract {
         treasury_contract: Address,
         amount: i128,
         duration: u64,
+        request_id: soroban_sdk::BytesN<32>,
     ) -> Result<(), CrowdfundError> {
         Self::with_reentrancy_guard(&env, || {
+            // Idempotency check
+            if idempotency_guard::claim_request(&env, &request_id).is_err() {
+                return Err(CrowdfundError::AlreadyExecuted);
+            }
+
             Self::verify_admin(&env, &admin)?;
 
             let mut project: ProjectData = env
@@ -1235,7 +1540,16 @@ impl CrowdfundVaultContract {
                 &amount,
                 &start_time,
                 &duration,
+                &request_id,
             );
+
+            events::TreasuryAllocatedEvent {
+                project_id,
+                treasury: treasury_contract,
+                beneficiary: project.owner,
+                amount,
+            }
+            .publish(&env);
 
             Ok(())
         })
@@ -1349,11 +1663,52 @@ impl CrowdfundVaultContract {
     }
 
     /// Register a new contributor
+    pub fn register_contributor_with_sig(
+        env: Env,
+        contributor: Address,
+        signature: soroban_sdk::Bytes,
+    ) -> Result<(), CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+
+        if signature.is_empty() {
+            return Err(CrowdfundError::InvalidSignature);
+        }
+
+        let nonce = Self::register_nonce_of(&env, &contributor);
+        let intent = RegistrationIntent {
+            user: contributor.clone(),
+            nonce,
+        };
+        contributor.require_auth_for_args(soroban_sdk::vec![
+            &env,
+            soroban_sdk::Symbol::new(&env, "register_contributor_with_sig").into_val(&env),
+            intent.into_val(&env),
+        ]);
+
+        let new_nonce = nonce + 1;
+        env.storage()
+            .persistent()
+            .set(&DataKey::RegistrationNonce(contributor.clone()), &new_nonce);
+        env.storage().persistent().extend_ttl(
+            &DataKey::RegistrationNonce(contributor.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+
+        Self::register_contributor_internal(&env, &contributor)
+    }
+
+    /// Register a new contributor
     pub fn register_contributor(env: Env, contributor: Address) -> Result<(), CrowdfundError> {
         Self::require_current_storage_version(&env)?;
-        // Require contributor authorization
         contributor.require_auth();
+        Self::register_contributor_internal(&env, &contributor)
+    }
 
+    fn register_contributor_internal(
+        env: &Env,
+        contributor: &Address,
+    ) -> Result<(), CrowdfundError> {
         // Check if already registered
         if env
             .storage()
@@ -1384,7 +1739,10 @@ impl CrowdfundVaultContract {
         );
 
         // Emit registration event
-        events::ContributorRegisteredEvent { contributor }.publish(&env);
+        events::ContributorRegisteredEvent {
+            contributor: contributor.clone(),
+        }
+        .publish(env);
 
         Ok(())
     }
@@ -1555,6 +1913,64 @@ impl CrowdfundVaultContract {
             .ok_or(CrowdfundError::MilestoneNotDisputed)
     }
 
+    /// Get a specific refund receipt by project and receipt ID
+    pub fn get_refund_receipt(
+        env: Env,
+        project_id: u64,
+        receipt_id: u64,
+    ) -> Result<RefundReceipt, CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+        env.storage()
+            .persistent()
+            .get::<_, ProjectData>(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        let receipt_key = DataKey::RefundReceipt(project_id, receipt_id);
+        let receipt = env
+            .storage()
+            .persistent()
+            .get(&receipt_key)
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+        env.storage()
+            .persistent()
+            .extend_ttl(&receipt_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        Ok(receipt)
+    }
+
+    /// Get the total count of refund receipts for a project
+    pub fn get_refund_receipt_count(env: Env, project_id: u64) -> Result<u64, CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+        env.storage()
+            .persistent()
+            .get::<_, ProjectData>(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::RefundReceiptCount(project_id))
+            .unwrap_or(0))
+    }
+
+    /// Check if a contributor has already claimed a refund for a project
+    pub fn has_refund_claimed(
+        env: Env,
+        project_id: u64,
+        contributor: Address,
+    ) -> Result<bool, CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+        env.storage()
+            .persistent()
+            .get::<_, ProjectData>(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::RefundClaimed(project_id, contributor))
+            .unwrap_or(false))
+    }
+
     /// Get admin address
     pub fn get_admin(env: Env) -> Result<Address, CrowdfundError> {
         Self::require_current_storage_version(&env)?;
@@ -1577,7 +1993,7 @@ impl CrowdfundVaultContract {
         }
 
         // Update matching pool balance
-        let pool_key = DataKey::MatchingPool(token_address);
+        let pool_key = DataKey::MatchingPool(token_address.clone());
         let current_pool: i128 = env.storage().persistent().get(&pool_key).unwrap_or(0);
         env.storage()
             .persistent()
@@ -1585,6 +2001,13 @@ impl CrowdfundVaultContract {
         env.storage()
             .persistent()
             .extend_ttl(&pool_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        events::PoolFundedEvent {
+            funder: admin,
+            token_address,
+            amount,
+        }
+        .publish(&env);
 
         Ok(())
     }
@@ -1614,6 +2037,13 @@ impl CrowdfundVaultContract {
 
             let contract_address = env.current_contract_address();
             token::transfer(&env, &token_address, &admin, &contract_address, &amount);
+
+            events::RewardPoolFundedEvent {
+                funder: admin,
+                token_address,
+                amount,
+            }
+            .publish(&env);
 
             Ok(())
         })
@@ -1739,6 +2169,12 @@ impl CrowdfundVaultContract {
                 .persistent()
                 .set(&DataKey::Project(project_id), &project);
 
+            events::MatchDistributedEvent {
+                project_id,
+                amount: match_after_fee,
+            }
+            .publish(&env);
+
             if fee_amount > 0 {
                 let contract_address = env.current_contract_address();
                 token::transfer(
@@ -1791,8 +2227,14 @@ impl CrowdfundVaultContract {
         admin: Address,
         token_address: Address,
         recipients: Vec<(Address, i128)>,
+        request_id: soroban_sdk::BytesN<32>,
     ) -> Result<(), CrowdfundError> {
         Self::with_reentrancy_guard(&env, || {
+            // Idempotency check
+            if idempotency_guard::claim_request(&env, &request_id).is_err() {
+                return Err(CrowdfundError::AlreadyExecuted);
+            }
+
             Self::verify_admin(&env, &admin)?;
 
             let is_paused: bool = env
@@ -1838,7 +2280,13 @@ impl CrowdfundVaultContract {
 
             for (recipient, amount) in recipients {
                 token::transfer(&env, &token_address, &contract_address, &recipient, &amount);
-                events::ContributorPayoutEvent { recipient, amount }.publish(&env);
+                events::ContributorPayoutEvent {
+                    recipient,
+                    request_id: request_id.clone(),
+                    token_address: token_address.clone(),
+                    amount,
+                }
+                .publish(&env);
             }
 
             Ok(())
@@ -1884,6 +2332,373 @@ impl CrowdfundVaultContract {
             .get(&contributor_count_key)
             .unwrap_or(0))
     }
+
+    /// Get project storage summary
+    pub fn get_project_storage_summary(
+        env: Env,
+        project_id: u64,
+    ) -> Result<ProjectStorageSummary, CrowdfundError> {
+        let project_exists = Self::get_project(env.clone(), project_id).is_ok();
+        let contributor_count = if project_exists {
+            Self::get_contributor_count(env.clone(), project_id).unwrap_or(0)
+        } else {
+            0
+        };
+        let refund_receipt_count = if project_exists {
+            Self::get_refund_receipt_count(env.clone(), project_id).unwrap_or(0)
+        } else {
+            0
+        };
+        let total_projects: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextProjectId)
+            .unwrap_or(0u64);
+        Ok(ProjectStorageSummary {
+            project_id,
+            project_exists,
+            contributor_count,
+            refund_receipt_count,
+            total_projects,
+        })
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  Emergency migration path  (issue #1047)
+    // ════════════════════════════════════════════════════════════════════════
+    //
+    // Design constraints satisfied:
+    //   • Permission: only the stored admin may propose or execute.
+    //   • Auditability: every action emits a structured Soroban event;
+    //     all plan data is written to persistent storage for off-chain
+    //     indexing.
+    //   • Contributor safety: the contract MUST be paused before a plan
+    //     is registered, preventing new deposits from racing execution.
+    //   • Double-execution prevention: plan status transitions are
+    //     monotonic (Pending → Executed | Vetoed); a second call to
+    //     `execute_emergency_migration` returns `MigrationAlreadyExecuted`.
+    //   • Veto path: a second trusted admin address may call
+    //     `veto_emergency_migration` to permanently block the plan; the
+    //     veto is recorded on-chain and emits its own event.
+
+    /// Register an emergency migration plan for a paused round.
+    ///
+    /// # Permissions
+    /// Callable only by the stored contract admin.
+    /// The contract **must** be paused before this function succeeds — this
+    /// serialises the migration window against new deposits.
+    ///
+    /// # Parameters
+    /// - `admin` — must match the stored admin address.
+    /// - `project_id` — the project with stranded funds.
+    /// - `recipient` — where the funds will go (must not be the contract itself).
+    /// - `amount` — must be ≤ the project's current balance and > 0.
+    /// - `reason` — short human-readable symbol stored on-chain for auditors.
+    ///
+    /// # Emits
+    /// [`EmergencyMigrationProposedEvent`]
+    pub fn propose_emergency_migration(
+        env: Env,
+        admin: Address,
+        project_id: u64,
+        recipient: Address,
+        amount: i128,
+        reason: Symbol,
+    ) -> Result<(), CrowdfundError> {
+        // ── 1. Authorisation ────────────────────────────────────────────────
+        Self::verify_admin(&env, &admin)?;
+
+        // ── 2. Contract must be paused ───────────────────────────────────────
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if !is_paused {
+            return Err(CrowdfundError::EmergencyMigrationRequiresPause);
+        }
+
+        // ── 3. Project must exist ────────────────────────────────────────────
+        let project: ProjectData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        // ── 4. Validate amount ───────────────────────────────────────────────
+        if amount <= 0 {
+            return Err(CrowdfundError::InvalidAmount);
+        }
+
+        let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+        let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+
+        if amount > current_balance {
+            return Err(CrowdfundError::MigrationAmountExceedsBalance);
+        }
+
+        // ── 5. Recipient must not be the contract itself ─────────────────────
+        if recipient == env.current_contract_address() {
+            return Err(CrowdfundError::InvalidMigrationRecipient);
+        }
+
+        // ── 6. Only one plan per project at a time ───────────────────────────
+        let plan_key = DataKey::EmergencyMigrationPlan(project_id);
+        if env.storage().persistent().has(&plan_key) {
+            // Allow re-proposal only if a previous plan was vetoed
+            let existing: EmergencyMigrationPlan =
+                env.storage().persistent().get(&plan_key).unwrap();
+            if existing.status != MigrationPlanStatus::Vetoed {
+                return Err(CrowdfundError::MigrationPlanAlreadyExists);
+            }
+        }
+
+        // ── 7. Persist the plan ──────────────────────────────────────────────
+        let proposed_at = env.ledger().timestamp();
+        let plan = EmergencyMigrationPlan {
+            project_id,
+            amount,
+            recipient: recipient.clone(),
+            reason: reason.clone(),
+            proposed_by: admin.clone(),
+            proposed_at,
+            status: MigrationPlanStatus::Pending,
+            resolved_at: 0,
+            vetoed_by: None,
+        };
+
+        env.storage().persistent().set(&plan_key, &plan);
+        env.storage()
+            .persistent()
+            .extend_ttl(&plan_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        // ── 8. Emit auditable event ──────────────────────────────────────────
+        events::EmrgMigrProposedEvent {
+            proposed_by: admin,
+            project_id,
+            amount,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Veto a pending emergency migration plan.
+    ///
+    /// Any admin (including the same admin who proposed it) can veto a plan
+    /// before execution.  Once vetoed the plan is permanently blocked; a new
+    /// plan must be proposed if the migration should still proceed.
+    ///
+    /// # Permissions
+    /// Callable only by the stored contract admin.
+    ///
+    /// # Emits
+    /// [`EmergencyMigrationVetoedEvent`]
+    pub fn veto_emergency_migration(
+        env: Env,
+        admin: Address,
+        project_id: u64,
+    ) -> Result<(), CrowdfundError> {
+        // ── 1. Authorisation ────────────────────────────────────────────────
+        Self::verify_admin(&env, &admin)?;
+
+        // ── 2. Plan must exist ───────────────────────────────────────────────
+        let plan_key = DataKey::EmergencyMigrationPlan(project_id);
+        let mut plan: EmergencyMigrationPlan = env
+            .storage()
+            .persistent()
+            .get(&plan_key)
+            .ok_or(CrowdfundError::MigrationPlanNotFound)?;
+
+        // ── 3. Plan must still be pending ────────────────────────────────────
+        if plan.status != MigrationPlanStatus::Pending {
+            return Err(CrowdfundError::MigrationAlreadyExecuted);
+        }
+
+        // ── 4. Record the veto ───────────────────────────────────────────────
+        let vetoed_at = env.ledger().timestamp();
+        plan.status = MigrationPlanStatus::Vetoed;
+        plan.resolved_at = vetoed_at;
+        plan.vetoed_by = Some(admin.clone());
+
+        env.storage().persistent().set(&plan_key, &plan);
+        env.storage()
+            .persistent()
+            .extend_ttl(&plan_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        // ── 5. Emit auditable event ──────────────────────────────────────────
+        events::EmergencyMigrationVetoedEvent {
+            vetoed_by: admin,
+            project_id,
+            vetoed_at,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Execute a pending emergency migration plan and move stranded funds.
+    ///
+    /// Transfers exactly `plan.amount` tokens from the project vault to
+    /// `plan.recipient`, marks the plan as `Executed`, cancels the project
+    /// (transitioning contributors to the refund-eligible path), and reduces
+    /// the TVL counter.
+    ///
+    /// # Permissions
+    /// Callable only by the stored contract admin.  The contract must remain
+    /// paused at call time — execution is blocked if someone unpaused between
+    /// proposal and execution.
+    ///
+    /// # State transitions
+    /// - Project status: any → `CANCELED` (contributors may now clawback)
+    /// - Plan status: `Pending` → `Executed`
+    ///
+    /// # Emits
+    /// 1. [`EmergencyMigrationExecutedEvent`]
+    /// 2. [`ProjectCanceledEvent`] (marks the project non-active for refunds)
+    pub fn execute_emergency_migration(
+        env: Env,
+        admin: Address,
+        project_id: u64,
+    ) -> Result<i128, CrowdfundError> {
+        Self::with_reentrancy_guard(&env, || {
+            // ── 1. Authorisation ────────────────────────────────────────────
+            Self::verify_admin(&env, &admin)?;
+
+            // ── 2. Contract must still be paused ────────────────────────────
+            let is_paused: bool = env
+                .storage()
+                .instance()
+                .get(&DataKey::Paused)
+                .unwrap_or(false);
+            if !is_paused {
+                return Err(CrowdfundError::EmergencyMigrationRequiresPause);
+            }
+
+            // ── 3. Load and validate the plan ────────────────────────────────
+            let plan_key = DataKey::EmergencyMigrationPlan(project_id);
+            let mut plan: EmergencyMigrationPlan = env
+                .storage()
+                .persistent()
+                .get(&plan_key)
+                .ok_or(CrowdfundError::MigrationPlanNotFound)?;
+
+            match plan.status {
+                MigrationPlanStatus::Executed => {
+                    return Err(CrowdfundError::MigrationAlreadyExecuted)
+                }
+                MigrationPlanStatus::Vetoed => return Err(CrowdfundError::MigrationPlanVetoed),
+                MigrationPlanStatus::Pending => {} // proceed
+            }
+
+            // ── 4. Re-validate balance (invariant: never move more than held) ─
+            let mut project: ProjectData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Project(project_id))
+                .ok_or(CrowdfundError::ProjectNotFound)?;
+
+            let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+            let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+
+            if plan.amount > current_balance {
+                return Err(CrowdfundError::MigrationAmountExceedsBalance);
+            }
+
+            // ── 5. If yield is invested, divest first ────────────────────────
+            let invested_key = DataKey::ProjectInvestedBalance(project_id);
+            let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
+            if current_invested > 0 {
+                Self::divest_funds_internal(&env, project_id, current_invested)?;
+            }
+
+            // ── 6. Move funds ────────────────────────────────────────────────
+            let new_balance = current_balance - plan.amount;
+            env.storage().persistent().set(&balance_key, &new_balance);
+            env.storage()
+                .persistent()
+                .extend_ttl(&balance_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            let contract_address = env.current_contract_address();
+            token::transfer(
+                &env,
+                &project.token_address,
+                &contract_address,
+                &plan.recipient,
+                &plan.amount,
+            );
+
+            // ── 7. Cancel the project so contributors can clawback ───────────
+            //   Only cancel if it hasn't been cancelled/expired already.
+            if project.is_active {
+                project.is_active = false;
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::Project(project_id), &project);
+                env.storage().persistent().set(
+                    &DataKey::ProjectStatus(project_id),
+                    &Symbol::new(&env, "CANCELED"),
+                );
+                // Open a refund window so individual contributors can clawback
+                // any remaining balance.
+                Self::set_refund_window_deadline(&env, project_id);
+                events::ProjectCanceledEvent {
+                    project_id,
+                    caller: admin.clone(),
+                }
+                .publish(&env);
+            }
+
+            // ── 8. Update protocol TVL ───────────────────────────────────────
+            Self::reduce_protocol_tvl(&env, plan.amount);
+
+            // ── 9. Mark plan as executed ─────────────────────────────────────
+            let executed_at = env.ledger().timestamp();
+            plan.status = MigrationPlanStatus::Executed;
+            plan.resolved_at = executed_at;
+            env.storage().persistent().set(&plan_key, &plan);
+            env.storage()
+                .persistent()
+                .extend_ttl(&plan_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+            // ── 10. Emit auditable event ─────────────────────────────────────
+            events::EmrgMigrExecutedEvent {
+                executed_by: admin,
+                project_id,
+                amount: plan.amount,
+            }
+            .publish(&env);
+
+            Ok(plan.amount)
+        })
+    }
+
+    /// Read a stored emergency migration plan (no state mutation).
+    pub fn get_emergency_migration_plan(
+        env: Env,
+        project_id: u64,
+    ) -> Result<EmergencyMigrationPlan, CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+
+        // Project must exist
+        env.storage()
+            .persistent()
+            .get::<_, ProjectData>(&DataKey::Project(project_id))
+            .ok_or(CrowdfundError::ProjectNotFound)?;
+
+        let plan_key = DataKey::EmergencyMigrationPlan(project_id);
+        let plan = env
+            .storage()
+            .persistent()
+            .get(&plan_key)
+            .ok_or(CrowdfundError::MigrationPlanNotFound)?;
+        env.storage()
+            .persistent()
+            .extend_ttl(&plan_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        Ok(plan)
+    }
+
+    // ── end emergency migration path ─────────────────────────────────────────
 
     pub fn pause(env: Env, admin: Address) -> Result<bool, CrowdfundError> {
         // Verify admin (single check with helper)
@@ -2061,9 +2876,16 @@ impl CrowdfundVaultContract {
     ) -> Result<(), CrowdfundError> {
         Self::verify_admin(&env, &admin)?;
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::YieldProvider(token_address), &yield_provider);
+        env.storage().persistent().set(
+            &DataKey::YieldProvider(token_address.clone()),
+            &yield_provider,
+        );
+
+        events::YieldProviderSetEvent {
+            token_address,
+            yield_provider,
+        }
+        .publish(&env);
 
         Ok(())
     }
@@ -2166,6 +2988,8 @@ impl CrowdfundVaultContract {
         let yield_client = yield_provider::YieldProviderClient::new(env, &yield_provider_addr);
         yield_client.deposit(&contract_address, &amount);
 
+        events::YieldInvestedEvent { project_id, amount }.publish(env);
+
         Ok(())
     }
 
@@ -2202,7 +3026,16 @@ impl CrowdfundVaultContract {
         let yield_client = yield_provider::YieldProviderClient::new(env, &yield_provider_addr);
         yield_client.withdraw(&contract_address, &amount);
 
+        events::YieldDivestedEvent { project_id, amount }.publish(env);
+
         Ok(())
+    }
+}
+
+#[contractimpl]
+impl VersionedContract for CrowdfundVaultContract {
+    fn contract_version(_env: Env) -> ContractVersion {
+        CONTRACT_VERSION
     }
 }
 

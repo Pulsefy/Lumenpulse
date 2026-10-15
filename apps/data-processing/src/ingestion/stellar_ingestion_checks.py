@@ -26,6 +26,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.db import PostgresService
+from src.ingestion.dataset_sla import (
+    DatasetSLAMeasurement,
+    evaluate_dataset_slas,
+    get_dataset_sla_targets,
+)
 from src.ingestion.stellar_fetcher import StellarDataFetcher
 
 
@@ -99,7 +104,10 @@ def check_ingestion_lag(
             severity="error",
             passed=False,
             metric="horizon_latest_ledger_close_time",
-            details={"reason": "Could not parse ledger_close_time from Horizon" , "latest": latest},
+            details={
+                "reason": "Could not parse ledger_close_time from Horizon",
+                "latest": latest,
+            },
         )
 
     now = datetime.now(timezone.utc)
@@ -337,7 +345,10 @@ def run_all_checks(
     report_path = Path(report_dir)
     report_path.mkdir(parents=True, exist_ok=True)
 
-    out_file = report_path / f"stellar_ingestion_quality_{report_ts.replace(':','-')}.json"
+    out_file = (
+        report_path
+        / f"stellar_ingestion_quality_{report_ts.replace(':', '-')}.json"
+    )
 
     # Fetcher + postgres are created inside to keep this script safe.
     fetcher = StellarDataFetcher(network=network)
@@ -375,6 +386,28 @@ def run_all_checks(
         )
     )
 
+    lag_finding = next(
+        (f for f in findings if f.check_id == "missing_ledger_ranges_or_ingestion_lag"),
+        None,
+    )
+    onchain_freshness_seconds = None
+    if lag_finding and lag_finding.details:
+        onchain_freshness_seconds = lag_finding.details.get("lag_seconds")
+
+    onchain_completeness = 1.0 if all(f.passed for f in findings) else 0.0
+    dataset_sla_measurements = [
+        DatasetSLAMeasurement(
+            dataset="stellar_ledger_events",
+            freshness_seconds=onchain_freshness_seconds,
+            completeness_ratio=onchain_completeness,
+            details={
+                "quality_check_findings": [f.to_dict() for f in findings],
+                "completeness_basis": "1 when ingestion lag, duplicate, and drift checks pass; 0 otherwise",
+            },
+        )
+    ]
+    dataset_sla_breaches = evaluate_dataset_slas(dataset_sla_measurements)
+
     passed = all(f.passed for f in findings)
 
     report: Dict[str, Any] = {
@@ -390,10 +423,16 @@ def run_all_checks(
             "drift_ratio_threshold": drift_ratio_threshold,
             "drift_hours_list": hours_list,
         },
+        "dataset_sla_targets": [target.to_dict() for target in get_dataset_sla_targets()],
+        "dataset_sla_measurements": [
+            measurement.to_dict() for measurement in dataset_sla_measurements
+        ],
+        "dataset_sla_breaches": [breach.to_dict() for breach in dataset_sla_breaches],
         "summary": {
             "passed": passed,
             "findings_total": len(findings),
             "findings_failed": sum(1 for f in findings if not f.passed),
+            "dataset_sla_breaches": len(dataset_sla_breaches),
         },
         "findings": [f.to_dict() for f in findings],
     }
@@ -415,7 +454,10 @@ def run_all_checks(
     # If we want low-noise: exit non-zero only when ingestion lag fails.
     # Drift/duplicates are warning-level (but can still be useful).
     # Keep this as MVP behavior.
-    critical_fail = any((f.check_id == "missing_ledger_ranges_or_ingestion_lag") and (not f.passed) for f in findings)
+    critical_fail = any(
+        (f.check_id == "missing_ledger_ranges_or_ingestion_lag") and (not f.passed)
+        for f in findings
+    )
     return {
         **report,
         "exit_code": 1 if critical_fail else 0,
@@ -423,19 +465,62 @@ def run_all_checks(
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Run Stellar ingestion quality checks (testnet-focused).")
-    parser.add_argument("--network", default=os.getenv("STELLAR_NETWORK", "testnet"), choices=["testnet", "public"], help="Horizon network selector")
-    parser.add_argument("--asset", default=os.getenv("ONCHAIN_ASSET", "XLM"), help="Asset code")
+    parser = argparse.ArgumentParser(
+        description="Run Stellar ingestion quality checks (testnet-focused)."
+    )
+    parser.add_argument(
+        "--network",
+        default=os.getenv("STELLAR_NETWORK", "testnet"),
+        choices=["testnet", "public"],
+        help="Horizon network selector",
+    )
+    parser.add_argument(
+        "--asset",
+        default=os.getenv("ONCHAIN_ASSET", "XLM"),
+        help="Asset code",
+    )
 
-    parser.add_argument("--ingestion-lag-seconds", type=int, default=int(os.getenv("INGESTION_LAG_SECONDS", "300")), help="Max allowed lag between Horizon latest ledger close time and now")
-    parser.add_argument("--duplicate-window-hours", type=int, default=int(os.getenv("DUPLICATE_WINDOW_HOURS", "24")), help="Lookback window for duplicate analytics record grouping")
+    parser.add_argument(
+        "--ingestion-lag-seconds",
+        type=int,
+        default=int(os.getenv("INGESTION_LAG_SECONDS", "300")),
+        help="Max allowed lag between Horizon latest ledger close time and now",
+    )
+    parser.add_argument(
+        "--duplicate-window-hours",
+        type=int,
+        default=int(os.getenv("DUPLICATE_WINDOW_HOURS", "24")),
+        help="Lookback window for duplicate analytics record grouping",
+    )
 
-    parser.add_argument("--drift-compare-window-hours", type=int, default=int(os.getenv("DRIFT_COMPARE_WINDOW_HOURS", "24")), help="Lookback for materialized view records")
-    parser.add_argument("--drift-ratio-threshold", type=float, default=float(os.getenv("DRIFT_RATIO_THRESHOLD", "0.05")), help="Max allowed relative drift (abs(diff)/expected)")
-    parser.add_argument("--drift-hours", default=os.getenv("DRIFT_HOURS_LIST", "24,48"), help="Comma-separated list of horizons to compare, e.g. 24,48")
+    parser.add_argument(
+        "--drift-compare-window-hours",
+        type=int,
+        default=int(os.getenv("DRIFT_COMPARE_WINDOW_HOURS", "24")),
+        help="Lookback for materialized view records",
+    )
+    parser.add_argument(
+        "--drift-ratio-threshold",
+        type=float,
+        default=float(os.getenv("DRIFT_RATIO_THRESHOLD", "0.05")),
+        help="Max allowed relative drift (abs(diff)/expected)",
+    )
+    parser.add_argument(
+        "--drift-hours",
+        default=os.getenv("DRIFT_HOURS_LIST", "24,48"),
+        help="Comma-separated list of horizons to compare, e.g. 24,48",
+    )
 
-    parser.add_argument("--report-dir", default=os.getenv("INGESTION_REPORT_DIR", REPORT_DIR_DEFAULT), help="Directory to persist reports")
-    parser.add_argument("--manual-run-id", default=os.getenv("MANUAL_RUN_ID"), help="Optional run identifier")
+    parser.add_argument(
+        "--report-dir",
+        default=os.getenv("INGESTION_REPORT_DIR", REPORT_DIR_DEFAULT),
+        help="Directory to persist reports",
+    )
+    parser.add_argument(
+        "--manual-run-id",
+        default=os.getenv("MANUAL_RUN_ID"),
+        help="Optional run identifier",
+    )
 
     args = parser.parse_args(argv)
 
@@ -460,4 +545,3 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

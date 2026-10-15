@@ -52,7 +52,11 @@ export default function BiometricLockGuard({ children }: BiometricLockGuardProps
 
   if (isBootstrapping) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]} accessible accessibilityLabel="Securing session">
+      <View
+        style={[styles.centered, { backgroundColor: colors.background }]}
+        accessible
+        accessibilityLabel="Securing session"
+      >
         <ActivityIndicator size="large" color={colors.accent} accessibilityLabel="Loading" />
         <Text style={[styles.bootText, { color: colors.textSecondary }]} accessible>
           Securing session...
@@ -63,7 +67,11 @@ export default function BiometricLockGuard({ children }: BiometricLockGuardProps
 
   if (isLocked) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]} accessible accessibilityLabel="App locked">
+      <View
+        style={[styles.centered, { backgroundColor: colors.background }]}
+        accessible
+        accessibilityLabel="App locked"
+      >
         <View
           style={[
             styles.lockCard,
@@ -75,8 +83,18 @@ export default function BiometricLockGuard({ children }: BiometricLockGuardProps
           accessible
           accessibilityLabel="Authentication required"
         >
-          <Ionicons name="lock-closed-outline" size={36} color={colors.accent} accessible accessibilityLabel="Locked" />
-          <Text style={[styles.lockTitle, { color: colors.text }]} accessible accessibilityRole="header">
+          <Ionicons
+            name="lock-closed-outline"
+            size={36}
+            color={colors.accent}
+            accessible
+            accessibilityLabel="Locked"
+          />
+          <Text
+            style={[styles.lockTitle, { color: colors.text }]}
+            accessible
+            accessibilityRole="header"
+          >
             App Locked
           </Text>
           <Text style={[styles.lockSubtitle, { color: colors.textSecondary }]} accessible>

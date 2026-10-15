@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Param,
   Post,
   Query,
   UseGuards,
@@ -8,11 +9,11 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiBearerAuth,
   ApiOperation,
+  ApiParam,
   ApiResponse,
   ApiQuery,
 } from '@nestjs/swagger';
@@ -30,10 +31,7 @@ import {
   CurrencyCode,
 } from './dto/portfolio-currency.dto';
 import { PortfolioPerformanceResponseDto } from './dto/portfolio-performance.dto';
-import {
-  getPortfolioReadThrottleOverride,
-  getPortfolioWriteThrottleOverride,
-} from '../common/rate-limit/rate-limit.config';
+import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 
 @ApiTags('portfolio')
 @ApiBearerAuth('JWT-auth')
@@ -43,7 +41,7 @@ export class PortfolioController {
   constructor(private readonly portfolioService: PortfolioService) {}
 
   @Get('summary')
-  @Throttle(getPortfolioReadThrottleOverride())
+  @RateLimitPolicy('portfolioRead')
   @ApiOperation({
     summary: 'Get portfolio summary',
     description:
@@ -74,8 +72,38 @@ export class PortfolioController {
     );
   }
 
+  @Get('accounts/:publicKey/summary')
+  @RateLimitPolicy('portfolioRead')
+  @ApiOperation({
+    summary: 'Get portfolio summary for a linked Stellar account',
+    description:
+      'Returns live balances and valuation for one Stellar account linked to the authenticated user',
+  })
+  @ApiParam({
+    name: 'publicKey',
+    description: 'Linked Stellar account public key',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Account portfolio summary retrieved successfully',
+    type: PortfolioSummaryWithCurrencyResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Linked Stellar account not found' })
+  async getPortfolioSummaryForAccount(
+    @Request() req: any,
+    @Param('publicKey') publicKey: string,
+  ): Promise<PortfolioSummaryWithCurrencyResponseDto> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const userId = req.user.sub as string;
+    return this.portfolioService.getPortfolioSummaryForAccount(
+      userId,
+      publicKey,
+    );
+  }
+
   @Get('history')
-  @Throttle(getPortfolioReadThrottleOverride())
+  @RateLimitPolicy('portfolioRead')
   @ApiOperation({
     summary: 'Get portfolio history',
     description:
@@ -103,7 +131,7 @@ export class PortfolioController {
   }
 
   @Post('snapshot')
-  @Throttle(getPortfolioWriteThrottleOverride())
+  @RateLimitPolicy('portfolioWrite')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Create portfolio snapshot',
@@ -146,7 +174,7 @@ export class PortfolioController {
   }
 
   @Post('snapshots/trigger')
-  @Throttle(getPortfolioWriteThrottleOverride())
+  @RateLimitPolicy('portfolioWrite')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Trigger snapshot creation for all users (Admin)',
@@ -209,7 +237,7 @@ export class PortfolioController {
   }
 
   @Get('performance')
-  @Throttle(getPortfolioReadThrottleOverride())
+  @RateLimitPolicy('portfolioRead')
   @ApiOperation({
     summary: 'Get portfolio performance',
     description:
@@ -230,7 +258,7 @@ export class PortfolioController {
   }
 
   @Get('allocation')
-  @Throttle(getPortfolioReadThrottleOverride())
+  @RateLimitPolicy('portfolioRead')
   @ApiOperation({
     summary: 'Get portfolio asset allocation',
     description:

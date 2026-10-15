@@ -1,0 +1,15 @@
+{
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-07-24",
+      "title": "Mobile MVP Launch",
+      "notes": [
+        "Added multi-account linking using Stellar public keys and QR code scanning.",
+        "Configured notifications and preferences screens.",
+        "Implemented secure biometric lock authentication on app startup.",
+        "Created customizable network switching between Testnet and Mainnet."
+      ]
+    }
+  ]
+}

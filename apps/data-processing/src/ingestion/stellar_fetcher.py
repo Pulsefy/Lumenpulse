@@ -8,9 +8,22 @@ from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 import json
-from stellar_sdk import Server, Asset
-from stellar_sdk.exceptions import NotFoundError, BadRequestError, ConnectionError
-from stellar_sdk.call_builder.call_builder_async import PaymentsCallBuilder
+
+try:
+    from stellar_sdk import Server, Asset
+    from stellar_sdk.exceptions import NotFoundError, BadRequestError, ConnectionError
+except ImportError:
+    Server = None
+    Asset = None
+
+    class NotFoundError(Exception):
+        pass
+
+    class BadRequestError(Exception):
+        pass
+
+    class ConnectionError(Exception):
+        pass
 
 
 @dataclass
@@ -121,6 +134,11 @@ class StellarDataFetcher:
 
         # Initialize Stellar SDK server
         self.timeout = timeout if timeout is not None else self.REQUEST_TIMEOUT
+        if Server is None:
+            raise ImportError(
+                "stellar_sdk.Server is unavailable; install a compatible stellar-sdk "
+                "version before constructing StellarDataFetcher"
+            )
         self.server = Server(horizon_url=self.horizon_url, timeout=self.timeout)
 
         # Cache for recent requests

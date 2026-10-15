@@ -1,36 +1,42 @@
 import {
-  Injectable,
-  NestInterceptor,
-  ExecutionContext,
   CallHandler,
-  HttpStatus,
+  ExecutionContext,
   HttpException,
+  HttpStatus,
+  Injectable,
   Logger,
+  NestInterceptor,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { HTTP_CODE_METADATA } from '@nestjs/common/constants';
 import { Request, Response } from 'express';
-import { Observable, of } from 'rxjs';
-import { tap } from 'rxjs/operators';
-import * as crypto from 'crypto';
-import { CacheService } from '../../cache/cache.service';
+import { Observable, of, throwError } from 'rxjs';
+import { tap, catchError } from 'rxjs/operators';
 import {
   IDEMPOTENT_OPTIONS_KEY,
   IdempotentOptions,
 } from '../decorators/idempotent.decorator';
+import { IdempotencyService } from '../../idempotency/idempotency.service';
 
-interface IdempotencyResult {
-  statusCode: number;
-  body: unknown;
-  bodyHash: string;
-}
-
+/**
+ * Idempotency for write endpoints.
+ *
+ * When a request carries an `Idempotency-Key` header, its response is persisted
+ * (keyed by method + route + body hash) and replayed verbatim for a repeated
+ * key within the retention window. Concurrent requests with the same key are
+ * serialised: the first executes, the rest wait and then receive the same
+ * response instead of re-executing.
+ *
+ * Storage is the `idempotency_records` table. Expired keys are purged by the
+ * `IdempotencyScheduler` on the documented cleanup schedule.
+ */
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
   private readonly logger = new Logger(IdempotencyInterceptor.name);
 
   constructor(
     private readonly reflector: Reflector,
-    private readonly cacheService: CacheService,
+    private readonly service: IdempotencyService,
   ) {}
 
   async intercept(
@@ -51,81 +57,95 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
 
     const headerName = options.header || 'idempotency-key';
-    const idempotencyKey = request.headers[headerName.toLowerCase()];
-
-    if (!idempotencyKey || typeof idempotencyKey !== 'string') {
+    const headerValue = request.headers[headerName.toLowerCase()];
+    if (!headerValue || typeof headerValue !== 'string') {
       return next.handle();
     }
 
-    // Hash the body to ensure the key is only valid for the same payload
-    const bodyHash = this.calculateHash(request.body);
-    const cacheKey = `idempotency:${request.path}:${idempotencyKey}`;
+    const route = request.path;
+    const method = request.method;
+    const requestHash = IdempotencyService.hashRequest(
+      method,
+      route,
+      request.body,
+    );
 
-    const cachedResult = await this.cacheService.get<
-      IdempotencyResult | string
-    >(cacheKey);
+    const outcome = await this.service.acquire(
+      headerValue,
+      method,
+      route,
+      requestHash,
+      { retentionMs: options.ttl },
+    );
 
-    if (cachedResult) {
-      if (cachedResult === 'IN_PROGRESS') {
-        throw new HttpException(
-          'Request with this idempotency key is already in progress.',
-          HttpStatus.CONFLICT,
+    switch (outcome.kind) {
+      case 'replay': {
+        this.logger.debug(
+          `Replaying cached response for idempotency key ${headerValue}`,
         );
+        const response = httpContext.getResponse<Response>();
+        response.status(outcome.record.responseStatus ?? HttpStatus.OK);
+        return of(outcome.record.responseBody);
       }
 
-      const result = cachedResult as IdempotencyResult;
-
-      // Verify that the body hash matches
-      if (result.bodyHash !== bodyHash) {
+      case 'hash-mismatch':
         throw new HttpException(
           'Idempotency key was used with a different request body.',
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
+
+      case 'in-progress': {
+        // Another request owns this key and is executing. Wait for it and
+        // return its response, so a concurrent retry neither duplicates the
+        // operation nor gets an error for trying.
+        const completed = await this.service.waitForCompletion(
+          outcome.record.id,
+        );
+        if (!completed) {
+          throw new HttpException(
+            'Request with this idempotency key is already in progress.',
+            HttpStatus.CONFLICT,
+          );
+        }
+        const response = httpContext.getResponse<Response>();
+        response.status(completed.responseStatus ?? HttpStatus.OK);
+        return of(completed.responseBody);
       }
 
-      this.logger.debug(`Returning cached result for key: ${idempotencyKey}`);
-      const response = httpContext.getResponse<Response>();
-      response.status(result.statusCode);
-      return of(result.body);
+      case 'acquired': {
+        return next.handle().pipe(
+          tap((body: unknown) => {
+            const status = this.resolveStatus(request, context);
+            void this.service
+              .complete(outcome.record, status, body)
+              .catch((err: Error) =>
+                this.logger.error(
+                  `Failed to persist idempotency result: ${err.message}`,
+                ),
+              );
+          }),
+          catchError((err: Error) => {
+            // The operation failed — drop the claim so the client can retry.
+            void this.service
+              .release(outcome.record.id)
+              .catch((releaseErr: Error) =>
+                this.logger.error(
+                  `Failed to release idempotency claim: ${releaseErr.message}`,
+                ),
+              );
+            return throwError(() => err);
+          }),
+        );
+      }
     }
-
-    // Mark as in progress to prevent concurrent duplicate requests
-    await this.cacheService.set(cacheKey, 'IN_PROGRESS', 60000); // 1 minute lock
-
-    return next.handle().pipe(
-      tap({
-        next: (body: unknown) => {
-          const response = httpContext.getResponse<Response>();
-          const result: IdempotencyResult = {
-            statusCode: response.statusCode,
-            body,
-            bodyHash,
-          };
-          const ttl = options.ttl || 24 * 60 * 60 * 1000; // 24 hours default
-          this.cacheService
-            .set(cacheKey, result, ttl)
-            .catch((err: Error) =>
-              this.logger.error(
-                `Failed to cache idempotency result: ${err.message}`,
-              ),
-            );
-        },
-        error: () => {
-          // Remove the lock on error so the client can retry
-          this.cacheService
-            .del(cacheKey)
-            .catch((err: Error) =>
-              this.logger.error(
-                `Failed to release idempotency lock: ${err.message}`,
-              ),
-            );
-        },
-      }),
-    );
   }
 
-  private calculateHash(body: unknown): string {
-    const data = body ? JSON.stringify(body) : '';
-    return crypto.createHash('sha256').update(data).digest('hex');
+  private resolveStatus(request: Request, context: ExecutionContext): number {
+    const explicit = this.reflector.get<number>(
+      HTTP_CODE_METADATA,
+      context.getHandler(),
+    );
+    if (explicit) return explicit;
+    return request.method === 'POST' ? HttpStatus.CREATED : HttpStatus.OK;
   }
 }

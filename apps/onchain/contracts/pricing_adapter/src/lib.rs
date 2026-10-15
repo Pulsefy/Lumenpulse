@@ -6,9 +6,12 @@ mod storage;
 
 use errors::PricingAdapterError;
 use soroban_sdk::{contract, contractimpl, Address, Env};
-use storage::DataKey;
+use storage::{DataKey, PriceState, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 pub const BASE_DECIMALS: u32 = 7;
+/// Default staleness window (seconds) used when no admin-configured value
+/// has been set via `set_staleness_window`.
+pub const DEFAULT_MAX_PRICE_AGE: u64 = 3600;
 
 #[contract]
 pub struct PricingAdapterContract;
@@ -22,6 +25,9 @@ impl PricingAdapterContract {
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         let event = events::InitializedEvent { admin };
         event.publish(&env);
@@ -48,6 +54,16 @@ impl PricingAdapterContract {
         env.storage()
             .persistent()
             .set(&DataKey::AssetDecimals(asset.clone()), &asset_decimals);
+        env.storage().persistent().set(
+            &DataKey::AssetPriceTimestamp(asset.clone()),
+            &env.ledger().timestamp(),
+        );
+        // A freshly admin-provided price always supersedes any prior
+        // invalidation.
+        env.storage()
+            .persistent()
+            .set(&DataKey::AssetPriceInvalidated(asset.clone()), &false);
+        Self::bump_asset_ttl(&env, &asset);
 
         let event = events::PriceUpdatedEvent {
             admin,
@@ -58,12 +74,142 @@ impl PricingAdapterContract {
         Ok(())
     }
 
-    /// Get the current configured price of an asset
+    /// Get the current configured price of an asset. Rejects deterministically
+    /// if the price has been explicitly invalidated or has aged past the
+    /// configured staleness window — this is the entry point consumers
+    /// (including `normalize_amount`, which calls this internally) rely on
+    /// to reject unsafe prices.
     pub fn get_price(env: Env, asset: Address) -> Result<i128, PricingAdapterError> {
+        let price: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AssetPrice(asset.clone()))
+            .ok_or(PricingAdapterError::PriceNotFound)?;
+
+        match Self::price_state(&env, &asset) {
+            PriceState::Invalidated => return Err(PricingAdapterError::PriceInvalidated),
+            PriceState::Stale => return Err(PricingAdapterError::StalePrice),
+            PriceState::Fresh => {}
+        }
+
+        Ok(price)
+    }
+
+    /// Explicitly flag an asset's currently stored price as invalid (admin
+    /// only), e.g. after detecting an oracle malfunction. The next
+    /// successful `set_price` call for the asset clears the flag.
+    pub fn invalidate_price(
+        env: Env,
+        admin: Address,
+        asset: Address,
+    ) -> Result<(), PricingAdapterError> {
+        Self::require_admin(&env, &admin)?;
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::AssetPrice(asset.clone()))
+        {
+            return Err(PricingAdapterError::PriceNotFound);
+        }
         env.storage()
             .persistent()
-            .get(&DataKey::AssetPrice(asset))
+            .set(&DataKey::AssetPriceInvalidated(asset.clone()), &true);
+        Self::bump_asset_ttl(&env, &asset);
+
+        let event = events::PriceInvalidatedEvent { admin, asset };
+        event.publish(&env);
+        Ok(())
+    }
+
+    /// Set (or update) the global staleness window, in seconds (admin only).
+    pub fn set_staleness_window(
+        env: Env,
+        admin: Address,
+        max_age_seconds: u64,
+    ) -> Result<(), PricingAdapterError> {
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::MaxPriceAge, &max_age_seconds);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        let event = events::StalenessWindowUpdatedEvent {
+            admin,
+            max_age_seconds,
+        };
+        event.publish(&env);
+        Ok(())
+    }
+
+    /// The currently configured staleness window, in seconds (defaults to
+    /// `DEFAULT_MAX_PRICE_AGE` until an admin sets one explicitly).
+    pub fn get_staleness_window(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MaxPriceAge)
+            .unwrap_or(DEFAULT_MAX_PRICE_AGE)
+    }
+
+    /// Freshness classification of an asset's stored price, without
+    /// triggering `get_price`'s rejection — lets a consumer inspect state
+    /// before deciding whether to call `get_price`.
+    pub fn get_price_state(env: Env, asset: Address) -> Result<PriceState, PricingAdapterError> {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::AssetPrice(asset.clone()))
+        {
+            return Err(PricingAdapterError::PriceNotFound);
+        }
+        Ok(Self::price_state(&env, &asset))
+    }
+
+    /// The ledger timestamp an asset's price was last set at.
+    pub fn get_price_timestamp(env: Env, asset: Address) -> Result<u64, PricingAdapterError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AssetPriceTimestamp(asset))
             .ok_or(PricingAdapterError::PriceNotFound)
+    }
+
+    fn price_state(env: &Env, asset: &Address) -> PriceState {
+        // Touches instance storage (`MaxPriceAge`, alongside `Admin`) on
+        // every price read, since this is the hottest read path in the
+        // contract and admin writes alone may be too infrequent to keep the
+        // instance TTL alive.
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        Self::bump_asset_ttl(env, asset);
+
+        let invalidated: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AssetPriceInvalidated(asset.clone()))
+            .unwrap_or(false);
+        if invalidated {
+            return PriceState::Invalidated;
+        }
+
+        let timestamp: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AssetPriceTimestamp(asset.clone()))
+            .unwrap_or(0);
+        let max_age: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MaxPriceAge)
+            .unwrap_or(DEFAULT_MAX_PRICE_AGE);
+        let age = env.ledger().timestamp().saturating_sub(timestamp);
+
+        if age > max_age {
+            PriceState::Stale
+        } else {
+            PriceState::Fresh
+        }
     }
 
     /// Get the decimals configured for an asset (defaults to 7)
@@ -109,7 +255,26 @@ impl PricingAdapterContract {
             return Err(PricingAdapterError::Unauthorized);
         }
         caller.require_auth();
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(())
+    }
+
+    /// Extends the TTL of the four persistent keys that make up an asset's
+    /// price record (`AssetPrice`, `AssetDecimals`, `AssetPriceTimestamp`,
+    /// `AssetPriceInvalidated`) together, so they always expire as a unit.
+    fn bump_asset_ttl(env: &Env, asset: &Address) {
+        for key in [
+            DataKey::AssetPrice(asset.clone()),
+            DataKey::AssetDecimals(asset.clone()),
+            DataKey::AssetPriceTimestamp(asset.clone()),
+            DataKey::AssetPriceInvalidated(asset.clone()),
+        ] {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
     }
 }
 

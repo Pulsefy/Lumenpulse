@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 /* eslint-disable @typescript-eslint/require-await */
-/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { User, UserRole } from '../../users/entities/user.entity';
 import { WebhookVerificationService } from '../../webhook/webhook-verification.service';
+import { SecretRotationService } from '../../config/secret-rotation.service';
 import {
   IAccessControlService,
   AccessControlContext,
@@ -32,6 +33,7 @@ export class AccessControlService implements IAccessControlService {
     private readonly userRepository: Repository<User>,
     private readonly configService: ConfigService,
     private readonly webhookVerificationService: WebhookVerificationService,
+    private readonly secretRotationService: SecretRotationService,
   ) {}
 
   /**
@@ -439,16 +441,75 @@ export class AccessControlService implements IAccessControlService {
   }
 
   /**
-   * Verify API key (placeholder for future implementation)
+   * Verify API key against configured admin API keys.
+   * Checks the provided key against CONTRACT_ADMIN_API_KEY env var.
    */
   private verifyApiKey(
-    _verificationData: Record<string, any>,
+    verificationData: Record<string, any>,
   ): Promise<TrustedCallerResult> {
-    // Placeholder - implement based on your API key strategy
+    const providedKey = verificationData.apiKey as string | undefined;
+
+    if (!providedKey) {
+      return Promise.resolve({
+        trusted: false,
+        error: 'API key is required',
+      });
+    }
+
+    const configuredKey = this.configService.get<string>(
+      'CONTRACT_ADMIN_API_KEY',
+    );
+
+    // Once a rotation has happened the rotation store owns the value; fall
+    // back to the boot-time value when nothing has been rotated yet.
+    const rotatedKeys = this.secretRotationService.acceptableValues(
+      'CONTRACT_ADMIN_API_KEY',
+    );
+    const candidates = rotatedKeys.length
+      ? rotatedKeys
+      : configuredKey
+        ? [configuredKey]
+        : [];
+
+    if (candidates.length === 0) {
+      this.logger.warn(
+        'CONTRACT_ADMIN_API_KEY not configured. API key verification cannot proceed.',
+      );
+      return Promise.resolve({
+        trusted: false,
+        error: 'API key verification not configured',
+      });
+    }
+
+    // Constant-time comparison to prevent timing attacks. During a rotation
+    // overlap window the previous value is still accepted.
+    const trusted = candidates.some((candidate) =>
+      this.constantTimeCompare(providedKey, candidate),
+    );
+
     return Promise.resolve({
-      trusted: false,
-      error: 'API key verification not implemented',
+      trusted,
+      callerId: trusted ? 'api-key:contract-admin' : undefined,
+      error: trusted ? undefined : 'Invalid API key',
+      metadata: {
+        verificationMethod: 'api_key',
+      },
     });
+  }
+
+  /**
+   * Constant-time string comparison to prevent timing attacks
+   */
+  private constantTimeCompare(a: string, b: string): boolean {
+    if (a.length !== b.length) {
+      return false;
+    }
+
+    let result = 0;
+    for (let i = 0; i < a.length; i++) {
+      result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return result === 0;
   }
 
   /**

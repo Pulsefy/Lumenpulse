@@ -1,6 +1,7 @@
 import {
   Injectable,
   OnModuleInit,
+  OnModuleDestroy,
   Inject,
   forwardRef,
   Logger,
@@ -9,8 +10,9 @@ import { PriceGateway } from './price.gateway';
 import { StellarService } from '../stellar/stellar.service';
 
 @Injectable()
-export class PriceService implements OnModuleInit {
+export class PriceService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PriceService.name);
+  private priceListenerInterval?: NodeJS.Timeout;
 
   constructor(
     @Inject(forwardRef(() => PriceGateway))
@@ -30,7 +32,11 @@ export class PriceService implements OnModuleInit {
   startPriceListener(): void {
     this.logger.log('Starting price update stream...');
 
-    setInterval(() => {
+    if (this.priceListenerInterval) {
+      clearInterval(this.priceListenerInterval);
+    }
+
+    this.priceListenerInterval = setInterval(() => {
       try {
         const price = (Math.random() * 0.2 + 0.1).toFixed(4);
 
@@ -47,6 +53,14 @@ export class PriceService implements OnModuleInit {
         this.logger.error('Price update error', err);
       }
     }, 3000);
+    this.priceListenerInterval.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.priceListenerInterval) {
+      clearInterval(this.priceListenerInterval);
+      this.priceListenerInterval = undefined;
+    }
   }
 
   /**
@@ -62,5 +76,36 @@ export class PriceService implements OnModuleInit {
     };
 
     return Promise.resolve(mockPrices[assetCode] || 0);
+  }
+
+  /**
+   * Batch-fetch USD prices for multiple asset codes in a single call.
+   *
+   * Replaces the N+1 pattern of calling `getCurrentPrice()` once per asset
+   * inside a `.map()`.  When a real price feed is introduced, this method
+   * should issue a single batched request to that feed rather than N
+   * individual requests.
+   *
+   * @param assetCodes Deduplicated list of asset code strings (e.g. ["XLM", "USDC"]).
+   * @returns Map from assetCode → USD price.  Missing codes map to 0.
+   */
+  getPricesForAssets(assetCodes: string[]): Promise<Map<string, number>> {
+    // Deduplicate so we only resolve each code once.
+    const unique = [...new Set(assetCodes)];
+
+    // When a real price-feed API is integrated, replace this with a single
+    // batched HTTP call and populate the map from the response.
+    const mockPrices: Record<string, number> = {
+      XLM: 0.12,
+      USDC: 1.0,
+      BTC: 45000.0,
+      ETH: 2500.0,
+    };
+
+    const result = new Map<string, number>();
+    for (const code of unique) {
+      result.set(code, mockPrices[code] ?? 0);
+    }
+    return Promise.resolve(result);
   }
 }

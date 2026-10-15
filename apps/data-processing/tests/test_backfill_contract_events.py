@@ -132,3 +132,36 @@ def test_run_idempotency(mock_fetch, backfill_instance, temp_output_dir):
     assert stats["batches_skipped"] == 3
     assert stats["total_events"] == 3 # read from file
     assert mock_fetch.call_count == 0
+
+
+def test_dry_run_plan_estimates_batches_without_mutating_state(temp_output_dir):
+    temp_output_dir.mkdir(parents=True, exist_ok=True)
+
+    checkpoint_path = temp_output_dir / "checkpoint.json"
+    checkpoint_path.write_text(json.dumps({"version": 1, "contracts": {}}), encoding="utf-8")
+    checkpoint_content = checkpoint_path.read_text(encoding="utf-8")
+
+    existing_output_path = temp_output_dir / "existing.json"
+    existing_output_path.write_text(json.dumps({"status": "completed", "event_count": 5}), encoding="utf-8")
+    existing_output_content = existing_output_path.read_text(encoding="utf-8")
+
+    backfill = BackfillContractEvents(
+        contract_ids=["CABC123"],
+        start_ledger=1000,
+        end_ledger=1050,
+        output_dir=temp_output_dir,
+        rpc_url="http://mock-rpc",
+        batch_size=20,
+        dry_run=True,
+    )
+
+    stats = backfill.run()
+
+    assert stats["dry_run"] is True
+    assert stats["plan"]["ledger_span"] == 51
+    assert stats["plan"]["estimated_batches"] == 3
+    assert stats["plan"]["estimated_output_files"] == 3
+    assert stats["plan"]["estimated_duration_seconds"] > 0
+    assert checkpoint_path.read_text(encoding="utf-8") == checkpoint_content
+    assert existing_output_path.read_text(encoding="utf-8") == existing_output_content
+    assert not (temp_output_dir / "CABC123_1000_1019.json").exists()

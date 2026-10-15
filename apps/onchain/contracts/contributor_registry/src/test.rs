@@ -158,7 +158,7 @@ fn test_update_contributor_github_handle_updates_index() {
     let new_handle = String::from_str(&env, "new_handle");
 
     client.register_contributor(&contributor, &old_handle);
-    client.update_contributor(&contributor, &new_handle);
+    client.update_contributor(&contributor, &contributor, &new_handle, &None);
 
     let old_lookup = client.try_get_contributor_by_github(&old_handle);
     assert_eq!(old_lookup, Err(Ok(ContributorError::ContributorNotFound)));
@@ -181,7 +181,7 @@ fn test_update_contributor_clears_stale_github_index_entry() {
     let old_handle = String::from_str(&env, "old_handle");
     let new_handle = String::from_str(&env, "new_handle");
     client.register_contributor(&contributor1, &old_handle);
-    client.update_contributor(&contributor1, &new_handle);
+    client.update_contributor(&contributor1, &contributor1, &new_handle, &None);
 
     // If the old index entry were stale, this registration would fail.
     client.register_contributor(&contributor2, &old_handle);
@@ -470,4 +470,57 @@ fn test_old_admin_cannot_upgrade_after_rotation() {
         result,
         Err(Ok(crate::errors::ContributorError::Unauthorized))
     );
+}
+
+// ── Notification interface conformance ─────────────────────────────
+//
+// These tests assert that `ContributorRegistryContract` satisfies the
+// `notification_interface::NotificationReceiverTrait` surface. Because the
+// contract uses `impl NotificationReceiverTrait`, adding an entry point to the
+// trait without updating this contract is a compile error; this test additionally
+// exercises the declared entry point end to end through the trait-derived client.
+
+use notification_interface::{
+    Notification, NotificationReceiverClient, NotificationReceiverTrait,
+};
+
+fn assert_implements_receiver<T: NotificationReceiverTrait>() {}
+
+#[test]
+fn conforms_to_notification_receiver_interface() {
+    assert_implements_receiver::<ContributorRegistryContract>();
+
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let id = env.register(ContributorRegistryContract, ());
+    let client = NotificationReceiverClient::new(&env, &id);
+    let source = Address::generate(&env);
+    let notification = Notification {
+        source: source.clone(),
+        event_type: soroban_sdk::Symbol::new(&env, "noop"),
+        data: soroban_sdk::Bytes::new(&env),
+    };
+
+    // The client is generated directly from the trait, so a signature mismatch
+    // on `on_notify` would fail to resolve this call.
+    client.on_notify(&notification);
+}
+
+// Same conformance pattern for `VersionedContract` (issue #1046): the
+// contract uses `impl VersionedContract`, so a signature mismatch on
+// `contract_version` would fail to compile.
+use version_interface::{ContractVersion, VersionedClient, VersionedContract};
+
+fn assert_implements_versioned<T: VersionedContract>() {}
+
+#[test]
+fn conforms_to_versioned_interface() {
+    assert_implements_versioned::<ContributorRegistryContract>();
+
+    let env = Env::default();
+    let id = env.register(ContributorRegistryContract, ());
+    let client = VersionedClient::new(&env, &id);
+
+    assert_eq!(client.contract_version(), ContractVersion::new(1, 0, 0));
 }

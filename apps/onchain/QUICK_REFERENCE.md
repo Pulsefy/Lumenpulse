@@ -30,9 +30,8 @@ contracts/
 │       ├── events.rs           # Event emissions
 │       └── storage.rs          # Data structures
 │
-├── aave_lending_pool/          # Mock Aave (interest-bearing)
-├── stable_swap_pool/           # Mock Curve (stablecoin AMM)
-└── liquidity_pool/             # Mock Uniswap (AMM)
+├── stable_swap_pool/           # Mock Curve (stablecoin AMM, legacy, not in workspace)
+└── liquidity_pool/             # Mock Uniswap (AMM, legacy, not in workspace)
 ```
 
 ## API Reference

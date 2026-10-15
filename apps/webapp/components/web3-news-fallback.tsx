@@ -1,6 +1,7 @@
 import { Clock, User, Zap, TrendingUp, Shield, Coins, Globe, Rocket, TrendingDown, Minus, DollarSign } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect, useMemo } from "react";
+import { ReportButton } from "@/components/report/report-button";
 
 interface Web3NewsItem {
   id: number;
@@ -205,9 +206,17 @@ export function Web3NewsFallback({ filters, sortOrder }: Web3NewsFallbackProps) 
               />
               <div className={`absolute inset-0 bg-gradient-to-t ${news.gradient} opacity-20`}></div>
               
-              <div className={`absolute top-2 right-2 bg-gradient-to-r ${news.gradient} text-white text-[10px] uppercase font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg`}>
-                {news.icon}
-                {news.category}
+              <div className="absolute top-2 right-2 flex items-center gap-2">
+                <div className={`bg-gradient-to-r ${news.gradient} text-white text-[10px] uppercase font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg`}>
+                  {news.icon}
+                  {news.category}
+                </div>
+                <ReportButton
+                  targetType="other"
+                  targetId={String(news.id)}
+                  targetLabel={`"${news.title}"`}
+                  variant="icon"
+                />
               </div>
 
               <div className="absolute bottom-2 left-2 flex gap-2">

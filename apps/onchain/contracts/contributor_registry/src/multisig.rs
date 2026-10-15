@@ -2,7 +2,8 @@ use soroban_sdk::{contracttype, Address, Env, Vec};
 
 use crate::errors::ContributorError;
 use crate::events::{
-    ProposalCancelledEvent, ProposalCreatedEvent, ProposalExecutedEvent, SignatureCollectedEvent,
+    ProposalCancelledEvent, ProposalCreatedEvent, ProposalExecutedEvent, ProposalExpiredEvent,
+    SignatureCollectedEvent,
 };
 use crate::storage::DataKey;
 
@@ -45,6 +46,17 @@ pub enum ProposalAction {
     GrantBadge,
     RevokeBadge,
     ApplyPenalty,
+    /// Update an arbitrary contributor's profile metadata (github_handle) on
+    /// the contributor's behalf. Self-service updates go through
+    /// `update_contributor` without a proposal id; this action is reserved for
+    /// admin-managed corrections (e.g. typo fixes, handle migrations).
+    UpdateProfile,
+    /// Suspend a contributor's attestation (temporary, reversible).
+    SuspendAttestation,
+    /// Revoke a contributor's attestation (permanent, terminal).
+    RevokeAttestation,
+    /// Restore a suspended attestation back to `Active`.
+    RestoreAttestation,
 }
 
 #[contracttype]
@@ -318,6 +330,12 @@ pub(crate) fn expire(env: &Env, proposal_id: u64) -> Result<(), ContributorError
     env.storage()
         .instance()
         .set(&DataKey::Proposal(proposal_id), &proposal);
+
+    ProposalExpiredEvent {
+        proposal_id,
+        expired_at: env.ledger().timestamp(),
+    }
+    .publish(env);
 
     Ok(())
 }

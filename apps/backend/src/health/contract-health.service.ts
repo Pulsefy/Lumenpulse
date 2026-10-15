@@ -84,14 +84,16 @@ export interface ContractHealthResult {
   message?: string;
 }
 
+export interface ContractHealthSummary {
+  total: number;
+  reachable: number;
+  misconfigured: number;
+  unreachable: number;
+}
+
 export interface ContractHealthReport {
   status: 'ok' | 'error';
-  summary: {
-    total: number;
-    reachable: number;
-    misconfigured: number;
-    unreachable: number;
-  };
+  summary: ContractHealthSummary;
   network: 'testnet' | 'mainnet';
   checkedAt: string;
   contracts: ContractHealthResult[];

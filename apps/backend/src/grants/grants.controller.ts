@@ -5,8 +5,10 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Query,
   Post,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,9 +16,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
 import { GrantsService } from './grants.service';
-import { getProjectReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 import {
   ApproveProjectDto,
   CreateRoundDto,
@@ -26,19 +27,23 @@ import {
   RoundDto,
   RoundSummaryDto,
   RoundExportDto,
+  LeaderboardQueryDto,
+  LeaderboardResponseDto,
 } from './dto/grants.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
+import { AuditBlockchainAction } from '../admin-audit/decorators/audit-blockchain-action.decorator';
+import { AdminAuditInterceptor } from '../admin-audit/interceptors/admin-audit.interceptor';
 
 @ApiTags('grants')
 @Controller('grants')
-@Throttle(getProjectReadThrottleOverride())
+@RateLimitPolicy('projectRead')
 export class GrantsController {
   constructor(private readonly grantsService: GrantsService) {}
 
-  // ── Rounds ─────────────────────────────────────────────────────────────────
+  // ΓöÇΓöÇ Rounds ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   @Get('rounds')
   @ApiOperation({
@@ -107,6 +112,8 @@ export class GrantsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN)
+  @UseInterceptors(AdminAuditInterceptor)
+  @AuditBlockchainAction({ contractField: 'tokenAddress' })
   @ApiOperation({
     summary: 'Create a new grant round (admin only)',
     description:
@@ -127,6 +134,8 @@ export class GrantsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN)
+  @UseInterceptors(AdminAuditInterceptor)
+  @AuditBlockchainAction({ contractField: 'id' })
   @ApiOperation({
     summary: 'Finalize a grant round (admin only)',
     description:
@@ -143,12 +152,14 @@ export class GrantsController {
     return this.grantsService.finalizeRound(id);
   }
 
-  // ── Pool funding ───────────────────────────────────────────────────────────
+  // ΓöÇΓöÇ Pool funding ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   @Post('rounds/fund')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN)
+  @UseInterceptors(AdminAuditInterceptor)
+  @AuditBlockchainAction({ contractField: 'funderPublicKey' })
   @ApiOperation({
     summary: 'Fund the matching pool (admin only)',
     description:
@@ -165,12 +176,14 @@ export class GrantsController {
     return this.grantsService.fundPool(dto);
   }
 
-  // ── Eligibility ────────────────────────────────────────────────────────────
+  // ΓöÇΓöÇ Eligibility ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   @Post('rounds/projects/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN, UserRole.REVIEWER)
+  @UseInterceptors(AdminAuditInterceptor)
+  @AuditBlockchainAction({ contractField: 'roundId' })
   @ApiOperation({
     summary: 'Approve a project for a round (admin/reviewer only)',
     description:
@@ -192,6 +205,8 @@ export class GrantsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN)
+  @UseInterceptors(AdminAuditInterceptor)
+  @AuditBlockchainAction({ contractField: 'roundId' })
   @ApiOperation({
     summary: 'Remove a project from a round (admin only)',
     description:
@@ -212,7 +227,7 @@ export class GrantsController {
     return { success: true };
   }
 
-  // ── Contributions ──────────────────────────────────────────────────────────
+  // ΓöÇΓöÇ Contributions ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   @Post('contributions')
   @ApiOperation({
@@ -230,12 +245,14 @@ export class GrantsController {
     return { success: true };
   }
 
-  // ── Distribution ───────────────────────────────────────────────────────────
+  // ΓöÇΓöÇ Distribution ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   @Post('rounds/distribute')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN)
+  @UseInterceptors(AdminAuditInterceptor)
+  @AuditBlockchainAction({ contractField: 'roundId' })
   @ApiOperation({
     summary: 'Distribute matching pool allocations (admin only)',
     description:
@@ -250,5 +267,22 @@ export class GrantsController {
   @ApiResponse({ status: 404, description: 'Round not found' })
   distribute(@Body() dto: DistributeDto) {
     return this.grantsService.distribute(dto);
+  }
+  @Get('leaderboard')
+  @ApiOperation({
+    summary: 'Get leaderboard for a matching round',
+    description:
+      'Returns ranked projects for a round with contribution and match figures. ' +
+      'Supports top-N (e.g. ?roundId=1&topN=5) or paginated responses ' +
+      '(e.g. ?roundId=1&page=2&limit=10). Projects are ranked by QF score descending.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Leaderboard retrieved successfully',
+    type: LeaderboardResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Round not found' })
+  getLeaderboard(@Query() query: LeaderboardQueryDto): LeaderboardResponseDto {
+    return this.grantsService.getLeaderboard(query);
   }
 }

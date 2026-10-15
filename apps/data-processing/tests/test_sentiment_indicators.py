@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 tests/test_sentiment_indicators.py
 

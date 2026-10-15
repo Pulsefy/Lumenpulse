@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bullmq';
 import { GrantsService } from './grants.service';
+import { CONTRIBUTION_QUEUE } from '../suspicious-contribution/types';
 
 describe('GrantsService', () => {
   let service: GrantsService;
@@ -10,11 +12,15 @@ describe('GrantsService', () => {
   const past = now - 7200; // 2 hours ago
   const future = now + 7200; // 2 hours from now
 
+  const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
+
   beforeEach(async () => {
+    mockQueue.add.mockClear();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GrantsService,
         { provide: ConfigService, useValue: { get: jest.fn() } },
+        { provide: getQueueToken(CONTRIBUTION_QUEUE), useValue: mockQueue },
       ],
     }).compile();
     service = module.get<GrantsService>(GrantsService);

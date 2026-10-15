@@ -9,4 +9,6 @@ pub enum PricingAdapterError {
     Unauthorized = 3,
     PriceNotFound = 4,
     InvalidPrice = 5,
+    StalePrice = 6,
+    PriceInvalidated = 7,
 }

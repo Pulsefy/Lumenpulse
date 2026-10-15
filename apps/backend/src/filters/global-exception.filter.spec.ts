@@ -8,7 +8,14 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
-import { REQUEST_ID_HEADER } from '../common/constants/request.constants';
+import {
+  CORRELATION_ID_HEADER,
+  REQUEST_ID_HEADER,
+} from '../common/constants/request.constants';
+import {
+  SorobanErrorCode,
+  SorobanRpcError,
+} from '../stellar/services/soroban-rpc-client.service';
 
 describe('GlobalExceptionFilter', () => {
   let filter: GlobalExceptionFilter;
@@ -23,6 +30,7 @@ describe('GlobalExceptionFilter', () => {
     method: 'GET',
     url: '/test-path',
     requestId: 'req-123',
+    correlationId: 'req-123',
   };
 
   const mockArgumentsHost = {
@@ -45,11 +53,15 @@ describe('GlobalExceptionFilter', () => {
     expect(filter).toBeDefined();
   });
 
-  it('normalizes a standard HttpException', () => {
+  it('normalizes a standard HttpException and sets correlation headers', () => {
     const exception = new HttpException('Not Found', HttpStatus.NOT_FOUND);
 
     filter.catch(exception, mockArgumentsHost);
 
+    expect(mockResponse.setHeader).toHaveBeenCalledWith(
+      CORRELATION_ID_HEADER,
+      'req-123',
+    );
     expect(mockResponse.setHeader).toHaveBeenCalledWith(
       REQUEST_ID_HEADER,
       'req-123',
@@ -60,6 +72,7 @@ describe('GlobalExceptionFilter', () => {
       message: 'Not Found',
       details: undefined,
       requestId: 'req-123',
+      correlationId: 'req-123',
     });
   });
 
@@ -72,6 +85,7 @@ describe('GlobalExceptionFilter', () => {
       expect.objectContaining({
         code: ErrorCode.AUTH_UNAUTHORIZED,
         requestId: 'req-123',
+        correlationId: 'req-123',
       }),
     );
   });
@@ -91,6 +105,7 @@ describe('GlobalExceptionFilter', () => {
       message: 'Validation failed',
       details: [{ field: 'email', message: 'Email is required' }],
       requestId: 'req-123',
+      correlationId: 'req-123',
     });
   });
 
@@ -108,8 +123,29 @@ describe('GlobalExceptionFilter', () => {
     expect(mockResponse.json).toHaveBeenCalledWith(
       expect.objectContaining({
         code: ErrorCode.STEL_INSUFFICIENT_FUNDS,
+        correlationId: 'req-123',
       }),
     );
+  });
+
+  it('normalizes uncaught SorobanRpcError via the safety net', () => {
+    const exception = new SorobanRpcError(
+      SorobanErrorCode.TIMEOUT,
+      'Soroban RPC request timed out after 30000ms',
+    );
+
+    filter.catch(exception, mockArgumentsHost);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(
+      HttpStatus.GATEWAY_TIMEOUT,
+    );
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      code: ErrorCode.STEL_RPC_TIMEOUT,
+      message: exception.message,
+      details: { sorobanCode: SorobanErrorCode.TIMEOUT },
+      requestId: 'req-123',
+      correlationId: 'req-123',
+    });
   });
 
   it('hides internal error messages in production mode', () => {
@@ -125,8 +161,40 @@ describe('GlobalExceptionFilter', () => {
       code: ErrorCode.SYS_INTERNAL_ERROR,
       message: 'Internal server error',
       requestId: 'req-123',
+      correlationId: 'req-123',
     });
 
     process['env']['NODE_ENV'] = originalNodeEnv;
+  });
+
+  it('returns custom correlation ID when provided in request', () => {
+    const customRequest = {
+      method: 'POST',
+      url: '/contributions',
+      correlationId: 'corr-custom-xyz',
+    };
+    const customHost = {
+      switchToHttp: () => ({
+        getResponse: () => mockResponse,
+        getRequest: () => customRequest,
+      }),
+    } as unknown as ArgumentsHost;
+
+    filter.catch(new BadRequestException('Invalid contribution'), customHost);
+
+    expect(mockResponse.setHeader).toHaveBeenCalledWith(
+      CORRELATION_ID_HEADER,
+      'corr-custom-xyz',
+    );
+    expect(mockResponse.setHeader).toHaveBeenCalledWith(
+      REQUEST_ID_HEADER,
+      'corr-custom-xyz',
+    );
+    expect(mockResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        correlationId: 'corr-custom-xyz',
+        requestId: 'corr-custom-xyz',
+      }),
+    );
   });
 });

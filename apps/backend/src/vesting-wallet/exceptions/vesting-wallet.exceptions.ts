@@ -8,7 +8,7 @@ export class VestingWalletException extends HttpException {
     status: HttpStatus,
     details?: Record<string, unknown>,
   ) {
-    super({ code, message, error: 'Vesting Wallet Error', ...details }, status);
+    super({ code, message, details }, status);
   }
 }
 
@@ -103,12 +103,23 @@ export class VestingWalletReentrancyException extends VestingWalletException {
   }
 }
 
+export class VestingWalletInsufficientBalanceException extends VestingWalletException {
+  constructor() {
+    super(
+      ErrorCode.STEL_INSUFFICIENT_FUNDS,
+      'Insufficient balance for vesting operation.',
+      HttpStatus.PAYMENT_REQUIRED,
+    );
+  }
+}
+
 export class VestingWalletRpcUnavailableException extends VestingWalletException {
-  constructor(cause?: string) {
+  constructor(cause?: string, details?: Record<string, unknown>) {
     super(
       ErrorCode.VEST_RPC_UNAVAILABLE,
       `Soroban RPC is unavailable${cause ? `: ${cause}` : ''}.`,
       HttpStatus.SERVICE_UNAVAILABLE,
+      details,
     );
   }
 }

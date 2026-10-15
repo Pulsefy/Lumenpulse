@@ -8,9 +8,16 @@ import {
   ReportStatus,
 } from './entities/content-report.entity';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { ModerationEventPublisherService } from './services/moderation-event-publisher.service';
+
+import { AuditService } from '../audit/audit.service';
 
 describe('ModerationService', () => {
   let service: ModerationService;
+  let mockEventPublisher: any;
+  const mockAuditService = {
+    log: jest.fn().mockResolvedValue({ id: 'audit-1' }),
+  };
 
   const mockReport: Partial<ContentReport> = {
     id: 'test-report-id',
@@ -44,12 +51,24 @@ describe('ModerationService', () => {
   };
 
   beforeEach(async () => {
+    mockEventPublisher = {
+      publishModerationEvent: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ModerationService,
         {
           provide: getRepositoryToken(ContentReport),
           useValue: mockRepository,
+        },
+        {
+          provide: ModerationEventPublisherService,
+          useValue: mockEventPublisher,
+        },
+        {
+          provide: AuditService,
+          useValue: mockAuditService,
         },
       ],
     }).compile();

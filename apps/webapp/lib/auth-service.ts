@@ -1,5 +1,7 @@
+import { clientConfig } from '@/lib/config';
+
 export class AuthApiService {
-  private static readonly BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  private static readonly BASE_URL = clientConfig.apiUrl;
 
   static async register(data: any) {
     const response = await fetch(`${this.BASE_URL}/auth/register`, {

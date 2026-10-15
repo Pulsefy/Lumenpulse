@@ -34,12 +34,17 @@ describe('CacheService', () => {
     service.setCacheConfig({
       balanceCacheTTL: 30_000,
       operationsCacheTTL: 15_000,
+      contractReadTTL: 60_000,
     });
   });
 
   describe('setCacheConfig', () => {
     it('sets cache configuration', () => {
-      const newConfig = { balanceCacheTTL: 60_000, operationsCacheTTL: 30_000 };
+      const newConfig = {
+        balanceCacheTTL: 60_000,
+        operationsCacheTTL: 30_000,
+        contractReadTTL: 120_000,
+      };
       service.setCacheConfig(newConfig);
       expect(service.cacheConfig).toEqual(newConfig);
     });

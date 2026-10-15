@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Star } from "lucide-react";
 import WatchlistPanel from "@/components/watchlist-panel";
 import AssetDetail from "@/components/asset-detail";
-import { WatchlistProvider } from "@/hooks/use-watchlist";
+
 
 export default function WatchlistPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -34,7 +34,7 @@ export default function WatchlistPage() {
   }
 
   return (
-    <WatchlistProvider>
+    <>
       <div className="min-h-screen bg-black text-white p-8">
         {selectedAsset ? (
           <AssetDetail
@@ -82,6 +82,6 @@ export default function WatchlistPage() {
           </>
         )}
       </div>
-    </WatchlistProvider>
+    </>
   );
 }

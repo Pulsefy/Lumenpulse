@@ -1,0 +1,111 @@
+﻿diff --git a/apps/backend/src/health/latency-budget.health.service.ts b/apps/backend/src/health/latency-budget.health.service.ts
+index 9a63251..4dce009 100644
+--- a/apps/backend/src/health/latency-budget.health.service.ts
++++ b/apps/backend/src/health/latency-budget.health.service.ts
+@@ -72,7 +72,8 @@ export class LatencyBudgetHealthService {
+    */
+   async getLatencyBudgetReport(): Promise<LatencyBudgetReport> {
+     const network = (process.env.STELLAR_NETWORK ?? 'testnet') as
+-      'testnet' | 'mainnet';
++      | 'testnet'
++      | 'mainnet';
+ 
+     const horizonUrl =
+       process.env.STELLAR_HORIZON_URL ?? DEFAULT_HORIZON_URLS[network];
+diff --git a/apps/backend/src/portfolio/dto/portfolio-snapshot.dto.ts b/apps/backend/src/portfolio/dto/portfolio-snapshot.dto.ts
+index 91d80db..6764d47 100644
+--- a/apps/backend/src/portfolio/dto/portfolio-snapshot.dto.ts
++++ b/apps/backend/src/portfolio/dto/portfolio-snapshot.dto.ts
+@@ -132,7 +132,11 @@ export class PortfolioSnapshotBatchStatusDto {
+     example: 'running',
+   })
+   status:
+-    'queued' | 'running' | 'completed' | 'completed_with_errors' | 'failed';
++    | 'queued'
++    | 'running'
++    | 'completed'
++    | 'completed_with_errors'
++    | 'failed';
+ 
+   @ApiProperty({
+     description: 'Total users scheduled for snapshot generation',
+@@ -204,7 +208,11 @@ export class TriggerSnapshotBatchResponseDto {
+     example: 'queued',
+   })
+   status:
+-    'queued' | 'running' | 'completed' | 'completed_with_errors' | 'failed';
++    | 'queued'
++    | 'running'
++    | 'completed'
++    | 'completed_with_errors'
++    | 'failed';
+ 
+   @ApiProperty({
+     description: 'Total users scheduled for snapshot generation',
+diff --git a/apps/backend/src/portfolio/queue/portfolio-snapshot.types.ts b/apps/backend/src/portfolio/queue/portfolio-snapshot.types.ts
+index 3419cf3..9682dad 100644
+--- a/apps/backend/src/portfolio/queue/portfolio-snapshot.types.ts
++++ b/apps/backend/src/portfolio/queue/portfolio-snapshot.types.ts
+@@ -13,7 +13,11 @@ export interface PortfolioSnapshotUserJobData {
+ export interface PortfolioSnapshotBatchStatus {
+   batchId: string;
+   status:
+-    'queued' | 'running' | 'completed' | 'completed_with_errors' | 'failed';
++    | 'queued'
++    | 'running'
++    | 'completed'
++    | 'completed_with_errors'
++    | 'failed';
+   total: number;
+   completed: number;
+   failed: number;
+diff --git a/apps/backend/src/soroban-events/guards/soroban-event-ingestion.guard.ts b/apps/backend/src/soroban-events/guards/soroban-event-ingestion.guard.ts
+index fc8284d..892001e 100644
+--- a/apps/backend/src/soroban-events/guards/soroban-event-ingestion.guard.ts
++++ b/apps/backend/src/soroban-events/guards/soroban-event-ingestion.guard.ts
+@@ -56,9 +56,11 @@ export class SorobanEventIngestionGuard implements CanActivate {
+     }
+ 
+     const signature = request.headers[SOROBAN_SIGNATURE_HEADER] as
+-      string | undefined;
++      | string
++      | undefined;
+     const timestampHeader = request.headers[SOROBAN_TIMESTAMP_HEADER] as
+-      string | undefined;
++      | string
++      | undefined;
+     const nonce = request.headers[SOROBAN_NONCE_HEADER] as string | undefined;
+ 
+     if (!signature) {
+diff --git a/apps/backend/src/stellar/services/horizon-client.service.ts b/apps/backend/src/stellar/services/horizon-client.service.ts
+index d4c092b..99d03ea 100644
+--- a/apps/backend/src/stellar/services/horizon-client.service.ts
++++ b/apps/backend/src/stellar/services/horizon-client.service.ts
+@@ -135,7 +135,8 @@ export class HorizonClientService {
+     try {
+       const response = await this.instrumentedFetch(url, method);
+       const data = (await response.json()) as
+-        HorizonTransactionsResponse | HorizonErrorResponse;
++        | HorizonTransactionsResponse
++        | HorizonErrorResponse;
+ 
+       if (!response.ok) {
+         const errorDetail = (data as HorizonErrorResponse).detail;
+diff --git a/apps/backend/src/webhook/webhook-verification.guard.ts b/apps/backend/src/webhook/webhook-verification.guard.ts
+index 5832c61..df03d12 100644
+--- a/apps/backend/src/webhook/webhook-verification.guard.ts
++++ b/apps/backend/src/webhook/webhook-verification.guard.ts
+@@ -96,9 +96,11 @@ export class WebhookVerificationGuard implements CanActivate {
+       providerInfo?.timestampHeader?.toLowerCase() || 'x-webhook-timestamp';
+ 
+     const signatureHeader = request.headers[signatureHeaderName] as
+-      string | undefined;
++      | string
++      | undefined;
+     const timestampHeader = request.headers[timestampHeaderName] as
+-      string | undefined;
++      | string
++      | undefined;
+ 
+     if (!signatureHeader) {
+       this.logger.warn('Missing signature header');

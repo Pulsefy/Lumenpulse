@@ -42,7 +42,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found');
     }
 
-    if (!user.id) {
+    // An erased account is kept only as an anonymised tombstone; it must never
+    // be able to authenticate again, even with a previously issued token.
+    if (!user.id || user.deletedAt) {
       throw new UnauthorizedException('User account is inactive');
     }
 
