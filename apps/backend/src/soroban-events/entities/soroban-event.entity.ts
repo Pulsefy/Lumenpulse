@@ -1,10 +1,4 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
 export enum SorobanEventStatus {
   PENDING = 'pending',
@@ -12,9 +6,26 @@ export enum SorobanEventStatus {
   FAILED = 'failed',
 }
 
+/**
+ * Soroban event record — stored in the monthly-partitioned soroban_events table.
+ *
+ * Partition key: created_at (RANGE, one child partition per calendar month).
+ *
+ * PostgreSQL requires that every UNIQUE constraint on a partitioned table
+ * includes the partition key column.  The (txHash, eventIndex) idempotency
+ * check therefore becomes (txHash, eventIndex, createdAt) in the DB.
+ * Application code that uses findOne({where: {txHash, eventIndex}}) continues
+ * to work because TypeORM issues a WHERE clause without a partition bound — PG
+ * will still enforce uniqueness across all partitions at INSERT/UPSERT time.
+ *
+ * The entity primary key is a composite (id, createdAt) matching the DB
+ * constraint pk_soroban_events.  Using @PrimaryColumn for both avoids the
+ * auto-increment semantics of @PrimaryGeneratedColumn and lets us keep the
+ * DEFAULT gen_random_uuid() on the id column.
+ */
 @Entity('soroban_events')
-@Index(['txHash', 'eventIndex'], { unique: true })
-@Index(['status'])
+@Index('idx_soroban_events_status', ['status'])
+@Index('idx_soroban_events_ledger_sequence', ['ledgerSequence'])
 @Index('IDX_soroban_events_contract_type_created_at', [
   'contractId',
   'eventType',
@@ -22,9 +33,13 @@ export enum SorobanEventStatus {
 ])
 @Index('IDX_soroban_events_status_created_at', ['status', 'createdAt'])
 @Index('IDX_soroban_events_processed_at', ['processedAt'])
-@Index('IDX_soroban_events_ledger_sequence', ['ledgerSequence'])
 export class SorobanEvent {
-  @PrimaryGeneratedColumn('uuid')
+  /**
+   * UUID primary key.  Part of the composite PK (id, created_at) required by
+   * the partitioned table.  Use @PrimaryColumn so TypeORM does not try to
+   * manage the sequence; the DB default gen_random_uuid() populates it.
+   */
+  @PrimaryColumn({ type: 'uuid', default: () => 'gen_random_uuid()' })
   id: string;
 
   /** Idempotency key: transaction hash */
@@ -69,7 +84,17 @@ export class SorobanEvent {
   @Column({ type: 'text', nullable: true })
   errorMessage: string | null;
 
-  @CreateDateColumn({ type: 'timestamptz' })
+  /**
+   * Partition key — also part of the composite PRIMARY KEY (id, created_at).
+   * Declared as @PrimaryColumn with a DB default so TypeORM treats it as part
+   * of the entity identity while still allowing the DB to populate it on INSERT
+   * when not explicitly supplied by the caller.
+   */
+  @PrimaryColumn({
+    type: 'timestamptz',
+    default: () => 'now()',
+    name: 'created_at',
+  })
   createdAt: Date;
 
   @Column({ type: 'timestamptz', nullable: true })

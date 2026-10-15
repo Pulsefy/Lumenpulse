@@ -37,10 +37,12 @@ export class SorobanEventsProcessor extends WorkerHost {
 
     const { txHash, eventIndex, contractId, eventType, rawPayload } = job.data;
 
-    const existing = await this.eventRepo.findOne({
-      where: { txHash, eventIndex },
-      select: ['id', 'status'],
-    });
+    // Cross-boundary idempotency check: the row may have been archived since it
+    // was first ingested.  Check both hot and archive tables.
+    const existing = await this.sorobanEventsService.findOneByTxHashAndIndex(
+      txHash,
+      eventIndex,
+    );
 
     if (existing) {
       this.logger.debug(
