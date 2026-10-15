@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { SorobanEvent } from './entities/soroban-event.entity';
 import { SorobanIndexerCursor } from './entities/soroban-indexer-cursor.entity';
+import { SorobanEventArchive } from './entities/soroban-event-archive.entity';
 import {
   SorobanEventsService,
   SOROBAN_EVENTS_QUEUE,
@@ -11,6 +12,7 @@ import { SorobanEventsProcessor } from './soroban-events.processor';
 import { SorobanEventsController } from './soroban-events.controller';
 import { SorobanEventIngestionGuard } from './guards/soroban-event-ingestion.guard';
 import { SorobanEventIndexerService } from './soroban-event-indexer.service';
+import { SorobanEventArchiveService } from './soroban-event-archive.service';
 import { ProjectRegistryEntity } from '../database/entities/project-registry.entity';
 import { StellarModule } from '../stellar/stellar.module';
 import { SchedulerModule } from '../scheduler/scheduler.module';
@@ -20,6 +22,7 @@ import { SchedulerModule } from '../scheduler/scheduler.module';
     TypeOrmModule.forFeature([
       SorobanEvent,
       SorobanIndexerCursor,
+      SorobanEventArchive,
       ProjectRegistryEntity,
     ]),
     BullModule.registerQueue({ name: SOROBAN_EVENTS_QUEUE }),
@@ -32,7 +35,8 @@ import { SchedulerModule } from '../scheduler/scheduler.module';
     SorobanEventsProcessor,
     SorobanEventIngestionGuard,
     SorobanEventIndexerService,
+    SorobanEventArchiveService,
   ],
-  exports: [SorobanEventIndexerService],
+  exports: [SorobanEventIndexerService, SorobanEventArchiveService],
 })
 export class SorobanEventsModule {}

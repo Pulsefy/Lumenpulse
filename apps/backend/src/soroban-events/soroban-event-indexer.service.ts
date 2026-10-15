@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
@@ -12,6 +12,7 @@ import {
   SorobanEventStatus,
 } from './entities/soroban-event.entity';
 import { SorobanIndexerCursor } from './entities/soroban-indexer-cursor.entity';
+import { SorobanEventArchiveService } from './soroban-event-archive.service';
 
 const JOB_NAME = 'soroban-event-indexer';
 const GLOBAL_CURSOR_KEY = '__global__';
@@ -35,6 +36,8 @@ export class SorobanEventIndexerService {
     private readonly eventRepo: Repository<SorobanEvent>,
     @InjectRepository(SorobanIndexerCursor)
     private readonly cursorRepo: Repository<SorobanIndexerCursor>,
+    @Inject(forwardRef(() => SorobanEventArchiveService))
+    private readonly archiveService: SorobanEventArchiveService,
   ) {}
 
   /**
@@ -53,6 +56,31 @@ export class SorobanEventIndexerService {
   async backfill(fromLedger: number): Promise<{ indexed: number }> {
     this.logger.log(`Starting backfill from ledger ${fromLedger}`);
     return this.sync('backfill', fromLedger);
+  }
+
+  /**
+   * Retrieve indexed events spanning both the hot partitioned table and the
+   * archive (cold storage) for a given ledger range.
+   *
+   * This is the preferred method for replay and audit use-cases because it
+   * works transparently across the partition boundary without the caller
+   * needing to know whether data has been archived.
+   *
+   * PostgreSQL's partition-pruning already handles efficient execution when
+   * the hot table is queried with a ledger_sequence range, and the archive
+   * table has its own ledger_sequence index.
+   */
+  async getEventsByLedgerRange(
+    fromLedger: number,
+    toLedger: number,
+  ): Promise<Array<{ txHash: string; eventIndex: number; ledgerSequence: number | null; source: 'hot' | 'archive' }>> {
+    const rows = await this.archiveService.findByLedgerRange(fromLedger, toLedger);
+    return rows.map((r) => ({
+      txHash: r.txHash,
+      eventIndex: r.eventIndex,
+      ledgerSequence: r.ledgerSequence,
+      source: 'archivedAt' in r ? ('archive' as const) : ('hot' as const),
+    }));
   }
 
   // ---------------------------------------------------------------------------
