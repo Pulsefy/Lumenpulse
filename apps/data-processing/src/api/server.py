@@ -5,8 +5,10 @@ for the Node.js backend to consume.
 """
 
 import asyncio
+import hashlib
 import os
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException, Request, Response, Query
 from fastapi.responses import StreamingResponse
@@ -58,6 +60,8 @@ from src.ml.model_registry import (
     clear_comparison_log,
     flush_all_comparisons,
     get_live_model,
+    load_metadata,
+    load_model_card,
     rollback_model,
 )
 from src.analytics.correlation_engine import CorrelationEngine
@@ -225,9 +229,6 @@ async def _reconcile_orphaned_analytics_jobs() -> None:
     reconcile_orphaned_jobs(postgres_service)
 
 
-import hashlib
-from typing import Optional
-
 def _log_prediction(
     request_id: str,
     model_type: str,
@@ -235,6 +236,8 @@ def _log_prediction(
     input_text: str,
     output: Dict[str, Any],
     latency_ms: float,
+    feature_values: Optional[Dict[str, Any]] = None,
+    subject_id: Optional[str] = None,
 ):
     """Log prediction to database using PostgresService."""
     if not postgres_service:
@@ -249,6 +252,14 @@ def _log_prediction(
         store_raw_input = os.getenv("LOG_PREDICTION_RAW_INPUT", "false").lower() == "true"
         raw_input = scrubbed_input if store_raw_input else None
         input_hash = hashlib.sha256(scrubbed_input.encode("utf-8")).hexdigest()
+        scrubbed_features = (
+            scrub_record(feature_values) if feature_values is not None else None
+        )
+        subject_hash = (
+            hashlib.sha256(scrub_text(subject_id).encode("utf-8")).hexdigest()
+            if subject_id is not None
+            else None
+        )
         
         postgres_service.log_prediction(
             request_id=request_id,
@@ -258,6 +269,8 @@ def _log_prediction(
             output=scrubbed_output,
             latency_ms=latency_ms,
             raw_input=raw_input,
+            subject_hash=subject_hash,
+            feature_values=scrubbed_features,
         )
     except Exception as e:
         logger.error(f"Failed to log prediction (non-fatal) in helper: {e}")
@@ -1412,6 +1425,159 @@ async def get_prediction_logs(
         "count": len(logs),
         "logs": logs
     }
+
+
+def _prediction_audit_entries(
+    rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Join prediction rows to the immutable model card and registry metadata."""
+    entries = []
+    for row in rows:
+        model_type = row["model_type"]
+        version = row["model_version"]
+        metadata = load_metadata(model_type, version) or {}
+        bounds = metadata.get("data_query_bounds", {})
+        card = load_model_card(model_type, version)
+        entries.append(
+            {
+                **row,
+                "feature_values": (
+                    scrub_record(row["feature_values"])
+                    if row.get("feature_values") is not None
+                    else None
+                ),
+                "output": scrub_record(row["output"]),
+                "model_card": scrub_record(card) if card is not None else None,
+                "model_metadata": scrub_record(metadata) if metadata else None,
+                "training_snapshot": {
+                    "snapshot_id": bounds.get("snapshot_id"),
+                    "snapshot_hash": bounds.get("snapshot_hash"),
+                },
+            }
+        )
+    return entries
+
+
+async def _export_prediction_audit(
+    *,
+    prediction_id: Optional[str] = None,
+    subject_id: Optional[str] = None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> Dict[str, Any]:
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+    if (start_time is None) != (end_time is None):
+        raise HTTPException(
+            status_code=400,
+            detail="Both start_time and end_time are required for a time-range export",
+        )
+    if start_time is not None and end_time is not None and (
+        start_time.utcoffset() is None or end_time.utcoffset() is None
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Time-range exports require timezone-aware ISO-8601 timestamps",
+        )
+    if start_time is not None and end_time is not None and start_time > end_time:
+        raise HTTPException(status_code=400, detail="start_time must be before end_time")
+    if subject_id is not None and not subject_id.strip():
+        raise HTTPException(status_code=400, detail="subject_id cannot be empty")
+    if prediction_id is None and subject_id is None and start_time is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide prediction_id, subject_id, or a start_time/end_time range",
+        )
+
+    subject_hash = (
+        hashlib.sha256(scrub_text(subject_id).encode("utf-8")).hexdigest()
+        if subject_id is not None
+        else None
+    )
+    numeric_prediction_id = None
+    prediction_request_id = None
+    if prediction_id is not None:
+        if prediction_id.isdecimal():
+            numeric_prediction_id = int(prediction_id)
+        else:
+            prediction_request_id = prediction_id
+
+    export_id = str(uuid.uuid4())
+    try:
+        rows = postgres_service.export_prediction_audit(
+            export_id=export_id,
+            request_id=correlation_id_ctx.get(generate_correlation_id()),
+            subject_hash=subject_hash,
+            start_time=start_time,
+            end_time=end_time,
+            prediction_db_id=numeric_prediction_id,
+            prediction_request_id=prediction_request_id,
+            limit=limit,
+            offset=offset,
+        )
+        entries = _prediction_audit_entries(rows)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Prediction audit export failed")
+        raise HTTPException(status_code=500, detail="Prediction audit export failed") from exc
+
+    return {
+        "export_id": export_id,
+        "count": len(entries),
+        "entries": entries,
+    }
+
+
+@app.get("/model/prediction-audits")
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def export_prediction_audits(
+    request: Request,
+    subject_id: Optional[str] = Query(None, description="Subject identifier; not persisted in raw form"),
+    start_time: Optional[datetime] = Query(None, description="Inclusive ISO-8601 range start"),
+    end_time: Optional[datetime] = Query(None, description="Inclusive ISO-8601 range end"),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+) -> Dict[str, Any]:
+    """Export prediction audit records by subject or inclusive time range."""
+    return await _export_prediction_audit(
+        subject_id=subject_id,
+        start_time=start_time,
+        end_time=end_time,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get("/model/prediction-audits/{prediction_id}")
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def export_prediction_audit(
+    prediction_id: str,
+    request: Request,
+) -> Dict[str, Any]:
+    """Export one prediction audit record by database ID or request ID."""
+    return await _export_prediction_audit(prediction_id=prediction_id, limit=1)
+
+
+@app.get("/model/prediction-audit-exports")
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def list_prediction_audit_exports(
+    request: Request,
+    limit: int = Query(100, ge=1, le=1000),
+) -> Dict[str, Any]:
+    """Retrieve recent audit events that prove prediction exports were recorded."""
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+    try:
+        exports = postgres_service.query_prediction_audit_exports(limit=limit)
+    except Exception as exc:
+        logger.exception("Failed to retrieve prediction export audit events")
+        raise HTTPException(
+            status_code=500, detail="Failed to retrieve prediction export audit events"
+        ) from exc
+    return {"count": len(exports), "exports": exports}
 
 
 class ForecastResponse(BaseModel):

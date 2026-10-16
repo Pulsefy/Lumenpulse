@@ -40,6 +40,8 @@ every row carries a valid treatment.
 | `detected_entities` | derived article tags | Extracted from source text (scrubbed first) | text scrub |
 | `input_text` | prediction log | Caller-supplied text analysed by the model | text scrub |
 | `raw_input` | prediction log | Stored copy of the request text (only when `LOG_PREDICTION_RAW_INPUT=true`) | text scrub |
+| `feature_values` | prediction log | Structured model inputs; values may contain free text | recursive text scrub |
+| `subject_id` | prediction log and export filter | Identifier used to find related predictions | scrub, then SHA-256; raw identifier is never persisted or exported |
 
 **Structural fields** (`STRUCTURAL_FIELDS`: `id`, `article_id`, `post_id`,
 `request_id`, `platform`, `source`, `published_at`, `posted_at`, timestamps,
@@ -111,6 +113,12 @@ this policy.
 - `raw_input` is stored only when `LOG_PREDICTION_RAW_INPUT=true`, and the
   stored value is the scrubbed text.
 - The `output` payload is scrubbed with `scrub_record()` before the write.
+- `feature_values` are recursively scrubbed before persistence and again before
+  export. Export responses never include `raw_input`.
+- Subject lookups compare a SHA-256 digest of the scrubbed subject identifier;
+  export audit filters contain only this digest, not the supplied identifier.
+- Each prediction audit export is recorded with its request ID, hashed filters,
+  result count, and timestamp in `prediction_audit_exports`.
 
 ## 6. Known limitations
 

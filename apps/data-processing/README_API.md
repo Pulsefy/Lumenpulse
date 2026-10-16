@@ -68,6 +68,70 @@ python -m uvicorn src.api.server:app --host 0.0.0.0 --port 8000 --reload
 ```
 ---
 
+## Prediction audit exports
+
+Prediction audit exports join the prediction log to the model card and
+registry metadata for its exact model version. The database must be migrated
+through revision `013` before deploying these endpoints.
+
+- `GET /model/prediction-audits/{prediction_id}` retrieves one record by its
+  numeric database ID or its request ID.
+- `GET /model/prediction-audits?subject_id=...` retrieves records for a
+  subject; `start_time` and `end_time` may be supplied together for an
+  inclusive time range. Use `limit` (capped at 1000) and `offset` to page
+  through the results.
+- `GET /model/prediction-audit-exports` lists durable records of prior exports.
+
+Prediction producers should pass `subject_id` and structured `feature_values`
+to `_log_prediction()`. Subject IDs are scrubbed and hashed before persistence;
+feature values are scrubbed before persistence and export. Export responses
+never include `raw_input`. Each completed export is written to
+`prediction_audit_exports` in the same database transaction as the log query.
+
+### Worked example: a flagged contribution
+
+Suppose a contribution risk prediction is logged with request ID `req-7f21`,
+subject ID `contribution-8472`, model version `v2.3`, and features
+`{"amount": 1250, "account_age_days": 4}`. The output records
+`{"flagged": true, "reason": "new_account_large_amount"}`. Retrieve that
+subject's audit trail:
+
+```http
+GET /model/prediction-audits?subject_id=contribution-8472
+X-API-Key: <service-key>
+```
+
+The entry includes the prediction ID, model version, scrubbed feature values,
+input hash, matching `v2.3` model card, and its training snapshot reference.
+For example, the card can identify the feature schema and held-out metrics,
+while `training_snapshot.snapshot_id` locates the training dataset snapshot
+used to register that model. The export response's `export_id` is recorded
+alongside the hashed subject filter and result count, and can be confirmed via
+`GET /model/prediction-audit-exports`.
+
+The relevant portion of the assembled entry looks like this:
+
+```json
+{
+  "prediction_id": "1842",
+  "request_id": "req-7f21",
+  "model_type": "contribution_risk",
+  "model_version": "v2.3",
+  "input_hash": "<sha256-of-scrubbed-input>",
+  "feature_values": {"amount": 1250, "account_age_days": 4},
+  "output": {"flagged": true, "reason": "new_account_large_amount"},
+  "model_card": {
+    "version": "v2.3",
+    "feature_schema": {"version": "1.0"},
+    "metrics": {"r2_score": 0.91}
+  },
+  "training_snapshot": {
+    "snapshot_id": "training_20260301_020000_ab12cd34",
+    "snapshot_hash": "<sha256-of-snapshot>"
+  }
+}
+```
+
 ## Pipeline Topology (`GET /api/pipeline/topology`)
 
 Returns the scheduled data-processing pipeline so the backend can ask the
