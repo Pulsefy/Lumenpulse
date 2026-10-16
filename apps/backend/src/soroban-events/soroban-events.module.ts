@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { SorobanEvent } from './entities/soroban-event.entity';
+import { SorobanEventArchive } from './entities/soroban-event-archive.entity';
 import { SorobanIndexerCursor } from './entities/soroban-indexer-cursor.entity';
 import { SorobanEventDeadLetter } from './entities/soroban-event-dead-letter.entity';
 import {
@@ -27,6 +28,7 @@ import { CrowdfundVaultProject } from '../crowdfund-sync/entities/crowdfund-vaul
   imports: [
     TypeOrmModule.forFeature([
       SorobanEvent,
+      SorobanEventArchive,
       SorobanIndexerCursor,
       SorobanEventDeadLetter,
       ProjectRegistryEntity,
@@ -51,6 +53,6 @@ import { CrowdfundVaultProject } from '../crowdfund-sync/entities/crowdfund-vaul
     SorobanEventIndexerService,
     SorobanEventReplayService,
   ],
-  exports: [SorobanEventIndexerService],
+  exports: [SorobanEventIndexerService, SorobanEventsRetentionService],
 })
 export class SorobanEventsModule {}

@@ -2,9 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { IngestSorobanEventDto } from './dto/ingest-soroban-event.dto';
 import { ProjectRegistryEntity } from '../database/entities/project-registry.entity';
+import { SorobanEvent } from './entities/soroban-event.entity';
+import { SorobanEventArchive } from './entities/soroban-event-archive.entity';
 
 export const SOROBAN_EVENTS_QUEUE = 'soroban-events';
 export const PROCESS_EVENT_JOB = 'process-event';
@@ -19,6 +22,19 @@ export interface ProjectEventPayload {
   txHash: string;
 }
 
+/**
+ * Result shape returned by cross-boundary ledger range queries.
+ * Combines records from both the hot partitioned table and cold archive.
+ */
+export interface LedgerRangeQueryResult {
+  /** Records found in soroban_events (hot, within hot window) */
+  hotCount: number;
+  /** Records found in soroban_events_archive (cold, beyond hot window) */
+  archiveCount: number;
+  /** All matched events, sorted by ledger_sequence ASC */
+  events: Array<SorobanEvent | SorobanEventArchive>;
+}
+
 @Injectable()
 export class SorobanEventsService {
   private readonly logger = new Logger(SorobanEventsService.name);
@@ -28,6 +44,15 @@ export class SorobanEventsService {
 
     @InjectRepository(ProjectRegistryEntity)
     private readonly projectRepo: Repository<ProjectRegistryEntity>,
+
+    @InjectRepository(SorobanEvent)
+    private readonly eventRepo: Repository<SorobanEvent>,
+
+    @InjectRepository(SorobanEventArchive)
+    private readonly archiveRepo: Repository<SorobanEventArchive>,
+
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   async ingest(
@@ -77,5 +102,74 @@ export class SorobanEventsService {
       },
       ['projectId'], // Conflict target prevents duplicate rows
     );
+  }
+
+  /**
+   * Find all events in a ledger range, spanning both the hot partitioned table
+   * and the cold archive.
+   *
+   * This is the primary entry point for replay and backfill read-path queries
+   * that may cross the hot-window boundary.  The indexer upsert path writes
+   * directly to soroban_events (hot) and is unaffected.
+   *
+   * Results are ordered by ledger_sequence ASC.
+   *
+   * @param fromLedger  Inclusive lower bound on ledger_sequence.
+   * @param toLedger    Inclusive upper bound on ledger_sequence.
+   */
+  async findByLedgerRange(
+    fromLedger: number,
+    toLedger: number,
+  ): Promise<LedgerRangeQueryResult> {
+    // Query both tables in parallel for efficiency
+    const [hotEvents, archiveEvents] = await Promise.all([
+      this.eventRepo
+        .createQueryBuilder('e')
+        .where('e.ledgerSequence >= :from', { from: fromLedger })
+        .andWhere('e.ledgerSequence <= :to', { to: toLedger })
+        .orderBy('e.ledgerSequence', 'ASC')
+        .getMany(),
+
+      this.archiveRepo
+        .createQueryBuilder('a')
+        .where('a.ledgerSequence >= :from', { from: fromLedger })
+        .andWhere('a.ledgerSequence <= :to', { to: toLedger })
+        .orderBy('a.ledgerSequence', 'ASC')
+        .getMany(),
+    ]);
+
+    // Merge and sort; hot events take precedence for any duplicate ledger seq
+    const combined: Array<SorobanEvent | SorobanEventArchive> = [
+      ...hotEvents,
+      ...archiveEvents,
+    ].sort((a, b) => (a.ledgerSequence ?? 0) - (b.ledgerSequence ?? 0));
+
+    return {
+      hotCount: hotEvents.length,
+      archiveCount: archiveEvents.length,
+      events: combined,
+    };
+  }
+
+  /**
+   * Look up a single event by (txHash, eventIndex) across both tables.
+   * Used by the processor for idempotency checks when a row may have been
+   * archived since it was first ingested.
+   */
+  async findOneByTxHashAndIndex(
+    txHash: string,
+    eventIndex: number,
+  ): Promise<SorobanEvent | SorobanEventArchive | null> {
+    const hot = await this.eventRepo.findOne({
+      where: { txHash, eventIndex },
+      select: ['id', 'status'],
+    });
+
+    if (hot) return hot;
+
+    return this.archiveRepo.findOne({
+      where: { txHash, eventIndex },
+      select: ['id', 'status'],
+    });
   }
 }
