@@ -6,6 +6,7 @@ import {
   IsInt,
   IsArray,
   ArrayMaxSize,
+  IsNumber,
   Min,
   Max,
 } from 'class-validator';
@@ -80,6 +81,51 @@ export class UpsertFeatureFlagDto {
   conditions?: Record<string, any>;
 
   @ApiPropertyOptional({
+    description: 'Rollout percentage between 0 and 100 for percentage targeting',
+    example: 25,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  targetPercentage?: number;
+
+  @ApiPropertyOptional({
+    description: 'Alias for rollout percentage between 0 and 100',
+    example: 25,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  percentage?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Whether this flag is marked sensitive and requires explicit confirmation',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  sensitive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Alias for sensitive flag configuration',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isSensitive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Explicit confirmation required for sensitive flag mutations',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  confirmed?: boolean;
+
+  @ApiPropertyOptional({
     description: 'Identifier of the user who changed this flag',
     example: 'admin@lumenpulse.com',
   })
@@ -125,6 +171,36 @@ export class FeatureFlagResponseDto {
     example: { roles: ['ADMIN'] },
   })
   conditions?: Record<string, any>;
+
+  @ApiPropertyOptional({
+    description: 'Rollout percentage between 0 and 100',
+    example: 25,
+  })
+  targetPercentage?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Compatibility alias for rollout percentage targeting',
+    example: 25,
+  })
+  percentage?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Whether the flag is sensitive and requires confirmation',
+    example: false,
+  })
+  sensitive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Compatibility alias for sensitive flag status',
+    example: false,
+  })
+  isSensitive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Timestamp of the last change to this flag',
+    example: '2024-06-01T12:00:00.000Z',
+  })
+  updatedAt?: Date;
 
   @ApiPropertyOptional({
     description: 'Identifier of the user who last changed this flag',
@@ -234,6 +310,18 @@ export class FlagAuditLogResponseDto {
     nullable: true,
   })
   newTargeting: Record<string, any> | null;
+
+  @ApiPropertyOptional({
+    description: 'Target rollout percentage at the time of this mutation',
+    example: 25,
+  })
+  targetPercentage?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Whether the flag was sensitive at the time of the mutation',
+    example: false,
+  })
+  sensitive?: boolean | null;
 
   @ApiPropertyOptional({
     description: 'Actor who requested the change',

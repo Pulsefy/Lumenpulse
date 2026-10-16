@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { FeatureFlagsService } from './feature-flags.service';
@@ -125,6 +126,15 @@ describe('FeatureFlagsService', () => {
   });
 
   describe('Audit logging', () => {
+    it('requires explicit confirmation before changing sensitive flags', async () => {
+      await expect(
+        service.upsert('flag.sensitive', true, undefined, 'admin@test.com', {
+          sensitive: true,
+          confirmed: false,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('writes an audit entry on upsert', async () => {
       await service.upsert('flag.audit', true, undefined, 'admin@test.com');
       expect(auditRepo.create).toHaveBeenCalledWith(
