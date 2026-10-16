@@ -15,6 +15,7 @@ import type { Response } from 'express';
 import { ContractHealthService } from './contract-health.service';
 import { DeploymentSmokeService } from './deployment-smoke.service';
 import { HealthService } from './health.service';
+import { ModelHealthReport } from './health.service';
 import { ShutdownService } from './shutdown.service';
 
 @ApiTags('health')
@@ -149,6 +150,38 @@ export class HealthController {
 
     response.status(report.ready ? 200 : 503);
 
+    return report;
+  }
+
+  @Get('health/models')
+  @ApiOperation({
+    summary: 'Returns per-model SLO health from the data-processing service',
+    description:
+      'Reports the trustworthiness of every registered model (live version, ' +
+      'drift state, calibration age and data freshness). Each model is ' +
+      'classified trustworthy | degraded | unavailable so consumers can decide ' +
+      'whether to surface a prediction. Transitions into a degraded state are ' +
+      'alerted through the backend notification path by the data-processing ' +
+      'service (#1647).',
+  })
+  @ApiOkResponse({
+    description: 'Per-model SLO health report.',
+  })
+  @ApiServiceUnavailableResponse({
+    description: 'Returns when the data-processing service is unreachable.',
+  })
+  async getModelHealth(@Res({ passthrough: true }) response: Response) {
+    let report: ModelHealthReport;
+    try {
+      report = await this.healthService.getModelHealthReport();
+      response.status(200);
+    } catch {
+      report = {
+        checked_at: new Date().toISOString(),
+        models: {},
+      };
+      response.status(503);
+    }
     return report;
   }
 }

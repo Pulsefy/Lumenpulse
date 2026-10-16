@@ -60,6 +60,7 @@ from src.ml.model_registry import (
     get_live_model,
     rollback_model,
 )
+from src.ml.model_health import get_model_health
 from src.analytics.correlation_engine import CorrelationEngine
 from src.utils.pagination import (
     DEFAULT_PAGE_SIZE,
@@ -330,6 +331,34 @@ class HealthResponse(BaseModel):
     service: str
 
 
+class ModelSignalResponse(BaseModel):
+    """Classified state of one health signal (trustworthy | degraded | unavailable)."""
+
+    state: str
+    detail: str
+    value: Optional[Any] = None
+
+
+class ModelHealthSnapshotResponse(BaseModel):
+    """Per-model SLO snapshot returned by GET /model/health."""
+
+    model_config = ConfigDict(protected_namespaces=())
+
+    model_type: str
+    live_version: Optional[str]
+    drift: ModelSignalResponse
+    calibration_age: ModelSignalResponse
+    data_freshness: ModelSignalResponse
+    overall: str  # trustworthy | degraded | unavailable
+    checked_at: str
+    transitioned_to_degraded: bool = False
+
+
+class ModelHealthResponse(BaseModel):
+    checked_at: str
+    models: Dict[str, ModelHealthSnapshotResponse]
+
+
 class NewsArticleResponse(BaseModel):
     article_id: str
     title: str
@@ -424,6 +453,7 @@ async def root(request: Request) -> Dict[str, Any]:
             # Model management endpoints
             "POST /retrain": "Submit a model retraining run to the async job queue; returns a job_id immediately (Admin only, requires X-API-Key header)",
             "GET /model/status": "Get model registry status (Admin only, requires X-API-Key header)",
+            "GET /model/health": "Get per-model SLO health (live version, drift state, calibration age, data freshness) (requires X-API-Key header)",
             # Async analytics job queue (Issue #1248)
             "GET /api/jobs/{job_id}": "Poll the status/result of a job submitted to /retrain, /correlation/analyze, /correlation/lag-analysis, or /analytics/kpis/daily-snapshots/run (requires X-API-Key header)",
             # Shadow-mode deployment (Issue #1256)
@@ -449,6 +479,35 @@ async def health_check(request: Request) -> HealthResponse:
         status="healthy",
         timestamp=datetime.now().isoformat(),
         service="sentiment-analysis",
+    )
+
+
+@app.get("/model/health", response_model=ModelHealthResponse)
+@limiter.limit("30/minute") if limiter else lambda x: x
+async def model_health(request: Request) -> ModelHealthResponse:
+    """
+    Report per-model SLO health (Issue #1647).
+
+    Returns a trustworthiness snapshot for every registered model type:
+    live version, drift state, calibration age and data freshness. Each
+    signal is classified trustworthy | degraded | unavailable and the
+    per-model overall is the worst of its signals.
+
+    The backend consumes this endpoint to decide whether to surface a
+    prediction. Transitions into a degraded/unavailable state raise an
+    alert through the backend notification path (see
+    src/ml/model_health.py).
+
+    Requires X-API-Key header.
+    """
+    report = get_model_health()
+    models = {
+        model_type: ModelHealthSnapshotResponse(**snapshot)
+        for model_type, snapshot in report["models"].items()
+    }
+    return ModelHealthResponse(
+        checked_at=report["checked_at"],
+        models=models,
     )
 
 

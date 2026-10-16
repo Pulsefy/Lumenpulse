@@ -155,4 +155,47 @@ describe('HealthService', () => {
       jest.useRealTimers();
     }
   });
+
+  describe('model health', () => {
+    const modelReport = {
+      checked_at: '2026-10-16T13:00:00.000Z',
+      models: {
+        sentiment: {
+          model_type: 'sentiment',
+          live_version: 'v1.1',
+          overall: 'trustworthy',
+          drift: { state: 'trustworthy', detail: 'ok', value: null },
+          calibration_age: { state: 'trustworthy', detail: 'ok', value: 60 },
+          data_freshness: {
+            state: 'trustworthy',
+            detail: 'ok',
+            value: 10,
+          },
+          checked_at: '2026-10-16T13:00:00.000Z',
+          transitioned_to_degraded: false,
+        },
+      },
+    };
+
+    it('returns per-model health from the data-processing service', async () => {
+      http.get.mockReturnValue(of({ data: modelReport }));
+      const report = await service.getModelHealthReport();
+      expect(report).toEqual(modelReport);
+      expect(http.get).toHaveBeenCalledWith(
+        '/model/health',
+        expect.objectContaining({ timeout: 3000, retry: false }),
+      );
+    });
+
+    it('returns an empty report when data-processing is unreachable', async () => {
+      http.get.mockReturnValue(
+        throwError(() => new Error('data-processing unavailable')),
+      );
+      const report = await service.getModelHealthReport();
+      expect(report).toEqual({
+        checked_at: expect.any(String),
+        models: {},
+      });
+    });
+  });
 });

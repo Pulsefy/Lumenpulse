@@ -1,5 +1,5 @@
 import { HttpService } from '@nestjs/axios';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { HealthCheckResult } from '@nestjs/terminus';
 import { firstValueFrom } from 'rxjs';
@@ -18,6 +18,28 @@ export interface DependencyStatus {
   message?: string;
 }
 
+export interface ModelHealthSignal {
+  state: 'trustworthy' | 'degraded' | 'unavailable';
+  detail: string;
+  value: unknown;
+}
+
+export interface ModelHealthSnapshot {
+  model_type: string;
+  live_version: string | null;
+  drift: ModelHealthSignal;
+  calibration_age: ModelHealthSignal;
+  data_freshness: ModelHealthSignal;
+  overall: 'trustworthy' | 'degraded' | 'unavailable';
+  checked_at: string;
+  transitioned_to_degraded: boolean;
+}
+
+export interface ModelHealthReport {
+  checked_at: string;
+  models: Record<string, ModelHealthSnapshot>;
+}
+
 export interface LumenpulseHealthReport extends HealthCheckResult {
   summary: 'healthy' | 'degraded' | 'down';
   dependencies: Record<string, DependencyStatus>;
@@ -29,6 +51,8 @@ const LATENCY_BUDGET_TIMEOUT_MS = 6000;
 
 @Injectable()
 export class HealthService {
+  private readonly logger = new Logger(HealthService.name);
+
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly cacheService: CacheService,
@@ -125,6 +149,37 @@ export class HealthService {
       error,
       details,
     };
+  }
+
+  /**
+   * Fetch per-model SLO health from the data-processing service.
+   *
+   * The backend consumes this to decide whether to surface a prediction: a
+   * model whose ``overall`` is not ``trustworthy`` should be treated as a
+   * degraded signal and surfaced with a quality warning (or withheld).
+   *
+   * Returns a report whose models are marked ``unavailable`` when the
+   * data-processing service cannot be reached.
+   */
+  async getModelHealthReport(): Promise<ModelHealthReport> {
+    try {
+      const response = await firstValueFrom(
+        this.python.get<ModelHealthReport>('/model/health', {
+          timeout: CHECK_TIMEOUT_MS,
+          retry: false,
+        }),
+      );
+      return response.data;
+    } catch (error) {
+      this.logger.error(
+        'Failed to fetch model health from data-processing: %s',
+        error instanceof Error ? error.message : String(error),
+      );
+      return {
+        checked_at: new Date().toISOString(),
+        models: {},
+      };
+    }
   }
 
   private async probe(
