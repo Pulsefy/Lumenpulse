@@ -5,13 +5,20 @@ mod events;
 mod storage;
 
 use errors::PricingAdapterError;
-use soroban_sdk::{contract, contractimpl, Address, Env};
-use storage::{DataKey, PriceState, LEDGER_BUMP, LEDGER_THRESHOLD};
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
+use storage::{DataKey, PriceState, SourceReport, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 pub const BASE_DECIMALS: u32 = 7;
 /// Default staleness window (seconds) used when no admin-configured value
 /// has been set via `set_staleness_window`.
 pub const DEFAULT_MAX_PRICE_AGE: u64 = 3600;
+/// Default maximum deviation (basis points) of a source from the
+/// cross-source median.
+pub const DEFAULT_MAX_DEVIATION_BPS: u32 = 500;
+/// Minimum number of fresh sources needed for an aggregated price.
+pub const MIN_SOURCES: u32 = 2;
+/// Maximum registered sources per asset (bounds aggregation cost).
+pub const MAX_SOURCES: u32 = 7;
 
 #[contract]
 pub struct PricingAdapterContract;
@@ -172,6 +179,206 @@ impl PricingAdapterContract {
             .persistent()
             .get(&DataKey::AssetPriceTimestamp(asset))
             .ok_or(PricingAdapterError::PriceNotFound)
+    }
+
+    // ── Multi-source pricing with a cross-source deviation bound ─────────
+
+    /// Register a price source for an asset (admin only).
+    pub fn add_source(
+        env: Env,
+        admin: Address,
+        asset: Address,
+        source: Address,
+    ) -> Result<(), PricingAdapterError> {
+        Self::require_admin(&env, &admin)?;
+        let mut sources = Self::sources_of(&env, &asset);
+        if sources.contains(&source) {
+            return Err(PricingAdapterError::SourceAlreadyRegistered);
+        }
+        if sources.len() >= MAX_SOURCES {
+            return Err(PricingAdapterError::TooManySources);
+        }
+        sources.push_back(source);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Sources(asset.clone()), &sources);
+        Self::bump_sources_ttl(&env, &asset);
+        Ok(())
+    }
+
+    /// Remove a registered price source and its last report (admin only).
+    pub fn remove_source(
+        env: Env,
+        admin: Address,
+        asset: Address,
+        source: Address,
+    ) -> Result<(), PricingAdapterError> {
+        Self::require_admin(&env, &admin)?;
+        let mut sources = Self::sources_of(&env, &asset);
+        let idx = sources
+            .first_index_of(&source)
+            .ok_or(PricingAdapterError::SourceNotRegistered)?;
+        sources.remove(idx);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Sources(asset.clone()), &sources);
+        env.storage()
+            .persistent()
+            .remove(&DataKey::SourceReport(asset.clone(), source));
+        Self::bump_sources_ttl(&env, &asset);
+        Ok(())
+    }
+
+    /// The sources currently registered for an asset.
+    pub fn get_sources(env: Env, asset: Address) -> Vec<Address> {
+        Self::sources_of(&env, &asset)
+    }
+
+    /// A registered source reports its latest price for an asset (scaled by
+    /// 10^7). Stamped with the current ledger timestamp.
+    pub fn report_price(
+        env: Env,
+        source: Address,
+        asset: Address,
+        price: i128,
+    ) -> Result<(), PricingAdapterError> {
+        source.require_auth();
+        if !Self::sources_of(&env, &asset).contains(&source) {
+            return Err(PricingAdapterError::SourceNotRegistered);
+        }
+        if price <= 0 {
+            return Err(PricingAdapterError::InvalidPrice);
+        }
+        env.storage().persistent().set(
+            &DataKey::SourceReport(asset.clone(), source),
+            &SourceReport {
+                price,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+        Self::bump_sources_ttl(&env, &asset);
+        Ok(())
+    }
+
+    /// Set the maximum allowed deviation, in basis points, between a source
+    /// and the cross-source median (admin only). Must be in `1..=10_000`.
+    pub fn set_max_deviation_bps(
+        env: Env,
+        admin: Address,
+        bps: u32,
+    ) -> Result<(), PricingAdapterError> {
+        Self::require_admin(&env, &admin)?;
+        if bps == 0 || bps > 10_000 {
+            return Err(PricingAdapterError::InvalidDeviationBound);
+        }
+        env.storage().instance().set(&DataKey::MaxDeviationBps, &bps);
+        Ok(())
+    }
+
+    /// The configured deviation bound in basis points (defaults to
+    /// `DEFAULT_MAX_DEVIATION_BPS`).
+    pub fn get_max_deviation_bps(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MaxDeviationBps)
+            .unwrap_or(DEFAULT_MAX_DEVIATION_BPS)
+    }
+
+    /// Manipulation-resistant price for an asset.
+    ///
+    /// Considers only fresh source reports. Requires at least `MIN_SOURCES`
+    /// of them (`InsufficientSources` otherwise). The median is the
+    /// reference; reports within the deviation bound of it are inliers. A
+    /// strict majority of fresh sources must be inliers, otherwise the call
+    /// fails closed with `SourcesDisagree`. The result is the median of the
+    /// inliers, so a single compromised source cannot move it beyond the
+    /// bound.
+    pub fn get_aggregated_price(env: Env, asset: Address) -> Result<i128, PricingAdapterError> {
+        let max_age = Self::get_staleness_window(env.clone());
+        let now = env.ledger().timestamp();
+        let mut prices: Vec<i128> = Vec::new(&env);
+        for source in Self::sources_of(&env, &asset).iter() {
+            let report: Option<SourceReport> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::SourceReport(asset.clone(), source));
+            if let Some(r) = report {
+                if now.saturating_sub(r.timestamp) <= max_age {
+                    prices.push_back(r.price);
+                }
+            }
+        }
+
+        let n = prices.len();
+        if n < MIN_SOURCES {
+            return Err(PricingAdapterError::InsufficientSources);
+        }
+
+        let median = Self::median(&env, &prices);
+        let bps = Self::get_max_deviation_bps(env.clone()) as i128;
+        let mut inliers: Vec<i128> = Vec::new(&env);
+        for p in prices.iter() {
+            let diff = if p > median { p - median } else { median - p };
+            let within = match (diff.checked_mul(10_000), median.checked_mul(bps)) {
+                (Some(lhs), Some(rhs)) => lhs <= rhs,
+                _ => false,
+            };
+            if within {
+                inliers.push_back(p);
+            }
+        }
+
+        if inliers.len() * 2 <= n {
+            return Err(PricingAdapterError::SourcesDisagree);
+        }
+        Ok(Self::median(&env, &inliers))
+    }
+
+    fn sources_of(env: &Env, asset: &Address) -> Vec<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Sources(asset.clone()))
+            .unwrap_or(Vec::new(env))
+    }
+
+    fn bump_sources_ttl(env: &Env, asset: &Address) {
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        let key = DataKey::Sources(asset.clone());
+        if env.storage().persistent().has(&key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        for source in Self::sources_of(env, asset).iter() {
+            let rkey = DataKey::SourceReport(asset.clone(), source);
+            if env.storage().persistent().has(&rkey) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&rkey, LEDGER_THRESHOLD, LEDGER_BUMP);
+            }
+        }
+    }
+
+    /// Median of a non-empty list (mean of the two middle values when even).
+    fn median(env: &Env, values: &Vec<i128>) -> i128 {
+        let mut sorted: Vec<i128> = Vec::new(env);
+        for v in values.iter() {
+            let mut i = sorted.len();
+            while i > 0 && sorted.get_unchecked(i - 1) > v {
+                i -= 1;
+            }
+            sorted.insert(i, v);
+        }
+        let k = sorted.len();
+        if k % 2 == 1 {
+            sorted.get_unchecked(k / 2)
+        } else {
+            let a = sorted.get_unchecked(k / 2 - 1);
+            let b = sorted.get_unchecked(k / 2);
+            a + (b - a) / 2
+        }
     }
 
     fn price_state(env: &Env, asset: &Address) -> PriceState {

@@ -313,3 +313,236 @@ fn test_ttl_extended_across_read_and_write() {
     assert_eq!(client.get_price(&asset), 20_000_000i128);
     assert_eq!(client.get_staleness_window(), DEFAULT_MAX_PRICE_AGE);
 }
+
+// ── Manipulated-source resistance (cross-source deviation bound) ─────────
+
+const PRICE: i128 = 10_000_000; // $1.00
+
+fn add_sources<'a>(
+    env: &Env,
+    client: &PricingAdapterContractClient<'a>,
+    admin: &Address,
+    asset: &Address,
+    n: u32,
+) -> soroban_sdk::Vec<Address> {
+    let mut out = soroban_sdk::Vec::new(env);
+    for _ in 0..n {
+        let s = Address::generate(env);
+        client.add_source(admin, asset, &s);
+        out.push_back(s);
+    }
+    out
+}
+
+#[test]
+fn test_aggregated_price_agreeing_sources() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, asset) = setup(&env);
+    env.ledger().set_timestamp(1_000);
+    let s = add_sources(&env, &client, &admin, &asset, 3);
+
+    client.report_price(&s.get(0).unwrap(), &asset, &PRICE);
+    client.report_price(&s.get(1).unwrap(), &asset, &(PRICE + 10_000));
+    client.report_price(&s.get(2).unwrap(), &asset, &(PRICE - 10_000));
+
+    assert_eq!(client.get_aggregated_price(&asset), PRICE);
+}
+
+#[test]
+fn test_single_compromised_source_extreme_move_within_freshness_cannot_move_price() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, asset) = setup(&env);
+    env.ledger().set_timestamp(1_000);
+    let s = add_sources(&env, &client, &admin, &asset, 3);
+
+    client.report_price(&s.get(0).unwrap(), &asset, &PRICE);
+    client.report_price(&s.get(1).unwrap(), &asset, &PRICE);
+    // Compromised source: 100x, perfectly fresh.
+    client.report_price(&s.get(2).unwrap(), &asset, &(PRICE * 100));
+
+    assert_eq!(client.get_aggregated_price(&asset), PRICE);
+
+    // Same for an extreme downward move.
+    client.report_price(&s.get(2).unwrap(), &asset, &1i128);
+    assert_eq!(client.get_aggregated_price(&asset), PRICE);
+}
+
+#[test]
+fn test_compromised_source_just_inside_bound_moves_price_at_most_bound() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, asset) = setup(&env);
+    env.ledger().set_timestamp(1_000);
+    let s = add_sources(&env, &client, &admin, &asset, 3);
+
+    let bound = client.get_max_deviation_bps() as i128;
+    assert_eq!(bound, DEFAULT_MAX_DEVIATION_BPS as i128);
+    let max_in = PRICE + PRICE * bound / 10_000;
+
+    client.report_price(&s.get(0).unwrap(), &asset, &PRICE);
+    client.report_price(&s.get(1).unwrap(), &asset, &PRICE);
+    client.report_price(&s.get(2).unwrap(), &asset, &max_in);
+
+    let got = client.get_aggregated_price(&asset);
+    assert!(got >= PRICE && got <= max_in);
+
+    // One unit past the bound is excluded entirely.
+    client.report_price(&s.get(2).unwrap(), &asset, &(max_in + 1_000));
+    assert_eq!(client.get_aggregated_price(&asset), PRICE);
+}
+
+#[test]
+fn test_all_sources_disagree_fails_closed() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, asset) = setup(&env);
+    env.ledger().set_timestamp(1_000);
+    let s = add_sources(&env, &client, &admin, &asset, 3);
+
+    client.report_price(&s.get(0).unwrap(), &asset, &PRICE);
+    client.report_price(&s.get(1).unwrap(), &asset, &(PRICE * 2));
+    client.report_price(&s.get(2).unwrap(), &asset, &(PRICE * 4));
+
+    assert_eq!(
+        client.try_get_aggregated_price(&asset),
+        Err(Ok(PricingAdapterError::SourcesDisagree))
+    );
+}
+
+#[test]
+fn test_two_diverging_sources_fail_closed() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, asset) = setup(&env);
+    env.ledger().set_timestamp(1_000);
+    let s = add_sources(&env, &client, &admin, &asset, 2);
+
+    client.report_price(&s.get(0).unwrap(), &asset, &PRICE);
+    client.report_price(&s.get(1).unwrap(), &asset, &(PRICE * 10));
+
+    assert_eq!(
+        client.try_get_aggregated_price(&asset),
+        Err(Ok(PricingAdapterError::SourcesDisagree))
+    );
+}
+
+#[test]
+fn test_single_fresh_source_is_insufficient() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, asset) = setup(&env);
+    env.ledger().set_timestamp(1_000);
+    let s = add_sources(&env, &client, &admin, &asset, 3);
+
+    client.report_price(&s.get(0).unwrap(), &asset, &(PRICE * 100));
+
+    assert_eq!(
+        client.try_get_aggregated_price(&asset),
+        Err(Ok(PricingAdapterError::InsufficientSources))
+    );
+}
+
+#[test]
+fn test_stale_sources_are_ignored_in_aggregation() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, asset) = setup(&env);
+    env.ledger().set_timestamp(1_000);
+    let s = add_sources(&env, &client, &admin, &asset, 3);
+
+    client.report_price(&s.get(0).unwrap(), &asset, &PRICE);
+    env.ledger().set_timestamp(1_000 + DEFAULT_MAX_PRICE_AGE + 1);
+    client.report_price(&s.get(1).unwrap(), &asset, &PRICE);
+    client.report_price(&s.get(2).unwrap(), &asset, &PRICE);
+    assert_eq!(client.get_aggregated_price(&asset), PRICE);
+
+    // Only one source remains fresh.
+    env.ledger()
+        .set_timestamp(1_000 + 2 * DEFAULT_MAX_PRICE_AGE + 2);
+    client.report_price(&s.get(0).unwrap(), &asset, &PRICE);
+    assert_eq!(
+        client.try_get_aggregated_price(&asset),
+        Err(Ok(PricingAdapterError::InsufficientSources))
+    );
+}
+
+#[test]
+fn test_custom_deviation_bound_is_enforced() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, asset) = setup(&env);
+    env.ledger().set_timestamp(1_000);
+    let s = add_sources(&env, &client, &admin, &asset, 3);
+
+    client.set_max_deviation_bps(&admin, &100u32); // 1%
+    assert_eq!(client.get_max_deviation_bps(), 100u32);
+
+    client.report_price(&s.get(0).unwrap(), &asset, &PRICE);
+    client.report_price(&s.get(1).unwrap(), &asset, &PRICE);
+    // +2% is inside the default 5% bound but outside the 1% bound.
+    client.report_price(&s.get(2).unwrap(), &asset, &(PRICE + PRICE / 50));
+    assert_eq!(client.get_aggregated_price(&asset), PRICE);
+
+    assert_eq!(
+        client.try_set_max_deviation_bps(&admin, &0u32),
+        Err(Ok(PricingAdapterError::InvalidDeviationBound))
+    );
+    assert_eq!(
+        client.try_set_max_deviation_bps(&admin, &10_001u32),
+        Err(Ok(PricingAdapterError::InvalidDeviationBound))
+    );
+}
+
+#[test]
+fn test_source_management_and_authorization() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, asset) = setup(&env);
+    let intruder = Address::generate(&env);
+    let unregistered = Address::generate(&env);
+    let s = add_sources(&env, &client, &admin, &asset, 1);
+    let src = s.get(0).unwrap();
+
+    assert_eq!(
+        client.try_add_source(&intruder, &asset, &unregistered),
+        Err(Ok(PricingAdapterError::Unauthorized))
+    );
+    assert_eq!(
+        client.try_add_source(&admin, &asset, &src),
+        Err(Ok(PricingAdapterError::SourceAlreadyRegistered))
+    );
+    assert_eq!(
+        client.try_report_price(&unregistered, &asset, &PRICE),
+        Err(Ok(PricingAdapterError::SourceNotRegistered))
+    );
+    assert_eq!(
+        client.try_report_price(&src, &asset, &0i128),
+        Err(Ok(PricingAdapterError::InvalidPrice))
+    );
+    assert_eq!(
+        client.try_set_max_deviation_bps(&intruder, &100u32),
+        Err(Ok(PricingAdapterError::Unauthorized))
+    );
+
+    client.remove_source(&admin, &asset, &src);
+    assert_eq!(client.get_sources(&asset).len(), 0);
+    assert_eq!(
+        client.try_remove_source(&admin, &asset, &src),
+        Err(Ok(PricingAdapterError::SourceNotRegistered))
+    );
+}
+
+#[test]
+fn test_source_cap() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, asset) = setup(&env);
+    add_sources(&env, &client, &admin, &asset, MAX_SOURCES);
+    let extra = Address::generate(&env);
+    assert_eq!(
+        client.try_add_source(&admin, &asset, &extra),
+        Err(Ok(PricingAdapterError::TooManySources))
+    );
+}

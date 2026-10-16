@@ -17,6 +17,17 @@ pub enum DataKey {
     AssetPriceTimestamp(Address), // ledger timestamp the price was last set
     AssetPriceInvalidated(Address), // explicit admin-set invalidation flag
     MaxPriceAge,            // instance: u64 seconds; unset = DEFAULT_MAX_PRICE_AGE
+    MaxDeviationBps,        // instance: u32 bps; unset = DEFAULT_MAX_DEVIATION_BPS
+    Sources(Address),       // persistent: Vec<Address> of registered sources for an asset
+    SourceReport(Address, Address), // persistent: (asset, source) -> SourceReport
+}
+
+/// A single source's latest price report.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct SourceReport {
+    pub price: i128,
+    pub timestamp: u64,
 }
 
 /// Freshness classification for a stored price, exposed to consumers so
