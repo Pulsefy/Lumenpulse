@@ -420,12 +420,21 @@ def test_prediction_logging_scrubs_input_and_output():
             input_text="please ping alice@example.com about 192.168.0.10",
             output={"sentiment": 0.2, "echo": "alice@example.com"},
             latency_ms=12.0,
+            feature_values={"note": "account alice@example.com", "amount": 12.0},
+            subject_id="subject-alice@example.com",
         )
 
     assert recorded["raw_input"] == "please ping [EMAIL] about [IP_ADDRESS]"
     assert recorded["output"]["echo"] == "[EMAIL]"
     expected_hash = hashlib.sha256(recorded["raw_input"].encode("utf-8")).hexdigest()
     assert recorded["input_hash"] == expected_hash
+    assert recorded["feature_values"] == {
+        "note": "account [EMAIL]",
+        "amount": 12.0,
+    }
+    assert recorded["subject_hash"] == hashlib.sha256(
+        b"subject-[EMAIL]"
+    ).hexdigest()
 
 
 def test_prediction_logging_omits_raw_input_by_default():

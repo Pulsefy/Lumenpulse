@@ -46,6 +46,7 @@ from .models import (
     EntityLinkingReview,
     DailyOnchainKPISnapshot,
     PredictionLog,
+    PredictionAuditExport,
     SentimentLabel,
     AnalyticsJob,
 )
@@ -3371,6 +3372,8 @@ class PostgresService:
         output: Dict[str, Any],
         latency_ms: float,
         raw_input: Optional[str] = None,
+        subject_hash: Optional[str] = None,
+        feature_values: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
         Log a prediction request for auditability (Issue #1245).
@@ -3386,6 +3389,8 @@ class PostgresService:
                     output=output,
                     latency_ms=latency_ms,
                     raw_input=raw_input,
+                    subject_hash=subject_hash,
+                    feature_values=feature_values,
                 )
                 session.add(log_entry)
                 session.commit()
@@ -3393,6 +3398,101 @@ class PostgresService:
         except Exception as e:
             logger.error(f"Failed to log prediction (non-fatal): {e}")
             return False
+
+    def export_prediction_audit(
+        self,
+        *,
+        export_id: str,
+        request_id: str,
+        subject_hash: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        prediction_db_id: Optional[int] = None,
+        prediction_request_id: Optional[str] = None,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """Fetch prediction rows and durably audit the export in one transaction."""
+        try:
+            with self.get_session() as session:
+                stmt = select(PredictionLog)
+                filters: Dict[str, Any] = {}
+                if prediction_db_id is not None:
+                    stmt = stmt.where(PredictionLog.id == prediction_db_id)
+                    filters["prediction_db_id"] = prediction_db_id
+                if prediction_request_id is not None:
+                    stmt = stmt.where(PredictionLog.request_id == prediction_request_id)
+                    filters["prediction_request_id"] = prediction_request_id
+                if subject_hash is not None:
+                    stmt = stmt.where(PredictionLog.subject_hash == subject_hash)
+                    filters["subject_hash"] = subject_hash
+                if start_time is not None:
+                    stmt = stmt.where(PredictionLog.created_at >= start_time)
+                    filters["start_time"] = start_time.isoformat()
+                if end_time is not None:
+                    stmt = stmt.where(PredictionLog.created_at <= end_time)
+                    filters["end_time"] = end_time.isoformat()
+                if offset:
+                    filters["offset"] = offset
+
+                logs = session.execute(
+                    stmt.order_by(
+                        PredictionLog.created_at.desc(), PredictionLog.id.desc()
+                    ).limit(limit).offset(offset)
+                ).scalars().all()
+                exported_rows = [
+                    {
+                        "prediction_id": str(log.id),
+                        "request_id": log.request_id,
+                        "model_type": log.model_type,
+                        "model_version": log.model_version,
+                        "input_hash": log.input_hash,
+                        "subject_hash": log.subject_hash,
+                        "feature_values": log.feature_values,
+                        "output": log.output,
+                        "created_at": (
+                            log.created_at.isoformat() if log.created_at else None
+                        ),
+                    }
+                    for log in logs
+                ]
+                session.add(
+                    PredictionAuditExport(
+                        export_id=export_id,
+                        request_id=request_id,
+                        filters=filters,
+                        exported_count=len(logs),
+                    )
+                )
+                session.commit()
+                return exported_rows
+        except Exception:
+            logger.exception("Failed to export and audit prediction records")
+            raise
+
+    def query_prediction_audit_exports(
+        self, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """List recent export audit records for audit verification."""
+        with self.get_session() as session:
+            rows = session.execute(
+                select(PredictionAuditExport)
+                .order_by(
+                    PredictionAuditExport.created_at.desc(),
+                    PredictionAuditExport.export_id.desc(),
+                )
+                .limit(limit)
+            ).scalars().all()
+            return [
+                {
+                    "export_id": row.export_id,
+                    "request_id": row.request_id,
+                    "filters": row.filters,
+                    "exported_count": row.exported_count,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                }
+                for row in rows
+            ]
 
     def cleanup_prediction_logs(self, retention_days: int = 30) -> int:
         """

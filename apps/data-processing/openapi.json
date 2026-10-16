@@ -2553,6 +2553,182 @@
         }
       }
     },
+    "/model/prediction-audits": {
+      "get": {
+        "summary": "Export Prediction Audits",
+        "description": "Export prediction audit records by subject or inclusive time range.",
+        "operationId": "export_prediction_audits_model_prediction_audits_get",
+        "parameters": [
+          {
+            "name": "subject_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {"type": "string"},
+                {"type": "null"}
+              ],
+              "description": "Subject identifier; not persisted in raw form",
+              "title": "Subject Id"
+            },
+            "description": "Subject identifier; not persisted in raw form"
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {"type": "string", "format": "date-time"},
+                {"type": "null"}
+              ],
+              "description": "Inclusive ISO-8601 range start",
+              "title": "Start Time"
+            },
+            "description": "Inclusive ISO-8601 range start"
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {"type": "string", "format": "date-time"},
+                {"type": "null"}
+              ],
+              "description": "Inclusive ISO-8601 range end",
+              "title": "End Time"
+            },
+            "description": "Inclusive ISO-8601 range end"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Export Prediction Audits Model Prediction Audits Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/HTTPValidationError"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/prediction-audits/{prediction_id}": {
+      "get": {
+        "summary": "Export Prediction Audit",
+        "description": "Export one prediction audit record by database ID or request ID.",
+        "operationId": "export_prediction_audit_model_prediction_audits__prediction_id__get",
+        "parameters": [
+          {
+            "name": "prediction_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "title": "Prediction Id"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Export Prediction Audit Model Prediction Audits  Prediction Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/HTTPValidationError"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/prediction-audit-exports": {
+      "get": {
+        "summary": "List Prediction Audit Exports",
+        "description": "Retrieve recent audit events that prove prediction exports were recorded.",
+        "operationId": "list_prediction_audit_exports_model_prediction_audit_exports_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Prediction Audit Exports Model Prediction Audit Exports Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/HTTPValidationError"}
+              }
+            }
+          }
+        }
+      }
+    },
     "/analytics/forecast": {
       "get": {
         "summary": "Get Forecast",

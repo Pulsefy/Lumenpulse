@@ -39,6 +39,8 @@ class PredictionLog(Base):
     output = Column(JSON, nullable=False)
     latency_ms = Column(Float, nullable=False)
     raw_input = Column(Text, nullable=True)  # Populated only if config allows
+    subject_hash = Column(String(64), nullable=True, index=True)
+    feature_values = Column(JSON, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
@@ -51,6 +53,20 @@ class PredictionLog(Base):
 
     def __repr__(self):
         return f"<PredictionLog(request_id={self.request_id}, model={self.model_type}:{self.model_version})>"
+
+
+class PredictionAuditExport(Base):
+    """Audit record for every prediction audit export request."""
+
+    __tablename__ = "prediction_audit_exports"
+
+    export_id = Column(String(36), primary_key=True)
+    request_id = Column(String(255), nullable=False, index=True)
+    filters = Column(JSON, nullable=False)
+    exported_count = Column(Integer, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
 
 
 class Article(Base):
