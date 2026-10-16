@@ -1,11 +1,11 @@
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { AxiosError } from 'axios';
-import { NEVER, Subject, firstValueFrom, of, throwError } from 'rxjs';
-import { Registry } from 'prom-client';
+import { NEVER, Subject, firstValueFrom, of, throwError } from 'rxjs';import { Registry } from 'prom-client';
 import { MetricsService } from '../metrics/metrics.service';
 import { RequestContextService } from '../common/services/request-context.service';
 import {
+  BiasAssessmentResponse,
   DataProcessingClient,
   DataProcessingUnavailableError,
 } from './data-processing.client';
@@ -20,7 +20,7 @@ describe('DataProcessingClient', () => {
   function create(overrides: Record<string, string | number> = {}) {
     registry = new Registry();
     const settings: Record<string, string | number> = {
-      PYTHON_API_URL: 'http://python:8000/',
+      PYTHON_API_URL: 'http://python:000/',
       PYTHON_API_KEY: 'secret',
       PYTHON_CLIENT_TIMEOUT_MS: 20,
       PYTHON_CLIENT_MAX_RETRIES: 2,
@@ -47,7 +47,7 @@ describe('DataProcessingClient', () => {
     );
     expect(http.request).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: 'http://python:8000/analyze',
+        url: 'http://python:000/analyze',
         method: 'POST',
         timeout: 20,
         maxRedirects: 0,
@@ -69,7 +69,7 @@ describe('DataProcessingClient', () => {
     ).rejects.toMatchObject({ reason: 'timeout' });
     await jest.advanceTimersByTimeAsync(20);
     await pending;
-    expect(http.request.mock.calls[0][0].signal.aborted).toBe(true);
+    expect(http.request.mockCalls[0][0].signal.aborted).toBe(true);
   });
 
   it('retries transient failures with a bounded budget and exports outcomes', async () => {
@@ -187,6 +187,45 @@ describe('DataProcessingClient', () => {
     await pending;
     expect(http.request).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['/bias/assess'])(
+    'runs the bias assessment as part of retraining via POST %s',
+    async (path) => {
+      const assessment: BiasAssessmentResponse = {
+        report: {
+          generatedAt: '2024-01-01T00:00:00.000Z',
+          modelVersion: 'v1',
+          totalSamples: 100,
+          segments: [],
+          disparities: [],
+          materialDisparityCount: 0,
+          mitigation: {
+            applied: true,
+            strategy: 'reweighting',
+            details: 'Balanced segment weights',
+          },
+          acceptedDisparities: [],
+          modelCard: {
+            summary: 'No material disparities',
+            findings: [],
+          },
+        },
+        modelCardUpdated: true,
+        regeneratedAtRetraining: true,
+      };
+      http.request.mockReturnValueOnce(of({ data: assessment }));
+      await expect(
+        firstValueFrom(client.assess('v1')),
+      ).resolves.toEqual({ data: assessment });
+      expect(http.request).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: `http://python:000${path}`,
+          method: 'POST',
+          data: { modelVersion: 'v1', regenerateAtRetraining: true },
+        }),
+      );
+    },
+  );
 
   it.each(['https://example.com', '//example.com', '/\\example.com'])(
     'rejects credential forwarding to %s',
