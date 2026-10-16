@@ -15,7 +15,8 @@ import type { Response } from 'express';
 import { ContractHealthService } from './contract-health.service';
 import { DeploymentSmokeService } from './deployment-smoke.service';
 import { HealthService } from './health.service';
-import { ModelHealthReport } from './health.service';
+import type { ModelHealthReport } from './health.service';
+import { ModelHealthResponseDto } from './dto/model-health-response.dto';
 import { ShutdownService } from './shutdown.service';
 
 @ApiTags('health')
@@ -166,6 +167,7 @@ export class HealthController {
   })
   @ApiOkResponse({
     description: 'Per-model SLO health report.',
+    type: ModelHealthResponseDto,
   })
   @ApiServiceUnavailableResponse({
     description: 'Returns when the data-processing service is unreachable.',
