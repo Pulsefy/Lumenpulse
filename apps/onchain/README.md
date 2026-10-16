@@ -84,3 +84,42 @@ cargo install --locked soroban-cli
 - `crowdfund_vault` now stores an explicit schema version during initialization and exposes `migrate` for legacy instances upgraded from older WASM without a version marker.
 - New projects receive a rolling milestone expiry deadline. If the deadline passes without progress, the project moves into an expired state and contributors can reclaim funds through a timed clawback window.
 - Bulk contributor refunds remain available for canceled or expired projects so funds do not stay trapped after stalled project lifecycles.
+
+## Execution Cost Benchmarks
+
+Soroban resource metering charges for CPU instructions and ledger read/write entry counts. To ensure entry points do not silently become more expensive over time, an automated execution cost benchmark records baseline costs and flags regressions in CI.
+
+### Running Benchmarks
+
+Run the benchmark suite across all public entry points in release mode:
+
+```bash
+cargo run --manifest-path contracts/benchmark/Cargo.toml --release -- --output execution-cost-current.json
+```
+
+To compare against the committed baseline and evaluate regression thresholds:
+
+```bash
+node ../../scripts/check-execution-cost.mjs
+```
+
+### Configurable Regression Thresholds
+
+Regression warning thresholds are configured in `apps/onchain/execution-cost-thresholds.json`:
+- `cpu_instruction_warning_threshold_pct`: Maximum allowable CPU instruction increase before warning (default `10.0%`).
+- `ledger_read_warning_threshold`: Maximum allowable ledger read increase (default `+1`).
+- `ledger_write_warning_threshold`: Maximum allowable ledger write increase (default `+1`).
+- `contract_overrides`: Per-contract threshold overrides.
+
+### Top 5 Most Expensive Entry Points
+
+The current baseline (`execution-cost-baseline.json`) identifies the following 5 most resource-intensive entry points:
+
+| Rank | Contract | Entry Point | CPU Instructions | Ledger Reads | Ledger Writes |
+| ---: | :--- | :--- | ---: | ---: | ---: |
+| 1 | `matching_pool` | `record_contribution` | 371,288 | 10 | 5 |
+| 2 | `treasury` | `allocate_budget` | 367,064 | 10 | 7 |
+| 3 | `matching_pool` | `approve_project` | 311,069 | 10 | 6 |
+| 4 | `treasury` | `cancel_stream` | 287,844 | 9 | 6 |
+| 5 | `vesting_wallet` | `create_vesting` | 276,912 | 9 | 5 |
+

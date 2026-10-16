@@ -1,0 +1,755 @@
+{
+  "version": 1,
+  "description": "Baseline execution costs (CPU instructions, ledger reads, ledger writes) for Soroban contract public entry points",
+  "metrics": {
+    "cpu_instructions": "Modelled CPU instructions consumed during entry point execution",
+    "ledger_reads": "Number of ledger entry reads (memory + disk)",
+    "ledger_writes": "Number of ledger entry writes"
+  },
+  "benchmarks": {
+    "contributor_registry::get_contributor": {
+      "contract": "contributor_registry",
+      "entry_point": "get_contributor",
+      "cpu_instructions": 55907,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Read contributor profile"
+    },
+    "contributor_registry::get_multisig_config": {
+      "contract": "contributor_registry",
+      "entry_point": "get_multisig_config",
+      "cpu_instructions": 61598,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Query multisig configuration"
+    },
+    "contributor_registry::get_reputation": {
+      "contract": "contributor_registry",
+      "entry_point": "get_reputation",
+      "cpu_instructions": 50788,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Query reputation score"
+    },
+    "contributor_registry::initialize": {
+      "contract": "contributor_registry",
+      "entry_point": "initialize",
+      "cpu_instructions": 70278,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Initialize contributor registry with multisig"
+    },
+    "contributor_registry::is_paused": {
+      "contract": "contributor_registry",
+      "entry_point": "is_paused",
+      "cpu_instructions": 44499,
+      "ledger_reads": 1,
+      "ledger_writes": 0,
+      "description": "Check pause state"
+    },
+    "contributor_registry::register_contributor": {
+      "contract": "contributor_registry",
+      "entry_point": "register_contributor",
+      "cpu_instructions": 142057,
+      "ledger_reads": 6,
+      "ledger_writes": 3,
+      "description": "Register new contributor"
+    },
+    "crowdfund_vault::get_admin": {
+      "contract": "crowdfund_vault",
+      "entry_point": "get_admin",
+      "cpu_instructions": 46011,
+      "ledger_reads": 1,
+      "ledger_writes": 0,
+      "description": "Query crowdfunding vault admin"
+    },
+    "crowdfund_vault::get_reputation": {
+      "contract": "crowdfund_vault",
+      "entry_point": "get_reputation",
+      "cpu_instructions": 59988,
+      "ledger_reads": 3,
+      "ledger_writes": 0,
+      "description": "Query contributor reputation"
+    },
+    "crowdfund_vault::get_storage_version": {
+      "contract": "crowdfund_vault",
+      "entry_point": "get_storage_version",
+      "cpu_instructions": 43065,
+      "ledger_reads": 1,
+      "ledger_writes": 0,
+      "description": "Query contract schema version"
+    },
+    "crowdfund_vault::initialize": {
+      "contract": "crowdfund_vault",
+      "entry_point": "initialize",
+      "cpu_instructions": 70558,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Initialize crowdfunding vault"
+    },
+    "crowdfund_vault::pause": {
+      "contract": "crowdfund_vault",
+      "entry_point": "pause",
+      "cpu_instructions": 103234,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Pause vault operations"
+    },
+    "crowdfund_vault::register_contributor": {
+      "contract": "crowdfund_vault",
+      "entry_point": "register_contributor",
+      "cpu_instructions": 107022,
+      "ledger_reads": 5,
+      "ledger_writes": 3,
+      "description": "Register project contributor"
+    },
+    "crowdfund_vault::unpause": {
+      "contract": "crowdfund_vault",
+      "entry_point": "unpause",
+      "cpu_instructions": 105117,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Unpause vault operations"
+    },
+    "feature_flags::get_flag": {
+      "contract": "feature_flags",
+      "entry_point": "get_flag",
+      "cpu_instructions": 39512,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Retrieve feature flag"
+    },
+    "feature_flags::initialize": {
+      "contract": "feature_flags",
+      "entry_point": "initialize",
+      "cpu_instructions": 46759,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Initialize contract with admin"
+    },
+    "feature_flags::is_enabled": {
+      "contract": "feature_flags",
+      "entry_point": "is_enabled",
+      "cpu_instructions": 40059,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Check if feature flag is active"
+    },
+    "feature_flags::list_flags": {
+      "contract": "feature_flags",
+      "entry_point": "list_flags",
+      "cpu_instructions": 59549,
+      "ledger_reads": 3,
+      "ledger_writes": 0,
+      "description": "List all configured flags"
+    },
+    "feature_flags::pause": {
+      "contract": "feature_flags",
+      "entry_point": "pause",
+      "cpu_instructions": 74417,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Pause contract operations"
+    },
+    "feature_flags::set_admin": {
+      "contract": "feature_flags",
+      "entry_point": "set_admin",
+      "cpu_instructions": 72435,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Rotate contract admin"
+    },
+    "feature_flags::set_flag": {
+      "contract": "feature_flags",
+      "entry_point": "set_flag",
+      "cpu_instructions": 101424,
+      "ledger_reads": 5,
+      "ledger_writes": 3,
+      "description": "Store feature flag"
+    },
+    "feature_flags::unpause": {
+      "contract": "feature_flags",
+      "entry_point": "unpause",
+      "cpu_instructions": 73473,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Unpause contract operations"
+    },
+    "lumen_token::allowance": {
+      "contract": "lumen_token",
+      "entry_point": "allowance",
+      "cpu_instructions": 39449,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Query allowance balance"
+    },
+    "lumen_token::approve": {
+      "contract": "lumen_token",
+      "entry_point": "approve",
+      "cpu_instructions": 84032,
+      "ledger_reads": 5,
+      "ledger_writes": 2,
+      "description": "Set allowance for spender"
+    },
+    "lumen_token::balance": {
+      "contract": "lumen_token",
+      "entry_point": "balance",
+      "cpu_instructions": 44231,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Query token balance"
+    },
+    "lumen_token::burn": {
+      "contract": "lumen_token",
+      "entry_point": "burn",
+      "cpu_instructions": 105299,
+      "ledger_reads": 5,
+      "ledger_writes": 2,
+      "description": "Burn tokens"
+    },
+    "lumen_token::freeze": {
+      "contract": "lumen_token",
+      "entry_point": "freeze",
+      "cpu_instructions": 88847,
+      "ledger_reads": 5,
+      "ledger_writes": 2,
+      "description": "Freeze account transfers"
+    },
+    "lumen_token::initialize": {
+      "contract": "lumen_token",
+      "entry_point": "initialize",
+      "cpu_instructions": 42545,
+      "ledger_reads": 2,
+      "ledger_writes": 1,
+      "description": "Initialize token with metadata"
+    },
+    "lumen_token::mint": {
+      "contract": "lumen_token",
+      "entry_point": "mint",
+      "cpu_instructions": 136592,
+      "ledger_reads": 6,
+      "ledger_writes": 3,
+      "description": "Mint tokens to account"
+    },
+    "lumen_token::transfer": {
+      "contract": "lumen_token",
+      "entry_point": "transfer",
+      "cpu_instructions": 181257,
+      "ledger_reads": 8,
+      "ledger_writes": 4,
+      "description": "Direct token transfer"
+    },
+    "lumen_token::transfer_from": {
+      "contract": "lumen_token",
+      "entry_point": "transfer_from",
+      "cpu_instructions": 249897,
+      "ledger_reads": 10,
+      "ledger_writes": 5,
+      "description": "Transfer from allowance"
+    },
+    "lumen_token::unfreeze": {
+      "contract": "lumen_token",
+      "entry_point": "unfreeze",
+      "cpu_instructions": 84948,
+      "ledger_reads": 5,
+      "ledger_writes": 2,
+      "description": "Unfreeze account transfers"
+    },
+    "lumenpulse_curation::get_deposit_amount": {
+      "contract": "lumenpulse_curation",
+      "entry_point": "get_deposit_amount",
+      "cpu_instructions": 21764,
+      "ledger_reads": 1,
+      "ledger_writes": 0,
+      "description": "Query required curation proposal stake"
+    },
+    "lumenpulse_curation::get_verify_threshold_bps": {
+      "contract": "lumenpulse_curation",
+      "entry_point": "get_verify_threshold_bps",
+      "cpu_instructions": 21766,
+      "ledger_reads": 1,
+      "ledger_writes": 0,
+      "description": "Query verification consensus threshold"
+    },
+    "lumenpulse_curation::get_voting_window_ledgers": {
+      "contract": "lumenpulse_curation",
+      "entry_point": "get_voting_window_ledgers",
+      "cpu_instructions": 21766,
+      "ledger_reads": 1,
+      "ledger_writes": 0,
+      "description": "Query voting duration"
+    },
+    "lumenpulse_curation::initialize": {
+      "contract": "lumenpulse_curation",
+      "entry_point": "initialize",
+      "cpu_instructions": 78344,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Initialize curation governance contract"
+    },
+    "lumenpulse_curation::is_verified": {
+      "contract": "lumenpulse_curation",
+      "entry_point": "is_verified",
+      "cpu_instructions": 27573,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Check project curation status"
+    },
+    "matching_pool::approve_project": {
+      "contract": "matching_pool",
+      "entry_point": "approve_project",
+      "cpu_instructions": 311069,
+      "ledger_reads": 10,
+      "ledger_writes": 6,
+      "description": "Approve project for matching round"
+    },
+    "matching_pool::create_round": {
+      "contract": "matching_pool",
+      "entry_point": "create_round",
+      "cpu_instructions": 271138,
+      "ledger_reads": 9,
+      "ledger_writes": 7,
+      "description": "Create quadratic funding round"
+    },
+    "matching_pool::get_pool_balance": {
+      "contract": "matching_pool",
+      "entry_point": "get_pool_balance",
+      "cpu_instructions": 70574,
+      "ledger_reads": 3,
+      "ledger_writes": 0,
+      "description": "Read matching pool remaining balance"
+    },
+    "matching_pool::get_round": {
+      "contract": "matching_pool",
+      "entry_point": "get_round",
+      "cpu_instructions": 61677,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Read matching round details"
+    },
+    "matching_pool::initialize": {
+      "contract": "matching_pool",
+      "entry_point": "initialize",
+      "cpu_instructions": 73456,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Initialize quadratic funding matching pool"
+    },
+    "matching_pool::preview_distribution": {
+      "contract": "matching_pool",
+      "entry_point": "preview_distribution",
+      "cpu_instructions": 95339,
+      "ledger_reads": 4,
+      "ledger_writes": 0,
+      "description": "Preview QF allocation amounts"
+    },
+    "matching_pool::record_contribution": {
+      "contract": "matching_pool",
+      "entry_point": "record_contribution",
+      "cpu_instructions": 371288,
+      "ledger_reads": 10,
+      "ledger_writes": 5,
+      "description": "Record round contribution and update QF sum"
+    },
+    "pricing_adapter::get_asset_decimals": {
+      "contract": "pricing_adapter",
+      "entry_point": "get_asset_decimals",
+      "cpu_instructions": 25560,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Query asset decimals"
+    },
+    "pricing_adapter::get_price": {
+      "contract": "pricing_adapter",
+      "entry_point": "get_price",
+      "cpu_instructions": 85222,
+      "ledger_reads": 6,
+      "ledger_writes": 0,
+      "description": "Read fresh asset price"
+    },
+    "pricing_adapter::get_price_timestamp": {
+      "contract": "pricing_adapter",
+      "entry_point": "get_price_timestamp",
+      "cpu_instructions": 25576,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Read price update timestamp"
+    },
+    "pricing_adapter::get_staleness_window": {
+      "contract": "pricing_adapter",
+      "entry_point": "get_staleness_window",
+      "cpu_instructions": 25101,
+      "ledger_reads": 1,
+      "ledger_writes": 0,
+      "description": "Read current staleness window"
+    },
+    "pricing_adapter::initialize": {
+      "contract": "pricing_adapter",
+      "entry_point": "initialize",
+      "cpu_instructions": 43852,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Initialize pricing adapter"
+    },
+    "pricing_adapter::invalidate_price": {
+      "contract": "pricing_adapter",
+      "entry_point": "invalidate_price",
+      "cpu_instructions": 102220,
+      "ledger_reads": 8,
+      "ledger_writes": 2,
+      "description": "Mark price feed invalid"
+    },
+    "pricing_adapter::normalize_amount": {
+      "contract": "pricing_adapter",
+      "entry_point": "normalize_amount",
+      "cpu_instructions": 96123,
+      "ledger_reads": 6,
+      "ledger_writes": 0,
+      "description": "Cross-currency amount normalization"
+    },
+    "pricing_adapter::set_price": {
+      "contract": "pricing_adapter",
+      "entry_point": "set_price",
+      "cpu_instructions": 129279,
+      "ledger_reads": 8,
+      "ledger_writes": 5,
+      "description": "Publish asset price update"
+    },
+    "pricing_adapter::set_staleness_window": {
+      "contract": "pricing_adapter",
+      "entry_point": "set_staleness_window",
+      "cpu_instructions": 65138,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Configure max acceptable price age"
+    },
+    "project_registry::archive_project": {
+      "contract": "project_registry",
+      "entry_point": "archive_project",
+      "cpu_instructions": 122943,
+      "ledger_reads": 5,
+      "ledger_writes": 2,
+      "description": "Archive inactive project"
+    },
+    "project_registry::cast_vote": {
+      "contract": "project_registry",
+      "entry_point": "cast_vote",
+      "cpu_instructions": 176680,
+      "ledger_reads": 7,
+      "ledger_writes": 4,
+      "description": "Cast community verification vote"
+    },
+    "project_registry::get_project": {
+      "contract": "project_registry",
+      "entry_point": "get_project",
+      "cpu_instructions": 54817,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Read project data"
+    },
+    "project_registry::has_voted": {
+      "contract": "project_registry",
+      "entry_point": "has_voted",
+      "cpu_instructions": 37247,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Check if voter has participated"
+    },
+    "project_registry::initialize": {
+      "contract": "project_registry",
+      "entry_point": "initialize",
+      "cpu_instructions": 56736,
+      "ledger_reads": 3,
+      "ledger_writes": 2,
+      "description": "Initialize project registry"
+    },
+    "project_registry::is_verified": {
+      "contract": "project_registry",
+      "entry_point": "is_verified",
+      "cpu_instructions": 47370,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Check verification status"
+    },
+    "project_registry::pause": {
+      "contract": "project_registry",
+      "entry_point": "pause",
+      "cpu_instructions": 94053,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Pause project registry"
+    },
+    "project_registry::register_project": {
+      "contract": "project_registry",
+      "entry_point": "register_project",
+      "cpu_instructions": 104085,
+      "ledger_reads": 5,
+      "ledger_writes": 2,
+      "description": "Register new crowdfunding project"
+    },
+    "project_registry::unpause": {
+      "contract": "project_registry",
+      "entry_point": "unpause",
+      "cpu_instructions": 94656,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Unpause project registry"
+    },
+    "protocol_registry::activate_module": {
+      "contract": "protocol_registry",
+      "entry_point": "activate_module",
+      "cpu_instructions": 92696,
+      "ledger_reads": 5,
+      "ledger_writes": 2,
+      "description": "Reactivate module"
+    },
+    "protocol_registry::deactivate_module": {
+      "contract": "protocol_registry",
+      "entry_point": "deactivate_module",
+      "cpu_instructions": 83275,
+      "ledger_reads": 5,
+      "ledger_writes": 2,
+      "description": "Deactivate module"
+    },
+    "protocol_registry::get_module": {
+      "contract": "protocol_registry",
+      "entry_point": "get_module",
+      "cpu_instructions": 34808,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Fetch module record"
+    },
+    "protocol_registry::initialize": {
+      "contract": "protocol_registry",
+      "entry_point": "initialize",
+      "cpu_instructions": 46759,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Initialize protocol registry"
+    },
+    "protocol_registry::is_active": {
+      "contract": "protocol_registry",
+      "entry_point": "is_active",
+      "cpu_instructions": 31903,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Check module active state"
+    },
+    "protocol_registry::pause": {
+      "contract": "protocol_registry",
+      "entry_point": "pause",
+      "cpu_instructions": 57266,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Pause protocol registry"
+    },
+    "protocol_registry::register_module": {
+      "contract": "protocol_registry",
+      "entry_point": "register_module",
+      "cpu_instructions": 77633,
+      "ledger_reads": 5,
+      "ledger_writes": 2,
+      "description": "Register protocol module"
+    },
+    "protocol_registry::resolve": {
+      "contract": "protocol_registry",
+      "entry_point": "resolve",
+      "cpu_instructions": 39636,
+      "ledger_reads": 3,
+      "ledger_writes": 0,
+      "description": "Resolve module address"
+    },
+    "protocol_registry::unpause": {
+      "contract": "protocol_registry",
+      "entry_point": "unpause",
+      "cpu_instructions": 58212,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Unpause protocol registry"
+    },
+    "protocol_registry::update_module": {
+      "contract": "protocol_registry",
+      "entry_point": "update_module",
+      "cpu_instructions": 96238,
+      "ledger_reads": 5,
+      "ledger_writes": 2,
+      "description": "Update registered module"
+    },
+    "treasury::allocate_budget": {
+      "contract": "treasury",
+      "entry_point": "allocate_budget",
+      "cpu_instructions": 367064,
+      "ledger_reads": 10,
+      "ledger_writes": 7,
+      "description": "Allocate linear vesting stream"
+    },
+    "treasury::cancel_stream": {
+      "contract": "treasury",
+      "entry_point": "cancel_stream",
+      "cpu_instructions": 287844,
+      "ledger_reads": 9,
+      "ledger_writes": 6,
+      "description": "Cancel active budget stream"
+    },
+    "treasury::get_admin": {
+      "contract": "treasury",
+      "entry_point": "get_admin",
+      "cpu_instructions": 28923,
+      "ledger_reads": 1,
+      "ledger_writes": 0,
+      "description": "Query treasury administrator"
+    },
+    "treasury::get_financials": {
+      "contract": "treasury",
+      "entry_point": "get_financials",
+      "cpu_instructions": 96101,
+      "ledger_reads": 3,
+      "ledger_writes": 0,
+      "description": "Get aggregate treasury financials"
+    },
+    "treasury::get_unlocked": {
+      "contract": "treasury",
+      "entry_point": "get_unlocked",
+      "cpu_instructions": 44341,
+      "ledger_reads": 3,
+      "ledger_writes": 0,
+      "description": "Compute unlocked streaming balance"
+    },
+    "treasury::initialize": {
+      "contract": "treasury",
+      "entry_point": "initialize",
+      "cpu_instructions": 38194,
+      "ledger_reads": 3,
+      "ledger_writes": 2,
+      "description": "Initialize protocol treasury"
+    },
+    "upgradable_contract::get_count": {
+      "contract": "upgradable_contract",
+      "entry_point": "get_count",
+      "cpu_instructions": 25813,
+      "ledger_reads": 1,
+      "ledger_writes": 0,
+      "description": "Read state counter"
+    },
+    "upgradable_contract::get_operation": {
+      "contract": "upgradable_contract",
+      "entry_point": "get_operation",
+      "cpu_instructions": 48085,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Read queued operation details"
+    },
+    "upgradable_contract::get_operation_status": {
+      "contract": "upgradable_contract",
+      "entry_point": "get_operation_status",
+      "cpu_instructions": 42911,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Check timelock operation status"
+    },
+    "upgradable_contract::increment": {
+      "contract": "upgradable_contract",
+      "entry_point": "increment",
+      "cpu_instructions": 36537,
+      "ledger_reads": 1,
+      "ledger_writes": 1,
+      "description": "State increment operation"
+    },
+    "upgradable_contract::init": {
+      "contract": "upgradable_contract",
+      "entry_point": "init",
+      "cpu_instructions": 43508,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Initialize upgradable timelocked contract"
+    },
+    "upgradable_contract::queue_operation": {
+      "contract": "upgradable_contract",
+      "entry_point": "queue_operation",
+      "cpu_instructions": 104746,
+      "ledger_reads": 5,
+      "ledger_writes": 3,
+      "description": "Queue timelocked governance action"
+    },
+    "vesting_wallet::create_vesting": {
+      "contract": "vesting_wallet",
+      "entry_point": "create_vesting",
+      "cpu_instructions": 276912,
+      "ledger_reads": 9,
+      "ledger_writes": 5,
+      "description": "Create schedule with cliff and duration"
+    },
+    "vesting_wallet::get_admin": {
+      "contract": "vesting_wallet",
+      "entry_point": "get_admin",
+      "cpu_instructions": 33157,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Query vesting contract admin"
+    },
+    "vesting_wallet::get_claimable": {
+      "contract": "vesting_wallet",
+      "entry_point": "get_claimable",
+      "cpu_instructions": 59254,
+      "ledger_reads": 2,
+      "ledger_writes": 1,
+      "description": "Calculate unlocked claimable tokens"
+    },
+    "vesting_wallet::get_vesting": {
+      "contract": "vesting_wallet",
+      "entry_point": "get_vesting",
+      "cpu_instructions": 48508,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Read vesting schedule"
+    },
+    "vesting_wallet::initialize": {
+      "contract": "vesting_wallet",
+      "entry_point": "initialize",
+      "cpu_instructions": 47148,
+      "ledger_reads": 4,
+      "ledger_writes": 2,
+      "description": "Initialize vesting wallet"
+    },
+    "yield_vault::balance_of": {
+      "contract": "yield_vault",
+      "entry_point": "balance_of",
+      "cpu_instructions": 33039,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Read user share balance"
+    },
+    "yield_vault::get_total_aum": {
+      "contract": "yield_vault",
+      "entry_point": "get_total_aum",
+      "cpu_instructions": 27723,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Read total assets under management"
+    },
+    "yield_vault::get_total_yield_harvested": {
+      "contract": "yield_vault",
+      "entry_point": "get_total_yield_harvested",
+      "cpu_instructions": 32410,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Read total harvested yield"
+    },
+    "yield_vault::initialize": {
+      "contract": "yield_vault",
+      "entry_point": "initialize",
+      "cpu_instructions": 42073,
+      "ledger_reads": 2,
+      "ledger_writes": 1,
+      "description": "Initialize multi-provider yield vault"
+    },
+    "yield_vault::is_paused": {
+      "contract": "yield_vault",
+      "entry_point": "is_paused",
+      "cpu_instructions": 34779,
+      "ledger_reads": 2,
+      "ledger_writes": 0,
+      "description": "Check pause flag"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "description": "Configurable regression thresholds for contract execution cost benchmark. Exceeding produces a CI warning.",
+  "cpu_instruction_warning_threshold_pct": 10.0,
+  "ledger_read_warning_threshold": 1,
+  "ledger_write_warning_threshold": 1,
+  "contract_overrides": {}
+}
