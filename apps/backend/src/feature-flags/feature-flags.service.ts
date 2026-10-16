@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { FeatureFlag } from './feature-flag.entity';
@@ -121,7 +126,7 @@ export class FeatureFlagsService implements OnModuleInit {
   }
 
   async listFlags(): Promise<FeatureFlag[]> {
-    return this.repo.find();
+    return this.repo.find({ order: { updatedAt: 'DESC' } });
   }
 
   /**
@@ -220,11 +225,54 @@ export class FeatureFlagsService implements OnModuleInit {
     enabled: boolean,
     conditions?: Record<string, unknown>,
     changedBy?: string,
-    targeting?: FlagTargetingInput,
+    targetingOrOptions?:
+      | FlagTargetingInput
+      | {
+          rolloutPercentage?: number | null;
+          allowList?: readonly string[] | null;
+          denyList?: readonly string[] | null;
+          sensitive?: boolean;
+          confirmed?: boolean;
+          targetPercentage?: number | null;
+        },
   ) {
-    // Snapshot the previous state as primitives BEFORE we fetch the mutable
-    // entity.  If we kept a reference to the entity object, mutating
-    // f.enabled below would silently change the snapshot too (aliasing).
+    const targeting =
+      targetingOrOptions &&
+      (('rolloutPercentage' in targetingOrOptions &&
+        targetingOrOptions.rolloutPercentage !== undefined) ||
+        ('allowList' in targetingOrOptions &&
+          targetingOrOptions.allowList !== undefined) ||
+        ('denyList' in targetingOrOptions &&
+          targetingOrOptions.denyList !== undefined))
+        ? {
+            rolloutPercentage: targetingOrOptions.rolloutPercentage,
+            allowList: targetingOrOptions.allowList,
+            denyList: targetingOrOptions.denyList,
+          }
+        : undefined;
+
+    const normalizedSensitive = Boolean(
+      targetingOrOptions && 'sensitive' in targetingOrOptions
+        ? targetingOrOptions.sensitive ?? false
+        : false,
+    );
+
+    const normalizedTarget =
+      targetingOrOptions && 'targetPercentage' in targetingOrOptions
+        ? targetingOrOptions.targetPercentage !== undefined &&
+          targetingOrOptions.targetPercentage !== null
+          ? Math.min(100, Math.max(0, Number(targetingOrOptions.targetPercentage)))
+          : undefined
+        : targeting?.rolloutPercentage !== undefined
+          ? targeting.rolloutPercentage
+          : undefined;
+
+    if (normalizedSensitive && targetingOrOptions && 'confirmed' in targetingOrOptions && targetingOrOptions.confirmed !== true) {
+      throw new BadRequestException(
+        'Sensitive flags require an explicit confirmation before they can be changed.',
+      );
+    }
+
     const prevFlag = await this.getFlag(key);
     const previousEnabled: boolean | null = prevFlag?.enabled ?? null;
     const previousTargeting = prevFlag
@@ -234,41 +282,51 @@ export class FeatureFlagsService implements OnModuleInit {
     const next =
       targeting === undefined ? null : sanitizeTargetingInput(targeting);
 
+    const normalizedConditions = conditions ?? prevFlag?.conditions ?? null;
+    const mergedConditions = {
+      ...(normalizedConditions ?? {}),
+      ...(normalizedTarget !== undefined ? { targetPercentage: normalizedTarget } : {}),
+      ...(normalizedSensitive ? { sensitive: true } : {}),
+    };
+
     let f = await this.repo.findOne({ where: { key } });
     if (!f) {
       f = this.repo.create({
         key,
         enabled,
-        conditions: conditions ?? null,
+        conditions:
+          Object.keys(mergedConditions).length > 0 ? mergedConditions : null,
+        rolloutPercentage: next?.rolloutPercentage ?? prevFlag?.rolloutPercentage ?? null,
+        allowList: next?.allowList ?? prevFlag?.allowList ?? null,
+        denyList: next?.denyList ?? prevFlag?.denyList ?? null,
+        targetPercentage: normalizedTarget ?? prevFlag?.targetPercentage ?? null,
+        sensitive: normalizedSensitive,
         changedBy: changedBy ?? null,
-        // A brand-new flag has no rollout to preserve, so default to none.
-        rolloutPercentage: next?.rolloutPercentage ?? null,
-        allowList: next?.allowList ?? null,
-        denyList: next?.denyList ?? null,
       });
     } else {
       f.enabled = enabled;
-      f.conditions = conditions ?? null;
+      f.conditions =
+        Object.keys(mergedConditions).length > 0 ? mergedConditions : null;
+      f.rolloutPercentage =
+        next?.rolloutPercentage ?? prevFlag?.rolloutPercentage ?? f.rolloutPercentage ?? null;
+      f.allowList = next?.allowList ?? prevFlag?.allowList ?? f.allowList ?? null;
+      f.denyList = next?.denyList ?? prevFlag?.denyList ?? f.denyList ?? null;
+      f.targetPercentage =
+        normalizedTarget ?? prevFlag?.targetPercentage ?? f.targetPercentage ?? null;
+      f.sensitive = normalizedSensitive || f.sensitive;
       f.changedBy = changedBy ?? null;
-      if (next) {
-        f.rolloutPercentage = next.rolloutPercentage;
-        f.allowList = next.allowList;
-        f.denyList = next.denyList;
-      }
     }
     const saved = await this.repo.save(f);
 
-    // Immediate cache invalidation — entry is repopulated with fresh TTL.
     const now = Date.now();
     this.cache.set(saved.key, {
       value: saved,
       expiresAt: now + CACHE_TTL_MS,
     });
 
-    // Persist audit log entry. The targeting snapshot rides along so a
-    // rollout change is as reviewable as an on/off change.
     const newTargeting = snapshotTargeting(readTargeting(saved));
     const rolloutAfter = normalizeRolloutPercentage(saved.rolloutPercentage);
+
     const auditEntry = this.auditRepo.create({
       flagKey: key,
       action: 'upsert',
@@ -276,6 +334,8 @@ export class FeatureFlagsService implements OnModuleInit {
       newEnabled: enabled,
       previousTargeting,
       newTargeting,
+      targetPercentage: normalizedTarget ?? prevFlag?.targetPercentage ?? null,
+      sensitive: normalizedSensitive || prevFlag?.sensitive || false,
       actor: changedBy ?? null,
     });
     await this.auditRepo.save(auditEntry);

@@ -38,6 +38,14 @@ export class FeatureFlag {
   @Column({ type: 'jsonb', nullable: true, default: null })
   denyList: string[] | null;
 
+  /** Compatibility alias for rollout percentage. */
+  @Column({ type: 'integer', nullable: true })
+  targetPercentage: number | null;
+
+  /** Whether this flag requires explicit confirmation before mutation. */
+  @Column({ type: 'boolean', default: false })
+  sensitive: boolean;
+
   @Column({ type: 'jsonb', nullable: true })
   conditions: Record<string, unknown> | null;
 
