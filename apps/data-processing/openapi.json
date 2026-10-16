@@ -310,6 +310,7 @@
               "application/json": {
                 "schema": {
                   "items": {
+                    "additionalProperties": true,
                     "type": "object"
                   },
                   "type": "array",
@@ -895,6 +896,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "additionalProperties": true,
                   "title": "Response Reset Cursor Api Account Operations Reset Cursor Post"
                 }
               }
@@ -1639,6 +1641,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Root  Get"
                 }
@@ -2064,6 +2067,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "additionalProperties": true,
                   "title": "Response Analyze Batch Analyze Batch Post"
                 }
               }
@@ -2093,6 +2097,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Get Sentiment Legend Sentiment Legend Get"
                 }
@@ -2569,6 +2574,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "additionalProperties": true,
                   "title": "Response Get Prediction Logs Model Prediction Logs Get"
                 }
               }
@@ -2970,6 +2976,7 @@
       "AllShadowStatusResponse": {
         "properties": {
           "shadows": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Shadows"
           }
@@ -3143,6 +3150,7 @@
           },
           "entries": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -3167,6 +3175,7 @@
           "report": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -3206,6 +3215,7 @@
           },
           "lag_alerts": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -3287,6 +3297,7 @@
             "title": "Critical Threshold Seconds"
           },
           "details": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Details",
             "default": {}
@@ -3418,6 +3429,7 @@
           "raw_data": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -3734,6 +3746,7 @@
           "extra_data": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -3880,6 +3893,7 @@
           },
           "metrics": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -3888,6 +3902,7 @@
           },
           "lag_alerts": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -3896,6 +3911,7 @@
           },
           "recent_source_failures": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -4000,15 +4016,18 @@
             "title": "Manual Run Id"
           },
           "thresholds": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Thresholds"
           },
           "summary": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Summary"
           },
           "findings": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -4185,6 +4204,7 @@
           "params": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -4196,6 +4216,7 @@
           "result": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -4340,6 +4361,7 @@
           "extra_data": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -4828,10 +4850,12 @@
       "ModelStatusResponse": {
         "properties": {
           "last_run": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Last Run"
           },
           "registry": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Registry"
           }
@@ -4953,6 +4977,7 @@
           },
           "onchain_entity_links": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -5199,6 +5224,7 @@
           "details": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -5243,6 +5269,7 @@
           "result": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -5353,6 +5380,7 @@
           "supporting_evidence": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -6003,6 +6031,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",
