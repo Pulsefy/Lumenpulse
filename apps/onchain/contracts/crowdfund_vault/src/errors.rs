@@ -55,4 +55,10 @@ pub enum CrowdfundError {
     InvalidBatch = 40,
     /// The provided signature for a gasless meta-transaction is empty or invalid.
     InvalidSignature = 41,
+    /// The cross-contract call to the treasury's `allocate_budget` entry-point
+    /// failed (e.g. the treasury contract panicked or rejected the call).
+    /// Tokens have already been transferred to the treasury contract address;
+    /// recovery must go through the treasury's own cancellation path or the
+    /// vault's emergency-migration mechanism.
+    TreasuryCallFailed = 42,
 }

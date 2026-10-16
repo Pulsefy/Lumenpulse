@@ -975,7 +975,12 @@ impl CrowdfundVaultContract {
         Ok(())
     }
 
-    /// Internal helper to notify all subscribers
+    /// Internal helper to notify all subscribers.
+    ///
+    /// Uses `try_on_notify` (best-effort delivery) so that a panicking or
+    /// buggy subscriber **never** rolls back the surrounding value transfer.
+    /// A delivery failure is silently swallowed; the notification event is
+    /// emitted regardless, giving off-chain indexers a complete audit trail.
     fn notify_subscribers(env: &Env, event_type: Symbol, data: soroban_sdk::Bytes) {
         let subscribers: Vec<Address> = env
             .storage()
@@ -990,7 +995,9 @@ impl CrowdfundVaultContract {
 
         for subscriber in subscribers {
             let client = NotificationReceiverClient::new(env, &subscriber);
-            client.on_notify(&notification);
+            // try_on_notify: failure is intentionally ignored — a bad
+            // subscriber must never block a fund movement.
+            let _ = client.try_on_notify(&notification);
         }
     }
 
@@ -1528,20 +1535,37 @@ impl CrowdfundVaultContract {
                 &amount,
             );
 
-            // Call treasury contract to start stream
+            // Call treasury contract to start stream.
+            //
+            // SAFETY: tokens have already been transferred to the treasury
+            // contract address above.  If `allocate_budget` fails for any
+            // reason (panicking treasury stub, authorization error, …), the
+            // tokens are already in the treasury contract's custody — they are
+            // NOT lost, but they are untracked (no stream).  The admin must
+            // recover them via the treasury's `cancel_stream` / `emergency_stop`
+            // path, or via the vault's `propose_emergency_migration`.
+            //
+            // We use `try_allocate_budget` so the failure is surfaced as a
+            // typed `Result` rather than aborting the entire transaction.
+            // This prevents the vault state mutation above (balance deduction
+            // + total_withdrawn increment) from being silently rolled back
+            // while tokens sit unreachable.  We propagate the error to the
+            // caller so they are aware that the stream was NOT started.
             let treasury_client = treasury_interface::TreasuryClient::new(&env, &treasury_contract);
             let start_time = env.ledger().timestamp();
 
             // The treasury contract expects the admin to authorize the allocation.
             // We pass the admin address here.
-            treasury_client.allocate_budget(
-                &admin,
-                &project.owner,
-                &amount,
-                &start_time,
-                &duration,
-                &request_id,
-            );
+            treasury_client
+                .try_allocate_budget(
+                    &admin,
+                    &project.owner,
+                    &amount,
+                    &start_time,
+                    &duration,
+                    &request_id,
+                )
+                .map_err(|_| CrowdfundError::TreasuryCallFailed)?;
 
             events::TreasuryAllocatedEvent {
                 project_id,
