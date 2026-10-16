@@ -561,6 +561,78 @@ Deposit tokens into a project. Tracks individual contributions for quadratic fun
 
 ---
 
+##### `deposit_with_sig`
+```rust
+pub fn deposit_with_sig(env: Env, user: Address, project_id: u64, amount: i128, signature: Bytes) -> Result<(), CrowdfundError>
+```
+Gasless meta-transaction variant of `deposit`. Shares the same contribution
+state and the same per-account rate-limit timer as `deposit`.
+
+**Auth**: Requires `user` authorization over the `ContributionIntent` nonce.
+**Fails** if the signature is empty or the account is rate limited.
+
+---
+
+##### Contribution Rate Limiting
+
+`crowdfund_vault` supports an optional **per-account minimum interval** between
+contributions to mitigate griefing spam (many tiny contributions that inflate
+contributor counts or skew the quadratic-funding matching calculation before an
+off-chain detector can react).
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `set_contribution_min_interval` | `(env, admin: Address, min_interval_seconds: u64) -> Result<(), CrowdfundError>` | Admin-only. Configures the minimum seconds between two accepted contributions from the same account. `0` disables the limit (the default). |
+| `get_contribution_min_interval` | `(env) -> Result<u64, CrowdfundError>` | Returns the configured interval; `0` means disabled. |
+| `get_last_contribution_time` | `(env, user: Address) -> u64` | Ledger timestamp of the account's last accepted contribution (`0` if none). |
+
+Semantics:
+
+- The limit applies **globally per account**, across all projects and across
+  both `deposit` and `deposit_with_sig`. An account that has never contributed
+  is always allowed.
+- A contribution is accepted once `now >= last_contribution_time + min_interval`.
+  The boundary is inclusive: contributing exactly at the boundary succeeds.
+- Only **accepted** contributions advance the account's timer. Rejected attempts
+  (including attempts rejected by this limit) never consume or reset the window.
+- The limit is checked before the token balance/transfer cross-contract calls,
+  so spam is rejected cheaply.
+- Changing the limit only affects **future** contributions; it never invalidates
+  or rewrites contributions already recorded.
+- Exceeding the limit reverts with `CrowdfundError::ContributionRateLimited` (42).
+
+**Auth**: `set_contribution_min_interval` is admin-only.  
+**Emits** (`set_contribution_min_interval`): `ContributionRateLimitEvent` carrying
+the admin, the previous interval, the new interval, and the ledger timestamp —
+providing an on-chain audit trail of every adjustment.
+
+###### Interaction with matching-pool contribution caps
+
+The two controls are complementary and **independent**:
+
+| Control | Scope | Storage / contract | Enforced at |
+|---------|-------|--------------------|-------------|
+| Per-account rate limit | One account, all projects | `crowdfund_vault` (`ContributionMinInterval`, `LastContributionTime`) | `deposit` / `deposit_with_sig` |
+| Round contribution cap | One account, one round (summed across projects) | `matching_pool` (`RoundCap`, `ContributorRoundTotal`) | `matching_pool::record_contribution` |
+
+- The rate limit throttles **how often** an account may contribute; the round cap
+  limits **how much** that account may cumulatively contribute to a round. Neither
+  replaces the other, and satisfying one does not imply satisfying the other.
+- They are enforced by different contracts at different points in the flow. A
+  deposit can succeed in `crowdfund_vault` and later be rejected by
+  `matching_pool::record_contribution` with `ContributionCapExceeded` (18); that
+  rejection is atomic and does not undo the vault deposit, and it does **not**
+  refund the rate-limit window (the vault already stamped the account's timer).
+- A `ContributionRateLimited` revert happens in the vault before any contribution
+  is recorded, so no matching-pool state is touched.
+- Administrators setting one limit should consider the other: a very short rate
+  interval still allows an account to reach its round cap quickly, while a long
+  interval may make it impossible to reach the cap within a short round window.
+
+**Emits** (`set_contribution_min_interval`): `ContributionRateLimitEvent`
+
+---
+
 ##### `approve_milestone`
 ```rust
 pub fn approve_milestone(env: Env, admin: Address, project_id: u64) -> Result<(), CrowdfundError>
@@ -708,6 +780,7 @@ soroban contract invoke \
 | **`ReputationUpdatedEvent`** | `contributor: Address` | `old_reputation: i128`, `new_reputation: i128` | `update_reputation` |
 | **`ContractPauseEvent`** | `admin: Address` | `paused: bool`, `timestamp: u64` | `pause` |
 | **`ContractUnpauseEvent`** | `admin: Address` | `paused: bool`, `timestamp: u64` | `unpause` |
+| **`ContributionRateLimitEvent`** | `admin: Address` | `previous_interval_seconds: u64`, `new_interval_seconds: u64`, `timestamp: u64` | `set_contribution_min_interval` |
 | **`UpgradedEvent`** | `admin: Address` | `new_wasm_hash: BytesN<32>` | `upgrade` |
 | **`AdminChangedEvent`** | `old_admin: Address` | `new_admin: Address` | `set_admin` |
 | **`ProjectCanceledEvent`** | — | `project_id: u64`, `caller: Address` | `cancel_project` |
@@ -743,6 +816,11 @@ pub enum CrowdfundError {
     InvalidMigrationRecipient       = 37, // recipient is the contract itself
     MigrationAmountExceedsBalance   = 38, // amount > project vault balance
     MigrationPlanVetoed             = 39, // plan was vetoed; cannot execute
+    // ── Batch / signature validation ───────────────────────────────────
+    InvalidBatch                    = 40, // empty/oversized/duplicate batch
+    InvalidSignature                = 41, // empty or invalid meta-tx signature
+    // ── Contribution rate limiting ─────────────────────────────────────
+    ContributionRateLimited         = 42, // per-account minimum interval not elapsed
 }
 ```
 
@@ -763,6 +841,8 @@ pub enum CrowdfundError {
 | `MatchingPool(Address)` | Persistent | `i128` | Matching pool balance per token |
 | `RegisteredContributor(Address)` | Persistent | `bool` | Whether address is registered |
 | `Reputation(Address)` | Persistent | `i128` | Contributor reputation score |
+| `ContributionMinInterval` | Instance | `u64` | Per-account minimum seconds between contributions (`0` = disabled) |
+| `LastContributionTime(Address)` | Persistent | `u64` | Ledger timestamp of an account's last accepted contribution |
 | `EmergencyMigrationPlan(u64)` | Persistent | `EmergencyMigrationPlan` | Migration plan per project (issue #1047) |
 
 **Custom Types**:

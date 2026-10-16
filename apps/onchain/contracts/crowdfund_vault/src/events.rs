@@ -361,3 +361,16 @@ pub struct YieldDivestedEvent {
     pub project_id: u64,
     pub amount: i128,
 }
+
+/// Emitted by `set_contribution_min_interval` to audit admin changes to the
+/// per-account contribution rate limit. Captures both the previous and the
+/// new interval so off-chain monitors can reconstruct the full history.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContributionRateLimitEvent {
+    #[topic]
+    pub admin: Address,
+    pub previous_interval_seconds: u64,
+    pub new_interval_seconds: u64,
+    pub timestamp: u64,
+}

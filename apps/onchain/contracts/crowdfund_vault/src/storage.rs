@@ -53,6 +53,15 @@ pub enum DataKey {
     DepositIdempotencyKey(u64, Address), // (project_id, depositor) -> BytesN<32>
     // ── Emergency migration (issue #1047) ─────────────────────────────────────
     EmergencyMigrationPlan(u64), // project_id -> EmergencyMigrationPlan
+    // ── Contribution rate limiting ────────────────────────────────────────────
+    /// Minimum seconds between two contributions from the same account.
+    /// Stored in instance storage. Absent (or 0) means rate limiting is
+    /// disabled. Configured by the admin via `set_contribution_min_interval`.
+    ContributionMinInterval, // -> u64
+    /// Ledger timestamp of an account's most recent accepted contribution.
+    /// Persistent so the limit survives ledger TTL bumps. Absent means the
+    /// account has not contributed yet.
+    LastContributionTime(Address), // Address -> u64
 }
 
 #[contracttype]

@@ -55,4 +55,8 @@ pub enum CrowdfundError {
     InvalidBatch = 40,
     /// The provided signature for a gasless meta-transaction is empty or invalid.
     InvalidSignature = 41,
+    // ── Contribution rate limiting ────────────────────────────────────────────
+    /// The account is contributing again before its per-account minimum
+    /// interval (configured via `set_contribution_min_interval`) has elapsed.
+    ContributionRateLimited = 42,
 }

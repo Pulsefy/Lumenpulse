@@ -228,6 +228,59 @@ impl CrowdfundVaultContract {
         result
     }
 
+    /// Read the configured per-account contribution minimum interval.
+    /// `0` (the default) means rate limiting is disabled.
+    fn contribution_min_interval(env: &Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::ContributionMinInterval)
+            .unwrap_or(0)
+    }
+
+    /// Enforce the per-account contribution rate limit.
+    ///
+    /// A `min_interval` of `0` disables rate limiting entirely (the default
+    /// for contracts initialized before this feature). An account that has
+    /// never contributed (`last == 0`) is always allowed. Otherwise a
+    /// contribution is only accepted once at least `min_interval` seconds
+    /// have elapsed since the account's last accepted contribution — a
+    /// contribution exactly at the boundary is allowed.
+    fn enforce_contribution_rate_limit(env: &Env, user: &Address) -> Result<(), CrowdfundError> {
+        let min_interval = Self::contribution_min_interval(env);
+        if min_interval == 0 {
+            return Ok(());
+        }
+
+        let last_key = DataKey::LastContributionTime(user.clone());
+        let last: u64 = env.storage().persistent().get(&last_key).unwrap_or(0);
+        if last == 0 {
+            return Ok(());
+        }
+
+        let now = env.ledger().timestamp();
+        let next_allowed = last
+            .checked_add(min_interval)
+            .ok_or(CrowdfundError::ContributionRateLimited)?;
+        if now < next_allowed {
+            return Err(CrowdfundError::ContributionRateLimited);
+        }
+
+        Ok(())
+    }
+
+    /// Record the timestamp of an accepted contribution for rate limiting.
+    /// Only called while rate limiting is enabled, so the default (disabled)
+    /// path pays no extra persistent-storage write.
+    fn record_contribution_time(env: &Env, user: &Address) {
+        let last_key = DataKey::LastContributionTime(user.clone());
+        env.storage()
+            .persistent()
+            .set(&last_key, &env.ledger().timestamp());
+        env.storage()
+            .persistent()
+            .extend_ttl(&last_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+    }
+
     /// Initialize the contract with an admin address
     pub fn initialize(env: Env, admin: Address) -> Result<(), CrowdfundError> {
         // Check if already initialized
@@ -823,6 +876,10 @@ impl CrowdfundVaultContract {
             return Err(CrowdfundError::ProjectNotActive);
         }
 
+        // Per-account rate limiting (checked before the token balance
+        // cross-contract call so spam is rejected as cheaply as possible).
+        Self::enforce_contribution_rate_limit(env, user)?;
+
         let contract_address = env.current_contract_address();
         let user_balance = token::balance(env, &project.token_address, user);
 
@@ -919,6 +976,13 @@ impl CrowdfundVaultContract {
             Symbol::new(env, "deposit"),
             (user.clone(), project_id, amount).to_xdr(env),
         );
+
+        // Stamp the account's last accepted contribution for rate limiting.
+        // Skipped entirely when the limit is disabled so the default path
+        // incurs no extra storage write.
+        if Self::contribution_min_interval(env) != 0 {
+            Self::record_contribution_time(env, user);
+        }
 
         Ok(())
     }
@@ -2828,6 +2892,66 @@ impl CrowdfundVaultContract {
         .publish(&env);
 
         Ok(())
+    }
+
+    /// Set the per-account minimum interval (in seconds) between contributions.
+    ///
+    /// - `0` disables rate limiting (the default).
+    /// - Any non-zero value means an account must wait at least that many
+    ///   seconds after an accepted contribution before contributing again.
+    ///
+    /// The limit applies globally across all projects and both `deposit` and
+    /// `deposit_with_sig`. It is checked before the contribution is applied and
+    /// only accepted contributions advance the account's timer, so rejected
+    /// attempts never consume the window. The change is audited via
+    /// [`ContributionRateLimitEvent`] and only affects future
+    /// contributions.
+    pub fn set_contribution_min_interval(
+        env: Env,
+        admin: Address,
+        min_interval_seconds: u64,
+    ) -> Result<(), CrowdfundError> {
+        Self::verify_admin(&env, &admin)?;
+
+        let previous: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ContributionMinInterval)
+            .unwrap_or(0);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::ContributionMinInterval, &min_interval_seconds);
+
+        events::ContributionRateLimitEvent {
+            admin,
+            previous_interval_seconds: previous,
+            new_interval_seconds: min_interval_seconds,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Get the configured per-account contribution minimum interval in seconds.
+    /// `0` means rate limiting is disabled.
+    pub fn get_contribution_min_interval(env: Env) -> Result<u64, CrowdfundError> {
+        Self::require_current_storage_version(&env)?;
+        Ok(env
+            .storage()
+            .instance()
+            .get(&DataKey::ContributionMinInterval)
+            .unwrap_or(0))
+    }
+
+    /// Get the ledger timestamp of an account's most recent accepted
+    /// contribution. `0` means the account has not contributed yet.
+    pub fn get_last_contribution_time(env: Env, user: Address) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::LastContributionTime(user))
+            .unwrap_or(0)
     }
 
     /// Get total contributions for a project

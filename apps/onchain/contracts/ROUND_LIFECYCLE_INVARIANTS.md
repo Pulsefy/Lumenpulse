@@ -83,6 +83,28 @@ one rule.
    contributions already recorded — and `set_round_cap` itself is subject
    to `INV-5` (admin-only) and rejected once the round is finalized.
 
+9. **INV-9 Per-account contribution rate limit** (`crowdfund_vault`). When the
+   admin-configured minimum interval (`ContributionMinInterval`, set via
+   `set_contribution_min_interval`) is non-zero, an account must wait at least
+   that many seconds after an *accepted* contribution before contributing
+   again, across all projects and both `deposit` and `deposit_with_sig`. A
+   contribution exactly at `last + interval` is accepted; anything earlier is
+   rejected in full with `ContributionRateLimited` and must not advance the
+   account's `LastContributionTime`. An interval of `0` (the default) disables
+   the limit, and changing it is admin-only (`INV-5`) and audited via
+   `ContributionRateLimitEvent`.
+
+   **Interaction with INV-8.** INV-8 (round cap, `matching_pool`) and INV-9
+   (rate limit, `crowdfund_vault`) are independent controls enforced by
+   different contracts: INV-9 bounds *how often* an account contributes, INV-8
+   bounds *how much* it contributes to a round. They compose rather than
+   subsume each other — a rate-limited `deposit` reverts before any round state
+   changes, while a deposit that passes INV-9 can still be rejected by
+   `matching_pool::record_contribution` with `ContributionCapExceeded` (and
+   that rejection does not undo the vault deposit or reset the rate-limit
+   timer). Operators should tune both together, since neither alone prevents
+   griefing.
+
 ## Debugging a failing invariant
 
 - Tests use `proptest`; on failure it prints the *minimal* shrunk input in
