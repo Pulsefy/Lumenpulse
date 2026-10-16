@@ -44,3 +44,121 @@ jobs:
 
     - name: Build
       run: npm run build
+
+  db-e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/backend
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lumenpulse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: lumenpulse
+      JWT_SECRET: test-jwt-secret
+      STELLAR_SERVER_SECRET: SB6RIPM3GJQ7RP3Q6R5F3QIBYZHP4N27SGGCQ3R4LWA2ZKXZWQ3NU3G4
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: './apps/backend/package-lock.json'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432 -U postgres; do
+          echo "Waiting for postgres..."
+          sleep 2
+        done
+
+    - name: Run E2E tests
+      run: npm run test:e2e
+
+  migration-safety:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/backend
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: './apps/backend/package-lock.json'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build (compile migrations)
+      run: npm run build
+
+    - name: Validate migration files compile and export down()
+      run: |
+        echo "Checking all TypeScript migration files..."
+        MIGRATION_DIRS="src/database/migrations src/migrations"
+        MISSING_DOWN=()
+
+        for dir in $MIGRATION_DIRS; do
+          if [ ! -d "$dir" ]; then
+            continue
+          fi
+          for file in "$dir"/*.ts; do
+            [ -f "$file" ] || continue
+            # Skip backup files
+            [[ "$file" == *.bak ]] && continue
+            if ! grep -q "async down(" "$file" && ! grep -q "public down(" "$file"; then
+              MISSING_DOWN+=("$file")
+            fi
+          done
+        done
+
+        if [ ${#MISSING_DOWN[@]} -gt 0 ]; then
+          echo "ERROR: The following migration files are missing a down() method:"
+          for f in "${MISSING_DOWN[@]}"; do
+            echo "  - $f"
+          done
+          exit 1
+        fi
+
+        echo "All migration files have a down() method."
+
+    - name: Verify compiled migration output exists
+      run: |
+        COMPILED_DIR="dist/src/database/migrations"
+        if [ ! -d "$COMPILED_DIR" ] || [ -z "$(ls -A "$COMPILED_DIR"/*.js 2>/dev/null)" ]; then
+          echo "ERROR: No compiled migration files found in $COMPILED_DIR"
+          exit 1
+        fi
+        echo "Compiled migration files found:"
+        ls "$COMPILED_DIR"/*.js
