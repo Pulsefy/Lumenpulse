@@ -3695,3 +3695,315 @@ fn test_batch_payout_event_carries_request_id_and_token() {
     let decoded_request_id: BytesN<32> = topics.get(topics.len() - 1).unwrap().into_val(&env);
     assert_eq!(decoded_request_id, request_id);
 }
+
+// ─── Contribution rate limiting ───────────────────────────────────────────────
+//
+// Acceptance criteria tested here:
+//   AC-1  A configurable per-account minimum interval applies to contributions.
+//   AC-2  The limit is admin-adjustable and the change is audited.
+//   AC-3  Exceeding the limit reverts with `ContributionRateLimited`.
+//   AC-4  Boundary behavior, window reset, and rejected attempts are correct.
+
+#[test]
+fn test_contribution_rate_limit_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("RLimit"),
+        &5_000_000,
+        &token_client.address,
+    );
+
+    client.set_contribution_min_interval(&admin, &100);
+    assert_eq!(client.get_contribution_min_interval(), 100);
+
+    // First contribution at t=1000 is always allowed and starts the timer.
+    env.ledger().set_timestamp(1_000);
+    client.deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xA1; 32]),
+    );
+    assert_eq!(client.get_last_contribution_time(&user), 1_000);
+
+    // One second before the interval elapses -> rejected.
+    env.ledger().set_timestamp(1_099);
+    let early = client.try_deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xA2; 32]),
+    );
+    assert_eq!(early, Err(Ok(CrowdfundError::ContributionRateLimited)));
+
+    // Exactly at `last + interval` -> accepted (boundary is inclusive).
+    env.ledger().set_timestamp(1_100);
+    client.deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xA3; 32]),
+    );
+
+    assert_eq!(client.get_balance(&project_id), 200_000);
+    assert_eq!(client.get_last_contribution_time(&user), 1_100);
+}
+
+#[test]
+fn test_contribution_rate_limit_disabled_by_default() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("RLimit"),
+        &5_000_000,
+        &token_client.address,
+    );
+
+    // No configuration -> disabled.
+    assert_eq!(client.get_contribution_min_interval(), 0);
+
+    // Two contributions in the same ledger are both accepted.
+    env.ledger().set_timestamp(500);
+    client.deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xB1; 32]),
+    );
+    client.deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xB2; 32]),
+    );
+    assert_eq!(client.get_balance(&project_id), 200_000);
+
+    // Explicitly setting 0 also disables the limit.
+    client.set_contribution_min_interval(&admin, &0);
+    client.deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xB3; 32]),
+    );
+    assert_eq!(client.get_balance(&project_id), 300_000);
+}
+
+#[test]
+fn test_contribution_rate_limit_resets_after_interval() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("RLimit"),
+        &5_000_000,
+        &token_client.address,
+    );
+
+    client.set_contribution_min_interval(&admin, &60);
+
+    env.ledger().set_timestamp(2_000);
+    client.deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xC1; 32]),
+    );
+
+    // After the interval elapses the account is allowed again...
+    env.ledger().set_timestamp(2_060);
+    client.deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xC2; 32]),
+    );
+    assert_eq!(client.get_last_contribution_time(&user), 2_060);
+
+    // ...and the window resets from that new contribution.
+    env.ledger().set_timestamp(2_060);
+    let immediately_again = client.try_deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xC3; 32]),
+    );
+    assert_eq!(
+        immediately_again,
+        Err(Ok(CrowdfundError::ContributionRateLimited))
+    );
+
+    assert_eq!(client.get_balance(&project_id), 200_000);
+}
+
+#[test]
+fn test_contribution_rate_limit_rejected_attempt_does_not_consume_window() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("RLimit"),
+        &5_000_000,
+        &token_client.address,
+    );
+
+    client.set_contribution_min_interval(&admin, &100);
+
+    env.ledger().set_timestamp(3_000);
+    client.deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xD1; 32]),
+    );
+
+    // A rejected attempt midway through the window must not advance the timer.
+    env.ledger().set_timestamp(3_050);
+    let rejected = client.try_deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xD2; 32]),
+    );
+    assert_eq!(rejected, Err(Ok(CrowdfundError::ContributionRateLimited)));
+
+    // If the rejected attempt had been recorded, `last` would be 3_050 and the
+    // next allowed time 3_150; the original 3_000 base makes 3_100 valid.
+    env.ledger().set_timestamp(3_100);
+    client.deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xD3; 32]),
+    );
+    assert_eq!(client.get_last_contribution_time(&user), 3_100);
+    assert_eq!(client.get_balance(&project_id), 200_000);
+}
+
+#[test]
+fn test_set_contribution_min_interval_admin_only_and_audited() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, ..) = setup_test(&env);
+    client.initialize(&admin);
+
+    // Non-admin callers are rejected and cannot change the limit.
+    let non_admin = Address::generate(&env);
+    let result = client.try_set_contribution_min_interval(&non_admin, &30);
+    assert_eq!(result, Err(Ok(CrowdfundError::Unauthorized)));
+    assert_eq!(client.get_contribution_min_interval(), 0);
+
+    // Admin sets the limit; the change emits an audit event. Assert the event
+    // immediately — `env.events().all()` reflects only the most recent contract
+    // invocation, and a getter call would clear it.
+    client.set_contribution_min_interval(&admin, &30);
+    assert_eq!(env.events().all().len(), 1);
+    assert_eq!(client.get_contribution_min_interval(), 30);
+
+    // Admin can adjust it again; previous value is carried in the audit event.
+    client.set_contribution_min_interval(&admin, &90);
+    assert_eq!(env.events().all().len(), 1);
+    assert_eq!(client.get_contribution_min_interval(), 90);
+
+    // Setting it back to 0 disables the limit.
+    client.set_contribution_min_interval(&admin, &0);
+    assert_eq!(client.get_contribution_min_interval(), 0);
+}
+
+#[test]
+fn test_contribution_rate_limit_applies_to_deposit_with_sig() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+    let project_id = client.create_project(
+        &owner,
+        &symbol_short!("RLimit"),
+        &5_000_000,
+        &token_client.address,
+    );
+
+    client.set_contribution_min_interval(&admin, &100);
+
+    env.ledger().set_timestamp(4_000);
+    client.deposit(
+        &user,
+        &project_id,
+        &100_000,
+        &BytesN::from_array(&env, &[0xE1; 32]),
+    );
+
+    // The meta-transaction entry point shares the same per-account timer.
+    let signature = soroban_sdk::Bytes::from_slice(&env, &[0x01, 0x02, 0x03]);
+    let blocked = client.try_deposit_with_sig(&user, &project_id, &100_000, &signature);
+    assert_eq!(blocked, Err(Ok(CrowdfundError::ContributionRateLimited)));
+
+    env.ledger().set_timestamp(4_100);
+    client.deposit_with_sig(&user, &project_id, &100_000, &signature);
+    assert_eq!(client.get_balance(&project_id), 200_000);
+}
+
+#[test]
+fn test_contribution_rate_limit_is_global_across_projects() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, owner, user, token_client) = setup_test(&env);
+    client.initialize(&admin);
+    let project_a = client.create_project(
+        &owner,
+        &symbol_short!("RLimA"),
+        &5_000_000,
+        &token_client.address,
+    );
+    let project_b = client.create_project(
+        &owner,
+        &symbol_short!("RLimB"),
+        &5_000_000,
+        &token_client.address,
+    );
+
+    client.set_contribution_min_interval(&admin, &100);
+
+    env.ledger().set_timestamp(5_000);
+    client.deposit(
+        &user,
+        &project_a,
+        &100_000,
+        &BytesN::from_array(&env, &[0xF1; 32]),
+    );
+
+    // Contributing to a *different* project does not bypass the timer.
+    let blocked = client.try_deposit(
+        &user,
+        &project_b,
+        &100_000,
+        &BytesN::from_array(&env, &[0xF2; 32]),
+    );
+    assert_eq!(blocked, Err(Ok(CrowdfundError::ContributionRateLimited)));
+
+    env.ledger().set_timestamp(5_100);
+    client.deposit(
+        &user,
+        &project_b,
+        &100_000,
+        &BytesN::from_array(&env, &[0xF3; 32]),
+    );
+}
