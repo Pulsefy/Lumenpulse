@@ -26,6 +26,9 @@ const requiredContracts = [
 
 const isSorobanAddress = (value) => typeof value === 'string' && /^C[0-9A-Z]{55}$/.test(value);
 const isWasmHash = (value) => typeof value === 'string' && /^[A-Fa-f0-9]{64}$/.test(value);
+// Stellar account addresses (admin keys) are `G...` strkeys; contract IDs are
+// `C...`. Rotation (issue #1626) updates `admin_address`, so validate it too.
+const isStellarAccount = (value) => typeof value === 'string' && /^G[0-9A-Z]{55}$/.test(value);
 
 function fail(message) {
   console.error(`❌ ${message}`);
@@ -41,6 +44,17 @@ try {
 
   if (!manifest.contracts || typeof manifest.contracts !== 'object' || Array.isArray(manifest.contracts)) {
     fail('Manifest must contain a top-level "contracts" object.');
+  }
+
+  // Top-level admin: the shared rotation target reused across contracts.
+  // Required so backend pickup (`DeploymentManifestService.refreshManifest`)
+  // and the rotation runbook have a single source of truth.
+  const topAdmin = manifest.admin_address ?? manifest.adminAddress;
+  if (!topAdmin) {
+    fail('Manifest is missing top-level "admin_address" (rotation source of truth).');
+  }
+  if (!isStellarAccount(topAdmin)) {
+    fail(`Top-level "admin_address" is not a valid Stellar account address: ${topAdmin}`);
   }
 
   const contractNames = Object.keys(manifest.contracts);
@@ -83,6 +97,15 @@ try {
     }
     if (!isWasmHash(wasmHash)) {
       fail(`Contract "${contractName}" has an invalid wasm_hash: ${wasmHash}`);
+    }
+
+    // Per-contract admin override (e.g. treasury). When present it must be a
+    // valid account address; when absent the top-level admin applies.
+    const contractAdmin = contractData.admin_address ?? contractData.adminAddress;
+    if (contractAdmin !== undefined && contractAdmin !== null) {
+      if (!isStellarAccount(contractAdmin)) {
+        fail(`Contract "${contractName}" has an invalid admin_address: ${contractAdmin}`);
+      }
     }
   }
 

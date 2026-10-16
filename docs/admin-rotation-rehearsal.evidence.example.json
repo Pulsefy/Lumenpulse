@@ -1,0 +1,56 @@
+{
+  "network": "testnet",
+  "commit": "<git commit>",
+  "contract_id": "<C... rehearsal instance>",
+  "old_admin": "<G... previous admin public key>",
+  "new_admin": "<G... rotated admin public key>",
+  "cancelled_admin": "<G... proposed-then-cancelled admin public key>",
+  "timelock_delay_seconds": 86400,
+  "steps": [
+    {
+      "name": "baseline",
+      "output": "<get_admin output showing old_admin + manifest admin_address>"
+    },
+    {
+      "name": "queued",
+      "output": "<queue_operation SetAdmin tx hash, operation id, execute_after, expires_at>"
+    },
+    {
+      "name": "pending",
+      "output": "<get_operation_status Pending output>"
+    },
+    {
+      "name": "early_execution_rejected",
+      "output": "<execute_operation before delay: OperationNotReady>"
+    },
+    {
+      "name": "ready",
+      "output": "<get_operation_status Ready output after delay>"
+    },
+    {
+      "name": "executed",
+      "output": "<execute_operation tx hash + AdminChanged + OperationExecuted events>"
+    },
+    {
+      "name": "post_rotation_verification",
+      "output": "<get_admin shows new_admin>"
+    },
+    {
+      "name": "previous_admin_revoked",
+      "output": "<old admin queue/propose/cancel all Unauthorized>"
+    },
+    {
+      "name": "manifest_updated",
+      "output": "<testnet-manifest.json diff + validate-manifest.js output>"
+    },
+    {
+      "name": "backend_verification",
+      "output": "<POST refresh + GET config stellar adminAddress + smoke + health outputs>"
+    },
+    {
+      "name": "cancelled_rotation",
+      "output": "<propose + get_proposed_admin + cancel + get_admin unchanged + candidate Unauthorized>"
+    }
+  ],
+  "follow_up_issues": []
+}

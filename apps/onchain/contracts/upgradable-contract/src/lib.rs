@@ -260,6 +260,17 @@ impl UpgradableContract {
             .ok_or(ContractError::NotInitialized)
     }
 
+    /// Returns the pending two-step rotation target, if one was proposed via
+    /// `propose_admin_rotation` and not yet accepted or cancelled.
+    ///
+    /// Read-only helper for operators and the backend to verify rotation
+    /// state against a live deployment (issue #1626): `Some(proposed)` means
+    /// a rotation is pending, `None` means no rotation is pending (either
+    /// never proposed, already accepted, or cancelled).
+    pub fn get_proposed_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::ProposedAdmin)
+    }
+
     pub fn increment(env: Env) -> u32 {
         let mut count: u32 = env.storage().instance().get(&DataKey::Counter).unwrap_or(0);
         count += 1;

@@ -54,6 +54,7 @@ describe('ConfigService', () => {
       horizonUrl: 'https://horizon-testnet.stellar.org',
       sorobanRpcUrl: 'https://soroban-testnet.stellar.org',
       networkPassphrase: 'Test SDF Network ; September 2015',
+      adminAddress: null,
       contracts: {
         lumenToken: 'CLUMEN',
         crowdfundVault: 'CCROWDFUND',
@@ -62,6 +63,34 @@ describe('ConfigService', () => {
         matchingPool: 'CMATCH',
         treasury: 'CTREASURY',
       },
+    });
+  });
+
+  it('exposes a rotated manifest admin without a restart (issue #1626)', () => {
+    const mockStellarConfig = {
+      network: 'testnet',
+      horizonUrl: 'https://horizon-testnet.stellar.org',
+      timeout: 30_000,
+      retryAttempts: 3,
+      retryDelay: 1_000,
+      networkPassphrase: 'Test SDF Network ; September 2015',
+    } as unknown as ConfigType<typeof stellarConfig>;
+
+    const service = new ConfigService(mockStellarConfig, mockCache);
+
+    expect(service.getStellarAdminAddress()).toBeNull();
+    expect(service.getStellarConfig().adminAddress).toBeNull();
+
+    const rotated =
+      'GCNQBZDKZJTPFERPP65ATQWH2T6OIXQESPKXSTO6YY33TA2HTUTAPJI7';
+    service.setStellarAdminAddress(rotated);
+
+    expect(service.getStellarAdminAddress()).toBe(rotated);
+    expect(service.getStellarConfig().adminAddress).toBe(rotated);
+
+    service.setStellarContractAdminOverrides({ treasury: rotated });
+    expect(service.getStellarContractAdmins()).toEqual({
+      treasury: rotated,
     });
   });
 

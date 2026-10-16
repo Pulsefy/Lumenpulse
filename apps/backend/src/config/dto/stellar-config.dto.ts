@@ -82,6 +82,14 @@ export class StellarConfigResponseDto {
 
   @ApiProperty({
     description:
+      'Current Stellar testnet admin address from the deployment manifest. Null until the manifest has been loaded. Updated without a restart when admin_address rotates.',
+    example: 'GDPBZZDKZJTPFERPP65ATQWH2T6OIXQESPKXSTO6YY33TA2HTUTAPJI6',
+    nullable: true,
+  })
+  adminAddress: string | null;
+
+  @ApiProperty({
+    description:
       'Deployed Soroban contract addresses on the specified network. All values may be null if not deployed.',
     type: StellarContractsDto,
   })

@@ -716,6 +716,198 @@ fn test_cancel_admin_rotation_without_proposal_fails() {
     );
 }
 
+// ── Admin rotation against live deployments (issue #1626) ────────────────────
+// The manifest reuses one admin across contracts and rotation had never been
+// exercised end to end. These tests simulate the live procedure: rotate,
+// verify the previous admin loses privileges, and verify a cancelled rotation
+// leaves the original admin intact.
+
+#[test]
+fn test_get_proposed_admin_tracks_lifecycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    // No pending rotation initially.
+    assert_eq!(client.get_proposed_admin(), None);
+
+    client.propose_admin_rotation(&admin, &new_admin);
+    assert_eq!(client.get_proposed_admin(), Some(new_admin.clone()));
+
+    client.cancel_admin_rotation(&admin);
+    assert_eq!(client.get_proposed_admin(), None);
+
+    // Propose again, then accept: pending clears on completion.
+    client.propose_admin_rotation(&admin, &new_admin);
+    assert_eq!(client.get_proposed_admin(), Some(new_admin.clone()));
+    client.accept_admin_rotation(&new_admin);
+    assert_eq!(client.get_proposed_admin(), None);
+    assert_eq!(client.get_admin(), new_admin);
+}
+
+#[test]
+fn test_two_step_rotation_revokes_previous_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    client.propose_admin_rotation(&admin, &new_admin);
+    client.accept_admin_rotation(&new_admin);
+    assert_eq!(client.get_admin(), new_admin);
+
+    // Previous admin no longer holds privileges on any admin-gated path.
+    let third = Address::generate(&env);
+    assert_eq!(
+        client.try_propose_admin_rotation(&admin, &third),
+        Err(Ok(ContractError::Unauthorized))
+    );
+    assert_eq!(
+        client.try_queue_operation(&admin, &TimelockAction::SetAdmin(third.clone())),
+        Err(Ok(ContractError::Unauthorized))
+    );
+    assert_eq!(
+        client.try_cancel_admin_rotation(&admin),
+        Err(Ok(ContractError::Unauthorized))
+    );
+
+    // New admin is fully privileged.
+    client.propose_admin_rotation(&new_admin, &third);
+    assert_eq!(client.get_proposed_admin(), Some(third));
+}
+
+#[test]
+fn test_cancelled_two_step_rotation_leaves_original_admin_intact() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    client.propose_admin_rotation(&admin, &new_admin);
+    client.cancel_admin_rotation(&admin);
+
+    // Original admin intact and still privileged; proposed admin never gained
+    // privileges.
+    assert_eq!(client.get_admin(), admin);
+    assert_eq!(client.get_proposed_admin(), None);
+    assert_eq!(
+        client.try_accept_admin_rotation(&new_admin),
+        Err(Ok(ContractError::OperationNotFound))
+    );
+    assert_eq!(
+        client.try_propose_admin_rotation(&new_admin, &admin),
+        Err(Ok(ContractError::Unauthorized))
+    );
+
+    // Original admin can still drive both rotation flows.
+    let third = Address::generate(&env);
+    client.propose_admin_rotation(&admin, &third);
+    assert_eq!(client.get_proposed_admin(), Some(third.clone()));
+    client.cancel_admin_rotation(&admin);
+    let id = client.queue_operation(&admin, &TimelockAction::SetAdmin(third));
+    assert_eq!(client.get_operation_status(&id), OperationStatus::Pending);
+}
+
+#[test]
+fn test_timelock_cancel_leaves_original_admin_intact() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    let id = client.queue_operation(&admin, &TimelockAction::SetAdmin(new_admin.clone()));
+    client.cancel_operation(&admin, &id);
+
+    // Cancelled timelock rotation leaves the original admin intact.
+    assert_eq!(client.get_admin(), admin);
+    assert_eq!(
+        client.try_get_operation(&id),
+        Err(Ok(ContractError::OperationNotFound))
+    );
+    // Accept path was never involved; there is no pending two-step proposal.
+    assert_eq!(client.get_proposed_admin(), None);
+    // Old admin retains privileges; the proposed admin never gained any.
+    let retry_id = client.queue_operation(&admin, &TimelockAction::SetAdmin(new_admin.clone()));
+    assert_eq!(
+        client.get_operation_status(&retry_id),
+        OperationStatus::Pending
+    );
+    assert_eq!(
+        client.try_queue_operation(&new_admin, &TimelockAction::SetAdmin(admin.clone())),
+        Err(Ok(ContractError::Unauthorized))
+    );
+}
+
+#[test]
+fn test_admin_rotation_e2e_timelock_then_cancelled_rotation() {
+    // End-to-end rehearsal of the live procedure against a deployed instance:
+    // 1. rotate via the timelock, 2. verify previous admin is revoked,
+    // 3. verify a subsequent cancelled rotation leaves the new admin intact.
+    // Mirrors `docs/ADMIN_KEY_ROTATION_RUNBOOK.md` without touching testnet.
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let rotated_admin = Address::generate(&env);
+    let cancelled_admin = Address::generate(&env);
+    let (_, client) = setup(&env);
+    client.init(&admin);
+
+    // --- Rotation via timelock (production path for `upgradable-contract`) ---
+    let rotate_id =
+        client.queue_operation(&admin, &TimelockAction::SetAdmin(rotated_admin.clone()));
+    assert_eq!(
+        client.get_operation_status(&rotate_id),
+        OperationStatus::Pending
+    );
+    // Early execution must be rejected (timelock delay).
+    assert_eq!(
+        client.try_execute_operation(&admin, &rotate_id),
+        Err(Ok(ContractError::OperationNotReady))
+    );
+    advance_to_ready(&env);
+    assert_eq!(
+        client.get_operation_status(&rotate_id),
+        OperationStatus::Ready
+    );
+    client.execute_operation(&admin, &rotate_id);
+    assert_eq!(client.get_admin(), rotated_admin);
+
+    // Previous admin verified to no longer hold privileges.
+    assert_eq!(
+        client.try_queue_operation(&admin, &TimelockAction::SetAdmin(admin.clone())),
+        Err(Ok(ContractError::Unauthorized))
+    );
+    assert_eq!(
+        client.try_propose_admin_rotation(&admin, &admin),
+        Err(Ok(ContractError::Unauthorized))
+    );
+
+    // --- Cancelled rotation leaves the rotated admin intact ---
+    client.propose_admin_rotation(&rotated_admin, &cancelled_admin);
+    assert_eq!(client.get_proposed_admin(), Some(cancelled_admin.clone()));
+    client.cancel_admin_rotation(&rotated_admin);
+    assert_eq!(client.get_admin(), rotated_admin);
+    assert_eq!(client.get_proposed_admin(), None);
+    assert_eq!(
+        client.try_accept_admin_rotation(&cancelled_admin),
+        Err(Ok(ContractError::OperationNotFound))
+    );
+    // Cancelled target never gained privileges.
+    assert_eq!(
+        client.try_propose_admin_rotation(&cancelled_admin, &rotated_admin),
+        Err(Ok(ContractError::Unauthorized))
+    );
+}
+
 #[test]
 fn test_contract_version() {
     use version_interface::ContractVersion;

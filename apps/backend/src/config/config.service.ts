@@ -32,6 +32,18 @@ export class ConfigService {
   // can be updated at runtime without mutating the frozen config.
   private contractOverrides: Record<string, string | null> = {};
 
+  // In-memory override for the Stellar testnet admin address recorded in
+  // `apps/onchain/testnet-manifest.json` (`admin_address`). Updated at
+  // runtime by `DeploymentManifestService.refreshManifest()` when the
+  // manifest file changes, so an admin key rotation is picked up without
+  // requiring a backend restart (see `docs/ADMIN_KEY_ROTATION_RUNBOOK.md`).
+  private adminAddressOverride: string | null = null;
+
+  // Per-contract admin overrides (e.g. `treasury.admin_address` in the
+  // manifest). Most deployments reuse the top-level admin; when a contract
+  // records its own `admin_address` it is tracked here.
+  private contractAdminOverrides: Record<string, string | null> = {};
+
   getStellarConfig(): StellarConfigResponseDto {
     const network = this.stellarCfg.network;
     const overrides = this.contractOverrides || {};
@@ -42,6 +54,9 @@ export class ConfigService {
       sorobanRpcUrl:
         config.stellar.sorobanRpcUrl ?? DEFAULT_SOROBAN_RPC_URLS[network],
       networkPassphrase: NETWORK_PASSPHRASES[network],
+      // Top-level manifest admin. Null when no manifest admin has been
+      // observed yet (e.g. before the first `refreshManifest()` call).
+      adminAddress: this.adminAddressOverride,
       contracts: {
         lumenToken:
           overrides.lumenToken ?? config.stellar.contracts.lumenToken ?? null,
@@ -68,6 +83,21 @@ export class ConfigService {
   }
 
   /**
+   * Returns the last admin address observed from the deployment manifest
+   * without a restart. Null when no manifest refresh has recorded one yet.
+   */
+  getStellarAdminAddress(): string | null {
+    return this.adminAddressOverride;
+  }
+
+  /**
+   * Returns per-contract admin overrides keyed by camelCase contract name.
+   */
+  getStellarContractAdmins(): Record<string, string | null> {
+    return { ...this.contractAdminOverrides };
+  }
+
+  /**
    * Apply runtime overrides for Stellar contract IDs. This does not mutate
    * the frozen global config object — overrides are stored in-memory and
    * merged when serving the client-facing config endpoint.
@@ -77,6 +107,30 @@ export class ConfigService {
   ): void {
     for (const [k, v] of Object.entries(updates)) {
       this.contractOverrides[k] = v ?? null;
+    }
+  }
+
+  /**
+   * Apply the top-level manifest admin address without a restart.
+   * Called by `DeploymentManifestService.refreshManifest()` when
+   * `admin_address` changes on disk (admin key rotation).
+   */
+  setStellarAdminAddress(address: string | null): void {
+    this.adminAddressOverride = address;
+  }
+
+  /**
+   * Apply per-contract admin overrides (camelCase contract name -> admin).
+   * Tracks contracts that record their own `admin_address` in the manifest.
+   */
+  setStellarContractAdminOverrides(
+    updates: Record<string, string | null | undefined>,
+  ): void {
+    for (const [k, v] of Object.entries(updates)) {
+      if (v === undefined) {
+        continue;
+      }
+      this.contractAdminOverrides[k] = v;
     }
   }
 

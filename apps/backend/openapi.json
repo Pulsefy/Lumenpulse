@@ -35095,7 +35095,7 @@
     },
     "/v1/contracts/manifests/refresh": {
       "post": {
-        "description": "Forces a reload of the testnet-manifest.json file to update contract IDs and caches.",
+        "description": "Forces a reload of the testnet-manifest.json file to update contract IDs, admin addresses, and caches without a restart. Use after an admin key rotation to verify backend pickup.",
         "operationId": "DeploymentManifestController_refreshManifest",
         "parameters": [
           {
@@ -43419,6 +43419,12 @@
             "description": "Network passphrase for transaction signing - used when building transactions to prevent cross-network replays",
             "example": "Test SDF Network ; September 2015"
           },
+          "adminAddress": {
+            "type": "string",
+            "nullable": true,
+            "description": "Current Stellar testnet admin address from the deployment manifest. Null until the manifest has been loaded. Updated without a restart when admin_address rotates.",
+            "example": "GDPBZZDKZJTPFERPP65ATQWH2T6OIXQESPKXSTO6YY33TA2HTUTAPJI6"
+          },
           "contracts": {
             "description": "Deployed Soroban contract addresses on the specified network. All values may be null if not deployed.",
             "allOf": [
@@ -43433,6 +43439,7 @@
           "horizonUrl",
           "sorobanRpcUrl",
           "networkPassphrase",
+          "adminAddress",
           "contracts"
         ]
       },

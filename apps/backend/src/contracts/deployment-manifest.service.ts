@@ -26,6 +26,8 @@ export class DeploymentManifestService implements OnModuleInit {
     string,
     { id: string; wasmHash: string | null }
   > = {};
+  private lastKnownAdminAddress: string | null = null;
+  private lastKnownContractAdmins: Record<string, string> = {};
 
   constructor(
     @Optional()
@@ -319,8 +321,32 @@ export class DeploymentManifestService implements OnModuleInit {
   }
 
   /**
+   * Returns the last top-level admin address observed via `refreshManifest()`.
+   * Used by the admin-rotation runbook and tests to assert the backend picked
+   * up a rotation without a restart.
+   */
+  getLastKnownAdminAddress(): string | null {
+    return this.lastKnownAdminAddress;
+  }
+
+  /**
+   * Returns the last per-contract admin addresses observed via
+   * `refreshManifest()`, keyed by camelCase contract name.
+   */
+  getLastKnownContractAdmins(): Record<string, string> {
+    return { ...this.lastKnownContractAdmins };
+  }
+
+  /**
    * Refreshes the manifest from the testnet-manifest.json file.
-   * If contract IDs or WASM hashes have changed, invalidates caches.
+   * If contract IDs, WASM hashes, or admin addresses have changed,
+   * applies in-memory overrides and invalidates caches — no restart needed.
+   *
+   * Admin rotation coverage (issue #1626): the top-level `admin_address` and
+   * any per-contract `admin_address` entries are tracked alongside contract
+   * IDs so `GET /v1/config/stellar` reflects the new admin immediately after
+   * the manifest is updated on disk (via the file watcher) or via
+   * `POST /v1/contracts/manifests/refresh`.
    */
   async refreshManifest(): Promise<void> {
     const repoRoot = process.cwd();
@@ -339,7 +365,17 @@ export class DeploymentManifestService implements OnModuleInit {
     try {
       const content = readFileSync(manifestPath, 'utf8');
       const parsed = JSON.parse(content) as {
-        contracts?: Record<string, { id?: unknown; wasm_hash?: unknown; reason?: unknown }>;
+        admin_address?: unknown;
+        adminAddress?: unknown;
+        contracts?: Record<
+          string,
+          {
+            id?: unknown;
+            wasm_hash?: unknown;
+            reason?: unknown;
+            admin_address?: unknown;
+          }
+        >;
       };
 
       if (
@@ -358,7 +394,24 @@ export class DeploymentManifestService implements OnModuleInit {
       for (const [snakeKey, contractInfo] of Object.entries(contracts)) {
         // Convert snake_case to camelCase
         const camelKey = snakeKey.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-        
+
+        // Track per-contract admin addresses even for undeployed entries is
+        // unnecessary; only deployed contracts carry admin metadata.
+        const contractAdmin =
+          typeof contractInfo.admin_address === 'string'
+            ? contractInfo.admin_address
+            : null;
+        if (contractAdmin) {
+          const previousAdmin = this.lastKnownContractAdmins[camelKey];
+          if (previousAdmin !== contractAdmin) {
+            this.logger.log(
+              `Contract ${camelKey} admin changed: previous=${previousAdmin ?? 'null'}, new=${contractAdmin}`,
+            );
+            this.lastKnownContractAdmins[camelKey] = contractAdmin;
+            hasChanges = true;
+          }
+        }
+
         // Skip un-deployed contracts (they have a 'reason' instead of 'id')
         if (contractInfo.reason) {
           continue;
@@ -383,9 +436,46 @@ export class DeploymentManifestService implements OnModuleInit {
         }
       }
 
+      // Top-level admin rotation: `admin_address` is the shared deployer/admin
+      // reused across contracts in the current testnet manifest. A rotation
+      // updates this field; the backend must surface it without a restart.
+      const rawAdmin =
+        typeof parsed.admin_address === 'string'
+          ? parsed.admin_address
+          : typeof parsed.adminAddress === 'string'
+            ? parsed.adminAddress
+            : null;
+      let adminChanged = false;
+      if (rawAdmin !== null) {
+        if (this.lastKnownAdminAddress !== rawAdmin) {
+          this.logger.log(
+            `Manifest admin changed: previous=${this.lastKnownAdminAddress ?? 'null'}, new=${rawAdmin}`,
+          );
+          this.lastKnownAdminAddress = rawAdmin;
+          adminChanged = true;
+          hasChanges = true;
+        }
+      } else if (this.lastKnownAdminAddress === null) {
+        // First refresh with no admin field: record explicit null so callers
+        // can distinguish "not loaded yet" from "loaded, no admin".
+        this.lastKnownAdminAddress = null;
+      }
+
       if (hasChanges) {
         this.logger.log('Manifest changes detected. Applying updates and invalidating caches.');
-        this.configService.setStellarContractOverrides(updates);
+        if (Object.keys(updates).length > 0) {
+          this.configService.setStellarContractOverrides(updates);
+        }
+        if (adminChanged) {
+          this.configService.setStellarAdminAddress(this.lastKnownAdminAddress);
+        }
+        const adminUpdates: Record<string, string> = {};
+        for (const [k, v] of Object.entries(this.lastKnownContractAdmins)) {
+          adminUpdates[k] = v;
+        }
+        if (Object.keys(adminUpdates).length > 0) {
+          this.configService.setStellarContractAdminOverrides(adminUpdates);
+        }
         await this.configService.invalidateCache();
         this.contractCapabilityService.invalidateCache();
       } else {

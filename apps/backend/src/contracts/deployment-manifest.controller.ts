@@ -140,7 +140,7 @@ export class DeploymentManifestController {
   @ApiOperation({
     summary: 'Refresh active contract deployment manifest from disk (admin only)',
     description:
-      'Forces a reload of the testnet-manifest.json file to update contract IDs and caches.',
+      'Forces a reload of the testnet-manifest.json file to update contract IDs, admin addresses, and caches without a restart. Use after an admin key rotation to verify backend pickup.',
   })
   @ApiOkResponse({
     description: 'Manifest refreshed successfully',
