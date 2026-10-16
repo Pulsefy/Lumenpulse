@@ -6,7 +6,6 @@ members = [
   "contracts/cross-contract-view",
   "contracts/lumen_token",
   "contracts/matching_pool",
-  "contracts/notification_broker",
   "contracts/notification_interface",
   "contracts/project_registry",
   "contracts/protocol_registry",
@@ -18,22 +17,31 @@ members = [
   "contracts/lumenpulse-curation",
   "contracts/pricing_adapter",
   "contracts/treasury",
-  "contracts/idempotency-guard",
+  "contracts/idompotency-guard",
   "contracts/yield_vault",
   "contracts/feature_flags",
   "contracts/contract_registry",
-  "contracts/liquidity_pool",
   "contracts/error-registry"
 ]
-# `contracts/stable_swap_pool` is intentionally not a workspace member: its
-# sources still target the pre-v23 Soroban API (`Env::invoker`,
-# `storage::Persistent::bump`, `Symbol` as the error type), so it does not
-# build against soroban-sdk 23. Its test suite (#1220) is in-tree under
-# `contracts/stable_swap_pool/src/test.rs` and will move into CI once the
-# contract itself is migrated.
-exclude = ["contracts/tests", "contracts/stable_swap_pool", "contracts/test_utils", "contracts/event-golden"]
+# Excluded from the workspace:
+# - `contracts/tests`: cross-contract integration suite.
+# - `contracts/stable_swap_pool`: sources target the pre-v23 Soroban API
+#   (`Env::invoker`, `storage::Persistent::bump`, `Symbol` as the error type), so it
+#   does not build against soroban-sdk 23. Pending migration.
+# - `contracts/test_utils`, `contracts/event-golden`: test/only support crates.
+# - `contracts/notification_broker`, `contracts/liquidity_pool`: dead crates with
+#   no evident integration (Wave 10 contract inventory consolidation).
+# - `contracts/ProtocolStats.sol`: Solidity file in a Soroban project, removed.
+exclude = [
+  "contracts/tests",
+  "contracts/stable_swap_pool",
+  "contracts/test_utils",
+  "contracts/event-golden",
+  "contracts/notification_broker",
+  "contracts/liquidity_pool",
+]
 
-[workspace.dependencies]
+workspace.dependencies
 soroban-sdk = "23"
 soroban-sdk-macros = "23"
 
