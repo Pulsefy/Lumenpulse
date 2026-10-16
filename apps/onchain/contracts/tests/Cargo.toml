@@ -15,6 +15,7 @@ crowdfund_vault = { path = "../crowdfund_vault", features = ["testutils"] }
 matching_pool = { path = "../matching_pool", features = ["testutils"] }
 treasury = { path = "../treasury", features = ["testutils"] }
 project_registry = { path = "../project_registry", features = ["testutils"] }
+notification_broker = { package = "notification-broker", path = "../notification_broker", features = ["testutils"] }
 idempotency-guard = { path = "../idempotency-guard" }
 notification_interface = { path = "../notification_interface" }
 proptest = { version = "1", default-features = false, features = ["std"] }

@@ -3,6 +3,7 @@ extern crate std;
 
 
 mod fuzz_pipeline;
+mod funding_path_failure_tests;
 use soroban_sdk::{testutils::Address as _, Address, Env, String, Symbol, Vec};
 
 // 1. IMPORT SOURCE CONTRACTS

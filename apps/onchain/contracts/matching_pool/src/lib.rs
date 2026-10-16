@@ -10,7 +10,10 @@ use math::{sqrt_scaled, unscale};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, IntoVal, Symbol, Val, Vec};
-use storage::{DataKey, PauseScope, RoundData, LEDGER_BUMP, LEDGER_THRESHOLD};
+use storage::{DataKey, LEDGER_BUMP, LEDGER_THRESHOLD};
+// Re-export `PauseScope` and `RoundData` — `pub use` also brings them into this
+// module's namespace, so no separate `use` is needed.
+pub use storage::{PauseScope, RoundData};
 
 #[contract]
 pub struct MatchingPoolContract;
@@ -625,6 +628,20 @@ impl MatchingPoolContract {
                 total_distributed += alloc;
             }
 
+            // ── Commit state only after all allocations are computed ──────────
+            //
+            // ATOMICITY GUARANTEE: We mark the round as distributed and zero
+            // the pool balance BEFORE executing the transfer loop below.  The
+            // entire function runs inside `with_reentrancy_guard`, which means
+            // it is already serialised against re-entrant calls from token
+            // contracts.  If any individual token transfer panics, the Soroban
+            // host will abort the entire transaction and roll back ALL state
+            // mutations in this invocation — including these flag writes — so
+            // no partial state can be committed.
+            //
+            // Previously `is_distributed` was set here (before transfers) but
+            // without adequate documentation of the atomicity guarantee; this
+            // comment makes the invariant explicit.
             round.is_distributed = true;
             env.storage()
                 .persistent()
@@ -643,6 +660,12 @@ impl MatchingPoolContract {
             env.storage().persistent().set(&pool_key, &0i128);
             Self::touch_persistent(&env, &pool_key);
 
+            // ── Execute transfers ────────────────────────────────────────────
+            //
+            // Each transfer is a standard Soroban token call.  If any call
+            // panics the host aborts the transaction and rolls back the state
+            // commits above, leaving `is_distributed = false` and the pool
+            // balance intact — safe to retry.
             let contract_addr = env.current_contract_address();
             let token = TokenClient::new(&env, &round.token_address);
             for distribution in distributions {
