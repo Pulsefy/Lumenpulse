@@ -6,7 +6,6 @@
     "version": "1.0.0"
   },
   "paths": {
-    "/api/pipeline/topology": {"get":{"tags":["Pipeline"],"summary":"Get Pipeline Topology","description":"Return the pipeline topology: each scheduled stage, its schedule and dependencies, and its latest run (last run, duration, outcome).","operationId":"get_pipeline_topology_api_pipeline_topology_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/PipelineTopologyResponse"}}}}}}},
     "/ingestion/contract-lag": {
       "get": {
         "summary": "Get Contract Lag",
@@ -1592,6 +1591,28 @@
         }
       }
     },
+    "/api/pipeline/topology": {
+      "get": {
+        "tags": [
+          "Pipeline"
+        ],
+        "summary": "Get Pipeline Topology",
+        "description": "Return the pipeline topology: each scheduled stage, its schedule and dependencies, and its latest run (last run, duration, outcome).",
+        "operationId": "get_pipeline_topology_api_pipeline_topology_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineTopologyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/metrics": {
       "get": {
         "summary": "Metrics",
@@ -1642,6 +1663,25 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/health": {
+      "get": {
+        "summary": "Model Health",
+        "description": "Report per-model SLO health (Issue #1647).\n\nReturns a trustworthiness snapshot for every registered model type:\nlive version, drift state, calibration age and data freshness. Each\nsignal is classified trustworthy | degraded | unavailable and the\nper-model overall is the worst of its signals.\n\nThe backend consumes this endpoint to decide whether to surface a\nprediction. Transitions into a degraded/unavailable state raise an\nalert through the backend notification path (see\nsrc/ml/model_health.py).\n\nRequires X-API-Key header.",
+        "operationId": "model_health_model_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelHealthResponse"
                 }
               }
             }
@@ -2915,8 +2955,6 @@
   },
   "components": {
     "schemas": {
-      "StageStatus": {"description":"One pipeline stage plus the outcome of its most recent run.","properties":{"id":{"type":"string","title":"Id"},"name":{"type":"string","title":"Name"},"schedule":{"type":"string","title":"Schedule"},"depends_on":{"items":{"type":"string"},"type":"array","title":"Depends On"},"status":{"type":"string","title":"Status"},"last_run":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Last Run"},"duration_seconds":{"anyOf":[{"type":"number"},{"type":"null"}],"title":"Duration Seconds"},"outcome":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Outcome"},"error":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Error"}},"type":"object","required":["id","name","schedule","depends_on","status"],"title":"StageStatus"},
-      "PipelineTopologyResponse": {"description":"The full pipeline topology response.","properties":{"generated_at":{"type":"string","title":"Generated At"},"stages":{"items":{"$ref":"#/components/schemas/StageStatus"},"type":"array","title":"Stages"}},"type":"object","required":["generated_at","stages"],"title":"PipelineTopologyResponse"},
       "ActionResponse": {
         "properties": {
           "success": {
@@ -4707,6 +4745,108 @@
         ],
         "title": "MetricDataPoint"
       },
+      "ModelHealthResponse": {
+        "properties": {
+          "checked_at": {
+            "type": "string",
+            "title": "Checked At"
+          },
+          "models": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ModelHealthSnapshotResponse"
+            },
+            "type": "object",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checked_at",
+          "models"
+        ],
+        "title": "ModelHealthResponse"
+      },
+      "ModelHealthSnapshotResponse": {
+        "properties": {
+          "model_type": {
+            "type": "string",
+            "title": "Model Type"
+          },
+          "live_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Version"
+          },
+          "drift": {
+            "$ref": "#/components/schemas/ModelSignalResponse"
+          },
+          "calibration_age": {
+            "$ref": "#/components/schemas/ModelSignalResponse"
+          },
+          "data_freshness": {
+            "$ref": "#/components/schemas/ModelSignalResponse"
+          },
+          "overall": {
+            "type": "string",
+            "title": "Overall"
+          },
+          "checked_at": {
+            "type": "string",
+            "title": "Checked At"
+          },
+          "transitioned_to_degraded": {
+            "type": "boolean",
+            "title": "Transitioned To Degraded",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_type",
+          "live_version",
+          "drift",
+          "calibration_age",
+          "data_freshness",
+          "overall",
+          "checked_at"
+        ],
+        "title": "ModelHealthSnapshotResponse",
+        "description": "Per-model SLO snapshot returned by GET /model/health."
+      },
+      "ModelSignalResponse": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "value": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "detail"
+        ],
+        "title": "ModelSignalResponse",
+        "description": "Classified state of one health signal (trustworthy | degraded | unavailable)."
+      },
       "ModelStatusResponse": {
         "properties": {
           "last_run": {
@@ -4988,6 +5128,28 @@
         ],
         "title": "OperationResponse",
         "description": "Response model for account operation."
+      },
+      "PipelineTopologyResponse": {
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "title": "Generated At"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageStatus"
+            },
+            "type": "array",
+            "title": "Stages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "generated_at",
+          "stages"
+        ],
+        "title": "PipelineTopologyResponse",
+        "description": "The full pipeline topology response."
       },
       "RebuildRequest": {
         "properties": {
@@ -5704,6 +5866,87 @@
           "message"
         ],
         "title": "ShadowUnregisterResponse"
+      },
+      "StageStatus": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "schedule": {
+            "type": "string",
+            "title": "Schedule"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "schedule",
+          "depends_on",
+          "status"
+        ],
+        "title": "StageStatus",
+        "description": "One pipeline stage plus the outcome of its most recent run."
       },
       "TokenContributionResponse": {
         "properties": {
