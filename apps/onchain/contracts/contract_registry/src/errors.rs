@@ -3,8 +3,8 @@ use soroban_sdk::contracterror;
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum RegistryError {
-    Unauthorized = 1,
-    AlreadyInitialized = 2,
-    NotInitialized = 3,
-    ContractNotFound = 4,
+    Unauthorized = 1000,
+    AlreadyInitialized = 1001,
+    NotInitialized = 1002,
+    ContractNotFound = 1003,
 }

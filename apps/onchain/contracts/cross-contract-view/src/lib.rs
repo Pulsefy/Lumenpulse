@@ -22,3 +22,6 @@ pub use admin_helpers::{get_admin, require_admin};
 pub use errors::ViewError;
 pub use safe_view::{has_state, read_state, read_state_with_default};
 pub use token_helpers::{allowance, balance, token_info};
+
+#[cfg(test)]
+mod test;

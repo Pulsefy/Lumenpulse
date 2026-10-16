@@ -18,15 +18,15 @@ import {
  * `Error(Contract, #N)` in simulation and transaction diagnostics.
  */
 export enum TreasuryContractError {
-  NotInitialized = 1,
-  AlreadyInitialized = 2,
-  Unauthorized = 3,
-  InvalidAmount = 4,
-  InvalidDuration = 5,
-  InvalidStartTime = 6,
-  StreamNotFound = 7,
-  NothingToClaim = 8,
-  Reentrancy = 9,
+  NotInitialized = 2100,
+  AlreadyInitialized = 2101,
+  Unauthorized = 2102,
+  InvalidAmount = 2103,
+  InvalidDuration = 2104,
+  InvalidStartTime = 2105,
+  StreamNotFound = 2106,
+  NothingToClaim = 2107,
+  Reentrancy = 2108,
 }
 
 /**
@@ -39,21 +39,21 @@ export function mapContractErrorCode(
   beneficiary?: string,
 ): TreasuryException {
   switch (code) {
-    case 1: // TreasuryContractError.NotInitialized
+    case 2100: // TreasuryContractError.NotInitialized
       return new TreasuryNotInitializedException();
-    case 3: // TreasuryContractError.Unauthorized
+    case 2102: // TreasuryContractError.Unauthorized
       return new TreasuryUnauthorizedException();
-    case 4: // TreasuryContractError.InvalidAmount
+    case 2103: // TreasuryContractError.InvalidAmount
       return new TreasuryInvalidAmountException();
-    case 5: // TreasuryContractError.InvalidDuration
+    case 2104: // TreasuryContractError.InvalidDuration
       return new TreasuryInvalidDurationException();
-    case 6: // TreasuryContractError.InvalidStartTime
+    case 2105: // TreasuryContractError.InvalidStartTime
       return new TreasuryInvalidStartTimeException();
-    case 7: // TreasuryContractError.StreamNotFound
+    case 2106: // TreasuryContractError.StreamNotFound
       return new TreasuryStreamNotFoundException(beneficiary ?? 'unknown');
-    case 8: // TreasuryContractError.NothingToClaim
+    case 2107: // TreasuryContractError.NothingToClaim
       return new TreasuryNothingToClaimException();
-    case 9: // TreasuryContractError.Reentrancy
+    case 2108: // TreasuryContractError.Reentrancy
       return new TreasuryReentrancyException();
     default:
       return new TreasuryTransactionFailedException(fallbackMessage, {

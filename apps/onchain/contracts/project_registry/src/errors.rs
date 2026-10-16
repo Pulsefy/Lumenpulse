@@ -4,16 +4,16 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum RegistryError {
-    NotInitialized = 1,
-    AlreadyInitialized = 2,
-    Unauthorized = 3,
-    ProjectNotFound = 4,
-    ProjectAlreadyRegistered = 5,
-    AlreadyVoted = 6,
-    VotingClosed = 7,
-    InsufficientWeight = 8,
-    InvalidThreshold = 9,
-    ContractPaused = 10,
-    ProjectAlreadyVerified = 11,
-    ProjectAlreadyRejected = 12,
+    NotInitialized = 1900,
+    AlreadyInitialized = 1901,
+    Unauthorized = 1902,
+    ProjectNotFound = 1903,
+    ProjectAlreadyRegistered = 1904,
+    AlreadyVoted = 1905,
+    VotingClosed = 1906,
+    InsufficientWeight = 1907,
+    InvalidThreshold = 1908,
+    ContractPaused = 1909,
+    ProjectAlreadyVerified = 1910,
+    ProjectAlreadyRejected = 1911,
 }
