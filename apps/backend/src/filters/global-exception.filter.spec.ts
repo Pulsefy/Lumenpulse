@@ -197,4 +197,40 @@ describe('GlobalExceptionFilter', () => {
       }),
     );
   });
+
+  it('normalizes a standard Error in non-production mode with original message', () => {
+    const originalNodeEnv = process['env']['NODE_ENV'];
+    process['env']['NODE_ENV'] = 'development';
+
+    const error = new Error('Test general error message');
+    filter.catch(error, mockArgumentsHost);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      code: ErrorCode.SYS_INTERNAL_ERROR,
+      message: 'Test general error message',
+      details: undefined,
+      requestId: 'req-123',
+      correlationId: 'req-123',
+    });
+
+    process['env']['NODE_ENV'] = originalNodeEnv;
+  });
+
+  it('normalizes unknown non-Error exceptions with fallback internal server error', () => {
+    filter.catch('Unknown string error', mockArgumentsHost);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      code: ErrorCode.SYS_INTERNAL_ERROR,
+      message: 'Internal server error',
+      details: undefined,
+      requestId: 'req-123',
+      correlationId: 'req-123',
+    });
+  });
 });
