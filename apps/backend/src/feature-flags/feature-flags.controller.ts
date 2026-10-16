@@ -179,7 +179,7 @@ export class FeatureFlagsController {
     @Body() body: UpsertFeatureFlagDto,
     @Req() req?: { user?: { email?: string } },
   ) {
-    const resolvedActor = body.changedBy ?? req?.user?.email ?? 'admin';
+    const resolvedActor = body.changedBy ?? req?.user?.email;
 
     const targeting =
       body.rolloutPercentage !== undefined ||

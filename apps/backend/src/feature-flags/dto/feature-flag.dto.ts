@@ -19,7 +19,7 @@ export class UpsertFeatureFlagDto {
     example: 'new-onboarding-flow',
   })
   @IsString()
-  key: string;
+  key!: string;
 
   @ApiProperty({
     description:
@@ -28,7 +28,7 @@ export class UpsertFeatureFlagDto {
     example: true,
   })
   @IsBoolean()
-  enabled: boolean;
+  enabled!: boolean;
 
   @ApiPropertyOptional({
     description:
@@ -139,10 +139,10 @@ export class FeatureFlagResponseDto {
     description: 'Unique feature flag key',
     example: 'new-onboarding-flow',
   })
-  key: string;
+  key!: string;
 
   @ApiProperty({ description: 'Whether the feature is enabled', example: true })
-  enabled: boolean;
+  enabled!: boolean;
 
   @ApiPropertyOptional({
     description:
@@ -214,20 +214,20 @@ export class FlagEvaluationResponseDto {
     description: 'The feature-flag key that was evaluated',
     example: 'new-onboarding-flow',
   })
-  key: string;
+  key!: string;
 
   @ApiProperty({
     description: 'The principal the flag was evaluated for',
     example: 'user-123',
     nullable: true,
   })
-  principalId: string | null;
+  principalId!: string | null;
 
   @ApiProperty({
     description: 'Whether the flag is enabled for this principal',
     example: true,
   })
-  enabled: boolean;
+  enabled!: boolean;
 
   @ApiProperty({
     description: 'The rule that produced this result',
@@ -235,7 +235,7 @@ export class FlagEvaluationResponseDto {
     enumName: 'FlagEvaluationReason',
     example: 'percentage_included',
   })
-  reason: string;
+  reason!: string;
 
   @ApiPropertyOptional({
     description:
@@ -243,55 +243,55 @@ export class FlagEvaluationResponseDto {
     example: 412,
     nullable: true,
   })
-  bucket: number | null;
+  bucket!: number | null;
 
   @ApiPropertyOptional({
     description: 'Rollout percentage configured on the flag',
     example: 5,
     nullable: true,
   })
-  rolloutPercentage: number | null;
+  rolloutPercentage!: number | null;
 
   @ApiPropertyOptional({
     description: 'Allow list configured on the flag',
     type: [String],
   })
-  allowList: string[];
+  allowList!: string[];
 
   @ApiPropertyOptional({
     description: 'Deny list configured on the flag',
     type: [String],
   })
-  denyList: string[];
+  denyList!: string[];
 }
 
 export class FlagAuditLogResponseDto {
   @ApiProperty({ description: 'Audit record ID (UUID)' })
-  id: string;
+  id!: string;
 
   @ApiProperty({
     description: 'The feature-flag key that was mutated',
     example: 'new-onboarding-flow',
   })
-  flagKey: string;
+  flagKey!: string;
 
   @ApiProperty({
     description: "Action performed: 'upsert' | 'remove'",
     example: 'upsert',
   })
-  action: 'upsert' | 'remove';
+  action!: 'upsert' | 'remove';
 
   @ApiPropertyOptional({
     description: "Flag's enabled state before this mutation (null if new flag)",
     example: false,
   })
-  previousEnabled: boolean | null;
+  previousEnabled!: boolean | null;
 
   @ApiPropertyOptional({
     description: "Flag's enabled state after this mutation (null for removals)",
     example: true,
   })
-  newEnabled: boolean | null;
+  newEnabled!: boolean | null;
 
   @ApiPropertyOptional({
     description:
@@ -300,7 +300,7 @@ export class FlagAuditLogResponseDto {
     example: { rolloutPercentage: null, allowList: [], denyList: [] },
     nullable: true,
   })
-  previousTargeting: Record<string, any> | null;
+  previousTargeting!: Record<string, any> | null;
 
   @ApiPropertyOptional({
     description:
@@ -309,7 +309,7 @@ export class FlagAuditLogResponseDto {
     example: { rolloutPercentage: 5, allowList: [], denyList: [] },
     nullable: true,
   })
-  newTargeting: Record<string, any> | null;
+  newTargeting!: Record<string, any> | null;
 
   @ApiPropertyOptional({
     description: 'Target rollout percentage at the time of this mutation',
@@ -327,11 +327,11 @@ export class FlagAuditLogResponseDto {
     description: 'Actor who requested the change',
     example: 'admin@lumenpulse.com',
   })
-  actor: string | null;
+  actor!: string | null;
 
   @ApiProperty({
     description: 'Timestamp when the mutation was applied',
     example: '2024-06-01T12:00:00.000Z',
   })
-  changedAt: Date;
+  changedAt!: Date;
 }
