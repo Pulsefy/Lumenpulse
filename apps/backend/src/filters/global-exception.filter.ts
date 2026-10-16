@@ -12,7 +12,10 @@ import {
   REQUEST_ID_HEADER,
 } from '../common/constants/request.constants';
 import { ErrorCode } from '../common/enums/error-code.enum';
-import { ErrorResponse } from '../interfaces/error-response.interface';
+import {
+  ApiErrorResponse,
+  ApiErrorPayload,
+} from '../common/interfaces/api-envelope.interface';
 import { resolveNodeEnv } from '../lib/config';
 import { mapSorobanRpcErrorToApi } from '../stellar/utils/soroban-error.mapper';
 import { SorobanRpcError } from '../stellar/services/soroban-rpc-client.service';
@@ -37,7 +40,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       (typeof request.requestId === 'string' && request.requestId) ||
       'unknown';
     const requestId = correlationId;
-    const errorResponse = this.buildErrorResponse(exception, status, requestId);
+    const errorPayload = this.buildErrorPayload(exception, status, requestId);
+    const errorResponse: ApiErrorResponse = {
+      success: false,
+      error: errorPayload,
+    };
 
     response.setHeader(CORRELATION_ID_HEADER, correlationId);
     response.setHeader(REQUEST_ID_HEADER, requestId);
@@ -52,8 +59,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           method: request.method,
           url: request.originalUrl ?? request.url,
           statusCode: status,
-          errorCode: errorResponse.code,
-          message: errorResponse.message,
+          errorCode: errorPayload.code,
+          message: errorPayload.message,
           timestamp: new Date().toISOString(),
         }),
         stack,
@@ -67,8 +74,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           method: request.method,
           url: request.originalUrl ?? request.url,
           statusCode: status,
-          errorCode: errorResponse.code,
-          message: errorResponse.message,
+          errorCode: errorPayload.code,
+          message: errorPayload.message,
           timestamp: new Date().toISOString(),
         }),
       );
@@ -77,11 +84,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     response.status(status).json(errorResponse);
   }
 
-  private buildErrorResponse(
+  private buildErrorPayload(
     exception: unknown,
     status: number,
     requestId: string,
-  ): ErrorResponse {
+  ): ApiErrorPayload {
     const isProduction = resolveNodeEnv() === 'production';
     const correlationId = requestId;
 
@@ -191,13 +198,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   private getErrorDetails(
     responseBody: Record<string, unknown> | undefined,
     status: number,
-  ): ErrorResponse['details'] {
+  ): ApiErrorPayload['details'] {
     if (!responseBody) {
       return undefined;
     }
 
     if ('details' in responseBody) {
-      return responseBody.details as ErrorResponse['details'];
+      return responseBody.details as ApiErrorPayload['details'];
     }
 
     if (status === 400 && Array.isArray(responseBody.message)) {
@@ -244,6 +251,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         return ErrorCode.SYS_PAYLOAD_TOO_LARGE;
       case 415:
         return ErrorCode.SYS_UNSUPPORTED_MEDIA_TYPE;
+      case 422:
+        return ErrorCode.SYS_VALIDATION_FAILED;
       case 429:
         return ErrorCode.SYS_RATE_LIMIT_EXCEEDED;
       case 503:

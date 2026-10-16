@@ -33,7 +33,7 @@ inside `nest build`.
 `.github/workflows/backend.yml` runs `npm run build` and then:
 
 1. **Fails if `openapi.json` changed**, which means the committed spec is stale
-   relative to the code. To fix it, run `npm run build` locally and commit
+   relative to the code. To fix it, run `npm run build locally and commit
    `openapi.json`.
 2. **Fails if the webapp's generated types are stale**
    (`apps/webapp/scripts/generate-api-types.mjs --check`). To fix it, run
@@ -66,7 +66,7 @@ registered with `APP_GUARD`. The lint then rejects:
 Register global guards with `{ provide: APP_GUARD, ... }`, not
 `app.useGlobalGuards()`, which the scan can't see. `route-guards.spec.ts`
 fails if `main.ts` or `app.setup.ts` calls `useGlobalGuards`. The same spec
-runs the lint against fixture routes that use the real JWT, API-key and
+hthe lint against fixture routes that use the real JWT, API-key and
 webhook-signature guards, and against the real `AppModule`.
 
 Two DTO classes that publish the same schema name are also fatal, because
@@ -80,11 +80,105 @@ bodies, and component schemas with no properties.
 
 Gaps that already existed when the lint was introduced are listed in
 `openapi-lint-baseline.json`. A **new** gap fails the build. When you fix a
-baselined gap, the build fails until you remove it with
+ *baselined** gap, the build fails until you remove it with
 `npm run openapi:baseline`, so the list only shrinks. Don't add entries by
 hand to get past the lint.
 
 Each violation names the route and `Controller_method` to fix.
+
+## Response envelope
+
+Every HTTP response body is wrapped in a single envelope so clients can
+parse success, error and pagination without per-call-site logic. The envelope
+is applied globally by `ResponseEnvelopeInterceptor` (`src/common/interceptors/response-envelope.interceptor.ts`) and documented in the spec by
+src/openapi/openapi.document.ts`. Controllers return the bare payload and the
+interceptor wraps it; no controller code constructs the envelope.
+
+### Success
+
+```json
+{
+  "success": true,
+  "data": { /* resource or array */ },
+  "meta": { "requestId": "..." }
+}
+```
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `success` | `true` | Always true for 20x responses. |
+| `data` | any | The handler's return value. `null` for 204. |
+| `meta` | object | Correlation information. |
+| `meta.requestId` | string | Matches the `X-Request-Id` response header. |
+
+### Error
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "...",
+    "message": "...",
+    "details": { /* optional */ }
+  },
+  "meta": { "requestId": "..." }
+}
+```
+
+The error shape is produced by `GlobalExceptionFilter` and is already the
+schema `#/components/schemas/ErrorResponseDto` used by every 4xx/5xx response.
+
+### Paginated list
+
+```json
+{
+  "success": true,
+  "data": [ /* items */ ],
+  "meta": {
+    "requestId": "...",
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 123,
+      "totalPages": 7,
+      "hasNext": true,
+      "hasPrevious": false
+    }
+  }
+}
+```
+
+List handlers return a paginated result object (`data` + `pagination`); the
+interceptor promotes the pagination into `meta.pagination`. The component
+schemas are `PaginationMetaDto`, `PaginatedResponseDto` and `PaginationQueryDto`.
+
+### Intentional exceptions
+
+A small number of routes do not use the envelope. Each exception is
+documented here and in the spec via `@ApiExtension({ 'openapi-envelope':
+'excluded' })` on the operation:
+
+| Route | Why it is excluded |
+| --- | --- |
+| `GET /api/health` | Kubernetes liveness/probes expect a flat object. |
+| `GET /api/docs-jwt` | Swagger UI consumes the raw OpenAPI document. |
+| `GET /api/metrics` | Prometheus scrapes the raw text format. |
+| `GET /api/stream/*` | Server-sent events are framed by the SSE protocol. |
+
+### Breaking changes for clients
+
+Client work must be sequenced against these breaking changes:
+
+1. All 2xx response bodies are now wrapped in `{ success, data, meta }`.
+   Call sites that read the bare resource must read `.data`.
+2. All 4xx/5xx response bodies are now wrapped in `{ success, error, meta }`.
+   Call sites that read `code`/`message` at the top level must read `.error`.
+3. List responses move pagination fields from the top level into
+   `meta.pagination`.
+4. `XRequestId` is now always present in `meta.requestId` as well as in the
+   `X-Request-Id` response header.
+5. The generated types in `apps/webapp/generated/` and the mobile client
+   change shape; regenerate and adapt call sites after the backend ships.
 
 ## What the generator adds automatically
 
@@ -93,10 +187,12 @@ from global infrastructure rather than individual controllers:
 
 | Concern | Source in code | In the spec |
 | --- | --- | --- |
+| Response envelope | `ResponseEnvelopeInterceptor` | Every 2xx response uses the envelope schemas (`SuccessResponseDto`, `PaginatedResponseDto`). |
 | Error envelope | `GlobalExceptionFilter` | Every 4xx/5xx response uses `#/components/schemas/ErrorResponseDto` (`code`, `message`, `details?`, `requestId`). |
-| Standard errors | validation pipe, guards, rate limiter | `400` if the operation takes input, `401`/`403` if it is secured, `404` for path parameters, and `429`/`500` everywhere. |
+| Standard errors | validation pipe, guards, rate limiter | `400` if the operation takes input, `401`/`403` if it is secured, `404`
+for path parameters, and `429`/`500` everywhere. |
 | Idempotency | `IdempotencyInterceptor` (global) | Optional `Idempotency-Key` header on every `POST`/`PUT`/`PATCH`/`DELETE`, plus `409` (still in progress) and `422` (key reused with a different body). |
-| Correlation id | `RequestIdMiddleware` | `X-Request-Id` response header on every response. |
+| Correlation id | `RequestIdMiddleware` | `X-Request-Id` response header on every response, and `meta.requestId` in the envelope. |
 
 ## Security schemes
 
@@ -115,7 +211,8 @@ using string literals.
    compiler plugin documents their properties; add `@ApiProperty` for
    descriptions and examples.
 2. Add `@ApiTags`, `@ApiOperation({ summary })` and a typed success response
-   (`@ApiOkResponse({ type: Dto })`).
+   (`@ApiOkResponse({ type: Dto })`). Return the bare payload from the handler;
+   the interceptor applies the envelope.
 3. If the route is guarded, declare the matching security decorator
    (`@ApiBearerAuth(JWT_SECURITY_SCHEME)`, or `@ApiSecurity(...)` for the
    others). If it needs several schemes, put them in one `@ApiSecurity({...})`.
@@ -123,4 +220,4 @@ using string literals.
    webapp uses changed, also run `npm run generate:api-types` in `apps/webapp`.
 
 The same document is served at runtime at `/api/docs` (Swagger UI) and
-`/api/docs-json`.
+`api/docs-json`.
