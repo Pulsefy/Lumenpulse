@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "network": "testnet",
   "commit": "<git commit>",
   "contract_name": "upgradable_contract",
@@ -10,50 +11,75 @@
   "steps": [
     {
       "name": "baseline",
-      "output": "<captured command output>"
+      "output": "<captured command output>",
+      "timestamp": "<ISO-8601 timestamp>",
+      "status": "passed"
     },
     {
       "name": "queued",
-      "output": "<transaction hash, operation ID, execute_after, expires_at>"
+      "output": "<transaction hash, operation ID, execute_after, expires_at>",
+      "timestamp": "<ISO-8601 timestamp>",
+      "status": "passed"
     },
     {
       "name": "early_execution_rejected",
-      "output": "<OperationNotReady output>"
+      "output": "<OperationNotReady output>",
+      "timestamp": "<ISO-8601 timestamp>",
+      "status": "passed"
     },
     {
       "name": "ready",
-      "output": "<Ready status output>"
+      "output": "<Ready status output>",
+      "timestamp": "<ISO-8601 timestamp>",
+      "status": "passed"
     },
     {
       "name": "executed",
-      "output": "<execution transaction and events>"
+      "output": "<execution transaction and events>",
+      "timestamp": "<ISO-8601 timestamp>",
+      "status": "passed"
     },
     {
       "name": "post_upgrade_verification",
-      "output": "<read-only state verification>"
+      "output": "<read-only state verification>",
+      "timestamp": "<ISO-8601 timestamp>",
+      "status": "passed"
     },
     {
       "name": "manifest_updated",
-      "output": "<manifest validation output>"
+      "output": "<manifest validation output>",
+      "timestamp": "<ISO-8601 timestamp>",
+      "status": "passed"
     },
     {
       "name": "backend_verification",
-      "output": "<drift, active-manifest, and smoke output>"
+      "output": "<drift, active-manifest, and smoke output>",
+      "timestamp": "<ISO-8601 timestamp>",
+      "status": "passed"
     },
     {
       "name": "rollback_queued",
-      "output": "<rollback queue output>"
+      "output": "<rollback queue output>",
+      "timestamp": "<ISO-8601 timestamp>",
+      "status": "passed"
     },
     {
       "name": "rollback_executed",
-      "output": "<rollback execution output>"
+      "output": "<rollback execution output>",
+      "timestamp": "<ISO-8601 timestamp>",
+      "status": "passed"
     },
     {
       "name": "post_rollback_verification",
-      "output": "<read-only rollback verification>"
+      "output": "<read-only rollback verification>",
+      "timestamp": "<ISO-8601 timestamp>",
+      "status": "passed"
     }
   ],
   "follow_up_issues": [
     "UPGRADE-REHEARSAL-001"
-  ]
+  ],
+  "generated_at": "<ISO-8601 timestamp>",
+  "stale": false,
+  "stale_after_seconds": 604800
 }
