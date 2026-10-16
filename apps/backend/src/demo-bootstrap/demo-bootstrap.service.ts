@@ -1,6 +1,7 @@
 import {
   Injectable,
   Logger,
+  OnModuleInit,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { config } from '../lib/config';
@@ -16,6 +17,7 @@ import {
   ResetResultDto,
   BootstrapStatusDto,
 } from './dto/demo-bootstrap.dto';
+
 
 /**
  * DemoBootstrapService
@@ -59,11 +61,48 @@ interface SeededState {
 }
 
 @Injectable()
-export class DemoBootstrapService {
+export class DemoBootstrapService implements OnModuleInit {
   private readonly logger = new Logger(DemoBootstrapService.name);
   private state: SeededState | null = null;
 
   constructor(private readonly runRegistry: BootstrapRunRegistryService) {}
+
+  /**
+   * Auto-seeds demo data on startup when the environment gate is open and
+   * AUTO_SEED_DEMO_DATA is enabled. This is what makes the one-command local
+   * stack work: `docker compose up` brings up Postgres, Redis, the model
+   * artefacts and the API, and the API seeds itself so the documented smoke
+   * request succeeds without any manual step.
+   *
+   * Failures are logged but never crash the process — CI can still start the
+   * service and call the seed endpoint explicitly if auto-seed was skipped.
+   */
+  async onModuleInit(): Promise<void> {
+    if (!this.isEnvironmentAllowed) {
+      this.logger.log(
+        'Demo bootstrap auto-seed skipped: environment gate is closed.',
+      );
+      return;
+    }
+
+    if (!config.featureFlags.autoSeedDemoData) {
+      this.logger.log(
+        'Demo bootstrap auto-seed skipped: AUTO_SEED_DEMO_DATA is not set to true.',
+      );
+      return;
+    }
+
+    try {
+      await this.seed(DemoScenario.FULL, true, 'auto-seed');
+      this.logger.log('Demo bootstrap auto-seed completed on startup.');
+    } catch (error) {
+      this.logger.error(
+        `Demo bootstrap auto-seed failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
 
   /**
    * Returns true when the bootstrap endpoints are permitted:

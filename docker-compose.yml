@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lumenpulse"]
+      test: ["CMD-XHELL", "pgs_ready -U lumenpulse"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,14 +35,22 @@ services:
     build:
       context: ./apps/data-processing
       dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
-      - RUN_IMMEDIATELY=${RUN_IMMEDIATELY}
-      - LOG_LEVEL=${LOG_LEVEL}
-      - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS}
-      - COINGECKO_API_KEY=${COINGECKO_API_KEY}
-      - NEWS_API_KEY=${NEWS_API_KEY}
-      - CRYPTOCOMPARE_API_KEY=${CRYPTOCOMPARE_API_KEY}
-      - NEWSAPI_API_KEY=${NEWSAPI_API_KEY}
+      - RUN_IMMEDIATELY=true
+      - DATABASE_URL=postgres://lumenpulse:lumenpulse@postgres:5432/lumenpulse
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres_data:

@@ -15,5 +15,9 @@ export default new DataSource({
   migrations: ['dist/database/migrations/*.js', 'src/database/migrations/*.ts'],
   migrationsTransactionMode: 'each',
 
+  // Ensure the local docker-compose stack and CI integration tests both connect
+  // to the same database and that migrations can be applied automatically.
+  synchronize: false,
+
   logging: true,
 });
