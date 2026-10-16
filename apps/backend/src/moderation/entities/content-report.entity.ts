@@ -34,6 +34,12 @@ export enum ReportReason {
   OTHER = 'other',
 }
 
+export enum ModerationDecision {
+  APPROVE = 'approve',
+  REJECT = 'reject',
+  ESCALATE = 'escalate',
+}
+
 @Entity('content_reports')
 @Index(['targetId', 'targetType'])
 @Index(['status'])
@@ -88,6 +94,18 @@ export class ContentReport {
 
   @Column({ name: 'review_notes', type: 'text', nullable: true })
   reviewNotes?: string;
+
+  @ApiProperty({ enum: ModerationDecision, enumName: 'ModerationDecision' })
+  @Column({
+    name: 'decision',
+    type: 'enum',
+    enum: ModerationDecision,
+    nullable: true,
+  })
+  decision?: ModerationDecision;
+
+  @Column({ name: 'rationale', type: 'text', nullable: true })
+  rationale?: string;
 
   @Column({ name: 'resolved_at', nullable: true })
   resolvedAt?: Date;

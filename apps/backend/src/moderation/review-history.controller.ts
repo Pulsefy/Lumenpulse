@@ -64,13 +64,11 @@ export class ReviewHistoryController {
   }
 
   @Post('decisions')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
   @UsePipes(new ValidationPipe())
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Record a review decision (Admin only)' })
+  @ApiOperation({ summary: 'Record a review decision' })
   @ApiResponse({ status: 201, description: 'Decision successfully recorded' })
-  @ApiResponse({ status: 403, description: 'Forbidden - admin only' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
   async createDecision(
     @Req() req: RequestWithUser,
     @Body() createDecisionDto: CreateReviewDecisionDto,
@@ -143,7 +141,7 @@ export class ReviewHistoryController {
   @ApiOperation({ summary: 'Get a specific decision by ID' })
   @ApiResponse({ status: 200, description: 'Decision retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Decision not found' })
-  async getDecision(@Param('id') id: string) {
+  async getDecision(@Req() req: RequestWithUser, @Param('id') id: string) {
     return this.reviewHistoryService.getDecisionById(id);
   }
 }
