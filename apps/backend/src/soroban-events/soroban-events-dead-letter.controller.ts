@@ -11,6 +11,7 @@ import {
   Logger,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -37,6 +38,7 @@ import { User, UserRole } from '../users/entities/user.entity';
 import { AdminAuditService } from '../admin-audit/admin-audit.service';
 import { Request } from 'express';
 import { JWT_SECURITY_SCHEME } from '../openapi/openapi.constants';
+import { randomUUID } from 'crypto';
 
 /**
  * Dead Letter Queue Controller
@@ -129,6 +131,56 @@ export class SorobanEventsDeadLetterController {
   async getStats(): Promise<DeadLetterStatsDto> {
     this.logger.debug('Fetching dead letter queue statistics');
     return this.dlqService.getStats();
+  }
+
+  @Post('bulk/replay')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Replay independent dead-letter events in bulk' })
+  async replayEventsBulk(
+    @Body() body: { items: Array<{ id: string; reason?: string }> },
+    @Req() request: Request & { user: User },
+  ) {
+    const items = body?.items;
+    if (!Array.isArray(items) || items.length < 1 || items.length > 50) {
+      throw new BadRequestException('items must contain between 1 and 50 events');
+    }
+    const ids = items.map((item) => item?.id);
+    if (ids.some((id) => typeof id !== 'string' || !id) || new Set(ids).size !== ids.length) {
+      throw new BadRequestException('Each item must have a unique event id');
+    }
+    if (items.some((item) => item.reason !== undefined && typeof item.reason !== 'string')) {
+      throw new BadRequestException('Each replay reason must be a string');
+    }
+
+    const bulkOperationId = randomUUID();
+    const results = await Promise.all(items.map(async (item) => {
+      try {
+        const value = await this.dlqService.replayEvent(item.id, item.reason);
+        await this.auditService.create({
+          actorId: request.user.id,
+          actorEmail: request.user.email,
+          endpoint: 'POST /soroban-events/dead-letter/bulk/replay',
+          params: { dlqId: item.id, reason: item.reason, jobId: value.jobId, bulkOperationId },
+          responseStatus: HttpStatus.ACCEPTED,
+        });
+        return { id: item.id, success: true, value };
+      } catch (error) {
+        await this.auditService.create({
+          actorId: request.user.id,
+          actorEmail: request.user.email,
+          endpoint: 'POST /soroban-events/dead-letter/bulk/replay',
+          params: {
+            dlqId: item.id,
+            bulkOperationId,
+            status: 'failed',
+            error: error instanceof Error ? error.message : 'Replay failed',
+          },
+          responseStatus: HttpStatus.BAD_REQUEST,
+        });
+        return { id: item.id, success: false, error: error instanceof Error ? error.message : 'Replay failed' };
+      }
+    }));
+    return { bulkOperationId, results };
   }
 
   /**
