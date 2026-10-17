@@ -2,22 +2,33 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  BadRequestException,
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindManyOptions } from 'typeorm';
-import { ContractDeploymentManifest } from './entities/contract-deployment-manifest.entity';
+import {
+  ContractDeploymentManifest,
+  ContractLifecycleAuditEntry,
+  ContractLifecycleRecord,
+  ContractLifecycleState,
+} from './entities/contract-deployment-manifest.entity';
 import {
   CreateDeploymentManifestDto,
   UpdateDeploymentManifestDto,
   QueryDeploymentManifestDto,
   DeploymentManifestListResponseDto,
 } from './dto/deployment-manifest.dto';
-import { existsSync, readFileSync, watchFile } from 'fs';
-import { resolve } from 'path';
+import { existsSync, readFileSync, watchFile } from 'fs';import { resolve } from 'path';
 import { ConfigService } from '../config/config.service';
 import { ContractCapabilityService } from './contract-capability.service';
+
+export const DEPRECATION_WRITE_ERROR =
+  'Contract is deprecated: new writes are blocked, but exits (withdrawals) remain open.';
+
+export const SUSET_WRITE_ERROR =
+  'Contract has been sunset: no new writes are permitted.';
 
 @Injectable()
 export class DeploymentManifestService implements OnModuleInit {
@@ -101,11 +112,14 @@ export class DeploymentManifestService implements OnModuleInit {
         }
       }
 
+      const lifecycle = this.buildInitialLifecycle(contracts);
+
       const seedManifest = this.manifestRepo.create({
         environment,
         version: 'v1.0.0-initial',
         contracts,
         metadata,
+        lifecycle,
         isActive: true,
         createdBy: 'system-seed',
       });
@@ -129,6 +143,7 @@ export class DeploymentManifestService implements OnModuleInit {
   ): Promise<ContractDeploymentManifest> {
     const environment = dto.environment || 'testnet';
     const shouldBeActive = dto.isActive !== false;
+    const lifecycle = this.buildInitialLifecycle(dto.contracts);
 
     if (!this.manifestRepo) {
       const dummy: ContractDeploymentManifest = {
@@ -137,6 +152,7 @@ export class DeploymentManifestService implements OnModuleInit {
         version: dto.version || null,
         contracts: dto.contracts,
         metadata: dto.metadata || null,
+        lifecycle,
         isActive: shouldBeActive,
         createdBy: actorId || null,
         createdAt: new Date(),
@@ -157,6 +173,7 @@ export class DeploymentManifestService implements OnModuleInit {
       version: dto.version || null,
       contracts: dto.contracts,
       metadata: dto.metadata || null,
+      lifecycle,
       isActive: shouldBeActive,
       createdBy: actorId || null,
     });
@@ -242,6 +259,7 @@ export class DeploymentManifestService implements OnModuleInit {
           version: 'file-fallback',
           contracts,
           metadata,
+          lifecycle: this.buildInitialLifecycle(contracts),
           isActive: true,
           createdBy: 'system-file',
           createdAt: new Date(),
@@ -297,7 +315,15 @@ export class DeploymentManifestService implements OnModuleInit {
 
     if (dto.environment) manifest.environment = dto.environment;
     if (dto.version !== undefined) manifest.version = dto.version;
-    if (dto.contracts) manifest.contracts = dto.contracts;
+    if (dto.contracts) {
+      manifest.contracts = dto.contracts;
+      // Preserve existing lifecycle state for contracts that still exist,
+      // and initialise new contracts as active.
+      manifest.lifecycle = this.reconcileLifecycle(
+        manifest.lifecycle,
+        dto.contracts,
+      );
+    }
     if (dto.metadata !== undefined) manifest.metadata = dto.metadata;
     if (dto.isActive !== undefined) manifest.isActive = dto.isActive;
     if (actorId) manifest.createdBy = actorId;
@@ -319,80 +345,239 @@ export class DeploymentManifestService implements OnModuleInit {
   }
 
   /**
-   * Refreshes the manifest from the testnet-manifest.json file.
-   * If contract IDs or WASM hashes have changed, invalidates caches.
+   * Returns the lifecycle record for a contract in the active manifest.
+   */
+  async getLifecycleState(
+    contractKey: string,
+    environment = 'testnet',
+  ): Promise<ContractLifecycleRecord> {
+    const manifest = await this.findActive(environment);
+    const record = manifest.lifecycle?.[contractKey];
+    if (!record) {
+      throw new NotFoundException(
+        `No lifecycle record for contract '${contractKey}' in environment '${environment}'`,
+      );
+    }
+    return record;
+  }
+
+  /**
+   * Ensures writes are allowed for the given contract. Throws a
+   * `BadRequestException` when the contract is deprecated or sunset.
+   * Exits (withdrawals) are always permitted and are not gated here.
+   */
+  async assertWritesAllowed(
+    contractKey: string,
+    environment = 'testnet',
+  ): Promise<void> {
+    const manifest = await this.findActive(environment);
+    const state = manifest.lifecycle?.[contractKey]?.state ?? 'active';
+    if (state === 'deprecated') {
+      throw new BadRequestException(DEPRECATION_WRITE_ERROR);
+    }
+    if (state === 'sunset') {
+      throw new BadRequestException(SUNET_WRITE_ERROR);
+    }
+  }
+
+  /**
+   * Mark a contract as deprecated in the active manifest. New writes are
+   * blocked, exits remain open. The transition is audited.
+   */
+  async deprecateContract(
+    contractKey: string,
+    actorId: string | null,
+    reason?: string,
+    environment = 'testnet',
+  ): Promise<ContractDeploymentManifest> {
+    const manifest = await this.findActive(environment);
+    const lifecycle = this.ensureLifecycleMap(manifest);
+    const current = lifecycle[contractKey] ?? { state: 'active' as ContractLifecycleState, audit: [] };
+    if (current.state === 'deprecated') {
+      throw new BadRequestException(
+        `Contract '${contractKey}' is already deprecated`,
+      );
+    }
+    if (current.state === 'sunset') {
+      throw new BadRequestException(
+        `Contract '${contractKey}' has been sunset and cannot be deprecated`,
+      );
+    }
+
+    const now = new Date().toISOString();
+    const auditEntry: ContractLifecycleAuditEntry = {
+      contractKey,
+      from: current.state,
+      to: 'deprecated',
+      actorId: actorId ?? null,
+      reason: reason ?? null,
+      at: now,
+    };
+
+    lifecycle[contractKey] = {
+      ...current,
+      state: 'deprecated',
+      deprecatedAt: now,
+      deprecatedBy: actorId ?? null,
+      deprecationReason: reason ?? null,
+      audit: [...(current.audit ?? []), auditEntry],
+    };
+    manifest.lifecycle = lifecycle;
+
+    if (this.manifestRepo) {
+      return await this.manifestRepo.save(manifest);
+    }
+    return manifest;
+  }
+
+  /**
+   * Restore a deprecated contract back to active. The transition is audited.
+   */
+  async restoreContract(
+    contractKey: string,
+    actorId: string | null,
+    reason?: string,
+    environment = 'testnet',
+  ): Promise<ContractDeploymentManifest> {
+    const manifest = await this.findActive(environment);
+    const lifecycle = this.ensureLifecycleMap(manifest);
+    const current = lifecycle[contractKey];
+    if (!current) {
+      throw new NotFoundException(
+        `No lifecycle record for contract '${contractKey}'`,
+      );
+    }
+    if (current.state !== 'deprecated') {
+      throw new BadRequestException(
+        `Contract '${contractKey}' is not deprecated (current state: ${current.state})`,
+      );
+    }
+
+    const now = new Date().toISOString();
+    const auditEntry: ContractLifecycleAuditEntry = {
+      contractKey,
+      from: current.state,
+      to: 'active',
+      actorId: actorId ?? null,
+      reason: reason ?? null,
+      at: now,
+    };
+
+    lifecycle[contractKey] = {
+      ...current,
+      state: 'active',
+      deprecatedAt: null,
+      deprecatedBy: null,
+      deprecationReason: null,
+      audit: [...(current.audit ?? []), auditEntry],
+    };
+    manifest.lifecycle = lifecycle;
+
+    if (this.manifestRepo) {
+      return await this.manifestRepo.save(manifest);
+    }
+    return manifest;
+  }
+
+  /**
+   * Sunset a contract and remove it from the active manifest. The
+   * lifecycle record is retained for audit purposes.
+   */
+  async sunsetContract(
+    contractKey: string,
+    actorId: string | null,
+    reason?: string,
+    environment = 'testnet',
+  ): Promise<ContractDeploymentManifest> {
+    const manifest = await this.findActive(environment);
+    const lifecycle = this.ensureLifecycleMap(manifest);
+    const current = lifecycle[contractKey] ?? {
+      state: 'active' as ContractLifecycleState,
+      audit: [],
+    };
+    if (current.state === 'sunset') {
+      throw new BadRequestException(
+        `Contract '${contractKey}' has already been sunset`,
+      );
+    }
+
+    const now = new Date().toISOString();
+    const auditEntry: ContractLifecycleAuditEntry = {
+      contractKey,
+      from: current.state,
+      to: 'sunset',
+      actorId: actorId ?? null,
+      reason: reason ?? null,
+      at: now,
+    };
+
+    lifecycle[contractKey] = {
+      ...current,
+      state: 'sunset',
+      sunsetAt: now,
+      sunsetBy: actorId ?? null,
+      audit: [...(current.audit ?? []), auditEntry],
+    };
+    manifest.lifecycle = lifecycle;
+
+    // Remove from the active manifest contracts map.
+    if (manifest.contracts && manifest.contracts[contractKey]) {
+      const { [contractKey]: _removed, ...rest } = manifest.contracts;
+      manifest.contracts = rest;
+    }
+
+    if (this.manifestRepo) {
+      return await this.manifestRepo.save(manifest);
+    }
+    return manifest;
+  }
+
+  /**
+   * Refresh the in-memory manifest cache from the active manifest.
    */
   async refreshManifest(): Promise<void> {
-    const repoRoot = process.cwd();
-    const candidatePaths = [
-      resolve(repoRoot, 'apps/onchain/testnet-manifest.json'),
-      resolve(repoRoot, '../onchain/testnet-manifest.json'),
-      resolve(repoRoot, 'testnet-manifest.json'),
-    ];
-
-    const manifestPath = candidatePaths.find((p) => existsSync(p));
-    if (!manifestPath) {
-      this.logger.warn('No testnet-manifest.json found to refresh from.');
-      return;
-    }
-
     try {
-      const content = readFileSync(manifestPath, 'utf8');
-      const parsed = JSON.parse(content) as {
-        contracts?: Record<string, { id?: unknown; wasm_hash?: unknown; reason?: unknown }>;
-      };
-
-      if (
-        !parsed ||
-        typeof parsed.contracts !== 'object' ||
-        parsed.contracts === null ||
-        Array.isArray(parsed.contracts)
-      ) {
-        throw new Error('Manifest must contain a contracts object');
+      const manifest = await this.findActive();
+      const next: Record<string, { id: string; wasmHash: string | null }> = {};
+      for (const [key, value] of Object.entries(manifest.contracts ?? {})) {
+        next[key] = {
+          id: String(value?.id ?? ''),
+          wasmHash: value?.wasm_hash ?? null,
+        };
       }
-
-      const contracts = parsed.contracts;
-      let hasChanges = false;
-      const updates: Record<string, string | null> = {};
-
-      for (const [snakeKey, contractInfo] of Object.entries(contracts)) {
-        // Convert snake_case to camelCase
-        const camelKey = snakeKey.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-        
-        // Skip un-deployed contracts (they have a 'reason' instead of 'id')
-        if (contractInfo.reason) {
-          continue;
-        }
-
-        const id = typeof contractInfo.id === 'string' ? contractInfo.id : null;
-        const wasmHash =
-          typeof contractInfo.wasm_hash === 'string'
-            ? contractInfo.wasm_hash
-            : null;
-
-        if (id) {
-          const previous = this.lastKnownContracts[camelKey];
-          if (!previous || previous.id !== id || previous.wasmHash !== wasmHash) {
-            this.logger.log(
-              `Contract ${camelKey} changed: previous=${JSON.stringify(previous ?? null)}, new=${JSON.stringify({ id, wasmHash })}`,
-            );
-            this.lastKnownContracts[camelKey] = { id, wasmHash };
-            updates[camelKey] = id;
-            hasChanges = true;
-          }
-        }
-      }
-
-      if (hasChanges) {
-        this.logger.log('Manifest changes detected. Applying updates and invalidating caches.');
-        this.configService.setStellarContractOverrides(updates);
-        await this.configService.invalidateCache();
-        this.contractCapabilityService.invalidateCache();
-      } else {
-        this.logger.debug('Manifest parsed, no changes detected.');
-      }
+      this.lastKnownContracts = next;
     } catch (error) {
-      this.logger.error('Failed to parse or refresh manifest. Retaining previous state.', error);
+      this.logger.warn('Failed to refresh manifest cache', error);
     }
+  }
+
+  private buildInitialLifecycle(
+    contracts: Record<string, any>,
+  ): Record<string, ContractLifecycleRecord> {
+    const lifecycle: Record<string, ContractLifecycleRecord> = {};
+    for (const key of Object.keys(contracts ?? {})) {
+      lifecycle[key] = { state: 'active', audit: [] };
+    }
+    return lifecycle;
+  }
+
+  private reconcileLifecycle(
+    existing: Record<string, ContractLifecycleRecord> | null | undefined,
+    contracts: Record<string, any>,
+  ): Record<string, ContractLifecycleRecord> {
+    const next: Record<string, ContractLifecycleRecord> = {};
+    for (const key of Object.keys(contracts ?? {})) {
+      next[key] = existing?.[key] ?? { state: 'active', audit: [] };
+    }
+    return next;
+  }
+
+  private ensureLifecycleMap(
+    manifest: ContractDeploymentManifest,
+  ): Record<string, ContractLifecycleRecord> {
+    if (!manifest.lifecycle) {
+      manifest.lifecycle = this.buildInitialLifecycle(manifest.contracts ?? {});
+    }
+    return manifest.lifecycle;
   }
 }
