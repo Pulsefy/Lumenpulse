@@ -147,6 +147,15 @@ class PipelineRunRegistry:
             data[stage_id] = entry
             self._write_all(data)
 
+    def record_progress(self, stage_id: str, progress: Dict[str, Any]) -> None:
+        """Persist observable progress details for a running stage."""
+        with self._lock:
+            data = self._read_all()
+            entry = data.get(stage_id, {})
+            entry.update({"stage_id": stage_id, "progress": progress})
+            data[stage_id] = entry
+            self._write_all(data)
+
     def get_runs(self) -> Dict[str, Dict[str, Any]]:
         """Return the latest recorded run for every known stage id."""
         with self._lock:
