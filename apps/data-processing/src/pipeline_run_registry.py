@@ -26,6 +26,9 @@ from typing import Any, Dict, Optional
 # Outcome values persisted for a finished run.
 OUTCOME_SUCCESS = "success"
 OUTCOME_FAILED = "failed"
+OUTCOME_RETRY = "retry"
+OUTCOME_PERMANENTLY_FAILED = "permanently_failed"
+OUTCOME_SKIPPED = "skipped"
 
 # Marker written while a stage is executing but has not finished yet.
 STATE_RUNNING = "running"
@@ -142,6 +145,127 @@ class PipelineRunRegistry:
                         else None
                     ),
                     "error": error,
+                }
+            )
+            data[stage_id] = entry
+            self._write_all(data)
+
+    def record_retry(
+        self,
+        stage_id: str,
+        attempt: int,
+        max_attempts: int,
+        error: Optional[str] = None,
+        next_retry_at: Optional[str] = None,
+        when: Optional[float] = None,
+    ) -> None:
+        """Record that a stage failed transiently and will be retried.
+
+        Parameters
+        ----------
+        stage_id:
+            The stage being retried.
+        attempt:
+            The 1-based attempt number that just failed.
+        max_attempts:
+            Total retry budget (used by callers to compute ``next_retry_at``).
+        error:
+            String representation of the exception that triggered the retry.
+        next_retry_at:
+            ISO-8601 timestamp indicating when the next attempt is scheduled.
+        when:
+            Wall-clock epoch of the retry event; defaults to ``time.time()``.
+        """
+        ts = when if when is not None else time.time()
+        with self._lock:
+            data = self._read_all()
+            entry = data.get(stage_id, {})
+            entry.update(
+                {
+                    "stage_id": stage_id,
+                    "state": OUTCOME_RETRY,
+                    "outcome": OUTCOME_RETRY,
+                    "last_run": datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(),
+                    "retry_attempt": attempt,
+                    "retry_max_attempts": max_attempts,
+                    "error": error,
+                    "next_retry_at": next_retry_at,
+                }
+            )
+            data[stage_id] = entry
+            self._write_all(data)
+
+    def record_permanently_failed(
+        self,
+        stage_id: str,
+        attempts: int,
+        error: Optional[str] = None,
+        when: Optional[float] = None,
+    ) -> None:
+        """Record that a stage has exhausted all retry attempts.
+
+        Parameters
+        ----------
+        stage_id:
+            The stage that permanently failed.
+        attempts:
+            Total number of attempts that were made.
+        error:
+            String representation of the final exception.
+        when:
+            Wall-clock epoch; defaults to ``time.time()``.
+        """
+        ts = when if when is not None else time.time()
+        started = self._started_at.pop(stage_id, None)
+        duration = max(0.0, ts - started) if started is not None else None
+
+        with self._lock:
+            data = self._read_all()
+            entry = data.get(stage_id, {})
+            entry.update(
+                {
+                    "stage_id": stage_id,
+                    "state": OUTCOME_PERMANENTLY_FAILED,
+                    "outcome": OUTCOME_PERMANENTLY_FAILED,
+                    "last_run": datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(),
+                    "duration_seconds": round(duration, 3) if duration is not None else None,
+                    "total_attempts": attempts,
+                    "error": error,
+                }
+            )
+            data[stage_id] = entry
+            self._write_all(data)
+
+    def record_skipped(
+        self,
+        stage_id: str,
+        skipped_because: Optional[str] = None,
+        when: Optional[float] = None,
+    ) -> None:
+        """Record that a stage was skipped due to an upstream permanent failure.
+
+        Parameters
+        ----------
+        stage_id:
+            The downstream stage that was skipped.
+        skipped_because:
+            Stage ID of the upstream stage whose failure caused the skip.
+        when:
+            Wall-clock epoch; defaults to ``time.time()``.
+        """
+        ts = when if when is not None else time.time()
+        with self._lock:
+            data = self._read_all()
+            entry = data.get(stage_id, {})
+            entry.update(
+                {
+                    "stage_id": stage_id,
+                    "state": OUTCOME_SKIPPED,
+                    "outcome": OUTCOME_SKIPPED,
+                    "last_run": datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(),
+                    "skipped_because": skipped_because,
+                    "error": None,
+                    "duration_seconds": None,
                 }
             )
             data[stage_id] = entry

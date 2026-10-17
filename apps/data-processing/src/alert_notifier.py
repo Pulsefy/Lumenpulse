@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+from typing import Optional
 
 import requests
 
@@ -55,6 +56,59 @@ class AlertNotifier:
             payload["confidence_level"] = result.confidence_level
 
         self._send_telegram(payload)
+        self._send_webhooks(payload)
+
+    def notify_stage_permanent_failure(
+        self,
+        stage_id: str,
+        total_attempts: int,
+        error: str,
+        *,
+        downstream_skipped: Optional[list] = None,
+    ) -> None:
+        """Alert that a pipeline stage has exhausted all retry attempts.
+
+        Fires through the same Telegram + webhook fan-out used by anomaly
+        and drift alerts so the alert travels the existing delivery path.
+
+        Parameters
+        ----------
+        stage_id:
+            The identifier of the stage that permanently failed.
+        total_attempts:
+            How many attempts were made before giving up.
+        error:
+            String representation of the final exception.
+        downstream_skipped:
+            Optional list of downstream stage IDs that were skipped as a
+            consequence of this failure.  Included in the alert body when
+            provided.
+        """
+        skipped_summary = (
+            f"Skipped downstream stages: {', '.join(downstream_skipped)}"
+            if downstream_skipped
+            else "No downstream stages skipped."
+        )
+
+        text_lines = [
+            "🔴 Pipeline Stage Permanently Failed",
+            f"Stage: {stage_id}",
+            f"Attempts: {total_attempts}",
+            f"Final error: {error}",
+            skipped_summary,
+        ]
+        text = "\n".join(text_lines)
+
+        payload = {
+            "event": "high_priority_insight",
+            "type": "stage_permanent_failure",
+            "stage_id": stage_id,
+            "total_attempts": total_attempts,
+            "error": error,
+            "downstream_skipped": downstream_skipped or [],
+        }
+
+        self._send_telegram_text(text)
         self._send_webhooks(payload)
 
     def notify_feature_drift(self, report):
