@@ -1,0 +1,21 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-1578-mobile-add-an-in-app-feedback-and-support",
+    "fix/issue-1580-mobile-define-a-session-timeout-and-re",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-1578-mobile-add-an-in-app-feedback-and-support": "main",
+    "fix/issue-1580-mobile-define-a-session-timeout-and-re": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-1578-mobile-add-an-in-app-feedback-and-support",
+    "fix/issue-1580-mobile-define-a-session-timeout-and-re",
+    "origin"
+  ]
+}

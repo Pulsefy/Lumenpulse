@@ -55,4 +55,11 @@ export {
 export * from './guards/access-control.guard';
 export * from './guards/contract-admin-trusted-caller.guard';
 export * from './utils/access-control.utils';
-export * from './access-control.module';
+
+// Feedback & support exports
+export * from './interfaces/feedback.interface';
+export * from './services/feedbacks.service';
+export * from './controllers/feedback.controller';
+export * from './modules/feedback.module';
+export * from './dto/create-feedback.dto';
+export * from './utils/feedback-redaction.util';
