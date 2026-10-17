@@ -662,3 +662,145 @@ fn test_round_lifecycle_accounting_no_double_count() {
 
     assert_eq!(final_sum, initial_supply, "Funds must never be created or destroyed");
 }
+
+// ============================================================
+// IDEMPOTENCY GUARD INTEGRATION TEST (Issue AC-6)
+// ============================================================
+
+/// Integration test: crowdfund_vault deposit with duplicate request_id must revert.
+///
+/// Acceptance criteria:
+///   • The first deposit with a unique request_id succeeds and transfers funds.
+///   • A second deposit attempt with the same request_id is rejected with AlreadyExecuted.
+///   • Balances remain consistent: the duplicate call does not double-spend.
+///   • The idempotency-guard receipt persists across the rejection.
+#[test]
+fn test_idempotency_guard_integration_crowdfund_vault_duplicate_revert() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let project_owner = Address::generate(&env);
+    let contributor = Address::generate(&env);
+
+    let (token, token_admin) = create_token(&env, &admin);
+    let token_id = token.address;
+
+    let vault_id = env.register(CrowdfundVaultContract, ());
+    let vault = VaultClient::new(&env, &vault_id);
+
+    vault.initialize(&admin);
+
+    token_admin.mint(&contributor, &10_000i128);
+
+    let project_id = vault.create_project(
+        &project_owner,
+        &Symbol::new(&env, "DevTools"),
+        &5_000i128,
+        &token_id,
+    );
+
+    // Generate a unique request_id for the deposit
+    let mut request_id = [0u8; 32];
+    request_id[31] = 42;
+    let request_id_bytes = soroban_sdk::BytesN::from_array(&env, &request_id);
+
+    // First deposit attempt with this request_id — must succeed
+    let result1 = vault.try_deposit_with_id(&contributor, &project_id, &3_000i128, &request_id_bytes);
+    assert!(result1.is_ok(), "First deposit with unique request_id must succeed");
+
+    // Verify funds transferred
+    assert_eq!(token.balance(&contributor), 7_000i128);
+    assert_eq!(vault.get_balance(&project_id), 3_000i128);
+    assert_eq!(vault.get_total_contributions(&project_id), 3_000i128);
+
+    // Second deposit attempt with the same request_id — must be rejected
+    let result2 = vault.try_deposit_with_id(&contributor, &project_id, &3_000i128, &request_id_bytes);
+    assert!(result2.is_err(), "Duplicate deposit with same request_id must fail");
+
+    // Verify no additional funds transferred (balances unchanged from first deposit)
+    assert_eq!(token.balance(&contributor), 7_000i128);
+    assert_eq!(vault.get_balance(&project_id), 3_000i128);
+    assert_eq!(vault.get_total_contributions(&project_id), 3_000i128);
+
+    // Third attempt with same request_id — still rejected
+    let result3 = vault.try_deposit_with_id(&contributor, &project_id, &1_000i128, &request_id_bytes);
+    assert!(result3.is_err(), "Third attempt with same request_id must also fail");
+
+    // Balances still unchanged
+    assert_eq!(token.balance(&contributor), 7_000i128);
+    assert_eq!(vault.get_balance(&project_id), 3_000i128);
+
+    // A new deposit with a different request_id must succeed
+    let mut new_request_id = [0u8; 32];
+    new_request_id[31] = 99;
+    let new_request_id_bytes = soroban_sdk::BytesN::from_array(&env, &new_request_id);
+
+    let result4 = vault.try_deposit_with_id(&contributor, &project_id, &2_000i128, &new_request_id_bytes);
+    assert!(result4.is_ok(), "Deposit with new request_id must succeed");
+
+    // Verify the new deposit transferred funds
+    assert_eq!(token.balance(&contributor), 5_000i128);
+    assert_eq!(vault.get_balance(&project_id), 5_000i128);
+    assert_eq!(vault.get_total_contributions(&project_id), 5_000i128);
+}
+
+/// Integration test: Multiple concurrent deposits with unique request_ids all succeed.
+///
+/// Verifies that the idempotency-guard does not create false collisions between
+/// independent operations.
+#[test]
+fn test_idempotency_guard_integration_multiple_unique_deposits() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let project_owner = Address::generate(&env);
+    let contributor = Address::generate(&env);
+
+    let (token, token_admin) = create_token(&env, &admin);
+    let token_id = token.address;
+
+    let vault_id = env.register(CrowdfundVaultContract, ());
+    let vault = VaultClient::new(&env, &vault_id);
+
+    vault.initialize(&admin);
+
+    token_admin.mint(&contributor, &20_000i128);
+
+    let project_id = vault.create_project(
+        &project_owner,
+        &Symbol::new(&env, "MultiDeposit"),
+        &10_000i128,
+        &token_id,
+    );
+
+    // Make 5 deposits with unique request_ids
+    for i in 0..5 {
+        let mut request_id = [0u8; 32];
+        request_id[31] = i;
+        let request_id_bytes = soroban_sdk::BytesN::from_array(&env, &request_id);
+
+        let result = vault.try_deposit_with_id(&contributor, &project_id, &1_000i128, &request_id_bytes);
+        assert!(result.is_ok(), "Each unique request_id must succeed");
+    }
+
+    // Verify total contributions accumulated correctly
+    assert_eq!(vault.get_balance(&project_id), 5_000i128);
+    assert_eq!(vault.get_total_contributions(&project_id), 5_000i128);
+    assert_eq!(token.balance(&contributor), 15_000i128);
+
+    // Attempting any of the same request_ids again must fail
+    for i in 0..5 {
+        let mut request_id = [0u8; 32];
+        request_id[31] = i;
+        let request_id_bytes = soroban_sdk::BytesN::from_array(&env, &request_id);
+
+        let result = vault.try_deposit_with_id(&contributor, &project_id, &500i128, &request_id_bytes);
+        assert!(result.is_err(), "Duplicate request_id must be rejected");
+    }
+
+    // Balances remain unchanged after rejected attempts
+    assert_eq!(vault.get_balance(&project_id), 5_000i128);
+    assert_eq!(token.balance(&contributor), 15_000i128);
+}

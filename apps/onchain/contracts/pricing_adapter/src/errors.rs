@@ -11,4 +11,8 @@ pub enum PricingAdapterError {
     InvalidPrice = 5,
     StalePrice = 6,
     PriceInvalidated = 7,
+    /// All configured price sources are either stale or invalidated.
+    /// Distinct from PriceNotFound (no sources exist) and StalePrice
+    /// (single-source stale). Consumers must not proceed with a default price.
+    AllSourcesExhausted = 8,
 }
