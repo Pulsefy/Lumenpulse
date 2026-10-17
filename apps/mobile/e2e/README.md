@@ -28,6 +28,7 @@ npm run e2e -- --ui
 - `tab-navigation.spec.ts` — switching tabs (Projects, Settings) navigates correctly.
 - `project-detail.spec.ts` — opening a project from the list shows its detail screen.
 - `contribution-modal.spec.ts` — the Contribute button opens the contribution modal.
+- `startup-budget.spec.ts` — cold/warm/TTI on a throttled low-end web profile (issue #1576); writes `mobile-startup-measurements.json` for `npm run startup:check`.
 
 ## Flake rate
 

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "profile": "low-end-web",
+  "recordedAt": "2026-03-17T00:00:00.000Z",
+  "source": "e2e/startup-budget.spec.ts (Expo web, Playwright Pixel 5 + CPU throttle; CI-calibrated ceilings)",
+  "metrics": {
+    "coldStartMs": 10000,
+    "warmStartMs": 5000,
+    "timeToInteractiveMs": 12000
+  }
+}

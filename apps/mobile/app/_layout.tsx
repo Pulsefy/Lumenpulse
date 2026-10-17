@@ -1,6 +1,9 @@
+import '../lib/startup-metrics-bootstrap';
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { View } from 'react-native';
+import { DataPreloader } from '../components/DataPreloader';
+import { StartupInteractiveGate } from '../components/StartupInteractiveGate';
 import { applyPrivacyPreferences } from '../lib/privacy-preferences';
 import { OfflineIndicator } from '../lib/offline-indicator';
 import { startMutationQueueReplayOnReconnect } from '../lib/mutation-queue';
@@ -42,9 +45,11 @@ export default function RootLayout() {
         <EnvironmentProvider>
           <BiometricLockGuard>
             <AuthProvider>
+              <DataPreloader />
               <WalletProvider>
                 <NotificationsProvider>
                   <DeepLinkProvider>
+                    <StartupInteractiveGate>
                     <View style={{ flex: 1 }}>
                       <OfflineIndicator />
                       <Stack
@@ -59,6 +64,7 @@ export default function RootLayout() {
                       </Stack>
                       <NetworkBadge />
                     </View>
+                    </StartupInteractiveGate>
                   </DeepLinkProvider>
                 </NotificationsProvider>
               </WalletProvider>
