@@ -59,8 +59,8 @@ import { ExportModule } from './export/export.module';
 import { SignalsModule } from './signals/signals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppConfigModule } from './config/config.module';
-import { CrowdfundModule } from './crowdfund/crowdfund.module';
-import { CrowdfundSyncModule } from './crowdfund-sync/crowdfund-sync.module';
+import { CrowdundModule } from './crowdfund/crowdfund.module';
+import { CrowdundSyncModule } from './crowdfund-sync/crowdfund-sync.module';
 import { ContributorRegistryModule } from './contributor-registry/contributor-registry.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
@@ -85,6 +85,7 @@ import { ProfilingModule } from './common/profiling/profiling.module';
 import { QueryCountMiddleware } from './common/profiling/query-count.middleware';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SavedSearchesModule } from './saved-searches/saved-searches.module';
+import { ResponseEnvelopeInterceptor } from './common/interceptors/response-envelope.interceptor';
 
 @Module({
   imports: [
@@ -167,7 +168,7 @@ import { SavedSearchesModule } from './saved-searches/saved-searches.module';
     MessageTemplateModule,
 
     // Crowdfund modules
-    CrowdfundModule,
+    CrowdundModule,
     CrowdfundSyncModule, // New: Crowdfund vault sync with DLQ support
 
     // Registry modules
@@ -242,6 +243,10 @@ import { SavedSearchesModule } from './saved-searches/saved-searches.module';
     {
       provide: APP_GUARD,
       useClass: RateLimitGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ResponseEnvelopeInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,
