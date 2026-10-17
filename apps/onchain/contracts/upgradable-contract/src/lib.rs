@@ -10,10 +10,8 @@ use events::{
     OperationCancelledEvent, OperationExecutedEvent, OperationQueuedEvent, UpgradedEvent,
 };
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
-use storage::{
-    OperationStatus, QueuedOperation, TimelockAction, GRACE_PERIOD_SECONDS, LEDGER_BUMP,
-    LEDGER_THRESHOLD, MIN_DELAY_SECONDS,
-};
+pub use storage::{OperationStatus, QueuedOperation, TimelockAction};
+use storage::{GRACE_PERIOD_SECONDS, LEDGER_BUMP, LEDGER_THRESHOLD, MIN_DELAY_SECONDS};
 use version_interface::{ContractVersion, VersionedContract};
 
 /// Bumped on storage-layout or interface changes that break compatibility

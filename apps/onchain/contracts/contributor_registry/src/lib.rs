@@ -15,16 +15,18 @@ use events::{
 };
 use multisig::{
     cancel, consume_approval, expire, find_signer, get_config, get_proposal, propose, sign,
-    validate_config, MultisigConfig, ProposalAction, ProposalStatus, Signer,
+    validate_config, ProposalAction, ProposalStatus,
 };
+pub use multisig::{MultisigConfig, Signer};
 use notification_interface::{Notification, NotificationReceiverTrait};
 use soroban_sdk::xdr::FromXdr;
 use soroban_sdk::{
     contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
+pub use storage::ContribPauseScope;
 use storage::{
-    AttestationStatus, Badge, ContribPauseScope, ContributorData, ContributorTier, DataKey,
-    PenaltyRecord, PenaltySeverity, LEDGER_BUMP, LEDGER_THRESHOLD,
+    AttestationStatus, Badge, ContributorData, ContributorTier, DataKey, PenaltyRecord,
+    PenaltySeverity, LEDGER_BUMP, LEDGER_THRESHOLD,
 };
 use version_interface::{ContractVersion, VersionedContract};
 

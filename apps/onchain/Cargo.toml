@@ -31,7 +31,7 @@ members = [
 # build against soroban-sdk 23. Its test suite (#1220) is in-tree under
 # `contracts/stable_swap_pool/src/test.rs` and will move into CI once the
 # contract itself is migrated.
-exclude = ["contracts/tests", "contracts/stable_swap_pool", "contracts/test_utils", "contracts/event-golden"]
+exclude = ["contracts/tests", "contracts/stable_swap_pool", "contracts/test_utils", "contracts/event-golden", "contracts/benchmark"]
 
 [workspace.dependencies]
 soroban-sdk = "23"

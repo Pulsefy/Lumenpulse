@@ -7,10 +7,8 @@ mod storage;
 use errors::RegistryError;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal, Symbol};
-use storage::{
-    DataKey, ProjectEntry, RegistryConfig, VerificationStatus, WeightMode, LEDGER_BUMP,
-    LEDGER_THRESHOLD,
-};
+use storage::{DataKey, LEDGER_BUMP, LEDGER_THRESHOLD};
+pub use storage::{ProjectEntry, RegistryConfig, VerificationStatus, WeightMode};
 
 fn transition_to_archived(env: &Env, entry: &mut ProjectEntry) {
     entry.status = VerificationStatus::Archived;

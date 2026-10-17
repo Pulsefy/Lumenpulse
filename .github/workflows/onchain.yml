@@ -6,12 +6,14 @@ on:
     branches: [ "main" ]
     paths:
       - 'apps/onchain/**'
+      - 'scripts/check-execution-cost.mjs'
       - 'docs/MAINNET_READINESS_CHECKLIST.md'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'apps/onchain/**'
       - 'apps/onchain/.ci-trigger'
+      - 'scripts/check-execution-cost.mjs'
       - 'docs/MAINNET_READINESS_CHECKLIST.md'
 
 jobs:
@@ -104,6 +106,20 @@ jobs:
     - name: Run tests
       if: env.SKIP_TESTS != 'true'
       run: cargo test
+
+    - name: Run execution cost benchmark
+      run: cargo run --manifest-path contracts/benchmark/Cargo.toml --release -- --output execution-cost-current.json
+
+    - name: Report execution cost delta and evaluate thresholds
+      run: node ../../scripts/check-execution-cost.mjs --baseline execution-cost-baseline.json --current execution-cost-current.json --thresholds execution-cost-thresholds.json | tee execution-cost.md >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Add execution cost report to pull request
+      if: github.event_name == 'pull_request'
+      uses: marocchino/sticky-pull-request-comment@v2
+      continue-on-error: true
+      with:
+        header: execution-cost
+        path: apps/onchain/execution-cost.md
 
     - name: Verify mainnet readiness checklist is current
       run: node scripts/mainnet-readiness.mjs --check
