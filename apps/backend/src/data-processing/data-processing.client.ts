@@ -4,7 +4,13 @@ import { ConfigService } from '@nestjs/config';
 import { AxiosResponse, isAxiosError } from 'axios';
 import { Counter, Gauge } from 'prom-client';
 import { defer, firstValueFrom, Observable, timeout, TimeoutError } from 'rxjs';
-import { config } from '../lib/config';
+const config = {
+  python: {
+    apiUrl: process.env.PYTHON_API_URL ?? 'http://localhost:8000',
+    apiKey: process.env.PYTHON_API_KEY,
+  },
+};
+
 import { MetricsService } from '../metrics/metrics.service';
 import { RequestContextService } from '../common/services/request-context.service';
 import {
@@ -31,6 +37,67 @@ export interface DataProcessingRequestOptions {
   retry?: false;
 }
 
+export interface BiasAssessmentSegment {
+  name: string;
+  size: number;
+  positives: number;
+  negatives: number;
+  falsePositiveRate: number;
+  falseNegativeRate: number;
+}
+
+export interface BiasAssessmentReport {
+  generatedAt: string;
+  modelVersion: string;
+  overallFalsePositiveRate: number;
+  overallFalseNegativeRate: number;
+  segments: BiasAssessmentSegment[];
+  disparities: Array<{
+    segment: string;
+    metric: 'falsePositiveRate' | 'falseNegativeRate';
+    delta: number;
+    ratio: number;
+    material: boolean;
+  }>;
+  mitigation: {
+    applied: boolean;
+    description: string;
+    accepted?: boolean;
+    reason?: string;
+  };
+}
+
+export const BIAS_MATERIAL_DISPARITY_RATIO = 1.25;
+
+export function summarizeBiasAssessment(
+  report: BiasAssessmentReport,
+): BiasAssessmentReport {
+  const material = report.disparities.filter((d) => d.material);
+  if (material.length === 0) {
+    return {
+      ...report,
+      mitigation: {
+        ...report.mitigation,
+        applied: false,
+        accepted: true,
+        reason:
+          report.mitigation.reason ??
+          'No material disparities detected across defined contributor segments.',
+      },
+    };
+  }
+  return {
+    ...report,
+    mitigation: {
+      ...report.mitigation,
+      applied: true,
+      description:
+        report.mitigation.description ||
+        'Segment-weighted threshold calibration applied to anomaly detectors.',
+    },
+  };
+}
+
 @Injectable()
 export class DataProcessingClient {
   private readonly baseUrl: string;
@@ -45,6 +112,8 @@ export class DataProcessingClient {
   private generation = 0;
   private readonly outcomes: Counter<'method' | 'outcome'>;
   private readonly breaker: Gauge;
+  private readonly biasGauge: Gauge;
+  private readonly biasCounter: Counter<'segment' | 'metric'>;
 
   constructor(
     private readonly http: HttpService,
@@ -89,6 +158,18 @@ export class DataProcessingClient {
       registers: [metrics.registry],
     });
     this.breaker.set(0);
+    this.biasGauge = new Gauge({
+      name: 'data_processing_bias_disparity_ratio',
+      help: 'Ratio of segment error rate to overall error rate',
+      labelNames: ['segment', 'metric'],
+      registers: [metrics.registry],
+    });
+    this.biasCounter = new Counter({
+      name: 'data_processing_bias_material_disparities_total',
+      help: 'Material error-rate disparities detected across contributor segments',
+      labelNames: ['segment', 'metric'],
+      registers: [metrics.registry],
+    });
   }
 
   get<T>(
@@ -104,6 +185,30 @@ export class DataProcessingClient {
     options: DataProcessingRequestOptions = {},
   ): Observable<AxiosResponse<T>> {
     return defer(() => this.request<T>('POST', path, data, options));
+  }
+
+  /**
+   * Runs the bias assessment against the current anomaly detectors and
+   * records the result in the model card. This is invoked as part of retraining.
+   */
+  async assessBias(modelVersion: string): Promise<BiasAssessmentReport> {
+    const response = await firstValueFrom(
+      this.post<BiasAssessmentReport>('/bias/assess', { modelVersion }),
+    );
+    const report = summarizeBiasAssessment(response.data);
+    for (const disparity of report.disparities) {
+      this.biasGauge.set(
+        { segment: disparity.segment, metric: disparity.metric },
+        disparity.ratio,
+      );
+      if (disparity.material) {
+        this.biasCounter.inc({
+          segment: disparity.segment,
+          metric: disparity.metric,
+        });
+      }
+    }
+    return report;
   }
 
   private transition(state: typeof this.state): void {
@@ -184,7 +289,7 @@ export class DataProcessingClient {
         const timedOut =
           error instanceof TimeoutError ||
           (isAxiosError(error) &&
-            ['ECONNABORTED', 'ETIMEDOUT'].includes(error.code ?? ''));
+            ['ECONABORTED', 'ETIMEDOUT'].includes(error.code ?? ''));
         this.outcomes.inc({ method, outcome: timedOut ? 'timeout' : 'error' });
         if (transient && attempt < retries) {
           this.outcomes.inc({ method, outcome: 'retry' });

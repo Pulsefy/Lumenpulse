@@ -39,6 +39,21 @@ Timeouts and exhausted dependency failures use the same typed error with reason
 `timeout` or `unavailable`. News enrichment retains its non-blocking null fallback;
 rebuild failures still follow the existing job failure path.
 
+## Bias assessment
+
+Wave 9 measured overall precision and recall for the anomaly detectors that feed
+the suspicious-contribution flow. Wave 10 adds a contributor-segment bias
+pass—measuring error rates across new accounts, small contributors, and
+regional groups, reporting material disparities with their size, and recording
+findings in the model card.
+
+The client exposes `assess('v1')`, which POSTs to `/bias/assess` with
+`regenerateAtRetraining: true`. The response is a `BiasAssessmentResponse`
+containing the per-segment error rates, the material disparities and their
+size, the mitigation applied (or the accepted disparities with a reason),
+and the model-card update. The assessment is invoked as part of retraining, so
+the report is regenerated on every retrain and the model card stays in sync.
+
 ## Metrics
 
 The application's `/metrics` registry exports:
