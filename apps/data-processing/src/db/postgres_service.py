@@ -74,6 +74,13 @@ from src.privacy import scrub_record
 logger = logging.getLogger(__name__)
 
 
+def _invalidate_feature_cache(*features: str) -> None:
+    """Invalidate serving feature data after upstream records commit."""
+    from src.ml.feature_store import invalidate_feature_store_cache
+
+    invalidate_feature_store_cache(tuple(features))
+
+
 class PostgresService:
     """
     Service for persisting and retrieving analytics data from PostgreSQL
@@ -611,6 +618,7 @@ class PostgresService:
         try:
             article = self._retry_operation(_save)
             if article is not None:
+                _invalidate_feature_cache("sentiment_score")
                 # Best-effort semantic embedding (#1455); never fails the save.
                 self._persist_embedding(article)
             return article
@@ -753,6 +761,8 @@ class PostgresService:
         except SQLAlchemyError as e:
             logger.error(f"Failed to save articles batch: {e}")
 
+        if saved_count:
+            _invalidate_feature_cache("sentiment_score")
         return saved_count
 
     def get_recent_articles(
@@ -1184,7 +1194,10 @@ class PostgresService:
                     return post
 
         try:
-            return self._retry_operation(_save)
+            post = self._retry_operation(_save)
+            if post is not None:
+                _invalidate_feature_cache("sentiment_score")
+            return post
         except SQLAlchemyError as e:
             logger.error(f"Failed to save social post: {e}")
             return None
@@ -1298,6 +1311,8 @@ class PostgresService:
         except SQLAlchemyError as e:
             logger.error(f"Failed to save social posts batch: {e}")
 
+        if saved_count:
+            _invalidate_feature_cache("sentiment_score")
         return saved_count
 
     def get_recent_social_posts(
@@ -1543,7 +1558,10 @@ class PostgresService:
                 return event
 
         try:
-            return self._retry_operation(_save)
+            event = self._retry_operation(_save)
+            if event is not None:
+                _invalidate_feature_cache("volume")
+            return event
         except SQLAlchemyError as e:
             logger.error(f"Failed to save contract event: {e}")
             return None
@@ -1596,7 +1614,10 @@ class PostgresService:
                 return event
 
         try:
-            return self._retry_operation(_save)
+            event = self._retry_operation(_save)
+            if event is not None:
+                _invalidate_feature_cache("volume")
+            return event
         except SQLAlchemyError as e:
             logger.error(f"Failed to save raw Soroban event: {e}")
             return None
