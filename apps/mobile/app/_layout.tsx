@@ -3,7 +3,8 @@ import { Stack } from 'expo-router';
 import { View } from 'react-native';
 import { applyPrivacyPreferences } from '../lib/privacy-preferences';
 import { OfflineIndicator } from '../lib/offline-indicator';
-import { startMutationQueueReplayOnReconnect } from '../lib/mutation-queue';
+import { mutationQueue, startMutationQueueReplayOnReconnect } from '../lib/mutation-queue';
+import { replaySavedSearchMutation } from '../lib/saved-searches';
 import { AuthProvider } from '../contexts/AuthContext';
 import { DeepLinkProvider } from '../contexts/DeepLinkContext';
 import { EnvironmentProvider } from '../contexts/EnvironmentContext';
@@ -24,7 +25,14 @@ export default function RootLayout() {
   // Replay queued offline mutations whenever connectivity returns. The queue
   // records replay failures and conflicts instead of dropping them, and the
   // mounted OfflineIndicator links the user to the review screen.
-  useEffect(() => startMutationQueueReplayOnReconnect(), []);
+  useEffect(() => {
+    mutationQueue.setReplayer(replaySavedSearchMutation);
+    const stopReplay = startMutationQueueReplayOnReconnect();
+    return () => {
+      stopReplay();
+      mutationQueue.setReplayer(null);
+    };
+  }, []);
 
   return (
     <LocalizationProvider>
