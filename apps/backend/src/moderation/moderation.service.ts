@@ -14,6 +14,30 @@ import { ModerationEventPublisherService } from './services/moderation-event-pub
 
 import { AuditService } from '../audit/audit.service';
 
+export interface ModerationDecisionHistoryEntry {
+  id: string;
+  reportId: string;
+  decision: 'approve' | 'reject' | 'escalate';
+  rationale: string;
+  decidedById: string;
+  decidedByName: string;
+  decidedAt: Date;
+}
+
+export interface ModerationQueueItem {
+  id: string;
+  targetType: string;
+  targetId: string;
+  content: string | null;
+  reporterId: string;
+  reporterName: string;
+  reason: string;
+  details: string | null;
+  status: ReportStatus;
+  ageInSeconds: number;
+  createdAt: Date;
+}
+
 @Injectable()
 export class ModerationService {
   private readonly logger = new Logger(ModerationService.name);
@@ -40,7 +64,7 @@ export class ModerationService {
       .andWhere('report.targetType = :targetType', {
         targetType: dto.targetType,
       })
-      .andWhere('report.status IN (:...statuses)', {
+      .andWhere('report.status IN (...statuses)', {
         statuses: [ReportStatus.PENDING, ReportStatus.UNDER_REVIEW],
       })
       .getOne();
@@ -147,6 +171,162 @@ export class ModerationService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  /**
+   * Get the moderation queue of pending reports with content, reporter, reason and age
+   */
+  async getModerationQueue(query: QueryReportsTo): Promise<{
+    items: ModerationQueueItem[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const page = Math.max(1, parseInt(query.page || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(query.limit || '20', 10)));
+
+    const queryBuilder = this.reportsRepository
+      .createQueryBuilder('report')
+      .leftJoinAndSelect('report.reporter', 'reporter')
+      .leftJoinAndSelect('report.reviewer', 'reviewer')
+      .where('report.status IN (...statuses)', {
+        statuses: [ReportStatus.PENDING, ReportStatus.UNDER_REVIEW],
+      })
+      .orderBy('report.createdAt', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    if (query.targetType) {
+      queryBuilder.andWhere('report.targetType = :targetType', {
+        targetType: query.targetType,
+      });
+    }
+
+    if (query.reviewerId !== undefined) {
+      if (query.reviewerId === 'unassigned') {
+        queryBuilder.andWhere('report.reviewerId IS NULL');
+      } else {
+        queryBuilder.andWhere('report.reviewerId = :reviewerId', {
+          reviewerId: query.reviewerId,
+        });
+      }
+    }
+
+    const [reports, total] = await queryBuilder.getManyAndCount();
+    const now = Date.now();
+
+    const items: ModerationQueueItem[] = reports.map((report) => ({
+      id: report.id,
+      targetType: report.targetType,
+      targetId: report.targetId,
+      content: report.content ?? null,
+      reporterId: report.reporterId,
+      reporterName: report.reporter.displayName ?? report.reporterId,
+      reason: report.reason,
+      details: report.details ?? null,
+      status: report.status,
+      ageInSeconds: Math.floor((now - report.createdAt.getTime()) / 1000),
+      createdAt: report.createdAt,
+    }));
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Record a moderation decision with a required rationale
+   */
+  async recordDecision(
+    id: string,
+    moderatorId: string,
+    decision: 'approve' | 'reject' | 'escalate',
+    rationale: string,
+  ): Promise<ContentReport> {
+    if (!rationale || rationale.trim().length === 0) {
+      throw new BadRequestException('A rationale is required for a moderation decision');
+    }
+
+    const report = await this.getReportById(id);
+    const previousStatus = report.status;
+
+    const statusByDecision: Record<typeof decision, ReportStatus> = {
+      approve: ReportStatus.RESOLVED,
+      reject: ReportStatus.DISMISSED,
+      escalate: ReportStatus.UNDER_REVIEW,
+    };
+
+    report.status = statusByDecision[decision];
+    report.reviewNotes = rationale;
+    report.reviewerId = moderatorId;
+
+    if (
+      (report.status === ReportStatus.RESOLVED ||
+        report.status === ReportStatus.DISMISSED) &&
+      !report.resolvedAt
+    ) {
+      report.resolvedAt = new Date();
+    }
+
+    const updatedReport = await this.reportsRepository.save(report);
+
+    await this.auditService.log(
+      'moderation_decision',
+      moderatorId,
+      null,
+      {
+        reportId: id,
+        decision,
+        rationale,
+        previousStatus,
+        newStatus: updatedReport.status,
+      },
+    );
+
+    this.logger.log(
+      `Report ${id} decision '${decision}' by ${moderatorId}. Status: ${updatedReport.status}`,
+    );
+
+    if (previousStatus !== updatedReport.status) {
+      const eventType = this.mapStatusToEventType(updatedReport.status);
+      await this.eventPublisher.publishModerationEvent(
+        eventType,
+        updatedReport,
+        previousStatus,
+      );
+    }
+
+    return updatedReport;
+  }
+
+  /**
+   * Get the decision history for an item, including who decided and when
+   */
+  async getDecisionHistory(
+    id: string,
+  ): Promise<ModerationDecisionHistoryEntry[]> {
+    const report = await this.getReportById(id);
+
+    const history = await this.auditService.findByTargetAndAction(
+      'item',
+      report.targetId,
+      'moderation_decision',
+    );
+
+    return history.map((entry) => ({
+      id: entry.id,
+      reportId: (entry.metadata?.reportId as string) ?? report.id,
+      decision: entry.metadata?.decision as 'approve' | 'reject' | 'escalate',
+      rationale: (entry.metadata?.rationale as string) ?? '',
+      decidedById: entry.actorId,
+      decidedByName: entry.actorName ?? entry.actorId,
+      decidedAt: entry.createdAt,
+    }));
   }
 
   /**
@@ -262,70 +442,19 @@ export class ModerationService {
     reviewerId?: string,
   ): Promise<ContentReport> {
     const report = await this.getReportById(id);
-    const previousReviewerId = report.reviewerId;
 
-    if (
-      report.status !== ReportStatus.PENDING &&
-      report.status !== ReportStatus.UNDER_REVIEW
-    ) {
-      throw new BadRequestException(
-        `Cannot assign reviewer to report in status ${report.status}`,
-      );
+    report.reviewerId = reviewerId ?? assignerId;
+
+    if (report.status === ReportStatus.PENDING) {
+      report.status = ReportStatus.UNDER_REVIEW;
     }
 
-    report.reviewerId = reviewerId || undefined;
     const updatedReport = await this.reportsRepository.save(report);
 
     this.logger.log(
-      `Report ${id} reviewer updated to ${reviewerId || 'unassigned'} by ${assignerId}`,
-    );
-
-    await this.auditService.log(
-      'assign_moderation_report_reviewer',
-      assignerId,
-      null,
-      { reportId: id, previousReviewerId, newReviewerId: reviewerId || null },
+      `Report ${id} assigned to reviewer ${reviewerId ?? assignerId} by ${assignerId}`,
     );
 
     return updatedReport;
-  }
-
-  /**
-   * Get moderation queue statistics
-   */
-  async getModerationStats(): Promise<{
-    totalReports: number;
-    pendingReports: number;
-    underReviewReports: number;
-    resolvedReports: number;
-    dismissedReports: number;
-  }> {
-    const [
-      totalReports,
-      pendingReports,
-      underReviewReports,
-      resolvedReports,
-      dismissedReports,
-    ] = await Promise.all([
-      this.reportsRepository.count(),
-      this.reportsRepository.count({ where: { status: ReportStatus.PENDING } }),
-      this.reportsRepository.count({
-        where: { status: ReportStatus.UNDER_REVIEW },
-      }),
-      this.reportsRepository.count({
-        where: { status: ReportStatus.RESOLVED },
-      }),
-      this.reportsRepository.count({
-        where: { status: ReportStatus.DISMISSED },
-      }),
-    ]);
-
-    return {
-      totalReports,
-      pendingReports,
-      underReviewReports,
-      resolvedReports,
-      dismissedReports,
-    };
   }
 }

@@ -10,12 +10,12 @@ export class CreateReviewCommentsAndDecisionHistory1850000000000 implements Migr
     `);
 
     // Create enum types for review decisions
-    await queryRunner.query(`
+    await queryRunner.query(` 
       CREATE TYPE "review_decision_history_decisionType_enum" AS ENUM('approved', 'rejected', 'deferred', 'escalated')
     `);
 
     // Create review_comments table
-    await queryRunner.query(`
+    await queryRunner.query(` 
       CREATE TABLE "review_comments" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "target_id" character varying NOT NULL,
@@ -39,20 +39,21 @@ export class CreateReviewCommentsAndDecisionHistory1850000000000 implements Migr
     `);
 
     // Create indexes for review_comments
-    await queryRunner.query(`
+    await queryRunner.query(` 
       CREATE INDEX "IDX_review_comments_target" ON "review_comments"("target_id", "target_type")
     `);
 
-    await queryRunner.query(`
+    await queryRunner.query(` 
       CREATE INDEX "IDX_review_comments_author" ON "review_comments"("author_id")
     `);
 
     await queryRunner.query(`
-      CREATE INDEX "IDX_review_comments_visibility" ON "review_comments"("visibility")
+      CREATE INDEX "IDX_review_comments_visibility" ON "review_comments"
+"visibility")
     `);
 
     // Create review_decision_history table
-    await queryRunner.query(`
+    await queryRunner.query(` 
       CREATE TABLE "review_decision_history" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "target_id" character varying NOT NULL,
@@ -68,7 +69,7 @@ export class CreateReviewCommentsAndDecisionHistory1850000000000 implements Migr
     `);
 
     // Add foreign key constraint for reviewer
-    await queryRunner.query(`
+    await queryRunner.query(` 
       ALTER TABLE "review_decision_history"
       ADD CONSTRAINT "FK_review_decision_history_reviewer"
       FOREIGN KEY ("reviewer_id") REFERENCES "users"("id")
@@ -76,16 +77,18 @@ export class CreateReviewCommentsAndDecisionHistory1850000000000 implements Migr
     `);
 
     // Create indexes for review_decision_history
-    await queryRunner.query(`
-      CREATE INDEX "IDX_review_decision_history_target" ON "review_decision_history"("target_id", "target_type")
+    await queryRunner.query(` 
+      CREATE INDEX "IDX_review_decision_history_target" ON "review_decision_history"
+"target_id", "target_type")
     `);
 
-    await queryRunner.query(`
+    await queryRunner.query(` 
       CREATE INDEX "IDX_review_decision_history_reviewer" ON "review_decision_history"("reviewer_id")
     `);
 
     await queryRunner.query(`
-      CREATE INDEX "IDX_review_decision_history_decisionType" ON "review_decision_history"("decisionType")
+      CREATE INDEX "IDX_review_decision_history_decisionType" ON "review_decision_history"
+"tecisionType")
     `);
   }
 

@@ -1,3 +1,5 @@
+
+
 import {
   Controller,
   Get,
@@ -10,6 +12,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
@@ -19,15 +22,18 @@ import {
   ApiOperation,
   ApiResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Request } from 'express';
 import { ModerationService } from './moderation.service';
 import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 import { QueryReportsDto } from './dto/query-reports.dto';
 import { AssignReviewerDto } from './dto/assign-reviewer.dto';
+import { RecordDecisionDto } from './dto/record-decision.dto';
 import { ContentReport } from './entities/content-report.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
+import { ModeratorGuard } from '../auth/moderator.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
 
@@ -37,12 +43,14 @@ interface RequestWithUser extends Request {
     id: string;
     email?: string;
     role?: string;
+    roles?: string[];
   };
 }
 
 @ApiTags('moderation')
 @ApiBearerAuth('JWT-auth')
 @Controller('moderation')
+@Throttle({ default: { limit: 60, ttl: 60_000 } })
 @UseGuards(JwtAuthGuard)
 export class ModerationController {
   constructor(private readonly moderationService: ModerationService) {}
@@ -89,6 +97,7 @@ export class ModerationController {
   @Get('queue')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
+  @UseGuards(ModeratorGuard)
   @ApiOperation({ summary: 'Get moderation queue (Admin only)' })
   @ApiResponse({
     status: 200,
@@ -101,6 +110,7 @@ export class ModerationController {
   @Get('queue/stats')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
+  @UseGuards(ModeratorGuard)
   @ApiOperation({ summary: 'Get moderation statistics (Admin only)' })
   @ApiResponse({ status: 200, description: 'Moderation queue statistics' })
   async getModerationStats() {
@@ -110,6 +120,7 @@ export class ModerationController {
   @Get('queue/:id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
+  @UseGuards(ModeratorGuard)
   @ApiOperation({ summary: 'Get specific report details (Admin only)' })
   @ApiResponse({ status: 200, description: 'Report details' })
   @ApiResponse({ status: 404, description: 'Report not found' })
@@ -120,6 +131,7 @@ export class ModerationController {
   @Patch('queue/:id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
+  @UseGuards(ModeratorGuard)
   @UsePipes(new ValidationPipe())
   @ApiOperation({ summary: 'Update report status (Admin only)' })
   @ApiResponse({ status: 200, description: 'Report updated successfully' })
@@ -139,6 +151,7 @@ export class ModerationController {
   @Patch('queue/:id/assign')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
+  @UseGuards(ModeratorGuard)
   @UsePipes(new ValidationPipe())
   @ApiOperation({ summary: 'Assign a reviewer to a report (Admin only)' })
   @ApiResponse({ status: 200, description: 'Reviewer assigned successfully' })
@@ -152,6 +165,42 @@ export class ModerationController {
       id,
       req.user.id,
       assignReviewerDto.reviewerId,
+    );
+  }
+
+  @Get('queue/:id/history')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @UseGuards(ModeratorGuard)
+  @ApiOperation({ summary: 'Get decision history for a report (Moderator only)' })
+  @ApiResponse({ status: 200, description: 'Decision history for the report' })
+  @ApiResponse({ status: 404, description: 'Report not found' })
+  async getReportHistory(@Param('id') id: string) {
+    return this.moderationService.getReportHistory(id);
+  }
+
+  @Post('queue/:id/decision')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @UseGuards(ModeratorGuard)
+  @UsePipes(new ValidationPipe())
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Record a moderation decision (Moderator only)' })
+  @ApiResponse({ status: 200, description: 'Decision recorded successfully' })
+  @ApiResponse({ status: 400, description: 'Rationale is required' })
+  @ApiResponse({ status: 404, description: 'Report not found' })
+  async recordDecision(
+    @Req() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() decisionDto: RecordDecisionDto,
+  ) {
+    if (!decisionDto?.rationale || decisionDto.rationale.trim().length === 0) {
+      throw new ForbiddenException('A rationale is required for a decision');
+    }
+    return this.moderationService.recordDecision(
+      id,
+      req.user.id,
+      decisionDto,
     );
   }
 }
