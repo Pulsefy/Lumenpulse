@@ -24,22 +24,21 @@ describe('IdempotencyInterceptor', () => {
     get: jest.fn(),
   };
 
-  const makeRecord = (overrides: Partial<IdempotencyRecord> = {}) =>
-    ({
-      id: 'record-id',
-      key: 'test-key',
-      method: 'POST',
-      route: '/test',
-      requestHash: 'hash',
-      status: IdempotencyRecordStatus.COMPLETED,
-      responseStatus: HttpStatus.CREATED,
-      responseBody: { success: true },
-      leaseExpiresAt: new Date(Date.now() + 60_000),
-      expiresAt: new Date(Date.now() + 86_400_000),
-      completedAt: new Date(),
-      createdAt: new Date(),
-      ...overrides,
-    }) as IdempotencyRecord;
+  const makeRecord = (overrides: Partial<IdempotencyRecord> = {}) => ({
+    id: 'record-id',
+    key: 'test-key',
+    method: 'POST',
+    route: '/test',
+    requestHash: 'hash',
+    status: IdempotencyRecordStatus.COMPLETED,
+    responseStatus: HttpStatus.CREATED,
+    responseBody: { success: true },
+    leaseExpiresAt: new Date(Date.now() + 60_000),
+    expiresAt: new Date(Date.now() + 86_400_000),
+    completedAt: new Date(),
+    createdAt: new Date(),
+    ...overrides,
+  });
 
   beforeEach(async () => {
     jest.resetAllMocks();

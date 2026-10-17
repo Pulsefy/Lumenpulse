@@ -11,6 +11,7 @@ import {
   HttpStatus,
   NotFoundException,
   ForbiddenException,
+  Query,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import {
@@ -23,9 +24,15 @@ import { ExportService } from './export.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles, UserRole } from '../auth/decorators/auth.decorators';
-import { CreateExportJobDto, ExportJobResponseDto } from './dto/export-job.dto';
+import {
+  CreateExportJobDto,
+  ExportJobResponseDto,
+  ExportJobListResponseDto,
+} from './dto/export-job.dto';
 import { ExportStatus, ExportType } from './entities/export-job.entity';
 import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
+import { PaginatedQueryDto } from '../common/pagination/pagination-query.dto';
+import { resolvePagination } from '../common/pagination/pagination-response.dto';
 
 const ANALYTICS_TYPES = new Set<ExportType>([
   ExportType.ONCHAIN_ANALYTICS,
@@ -99,18 +106,24 @@ export class ExportController {
 
   @Get()
   @ApiOperation({ summary: 'List recent export jobs for the current user' })
-  @ApiResponse({ status: 200, type: [ExportJobResponseDto] })
+  @ApiResponse({ status: 200, type: ExportJobListResponseDto })
   async listJobs(
+    @Query() paginationQuery: PaginatedQueryDto,
     @Request() req: { user: { id: string } },
-  ): Promise<ExportJobResponseDto[]> {
-    const jobs = await this.exportService.listJobs(req.user.id);
-    return jobs.map((job) => ({
+  ): Promise<ExportJobListResponseDto> {
+    const pagination = resolvePagination(
+      paginationQuery.page,
+      paginationQuery.pageSize,
+    );
+    const jobs = await this.exportService.listJobs(req.user.id, pagination);
+    const items: ExportJobResponseDto[] = jobs.items.map((job) => ({
       id: job.id,
       type: job.type,
       status: job.status,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
     }));
+    return new ExportJobListResponseDto(items, pagination, jobs.total);
   }
 
   @Get(':id')

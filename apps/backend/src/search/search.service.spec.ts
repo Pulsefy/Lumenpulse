@@ -59,8 +59,6 @@ describe('SearchService', () => {
 
       const byName = service.searchProjects({
         q: 'lumen',
-        limit: 10,
-        offset: 0,
       });
       expect(byName.total).toBe(1);
       expect(byName.items[0].projectId).toBe(1);
@@ -89,15 +87,15 @@ describe('SearchService', () => {
 
       const res = service.searchProjects({
         status: VerificationStatus.Pending,
-        limit: 10,
-        offset: 10,
+        page: 2,
+        pageSize: 10,
       });
       expect(verificationService.listProjects).toHaveBeenCalledWith(
         VerificationStatus.Pending,
       );
       expect(res.items).toHaveLength(10);
-      expect(res.limit).toBe(10);
-      expect(res.offset).toBe(10);
+      expect(res.page).toBe(2);
+      expect(res.pageSize).toBe(10);
       expect(res.total).toBe(30);
     });
   });

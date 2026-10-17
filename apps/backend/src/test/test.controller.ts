@@ -48,6 +48,17 @@ export class TestController {
       },
     },
   })
+  @ApiResponse({
+    status: 201,
+    description: 'Data submitted successfully',
+    schema: {
+      properties: {
+        message: { type: 'string', example: 'Data submitted successfully' },
+        timestamp: { type: 'string', format: 'date-time' },
+        receivedData: { type: 'object', additionalProperties: true },
+      },
+    },
+  })
   submitData(@Body() body: Record<string, unknown>): {
     message: string;
     timestamp: Date;

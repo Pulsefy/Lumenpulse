@@ -23,12 +23,15 @@ import {
   LeaderboardQueryDto,
   LeaderboardResponseDto,
   LeaderboardEntryDto,
+  RoundListQueryDto,
+  RoundListResponseDto,
 } from './dto/grants.dto';
 import {
   CONTRIBUTION_QUEUE,
   DETECTION_JOB,
 } from '../suspicious-contribution/types';
 import { RequestContextService } from '../common/services/request-context.service';
+import { resolvePagination } from '../common/pagination/pagination-response.dto';
 
 /**
  * In-memory store for round and contribution data.
@@ -217,8 +220,14 @@ export class GrantsService {
     return this.toRoundDto(this.getRecord(roundId));
   }
 
-  listRounds(): RoundDto[] {
-    return [...this.rounds.values()].map((r) => this.toRoundDto(r));
+  listRounds(query?: RoundListQueryDto): RoundListResponseDto {
+    const pagination = resolvePagination(query?.page, query?.pageSize);
+    const allRounds = [...this.rounds.values()].map((r) => this.toRoundDto(r));
+    // Stable sort by id ascending so pages don't shift under concurrent inserts
+    allRounds.sort((a, b) => a.id - b.id);
+    const { pageSize, offset } = pagination;
+    const items = allRounds.slice(offset, offset + pageSize);
+    return new RoundListResponseDto(items, pagination, allRounds.length);
   }
 
   fundPool(dto: FundPoolDto): { roundId: number; newBalance: string } {

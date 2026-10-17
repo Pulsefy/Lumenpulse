@@ -93,7 +93,8 @@ export class RotateContractIdsResponseDto {
   message: string;
 
   @ApiProperty({
-    type: Object,
+    type: 'object',
+    additionalProperties: { type: 'string' },
     description: 'Map of contract names to their new IDs',
     example: {
       lumenToken: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',

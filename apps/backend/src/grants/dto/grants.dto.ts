@@ -7,6 +7,11 @@ import {
   IsArray,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { PaginatedQueryDto } from '../../common/pagination/pagination-query.dto';
+import {
+  PaginatedResponseDto,
+  ResolvedPagination,
+} from '../../common/pagination/pagination-response.dto';
 
 export class CreateRoundDto {
   @ApiProperty({
@@ -409,4 +414,25 @@ export class RoundExportDto extends RoundSummaryDto {
     type: [ContributionRecordDto],
   })
   contributions: ContributionRecordDto[];
+}
+
+// ── Paginated list DTOs ──────────────────────────────────────────────────────
+
+/**
+ * Query DTO for `GET /grants/rounds`. Extends the shared pagination contract
+ * so every list endpoint accepts the same `page` / `pageSize` parameters.
+ */
+export class RoundListQueryDto extends PaginatedQueryDto {}
+
+/**
+ * Paginated response for `GET /grants/rounds`.
+ */
+export class RoundListResponseDto extends PaginatedResponseDto<RoundDto> {
+  constructor(
+    items: RoundDto[],
+    pagination: ResolvedPagination,
+    total: number,
+  ) {
+    super(items, pagination, total);
+  }
 }

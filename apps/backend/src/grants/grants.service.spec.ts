@@ -65,7 +65,31 @@ describe('GrantsService', () => {
       startTime: past,
       endTime: future,
     });
-    expect(service.listRounds()).toHaveLength(2);
+    const result = service.listRounds();
+    expect(result.items).toHaveLength(2);
+    expect(result.total).toBe(2);
+    expect(result.page).toBe(1);
+    expect(result.pageSize).toBe(20);
+    expect(result.totalPages).toBe(1);
+  });
+
+  it('paginates listRounds', () => {
+    for (let i = 0; i < 5; i++) {
+      service.createRound({
+        name: `R${i}`,
+        tokenAddress: 'GT',
+        startTime: past,
+        endTime: future,
+      });
+    }
+    const page1 = service.listRounds({ page: 1, pageSize: 2 });
+    expect(page1.items).toHaveLength(2);
+    expect(page1.total).toBe(5);
+    expect(page1.totalPages).toBe(3);
+
+    const page3 = service.listRounds({ page: 3, pageSize: 2 });
+    expect(page3.items).toHaveLength(1);
+    expect(page3.page).toBe(3);
   });
 
   it('throws NotFoundException for unknown round', () => {

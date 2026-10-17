@@ -72,7 +72,7 @@ export interface components {
       items: components['schemas']['FeedActivityItemDto'][];
       total: number;
       page: number;
-      limit: number;
+      pageSize: number;
       totalPages: number;
       isSparseContributor: boolean;
     };

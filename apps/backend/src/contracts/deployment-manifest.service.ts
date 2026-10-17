@@ -30,7 +30,9 @@ export class DeploymentManifestService implements OnModuleInit {
   constructor(
     @Optional()
     @InjectRepository(ContractDeploymentManifest)
-    private readonly manifestRepo: Repository<ContractDeploymentManifest> | undefined,
+    private readonly manifestRepo:
+      | Repository<ContractDeploymentManifest>
+      | undefined,
     private readonly configService: ConfigService,
     private readonly contractCapabilityService: ContractCapabilityService,
   ) {}
@@ -49,7 +51,9 @@ export class DeploymentManifestService implements OnModuleInit {
     if (manifestPath) {
       watchFile(manifestPath, { interval: 5000 }, (curr, prev) => {
         if (curr.mtime !== prev.mtime) {
-          this.logger.log('testnet-manifest.json changed on disk. Reloading...');
+          this.logger.log(
+            'testnet-manifest.json changed on disk. Reloading...',
+          );
           this.refreshManifest();
         }
       });
@@ -339,7 +343,10 @@ export class DeploymentManifestService implements OnModuleInit {
     try {
       const content = readFileSync(manifestPath, 'utf8');
       const parsed = JSON.parse(content) as {
-        contracts?: Record<string, { id?: unknown; wasm_hash?: unknown; reason?: unknown }>;
+        contracts?: Record<
+          string,
+          { id?: unknown; wasm_hash?: unknown; reason?: unknown }
+        >;
       };
 
       if (
@@ -357,8 +364,10 @@ export class DeploymentManifestService implements OnModuleInit {
 
       for (const [snakeKey, contractInfo] of Object.entries(contracts)) {
         // Convert snake_case to camelCase
-        const camelKey = snakeKey.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-        
+        const camelKey = snakeKey.replace(/_([a-z])/g, (g) =>
+          g[1].toUpperCase(),
+        );
+
         // Skip un-deployed contracts (they have a 'reason' instead of 'id')
         if (contractInfo.reason) {
           continue;
@@ -372,7 +381,11 @@ export class DeploymentManifestService implements OnModuleInit {
 
         if (id) {
           const previous = this.lastKnownContracts[camelKey];
-          if (!previous || previous.id !== id || previous.wasmHash !== wasmHash) {
+          if (
+            !previous ||
+            previous.id !== id ||
+            previous.wasmHash !== wasmHash
+          ) {
             this.logger.log(
               `Contract ${camelKey} changed: previous=${JSON.stringify(previous ?? null)}, new=${JSON.stringify({ id, wasmHash })}`,
             );
@@ -384,7 +397,9 @@ export class DeploymentManifestService implements OnModuleInit {
       }
 
       if (hasChanges) {
-        this.logger.log('Manifest changes detected. Applying updates and invalidating caches.');
+        this.logger.log(
+          'Manifest changes detected. Applying updates and invalidating caches.',
+        );
         this.configService.setStellarContractOverrides(updates);
         await this.configService.invalidateCache();
         this.contractCapabilityService.invalidateCache();
@@ -392,7 +407,10 @@ export class DeploymentManifestService implements OnModuleInit {
         this.logger.debug('Manifest parsed, no changes detected.');
       }
     } catch (error) {
-      this.logger.error('Failed to parse or refresh manifest. Retaining previous state.', error);
+      this.logger.error(
+        'Failed to parse or refresh manifest. Retaining previous state.',
+        error,
+      );
     }
   }
 }

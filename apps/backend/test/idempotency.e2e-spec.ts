@@ -5,7 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import request from 'supertest';
-import { App } from 'supertest/types';
+import { type App } from 'supertest/types';
 import { IdempotencyModule } from '../src/idempotency/idempotency.module';
 import { IdempotencyInterceptor } from '../src/common/interceptors/idempotency.interceptor';
 import { Idempotent } from '../src/common/decorators/idempotent.decorator';
@@ -37,7 +37,7 @@ interface TestResponseBody {
 }
 
 const makeRequest = (app: INestApplication) =>
-  request(app.getHttpServer() as unknown as App);
+  request(app.getHttpServer() as App);
 
 describe('Idempotency (e2e)', () => {
   let app: INestApplication;

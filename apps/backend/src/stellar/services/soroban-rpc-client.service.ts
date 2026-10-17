@@ -43,8 +43,6 @@ export interface SorobanClientOptions {
   isReadOnly?: boolean;
 }
 
-type SimulationTraceLevel = 'off' | 'summary' | 'verbose';
-
 interface ContractInvocationSummary {
   contract: string;
   method: string;
@@ -452,8 +450,7 @@ export class SorobanRpcClientService {
     tx: unknown,
     result: rpc.Api.SimulateTransactionErrorResponse,
   ): void {
-    const traceLevel = config.stellar
-      .simulationTraceLevel as SimulationTraceLevel;
+    const traceLevel = config.stellar.simulationTraceLevel;
     if (traceLevel === 'off') {
       return;
     }

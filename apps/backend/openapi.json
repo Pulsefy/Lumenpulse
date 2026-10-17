@@ -193,7 +193,27 @@
             }
           },
           "201": {
-            "description": "",
+            "description": "Data submitted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Data submitted successfully"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "receivedData": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            },
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -1760,17 +1780,58 @@
       "get": {
         "description": "Retrieves all available grant rounds (active, pending, finalized).",
         "operationId": "GrantsController_listRounds",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-indexed)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Number of items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "List of rounds retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RoundDto"
-                  }
+                  "$ref": "#/components/schemas/RoundListResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
                 }
               }
             },
@@ -2582,6 +2643,25 @@
         "responses": {
           "200": {
             "description": "Matching pool funded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roundId": {
+                      "type": "integer"
+                    },
+                    "newBalance": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "roundId",
+                    "newBalance"
+                  ]
+                }
+              }
+            },
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -2592,7 +2672,26 @@
             }
           },
           "201": {
-            "description": "",
+            "description": "Matching pool funded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roundId": {
+                      "type": "integer"
+                    },
+                    "newBalance": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "roundId",
+                    "newBalance"
+                  ]
+                }
+              }
+            },
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -2787,6 +2886,21 @@
         "responses": {
           "200": {
             "description": "Project approved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            },
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -2797,7 +2911,22 @@
             }
           },
           "201": {
-            "description": "",
+            "description": "Project approved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            },
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -3192,6 +3321,21 @@
         "responses": {
           "200": {
             "description": "Contribution recorded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            },
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -3202,7 +3346,22 @@
             }
           },
           "201": {
-            "description": "",
+            "description": "Contribution recorded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            },
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -3338,6 +3497,44 @@
         "responses": {
           "200": {
             "description": "Distribution completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "totalDistributed": {
+                      "type": "string"
+                    },
+                    "allocations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "projectId": {
+                            "type": "integer"
+                          },
+                          "owner": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "projectId",
+                          "owner",
+                          "amount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "totalDistributed",
+                    "allocations"
+                  ]
+                }
+              }
+            },
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -3348,7 +3545,45 @@
             }
           },
           "201": {
-            "description": "",
+            "description": "Distribution completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "totalDistributed": {
+                      "type": "string"
+                    },
+                    "allocations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "projectId": {
+                            "type": "integer"
+                          },
+                          "owner": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "projectId",
+                          "owner",
+                          "amount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "totalDistributed",
+                    "allocations"
+                  ]
+                }
+              }
+            },
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -9403,7 +9638,27 @@
             }
           },
           "201": {
-            "description": "",
+            "description": "Authentication successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "token": {
+                      "type": "string"
+                    },
+                    "refresh_token": {
+                      "type": "string"
+                    },
+                    "user": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -24394,17 +24649,58 @@
       },
       "get": {
         "operationId": "ExportController_listJobs",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-indexed)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Number of items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ExportJobResponseDto"
-                  }
+                  "$ref": "#/components/schemas/ExportJobListResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
                 }
               }
             },
@@ -25477,9 +25773,20 @@
         "operationId": "NewsController_getLatestArticles",
         "parameters": [
           {
-            "name": "limit",
+            "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (1-indexed)",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (1–100, default 20)",
             "schema": {
               "example": 20,
               "type": "number"
@@ -25521,7 +25828,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NewsArticlesResponseDto"
+                  "$ref": "#/components/schemas/NewsArticlesPaginatedResponseDto"
                 }
               }
             },
@@ -25589,7 +25896,7 @@
             }
           }
         },
-        "summary": "Get latest crypto news articles",
+        "summary": "Get paginated latest crypto news articles",
         "tags": [
           "news"
         ]
@@ -26013,11 +26320,22 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
             "required": false,
             "in": "query",
+            "description": "Page number (1-indexed)",
             "schema": {
-              "example": 10,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (1–100, default 20)",
+            "schema": {
+              "example": 20,
               "type": "number"
             }
           }
@@ -26028,7 +26346,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NewsArticlesResponseDto"
+                  "$ref": "#/components/schemas/NewsArticlesPaginatedResponseDto"
                 }
               }
             },
@@ -26114,7 +26432,7 @@
             }
           }
         },
-        "summary": "Get news for a specific cryptocurrency",
+        "summary": "Get paginated news for a specific cryptocurrency",
         "tags": [
           "news"
         ]
@@ -26125,6 +26443,31 @@
         "description": "Search registered projects with basic relevance ranking and optional status/owner filters.",
         "operationId": "SearchController_searchProjects",
         "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-indexed)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Number of items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
           {
             "name": "q",
             "required": false,
@@ -26159,31 +26502,6 @@
             "schema": {
               "example": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
               "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "description": "Pagination limit",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20,
-              "example": 20,
-              "type": "number"
-            }
-          },
-          {
-            "name": "offset",
-            "required": false,
-            "in": "query",
-            "description": "Pagination offset",
-            "schema": {
-              "minimum": 0,
-              "default": 0,
-              "example": 0,
-              "type": "number"
             }
           }
         ],
@@ -28932,6 +29250,33 @@
         "operationId": "CrowdfundSyncController_listEvents",
         "parameters": [
           {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "createdAt",
+              "type": "string",
+              "enum": [
+                "createdAt",
+                "ledgerSequence",
+                "processedAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "DESC",
+              "type": "string",
+              "enum": [
+                "ASC",
+                "DESC"
+              ]
+            }
+          },
+          {
             "name": "vaultAddress",
             "required": false,
             "in": "query",
@@ -28996,22 +29341,6 @@
               "maximum": 100,
               "default": 20,
               "type": "number"
-            }
-          },
-          {
-            "name": "sortBy",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/Object"
-            }
-          },
-          {
-            "name": "sortOrder",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/Object"
             }
           }
         ],
@@ -29440,6 +29769,33 @@
         "operationId": "CrowdfundSyncController_listDeadLetters",
         "parameters": [
           {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "createdAt",
+              "type": "string",
+              "enum": [
+                "createdAt",
+                "failureCount",
+                "updatedAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "DESC",
+              "type": "string",
+              "enum": [
+                "ASC",
+                "DESC"
+              ]
+            }
+          },
+          {
             "name": "vaultAddress",
             "required": false,
             "in": "query",
@@ -29495,22 +29851,6 @@
               "maximum": 100,
               "default": 20,
               "type": "number"
-            }
-          },
-          {
-            "name": "sortBy",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/Object"
-            }
-          },
-          {
-            "name": "sortOrder",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/Object"
             }
           }
         ],
@@ -34955,19 +35295,8 @@
           }
         ],
         "responses": {
-          "24": {
-            "description": "Deployment manifest deleted successfully",
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
           "204": {
-            "description": "",
+            "description": "Deployment manifest deleted successfully",
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -36490,18 +36819,20 @@
             "schema": {
               "minimum": 1,
               "default": 1,
+              "example": 1,
               "type": "number"
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "required": false,
             "in": "query",
-            "description": "Items per page (1-100, default 20)",
+            "description": "Number of items per page",
             "schema": {
               "minimum": 1,
               "maximum": 100,
               "default": 20,
+              "example": 20,
               "type": "number"
             }
           },
@@ -36535,6 +36866,15 @@
                 "DESC"
               ],
               "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (1-100, default 20)",
+            "schema": {
+              "type": "number"
             }
           }
         ],
@@ -38890,7 +39230,88 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "generatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "cacheTtlMs": {
+                      "type": "number"
+                    },
+                    "portfolio": {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true
+                        },
+                        "error": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "unavailable"
+                          ]
+                        }
+                      }
+                    },
+                    "watchlist": {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true
+                        },
+                        "error": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "unavailable"
+                          ]
+                        }
+                      }
+                    },
+                    "signals": {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true
+                        },
+                        "error": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "unavailable"
+                          ]
+                        }
+                      }
+                    },
+                    "news": {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true
+                        },
+                        "error": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "unavailable"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "generatedAt",
+                    "cacheTtlMs",
+                    "portfolio",
+                    "watchlist",
+                    "signals",
+                    "news"
+                  ]
                 }
               }
             },
@@ -39868,6 +40289,31 @@
         "operationId": "ProjectsController_listProjects",
         "parameters": [
           {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-indexed)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Number of items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
             "name": "status",
             "required": false,
             "in": "query",
@@ -39892,29 +40338,6 @@
             }
           },
           {
-            "name": "page",
-            "required": false,
-            "in": "query",
-            "description": "Page number (1-indexed)",
-            "schema": {
-              "minimum": 1,
-              "default": 1,
-              "type": "number"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "description": "Items per page",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 10,
-              "type": "number"
-            }
-          },
-          {
             "name": "sortBy",
             "required": false,
             "in": "query",
@@ -39930,7 +40353,12 @@
             "in": "query",
             "description": "Sort direction",
             "schema": {
-              "$ref": "#/components/schemas/Object"
+              "default": "DESC",
+              "type": "string",
+              "enum": [
+                "ASC",
+                "DESC"
+              ]
             }
           }
         ],
@@ -40608,7 +41036,48 @@
       },
       "ForceRefreshDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "requestedBy": {
+            "type": "string",
+            "description": "Optional identifier for audit logs."
+          }
+        }
+      },
+      "RoundListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "List of items for the current page"
+          },
+          "total": {
+            "type": "number",
+            "description": "Total number of items matching the query",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "Current page number (1-indexed)",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "description": "Number of items per page",
+            "example": 20
+          },
+          "totalPages": {
+            "type": "number",
+            "description": "Total number of pages",
+            "example": 3
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "totalPages"
+        ]
       },
       "RoundDto": {
         "type": "object",
@@ -43223,6 +43692,9 @@
           },
           "updatedContracts": {
             "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
             "description": "Map of contract names to their new IDs",
             "example": {
               "lumenToken": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4"
@@ -45120,6 +45592,42 @@
           "updatedAt"
         ]
       },
+      "ExportJobListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "List of items for the current page"
+          },
+          "total": {
+            "type": "number",
+            "description": "Total number of items matching the query",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "Current page number (1-indexed)",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "description": "Number of items per page",
+            "example": 20
+          },
+          "totalPages": {
+            "type": "number",
+            "description": "Total number of pages",
+            "example": 3
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "totalPages"
+        ]
+      },
       "UserSignalDto": {
         "type": "object",
         "properties": {
@@ -45326,6 +45834,48 @@
           "message"
         ]
       },
+      "NewsArticlesPaginatedResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "List of items for the current page"
+          },
+          "total": {
+            "type": "number",
+            "description": "Total number of items matching the query",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "Current page number (1-indexed)",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "description": "Number of items per page",
+            "example": 20
+          },
+          "totalPages": {
+            "type": "number",
+            "description": "Total number of pages",
+            "example": 3
+          },
+          "fetchedAt": {
+            "type": "string",
+            "description": "Timestamp when data was fetched",
+            "example": "2024-02-25T15:30:00Z"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "totalPages",
+          "fetchedAt"
+        ]
+      },
       "NewsArticleDto": {
         "type": "object",
         "properties": {
@@ -45447,33 +45997,6 @@
           "sentiment",
           "publishedAt",
           "relatedCoins"
-        ]
-      },
-      "NewsArticlesResponseDto": {
-        "type": "object",
-        "properties": {
-          "articles": {
-            "description": "List of news articles",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NewsArticleDto"
-            }
-          },
-          "totalCount": {
-            "type": "number",
-            "description": "Total number of articles",
-            "example": 150
-          },
-          "fetchedAt": {
-            "type": "string",
-            "description": "Timestamp when data was fetched",
-            "example": "2024-02-25T15:30:00Z"
-          }
-        },
-        "required": [
-          "articles",
-          "totalCount",
-          "fetchedAt"
         ]
       },
       "NewsSearchResponseDto": {
@@ -45662,20 +46185,28 @@
             "type": "number",
             "example": 42
           },
-          "limit": {
+          "page": {
             "type": "number",
+            "description": "Current page number (1-indexed)",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "description": "Number of items per page",
             "example": 20
           },
-          "offset": {
+          "totalPages": {
             "type": "number",
-            "example": 0
+            "description": "Total number of pages (always ≥ 1)",
+            "example": 3
           }
         },
         "required": [
           "items",
           "total",
-          "limit",
-          "offset"
+          "page",
+          "pageSize",
+          "totalPages"
         ]
       },
       "EcosystemEntityDto": {
@@ -46535,10 +47066,6 @@
           "eventsProcessed",
           "status"
         ]
-      },
-      "Object": {
-        "type": "object",
-        "properties": {}
       },
       "VaultSyncStatsDto": {
         "type": "object",
@@ -48795,17 +49322,17 @@
           },
           "page": {
             "type": "number",
-            "description": "Current page number",
+            "description": "Current page number (1-indexed)",
             "example": 1
           },
-          "limit": {
+          "pageSize": {
             "type": "number",
-            "description": "Items per page",
+            "description": "Number of items per page",
             "example": 20
           },
           "totalPages": {
             "type": "number",
-            "description": "Total number of pages",
+            "description": "Total number of pages (always ≥ 1)",
             "example": 3
           },
           "isSparseContributor": {
@@ -48818,7 +49345,7 @@
           "items",
           "total",
           "page",
-          "limit",
+          "pageSize",
           "totalPages",
           "isSparseContributor"
         ]
@@ -49443,6 +49970,42 @@
           }
         }
       },
+      "ProjectListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "List of items for the current page"
+          },
+          "total": {
+            "type": "number",
+            "description": "Total number of items matching the query",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "Current page number (1-indexed)",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "description": "Number of items per page",
+            "example": 20
+          },
+          "totalPages": {
+            "type": "number",
+            "description": "Total number of pages",
+            "example": 3
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "totalPages"
+        ]
+      },
       "ProjectMetadataDto": {
         "type": "object",
         "properties": {
@@ -49550,88 +50113,6 @@
           "vault",
           "lastTxHash",
           "lastSyncedAt"
-        ]
-      },
-      "ProjectListItemDto": {
-        "type": "object",
-        "properties": {
-          "projectId": {
-            "type": "string",
-            "description": "Project ID"
-          },
-          "owner": {
-            "type": "string",
-            "description": "Owner address"
-          },
-          "metadata": {
-            "description": "Project metadata",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ProjectMetadataDto"
-              }
-            ]
-          },
-          "onChainStatus": {
-            "description": "On-chain status",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/OnChainStatusDto"
-              }
-            ]
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string",
-            "description": "Creation timestamp"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "type": "string",
-            "description": "Last update timestamp"
-          }
-        },
-        "required": [
-          "projectId",
-          "owner",
-          "metadata",
-          "onChainStatus",
-          "createdAt",
-          "updatedAt"
-        ]
-      },
-      "ProjectListResponseDto": {
-        "type": "object",
-        "properties": {
-          "projects": {
-            "description": "Array of projects",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ProjectListItemDto"
-            }
-          },
-          "total": {
-            "type": "number",
-            "description": "Total number of projects"
-          },
-          "page": {
-            "type": "number",
-            "description": "Current page number"
-          },
-          "limit": {
-            "type": "number",
-            "description": "Items per page"
-          },
-          "totalPages": {
-            "type": "number",
-            "description": "Total number of pages"
-          }
-        },
-        "required": [
-          "projects",
-          "total",
-          "page",
-          "limit",
-          "totalPages"
         ]
       },
       "ProjectDetailDto": {

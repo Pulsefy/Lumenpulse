@@ -100,7 +100,9 @@ export class SchedulerHealthService {
         );
         const lastCompletedAt = lastSuccessAt ?? lastFailure?.startedAt ?? null;
         const nextRunAt = lastCompletedAt
-          ? new Date(lastCompletedAt.getTime() + job.expectedIntervalMs).toISOString()
+          ? new Date(
+              lastCompletedAt.getTime() + job.expectedIntervalMs,
+            ).toISOString()
           : null;
 
         return {
