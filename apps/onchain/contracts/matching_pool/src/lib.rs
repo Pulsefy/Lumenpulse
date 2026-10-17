@@ -10,6 +10,7 @@ use math::{sqrt_scaled, unscale};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, IntoVal, Symbol, Val, Vec};
+use soroban_sdk::deployer::ContractExecutable;
 use storage::{DataKey, PauseScope, RoundData, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 #[contract]
@@ -970,7 +971,7 @@ impl MatchingPoolContract {
         Self::require_admin(&env, &caller)?;
         Self::require_governance_not_paused(&env)?;
         env.deployer()
-            .update_current_contract_wasm(new_wasm_hash.clone());
+            .update_current_contract(ContractExecutable::Wasm(new_wasm_hash.clone()));
         events::UpgradedEvent {
             admin: caller,
             new_wasm_hash,

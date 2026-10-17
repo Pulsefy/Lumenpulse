@@ -27,7 +27,7 @@ members = [
 exclude = ["contracts/tests"]
 
 [workspace.dependencies]
-soroban-sdk = "23"
+soroban-sdk = "29"
 
 [profile.release]
 opt-level = "z"

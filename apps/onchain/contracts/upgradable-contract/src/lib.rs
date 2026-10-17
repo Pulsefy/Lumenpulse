@@ -10,6 +10,7 @@ use events::{
     OperationCancelledEvent, OperationExecutedEvent, OperationQueuedEvent, UpgradedEvent,
 };
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
+use soroban_sdk::deployer::ContractExecutable;
 use storage::{
     OperationStatus, QueuedOperation, TimelockAction, GRACE_PERIOD_SECONDS, LEDGER_BUMP,
     LEDGER_THRESHOLD, MIN_DELAY_SECONDS,
@@ -226,7 +227,7 @@ impl UpgradableContract {
         match op.action.clone() {
             TimelockAction::Upgrade(new_wasm_hash) => {
                 env.deployer()
-                    .update_current_contract_wasm(new_wasm_hash.clone());
+                    .update_current_contract(ContractExecutable::Wasm(new_wasm_hash.clone()));
                 UpgradedEvent {
                     admin: executor.clone(),
                     new_wasm_hash,

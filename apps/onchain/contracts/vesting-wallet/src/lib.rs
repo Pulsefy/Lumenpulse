@@ -11,6 +11,7 @@ use errors::VestingError;
 use events::{AdminChangedEvent, UpgradedEvent};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
+use soroban_sdk::deployer::ContractExecutable;
 use storage::{
     DataKey, MilestoneLink, MilestoneRequirement, VestingData, LEDGER_BUMP, LEDGER_THRESHOLD,
 };
@@ -413,7 +414,7 @@ impl VestingWalletContract {
         }
         caller.require_auth();
         env.deployer()
-            .update_current_contract_wasm(new_wasm_hash.clone());
+            .update_current_contract(ContractExecutable::Wasm(new_wasm_hash.clone()));
         UpgradedEvent {
             admin: caller,
             new_wasm_hash,

@@ -22,6 +22,7 @@ use soroban_sdk::xdr::FromXdr;
 use soroban_sdk::{
     contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
+use soroban_sdk::deployer::ContractExecutable;
 use storage::{
     AttestationStatus, Badge, ContribPauseScope, ContributorData, ContributorTier, DataKey,
     PenaltyRecord, PenaltySeverity, LEDGER_BUMP, LEDGER_THRESHOLD,
@@ -871,7 +872,7 @@ impl ContributorRegistryContract {
         consume_approval(&env, &executor, proposal_id, &ProposalAction::Upgrade)?;
 
         env.deployer()
-            .update_current_contract_wasm(new_wasm_hash.clone());
+            .update_current_contract(ContractExecutable::Wasm(new_wasm_hash.clone()));
 
         UpgradedEvent {
             admin: executor,

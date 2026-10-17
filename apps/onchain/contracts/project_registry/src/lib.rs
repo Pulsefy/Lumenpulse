@@ -5,6 +5,7 @@ mod events;
 mod storage;
 
 use errors::RegistryError;
+use soroban_sdk::deployer::ContractExecutable;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal, Symbol};
 use storage::{
@@ -530,7 +531,7 @@ impl ProjectRegistryContract {
         new_wasm_hash: BytesN<32>,
     ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &caller)?;
-        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        env.deployer().update_current_contract(ContractExecutable::Wasm(new_wasm_hash));
         Ok(())
     }
 }

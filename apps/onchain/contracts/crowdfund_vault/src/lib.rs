@@ -18,6 +18,8 @@ use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
     contract, contractimpl, contracttype, vec, Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
+use soroban_sdk::deployer::ContractExecutable;
+use soroban_sdk::deployer::ContractExecutable;
 use storage::{
     DataKey, EmergencyMigrationPlan, MigrationPlanStatus, MilestoneDecision,
     MilestoneDecisionOutcome, MilestoneDispute, ProjectData, ProjectStorageSummary, ProtocolStats,
@@ -2775,7 +2777,7 @@ impl CrowdfundVaultContract {
         Self::verify_admin(&env, &caller)?;
 
         env.deployer()
-            .update_current_contract_wasm(new_wasm_hash.clone());
+            .update_current_contract(ContractExecutable::Wasm(new_wasm_hash.clone()));
         events::UpgradedEvent {
             admin: caller,
             new_wasm_hash,

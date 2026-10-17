@@ -45,7 +45,7 @@ pub struct AllowanceChangedEvent {
     #[topic]
     pub spender: Address,
     pub amount: i128,
-    pub expiration_ledger: u32,
+    pub live_until_ledger: u32,
 }
 
 /// Emitted by both `transfer` and `transfer_from` — the underlying economic

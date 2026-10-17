@@ -13,6 +13,7 @@ use events::{
     TransferEvent, UpgradedEvent,
 };
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
+use soroban_sdk::deployer::ContractExecutable;
 use version_interface::{ContractVersion, VersionedContract};
 
 /// Bumped on storage-layout or interface changes that break compatibility
@@ -77,7 +78,7 @@ impl LumenToken {
             from,
             spender,
             amount,
-            expiration_ledger,
+            live_until_ledger: expiration_ledger,
         }
         .publish(&e);
     }
@@ -140,7 +141,7 @@ impl LumenToken {
         }
         caller.require_auth();
         e.deployer()
-            .update_current_contract_wasm(new_wasm_hash.clone());
+            .update_current_contract(ContractExecutable::Wasm(new_wasm_hash.clone()));
         UpgradedEvent {
             admin: caller,
             new_wasm_hash,

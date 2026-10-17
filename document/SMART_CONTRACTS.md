@@ -1,6 +1,6 @@
 # LumenPulse — Smart Contract Interface Reference
 
-> **Soroban SDK**: v23 · **Rust toolchain**: stable + `wasm32-unknown-unknown` target  
+> **Soroban SDK**: v29 · **Rust toolchain**: stable + `wasm32-unknown-unknown` target  
 > Source: [`apps/onchain/contracts/`](../apps/onchain/contracts/) · **Operations & Deployment Playbook**: [`document/CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md`](CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md)
 
 This document provides a complete technical reference for every public function (WASM entrypoint), emitted event, error code, and storage layout across all Soroban smart contracts in the LumenPulse workspace. For operational deployment steps, canonical manifest management, and emergency rollback procedures, see the [Contract Deployment & Rollback Playbook](CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md).
