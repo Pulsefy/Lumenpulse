@@ -5,8 +5,8 @@ mod events;
 mod storage;
 
 use errors::PricingAdapterError;
-use soroban_sdk::{contract, contractimpl, Address, Env};
-use storage::{DataKey, PriceState, LEDGER_BUMP, LEDGER_THRESHOLD};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
+use storage::{DataKey, PriceResult, PriceState, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 pub const BASE_DECIMALS: u32 = 7;
 /// Default staleness window (seconds) used when no admin-configured value
@@ -243,6 +243,233 @@ impl PricingAdapterContract {
             .unwrap_or(0);
 
         Ok(normalized)
+    }
+
+    // ── Fallback Price Source Support ────────────────────────────────────────
+
+    /// Configure an ordered list of price sources for an asset (admin only).
+    /// The first source in the list is the primary source; subsequent sources
+    /// are tried in order when earlier sources are stale or invalidated.
+    ///
+    /// Selection rule:
+    ///   1. Iterate through sources in order
+    ///   2. For each source, check if it has a Fresh price
+    ///   3. Return the first Fresh price found
+    ///   4. If all sources are Stale or Invalidated, revert with AllSourcesExhausted
+    ///
+    /// An empty list removes fallback support and reverts to single-source behavior.
+    pub fn set_price_sources(
+        env: Env,
+        admin: Address,
+        asset: Address,
+        sources: Vec<BytesN<32>>,
+    ) -> Result<(), PricingAdapterError> {
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::AssetPriceSources(asset.clone()), &sources);
+        Self::bump_asset_ttl(&env, &asset);
+        Ok(())
+    }
+
+    /// Get the configured price sources for an asset.
+    /// Returns an empty vector if no sources are configured.
+    pub fn get_price_sources(env: Env, asset: Address) -> Vec<BytesN<32>> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AssetPriceSources(asset))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    /// Set the price for a specific asset from a specific source (admin only).
+    /// Price should be scaled by 10^7 (BASE_DECIMALS).
+    /// `source_id` identifies which source this price comes from.
+    pub fn set_source_price(
+        env: Env,
+        admin: Address,
+        asset: Address,
+        source_id: BytesN<32>,
+        price: i128,
+        asset_decimals: u32,
+    ) -> Result<(), PricingAdapterError> {
+        Self::require_admin(&env, &admin)?;
+        if price <= 0 {
+            return Err(PricingAdapterError::InvalidPrice);
+        }
+
+        env.storage().persistent().set(
+            &DataKey::SourcePrice(asset.clone(), source_id.clone()),
+            &price,
+        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::AssetDecimals(asset.clone()), &asset_decimals);
+        env.storage().persistent().set(
+            &DataKey::SourcePriceTimestamp(asset.clone(), source_id.clone()),
+            &env.ledger().timestamp(),
+        );
+        env.storage().persistent().set(
+            &DataKey::SourcePriceInvalidated(asset.clone(), source_id.clone()),
+            &false,
+        );
+        Self::bump_source_ttl(&env, &asset, &source_id);
+
+        let event = events::PriceUpdatedEvent {
+            admin,
+            asset,
+            price,
+        };
+        event.publish(&env);
+        Ok(())
+    }
+
+    /// Get price with fallback support. Returns the price from the first Fresh source.
+    /// The returned PriceResult identifies which source produced the price and how old it is.
+    ///
+    /// If no sources are configured, falls back to the legacy single-source behavior
+    /// (using AssetPrice storage key).
+    ///
+    /// If sources are configured but all are stale or invalidated, returns AllSourcesExhausted.
+    pub fn get_price_with_fallback(
+        env: Env,
+        asset: Address,
+    ) -> Result<PriceResult, PricingAdapterError> {
+        let sources = Self::get_price_sources(env.clone(), asset.clone());
+
+        // If no sources configured, fall back to legacy single-source behavior
+        if sources.is_empty() {
+            let price = Self::get_price(env.clone(), asset.clone())?;
+            let timestamp = Self::get_price_timestamp(env.clone(), asset.clone())?;
+            let age = env.ledger().timestamp().saturating_sub(timestamp);
+            return Ok(PriceResult {
+                price,
+                source_id: BytesN::from_array(&env, &[0u8; 32]), // Default source
+                age_seconds: age,
+            });
+        }
+
+        // Try each source in order
+        for source_id in sources.iter() {
+            let state = Self::source_price_state(&env, &asset, &source_id);
+            if state == PriceState::Fresh {
+                let price: i128 = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::SourcePrice(asset.clone(), source_id.clone()))
+                    .ok_or(PricingAdapterError::PriceNotFound)?;
+
+                let timestamp: u64 = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::SourcePriceTimestamp(asset.clone(), source_id.clone()))
+                    .unwrap_or(0);
+
+                let age = env.ledger().timestamp().saturating_sub(timestamp);
+
+                return Ok(PriceResult {
+                    price,
+                    source_id,
+                    age_seconds: age,
+                });
+            }
+        }
+
+        // All sources exhausted (all stale or invalidated)
+        Err(PricingAdapterError::AllSourcesExhausted)
+    }
+
+    /// Invalidate a specific source's price for an asset (admin only).
+    pub fn invalidate_source_price(
+        env: Env,
+        admin: Address,
+        asset: Address,
+        source_id: BytesN<32>,
+    ) -> Result<(), PricingAdapterError> {
+        Self::require_admin(&env, &admin)?;
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::SourcePrice(asset.clone(), source_id.clone()))
+        {
+            return Err(PricingAdapterError::PriceNotFound);
+        }
+        env.storage().persistent().set(
+            &DataKey::SourcePriceInvalidated(asset.clone(), source_id.clone()),
+            &true,
+        );
+        Self::bump_source_ttl(&env, &asset, &source_id);
+
+        let event = events::PriceInvalidatedEvent { admin, asset };
+        event.publish(&env);
+        Ok(())
+    }
+
+    /// Get the state of a specific source's price for an asset.
+    pub fn get_source_price_state(
+        env: Env,
+        asset: Address,
+        source_id: BytesN<32>,
+    ) -> Result<PriceState, PricingAdapterError> {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::SourcePrice(asset.clone(), source_id.clone()))
+        {
+            return Err(PricingAdapterError::PriceNotFound);
+        }
+        Ok(Self::source_price_state(&env, &asset, &source_id))
+    }
+
+    fn source_price_state(env: &Env, asset: &Address, source_id: &BytesN<32>) -> PriceState {
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        Self::bump_source_ttl(env, asset, source_id);
+
+        let invalidated: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::SourcePriceInvalidated(
+                asset.clone(),
+                source_id.clone(),
+            ))
+            .unwrap_or(false);
+        if invalidated {
+            return PriceState::Invalidated;
+        }
+
+        let timestamp: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::SourcePriceTimestamp(
+                asset.clone(),
+                source_id.clone(),
+            ))
+            .unwrap_or(0);
+        let max_age: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MaxPriceAge)
+            .unwrap_or(DEFAULT_MAX_PRICE_AGE);
+        let age = env.ledger().timestamp().saturating_sub(timestamp);
+
+        if age > max_age {
+            PriceState::Stale
+        } else {
+            PriceState::Fresh
+        }
+    }
+
+    fn bump_source_ttl(env: &Env, asset: &Address, source_id: &BytesN<32>) {
+        for key in [
+            DataKey::SourcePrice(asset.clone(), source_id.clone()),
+            DataKey::SourcePriceTimestamp(asset.clone(), source_id.clone()),
+            DataKey::SourcePriceInvalidated(asset.clone(), source_id.clone()),
+        ] {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
     }
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), PricingAdapterError> {

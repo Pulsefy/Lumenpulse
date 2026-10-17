@@ -313,3 +313,396 @@ fn test_ttl_extended_across_read_and_write() {
     assert_eq!(client.get_price(&asset), 20_000_000i128);
     assert_eq!(client.get_staleness_window(), DEFAULT_MAX_PRICE_AGE);
 }
+
+// ── Fallback Price Source Tests ───────────────────────────────────────────────
+
+fn make_source_id(env: &Env, b: u8) -> soroban_sdk::BytesN<32> {
+    soroban_sdk::BytesN::from_array(env, &[b; 32])
+}
+
+/// AC-1: Primary source healthy returns primary price
+#[test]
+fn test_fallback_primary_healthy() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+
+    let source_primary = make_source_id(&env, 0x01);
+    let source_secondary = make_source_id(&env, 0x02);
+
+    // Configure fallback chain: primary → secondary
+    let mut sources = soroban_sdk::Vec::new(&env);
+    sources.push_back(source_primary.clone());
+    sources.push_back(source_secondary.clone());
+    client.set_price_sources(&admin, &asset, &sources);
+
+    // Set prices for both sources
+    env.ledger().set_timestamp(1_000);
+    client.set_source_price(&admin, &asset, &source_primary, &10_000_000i128, &7u32);
+    client.set_source_price(&admin, &asset, &source_secondary, &12_000_000i128, &7u32);
+
+    // Get price with fallback should return primary
+    let result = client.get_price_with_fallback(&asset);
+    assert_eq!(result.price, 10_000_000i128);
+    assert_eq!(result.source_id, source_primary);
+    assert_eq!(result.age_seconds, 0u64);
+}
+
+/// AC-2: Primary stale with healthy fallback returns fallback price
+#[test]
+fn test_fallback_primary_stale_secondary_healthy() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+
+    let source_primary = make_source_id(&env, 0x01);
+    let source_secondary = make_source_id(&env, 0x02);
+
+    let mut sources = soroban_sdk::Vec::new(&env);
+    sources.push_back(source_primary.clone());
+    sources.push_back(source_secondary.clone());
+    client.set_price_sources(&admin, &asset, &sources);
+
+    // Set primary price at t=1000, secondary at t=2000
+    env.ledger().set_timestamp(1_000);
+    client.set_source_price(&admin, &asset, &source_primary, &10_000_000i128, &7u32);
+
+    env.ledger().set_timestamp(2_000);
+    client.set_source_price(&admin, &asset, &source_secondary, &12_000_000i128, &7u32);
+
+    // Advance time so primary is stale but secondary is fresh
+    env.ledger().set_timestamp(2_000 + DEFAULT_MAX_PRICE_AGE + 1);
+
+    // Primary is stale
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_primary),
+        PriceState::Stale
+    );
+    // Secondary is fresh
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_secondary),
+        PriceState::Fresh
+    );
+
+    // Get price with fallback should return secondary
+    let result = client.get_price_with_fallback(&asset);
+    assert_eq!(result.price, 12_000_000i128);
+    assert_eq!(result.source_id, source_secondary);
+    assert_eq!(result.age_seconds, DEFAULT_MAX_PRICE_AGE + 1);
+}
+
+/// AC-3: Primary invalidated with healthy fallback returns fallback price
+#[test]
+fn test_fallback_primary_invalidated_secondary_healthy() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+
+    let source_primary = make_source_id(&env, 0x01);
+    let source_secondary = make_source_id(&env, 0x02);
+
+    let mut sources = soroban_sdk::Vec::new(&env);
+    sources.push_back(source_primary.clone());
+    sources.push_back(source_secondary.clone());
+    client.set_price_sources(&admin, &asset, &sources);
+
+    env.ledger().set_timestamp(1_000);
+    client.set_source_price(&admin, &asset, &source_primary, &10_000_000i128, &7u32);
+    client.set_source_price(&admin, &asset, &source_secondary, &12_000_000i128, &7u32);
+
+    // Invalidate primary source
+    client.invalidate_source_price(&admin, &asset, &source_primary);
+
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_primary),
+        PriceState::Invalidated
+    );
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_secondary),
+        PriceState::Fresh
+    );
+
+    // Should fall back to secondary
+    let result = client.get_price_with_fallback(&asset);
+    assert_eq!(result.price, 12_000_000i128);
+    assert_eq!(result.source_id, source_secondary);
+}
+
+/// AC-4: All sources stale reverts with AllSourcesExhausted
+#[test]
+fn test_fallback_all_sources_stale() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+
+    let source_primary = make_source_id(&env, 0x01);
+    let source_secondary = make_source_id(&env, 0x02);
+
+    let mut sources = soroban_sdk::Vec::new(&env);
+    sources.push_back(source_primary.clone());
+    sources.push_back(source_secondary.clone());
+    client.set_price_sources(&admin, &asset, &sources);
+
+    // Set both prices at t=1000
+    env.ledger().set_timestamp(1_000);
+    client.set_source_price(&admin, &asset, &source_primary, &10_000_000i128, &7u32);
+    client.set_source_price(&admin, &asset, &source_secondary, &12_000_000i128, &7u32);
+
+    // Advance time so both are stale
+    env.ledger()
+        .set_timestamp(1_000 + DEFAULT_MAX_PRICE_AGE + 1);
+
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_primary),
+        PriceState::Stale
+    );
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_secondary),
+        PriceState::Stale
+    );
+
+    // Must revert with AllSourcesExhausted (not return a default)
+    assert_eq!(
+        client.try_get_price_with_fallback(&asset),
+        Err(Ok(PricingAdapterError::AllSourcesExhausted))
+    );
+}
+
+/// AC-5: All sources invalidated reverts with AllSourcesExhausted
+#[test]
+fn test_fallback_all_sources_invalidated() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+
+    let source_primary = make_source_id(&env, 0x01);
+    let source_secondary = make_source_id(&env, 0x02);
+
+    let mut sources = soroban_sdk::Vec::new(&env);
+    sources.push_back(source_primary.clone());
+    sources.push_back(source_secondary.clone());
+    client.set_price_sources(&admin, &asset, &sources);
+
+    env.ledger().set_timestamp(1_000);
+    client.set_source_price(&admin, &asset, &source_primary, &10_000_000i128, &7u32);
+    client.set_source_price(&admin, &asset, &source_secondary, &12_000_000i128, &7u32);
+
+    // Invalidate both sources
+    client.invalidate_source_price(&admin, &asset, &source_primary);
+    client.invalidate_source_price(&admin, &asset, &source_secondary);
+
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_primary),
+        PriceState::Invalidated
+    );
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_secondary),
+        PriceState::Invalidated
+    );
+
+    // Must revert with AllSourcesExhausted
+    assert_eq!(
+        client.try_get_price_with_fallback(&asset),
+        Err(Ok(PricingAdapterError::AllSourcesExhausted))
+    );
+}
+
+/// AC-6: Multiple fallbacks - skip stale primary and stale secondary, use tertiary
+#[test]
+fn test_fallback_chain_multiple_sources() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+
+    let source_1 = make_source_id(&env, 0x01);
+    let source_2 = make_source_id(&env, 0x02);
+    let source_3 = make_source_id(&env, 0x03);
+
+    let mut sources = soroban_sdk::Vec::new(&env);
+    sources.push_back(source_1.clone());
+    sources.push_back(source_2.clone());
+    sources.push_back(source_3.clone());
+    client.set_price_sources(&admin, &asset, &sources);
+
+    // Set all prices at different times
+    env.ledger().set_timestamp(1_000);
+    client.set_source_price(&admin, &asset, &source_1, &10_000_000i128, &7u32);
+
+    env.ledger().set_timestamp(2_000);
+    client.set_source_price(&admin, &asset, &source_2, &11_000_000i128, &7u32);
+
+    env.ledger().set_timestamp(3_000);
+    client.set_source_price(&admin, &asset, &source_3, &12_000_000i128, &7u32);
+
+    // Advance time so source_1 and source_2 are stale, but source_3 is fresh
+    env.ledger().set_timestamp(3_000 + DEFAULT_MAX_PRICE_AGE + 1);
+
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_1),
+        PriceState::Stale
+    );
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_2),
+        PriceState::Stale
+    );
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_3),
+        PriceState::Fresh
+    );
+
+    // Should return source_3
+    let result = client.get_price_with_fallback(&asset);
+    assert_eq!(result.price, 12_000_000i128);
+    assert_eq!(result.source_id, source_3);
+}
+
+/// AC-7: No sources configured falls back to legacy single-source behavior
+#[test]
+fn test_fallback_no_sources_uses_legacy() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+
+    // Set price using legacy set_price (no sources configured)
+    env.ledger().set_timestamp(1_000);
+    client.set_price(&admin, &asset, &10_000_000i128, &7u32);
+
+    // get_price_with_fallback should fall back to legacy behavior
+    let result = client.get_price_with_fallback(&asset);
+    assert_eq!(result.price, 10_000_000i128);
+    // Default source ID (all zeros)
+    assert_eq!(result.source_id, make_source_id(&env, 0x00));
+    assert_eq!(result.age_seconds, 0u64);
+}
+
+/// AC-8: Returned price identifies source and age correctly
+#[test]
+fn test_fallback_result_includes_source_and_age() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+
+    let source_primary = make_source_id(&env, 0xAA);
+
+    let mut sources = soroban_sdk::Vec::new(&env);
+    sources.push_back(source_primary.clone());
+    client.set_price_sources(&admin, &asset, &sources);
+
+    env.ledger().set_timestamp(5_000);
+    client.set_source_price(&admin, &asset, &source_primary, &15_000_000i128, &7u32);
+
+    // Advance time by 100 seconds
+    env.ledger().set_timestamp(5_100);
+
+    let result = client.get_price_with_fallback(&asset);
+    assert_eq!(result.price, 15_000_000i128);
+    assert_eq!(result.source_id, source_primary);
+    assert_eq!(result.age_seconds, 100u64);
+}
+
+/// AC-9: Setting price on invalidated source clears invalidation flag
+#[test]
+fn test_fallback_set_source_price_clears_invalidation() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+
+    let source_id = make_source_id(&env, 0x01);
+
+    let mut sources = soroban_sdk::Vec::new(&env);
+    sources.push_back(source_id.clone());
+    client.set_price_sources(&admin, &asset, &sources);
+
+    env.ledger().set_timestamp(1_000);
+    client.set_source_price(&admin, &asset, &source_id, &10_000_000i128, &7u32);
+
+    // Invalidate
+    client.invalidate_source_price(&admin, &asset, &source_id);
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_id),
+        PriceState::Invalidated
+    );
+
+    // Set new price (should clear invalidation)
+    client.set_source_price(&admin, &asset, &source_id, &11_000_000i128, &7u32);
+    assert_eq!(
+        client.get_source_price_state(&asset, &source_id),
+        PriceState::Fresh
+    );
+
+    let result = client.get_price_with_fallback(&asset);
+    assert_eq!(result.price, 11_000_000i128);
+}
+
+/// AC-10: Empty source list after configuration falls back to legacy
+#[test]
+fn test_fallback_empty_sources_list() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+
+    // Configure with empty sources
+    let sources = soroban_sdk::Vec::new(&env);
+    client.set_price_sources(&admin, &asset, &sources);
+
+    // Set legacy price
+    env.ledger().set_timestamp(1_000);
+    client.set_price(&admin, &asset, &8_000_000i128, &7u32);
+
+    // Should use legacy behavior
+    let result = client.get_price_with_fallback(&asset);
+    assert_eq!(result.price, 8_000_000i128);
+}
+
+/// AC-11: Distinct error when all sources exhausted vs price not found
+#[test]
+fn test_fallback_distinct_error_all_sources_exhausted() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+
+    let source_id = make_source_id(&env, 0x01);
+    let mut sources = soroban_sdk::Vec::new(&env);
+    sources.push_back(source_id.clone());
+    client.set_price_sources(&admin, &asset, &sources);
+
+    env.ledger().set_timestamp(1_000);
+    client.set_source_price(&admin, &asset, &source_id, &10_000_000i128, &7u32);
+
+    // Make it stale
+    env.ledger()
+        .set_timestamp(1_000 + DEFAULT_MAX_PRICE_AGE + 1);
+
+    // AllSourcesExhausted is distinct from PriceNotFound
+    let result = client.try_get_price_with_fallback(&asset);
+    assert_eq!(result, Err(Ok(PricingAdapterError::AllSourcesExhausted)));
+
+    // For comparison, asset with no data at all gives PriceNotFound
+    let unknown_asset = Address::generate(&env);
+    assert_eq!(
+        client.try_get_price_with_fallback(&unknown_asset),
+        Err(Ok(PricingAdapterError::PriceNotFound))
+    );
+}
+
+/// AC-12: Test authorization - only admin can set sources and source prices
+#[test]
+fn test_fallback_authorization_admin_only() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+    let intruder = Address::generate(&env);
+
+    let source_id = make_source_id(&env, 0x01);
+    let mut sources = soroban_sdk::Vec::new(&env);
+    sources.push_back(source_id.clone());
+
+    // Non-admin cannot set sources
+    assert_eq!(
+        client.try_set_price_sources(&intruder, &asset, &sources),
+        Err(Ok(PricingAdapterError::Unauthorized))
+    );
+
+    // Non-admin cannot set source price
+    assert_eq!(
+        client.try_set_source_price(&intruder, &asset, &source_id, &10_000_000i128, &7u32),
+        Err(Ok(PricingAdapterError::Unauthorized))
+    );
+
+    // Non-admin cannot invalidate source
+    client.set_price_sources(&admin, &asset, &sources);
+    client.set_source_price(&admin, &asset, &source_id, &10_000_000i128, &7u32);
+
+    assert_eq!(
+        client.try_invalidate_source_price(&intruder, &asset, &source_id),
+        Err(Ok(PricingAdapterError::Unauthorized))
+    );
+}
