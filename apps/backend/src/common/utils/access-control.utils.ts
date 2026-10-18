@@ -128,6 +128,28 @@ export class AccessControlUtils {
   }
 
   /**
+   * Check if a context is in a read-only support session
+   */
+  static isSupportSession(context: AccessControlContext): boolean {
+    return !!context.metadata?.supportSessionId;
+  }
+
+  /**
+   * Enforce read-only mode for support sessions.
+   * Returns true when the action is allowed under the context.
+   */
+  static isAllowedInSupportSession(
+    context: AccessControlContext,
+    action: string,
+  ): boolean {
+    if (!AccessControlUtils.isSupportSession(context)) {
+      return true;
+    }
+    // Support sessions are strictly read-only.
+    return AccessControlUtils.isReadAction(action);
+  }
+
+  /**
    * Get the minimum role required for an action on a resource type
    */
   static getMinimumRoleForAction(
@@ -190,7 +212,7 @@ export class AccessControlUtils {
   ): AccessControlContext {
     return {
       webhookProvider: provider,
-      ipAddress,
+      ipAddress: ipAddress,
       metadata: {
         webhook: true,
       },
@@ -256,8 +278,11 @@ export class AccessControlUtils {
     }
 
     if (context.userId) {
-      const role = context.userRole ? ` (${context.userRole})` : '';
-      return `User ${context.userId}${role}`;
+      const role = context.userRole ? `(${context.userRole})` : '';
+      const support = AccessControlUtils.isSupportSession(context)
+        ? ` via support session ${context.metadata?.supportSessionId}`
+        : '';
+      return `User ${context.userId}${role}${support}`;
     }
 
     return 'Anonymous';
