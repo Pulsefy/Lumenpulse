@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-1590-backend-drill-database-backup-and-restore",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-1590-backend-drill-database-backup-and-restore": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-1590-backend-drill-database-backup-and-restore",
+    "origin"
+  ]
+}
