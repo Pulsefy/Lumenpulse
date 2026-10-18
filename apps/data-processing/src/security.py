@@ -8,6 +8,9 @@ import re
 import json
 import hmac
 import hashlib
+import math
+import time
+from collections import defaultdict, deque
 from typing import Optional, Callable, Dict, Any
 from functools import wraps
 from fastapi import Request, HTTPException, status, Header
@@ -33,6 +36,11 @@ SERVICE_API_KEY_REQUESTS = Counter(
     "service_api_key_requests_total",
     "Authenticated API requests attributed to their service consumer",
     ["consumer", "method", "scope"],
+)
+SERVICE_API_KEY_RATE_LIMIT_REJECTIONS_TOTAL = Counter(
+    "service_api_key_rate_limit_rejections_total",
+    "Rejected requests due to per-key rate or concurrency limits",
+    ["consumer", "method", "scope", "endpoint"],
 )
 
 
@@ -77,6 +85,20 @@ class SecurityConfig:
         self.rate_limit_enabled = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
         self.rate_limit_default = os.getenv("RATE_LIMIT_DEFAULT", "100/minute")
         self.rate_limit_strict = os.getenv("RATE_LIMIT_STRICT", "10/minute")
+        self._max_concurrent_requests = max(1, int(os.getenv("API_KEY_MAX_CONCURRENT_REQUESTS", "4")))
+        self._rate_limit_buckets: Dict[str, deque[float]] = defaultdict(deque)
+        self._in_flight: Dict[str, int] = {}
+        self._endpoint_costs = {
+            "/analyze-batch": 4,
+            "/analyze": 2,
+            "/correlation/analyze": 4,
+            "/correlation/lag-analysis": 4,
+            "/price/predict": 3,
+            "/api/kpi/recompute": 3,
+            "/api/kpi/recompute-async": 3,
+            "/retrain": 3,
+            "/api/account-operations/ingest": 5,
+        }
         
         # Admin token for development and testing
         self.admin_api_token = os.getenv("ADMIN_API_TOKEN", "")
@@ -94,6 +116,67 @@ class SecurityConfig:
                 f"Invalid rate limit format: {limit_string}. "
                 "Expected format: 'N/second', 'N/minute', 'N/hour', or 'N/day'"
             )
+
+    @staticmethod
+    def _parse_rate_limit(limit_string: str) -> tuple[int, int]:
+        match = re.fullmatch(r"(\d+)/(second|minute|hour|day)", limit_string)
+        if not match:
+            raise ValueError(f"Invalid rate limit format: {limit_string}")
+        limit_value, unit = match.groups()
+        seconds_per_unit = {
+            "second": 1,
+            "minute": 60,
+            "hour": 3600,
+            "day": 86400,
+        }
+        return int(limit_value), seconds_per_unit[unit]
+
+    def _request_cost(self, request: Request) -> int:
+        path = request.url.path
+        return self._endpoint_costs.get(path, 1)
+
+    def _per_key_retry_after(self, key_id: str, request: Request, required_scope: str) -> Optional[str]:
+        limit_string = self.rate_limit_strict if required_scope == "data:write" else self.rate_limit_default
+        limit_value, window_seconds = self._parse_rate_limit(limit_string)
+        cost = self._request_cost(request)
+        effective_quota = max(1, limit_value // cost)
+        now = time.monotonic()
+        bucket = self._rate_limit_buckets[key_id]
+        while bucket and now - bucket[0] > window_seconds:
+            bucket.popleft()
+
+        if len(bucket) + cost > effective_quota:
+            retry_after = 1
+            if bucket:
+                retry_after = max(1, int(math.ceil(window_seconds - (now - bucket[0]))))
+            return str(retry_after)
+
+        for _ in range(cost):
+            bucket.append(now)
+        return None
+
+    def reserve_request_slot(self, request: Request) -> Optional[str]:
+        key_id = getattr(request.state, "api_key_id", None)
+        if not key_id:
+            return None
+
+        current_in_flight = self._in_flight.get(key_id, 0)
+        if current_in_flight >= self._max_concurrent_requests:
+            return "1"
+
+        self._in_flight[key_id] = current_in_flight + 1
+        return None
+
+    def release_request(self, request: Request) -> None:
+        key_id = getattr(request.state, "api_key_id", None)
+        if not key_id:
+            return
+
+        current_in_flight = self._in_flight.get(key_id, 0)
+        if current_in_flight <= 1:
+            self._in_flight.pop(key_id, None)
+        else:
+            self._in_flight[key_id] = current_in_flight - 1
     
     @property
     def limiter(self) -> Optional[Limiter]:
@@ -193,11 +276,39 @@ class SecurityConfig:
                 headers={"WWW-Authenticate": "ApiKey"},
             )
 
-        # Log usage by identifier (never log the raw key)
-        logger.info(f"API key {matched['id']} used for {request.url.path}")
-        # Attach key info to request state for downstream checks
         request.state.api_key_id = matched['id']
         request.state.api_key_scopes = scopes
+
+        retry_after = self._per_key_retry_after(matched['id'], request, required_scope)
+        if retry_after is not None:
+            SERVICE_API_KEY_RATE_LIMIT_REJECTIONS_TOTAL.labels(
+                consumer=matched["id"],
+                method=request.method,
+                scope=required_scope,
+                endpoint=request.url.path,
+            ).inc()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded for this API key.",
+                headers={"Retry-After": retry_after},
+            )
+
+        concurrency_retry = self.reserve_request_slot(request)
+        if concurrency_retry is not None:
+            SERVICE_API_KEY_RATE_LIMIT_REJECTIONS_TOTAL.labels(
+                consumer=matched["id"],
+                method=request.method,
+                scope=required_scope,
+                endpoint=request.url.path,
+            ).inc()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Concurrent request limit reached for this API key.",
+                headers={"Retry-After": concurrency_retry},
+            )
+
+        # Log usage by identifier (never log the raw key)
+        logger.info(f"API key {matched['id']} used for {request.url.path}")
         SERVICE_API_KEY_REQUESTS.labels(
             consumer=matched["id"],
             method=request.method,
@@ -495,18 +606,17 @@ def setup_security_middleware(app) -> None:
         if request.url.path in excluded_paths:
             return await call_next(request)
         
-        # Validate API key
         try:
             security_config.validate_api_key(request)
+            return await call_next(request)
         except HTTPException as exc:
             return JSONResponse(
                 status_code=exc.status_code,
                 content={"detail": exc.detail},
                 headers=exc.headers,
             )
-        
-        # Continue processing
-        return await call_next(request)
+        finally:
+            security_config.release_request(request)
 
 
 def setup_rate_limiter(app, limiter: Limiter) -> None:
