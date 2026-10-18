@@ -29,6 +29,9 @@ jobs:
         working-directory: ./apps/mobile
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
@@ -36,9 +39,6 @@ jobs:
           job-id: mobile-checks
           budget-minutes: '10'
           note: npm ci + tsc --noEmit + jest with coverage. Observed p90 0.8 min.
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -79,6 +79,9 @@ jobs:
         working-directory: ./apps/mobile
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
@@ -86,9 +89,6 @@ jobs:
           job-id: mobile-size
           budget-minutes: '15'
           note: Two `expo export` runs (branch + base) and a four-way budget comparison.
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -204,6 +204,9 @@ jobs:
         working-directory: ./apps/mobile
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
@@ -211,9 +214,6 @@ jobs:
           job-id: mobile-startup
           budget-minutes: '15'
           note: Playwright browser download + Expo web boot + three timed loads on a throttled profile.
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -287,6 +287,9 @@ jobs:
         working-directory: ./apps/mobile
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
@@ -294,9 +297,6 @@ jobs:
           job-id: mobile-e2e
           budget-minutes: '25'
           note: Playwright browser install + `expo start --web` boot + the full smoke suite. Observed p50 1.4 min, worst 11.3 min.
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

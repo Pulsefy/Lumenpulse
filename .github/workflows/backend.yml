@@ -33,6 +33,11 @@ jobs:
         working-directory: ./apps/backend
 
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
     - name: Start timeout guard
       uses: ./.github/actions/job-timeout-guard
       with:
@@ -40,11 +45,6 @@ jobs:
         job-id: backend-checks
         budget-minutes: '10'
         note: npm ci + lint + type-check + jest + nest build + SBOM. Observed p90 1.8 min; cold-cache variance dominates.
-
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -126,6 +126,11 @@ jobs:
           --health-retries 5
 
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
     - name: Start timeout guard
       uses: ./.github/actions/job-timeout-guard
       with:
@@ -133,11 +138,6 @@ jobs:
         job-id: migration-safety
         budget-minutes: '10'
         note: Postgres service + npm ci + static migration check + full up/drift/down verification.
-
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -218,6 +218,9 @@ jobs:
           --health-retries 5
 
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
     - name: Start timeout guard
       uses: ./.github/actions/job-timeout-guard
       with:
@@ -225,9 +228,6 @@ jobs:
         job-id: db-e2e
         budget-minutes: '20'
         note: Provisions Postgres+Redis, migrates a clean database, runs the serial DB-backed e2e suite.
-
-    - name: Checkout repository
-      uses: actions/checkout@v4
 
     - name: Setup Node.js
       uses: actions/setup-node@v4

@@ -31,6 +31,9 @@ jobs:
       run:
         working-directory: ./apps/mobile
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
@@ -38,9 +41,6 @@ jobs:
           job-id: repeat-suite
           budget-minutes: '30'
           note: One full smoke suite per matrix leg; worst observed mobile-e2e run was 11.3 min.
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -80,6 +80,12 @@ jobs:
     # Issue #1714. Four `echo` lines; 5 min is a ceiling, not an estimate.
     timeout-minutes: 5
     steps:
+      # Needed only so the local timeout-guard action exists on disk.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/actions
+
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:

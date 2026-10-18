@@ -37,6 +37,11 @@ jobs:
         working-directory: ./apps/onchain
 
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
     - name: Start timeout guard
       uses: ./.github/actions/job-timeout-guard
       with:
@@ -44,11 +49,6 @@ jobs:
         job-id: onchain-checks
         budget-minutes: '30'
         note: Two full wasm32 release builds on a PR, clippy, contract tests, wasm optimisation.
-
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
