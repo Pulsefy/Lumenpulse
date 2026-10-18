@@ -53,7 +53,7 @@ docker compose -f docker-compose.local.yml down -v   # stop and wipe volumes
 | Piece | How |
 | --- | --- |
 | Postgres, Redis | Compose services with healthchecks |
-| Schema + seed labels | `scripts/bootstrap_local.py` |
+| Schema + seed data (sentiment labels, sample analytics records) | `scripts/bootstrap_local.py` |
 | Models | Bootstrap trains and promotes `sentiment` and `price_predictor` (seed `BOOTSTRAP_MODEL_SEED`, default 42) when the registry has none; reruns skip this |
 | NER / embedding / FinBERT weights | Baked into the image by `Dockerfile.inference` |
 

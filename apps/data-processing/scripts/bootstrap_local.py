@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 """Provision a fresh local stack (issue #1645).
 
-Creates the database schema, seeds the labelled sentiment set and makes sure
+Creates the database schema, seeds the labelled sentiment set and the sample
+analytics records (only while ``analytics_records`` is empty) and makes sure
 the live model registry has a promoted ``sentiment`` and ``price_predictor``
 model. Idempotent: safe to run on every ``docker compose up``. Exits non-zero
 when the API would not be usable afterwards, so compose never starts it.
@@ -16,6 +17,7 @@ BOOTSTRAP_MODEL_SEED       Seed for the bootstrap training run (default: 42).
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import time
 
@@ -28,6 +30,7 @@ logger = setup_logger(__name__)
 REQUIRED_MODELS = ("sentiment", "price_predictor")
 DB_WAIT_SECONDS = int(os.getenv("BOOTSTRAP_DB_WAIT_SECONDS", "60"))
 MODEL_SEED = int(os.getenv("BOOTSTRAP_MODEL_SEED", "42"))
+APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
 def init_database():
@@ -59,6 +62,32 @@ def seed_labels(db) -> None:
         logger.warning("Sentiment label seeding skipped: %s", exc)
 
 
+def seed_analytics(db) -> None:
+    """Load data/analytics.jsonl once, only while analytics_records is empty.
+
+    Best effort: a failure is logged but does not stop the stack.
+    """
+    try:
+        from sqlalchemy import text
+
+        with db.get_session() as session:
+            count = session.execute(
+                text("SELECT COUNT(*) FROM analytics_records")
+            ).scalar()
+        if count:
+            logger.info("Analytics seed skipped: %s rows already present", count)
+            return
+        code = subprocess.call(
+            [sys.executable, "scripts/migrate_jsonl_to_db.py"], cwd=APP_ROOT
+        )
+        if code != 0:
+            logger.warning("Analytics seed exited with code %s", code)
+        else:
+            logger.info("Seeded analytics_records from data/analytics.jsonl")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Analytics seeding skipped: %s", exc)
+
+
 def missing_models() -> list:
     from src.ml.model_loader import get_model_version
 
@@ -78,6 +107,7 @@ def main() -> int:
     try:
         db = init_database()
         seed_labels(db)
+        seed_analytics(db)
         todo = missing_models()
         if todo:
             logger.info("Provisioning models (missing: %s)", ", ".join(todo))
