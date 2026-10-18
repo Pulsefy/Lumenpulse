@@ -60,7 +60,7 @@
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.3.0",
     "eslint": "8.49.0",
-    "eslint-config-next": "13.5.1",
+    "eslint-config-next": "16.4.1",
     "gsap": "^3.12.7",
     "input-otp": "^1.2.4",
     "lucide-react": "^0.446.0",
