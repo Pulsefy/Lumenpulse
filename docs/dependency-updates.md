@@ -205,3 +205,7 @@ A bot PR is not exempt from this repository's review rules. Specifically:
 - If Dependabot opens a PR that CI cannot possibly pass for a known reason,
   the right fix is an `ignore` entry with that reason written next to it — not
   `continue-on-error` in the workflow.
+- Pull requests in `apps/backend` run `npm run audit:ci` in CI (#1593). Un-allowlisted
+  or expired high and critical vulnerabilities fail the build. Unavoidable findings
+  are tracked in `audit-allowlist.json` with an explicit reason and expiration date.
+  Extending scanning to webapp, mobile, data-processing, and onchain is tracked in #1759.

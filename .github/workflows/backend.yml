@@ -8,6 +8,7 @@ on:
       - 'apps/backend/**'
       - 'apps/webapp/generated/**'
       - 'apps/webapp/scripts/generate-api-types.mjs'
+      - 'scripts/audit-dependencies.mjs'
   pull_request:
     branches: [ "main" ]
     paths:
@@ -15,6 +16,7 @@ on:
       - 'apps/backend/.ci-trigger'
       - 'apps/webapp/generated/**'
       - 'apps/webapp/scripts/generate-api-types.mjs'
+      - 'scripts/audit-dependencies.mjs'
 
 # Issue #1713. One group per workflow+ref, so a second push to the same PR
 # cancels the now-obsolete run instead of paying for both. `main` is excluded
@@ -45,6 +47,7 @@ jobs:
         job-id: backend-checks
         budget-minutes: '10'
         note: npm ci + lint + type-check + jest + nest build + SBOM. Observed p90 1.8 min; cold-cache variance dominates.
+        note: npm ci + audit + lint + type-check + jest + nest build + SBOM. Observed p90 1.8 min; cold-cache variance dominates.
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -55,6 +58,9 @@ jobs:
 
     - name: Install dependencies
       run: npm ci
+
+    - name: Scan dependencies for vulnerabilities
+      run: npm run audit:ci
 
     - name: Lint
       run: npm run lint
