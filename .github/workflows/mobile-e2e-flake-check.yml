@@ -40,7 +40,7 @@ jobs:
           note: One full smoke suite per matrix leg; worst observed mobile-e2e run was 11.3 min.
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

@@ -42,7 +42,7 @@ jobs:
         note: npm ci + lint + type-check + jest + nest build + SBOM. Observed p90 1.8 min; cold-cache variance dominates.
 
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
@@ -135,7 +135,7 @@ jobs:
         note: Postgres service + npm ci + static migration check + full up/drift/down verification.
 
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
@@ -227,7 +227,7 @@ jobs:
         note: Provisions Postgres+Redis, migrates a clean database, runs the serial DB-backed e2e suite.
 
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Setup Node.js
       uses: actions/setup-node@v4

@@ -46,7 +46,7 @@ jobs:
         note: Two full wasm32 release builds on a PR, clippy, contract tests, wasm optimisation.
 
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 

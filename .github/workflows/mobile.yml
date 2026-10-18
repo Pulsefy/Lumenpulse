@@ -38,7 +38,7 @@ jobs:
           note: npm ci + tsc --noEmit + jest with coverage. Observed p90 0.8 min.
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -88,7 +88,7 @@ jobs:
           note: Two `expo export` runs (branch + base) and a four-way budget comparison.
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -123,7 +123,7 @@ jobs:
       - name: Checkout the base branch
         if: github.event_name == 'pull_request'
         continue-on-error: true
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: base
@@ -213,7 +213,7 @@ jobs:
           note: Playwright browser download + Expo web boot + three timed loads on a throttled profile.
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -296,7 +296,7 @@ jobs:
           note: Playwright browser install + `expo start --web` boot + the full smoke suite. Observed p50 1.4 min, worst 11.3 min.
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
