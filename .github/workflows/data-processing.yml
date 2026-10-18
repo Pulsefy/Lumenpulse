@@ -31,6 +31,9 @@ jobs:
         working-directory: ./apps/data-processing
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
@@ -38,9 +41,6 @@ jobs:
           job-id: data-processing-checks
           budget-minutes: '15'
           note: Hash-pinned pip install (torch CPU wheel) + flake8 + pytest.
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Set up Python 3.9
         uses: actions/setup-python@v5

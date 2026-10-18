@@ -207,7 +207,9 @@ def list_available_transforms() -> list[TransformDefinition]:
 # ── Window Parsing ─────────────────────────────────────────────────────────
 
 
-def parse_window_to_timedelta(window: str | int | float | timedelta) -> timedelta:
+def parse_window_to_timedelta(
+    window: str | int | float | timedelta,
+) -> timedelta:
     """
     Parse a window duration specification into a Python timedelta.
 

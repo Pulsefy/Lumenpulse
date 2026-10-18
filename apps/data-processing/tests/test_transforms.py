@@ -3,6 +3,8 @@ Comprehensive test suite for shared time-series transforms and
 lookahead bias prevention (#150).
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
@@ -10,39 +12,74 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.analytics.correlation_engine import CorrelationEngine
-from src.analytics.forecaster import SentimentForecaster
-from src.ml.feature_schema import (
-    PRICE_PREDICTOR_FEATURE_SET,
-    current_feature_schema,
-)
-from src.ml.feature_store import FeatureStore
-from src.ml.transforms import (
-    LookaheadBiasError,
-    TransformDefinition,
-    apply_time_lag,
-    build_clamped_future_target,
-    calculate_percentage_change,
-    clean_time_series,
-    compute_returns,
-    compute_scalar_volatility,
-    compute_velocity,
-    compute_volatility,
-    get_transform_definition,
-    lag,
-    lead,
-    list_available_transforms,
-    parse_window_to_datetime,
-    parse_window_to_timedelta,
-    register_transform,
-    rolling_max,
-    rolling_mean,
-    rolling_min,
-    rolling_sum,
-    rolling_velocity,
-    rolling_window,
-)
-from src.trends import TrendCalculator
+try:
+    from src.analytics.correlation_engine import CorrelationEngine
+    from src.analytics.forecaster import SentimentForecaster
+    from src.ml.feature_schema import (
+        PRICE_PREDICTOR_FEATURE_SET,
+        current_feature_schema,
+    )
+    from src.ml.feature_store import FeatureStore
+    from src.ml.transforms import (
+        LookaheadBiasError,
+        TransformDefinition,
+        apply_time_lag,
+        build_clamped_future_target,
+        calculate_percentage_change,
+        clean_time_series,
+        compute_returns,
+        compute_scalar_volatility,
+        compute_velocity,
+        compute_volatility,
+        get_transform_definition,
+        lag,
+        lead,
+        list_available_transforms,
+        parse_window_to_datetime,
+        parse_window_to_timedelta,
+        register_transform,
+        rolling_max,
+        rolling_mean,
+        rolling_min,
+        rolling_sum,
+        rolling_velocity,
+        rolling_window,
+    )
+    from src.trends import TrendCalculator
+except ImportError:
+    from analytics.correlation_engine import CorrelationEngine
+    from analytics.forecaster import SentimentForecaster
+    from ml.feature_schema import (
+        PRICE_PREDICTOR_FEATURE_SET,
+        current_feature_schema,
+    )
+    from ml.feature_store import FeatureStore
+    from ml.transforms import (
+        LookaheadBiasError,
+        TransformDefinition,
+        apply_time_lag,
+        build_clamped_future_target,
+        calculate_percentage_change,
+        clean_time_series,
+        compute_returns,
+        compute_scalar_volatility,
+        compute_velocity,
+        compute_volatility,
+        get_transform_definition,
+        lag,
+        lead,
+        list_available_transforms,
+        parse_window_to_datetime,
+        parse_window_to_timedelta,
+        register_transform,
+        rolling_max,
+        rolling_mean,
+        rolling_min,
+        rolling_sum,
+        rolling_velocity,
+        rolling_window,
+    )
+    from trends import TrendCalculator
 
 # ── Window Parsing ─────────────────────────────────────────────────────────
 

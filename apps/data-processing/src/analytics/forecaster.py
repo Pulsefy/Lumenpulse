@@ -10,22 +10,33 @@ Backend selection (auto-detected at runtime):
   - Heuristic decay — final fallback when data < 3 points
 """
 
+from __future__ import annotations
+
 import json
 import os
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from src.analytics.market_analyzer import Trend
-from src.ml.transforms import (
-    build_clamped_future_target,
-    compute_velocity,
-    rolling_velocity,
-)
+
+try:
+    from src.ml.transforms import (
+        build_clamped_future_target,
+        compute_velocity,
+        rolling_velocity,
+    )
+except ImportError:
+    from ml.transforms import (
+        build_clamped_future_target,
+        compute_velocity,
+        rolling_velocity,
+    )
+
 from src.observability.stage_profiler import profile_stage
 from src.utils.logger import setup_logger
 
@@ -112,7 +123,7 @@ class SentimentForecaster:
 
     MODEL_TYPE = "sentiment_forecaster"
 
-    def __init__(self, jsonl_path: Optional[Path] = None) -> None:
+    def __init__(self, jsonl_path: Path | None = None) -> None:
         self.jsonl_path: Path = Path(jsonl_path) if jsonl_path else _DEFAULT_JSONL
         self._model_24h = None  # fitted model / Prophet instance
         self._model_48h = None  # separate ridge for 48 h (sklearn path)
@@ -121,7 +132,7 @@ class SentimentForecaster:
 
     # ── Data loading ──────────────────────────────────────────────────────
 
-    def load_history(self, path: Optional[Path] = None) -> pd.DataFrame:
+    def load_history(self, path: Path | None = None) -> pd.DataFrame:
         """
         Parse *analytics.jsonl* into a time-indexed DataFrame.
 
@@ -437,7 +448,7 @@ class SentimentForecaster:
 
     @staticmethod
     def _predict_heuristic(
-        df: Optional[pd.DataFrame] = None, velocity: float = 0.0
+        df: pd.DataFrame | None = None, velocity: float = 0.0
     ) -> tuple[float, float]:
         """
         Extrapolate current sentiment using velocity with exponential decay.
@@ -468,7 +479,7 @@ class SentimentForecaster:
         return version
 
     @classmethod
-    def load(cls) -> "SentimentForecaster":
+    def load(cls) -> SentimentForecaster:
         """Load the currently promoted forecaster from the model registry."""
         from src.ml.model_registry import get_live_model
 
@@ -482,7 +493,7 @@ class SentimentForecaster:
 
     # ── Convenience ───────────────────────────────────────────────────────
 
-    def run(self, jsonl_path: Optional[Path] = None) -> ForecastResult:
+    def run(self, jsonl_path: Path | None = None) -> ForecastResult:
         """
         One-call shortcut: load history → train (if needed) → predict.
 

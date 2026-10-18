@@ -1,16 +1,25 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
-from typing import Optional
 
 import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from src.ml.feature_schema import (
-    PRICE_PREDICTOR_FEATURE_SET,
-    FeatureSchema,
-    current_feature_schema,
-)
-from src.ml.transforms import clean_time_series, parse_window_to_datetime
+try:
+    from src.ml.feature_schema import (
+        PRICE_PREDICTOR_FEATURE_SET,
+        FeatureSchema,
+        current_feature_schema,
+    )
+    from src.ml.transforms import clean_time_series, parse_window_to_datetime
+except ImportError:
+    from ml.feature_schema import (
+        PRICE_PREDICTOR_FEATURE_SET,
+        FeatureSchema,
+        current_feature_schema,
+    )
+    from ml.transforms import clean_time_series, parse_window_to_datetime
 
 
 class FeatureStore:
@@ -70,9 +79,9 @@ class FeatureStore:
     def get_features_for_asset(
         self,
         asset: str,
-        window: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        window: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ) -> pd.DataFrame:
         """
         Retrieves and combines features for a specific asset over a given time window.

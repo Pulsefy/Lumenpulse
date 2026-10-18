@@ -4,14 +4,20 @@ Calculates statistical correlation between social sentiment and Stellar
 on-chain metrics.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from src.ml.transforms import apply_time_lag
+try:
+    from src.ml.transforms import apply_time_lag
+except ImportError:
+    from ml.transforms import apply_time_lag
+
 from src.observability.stage_profiler import profile_stage
 
 
@@ -39,7 +45,7 @@ class CorrelationResult:
 
     metric_type: str  # 'price' or 'volume'
     correlation_score: float  # Pearson correlation coefficient (-1 to 1)
-    p_value: Optional[float]  # Statistical significance
+    p_value: float | None  # Statistical significance
     sample_size: int
     confidence_level: str  # 'high', 'medium', 'low', 'insufficient_data'
     data_points: list[DataPoint] = field(default_factory=list)
@@ -93,7 +99,7 @@ class CorrelationEngine:
     RECOMMENDED_SAMPLES = 30
 
     @staticmethod
-    def _calculate_pearson(x: pd.Series, y: pd.Series) -> tuple[float, Optional[float]]:
+    def _calculate_pearson(x: pd.Series, y: pd.Series) -> tuple[float, float | None]:
         """
         Calculate Pearson correlation coefficient and p-value.
 
@@ -131,7 +137,7 @@ class CorrelationEngine:
         return float(correlation), float(p_value)
 
     @staticmethod
-    def _determine_confidence(sample_size: int, p_value: Optional[float]) -> str:
+    def _determine_confidence(sample_size: int, p_value: float | None) -> str:
         """Determine confidence level based on sample size and p-value."""
         if sample_size < CorrelationEngine.MIN_SAMPLES:
             return "insufficient_data"

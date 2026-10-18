@@ -2,13 +2,18 @@
 Trend calculator module - calculates market trends from sentiment and data
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from src.ml.transforms import calculate_percentage_change
+try:
+    from src.ml.transforms import calculate_percentage_change
+except ImportError:
+    from ml.transforms import calculate_percentage_change
 
 logger = logging.getLogger(__name__)
 
