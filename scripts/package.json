@@ -7,6 +7,8 @@
         "deploy": "ts-node deploy.ts",
         "smoke": "ts-node smoke.ts",
         "validate:upgrade-rehearsal": "node validate-upgrade-rehearsal.js",
+        "validate:emergency-pause-drill": "node validate-emergency-pause-drill.js",
+        "drill:emergency-pause": "node run-emergency-pause-drill.mjs",
         "deploy:cost": "ts-node measure-deploy-cost.ts",
         "wasm:optimize": "node optimize-wasm.mjs"
     },
