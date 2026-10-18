@@ -1,14 +1,17 @@
 """
 Correlation Analysis Engine
-Calculates statistical correlation between social sentiment and Stellar on-chain metrics.
+Calculates statistical correlation between social sentiment and Stellar
+on-chain metrics.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
-import pandas as pd
-import numpy as np
+from typing import Any, Optional
 
+import numpy as np
+import pandas as pd
+
+from src.ml.transforms import apply_time_lag
 from src.observability.stage_profiler import profile_stage
 
 
@@ -21,7 +24,7 @@ class DataPoint:
     metric_value: float
     metric_type: str  # 'price' or 'volume'
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "timestamp": self.timestamp.isoformat(),
             "sentiment": self.sentiment,
@@ -39,10 +42,10 @@ class CorrelationResult:
     p_value: Optional[float]  # Statistical significance
     sample_size: int
     confidence_level: str  # 'high', 'medium', 'low', 'insufficient_data'
-    data_points: List[DataPoint] = field(default_factory=list)
+    data_points: list[DataPoint] = field(default_factory=list)
     lag_hours: int = 0  # Time lag between sentiment and metric
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "metric_type": self.metric_type,
             "correlation_score": round(self.correlation_score, 4),
@@ -62,9 +65,14 @@ class CorrelationResult:
         if self.sample_size < 10:
             return "Insufficient data for reliable interpretation."
         if score >= 0.7:
-            return f"Strong {direction} correlation: sentiment is a strong leading indicator."
+            return (
+                f"Strong {direction} correlation: "
+                "sentiment is a strong leading indicator."
+            )
         if score >= 0.4:
-            return f"Moderate {direction} correlation: sentiment shows predictive value."
+            return (
+                f"Moderate {direction} correlation: sentiment shows predictive value."
+            )
         if score >= 0.2:
             return f"Weak {direction} correlation: limited predictive relationship."
         return "No significant correlation: sentiment does not predict this metric."
@@ -85,9 +93,7 @@ class CorrelationEngine:
     RECOMMENDED_SAMPLES = 30
 
     @staticmethod
-    def _calculate_pearson(
-        x: pd.Series, y: pd.Series
-    ) -> Tuple[float, Optional[float]]:
+    def _calculate_pearson(x: pd.Series, y: pd.Series) -> tuple[float, Optional[float]]:
         """
         Calculate Pearson correlation coefficient and p-value.
 
@@ -140,8 +146,8 @@ class CorrelationEngine:
     @classmethod
     def calculate_correlation(
         cls,
-        sentiment_data: List[Dict[str, Any]],
-        metric_data: List[Dict[str, Any]],
+        sentiment_data: list[dict[str, Any]],
+        metric_data: list[dict[str, Any]],
         metric_type: str = "volume",
         lag_hours: int = 0,
     ) -> CorrelationResult:
@@ -177,19 +183,16 @@ class CorrelationEngine:
         metric_df["timestamp"] = pd.to_datetime(metric_df["timestamp"])
 
         # Apply lag to sentiment data
-        if lag_hours > 0:
-            sentiment_df["timestamp"] = sentiment_df["timestamp"] + pd.Timedelta(
-                hours=lag_hours
-            )
+        sentiment_df = apply_time_lag(
+            sentiment_df, lag_hours=lag_hours, timestamp_col="timestamp"
+        )
 
         # Round to hourly for alignment
         sentiment_df["hour"] = sentiment_df["timestamp"].dt.floor("h")
         metric_df["hour"] = metric_df["timestamp"].dt.floor("h")
 
         # Aggregate sentiment by hour (average)
-        sentiment_hourly = (
-            sentiment_df.groupby("hour")["score"].mean().reset_index()
-        )
+        sentiment_hourly = sentiment_df.groupby("hour")["score"].mean().reset_index()
         sentiment_hourly.columns = ["hour", "sentiment"]
 
         # Aggregate metric by hour (average for price, sum for volume)
@@ -245,11 +248,11 @@ class CorrelationEngine:
     @profile_stage("correlation_lag_analysis")
     def analyze_with_lags(
         cls,
-        sentiment_data: List[Dict[str, Any]],
-        metric_data: List[Dict[str, Any]],
+        sentiment_data: list[dict[str, Any]],
+        metric_data: list[dict[str, Any]],
         metric_type: str = "volume",
         max_lag_hours: int = 24,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze correlation across multiple time lags to find optimal lead time.
 
@@ -314,11 +317,11 @@ class CorrelationEngine:
     @profile_stage("correlation_analysis")
     def full_analysis(
         cls,
-        sentiment_data: List[Dict[str, Any]],
-        price_data: List[Dict[str, Any]],
-        volume_data: List[Dict[str, Any]],
+        sentiment_data: list[dict[str, Any]],
+        price_data: list[dict[str, Any]],
+        volume_data: list[dict[str, Any]],
         lag_hours: int = 0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Perform full correlation analysis for both price and volume.
 

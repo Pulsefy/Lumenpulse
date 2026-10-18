@@ -4,9 +4,11 @@ Trend calculator module - calculates market trends from sentiment and data
 
 import json
 import logging
-from typing import List, Dict, Any
-from datetime import datetime, timezone
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any
+
+from src.ml.transforms import calculate_percentage_change
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ class Trend:
     trend_direction: str  # 'up', 'down', 'stable'
     timestamp: datetime
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "metric_name": self.metric_name,
             "current_value": self.current_value,
@@ -37,7 +39,7 @@ class TrendCalculator:
     """Calculates trends from sentiment analysis and market data"""
 
     def __init__(self):
-        self.trend_history: Dict[str, Any] = {}
+        self.trend_history: dict[str, Any] = {}
         self.cache: object | None = None
         try:
             from cache_manager import CacheManager
@@ -52,7 +54,7 @@ class TrendCalculator:
                 logger.info("Trends cache ready")
 
     @staticmethod
-    def _summary_cache_key(sentiment_summary: Dict[str, Any]) -> str:
+    def _summary_cache_key(sentiment_summary: dict[str, Any]) -> str:
         """Deterministic key from a sentiment summary dict."""
         return json.dumps(sentiment_summary, sort_keys=True, default=str)
 
@@ -65,11 +67,10 @@ class TrendCalculator:
             "value", current_value
         )
 
-        # Calculate change
-        if previous_value != 0:
-            change_pct = ((current_value - previous_value) / abs(previous_value)) * 100
-        else:
-            change_pct = 0.0
+        # Calculate change using shared transform
+        change_pct = calculate_percentage_change(
+            current_value, previous_value, scale_100=True
+        )
 
         # Determine trend direction
         if change_pct > 2:
@@ -96,23 +97,23 @@ class TrendCalculator:
         logger.info("%s trend: %s (%.2f%%)", metric_name, direction, change_pct)
         return trend
 
-    def calculate_sentiment_trend(self, sentiment_summary: Dict[str, Any]) -> Trend:
+    def calculate_sentiment_trend(self, sentiment_summary: dict[str, Any]) -> Trend:
         current = sentiment_summary.get("average_compound_score", 0)
         return self._compute_trend("sentiment_score", current)
 
     def calculate_positive_sentiment_trend(
-        self, sentiment_summary: Dict[str, Any]
+        self, sentiment_summary: dict[str, Any]
     ) -> Trend:
         current = sentiment_summary.get("sentiment_distribution", {}).get("positive", 0)
         return self._compute_trend("positive_sentiment_percentage", current)
 
     def calculate_negative_sentiment_trend(
-        self, sentiment_summary: Dict[str, Any]
+        self, sentiment_summary: dict[str, Any]
     ) -> Trend:
         current = sentiment_summary.get("sentiment_distribution", {}).get("negative", 0)
         return self._compute_trend("negative_sentiment_percentage", current)
 
-    def calculate_all_trends(self, sentiment_summary: Dict[str, Any]) -> List[Trend]:
+    def calculate_all_trends(self, sentiment_summary: dict[str, Any]) -> list[Trend]:
         """
         Calculate all trends
 

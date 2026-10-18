@@ -1,14 +1,17 @@
-import pandas as pd
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
+
+import pandas as pd
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from src.ml.feature_schema import (
     PRICE_PREDICTOR_FEATURE_SET,
     FeatureSchema,
     current_feature_schema,
 )
+from src.ml.transforms import clean_time_series, parse_window_to_datetime
+
 
 class FeatureStore:
     # The feature set this store produces. Its versioned schema lives in
@@ -34,7 +37,7 @@ class FeatureStore:
         return self.schema.version
 
     def _stamp_schema(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Record the producing schema version/fingerprint on the frame.
+        """Record the producing schema version/fingerprint and transforms on the frame.
 
         Uses ``DataFrame.attrs`` so the tag travels with the frame without
         changing its columns (existing consumers are unaffected). ``attrs`` is
@@ -45,30 +48,32 @@ class FeatureStore:
             df.attrs["feature_set"] = schema.feature_set
             df.attrs["schema_version"] = schema.version
             df.attrs["schema_fingerprint"] = schema.fingerprint
+            df.attrs["feature_transforms"] = schema.transforms
         except Exception:
             pass
         return df
 
     def _parse_window_to_datetime(self, window: str) -> datetime:
         """Helper to parse window strings like '24h' or '7d' into a past timestamp."""
-        # Fix deprecation warning by using timezone-aware UTC datetime
+        # Use timezone-aware reference time to support freezing 'now' in parity tests
         now = datetime.now(timezone.utc)
-        if window.endswith('h'):
-            return now - timedelta(hours=int(window[:-1]))
-        elif window.endswith('d'):
-            return now - timedelta(days=int(window[:-1]))
-        else:
-            raise ValueError("Unsupported window format. Use 'h' (hours) or 'd' (days).")
+        return parse_window_to_datetime(window, reference_time=now)
 
     def _ensure_columns(self, df: pd.DataFrame, expected_col: str) -> pd.DataFrame:
-        """Ensures the DataFrame has the correct base columns, even if it's completely empty."""
-        if 'timestamp' not in df.columns:
-            df['timestamp'] = pd.Series(dtype='datetime64[ns]')
+        """Ensure the DataFrame has expected base columns even if empty."""
+        if "timestamp" not in df.columns:
+            df["timestamp"] = pd.Series(dtype="datetime64[ns]")
         if expected_col not in df.columns:
-            df[expected_col] = pd.Series(dtype='float64')
+            df[expected_col] = pd.Series(dtype="float64")
         return df
 
-    def get_features_for_asset(self, asset: str, window: Optional[str] = None, start_time: Optional[datetime] = None, end_time: Optional[datetime] = None) -> pd.DataFrame:
+    def get_features_for_asset(
+        self,
+        asset: str,
+        window: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+    ) -> pd.DataFrame:
         """
         Retrieves and combines features for a specific asset over a given time window.
         Combines: Sentiment stats, Volume metrics, and Volatility indicators.
@@ -77,19 +82,19 @@ class FeatureStore:
             if window is None:
                 raise ValueError("Must provide either window or start_time")
             start_time = self._parse_window_to_datetime(window)
-            
+
         end_clause = "AND timestamp <= :end_time" if end_time else ""
-        
+
         sentiment_query = text(f"""
             SELECT timestamp, sentiment_score FROM asset_sentiment_view
             WHERE asset = :asset AND timestamp >= :start_time {end_clause}
         """)
-        
+
         volume_query = text(f"""
             SELECT timestamp, volume FROM asset_volume_view
             WHERE asset = :asset AND timestamp >= :start_time {end_clause}
         """)
-        
+
         volatility_query = text(f"""
             SELECT timestamp, volatility FROM asset_volatility_view
             WHERE asset = :asset AND timestamp >= :start_time {end_clause}
@@ -109,21 +114,25 @@ class FeatureStore:
             volatility_df = pd.DataFrame()
 
         # Ensure all dataframes have the right columns before merging
-        sentiment_df = self._ensure_columns(sentiment_df, 'sentiment_score')
-        volume_df = self._ensure_columns(volume_df, 'volume')
-        volatility_df = self._ensure_columns(volatility_df, 'volatility')
+        sentiment_df = self._ensure_columns(sentiment_df, "sentiment_score")
+        volume_df = self._ensure_columns(volume_df, "volume")
+        volatility_df = self._ensure_columns(volatility_df, "volatility")
 
-        # Always merge using outer joins to align the time series and preserve column names
-        features_df = pd.merge(sentiment_df, volume_df, on='timestamp', how='outer')
-        features_df = pd.merge(features_df, volatility_df, on='timestamp', how='outer')
+        # Merge using outer joins to align time series and preserve column names
+        features_df = pd.merge(sentiment_df, volume_df, on="timestamp", how="outer")
+        features_df = pd.merge(features_df, volatility_df, on="timestamp", how="outer")
 
-        # If no actual data exists, return the empty DataFrame (now with the correct headers)
+        # If no actual data exists, return empty DataFrame with correct headers
         if features_df.empty:
             return self._stamp_schema(features_df)
 
         # Clean up the merged dataset (sort by time, forward fill missing values)
-        features_df.sort_values('timestamp', inplace=True)
-        features_df.ffill(inplace=True)
-        features_df.fillna(0, inplace=True) # Fill remaining NaNs with 0
+        features_df = clean_time_series(
+            features_df,
+            timestamp_col="timestamp",
+            sort=True,
+            ffill=True,
+            fillna_zero=True,
+        )
 
         return self._stamp_schema(features_df)
