@@ -7,6 +7,7 @@
  * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 10.1
  */
 
+import { describe, expect, it } from 'vitest';
 import { getThemeInitScript, getThemeInitScriptHTML } from './theme-init-script';
 
 describe('Theme Initialization Script', () => {

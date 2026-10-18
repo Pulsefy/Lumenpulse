@@ -910,3 +910,13 @@ class AnalyticsJob(Base):
 
     def __repr__(self):
         return f"<AnalyticsJob(job_id='{self.job_id}', type='{self.job_type}', status='{self.status}')>"
+
+
+class FeatureDriftRetrainingCooldown(Base):
+    """Persists per-drift cooldowns so scheduler restarts cannot retrigger."""
+
+    __tablename__ = "feature_drift_retraining_cooldowns"
+
+    drift_signature = Column(String(64), primary_key=True)
+    drift_event_id = Column(String(36), nullable=False)
+    triggered_at = Column(DateTime(timezone=True), nullable=False, index=True)

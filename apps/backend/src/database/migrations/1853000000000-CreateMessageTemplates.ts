@@ -114,10 +114,10 @@ export class CreateMessageTemplates1853000000000 implements MigrationInterface {
     await queryRunner.query(
       `DROP INDEX IF EXISTS "IDX_message_template_audit_logs_templateKey"`,
     );
-    await queryRunner.query(`DROP TABLE IF EXISTS "message_template_audit_logs"`);
     await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_message_templates_key"`,
+      `DROP TABLE IF EXISTS "message_template_audit_logs"`,
     );
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_message_templates_key"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "message_templates"`);
   }
 }

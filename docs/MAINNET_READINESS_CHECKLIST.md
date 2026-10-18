@@ -10,7 +10,7 @@ node apps/onchain/scripts/mainnet-readiness.mjs          # regenerate this repor
 node apps/onchain/scripts/mainnet-readiness.mjs --check  # fail if it is stale (CI)
 ```
 
-**Gate: NOT READY** — 12/24 automated checks met, 0/8 human sign-offs recorded.
+**Gate: NOT READY** — 13/24 automated checks met, 0/8 human sign-offs recorded.
 
 A `READY` gate requires every automated check to pass and every sign-off to be recorded.
 
@@ -20,7 +20,7 @@ A `READY` gate requires every automated check to pass and every sign-off to be r
 | --- | --- | --- | --- | --- |
 | 1 | Deployment manifest is structurally valid | ✅ met | scripts/validate-manifest.js passes: Manifest validation succeeded for 19 contracts. | — |
 | 2 | Every workspace contract crate is accounted for in the manifest | ❌ unmet | 23 workspace contract crates; 7 deployed and 12 deferred in the manifest; absent from manifest: contract_registry, cross-contract-view, error-registry, event-versioning, version-interface | [#1627](https://github.com/Pulsefy/Lumenpulse/issues/1627) |
-| 3 | Contract test coverage is present, executed and measured | ❌ unmet | 23 crates carry 698 unit tests; gaps: contracts/tests is excluded from the workspace and never invoked by CI; no line/branch coverage tooling or threshold is configured | [#1439](https://github.com/Pulsefy/Lumenpulse/issues/1439) |
+| 3 | Contract test coverage is present, executed and measured | ❌ unmet | 23 crates carry 713 unit tests; gaps: contracts/tests is excluded from the workspace and never invoked by CI; no line/branch coverage tooling or threshold is configured | [#1439](https://github.com/Pulsefy/Lumenpulse/issues/1439) |
 | 4 | Builds are reproducible and the deployed artifacts are the verified ones | ❌ unmet | gaps: CI verifies raw cargo artifacts while deploy.ts uploads release/optimized | [#1651](https://github.com/Pulsefy/Lumenpulse/issues/1651) |
 | 5 | Admin keys are not exposed and custody is documented | ✅ met | no tracked .env files; .env ignored; no unmasked secret seeds in tracked files; custody documented in docs/threat-model.md; one admin address across the manifest | — |
 | 6 | Admin key rotation is exercised against a live deployment | ❌ unmet | no committed admin-key-rotation evidence artifact; rotation against a live deployment is untested | [#1626](https://github.com/Pulsefy/Lumenpulse/issues/1626) |
@@ -30,15 +30,15 @@ A `READY` gate requires every automated check to pass and every sign-off to be r
 | 10 | Emergency migration entry points exist | ✅ met | crowdfund_vault implements EmergencyMigrationPlan (issue #1047) | — |
 | 11 | Version introspection is implemented and conformant | ✅ met | version-interface crate present and implemented by 5 contracts; conformance suite merged (#1437) | — |
 | 12 | Error-code registry is present and covers deployed contracts | ✅ met | error-registry crate and docs/error-codes.md present; allocation table covers all 7 deployed contracts | — |
-| 13 | Error-code range conformance is enforced across contracts | ❌ unmet | the registry defines per-contract ranges but no other crate or test consumes the allocator, so range conformance is unenforced | [#1610](https://github.com/Pulsefy/Lumenpulse/issues/1610) |
+| 13 | Error-code range conformance is enforced across contracts | ✅ met | allocation enforced by 1 consumer(s) | — |
 | 14 | Upgrade rehearsal evidence is committed | ❌ unmet | docs/upgrade-rehearsal.evidence.example.json defines the schema but no real evidence artifact is committed | [#1613](https://github.com/Pulsefy/Lumenpulse/issues/1613) |
 | 15 | Emergency pause drill evidence is committed | ❌ unmet | no pause-drill evidence artifact is committed for any deployed contract | [#1614](https://github.com/Pulsefy/Lumenpulse/issues/1614) |
 | 16 | Authorization coverage is inventoried and enforced by tests | ❌ unmet | no contract-side authorization inventory or automated unauthorized-call test exists (docs/AUTHORIZATION_MATRIX.md covers backend controllers only) | [#1615](https://github.com/Pulsefy/Lumenpulse/issues/1615) |
 | 17 | Oracle manipulation resistance is tested | ❌ unmet | pricing_adapter tests cover staleness but not oracle manipulation or deviation resistance | [#1616](https://github.com/Pulsefy/Lumenpulse/issues/1616) |
 | 18 | Storage archival and restore path is defined | ❌ unmet | TTL bump policy exists but no restore path for archived ledger entries is defined or tested | [#1617](https://github.com/Pulsefy/Lumenpulse/issues/1617) |
-| 19 | Every contract crate builds on the single pinned soroban-sdk | ❌ unmet | gaps: excluded from the workspace and not built or tested in CI: contracts/stable_swap_pool | [#1621](https://github.com/Pulsefy/Lumenpulse/issues/1621) |
+| 19 | Every contract crate builds on the single pinned soroban-sdk | ❌ unmet | gaps: excluded from the workspace and not built or tested in CI: contracts/stable_swap_pool, contracts/event-golden | [#1621](https://github.com/Pulsefy/Lumenpulse/issues/1621) |
 | 20 | Deployment environment example matches what the deploy scripts read | ❌ unmet | gaps: deploy.ts reads SOROBAN_RPC_URL but scripts/.env.example defines RPC_URL; scripts/.env.example passphrase is not a Stellar network passphrase ("Test SDA Network ; September 2015") | [#1651](https://github.com/Pulsefy/Lumenpulse/issues/1651) |
-| 21 | All contract CI gates are wired into the workflow | ✅ met | 7 gates run in .github/workflows/onchain.yml | — |
+| 21 | All contract CI gates are wired into the workflow | ✅ met | 8 gates run in .github/workflows/onchain.yml | — |
 | 22 | WASM size budgets are configured and enforced | ✅ met | positive byte budget for all 19 contracts; PR size deltas reported in CI (wasm-baseline.json is unfilled, so deltas use the base branch) | — |
 | 23 | Deployment uploads the optimized artifacts Soroban accepts | ✅ met | all 4 deploy targets point at release/optimized (the only artifacts Soroban accepts) | — |
 | 24 | A recorded mainnet cost estimate exists | ✅ met | mainnet simulation recorded 2026-10-15T17:19:30.739Z against https://mainnet.sorobanrpc.com (optimized total 3398393983 stroops) | — |
@@ -62,16 +62,15 @@ They are recorded in `apps/onchain/mainnet-readiness.signoffs.json` with an owne
 ## 3. What must change to reach READY
 
 - **Automated — Every workspace contract crate is accounted for in the manifest.** 23 workspace contract crates; 7 deployed and 12 deferred in the manifest; absent from manifest: contract_registry, cross-contract-view, error-registry, event-versioning, version-interface — tracked by [#1627](https://github.com/Pulsefy/Lumenpulse/issues/1627).
-- **Automated — Contract test coverage is present, executed and measured.** 23 crates carry 698 unit tests; gaps: contracts/tests is excluded from the workspace and never invoked by CI; no line/branch coverage tooling or threshold is configured — tracked by [#1439](https://github.com/Pulsefy/Lumenpulse/issues/1439).
+- **Automated — Contract test coverage is present, executed and measured.** 23 crates carry 713 unit tests; gaps: contracts/tests is excluded from the workspace and never invoked by CI; no line/branch coverage tooling or threshold is configured — tracked by [#1439](https://github.com/Pulsefy/Lumenpulse/issues/1439).
 - **Automated — Builds are reproducible and the deployed artifacts are the verified ones.** gaps: CI verifies raw cargo artifacts while deploy.ts uploads release/optimized — tracked by [#1651](https://github.com/Pulsefy/Lumenpulse/issues/1651).
 - **Automated — Admin key rotation is exercised against a live deployment.** no committed admin-key-rotation evidence artifact; rotation against a live deployment is untested — tracked by [#1626](https://github.com/Pulsefy/Lumenpulse/issues/1626).
-- **Automated — Error-code range conformance is enforced across contracts.** the registry defines per-contract ranges but no other crate or test consumes the allocator, so range conformance is unenforced — tracked by [#1610](https://github.com/Pulsefy/Lumenpulse/issues/1610).
 - **Automated — Upgrade rehearsal evidence is committed.** docs/upgrade-rehearsal.evidence.example.json defines the schema but no real evidence artifact is committed — tracked by [#1613](https://github.com/Pulsefy/Lumenpulse/issues/1613).
 - **Automated — Emergency pause drill evidence is committed.** no pause-drill evidence artifact is committed for any deployed contract — tracked by [#1614](https://github.com/Pulsefy/Lumenpulse/issues/1614).
 - **Automated — Authorization coverage is inventoried and enforced by tests.** no contract-side authorization inventory or automated unauthorized-call test exists (docs/AUTHORIZATION_MATRIX.md covers backend controllers only) — tracked by [#1615](https://github.com/Pulsefy/Lumenpulse/issues/1615).
 - **Automated — Oracle manipulation resistance is tested.** pricing_adapter tests cover staleness but not oracle manipulation or deviation resistance — tracked by [#1616](https://github.com/Pulsefy/Lumenpulse/issues/1616).
 - **Automated — Storage archival and restore path is defined.** TTL bump policy exists but no restore path for archived ledger entries is defined or tested — tracked by [#1617](https://github.com/Pulsefy/Lumenpulse/issues/1617).
-- **Automated — Every contract crate builds on the single pinned soroban-sdk.** gaps: excluded from the workspace and not built or tested in CI: contracts/stable_swap_pool — tracked by [#1621](https://github.com/Pulsefy/Lumenpulse/issues/1621).
+- **Automated — Every contract crate builds on the single pinned soroban-sdk.** gaps: excluded from the workspace and not built or tested in CI: contracts/stable_swap_pool, contracts/event-golden — tracked by [#1621](https://github.com/Pulsefy/Lumenpulse/issues/1621).
 - **Automated — Deployment environment example matches what the deploy scripts read.** gaps: deploy.ts reads SOROBAN_RPC_URL but scripts/.env.example defines RPC_URL; scripts/.env.example passphrase is not a Stellar network passphrase ("Test SDA Network ; September 2015") — tracked by [#1651](https://github.com/Pulsefy/Lumenpulse/issues/1651).
 - **Sign-off — Authorization inventory signed off for every privileged entry point.** Owner: Security lead. Tracked by [#1615](https://github.com/Pulsefy/Lumenpulse/issues/1615).
 - **Sign-off — Contracts-area go/no-go confirmed against the mainnet launch runbook.** Owner: Release engineer. Tracked by [#1651](https://github.com/Pulsefy/Lumenpulse/issues/1651).

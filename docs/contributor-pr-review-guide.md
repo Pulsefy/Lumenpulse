@@ -298,6 +298,9 @@ Use the checklist matching the changed area. Skip what does not apply; never ski
 - [ ] No hardcoded strings that should be localized (see `locales/` for mobile).
 - [ ] Screenshots or recordings attached for visual changes.
 - [ ] Verified on at least one target platform.
+- [ ] A new shared component in `apps/mobile/components/` has an entry in
+      `apps/mobile/lib/component-catalogue.ts` (or an exemption with a reason) and a preview in
+      `apps/mobile/app/dev/catalogue.tsx`.
 
 ### 7.2 Backend
 

@@ -1,4 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  PaginatedResponseDto,
+  ResolvedPagination,
+} from '../../common/pagination/pagination-response.dto';
 
 export class NewsArticleDto {
   @ApiProperty({
@@ -169,4 +173,28 @@ export class SingleArticleResponseDto {
     example: '2024-02-25T15:30:00Z',
   })
   fetchedAt: string;
+}
+
+/**
+ * Paginated response for `GET /news` and `GET /news/coin/:symbol`.
+ *
+ * Follows the standard envelope: `items / total / page / pageSize / totalPages`.
+ * The `fetchedAt` field is preserved as an endpoint-specific extension.
+ */
+export class NewsArticlesPaginatedResponseDto extends PaginatedResponseDto<NewsArticleDto> {
+  @ApiProperty({
+    description: 'Timestamp when data was fetched',
+    example: '2024-02-25T15:30:00Z',
+  })
+  fetchedAt: string;
+
+  constructor(
+    items: NewsArticleDto[],
+    pagination: ResolvedPagination,
+    total: number,
+    fetchedAt: string,
+  ) {
+    super(items, pagination, total);
+    this.fetchedAt = fetchedAt;
+  }
 }

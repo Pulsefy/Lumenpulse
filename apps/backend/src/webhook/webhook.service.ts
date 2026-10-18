@@ -283,5 +283,4 @@ export class WebhookService {
     if (score >= 0.4) return NotificationSeverity.MEDIUM;
     return NotificationSeverity.LOW;
   }
-
 }

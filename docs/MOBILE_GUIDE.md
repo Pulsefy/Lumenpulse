@@ -342,6 +342,12 @@ import { AuthContext } from '@/contexts/AuthContext';
 
 ## Shared Components & Key Utilities
 
+### Component catalogue (development builds)
+
+`app/dev/catalogue.tsx` renders the shared components from `components/` in their states: `StandardList` loading, empty, error and populated, `ListSkeleton`, `ListError` with and without retry, `NetworkBadge`, both modals (opened from a button, with stub handlers) and the guards with stub children. Open it from **Settings > Component catalogue**. The screen and the link exist only when `isCatalogueEnabled()` is true, that is in a development build (`EXPO_PUBLIC_APP_VARIANT=development`) running with `__DEV__`; anywhere else the route redirects home.
+
+The list lives in `lib/component-catalogue.ts`. When you add a shared component, add an entry with its variants and a preview in `app/dev/catalogue.tsx`. If it cannot be previewed in isolation (it renders nothing, or it loads its own data), add it to `CATALOGUE_EXEMPT` with the reason instead. `lib/__tests__/component-catalogue.test.ts` fails when a file in `components/` has neither.
+
 ### `components/ProtectedRoute.tsx`
 
 Wrap any screen that requires an authenticated user. It handles the redirect to login automatically:

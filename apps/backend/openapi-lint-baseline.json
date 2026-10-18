@@ -38,22 +38,10 @@
   "PATCH /moderation/queue/{id} [ModerationController_updateReport]: 200 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
   "PATCH /moderation/queue/{id}/assign [ModerationController_assignReviewer]: 200 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
   "POST /auth/logout-all [AuthController_logoutAll]: 200 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
-  "POST /auth/verify [AuthController_verifyChallenge]: 201 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
   "POST /cache/warm [WarmCacheController_forceRefresh]: 200 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
-  "POST /grants/contributions [GrantsController_recordContribution]: 200 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
-  "POST /grants/contributions [GrantsController_recordContribution]: 201 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
-  "POST /grants/rounds/distribute [GrantsController_distribute]: 200 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
-  "POST /grants/rounds/distribute [GrantsController_distribute]: 201 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
-  "POST /grants/rounds/fund [GrantsController_fundPool]: 200 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
-  "POST /grants/rounds/fund [GrantsController_fundPool]: 201 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
-  "POST /grants/rounds/projects/approve [GrantsController_approveProject]: 200 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
-  "POST /grants/rounds/projects/approve [GrantsController_approveProject]: 201 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
   "POST /grants/rounds/{id}/finalize [GrantsController_finalizeRound]: 200 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
   "POST /review-history/comments [ReviewHistoryController_createComment]: 201 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
   "POST /review-history/decisions [ReviewHistoryController_createDecision]: 201 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
-  "POST /test/submit [TestController_submitData]: 201 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
   "POST /transactions/status/callback [TransactionStatusController_registerCallback]: 202 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
-  "POST /users/me/accounts/{id}/primary [UsersController_setMyPrimaryAccount]: 200 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)",
-  "schema ForceRefreshDto: has no properties (add @ApiProperty or use a *.dto.ts file)",
-  "schema Object: has no properties (add @ApiProperty or use a *.dto.ts file)"
+  "POST /users/me/accounts/{id}/primary [UsersController_setMyPrimaryAccount]: 200 response has no body schema (add @ApiOkResponse/@ApiCreatedResponse with a type; @ApiNoBodyResponse if the handler returns nothing)"
 ]

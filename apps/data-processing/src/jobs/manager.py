@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from src.db.postgres_service import PostgresService
+from src.observability.stage_profiler import profile_stage
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ def submit_job(
     job_type: str,
     idempotency_payload: Dict[str, Any],
     work_fn: Callable[[], Dict[str, Any]],
+    job_params: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Any], bool]:
     """
     Submit a job for background execution.
@@ -67,7 +69,9 @@ def submit_job(
         return existing, False
 
     job = db_service.create_analytics_job(
-        job_type=job_type, dedupe_key=dedupe_key, params=idempotency_payload
+        job_type=job_type,
+        dedupe_key=dedupe_key,
+        params=job_params if job_params is not None else idempotency_payload,
     )
     if job is None:
         # Lost the race to a concurrent identical submission — return theirs.
@@ -76,16 +80,22 @@ def submit_job(
             return existing, False
         raise RuntimeError(f"Failed to submit {job_type} job")
 
-    _EXECUTOR.submit(_run_job, db_service, job["job_id"], work_fn)
+    _EXECUTOR.submit(_run_job, db_service, job["job_id"], job_type, work_fn)
     return job, True
 
 
 def _run_job(
-    db_service: PostgresService, job_id: str, work_fn: Callable[[], Dict[str, Any]]
+    db_service: PostgresService,
+    job_id: str,
+    job_type: str,
+    work_fn: Callable[[], Dict[str, Any]],
 ) -> None:
     db_service.mark_analytics_job_running(job_id)
     try:
-        result = work_fn()
+        # The Wave 8 queue is one of the platform's most expensive paths; profile
+        # the work function so every queued job type reports its own cost (#1454).
+        with profile_stage(f"job.{job_type}"):
+            result = work_fn()
         if not isinstance(result, dict):
             result = {"value": result}
         db_service.mark_analytics_job_succeeded(job_id, result)

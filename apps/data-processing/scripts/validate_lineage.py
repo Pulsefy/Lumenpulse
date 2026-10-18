@@ -35,6 +35,8 @@ Validation rules
    found in an ``upstream``/``downstream`` field) resolves to a feature or
    dataset that still exists in the manifest — catches lineage left
    dangling after a feature/KPI is renamed or removed (issue #1254).
+9. Every registered dataset includes operational metadata and its declared
+   pipeline-stage consumers match dataset references in pipeline code.
 """
 
 from __future__ import annotations
@@ -57,11 +59,8 @@ except ImportError:
 # regardless of the current working directory this script is invoked from.
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from src.lineage.manifest import (  # noqa: E402
-    parse_ref as _parse_ref,
-    ref_strings as _ref_strings,
-    resolve_ref as _resolve_ref,
-)
+from src.lineage import dataset_registry  # noqa: E402
+from src.lineage import manifest as lineage_manifest  # noqa: E402
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 
@@ -163,15 +162,18 @@ def _collect_errors(
     for section, entry in all_entries:
         entry_id = entry.get("id", "<unknown>")
         for field_name in ("upstream", "downstream"):
-            for raw in _ref_strings(entry, field_name):
-                ref = _parse_ref(raw)
+            for raw in lineage_manifest.ref_strings(entry, field_name):
+                ref = lineage_manifest.parse_ref(raw)
                 if ref is None:
                     continue  # free-text ref (file path, API route, …) — not our concern
-                if not _resolve_ref(manifest, ref):
+                if not lineage_manifest.resolve_ref(manifest, ref):
                     errors.append(
                         f"[{section}/{entry_id}] {field_name} references "
                         f"'{raw}', which no longer exists in the manifest."
                     )
+
+    # Rule 9 — dataset metadata and code-declared pipeline consumers.
+    errors.extend(dataset_registry.validate_dataset_registry(manifest))
 
     return errors
 
@@ -301,6 +303,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "manifest_path": str(args.manifest),
             "ml_feature_sets": len(manifest.get("ml_feature_sets") or []),
             "kpi_datasets": len(manifest.get("kpi_datasets") or []),
+            "datasets": len(manifest.get("datasets") or []),
             "errors": errors,
         }
         print(json.dumps(result, indent=2))
@@ -316,9 +319,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Validation passed
     ml_count = len(manifest.get("ml_feature_sets") or [])
     kpi_count = len(manifest.get("kpi_datasets") or [])
+    dataset_count = len(manifest.get("datasets") or [])
     print(
         f"\n✅  Manifest is valid  "
-        f"({ml_count} ML feature set(s), {kpi_count} KPI dataset(s))\n"
+        f"({ml_count} ML feature set(s), {kpi_count} KPI dataset(s), "
+        f"{dataset_count} registered dataset(s))\n"
     )
 
     if args.summary:

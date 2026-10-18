@@ -375,99 +375,180 @@ def start_scheduler():
         sys.exit(1)
 
 
+def _start_combined() -> None:
+    """
+    Start both the inference API and the batch scheduler in the same process
+    (issue #1628 — single-process mode for local development).
+
+    The FastAPI app runs in a background thread served by uvicorn while the
+    APScheduler loop runs on the main thread, exactly mirroring the previous
+    production behaviour.  Set ``SERVICE_MODE=combined`` (or omit the variable)
+    to use this mode.
+    """
+    import threading
+    import uvicorn
+
+    host = os.getenv("SERVICE_HOST", "0.0.0.0")
+    port = int(os.getenv("SERVICE_PORT", "8000"))
+    log_level = os.getenv("LOG_LEVEL", "info").lower()
+
+    logger.info("SERVICE_MODE=combined — starting inference API + batch scheduler in one process")
+
+    # Pre-warm models once; both the API thread and the scheduler use the same
+    # in-process model_registry cache.
+    from src.ml.model_loader import warm_models, INFERENCE_MODELS
+    warm_models(*INFERENCE_MODELS)
+
+    uv_config = uvicorn.Config(
+        "src.api.server:app",
+        host=host,
+        port=port,
+        log_level=log_level,
+        reload=False,
+    )
+    uv_server = uvicorn.Server(uv_config)
+
+    api_thread = threading.Thread(target=uv_server.run, daemon=True, name="inference-api")
+    api_thread.start()
+    logger.info("Inference API thread started on %s:%d", host, port)
+
+    start_scheduler()
+
+
 def main():
-    """Main entry point - handles both CLI modes"""
+    """Main entry point - handles both CLI modes and SERVICE_MODE."""
     load_dotenv()
 
     # Create logs directory if it doesn't exist
     os.makedirs("./logs", exist_ok=True)
 
-    # Check command line arguments
-    if len(sys.argv) > 1:
-        command = sys.argv[1].lower()
+    # ---------------------------------------------------------------------------
+    # SERVICE_MODE environment variable (issue #1628)
+    # ---------------------------------------------------------------------------
+    # batch     → run batch scheduler only (no HTTP server).  Production default
+    #             when inference is deployed as a separate container.
+    # inference → run uvicorn inference API only (no scheduler).  Delegates to
+    #             src/serve_inference.py for the full startup sequence.
+    # combined  → run both in the same process (local development default).
+    # ---------------------------------------------------------------------------
+    service_mode = os.getenv("SERVICE_MODE", "").strip().lower()
 
-        if command == "check-models":
-            # Verifies the pinned NER and embedding models (and other baked
-            # artifacts) are present at the expected version, failing fast on
-            # mismatch. Used as a container startup readiness gate.
-            from src.analytics.ner_service import (
-                check_model_available as check_ner_model,
-            )
-            from src.analytics.embedding_service import (
-                check_model_available as check_embedding_model,
-            )
+    if service_mode == "inference":
+        # Hand off entirely to the inference entrypoint.
+        from src.serve_inference import main as serve_main
+        serve_main()
+        return
 
-            checks = {}
-            for label, gate in (
-                ("ner_model", check_ner_model),
-                ("embedding_model", check_embedding_model),
-            ):
-                logger.info("Checking pinned %s availability...", label)
-                try:
-                    gate()
-                except Exception as exc:
-                    logger.error("Model startup check failed (%s): %s", label, exc)
-                    print(f"❌ {label} check failed: {exc}")
-                    return {
-                        "success": False,
-                        "checks": {**checks, label: False},
-                        "error": str(exc),
-                    }
-                checks[label] = True
-                logger.info("Pinned %s check passed.", label)
-            print("✓ Pinned NER and embedding models present, versions match.")
-            return {"success": True, "checks": checks}
-
-        if command == "serve":
-            # Run the startup model gates before starting the scheduler so the
-            # service fails fast instead of running with broken/unpinned models.
-            from src.analytics.ner_service import (
-                check_model_available as check_ner_model,
-            )
-            from src.analytics.embedding_service import (
-                check_model_available as check_embedding_model,
-            )
-
-            try:
-                check_ner_model()
-                check_embedding_model()
-            except Exception as exc:
-                logger.error(
-                    "Pinned model gate failed at startup; aborting: %s", exc
-                )
-                print(f"❌ {exc}")
-                return {"success": False, "error": str(exc)}
-
-            start_scheduler()
-        elif command == "run":
-            # Run pipeline once and exit
-            return run_data_pipeline()
-        elif command == "replay-quarantined":
-            from src.ingestion.quarantine_replay_cli import main as replay_main
-
-            exit_code = replay_main(sys.argv[2:])
-            return {"success": exit_code == 0, "exit_code": exit_code}
-        elif command == "help":
-            print("Usage:")
-            print("  python pipeline.py run          - Run pipeline once")
-            print("  python pipeline.py serve        - Start scheduled service")
-            print(
-                "  python pipeline.py check-models - Verify pinned "
-                "NER + embedding model artifacts"
-            )
-            print("  python pipeline.py help         - Show this help")
-            return {"help": True}
-        else:
-            print(f"Unknown command: {command}")
-            print("Use 'python pipeline.py help' for usage instructions")
-            return {"error": f"Unknown command: {command}"}
+    if service_mode == "batch":
+        # Skip API; go straight to the scheduler (same as the old Dockerfile CMD).
+        command = "serve"
+    elif service_mode == "combined":
+        _start_combined()
+        return
     else:
+        # No SERVICE_MODE set — fall through to the existing CLI dispatch.
+        command = sys.argv[1].lower() if len(sys.argv) > 1 else None
+
+    # ---------------------------------------------------------------------------
+    # CLI dispatch — also reachable when service_mode forces a command above.
+    # ---------------------------------------------------------------------------
+    # When service_mode == "batch" the variable `command` was set to "serve"
+    # above; when no SERVICE_MODE is set, derive it from sys.argv as before.
+    if service_mode not in ("batch",):
+        command = sys.argv[1].lower() if len(sys.argv) > 1 else None
+
+    if command == "check-models":
+        # Verifies the pinned NER and embedding models (and other baked
+        # artifacts) are present at the expected version, failing fast on
+        # mismatch. Used as a container startup readiness gate.
+        from src.analytics.ner_service import (
+            check_model_available as check_ner_model,
+        )
+        from src.analytics.embedding_service import (
+            check_model_available as check_embedding_model,
+        )
+
+        checks = {}
+        for label, gate in (
+            ("ner_model", check_ner_model),
+            ("embedding_model", check_embedding_model),
+        ):
+            logger.info("Checking pinned %s availability...", label)
+            try:
+                gate()
+            except Exception as exc:
+                logger.error("Model startup check failed (%s): %s", label, exc)
+                print(f"❌ {label} check failed: {exc}")
+                return {
+                    "success": False,
+                    "checks": {**checks, label: False},
+                    "error": str(exc),
+                }
+            checks[label] = True
+            logger.info("Pinned %s check passed.", label)
+        print("✓ Pinned NER and embedding models present, versions match.")
+        return {"success": True, "checks": checks}
+
+    elif command == "serve":
+        # Run the startup model gates before starting the scheduler so the
+        # service fails fast instead of running with broken/unpinned models.
+        from src.analytics.ner_service import (
+            check_model_available as check_ner_model,
+        )
+        from src.analytics.embedding_service import (
+            check_model_available as check_embedding_model,
+        )
+
+        try:
+            check_ner_model()
+            check_embedding_model()
+        except Exception as exc:
+            logger.error(
+                "Pinned model gate failed at startup; aborting: %s", exc
+            )
+            print(f"❌ {exc}")
+            return {"success": False, "error": str(exc)}
+
+        start_scheduler()
+
+    elif command == "run":
+        # Run pipeline once and exit
+        return run_data_pipeline()
+
+    elif command == "replay-quarantined":
+        from src.ingestion.quarantine_replay_cli import main as replay_main
+
+        exit_code = replay_main(sys.argv[2:])
+        return {"success": exit_code == 0, "exit_code": exit_code}
+
+    elif command == "help":
+        print("Usage:")
+        print("  python main.py run                - Run pipeline once and exit")
+        print("  python main.py serve              - Start scheduled batch service")
+        print(
+            "  python main.py check-models       - Verify pinned "
+            "NER + embedding model artifacts"
+        )
+        print("  python main.py help               - Show this help")
+        print()
+        print("Environment variables (issue #1628):")
+        print("  SERVICE_MODE=batch                - batch scheduler only (no API)")
+        print("  SERVICE_MODE=inference            - inference API only (no scheduler)")
+        print("  SERVICE_MODE=combined             - both in one process (dev default)")
+        return {"help": True}
+
+    elif command is None:
         # Default: run once (original behavior)
         result = run_data_pipeline()
         print("\n" + "=" * 60)
         print("PIPELINE COMPLETE")
         print("=" * 60)
         return result
+
+    else:
+        print(f"Unknown command: {command}")
+        print("Use 'python main.py help' for usage instructions")
+        return {"error": f"Unknown command: {command}"}
 
 
 if __name__ == "__main__":

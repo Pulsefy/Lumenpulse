@@ -1,20 +1,27 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { PaginatedQueryDto } from '../../common/pagination/pagination-query.dto';
 import { VerificationStatus } from '../../verification/dto/verification.dto';
 
-export class ProjectSearchQueryDto {
-  @ApiProperty({
+/**
+ * Query DTO for `GET /search/projects`.
+ *
+ * Extends {@link PaginatedQueryDto} so the endpoint accepts the standard
+ * `page` / `pageSize` parameters. The previous `offset` / `limit` style has
+ * been replaced by page-based pagination for consistency across all list
+ * endpoints.
+ */
+export class ProjectSearchQueryDto extends PaginatedQueryDto {
+  @ApiPropertyOptional({
     description: 'Search query (matches project name or numeric id)',
-    required: false,
     example: 'Lumen',
   })
   @IsOptional()
   @IsString()
   q?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Filter by verification status',
-    required: false,
     enum: VerificationStatus,
     example: VerificationStatus.Pending,
   })
@@ -22,40 +29,13 @@ export class ProjectSearchQueryDto {
   @IsEnum(VerificationStatus)
   status?: VerificationStatus;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Filter by owner Stellar public key',
-    required: false,
     example: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
   })
   @IsOptional()
   @IsString()
   ownerPublicKey?: string;
-
-  @ApiProperty({
-    description: 'Pagination limit',
-    required: false,
-    default: 20,
-    minimum: 1,
-    maximum: 100,
-    example: 20,
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number;
-
-  @ApiProperty({
-    description: 'Pagination offset',
-    required: false,
-    default: 0,
-    minimum: 0,
-    example: 0,
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  offset?: number;
 }
 
 export class ProjectSearchItemDto {
@@ -101,6 +81,11 @@ export class ProjectSearchItemDto {
   score: number;
 }
 
+/**
+ * Paginated response for `GET /search/projects`.
+ *
+ * Follows the standard envelope: `items / total / page / pageSize / totalPages`.
+ */
 export class ProjectSearchResponseDto {
   @ApiProperty({ type: [ProjectSearchItemDto] })
   items: ProjectSearchItemDto[];
@@ -108,9 +93,21 @@ export class ProjectSearchResponseDto {
   @ApiProperty({ example: 42 })
   total: number;
 
-  @ApiProperty({ example: 20 })
-  limit: number;
+  @ApiProperty({
+    description: 'Current page number (1-indexed)',
+    example: 1,
+  })
+  page: number;
 
-  @ApiProperty({ example: 0 })
-  offset: number;
+  @ApiProperty({
+    description: 'Number of items per page',
+    example: 20,
+  })
+  pageSize: number;
+
+  @ApiProperty({
+    description: 'Total number of pages (always ≥ 1)',
+    example: 3,
+  })
+  totalPages: number;
 }

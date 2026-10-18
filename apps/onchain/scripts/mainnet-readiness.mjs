@@ -567,6 +567,7 @@ function checkCiGates() {
     ["formatting", /cargo fmt/],
     ["clippy -D warnings", /cargo clippy[^\n]*-D warnings/],
     ["manifest validation", /validate-manifest\.js/],
+    ["contract test modules", /check-contract-tests\.mjs/],
     ["wasm build", /cargo build[^\n]*wasm32-unknown-unknown[^\n]*--release/],
     ["hash verification", /verify-wasm-hashes\.mjs/],
     ["size enforcement", /check-wasm-size\.mjs/],

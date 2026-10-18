@@ -1,0 +1,13 @@
+{
+  "description": "Crates under apps/onchain/contracts that legitimately cannot carry their own test module. Every entry needs a stated reason. The list is enforced by scripts/check-contract-tests.mjs, which fails on an unknown crate, a missing reason, or an entry whose crate has since gained tests.",
+  "crates": [
+    {
+      "name": "test_utils",
+      "reason": "Shared Soroban test harness. It is a dev-dependency that every contract suite already compiles and exercises; it exposes no contract entry points of its own, so it has nothing to assert in isolation."
+    },
+    {
+      "name": "event-golden",
+      "reason": "Test-only golden-fixture library for event serialization. It loads committed JSON fixtures at test time for other crates to assert against; it is a dev-dependency with no contract logic, so a self-test would only re-read the fixtures it exists to serve."
+    }
+  ]
+}

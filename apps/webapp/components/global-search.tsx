@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
   type ComponentType,
-  type KeyboardEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -141,7 +141,7 @@ export function GlobalSearch({ className }: { className?: string }) {
   useEffect(() => () => cancelInFlight(), [cancelInFlight]);
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setOpen(true);
@@ -167,7 +167,7 @@ export function GlobalSearch({ className }: { className?: string }) {
     [router],
   );
 
-  const onInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const onInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (!open && (event.key === "ArrowDown" || event.key === "Enter")) {
       setOpen(true);
     }

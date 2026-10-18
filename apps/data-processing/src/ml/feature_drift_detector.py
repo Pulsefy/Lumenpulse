@@ -206,6 +206,7 @@ class FeatureDriftReport:
     schema_mismatch: bool = False
     results: List[FeatureDriftResult] = field(default_factory=list)
     alerted: bool = False
+    retraining: Optional[Dict[str, Any]] = None
     completed_at: Optional[datetime] = None
     error: Optional[str] = None
 
@@ -232,6 +233,7 @@ class FeatureDriftReport:
             "drifted_features": self.drifted_features,
             "results": [r.to_dict() for r in self.results],
             "alerted": self.alerted,
+            "retraining": self.retraining,
             "error": self.error,
         }
 

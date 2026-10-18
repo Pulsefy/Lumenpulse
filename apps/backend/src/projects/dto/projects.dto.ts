@@ -1,12 +1,10 @@
-import {
-  IsString,
-  IsOptional,
-  IsNumber,
-  IsEnum,
-  Min,
-  Max,
-} from 'class-validator';
+import { IsString, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PaginatedQueryDto } from '../../common/pagination/pagination-query.dto';
+import {
+  PaginatedResponseDto,
+  ResolvedPagination,
+} from '../../common/pagination/pagination-response.dto';
 
 export enum ProjectStatus {
   ACTIVE = 'active',
@@ -15,7 +13,14 @@ export enum ProjectStatus {
   CANCELLED = 'cancelled',
 }
 
-export class ProjectListQueryDto {
+/**
+ * Query DTO for `GET /projects`.
+ *
+ * Extends the shared {@link PaginatedQueryDto} so the endpoint accepts the
+ * standard `page` / `pageSize` parameters alongside project-specific filters.
+ * The old `limit` field has been replaced by `pageSize` (inherited).
+ */
+export class ProjectListQueryDto extends PaginatedQueryDto {
   @ApiPropertyOptional({ description: 'Filter by project status' })
   @IsOptional()
   @IsEnum(ProjectStatus)
@@ -26,25 +31,16 @@ export class ProjectListQueryDto {
   @IsString()
   owner?: string;
 
-  @ApiPropertyOptional({ description: 'Page number (1-indexed)', default: 1 })
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiPropertyOptional({ description: 'Items per page', default: 10 })
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  @Max(100)
-  limit?: number = 10;
-
   @ApiPropertyOptional({ description: 'Sort field', default: 'createdAt' })
   @IsOptional()
   @IsString()
   sortBy?: string = 'createdAt';
 
-  @ApiPropertyOptional({ description: 'Sort direction', default: 'DESC' })
+  @ApiPropertyOptional({
+    description: 'Sort direction',
+    default: 'DESC',
+    enum: ['ASC', 'DESC'],
+  })
   @IsOptional()
   @IsString()
   sortOrder?: 'ASC' | 'DESC' = 'DESC';
@@ -147,19 +143,17 @@ export class ProjectDetailDto extends ProjectListItemDto {
   }>;
 }
 
-export class ProjectListResponseDto {
-  @ApiProperty({ description: 'Array of projects' })
-  projects: ProjectListItemDto[];
-
-  @ApiProperty({ description: 'Total number of projects' })
-  total: number;
-
-  @ApiProperty({ description: 'Current page number' })
-  page: number;
-
-  @ApiProperty({ description: 'Items per page' })
-  limit: number;
-
-  @ApiProperty({ description: 'Total number of pages' })
-  totalPages: number;
+/**
+ * Paginated response for `GET /projects`.
+ *
+ * Follows the standard envelope: `items / total / page / pageSize / totalPages`.
+ */
+export class ProjectListResponseDto extends PaginatedResponseDto<ProjectListItemDto> {
+  constructor(
+    items: ProjectListItemDto[],
+    pagination: ResolvedPagination,
+    total: number,
+  ) {
+    super(items, pagination, total);
+  }
 }

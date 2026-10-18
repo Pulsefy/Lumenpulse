@@ -222,6 +222,23 @@ export interface AllocationAsset {
   percentage: number;
 }
 
+export interface PortfolioAllocationResponse {
+  totalValueUsd: number;
+  allocation: AllocationAsset[];
+}
+
+export type PortfolioAnomalyStatus =
+  components['schemas']['ReviewPortfolioAnomalyDto']['status'];
+export type PortfolioAnomaly =
+  components['schemas']['PortfolioAnomalyResponseDto'];
+export type PortfolioAnomaliesResponse =
+  components['schemas']['PortfolioAnomaliesListResponseDto'];
+
+function getApiErrorMessage(body: unknown): string | null {
+  if (typeof body !== 'object' || body === null || !('message' in body)) return null;
+  return typeof body.message === 'string' && body.message ? body.message : null;
+}
+
 export class PortfolioApiService {
   private static readonly BASE_URL =
     clientConfig.apiUrl;
@@ -292,7 +309,7 @@ export class PortfolioApiService {
    */
   static async getAllocation(
     signal?: AbortSignal,
-  ): Promise<AllocationAsset[]> {
+  ): Promise<PortfolioAllocationResponse> {
     const response = await fetch(`${this.BASE_URL}/portfolio/allocation`, {
       headers: this.getAuthHeaders(),
       signal,
@@ -300,6 +317,52 @@ export class PortfolioApiService {
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error((err as any).message || `Portfolio allocation fetch failed (${response.status})`);
+    }
+    return response.json();
+  }
+
+  /**
+   * GET /portfolio/anomalies?userId=...
+   * The backend limits this endpoint to reviewer and admin roles.
+   */
+  static async getAnomalies(
+    userId: string,
+    signal?: AbortSignal,
+  ): Promise<PortfolioAnomaliesResponse> {
+    const response = await fetch(
+      `${this.BASE_URL}/portfolio/anomalies?userId=${encodeURIComponent(userId)}`,
+      { headers: this.getAuthHeaders(), signal },
+    );
+    if (!response.ok) {
+      const err: unknown = await response.json().catch(() => ({}));
+      throw new Error(
+        getApiErrorMessage(err) || `Portfolio anomalies fetch failed (${response.status})`,
+      );
+    }
+    return response.json();
+  }
+
+  /**
+   * POST /portfolio/anomalies/:id/review
+   * The backend limits this endpoint to reviewer and admin roles.
+   */
+  static async reviewAnomaly(
+    id: string,
+    status: PortfolioAnomalyStatus,
+  ): Promise<PortfolioAnomaly> {
+    const response = await fetch(
+      `${this.BASE_URL}/portfolio/anomalies/${encodeURIComponent(id)}/review`,
+      {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ status }),
+      },
+    );
+    if (!response.ok) {
+      const err: unknown = await response.json().catch(() => ({}));
+      throw new Error(
+        getApiErrorMessage(err) || `Portfolio anomaly review failed (${response.status})`,
+      );
     }
     return response.json();
   }

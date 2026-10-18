@@ -61,10 +61,10 @@ python scripts/validate_lineage.py --json
 
 ## Manifest structure
 
-The manifest is a YAML file with three top-level sections:
+The manifest is a YAML file with four top-level sections:
 
 ```yaml
-manifest_version: "1.0"
+manifest_version: "1.2"
 project: lumenpulse
 module: data-processing
 
@@ -73,7 +73,17 @@ ml_feature_sets:    # ML input features
 
 kpi_datasets:       # Derived metrics surfaced via the API
   - id: ...
+
+datasets:           # Operational data-processing inventory
+  - id: ...
 ```
+
+`datasets` covers every entry in `ml_feature_sets` and `kpi_datasets`, plus
+the ingested datasets tracked by the SLA monitor. Each registry entry requires
+`owner`, a field-to-type `schema`, `update_cadence`, `retention`,
+`model_consumers`, and `pipeline_stages` in addition to its id and description.
+An empty consumer list is valid when there is no known model or scheduled
+pipeline consumer.
 
 ### Entry schema
 
@@ -253,6 +263,33 @@ Both require the standard `X-API-Key` header (see `src/security.py`); no
 other auth is applied. `feature_id` is the manifest entry's `id` — e.g.
 `market_health_score` or `price_predictor_features`.
 
+## Dataset registry (#1634)
+
+The same manifest contains an operational inventory of datasets produced or
+consumed by this data-processing service. Each entry records its schema,
+owner, update cadence, retention policy, model consumers, and pipeline-stage
+consumers. It includes all ML feature-set and KPI lineage entries, along with
+the ingested datasets tracked by the ingestion SLA monitor. Entries are listed
+at the pipeline API endpoint:
+
+```
+GET /api/pipeline/datasets — all registered datasets and operational metadata
+```
+
+The endpoint uses the standard `X-API-Key` authentication. Pipeline-stage consumer references are declared in
+`StageSpec.consumes_datasets` in `src/pipeline_topology.py`; the lineage
+validator checks that every referenced dataset is registered and that each
+registry entry's stage consumers match those code declarations. It also
+checks registry metadata, ingestion SLA targets, and model-consumer
+references. Run
+`python scripts/validate_lineage.py` from `apps/data-processing` before
+changing the manifest or pipeline dataset references.
+
+The current stores do not declare application-level TTLs for these datasets;
+their retention is managed by the backing stores. Record a concrete policy
+here when the relevant storage lifecycle is configured rather than implying
+an unsupported retention period.
+
 `GET /api/lineage/market_health_score` returns:
 
 ```json
@@ -277,7 +314,7 @@ other auth is applied. `feature_id` is the manifest entry's `id` — e.g.
     { "id": "market_forecast", "kind": "kpi_dataset", "distance": 1, "...": "..." },
     { "id": "src/api/server.py (GET /api/market-analysis)", "kind": "external_source", "distance": 1, "...": "..." }
   ],
-  "manifest_version": "1.1"
+  "manifest_version": "1.2"
 }
 ```
 

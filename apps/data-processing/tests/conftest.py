@@ -3,6 +3,7 @@ Pytest configuration and shared fixtures for LumenPulse data processing tests.
 """
 
 import os
+import tempfile
 
 # Skip FinBERT download/load in default test runs (CI and local pytest).
 os.environ.setdefault("SENTIMENT_DISABLE_TRANSFORMER", "1")
@@ -12,6 +13,12 @@ os.environ.setdefault("SENTIMENT_DISABLE_TRANSFORMER", "1")
 # suite.
 os.environ.setdefault(
     "API_KEYS", '[{"id":"test","value":"test-key-123","scopes":["default"]}]'
+)
+# Keep stage-cost profiling (#1454) out of the working tree: profiled stages
+# append to this path, and running the suite must not create tracked files.
+os.environ.setdefault(
+    "STAGE_COST_LOG_PATH",
+    os.path.join(tempfile.gettempdir(), "lumenpulse_stage_costs.jsonl"),
 )
 
 import pytest

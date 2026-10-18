@@ -99,7 +99,7 @@ export class SavedSearchNotificationScheduler {
     _filters: Record<string, unknown>,
     since: Date | null,
   ): number {
-    const rounds = this.grantsService.listRounds() as Array<{
+    const rounds = this.grantsService.listRounds().items as Array<{
       startTime: number;
     }>;
 
@@ -119,7 +119,7 @@ export class SavedSearchNotificationScheduler {
     // Build a fully-typed query DTO — no `as any` cast needed.
     const query = new ProjectListQueryDto();
     query.page = 1;
-    query.limit = 100;
+    query.pageSize = 100;
 
     if (
       typeof filters['status'] === 'string' &&
@@ -136,8 +136,8 @@ export class SavedSearchNotificationScheduler {
 
     if (!since) return response.total;
 
-    // ProjectListResponseDto uses `projects`, typed as ProjectListItemDto[].
-    return response.projects.filter((p: ProjectListItemDto) => {
+    // ProjectListResponseDto uses `items`, typed as ProjectListItemDto[].
+    return response.items.filter((p: ProjectListItemDto) => {
       return new Date(p.createdAt).getTime() > since.getTime();
     }).length;
   }

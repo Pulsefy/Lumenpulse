@@ -326,6 +326,18 @@ export class AuthController {
     },
   })
   @ApiResponse({
+    status: 201,
+    description: 'Authentication successful',
+    schema: {
+      properties: {
+        success: { type: 'boolean' },
+        token: { type: 'string' },
+        refresh_token: { type: 'string' },
+        user: { type: 'object' },
+      },
+    },
+  })
+  @ApiResponse({
     status: 401,
     description: 'Invalid signature or expired challenge',
   })

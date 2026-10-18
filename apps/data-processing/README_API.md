@@ -59,6 +59,22 @@ sum by (endpoint) (rate(lumenpulse_inference_ood_total[5m]))
 sum by (endpoint) (rate(lumenpulse_inference_requests_total[5m]))
 ```
 
+## Price prediction ensembles
+
+`POST /price/predict` accepts a numeric `features` object and an optional
+`schema_version`. The promoted price ensemble averages the successfully
+serving members equally; member failures are returned as failure records and
+the remaining members are re-weighted. The response and prediction log include
+each member's prediction, contribution, weight, and status. If all members
+fail, the endpoint returns an error rather than a fabricated prediction.
+
+```json
+{
+  "features": {"feature_a": 0.25, "feature_b": 12.0},
+  "schema_version": "1.0"
+}
+```
+
 ## Starting the API
 
 ### Option 1: Direct command

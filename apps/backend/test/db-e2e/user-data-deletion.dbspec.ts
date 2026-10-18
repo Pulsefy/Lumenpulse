@@ -51,7 +51,10 @@ const ACCOUNT_COLUMNS = [
  * makes the second `seedUserData` fail with a duplicate key error.
  */
 const publicKeyFor = (fill: 'A' | 'B', userId: string): string =>
-  `G${fill}${userId.replace(/[^0-9a-f]/gi, '')}`.toUpperCase().padEnd(56, fill).slice(0, 56);
+  `G${fill}${userId.replace(/[^0-9a-f]/gi, '')}`
+    .toUpperCase()
+    .padEnd(56, fill)
+    .slice(0, 56);
 
 describe('User data deletion (db e2e)', () => {
   let app: INestApplication;
@@ -77,10 +80,9 @@ describe('User data deletion (db e2e)', () => {
   };
 
   const countBy = (table: string, column: string, value: string) =>
-    scalar(
-      `SELECT count(*)::int AS n FROM "${table}" WHERE "${column}" = $1`,
-      [value],
-    );
+    scalar(`SELECT count(*)::int AS n FROM "${table}" WHERE "${column}" = $1`, [
+      value,
+    ]);
 
   const seedUserData = async (userId: string, email: string): Promise<void> => {
     const accountPublicKey = publicKeyFor('A', userId);
@@ -103,9 +105,10 @@ describe('User data deletion (db e2e)', () => {
       `INSERT INTO password_reset_tokens ("tokenHash", "userId", "expiresAt") VALUES ('seeded-reset-hash', $1, now() + interval '1 hour')`,
       [userId],
     );
-    await ds.query('INSERT INTO notification_preferences ("userId") VALUES ($1)', [
-      userId,
-    ]);
+    await ds.query(
+      'INSERT INTO notification_preferences ("userId") VALUES ($1)',
+      [userId],
+    );
     await ds.query(
       `INSERT INTO push_tokens ("userId", "token", "deviceId") VALUES ($1, 'seeded-push-token', 'seeded-device')`,
       [userId],

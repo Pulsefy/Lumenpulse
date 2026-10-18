@@ -9,6 +9,8 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 
+from src.observability.stage_profiler import profile_stage
+
 
 @dataclass
 class DataPoint:
@@ -240,6 +242,7 @@ class CorrelationEngine:
         )
 
     @classmethod
+    @profile_stage("correlation_lag_analysis")
     def analyze_with_lags(
         cls,
         sentiment_data: List[Dict[str, Any]],
@@ -308,6 +311,7 @@ class CorrelationEngine:
         }
 
     @classmethod
+    @profile_stage("correlation_analysis")
     def full_analysis(
         cls,
         sentiment_data: List[Dict[str, Any]],

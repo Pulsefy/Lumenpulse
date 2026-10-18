@@ -41,7 +41,9 @@ export class DeploymentManifestService implements OnModuleInit {
   constructor(
     @Optional()
     @InjectRepository(ContractDeploymentManifest)
-    private readonly manifestRepo: Repository<ContractDeploymentManifest> | undefined,
+    private readonly manifestRepo:
+      | Repository<ContractDeploymentManifest>
+      | undefined,
     private readonly configService: ConfigService,
     private readonly contractCapabilityService: ContractCapabilityService,
   ) {}
@@ -60,7 +62,9 @@ export class DeploymentManifestService implements OnModuleInit {
     if (manifestPath) {
       watchFile(manifestPath, { interval: 5000 }, (curr, prev) => {
         if (curr.mtime !== prev.mtime) {
-          this.logger.log('testnet-manifest.json changed on disk. Reloading...');
+          this.logger.log(
+            'testnet-manifest.json changed on disk. Reloading...',
+          );
           this.refreshManifest();
         }
       });

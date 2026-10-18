@@ -145,6 +145,67 @@ jobs:
           echo "::error::apps/mobile exceeds its size budget. See the run summary for the per-metric breakdown."
           exit 1
 
+  # Issue #1576: cold / warm / TTI budget on a throttled low-end web profile.
+  mobile-startup:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/mobile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: './apps/mobile/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install root workspace dependencies (for Metro's monorepo resolution)
+        working-directory: .
+        run: npm install --no-audit --no-fund
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Measure startup (low-end profile)
+        run: npm run startup:measure
+        env:
+          CI: '1'
+
+      - name: Check against startup budgets
+        id: startup
+        continue-on-error: true
+        run: npm run startup:check -- --report "$RUNNER_TEMP/mobile-startup.md"
+
+      - name: Add startup report to the job summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/mobile-startup.md" ]; then
+            cat "$RUNNER_TEMP/mobile-startup.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'No startup report was produced; see the measure step above.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload startup report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-startup-report
+          path: ${{ runner.temp }}/mobile-startup.md
+          retention-days: 14
+
+      - name: Fail when a startup max budget is exceeded
+        if: steps.startup.outcome == 'failure'
+        run: |
+          echo "::error::apps/mobile exceeds its startup time budget. See the run summary."
+          exit 1
+
   # Issue #1402: end-to-end smoke suite, run headlessly against the Expo web
   # build (the one Expo platform that needs no emulator/simulator in CI).
   mobile-e2e:

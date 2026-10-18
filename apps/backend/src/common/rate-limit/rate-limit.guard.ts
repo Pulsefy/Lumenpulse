@@ -65,7 +65,7 @@ const THROTTLER_LIMIT_METADATA_PREFIX = 'THROTTLER:LIMIT';
 
 @Injectable()
 export class RateLimitGuard extends ThrottlerGuard {
-  private readonly logger = new Logger(RateLimitGuard.name);
+  protected readonly logger = new Logger(RateLimitGuard.name);
   private readonly principalResolver: RateLimitPrincipalResolver;
   private cachedSettings?: RateLimitSettings;
 

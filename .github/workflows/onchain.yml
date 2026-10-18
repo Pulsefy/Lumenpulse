@@ -57,6 +57,9 @@ jobs:
     - name: Validate manifest
       run: node scripts/validate-manifest.js
 
+    - name: Enforce contract test modules
+      run: node scripts/check-contract-tests.mjs
+
     - name: Build Contracts
       run: cargo build --target wasm32-unknown-unknown --release
 

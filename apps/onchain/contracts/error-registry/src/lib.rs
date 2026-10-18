@@ -168,6 +168,36 @@ impl ContractId {
             ContractId::LumenToken,
         ]
     }
+
+    /// Get the allocated error code range for this contract: `[base, base + 1000)`.
+    pub const fn allocated_range(self) -> (u32, u32) {
+        let base = self.base_code();
+        (base, base + 1000)
+    }
+
+    /// Check if a given error code falls within this contract's allocated range.
+    pub const fn is_valid_code(self, code: u32) -> bool {
+        let base = self.base_code();
+        code >= base && code < base + 1000
+    }
+
+    /// Assert that an error code falls within this contract's allocated range.
+    /// Panics with a descriptive error message if the code is out of range.
+    pub fn assert_code_in_range(self, code: u32) {
+        assert!(
+            self.is_valid_code(code),
+            "Error code {} is outside allocated range [{}, {}) for contract '{}'",
+            code,
+            self.base_code(),
+            self.base_code() + 1000,
+            self.name()
+        );
+    }
+}
+
+/// Assert that an error code belongs to the allocated range of the specified contract.
+pub fn assert_contract_code_in_range(contract: ContractId, code: u32) {
+    contract.assert_code_in_range(code);
 }
 
 /// Macro to compute standardized error codes.
@@ -212,6 +242,61 @@ pub fn common_error_description(variant: u32) -> Option<&'static str> {
     }
 }
 
+/// Resolve an error code to its human-readable description.
+pub fn resolve_error_message(code: u32) -> Option<&'static str> {
+    let (_, variant) = resolve_error_code(code)?;
+    common_error_description(variant)
+}
+
+/// Resolve a contract name and message/variant description back to its error code.
+pub fn resolve_code_from_message(contract: &str, message: &str) -> Option<u32> {
+    for entry in generate_error_reference() {
+        if entry.contract == contract && (entry.description == message || entry.variant == message)
+        {
+            return Some(entry.code);
+        }
+    }
+    None
+}
+
+/// Convert a numeric error code to a fully qualified message:
+/// `<contract>: <description>`
+pub fn code_to_message(code: u32) -> Option<String> {
+    let (contract, variant) = resolve_error_code(code)?;
+    let desc = common_error_description(variant)?;
+    Some(format!("{}: {}", contract, desc))
+}
+
+/// Parse a fully qualified message `<contract>: <description>` back to its numeric error code.
+pub fn message_to_code(message: &str) -> Option<u32> {
+    let (contract, desc) = message.split_once(": ")?;
+    resolve_code_from_message(contract, desc)
+}
+
+/// Look up a registered error by its exact numeric code in the error registry.
+pub fn get_registered_error(code: u32) -> Option<ErrorReferenceEntry> {
+    let (contract_name, variant) = resolve_error_code(code)?;
+    let (variant_name, desc) = match variant {
+        common::NOT_INITIALIZED => ("NotInitialized", "Contract has not been initialized"),
+        common::ALREADY_INITIALIZED => (
+            "AlreadyInitialized",
+            "Contract has already been initialized",
+        ),
+        common::UNAUTHORIZED => (
+            "Unauthorized",
+            "Caller is not authorized for this operation",
+        ),
+        _ => return None,
+    };
+    Some(ErrorReferenceEntry {
+        contract: contract_name,
+        code,
+        variant: variant_name,
+        description: desc,
+        is_common: true,
+    })
+}
+
 /// Generate a complete error code reference for documentation.
 /// This can be used to generate markdown or JSON reference docs.
 pub fn generate_error_reference() -> Vec<ErrorReferenceEntry> {
@@ -246,7 +331,7 @@ pub fn generate_error_reference() -> Vec<ErrorReferenceEntry> {
 }
 
 /// A single entry in the error code reference documentation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorReferenceEntry {
     pub contract: &'static str,
     pub code: u32,
@@ -341,5 +426,81 @@ mod tests {
         assert_eq!(reference[0].code, 1000);
         assert_eq!(reference[0].variant, "NotInitialized");
         assert!(reference[0].is_common);
+    }
+
+    #[test]
+    fn test_is_valid_code_and_range_check() {
+        let treasury = ContractId::Treasury;
+        let (start, end) = treasury.allocated_range();
+        assert_eq!(start, 2000);
+        assert_eq!(end, 3000);
+
+        assert!(treasury.is_valid_code(2000));
+        assert!(treasury.is_valid_code(2999));
+        assert!(!treasury.is_valid_code(1999));
+        assert!(!treasury.is_valid_code(3000));
+
+        treasury.assert_code_in_range(2000);
+        assert_contract_code_in_range(ContractId::Treasury, 2500);
+    }
+
+    #[test]
+    #[should_panic(expected = "outside allocated range")]
+    fn test_code_outside_allocated_range_panics() {
+        assert_contract_code_in_range(ContractId::Treasury, 3000);
+    }
+
+    #[test]
+    fn test_get_registered_error() {
+        let entry = get_registered_error(2000).expect("should find 2000");
+        assert_eq!(entry.contract, "treasury");
+        assert_eq!(entry.code, 2000);
+        assert_eq!(entry.variant, "NotInitialized");
+        assert_eq!(entry.description, "Contract has not been initialized");
+        assert!(entry.is_common);
+
+        assert_eq!(get_registered_error(2003), None);
+        assert_eq!(get_registered_error(999), None);
+    }
+
+    #[test]
+    fn test_resolve_error_message() {
+        assert_eq!(
+            resolve_error_message(1000),
+            Some("Contract has not been initialized")
+        );
+        assert_eq!(
+            resolve_error_message(2001),
+            Some("Contract has already been initialized")
+        );
+        assert_eq!(
+            resolve_error_message(3002),
+            Some("Caller is not authorized for this operation")
+        );
+        assert_eq!(resolve_error_message(3003), None);
+    }
+
+    #[test]
+    fn test_round_trip_message() {
+        for entry in generate_error_reference() {
+            let msg = resolve_error_message(entry.code).expect("message should resolve");
+            assert_eq!(msg, entry.description);
+            let code = resolve_code_from_message(entry.contract, msg).expect("code should resolve");
+            assert_eq!(code, entry.code);
+        }
+    }
+
+    #[test]
+    fn test_round_trip_qualified_message() {
+        for entry in generate_error_reference() {
+            let msg = code_to_message(entry.code).expect("should format message");
+            let expected_msg = format!("{}: {}", entry.contract, entry.description);
+            assert_eq!(msg, expected_msg);
+            let code = message_to_code(&msg).expect("should parse message");
+            assert_eq!(code, entry.code);
+        }
+
+        assert_eq!(message_to_code("unknown: message"), None);
+        assert_eq!(message_to_code("malformed"), None);
     }
 }

@@ -40,7 +40,7 @@ describe('ReadModelRebuildService', () => {
   beforeEach(async () => {
     httpService = {
       post: jest.fn(),
-    } as unknown as jest.Mocked<Pick<DataProcessingClient, 'post'>>;
+    };
 
     configService = {
       get: jest.fn((key: string) => {

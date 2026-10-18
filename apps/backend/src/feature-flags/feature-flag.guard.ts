@@ -19,10 +19,16 @@ import { FEATURE_FLAG_KEY } from './feature-flag.decorator';
  * state applies.
  */
 export function principalIdOf(request: Request): string | null {
-  const user = request.user as { id?: unknown; email?: unknown } | undefined;
-  if (!user) return null;
-  if (typeof user.id === 'string' && user.id !== '') return user.id;
-  if (typeof user.email === 'string' && user.email !== '') return user.email;
+  const user: unknown = request.user;
+  if (typeof user !== 'object' || user === null) return null;
+
+  const userRecord = user as Record<string, unknown>;
+  if (typeof userRecord.id === 'string' && userRecord.id !== '') {
+    return userRecord.id;
+  }
+  if (typeof userRecord.email === 'string' && userRecord.email !== '') {
+    return userRecord.email;
+  }
   return null;
 }
 

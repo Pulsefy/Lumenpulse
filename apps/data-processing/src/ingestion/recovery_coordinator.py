@@ -9,6 +9,22 @@ The coordinator encapsulates the full begin → process → advance / rollback
 lifecycle so individual ingestion callables do not need to understand cursor
 mechanics.
 
+New in this revision (#1451)
+----------------------------
+* **Failure classification** — :class:`FailureClassifier` decides whether an
+  exception represents a *transient* condition (network glitch, rate-limit,
+  temporary unavailability) or a *permanent* one (bad schema, auth error,
+  validation failure).  Only transient failures are retried.
+
+* **Retry with exponential back-off** — :class:`RetryPolicy` governs the
+  maximum number of attempts, initial back-off, maximum back-off cap, and
+  optional full jitter.  :meth:`RecoveryCoordinator.run_batch` retries the
+  entire fetch → persist sequence according to this policy before giving up.
+
+* **Exhausted-retry alerting** — when all retry attempts are consumed the
+  coordinator fires an alert via :class:`~src.alert_notifier.AlertNotifier`
+  so on-call engineers are notified without having to poll logs.
+
 Typical usage
 -------------
 ::
@@ -18,7 +34,7 @@ Typical usage
         stream_id="contract:CABC...XYZ",
     )
 
-    # One-shot: process a single batch
+    # One-shot: process a single batch (retries on transient failures)
     coordinator.run_batch(
         fetch_fn=lambda start, end: fetch_events(start, end),
         persist_fn=lambda events: db.bulk_insert(events),
@@ -53,7 +69,11 @@ Design notes
 from __future__ import annotations
 
 import logging
+import math
+import random
 import time
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Callable, Iterable, Optional
 
 from src.ingestion.ledger_cursor_store import LedgerCursorStore
@@ -75,14 +95,195 @@ class DuplicateEventError(Exception):
 
 
 # ---------------------------------------------------------------------------
+# Failure classification
+# ---------------------------------------------------------------------------
+
+
+class FailureKind(str, Enum):
+    """High-level failure category returned by :class:`FailureClassifier`."""
+
+    TRANSIENT = "transient"
+    """Temporary condition — network blip, rate-limit, temporary outage.
+    The operation *may* succeed if retried after a delay."""
+
+    PERMANENT = "permanent"
+    """Unrecoverable condition — validation error, bad schema, auth failure.
+    Retrying will produce the same failure; skip to avoid infinite loops."""
+
+
+# Substrings that appear in exception type names or messages that indicate
+# the failure is transient.  Case-insensitive match.
+_TRANSIENT_INDICATORS = (
+    "network",
+    "timeout",
+    "timed out",
+    "connection",
+    "connectionerror",
+    "connectionreset",
+    "connecttimeout",
+    "readtimeout",
+    "ratelimit",
+    "rate_limit",
+    "too many requests",
+    "service unavailable",
+    "unavailable",
+    "temporarily",
+    "retry",
+    "backoff",
+    "throttl",
+    "503",
+    "504",
+    "gateway",
+    "overloaded",
+    "ioerror",
+    "oserror",
+    "brokenpipe",
+)
+
+# Substrings that indicate a *permanent* failure.
+_PERMANENT_INDICATORS = (
+    "validation",
+    "validationerror",
+    "schema",
+    "parse",
+    "parseerror",
+    "deserializ",
+    "authentication",
+    "unauthorized",
+    "forbidden",
+    "403",
+    "401",
+    "permissiondenied",
+    "notfound",
+    "typeerror",
+    "valueerror",
+    "assertionerror",
+    "keyerror",
+    "attributeerror",
+    "invalid",
+)
+
+
+class FailureClassifier:
+    """
+    Classify an exception as :attr:`FailureKind.TRANSIENT` or
+    :attr:`FailureKind.PERMANENT`.
+
+    The classification is heuristic: it inspects the fully-qualified
+    exception type name and the stringified message for known indicator
+    substrings.  Permanent indicators take precedence over transient ones.
+    If neither matches, the failure defaults to *transient* so that unknown
+    errors receive at least one retry before the pipeline gives up.
+
+    Parameters
+    ----------
+    extra_transient:
+        Additional lower-case substrings to treat as transient.
+    extra_permanent:
+        Additional lower-case substrings to treat as permanent.
+    """
+
+    def __init__(
+        self,
+        extra_transient: tuple[str, ...] = (),
+        extra_permanent: tuple[str, ...] = (),
+    ) -> None:
+        self._transient = _TRANSIENT_INDICATORS + extra_transient
+        self._permanent = _PERMANENT_INDICATORS + extra_permanent
+
+    def classify(self, exc: BaseException) -> FailureKind:
+        """Return the failure kind for *exc*."""
+        # Build a combined fingerprint from the type name + message.
+        type_name = type(exc).__name__.lower()
+        message = str(exc).lower()
+        fingerprint = f"{type_name} {message}"
+
+        # Permanent check takes priority.
+        for indicator in self._permanent:
+            if indicator in fingerprint:
+                return FailureKind.PERMANENT
+
+        for indicator in self._transient:
+            if indicator in fingerprint:
+                return FailureKind.TRANSIENT
+
+        # Unknown failures default to transient (one retry attempt allowed).
+        return FailureKind.TRANSIENT
+
+
+# ---------------------------------------------------------------------------
+# Retry policy
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class RetryPolicy:
+    """
+    Parameters controlling the retry-with-back-off strategy.
+
+    Parameters
+    ----------
+    max_attempts:
+        Total number of attempts (initial try + retries).  Must be ≥ 1.
+        Set to ``1`` to disable retries.
+    base_backoff_seconds:
+        Delay (in seconds) before the *second* attempt.  Subsequent delays
+        are ``base_backoff_seconds * 2 ** (attempt - 1)``, capped by
+        ``max_backoff_seconds``.
+    max_backoff_seconds:
+        Upper cap on the calculated delay.
+    jitter:
+        When ``True`` (default), apply full jitter by sampling from
+        ``[0, calculated_delay]``.  This avoids thundering-herd when many
+        streams retry simultaneously.
+    """
+
+    max_attempts: int = 3
+    base_backoff_seconds: float = 2.0
+    max_backoff_seconds: float = 60.0
+    jitter: bool = True
+
+    def __post_init__(self) -> None:
+        if self.max_attempts < 1:
+            raise ValueError("max_attempts must be >= 1")
+        if self.base_backoff_seconds <= 0:
+            raise ValueError("base_backoff_seconds must be > 0")
+        if self.max_backoff_seconds < self.base_backoff_seconds:
+            raise ValueError(
+                "max_backoff_seconds must be >= base_backoff_seconds"
+            )
+
+    def delay_for_attempt(self, attempt: int) -> float:
+        """
+        Return the number of seconds to sleep before *attempt* (1-indexed).
+
+        ``attempt == 1`` means the first retry (after the initial failure).
+        Returns ``0.0`` for the first attempt (no pre-delay before the very
+        first try).
+        """
+        if attempt <= 1:
+            return 0.0
+        # Exponential back-off: base * 2^(attempt-2) capped at max.
+        raw = self.base_backoff_seconds * math.pow(2.0, attempt - 2)
+        capped = min(raw, self.max_backoff_seconds)
+        if self.jitter:
+            return random.uniform(0.0, capped)
+        return capped
+
+
+# Default policy used when callers do not supply one.
+DEFAULT_RETRY_POLICY = RetryPolicy()
+
+# ---------------------------------------------------------------------------
 # Coordinator
 # ---------------------------------------------------------------------------
 
 
 class RecoveryCoordinator:
     """
-    Coordinates ledger ingestion with persistent cursor tracking and
-    automatic recovery on failure.
+    Coordinates ledger ingestion with persistent cursor tracking,
+    automatic retry with exponential back-off, failure classification,
+    exhausted-retry alerting, and recovery on failure.
 
     Parameters
     ----------
@@ -91,15 +292,32 @@ class RecoveryCoordinator:
     stream_id:
         The stream key to track (e.g. ``"global"`` or
         ``"contract:CABC...XYZ"``).
+    retry_policy:
+        Controls max attempts and back-off timing.  Defaults to
+        :data:`DEFAULT_RETRY_POLICY` (3 attempts, 2-second base back-off,
+        60-second cap, full jitter).
+    classifier:
+        Decides whether a failure is transient or permanent.  Defaults to
+        :class:`FailureClassifier` with built-in heuristics.
+    notifier:
+        An :class:`~src.alert_notifier.AlertNotifier`-like object used to
+        fire an alert when retries are exhausted.  If ``None``, a default
+        instance is constructed lazily the first time it is needed.
     """
 
     def __init__(
         self,
         store: LedgerCursorStore,
         stream_id: str,
+        retry_policy: Optional[RetryPolicy] = None,
+        classifier: Optional[FailureClassifier] = None,
+        notifier: Optional[Any] = None,
     ) -> None:
         self._store = store
         self._stream_id = stream_id
+        self._retry_policy = retry_policy or DEFAULT_RETRY_POLICY
+        self._classifier = classifier or FailureClassifier()
+        self._notifier = notifier  # lazily initialised if None
 
         # Ensure the cursor row exists before anything tries to read it.
         self._store.get_or_create(stream_id)
@@ -116,6 +334,58 @@ class RecoveryCoordinator:
     def store(self) -> LedgerCursorStore:
         return self._store
 
+    @property
+    def retry_policy(self) -> RetryPolicy:
+        return self._retry_policy
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _get_notifier(self) -> Any:
+        """Return the alert notifier, constructing the default lazily."""
+        if self._notifier is None:
+            from src.alert_notifier import AlertNotifier
+
+            self._notifier = AlertNotifier()
+        return self._notifier
+
+    def _send_exhausted_alert(
+        self,
+        batch_end_ledger: int,
+        attempt_count: int,
+        last_exc: BaseException,
+    ) -> None:
+        """Fire an alert that retries for this batch have been exhausted."""
+        try:
+            notifier = self._get_notifier()
+            # Build a minimal anomaly-like object so the existing notifier
+            # path can route the alert without a schema change.
+            payload = {
+                "event": "retry_exhausted",
+                "stream_id": self._stream_id,
+                "batch_end_ledger": batch_end_ledger,
+                "attempts": attempt_count,
+                "last_error": f"{type(last_exc).__name__}: {last_exc}",
+            }
+            # Use the generic webhook/Telegram path if available.
+            if hasattr(notifier, "_send_webhooks"):
+                notifier._send_webhooks(payload)
+            if hasattr(notifier, "_send_telegram_text"):
+                notifier._send_telegram_text(
+                    f"🚨 Ingestion retry exhausted\n"
+                    f"stream={self._stream_id}\n"
+                    f"batch_end_ledger={batch_end_ledger}\n"
+                    f"attempts={attempt_count}\n"
+                    f"error={type(last_exc).__name__}: {last_exc}"
+                )
+        except Exception as alert_exc:  # noqa: BLE001
+            logger.error(
+                "Failed to send retry-exhausted alert for stream=%s: %s",
+                self._stream_id,
+                alert_exc,
+            )
+
     # ------------------------------------------------------------------
     # Core batch runner
     # ------------------------------------------------------------------
@@ -127,21 +397,29 @@ class RecoveryCoordinator:
         batch_end_ledger: int,
     ) -> Optional[str]:
         """
-        Ingest one batch of events from ``(last_safe_ledger, batch_end_ledger]``.
+        Ingest one batch of events from ``(last_safe_ledger, batch_end_ledger]``
+        with automatic retry on transient failures.
 
         Steps
         -----
         1. Load current cursor state.
         2. Call ``store.begin_batch`` — saves a safe-point and marks status
            as ``"ingesting"``.
-        3. Call ``fetch_fn(safe_ledger, batch_end_ledger)`` — retrieve events.
-        4. Call ``persist_fn(events)`` — persist and return last event_id.
-        5. Call ``store.advance`` — commit the new high-water mark.
+        3. Attempt up to ``retry_policy.max_attempts`` times:
 
-        If steps 3 or 4 raise anything other than
-        :class:`DuplicateEventError`:
-        * ``store.rollback_to_safe_point`` is called.
-        * The exception is re-raised.
+           a. Call ``fetch_fn(safe_ledger, batch_end_ledger)`` — retrieve events.
+           b. Call ``persist_fn(events)`` — persist and return last event_id.
+           c. On :class:`DuplicateEventError`, advance the cursor (idempotent
+              re-run) and return.
+           d. On any other exception, classify it:
+
+              - **Transient**: rollback, sleep with back-off, retry.
+              - **Permanent**: rollback and re-raise immediately (no more
+                attempts).
+
+        4. If all attempts are exhausted, fire an alert, rollback, and
+           re-raise the last exception.
+        5. Call ``store.advance`` — commit the new high-water mark.
 
         Returns
         -------
@@ -177,36 +455,101 @@ class RecoveryCoordinator:
         )
 
         last_event_id: Optional[str] = None
+        last_exc: Optional[BaseException] = None
+        policy = self._retry_policy
 
-        try:
-            events = fetch_fn(safe_ledger, batch_end_ledger)
-            last_event_id = persist_fn(events)
-        except DuplicateEventError as exc:
-            # All events already exist — safe to advance without treating
-            # this as a failure.
-            logger.warning(
-                "stream=%s batch (%d, %d] fully duplicate — advancing cursor. detail=%s",
-                self._stream_id,
-                safe_ledger,
-                batch_end_ledger,
-                exc,
-            )
-        except Exception as exc:
-            rolled_back_to = self._store.rollback_to_safe_point(
-                self._stream_id,
-                error_message=f"{type(exc).__name__}: {exc}",
-            )
-            logger.error(
-                "Ingestion failed stream=%s batch (%d, %d]; rolled back to ledger=%d. error=%s",
-                self._stream_id,
-                safe_ledger,
-                batch_end_ledger,
-                rolled_back_to,
-                exc,
-                exc_info=True,
-            )
-            raise
+        for attempt in range(1, policy.max_attempts + 1):
+            # Sleep before every retry (attempt > 1).
+            delay = policy.delay_for_attempt(attempt)
+            if delay > 0:
+                logger.info(
+                    "stream=%s batch (%d, %d] retry %d/%d — sleeping %.2fs",
+                    self._stream_id,
+                    safe_ledger,
+                    batch_end_ledger,
+                    attempt,
+                    policy.max_attempts,
+                    delay,
+                )
+                time.sleep(delay)
 
+            try:
+                events = fetch_fn(safe_ledger, batch_end_ledger)
+                last_event_id = persist_fn(events)
+                # Success — break out of the retry loop.
+                last_exc = None
+                break
+
+            except DuplicateEventError as exc:
+                # All events already exist — safe to advance without treating
+                # this as a failure.
+                logger.warning(
+                    "stream=%s batch (%d, %d] fully duplicate — advancing cursor. detail=%s",
+                    self._stream_id,
+                    safe_ledger,
+                    batch_end_ledger,
+                    exc,
+                )
+                last_exc = None
+                break
+
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                kind = self._classifier.classify(exc)
+
+                rolled_back_to = self._store.rollback_to_safe_point(
+                    self._stream_id,
+                    error_message=f"{type(exc).__name__}: {exc}",
+                )
+                logger.error(
+                    "Ingestion failed stream=%s batch (%d, %d] attempt=%d/%d "
+                    "kind=%s rolled_back_to=%d error=%s",
+                    self._stream_id,
+                    safe_ledger,
+                    batch_end_ledger,
+                    attempt,
+                    policy.max_attempts,
+                    kind.value,
+                    rolled_back_to,
+                    exc,
+                    exc_info=True,
+                )
+
+                if kind == FailureKind.PERMANENT:
+                    logger.error(
+                        "stream=%s permanent failure — not retrying. error=%s",
+                        self._stream_id,
+                        exc,
+                    )
+                    raise
+
+                # Transient: continue the retry loop (delay applied at the
+                # top of the next iteration).
+                if attempt == policy.max_attempts:
+                    # This was the last attempt.
+                    break
+
+        # ----------------------------------------------------------------
+        # Retry loop finished — check if we still have an outstanding error.
+        # ----------------------------------------------------------------
+        if last_exc is not None:
+            logger.critical(
+                "stream=%s exhausted %d/%d retry attempts — alerting and giving up. error=%s",
+                self._stream_id,
+                policy.max_attempts,
+                policy.max_attempts,
+                last_exc,
+            )
+            self._send_exhausted_alert(
+                batch_end_ledger=batch_end_ledger,
+                attempt_count=policy.max_attempts,
+                last_exc=last_exc,
+            )
+            raise last_exc
+
+        # ----------------------------------------------------------------
+        # All good — advance the cursor.
+        # ----------------------------------------------------------------
         self._store.advance(
             stream_id=self._stream_id,
             new_ledger=batch_end_ledger,
@@ -253,8 +596,12 @@ class RecoveryCoordinator:
             How long to sleep when the cursor is at the network tip.
         max_retries_on_failure:
             Number of consecutive failures before the loop exits.
+            Note: each call to :meth:`run_batch` already retries internally
+            according to the :class:`RetryPolicy`; this counter tracks
+            *batch-level* consecutive failures in the continuous loop.
         retry_backoff_seconds:
-            Sleep duration between retry attempts after a failure.
+            Sleep duration between batch-level retry attempts after a
+            batch failure.
         stop_event:
             Optional :class:`threading.Event`; the loop exits when set.
         """
@@ -296,7 +643,7 @@ class RecoveryCoordinator:
             except Exception as exc:
                 consecutive_failures += 1
                 logger.error(
-                    "run_continuous stream=%s failure %d/%d: %s",
+                    "run_continuous stream=%s batch-level failure %d/%d: %s",
                     self._stream_id,
                     consecutive_failures,
                     max_retries_on_failure,

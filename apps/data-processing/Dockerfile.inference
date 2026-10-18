@@ -1,0 +1,86 @@
+# syntax=docker/dockerfile:1
+# ---------------------------------------------------------------------------
+# Dockerfile.inference — inference-only service image (issue #1628)
+#
+# Runs only src/serve_inference.py (FastAPI + uvicorn).
+# Does NOT start APScheduler, retraining, ingestion, or any batch jobs.
+#
+# The model registry directory (./models) MUST be provided at runtime either
+# via a shared volume mount or by pre-baking models into the image at build
+# time (the latter is the default here, matching Dockerfile's approach).
+# ---------------------------------------------------------------------------
+
+###############################################################################
+# Stage 1 — builder
+###############################################################################
+FROM python:3.9-slim AS builder
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HF_HOME=/opt/hf
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements.lock .
+
+RUN pip install --require-hashes -r requirements.lock \
+        --index-url https://pypi.org/simple \
+        --extra-index-url https://download.pytorch.org/whl/cpu
+
+# Bake FinBERT weights at build time (no Hub access at runtime).
+RUN python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; m='ProsusAI/finbert'; AutoTokenizer.from_pretrained(m); AutoModelForSequenceClassification.from_pretrained(m)"
+
+###############################################################################
+# Stage 2 — runtime
+###############################################################################
+FROM python:3.9-slim
+
+LABEL org.opencontainers.image.title="lumenpulse-inference" \
+      org.opencontainers.image.description="Lumenpulse inference service — FastAPI only, no batch scheduler" \
+      org.opencontainers.image.source="https://github.com/Pulsefy/Lumenpulse"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/app/.cache/huggingface \
+    TRANSFORMERS_CACHE=/app/.cache/huggingface/hub \
+    PATH="/opt/venv/bin:$PATH" \
+    # Default to inference-only mode; overridable at runtime.
+    SERVICE_MODE=inference \
+    SERVICE_PORT=8000 \
+    SERVICE_HOST=0.0.0.0
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 appuser \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin appuser
+
+COPY --from=builder /opt/venv /opt/venv
+
+WORKDIR /app
+COPY . .
+
+COPY --from=builder /opt/hf /app/.cache/huggingface
+
+RUN mkdir -p /app/logs /app/models /app/data /app/.cache/huggingface \
+    && chown -R appuser:appuser /app/logs /app/models /app/data /app/.cache/huggingface
+
+USER appuser
+
+# Vendor pinned NER and embedding models at build time.
+RUN python scripts/fetch_ner_model.py && python scripts/fetch_ner_model.py --check-only
+RUN python scripts/fetch_embedding_model.py && python scripts/fetch_embedding_model.py --check-only
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"
+
+CMD ["python", "src/serve_inference.py"]

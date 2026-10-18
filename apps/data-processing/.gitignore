@@ -163,6 +163,7 @@ models/ner/*
 data/alert_suppression.json
 data/drift_alert_suppression.json
 data/undelivered_notifications.jsonl
+data/stage_costs.jsonl
 
 # Vendored spaCy embedding model artifact (baked into the image at build time).
 # Keep the README but ignore the downloaded model files.

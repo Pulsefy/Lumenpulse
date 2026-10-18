@@ -8,6 +8,7 @@ import {
 } from './entities/export-job.entity';
 import { PortfolioSnapshot } from '../portfolio/entities/portfolio-snapshot.entity';
 import { TransactionService } from '../transaction/transaction.service';
+import { ResolvedPagination } from '../common/pagination/pagination-response.dto';
 
 @Injectable()
 export class ExportService {
@@ -42,12 +43,17 @@ export class ExportService {
     return job;
   }
 
-  async listJobs(userId: string): Promise<ExportJob[]> {
-    return this.exportJobRepo.find({
+  async listJobs(
+    userId: string,
+    pagination: ResolvedPagination,
+  ): Promise<{ items: ExportJob[]; total: number }> {
+    const [items, total] = await this.exportJobRepo.findAndCount({
       where: { userId },
       order: { createdAt: 'DESC' },
-      take: 20,
+      skip: pagination.offset,
+      take: pagination.pageSize,
     });
+    return { items, total };
   }
 
   private async processJob(

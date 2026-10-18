@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { JobHistoryService } from './job-history.service';
 import { SCHEDULED_JOBS } from './job-registry';
+import { classifyQueueHealth } from '../queue/queue-health.util';
+import { CONTRIBUTION_QUEUE } from '../suspicious-contribution/types';
+import { SOROBAN_EVENTS_QUEUE } from '../soroban-events/soroban-events.service';
 
 /** Per-job status summary surfaced by the scheduler health endpoint. */
 export interface SchedulerJobStatus {
@@ -12,6 +17,8 @@ export interface SchedulerJobStatus {
   lastSuccess: string | null;
   /** ISO timestamp of the most recent failed run, or null. */
   lastFailure: string | null;
+  /** ISO timestamp of when the job is next expected to run, or null. */
+  nextRunAt: string | null;
   /** Duration in milliseconds of the most recent completed run, or null. */
   lastDurationMs: number | null;
   /** Expected maximum interval between successful runs. */
@@ -20,6 +27,14 @@ export interface SchedulerJobStatus {
   stale: boolean;
   /** Machine-readable reason for staleness, or null when healthy. */
   staleReason: 'never-succeeded' | 'last-success-too-old' | null;
+}
+
+export interface QueueHealthMetric {
+  name: string;
+  depth: number;
+  oldestJobAgeMs: number;
+  status: 'healthy' | 'backlogged' | 'stalled';
+  reason: string;
 }
 
 /**
@@ -56,7 +71,16 @@ export function isJobStale(
 export class SchedulerHealthService {
   private readonly logger = new Logger(SchedulerHealthService.name);
 
-  constructor(private readonly jobHistory: JobHistoryService) {}
+  constructor(
+    private readonly jobHistory: JobHistoryService,
+    @InjectQueue('stellar-sync') private readonly stellarSyncQueue: Queue,
+    @InjectQueue('moderation-events')
+    private readonly moderationEventsQueue: Queue,
+    @InjectQueue(SOROBAN_EVENTS_QUEUE)
+    private readonly sorobanEventsQueue: Queue,
+    @InjectQueue(CONTRIBUTION_QUEUE)
+    private readonly suspiciousContributionQueue: Queue,
+  ) {}
 
   /** Status summary for every registered scheduled job. */
   async getJobStatuses(now: Date = new Date()): Promise<SchedulerJobStatus[]> {
@@ -68,11 +92,18 @@ export class SchedulerHealthService {
           this.jobHistory.getLastFailure(job.name),
         ]);
 
+        const lastSuccessAt = lastSuccess ? lastSuccess.startedAt : null;
         const { stale, reason } = isJobStale(
-          lastSuccess ? lastSuccess.startedAt : null,
+          lastSuccessAt,
           job.expectedIntervalMs,
           now,
         );
+        const lastCompletedAt = lastSuccessAt ?? lastFailure?.startedAt ?? null;
+        const nextRunAt = lastCompletedAt
+          ? new Date(
+              lastCompletedAt.getTime() + job.expectedIntervalMs,
+            ).toISOString()
+          : null;
 
         return {
           job: job.name,
@@ -80,6 +111,7 @@ export class SchedulerHealthService {
           lastStart: lastRun ? lastRun.startedAt.toISOString() : null,
           lastSuccess: lastSuccess ? lastSuccess.startedAt.toISOString() : null,
           lastFailure: lastFailure ? lastFailure.startedAt.toISOString() : null,
+          nextRunAt,
           lastDurationMs: lastRun?.durationMs ?? null,
           expectedIntervalMs: job.expectedIntervalMs,
           stale,
@@ -89,6 +121,49 @@ export class SchedulerHealthService {
     );
 
     return statuses;
+  }
+
+  async getQueueStatuses(): Promise<QueueHealthMetric[]> {
+    const knownQueues = [
+      { name: 'stellar-sync', queue: this.stellarSyncQueue },
+      { name: 'moderation-events', queue: this.moderationEventsQueue },
+      { name: SOROBAN_EVENTS_QUEUE, queue: this.sorobanEventsQueue },
+      { name: CONTRIBUTION_QUEUE, queue: this.suspiciousContributionQueue },
+    ];
+
+    const queueStatuses = await Promise.all(
+      knownQueues.map(async ({ name, queue }) => {
+        const counts = await queue.getJobCounts('waiting', 'delayed');
+        const waitingJobs = await queue.getWaiting(0, 100);
+        const delayedJobs = await queue.getDelayed(0, 100);
+        const jobs = [...waitingJobs, ...delayedJobs];
+
+        const depth = (counts.waiting ?? 0) + (counts.delayed ?? 0);
+        const oldestJobAgeMs = jobs.length
+          ? Math.max(
+              0,
+              Date.now() -
+                Math.min(
+                  ...jobs
+                    .map((job) => Number(job.timestamp ?? Date.now()))
+                    .filter((value) => Number.isFinite(value)),
+                ),
+            )
+          : 0;
+
+        const health = classifyQueueHealth(depth, oldestJobAgeMs);
+
+        return {
+          name,
+          depth,
+          oldestJobAgeMs,
+          status: health.status,
+          reason: health.reason,
+        };
+      }),
+    );
+
+    return queueStatuses;
   }
 
   /** Only the jobs that have not succeeded within their expected interval. */

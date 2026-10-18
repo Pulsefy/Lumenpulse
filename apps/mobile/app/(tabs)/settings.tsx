@@ -16,6 +16,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { useLocalization } from '../../src/context';
 import { config, AppEnvironment } from '../../lib/config';
+import { isCatalogueEnabled } from '../../lib/component-catalogue';
 import {
   authenticateBiometricPrompt,
   getBiometricLockEnabled,
@@ -540,6 +541,39 @@ export default function SettingsScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
+
+          {isCatalogueEnabled() && (
+            <>
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              <TouchableOpacity
+                style={styles.navRow}
+                activeOpacity={0.75}
+                onPress={() => router.push('/dev/catalogue')}
+                accessibilityRole="link"
+                accessibilityLabel="Component catalogue"
+                accessibilityHint="Shared components in each of their states, development builds only"
+              >
+                <View style={styles.navRowCopy}>
+                  <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                    <Ionicons name="grid-outline" size={18} color={colors.accent} />
+                  </View>
+                  <View style={styles.navTextWrap}>
+                    <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                      Component catalogue
+                    </Text>
+                    <Text
+                      style={[styles.navDescription, { color: colors.textSecondary }]}
+                      accessible
+                    >
+                      Shared components in each of their states (development builds only)
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {isAuthenticated && (

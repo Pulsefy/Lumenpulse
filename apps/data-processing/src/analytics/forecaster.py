@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 
 from src.analytics.market_analyzer import Trend
+from src.observability.stage_profiler import profile_stage
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -502,7 +503,8 @@ class SentimentForecaster:
 
         Safe to call repeatedly — reuses an existing trained model.
         """
-        df = self.load_history(jsonl_path)
-        if not self._is_trained:
-            self.train(df)
-        return self.predict(df)
+        with profile_stage("forecasting"):
+            df = self.load_history(jsonl_path)
+            if not self._is_trained:
+                self.train(df)
+            return self.predict(df)

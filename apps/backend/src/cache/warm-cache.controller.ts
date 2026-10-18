@@ -14,6 +14,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiPropertyOptional,
 } from '@nestjs/swagger';
 import { WarmCachePreloaderService } from './warm-cache-preloader.service';
 import { WarmCacheReport } from './warm-cache.registry';
@@ -24,7 +25,7 @@ import { UserRole } from '../users/entities/user.entity';
 import { JWT_SECURITY_SCHEME } from '../openapi/openapi.constants';
 
 class ForceRefreshDto {
-  /** Optional identifier for audit logs. */
+  @ApiPropertyOptional({ description: 'Optional identifier for audit logs.' })
   requestedBy?: string;
 }
 

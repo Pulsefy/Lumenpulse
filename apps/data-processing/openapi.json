@@ -6,7 +6,6 @@
     "version": "1.0.0"
   },
   "paths": {
-    "/api/pipeline/topology": {"get":{"tags":["Pipeline"],"summary":"Get Pipeline Topology","description":"Return the pipeline topology: each scheduled stage, its schedule and dependencies, and its latest run (last run, duration, outcome).","operationId":"get_pipeline_topology_api_pipeline_topology_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/PipelineTopologyResponse"}}}}}}},
     "/ingestion/contract-lag": {
       "get": {
         "summary": "Get Contract Lag",
@@ -1592,6 +1591,50 @@
         }
       }
     },
+    "/api/pipeline/topology": {
+      "get": {
+        "tags": [
+          "Pipeline"
+        ],
+        "summary": "Get Pipeline Topology",
+        "description": "Return the pipeline topology: each scheduled stage, its schedule and dependencies, and its latest run (last run, duration, outcome).",
+        "operationId": "get_pipeline_topology_api_pipeline_topology_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineTopologyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pipeline/datasets": {
+      "get": {
+        "tags": [
+          "Pipeline"
+        ],
+        "summary": "Get Pipeline Datasets",
+        "description": "Return the validated dataset inventory and its owners and consumers.",
+        "operationId": "get_pipeline_datasets_api_pipeline_datasets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetRegistryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/metrics": {
       "get": {
         "summary": "Metrics",
@@ -1904,6 +1947,45 @@
         }
       }
     },
+    "/price/predict": {
+      "post": {
+        "summary": "Predict Price",
+        "description": "Serve the promoted price model and log every ensemble member's contribution.",
+        "operationId": "predict_price_price_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PricePredictionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricePredictionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/analyze": {
       "post": {
         "summary": "Analyze Text",
@@ -2118,6 +2200,27 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ModelStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/cost-report": {
+      "get": {
+        "summary": "Model Cost Report",
+        "description": "Serving compute cost report (#1643).\n\nReturns cost attributed per model version and per endpoint, cost per\nthousand inferences for each model, the cost delta of a newly promoted\nmodel against its predecessor, and the three most expensive serving\npaths. The same data is exported as Prometheus metrics on ``/metrics``\nalongside the stage-level profiling from #1454.\n\nRequires X-API-Key header.",
+        "operationId": "model_cost_report_model_cost_report_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Model Cost Report Model Cost Report Get"
                 }
               }
             }
@@ -2915,8 +3018,6 @@
   },
   "components": {
     "schemas": {
-      "StageStatus": {"description":"One pipeline stage plus the outcome of its most recent run.","properties":{"id":{"type":"string","title":"Id"},"name":{"type":"string","title":"Name"},"schedule":{"type":"string","title":"Schedule"},"depends_on":{"items":{"type":"string"},"type":"array","title":"Depends On"},"status":{"type":"string","title":"Status"},"last_run":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Last Run"},"duration_seconds":{"anyOf":[{"type":"number"},{"type":"null"}],"title":"Duration Seconds"},"outcome":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Outcome"},"error":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Error"}},"type":"object","required":["id","name","schedule","depends_on","status"],"title":"StageStatus"},
-      "PipelineTopologyResponse": {"description":"The full pipeline topology response.","properties":{"generated_at":{"type":"string","title":"Generated At"},"stages":{"items":{"$ref":"#/components/schemas/StageStatus"},"type":"array","title":"Stages"}},"type":"object","required":["generated_at","stages"],"title":"PipelineTopologyResponse"},
       "ActionResponse": {
         "properties": {
           "success": {
@@ -3740,6 +3841,96 @@
           "unique_contributors"
         ],
         "title": "DailyKPISnapshotResponse"
+      },
+      "DatasetRegistryEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "owner": {
+            "type": "string",
+            "title": "Owner"
+          },
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Schema"
+          },
+          "update_cadence": {
+            "type": "string",
+            "title": "Update Cadence"
+          },
+          "retention": {
+            "type": "string",
+            "title": "Retention"
+          },
+          "model_consumers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Model Consumers"
+          },
+          "pipeline_stages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pipeline Stages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "display_name",
+          "description",
+          "owner",
+          "schema",
+          "update_cadence",
+          "retention",
+          "model_consumers",
+          "pipeline_stages"
+        ],
+        "title": "DatasetRegistryEntry",
+        "description": "Registry metadata for one data-processing dataset."
+      },
+      "DatasetRegistryResponse": {
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "title": "Generated At"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetRegistryEntry"
+            },
+            "type": "array",
+            "title": "Datasets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "generated_at",
+          "count",
+          "datasets"
+        ],
+        "title": "DatasetRegistryResponse",
+        "description": "All registered datasets and their operational metadata."
       },
       "ForecastResponse": {
         "properties": {
@@ -4989,6 +5180,85 @@
         "title": "OperationResponse",
         "description": "Response model for account operation."
       },
+      "PipelineTopologyResponse": {
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "title": "Generated At"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageStatus"
+            },
+            "type": "array",
+            "title": "Stages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "generated_at",
+          "stages"
+        ],
+        "title": "PipelineTopologyResponse",
+        "description": "The full pipeline topology response."
+      },
+      "PricePredictionRequest": {
+        "properties": {
+          "features": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Features"
+          },
+          "schema_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "features"
+        ],
+        "title": "PricePredictionRequest"
+      },
+      "PricePredictionResponse": {
+        "properties": {
+          "predictions": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Predictions"
+          },
+          "member_contributions": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Member Contributions"
+          },
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "predictions",
+          "member_contributions",
+          "model_version"
+        ],
+        "title": "PricePredictionResponse"
+      },
       "RebuildRequest": {
         "properties": {
           "dataset": {
@@ -5704,6 +5974,87 @@
           "message"
         ],
         "title": "ShadowUnregisterResponse"
+      },
+      "StageStatus": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "schedule": {
+            "type": "string",
+            "title": "Schedule"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "schedule",
+          "depends_on",
+          "status"
+        ],
+        "title": "StageStatus",
+        "description": "One pipeline stage plus the outcome of its most recent run."
       },
       "TokenContributionResponse": {
         "properties": {

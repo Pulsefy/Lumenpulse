@@ -46,6 +46,7 @@ describe('ExportService', () => {
     update: jest.fn(),
     findOne: jest.fn(),
     find: jest.fn(),
+    findAndCount: jest.fn(),
   };
 
   const mockSnapshotRepo = {
@@ -128,11 +129,16 @@ describe('ExportService', () => {
   describe('listJobs', () => {
     it('returns jobs for the user', async () => {
       const jobs = [{ id: 'job-1' }, { id: 'job-2' }];
-      mockExportJobRepo.find.mockResolvedValue(jobs);
+      mockExportJobRepo.findAndCount = jest.fn().mockResolvedValue([jobs, 2]);
 
-      const result = await service.listJobs('user-1');
-      expect(result).toHaveLength(2);
-      expect(mockExportJobRepo.find).toHaveBeenCalledWith(
+      const result = await service.listJobs('user-1', {
+        page: 1,
+        pageSize: 20,
+        offset: 0,
+      });
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(mockExportJobRepo.findAndCount).toHaveBeenCalledWith(
         expect.objectContaining({ where: { userId: 'user-1' } }),
       );
     });

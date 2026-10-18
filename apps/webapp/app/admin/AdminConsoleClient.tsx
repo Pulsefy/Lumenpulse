@@ -32,6 +32,7 @@ import { useExplorerUrl } from '@/hooks/useExplorerUrl';
 import { DependencyStatusBanner } from '@/components/DependencyStatusBanner';
 
 import { clientConfig } from '@/lib/config';
+import { getCurrentUserRole, getAuthToken } from '@/lib/auth-role';
 
 const API_BASE = clientConfig.apiUrl;
 
@@ -71,6 +72,36 @@ interface SystemStatus {
   pendingEvents: number;
   rpcStatus: 'online' | 'offline' | 'degraded';
   horizonStatus: 'online' | 'offline' | 'degraded';
+}
+
+interface SchedulerQueueMetric {
+  name: string;
+  depth: number;
+  oldestJobAgeMs: number;
+  status: 'healthy' | 'backlogged' | 'stalled';
+  reason: string;
+}
+
+interface SchedulerJobStatus {
+  job: string;
+  description: string;
+  lastStart: string | null;
+  lastSuccess: string | null;
+  lastFailure: string | null;
+  nextRunAt: string | null;
+  lastDurationMs: number | null;
+  expectedIntervalMs: number;
+  stale: boolean;
+  staleReason: 'never-succeeded' | 'last-success-too-old' | null;
+}
+
+interface SchedulerHealthPayload {
+  status: 'ok' | 'error';
+  summary: 'healthy' | 'stale-jobs';
+  checkedAt: string;
+  staleJobs: SchedulerJobStatus[];
+  jobs: SchedulerJobStatus[];
+  queues: SchedulerQueueMetric[];
 }
 
 // Helper function to format addresses
@@ -341,13 +372,15 @@ function ContractCard({
 }
 
 // Status Badge Component
-function StatusBadge({ status }: { status: 'healthy' | 'degraded' | 'unhealthy' | 'online' | 'offline' }) {
+function StatusBadge({ status }: { status: 'healthy' | 'degraded' | 'unhealthy' | 'online' | 'offline' | 'backlogged' | 'stalled' }) {
   const styles = {
     healthy: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20',
     online: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20',
     degraded: 'bg-amber-500/20 text-amber-400 border-amber-500/20',
     unhealthy: 'bg-red-500/20 text-red-400 border-red-500/20',
     offline: 'bg-red-500/20 text-red-400 border-red-500/20',
+    backlogged: 'bg-amber-500/20 text-amber-400 border-amber-500/20',
+    stalled: 'bg-red-500/20 text-red-400 border-red-500/20',
   };
 
   const labels = {
@@ -356,17 +389,148 @@ function StatusBadge({ status }: { status: 'healthy' | 'degraded' | 'unhealthy' 
     degraded: 'Degraded',
     unhealthy: 'Unhealthy',
     offline: 'Offline',
+    backlogged: 'Backlogged',
+    stalled: 'Stalled',
   };
 
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${styles[status]}`}>
       <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
         status === 'healthy' || status === 'online' ? 'bg-emerald-400' :
-        status === 'degraded' ? 'bg-amber-400' :
+        status === 'degraded' || status === 'backlogged' ? 'bg-amber-400' :
         'bg-red-400'
       }`} />
       {labels[status]}
     </span>
+  );
+}
+
+function formatDurationMs(durationMs: number | null): string {
+  if (durationMs === null || Number.isNaN(durationMs)) return '—';
+  if (durationMs < 1000) return `${durationMs} ms`;
+  if (durationMs < 60_000) return `${(durationMs / 1000).toFixed(1)} s`;
+  const minutes = Math.floor(durationMs / 60_000);
+  const seconds = Math.round((durationMs % 60_000) / 1000);
+  return `${minutes}m ${seconds}s`;
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString();
+}
+
+function formatAgeMs(ageMs: number): string {
+  if (ageMs <= 0) return '0s';
+  if (ageMs < 60_000) return `${Math.round(ageMs / 1000)}s`;
+  if (ageMs < 3_600_000) return `${Math.round(ageMs / 60_000)}m`;
+  return `${(ageMs / 3_600_000).toFixed(1)}h`;
+}
+
+function SchedulerHealthPanel({
+  health,
+  error,
+}: {
+  health: SchedulerHealthPayload | null;
+  error: string | null;
+}) {
+  if (error && !health) {
+    return (
+      <div className="mb-8 p-4 rounded-2xl border border-amber-500/20 bg-amber-500/5">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-400">Scheduler health unavailable</p>
+            <p className="text-xs text-foreground/60 mt-1">{error}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!health) {
+    return null;
+  }
+
+  return (
+    <div className="mb-8 space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Activity className="w-5 h-5 text-primary" />
+          <h2 className="text-lg font-semibold">Scheduler & Queue Health</h2>
+        </div>
+        <span className="text-xs text-foreground/40">Checked {formatDateTime(health.checkedAt)}</span>
+      </div>
+
+      {error && (
+        <div className="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-xs text-amber-300">
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {health.queues.map((queue) => (
+          <div key={queue.name} className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-foreground/50">{queue.name}</p>
+              <StatusBadge status={queue.status} />
+            </div>
+            <div className="space-y-1 text-xs text-foreground/60">
+              <div className="flex items-center justify-between">
+                <span>Depth</span>
+                <span className="font-mono text-foreground/80">{queue.depth}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Oldest</span>
+                <span className="font-mono text-foreground/80">{formatAgeMs(queue.oldestJobAgeMs)}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="border border-white/5 rounded-2xl overflow-hidden bg-white/[0.02]">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-white/[0.02] border-b border-white/5">
+              <tr>
+                <th className="px-4 py-3 text-xs font-medium text-foreground/40">Job</th>
+                <th className="px-4 py-3 text-xs font-medium text-foreground/40">Status</th>
+                <th className="px-4 py-3 text-xs font-medium text-foreground/40">Last Success</th>
+                <th className="px-4 py-3 text-xs font-medium text-foreground/40">Last Failure</th>
+                <th className="px-4 py-3 text-xs font-medium text-foreground/40">Duration</th>
+                <th className="px-4 py-3 text-xs font-medium text-foreground/40">Next Run</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {health.jobs.map((job) => (
+                <tr key={job.job} className={job.stale ? 'bg-red-500/5' : undefined}>
+                  <td className="px-4 py-3 align-top">
+                    <div className="font-medium">{job.job}</div>
+                    <div className="text-xs text-foreground/40">{job.description}</div>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <div className="space-y-1">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${job.stale ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                        {job.stale ? 'Overdue' : 'Healthy'}
+                      </span>
+                      {job.staleReason && (
+                        <div className="text-[10px] uppercase tracking-wide text-red-300">{job.staleReason}</div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 align-top text-xs text-foreground/70">{formatDateTime(job.lastSuccess)}</td>
+                  <td className="px-4 py-3 align-top text-xs text-foreground/70">{formatDateTime(job.lastFailure)}</td>
+                  <td className="px-4 py-3 align-top text-xs text-foreground/70">{formatDurationMs(job.lastDurationMs)}</td>
+                  <td className="px-4 py-3 align-top text-xs text-foreground/70">{formatDateTime(job.nextRunAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -379,11 +543,14 @@ export default function AdminConsoleClient() {
   const [contracts, setContracts] = useState<ContractMetadata[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [schedulerHealth, setSchedulerHealth] = useState<SchedulerHealthPayload | null>(null);
+  const [schedulerError, setSchedulerError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isTestnet = config?.network === 'testnet';
+  const currentUserRole = getCurrentUserRole();
   const isMainnet = config?.network === 'mainnet';
   const hasValidConfig = configStatus === 'ready' && config;
 
@@ -459,6 +626,39 @@ export default function AdminConsoleClient() {
           },
         ]);
       }
+
+      try {
+        const authToken = getAuthToken();
+        const schedulerResponse = await fetch(`${API_BASE}/health/schedulers`, {
+          headers: {
+            Accept: 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+        });
+
+        if (schedulerResponse.ok) {
+          const data = (await schedulerResponse.json()) as SchedulerHealthPayload;
+          setSchedulerHealth(data);
+          setSchedulerError(null);
+        } else if (schedulerResponse.status === 401 || schedulerResponse.status === 403) {
+          setSchedulerHealth(null);
+          setSchedulerError('Admin access is required to view scheduler health.');
+        } else if (schedulerResponse.status === 503) {
+          const data = (await schedulerResponse.json().catch(() => null)) as SchedulerHealthPayload | null;
+          setSchedulerHealth(data ?? null);
+          setSchedulerError(
+            data && data.staleJobs.length > 0
+              ? `${data.staleJobs.length} scheduled jobs are overdue.`
+              : 'The scheduler health endpoint reported degraded backend health.',
+          );
+        } else {
+          setSchedulerHealth(null);
+          setSchedulerError('Scheduler health is unavailable right now.');
+        }
+      } catch {
+        setSchedulerHealth(null);
+        setSchedulerError('Scheduler health is unavailable right now.');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load admin data');
     } finally {
@@ -469,7 +669,12 @@ export default function AdminConsoleClient() {
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      loadData();
+      void loadData();
+      const refreshInterval = window.setInterval(() => {
+        void loadData();
+      }, 30_000);
+
+      return () => window.clearInterval(refreshInterval);
     }
   }, [authLoading, isAuthenticated, loadData]);
 
@@ -497,6 +702,21 @@ export default function AdminConsoleClient() {
           <Shield className="w-12 h-12 text-foreground/20 mx-auto mb-4" />
           <h2 className="text-xl font-semibold">Access Denied</h2>
           <p className="text-foreground/50 text-sm mt-2">You do not have permission to access this page.</p>
+          <Link href="/" className="mt-4 inline-block text-primary hover:underline text-sm">
+            Return to home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentUserRole !== 'admin') {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="text-center">
+          <Shield className="w-12 h-12 text-foreground/20 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold">Admin Access Required</h2>
+          <p className="text-foreground/50 text-sm mt-2">This console is restricted to administrators.</p>
           <Link href="/" className="mt-4 inline-block text-primary hover:underline text-sm">
             Return to home
           </Link>
@@ -648,6 +868,8 @@ export default function AdminConsoleClient() {
               </div>
             )}
           </div>
+
+          <SchedulerHealthPanel health={schedulerHealth} error={schedulerError} />
 
           {/* Audit Logs Section */}
           <div className="mb-8">
