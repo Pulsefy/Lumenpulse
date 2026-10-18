@@ -16,8 +16,10 @@ export function getFundingProgress(fundedAmount: string, totalPool: string): num
   return Math.min(100, Math.max(0, Math.round((funded / total) * 100)));
 }
 
-export function getRoundMilestones(round: GrantRound, nowSeconds = Math.floor(Date.now() / 1000)):
-  RoundMilestone[] {
+export function getRoundMilestones(
+  round: GrantRound,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): RoundMilestone[] {
   const start = round.startTime;
   const end = round.endTime;
 
@@ -44,14 +46,16 @@ export function getRoundMilestones(round: GrantRound, nowSeconds = Math.floor(Da
     {
       id: 'distribution',
       title: 'Distribution',
-      description: round.status === 'FINALIZED' || round.status === 'DISTRIBUTED'
-        ? 'Matching decisions have been finalized.'
-        : 'Results will be published after the round closes.',
-      state: round.status === 'FINALIZED' || round.status === 'DISTRIBUTED'
-        ? 'completed'
-        : isEnded
-          ? 'in-progress'
-          : 'upcoming',
+      description:
+        round.status === 'CLOSED' || round.status === 'DISBURSED'
+          ? 'Matching decisions have been finalized.'
+          : 'Results will be published after the round closes.',
+      state:
+        round.status === 'CLOSED' || round.status === 'DISBURSED'
+          ? 'completed'
+          : isEnded
+            ? 'in-progress'
+            : 'upcoming',
     },
   ];
 }

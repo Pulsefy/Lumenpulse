@@ -130,9 +130,7 @@ describe('message template migration parity', () => {
       'message',
     ).rendered;
 
-    expect(title).toBe(
-      legacyDataProcessingTitle(type, metricName, severity),
-    );
+    expect(title).toBe(legacyDataProcessingTitle(type, metricName, severity));
     expect(message).toBe(
       legacyDataProcessingMessage(
         type,
@@ -167,8 +165,12 @@ describe('message template migration parity', () => {
       MessageTemplateKey.NOTIFICATION_DATA_PROCESSING_SENTIMENT_SPIKE,
     );
 
-    const title = renderTemplateField(def.titleTemplate!, vars, [], 'title')
-      .rendered;
+    const title = renderTemplateField(
+      def.titleTemplate!,
+      vars,
+      [],
+      'title',
+    ).rendered;
     const message = renderTemplateField(
       def.messageTemplate!,
       vars,
@@ -176,9 +178,7 @@ describe('message template migration parity', () => {
       'message',
     ).rendered;
 
-    expect(title).toBe(
-      legacyDataProcessingTitle(type, metricName, severity),
-    );
+    expect(title).toBe(legacyDataProcessingTitle(type, metricName, severity));
     expect(message).toBe(
       legacyDataProcessingMessage(
         type,
@@ -190,5 +190,4 @@ describe('message template migration parity', () => {
       ),
     );
   });
-
 });

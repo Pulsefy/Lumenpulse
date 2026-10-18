@@ -1,3 +1,4 @@
+import { DataProcessingClient } from '../data-processing/data-processing.client';
 import { HttpService } from '@nestjs/axios';
 import { Test } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
@@ -53,6 +54,7 @@ describe('HealthService', () => {
         { provide: getDataSourceToken(), useValue: database },
         { provide: CacheService, useValue: cache },
         { provide: HttpService, useValue: http },
+        { provide: DataProcessingClient, useValue: http },
         { provide: LatencyBudgetHealthService, useValue: latency },
       ],
     }).compile();

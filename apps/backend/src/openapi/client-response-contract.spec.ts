@@ -8,7 +8,9 @@ interface WatchlistItemResponse {
   sortOrder: number;
 }
 
-function matchesWatchlistItemContract(value: unknown): value is WatchlistItemResponse {
+function matchesWatchlistItemContract(
+  value: unknown,
+): value is WatchlistItemResponse {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Record<string, unknown>;
   return (

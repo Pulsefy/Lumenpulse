@@ -70,7 +70,7 @@ describe('ContributorFeedService', () => {
       expect(result.items.length).toBe(3);
       expect(result.total).toBe(3);
       expect(result.page).toBe(1);
-      expect(result.limit).toBe(20);
+      expect(result.pageSize).toBe(20);
       expect(result.totalPages).toBe(1);
     });
 
@@ -111,12 +111,12 @@ describe('ContributorFeedService', () => {
     });
 
     it('should paginate correctly', () => {
-      const page1 = service.getFeed({ page: 1, limit: 2 });
+      const page1 = service.getFeed({ page: 1, pageSize: 2 });
       expect(page1.items.length).toBe(2);
       expect(page1.total).toBe(3);
       expect(page1.totalPages).toBe(2);
 
-      const page2 = service.getFeed({ page: 2, limit: 2 });
+      const page2 = service.getFeed({ page: 2, pageSize: 2 });
       expect(page2.items.length).toBe(1);
       expect(page2.page).toBe(2);
     });

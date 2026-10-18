@@ -1,0 +1,102 @@
+name: Job timeout guard
+description: >-
+  Two-phase wrapper that records the observed runtime of the calling job
+  against its `timeout-minutes` budget and raises a distinguishable, titled
+  error before GitHub cancels the job on a hard timeout.
+
+  Invoke once at the top of a job with `phase: start` and once at the bottom
+  with `phase: finish` (add `if: always()` to the finishing step so it also
+  runs on failure). `budget-minutes` MUST equal the job's `timeout-minutes`.
+
+inputs:
+  phase:
+    description: >-
+      `start` opens the clock, `finish` closes it and reports. Any other value
+      makes the action a no-op.
+    required: true
+  job-id:
+    description: Stable identifier for the guarded job, used in the summary table and annotations.
+    required: true
+  budget-minutes:
+    description: Must match the job's `timeout-minutes`. Do not duplicate the value loosely.
+    required: true
+  soft-threshold:
+    description: >-
+      Fraction of the budget after which the job is considered to be running
+      long and a warning is raised. Raise it to warn earlier.
+    default: '0.8'
+  note:
+    description: Free-text justification for the configured budget, shown in the run summary.
+    default: ''
+
+outputs:
+  elapsed-minutes:
+    description: Wall-clock minutes the guarded portion of the job took, to one decimal place.
+    value: ${{ steps.report.outputs.elapsed-minutes }}
+
+runs:
+  using: composite
+  steps:
+    - name: Open the clock
+      id: start
+      if: inputs.phase == 'start'
+      shell: bash
+      run: echo "started=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+    - name: Report the observed runtime
+      id: report
+      if: inputs.phase == 'finish'
+      shell: bash
+      env:
+        JOB_ID: ${{ inputs.job-id }}
+        BUDGET_MINUTES: ${{ inputs.budget-minutes }}
+        SOFT_THRESHOLD: ${{ inputs.soft-threshold }}
+        NOTE: ${{ inputs.note }}
+        STARTED_AT: ${{ steps.start.outputs.started }}
+      run: |
+        set -euo pipefail
+
+        if [ -z "${STARTED_AT:-}" ]; then
+          echo "::warning title=timeout guard::Job '${JOB_ID}' finished without a matching" \
+               "'phase: start' step, so no runtime was recorded."
+          exit 0
+        fi
+
+        now=$(date +%s)
+        elapsed_secs=$(( now - STARTED_AT ))
+        budget_secs=$(( $(printf '%.0f' "${BUDGET_MINUTES}") * 60 ))
+        elapsed_min=$(awk "BEGIN { printf \"%.1f\", ${elapsed_secs} / 60 }")
+        used_pct=$(awk "BEGIN { printf \"%.0f\", ${elapsed_secs} * 100 / ${budget_secs} }")
+        soft_secs=$(awk "BEGIN { printf \"%.0f\", ${budget_secs} * ${SOFT_THRESHOLD} }")
+
+        echo "elapsed-minutes=${elapsed_min}" >> "$GITHUB_OUTPUT"
+
+        {
+          echo "### Timeout guard — \`${JOB_ID}\`"
+          echo
+          echo "| Metric | Value |"
+          echo "|---|---|"
+          echo "| Observed runtime | ${elapsed_min} min |"
+          echo "| Configured \`timeout-minutes\` | ${BUDGET_MINUTES} min |"
+          echo "| Budget consumed | ${used_pct}% |"
+        } >> "$GITHUB_STEP_SUMMARY"
+        if [ -n "${NOTE}" ]; then
+          echo "| Budget justification | ${NOTE} |" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        # Distinguishable warning: the job is close enough to the ceiling that a
+        # hard GitHub timeout is likely. GitHub cancels the job outright on a
+        # real timeout and no step of ours gets to run, so this is the earliest
+        # point at which the cause can be attributed to runtime rather than to a
+        # generic test failure.
+        if [ "${elapsed_secs}" -ge "${soft_secs}" ]; then
+          echo "::error title=Job timeout — \`${JOB_ID}\` consumed ${used_pct}% of its" \
+               "${BUDGET_MINUTES}-minute timeout budget after ${elapsed_min} min. This job is" \
+               "about to be cancelled by the runner rather than failing on its own merits; raise" \
+               "\`timeout-minutes\` for ${JOB_ID} (see docs/ci-timeouts.md) or find the step that" \
+               "is blocking."
+          echo "Budget justification on record: ${NOTE:-none}" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "\`${JOB_ID}\` finished in ${elapsed_min} min, within its ${BUDGET_MINUTES}-minute budget." \
+               >> "$GITHUB_STEP_SUMMARY"
+        fi

@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { HttpService } from '@nestjs/axios';
+import { DataProcessingClient } from '../data-processing/data-processing.client';
 import { ConfigService } from '@nestjs/config';
 import { of, throwError } from 'rxjs';
 import { AxiosError } from 'axios';
@@ -13,7 +13,7 @@ import { RequestContextService } from '../common/services/request-context.servic
 
 describe('ModelRetrainingService', () => {
   let service: ModelRetrainingService;
-  let httpService: jest.Mocked<Pick<HttpService, 'post' | 'get'>>;
+  let httpService: jest.Mocked<Pick<DataProcessingClient, 'post' | 'get'>>;
   let configService: jest.Mocked<Pick<ConfigService, 'get'>>;
 
   beforeEach(async () => {
@@ -33,7 +33,7 @@ describe('ModelRetrainingService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ModelRetrainingService,
-        { provide: HttpService, useValue: httpService },
+        { provide: DataProcessingClient, useValue: httpService },
         { provide: ConfigService, useValue: configService },
       ],
     }).compile();
@@ -56,20 +56,13 @@ describe('ModelRetrainingService', () => {
 
       expect(result).toEqual(submission);
       expect(httpService.post).toHaveBeenCalledWith(
-        'http://localhost:8000/retrain',
+        '/retrain',
         { force: true },
-        {
-          headers: {
-            'X-API-Key': 'test-key',
-            'X-Correlation-ID': 'unknown',
-            'X-Request-Id': 'unknown',
-          },
-          timeout: 10_000,
-        },
+        {},
       );
     });
 
-    it('propagates active correlationId when available', async () => {
+    it('delegates retraining within an active request context', async () => {
       const submission: JobSubmission = {
         job_id: 'job-corr',
         job_type: 'retrain',
@@ -86,14 +79,9 @@ describe('ModelRetrainingService', () => {
       );
 
       expect(httpService.post).toHaveBeenCalledWith(
-        'http://localhost:8000/retrain',
+        '/retrain',
         { force: false },
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'X-Correlation-ID': 'corr-retrain-999',
-            'X-Request-Id': 'corr-retrain-999',
-          }),
-        }),
+        {},
       );
     });
 
@@ -108,7 +96,7 @@ describe('ModelRetrainingService', () => {
   });
 
   describe('getJobStatus', () => {
-    it('calls python /api/jobs/{jobId} with correct URL and headers', async () => {
+    it('calls python /api/jobs/{jobId} using a relative path', async () => {
       const jobStatus: JobStatus = {
         job_id: 'job-1',
         job_type: 'retrain',
@@ -120,17 +108,7 @@ describe('ModelRetrainingService', () => {
       const result = await service.getJobStatus('job-1');
 
       expect(result).toEqual(jobStatus);
-      expect(httpService.get).toHaveBeenCalledWith(
-        'http://localhost:8000/api/jobs/job-1',
-        {
-          headers: {
-            'X-API-Key': 'test-key',
-            'X-Correlation-ID': 'unknown',
-            'X-Request-Id': 'unknown',
-          },
-          timeout: 10_000,
-        },
-      );
+      expect(httpService.get).toHaveBeenCalledWith('/api/jobs/job-1', {});
     });
   });
 
@@ -222,7 +200,7 @@ describe('ModelRetrainingService', () => {
   });
 
   describe('getModelStatus', () => {
-    it('calls python /model/status with correct URL and headers', async () => {
+    it('calls python /model/status using a relative path', async () => {
       const mockStatus: ModelStatusResult = {
         last_run: { status: 'success' },
         registry: { active_version: 'v1.0' },
@@ -233,17 +211,7 @@ describe('ModelRetrainingService', () => {
       const result = await service.getModelStatus();
 
       expect(result).toEqual(mockStatus);
-      expect(httpService.get).toHaveBeenCalledWith(
-        'http://localhost:8000/model/status',
-        {
-          headers: {
-            'X-API-Key': 'test-key',
-            'X-Correlation-ID': 'unknown',
-            'X-Request-Id': 'unknown',
-          },
-          timeout: 10_000,
-        },
-      );
+      expect(httpService.get).toHaveBeenCalledWith('/model/status', {});
     });
   });
 });

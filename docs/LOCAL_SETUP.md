@@ -38,6 +38,13 @@ This is the single source of truth for running the full LumenPulse stack locally
 
 The monorepo root uses **pnpm workspaces** and **TurboRepo** to coordinate JS/TS builds.
 
+> **Want the whole stack in one command?**
+> [`docker compose up -d --build`](LOCAL_STACK.md) now brings up the webapp, the backend,
+> data-processing, Postgres and Redis together, applies migrations automatically, and wires
+> every dependency through a health check. This document remains the reference for running each
+> service directly from source, which is what you want when you are debugging a single service.
+> See [LOCAL_STACK.md](LOCAL_STACK.md).
+
 ---
 
 ## 2. Prerequisites
@@ -223,7 +230,7 @@ DB_PASSWORD=lumenpulse
 # Logging
 LOG_LEVEL=INFO
 
-# API security key (must match PYTHON_API_KEY in the backend .env)
+# Legacy local-development shared key (managed per-consumer keys are recommended)
 API_KEY=local-dev-key
 
 # Optional — external API keys for live data; omit to use stubs
@@ -580,7 +587,12 @@ Restart the backend after changing this value.
 
 ### Data processing service returns `403 Forbidden`
 
-The backend's `PYTHON_API_KEY` and the data processing service's `API_KEY` must match.
+For quick local development, the legacy backend `PYTHON_API_KEY` and Python
+`API_KEY` values can still match. For managed per-consumer keys, first apply the
+backend migration and configure the Python service to use the same PostgreSQL
+database, then issue a key as a backend admin and set the returned secret as
+`PYTHON_API_KEY`. Do not keep the legacy `API_KEY` configured after callers have
+migrated, since environment keys cannot be revoked through the backend.
 
 ```env
 # apps/backend/.env
@@ -602,6 +614,10 @@ API_KEY=local-dev-key
 | Mobile (Expo) | `8081` | Expo default |
 | PostgreSQL (host) | `5433` | Docker compose `ports` mapping |
 | Redis | `6379` | Docker compose `ports` mapping |
+
+> When using the full `docker compose` stack, host ports are overridable via
+> `WEBAPP_HOST_PORT`, `BACKEND_HOST_PORT`, `POSTGRES_PORT` and `REDIS_PORT` in a root `.env`.
+> See [LOCAL_STACK.md](LOCAL_STACK.md#configuration).
 
 ---
 

@@ -14,9 +14,9 @@ describe('renderTemplateField', () => {
   });
 
   it('throws on missing referenced variable', () => {
-    expect(() =>
-      renderTemplateField('Hi {{name}}', {}, [], 'test'),
-    ).toThrow(MessageTemplateRenderError);
+    expect(() => renderTemplateField('Hi {{name}}', {}, [], 'test')).toThrow(
+      MessageTemplateRenderError,
+    );
   });
 
   it('throws on malformed placeholder', () => {
@@ -26,8 +26,8 @@ describe('renderTemplateField', () => {
   });
 
   it('throws on unclosed placeholder', () => {
-    expect(() => renderTemplateField('Hi {{name', { name: 'x' }, [], 'test')).toThrow(
-      /Unclosed/,
-    );
+    expect(() =>
+      renderTemplateField('Hi {{name', { name: 'x' }, [], 'test'),
+    ).toThrow(/Unclosed/);
   });
 });

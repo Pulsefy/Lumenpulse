@@ -8,17 +8,20 @@ describe('grant detail utilities', () => {
   });
 
   it('derives milestone states from round status and timeline', () => {
-    const milestones = getRoundMilestones({
-      id: 1,
-      name: 'Spring Round',
-      tokenAddress: 'test',
-      startTime: 1_700_000_000,
-      endTime: 1_700_000_600,
-      totalPool: '1000000',
-      isFinalized: false,
-      isDistributed: false,
-      status: 'ACTIVE',
-    }, 1_700_000_300);
+    const milestones = getRoundMilestones(
+      {
+        id: 1,
+        name: 'Spring Round',
+        tokenAddress: 'test',
+        startTime: 1_700_000_000,
+        endTime: 1_700_000_600,
+        totalPool: '1000000',
+        isFinalized: false,
+        isDistributed: false,
+        status: 'OPEN',
+      },
+      1_700_000_300,
+    );
 
     expect(milestones[0].title).toBe('Round announced');
     expect(milestones[0].state).toBe('completed');

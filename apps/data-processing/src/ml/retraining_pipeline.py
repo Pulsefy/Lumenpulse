@@ -7,7 +7,7 @@ versions the artifacts, and promotes them with zero downtime.
 
 Models:
   - sentiment   : VADER lexicon + custom crypto slang dictionary
-  - price_predictor : scikit-learn LinearRegression pipeline
+  - price_predictor : equal-weight ensemble of scikit-learn regressors
 """
 
 import os
@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
+from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
@@ -28,12 +29,13 @@ from src.ml.model_registry import (
     get_current_version,
     get_registry_status,
 )
-from src.ml.price_predictor import PricePredictor
+from src.ml.price_predictor import PriceEnsemble, PricePredictor
 from src.ml.feature_schema import current_feature_schema, schema_metadata
 from src.ml.feature_drift_detector import compute_distribution_baseline
 from src.ml.sentiment_evaluation import classification_metrics, seed_sentiment_labels
 from src.utils.logger import setup_logger
 from src.utils.metrics import JOBS_RUN_TOTAL, MODEL_RETRAINING_TOTAL, MODEL_RETRAINING_DURATION
+from src.observability.stage_profiler import profile_stage
 
 logger = setup_logger(__name__)
 
@@ -377,14 +379,112 @@ def _build_price_predictor(
 
 
 # ---------------------------------------------------------------------------
+# Price ensemble training
+# ---------------------------------------------------------------------------
+
+def _build_price_ensemble_from_frame(
+    df: pd.DataFrame,
+    query_bounds: Dict[str, Any],
+    seed: Optional[int] = None,
+) -> Tuple[
+    PriceEnsemble,
+    Dict[str, Any],
+    Dict[str, Any],
+    Tuple[pd.DataFrame, pd.Series],
+]:
+    training_set, evaluation_frame = train_test_split(
+        df, test_size=0.2, random_state=42
+    )
+    evaluation_features = evaluation_frame.drop(columns=["target"])
+    evaluation_target = evaluation_frame["target"]
+    models = {
+        name: PricePredictor(
+            model_name=name,
+            random_state=seed if seed is not None else 42,
+        )
+        for name in ("linear_regression", "random_forest", "gradient_boosting")
+    }
+    member_metrics: Dict[str, Dict[str, float]] = {}
+    for name, model in models.items():
+        model.fit(training_set, target_column="target")
+        member_predictions = model.predict(evaluation_features)
+        member_metrics[name] = {
+            "mse": float(mean_squared_error(evaluation_target, member_predictions)),
+            "r2": float(r2_score(evaluation_target, member_predictions)),
+        }
+
+    ensemble = PriceEnsemble(models)
+    ensemble_predictions = ensemble.predict(evaluation_features)
+    metrics = {
+        "mse": float(mean_squared_error(evaluation_target, ensemble_predictions)),
+        "r2": float(r2_score(evaluation_target, ensemble_predictions)),
+    }
+    ensemble.metrics = metrics
+    logger.info(
+        "Price ensemble evaluated: strategy=%s metrics=%s member_metrics=%s",
+        ensemble.strategy,
+        metrics,
+        member_metrics,
+    )
+
+    feature_set = next(iter(models.values())).feature_set
+    schema = current_feature_schema(feature_set)
+    feature_names = [name for name in schema.feature_names if name in df.columns]
+    baseline = compute_distribution_baseline(df, feature_names)
+    import sklearn
+
+    metadata: Dict[str, Any] = {
+        **schema_metadata(feature_set),
+        "trained_at": datetime.utcnow().isoformat(),
+        "metrics": metrics,
+        "member_metrics": member_metrics,
+        "ensemble": {
+            "strategy": ensemble.strategy,
+            "members": list(models),
+        },
+        "feature_names": feature_names,
+        "feature_baseline": baseline,
+        "seed": seed,
+        "data_query_bounds": query_bounds,
+        "row_count": len(df),
+        "library_versions": {
+            "pandas": pd.__version__,
+            "scikit-learn": sklearn.__version__,
+        },
+    }
+    return (
+        ensemble,
+        metrics,
+        metadata,
+        (evaluation_features, evaluation_target),
+    )
+
+
+def _build_price_ensemble(
+    db_session=None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    seed: Optional[int] = None,
+) -> Tuple[
+    PriceEnsemble,
+    Dict[str, Any],
+    Dict[str, Any],
+    Tuple[pd.DataFrame, pd.Series],
+]:
+    df, query_bounds = _fetch_training_data(db_session, start_time, end_time, seed)
+    return _build_price_ensemble_from_frame(df, query_bounds, seed)
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
-def run_retraining(
+def _run_retraining(
     db_session=None,
     force: bool = False,
     manifest: Optional[Dict[str, Any]] = None,
     seed: Optional[int] = None,
+    trigger_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Full retraining run: train → evaluate → version → promote.
@@ -396,6 +496,7 @@ def run_retraining(
                     If manifest contains 'snapshot_id', the exact training data
                     from that snapshot will be loaded for reproducibility.
         seed:       Optional seed for randomness (used only if no manifest).
+        trigger_context: Optional attribution for the event that initiated this run.
 
     Returns:
         A result dict with versions, metrics, and status.
@@ -412,6 +513,8 @@ def run_retraining(
         "started_at": started_at.isoformat(),
         "models": {},
     }
+    if trigger_context is not None:
+        result["trigger"] = dict(trigger_context)
 
     try:
         if db_session is not None:
@@ -459,7 +562,8 @@ def run_retraining(
 
         # ── 1. Sentiment model ──────────────────────────────────────────────
         logger.info("Step 1: Retraining sentiment model …")
-        with MODEL_RETRAINING_DURATION.labels(model_type="sentiment").time():
+        with MODEL_RETRAINING_DURATION.labels(model_type="sentiment").time(), \
+                profile_stage("model_retraining.sentiment"):
             sentiment_model, sentiment_metrics = _build_sentiment_model()
             sentiment_metrics["evaluation"] = _evaluate_sentiment_model(sentiment_model, db_session)
 
@@ -490,59 +594,49 @@ def run_retraining(
 
         # ── 2. Price predictor ──────────────────────────────────────────────
         logger.info("Step 2: Retraining price predictor …")
-        with MODEL_RETRAINING_DURATION.labels(model_type="price_predictor").time():
+        with MODEL_RETRAINING_DURATION.labels(model_type="price_predictor").time(), \
+                profile_stage("model_retraining.price_predictor"):
             if snapshot_data is not None:
-                # Use snapshot data directly for exact reproducibility
-                predictor = PricePredictor(model_name="linear_regression")
-                training_set, evaluation_set = train_test_split(
-                    snapshot_data, test_size=0.2, random_state=42
-                )
-                price_metrics = predictor.fit(training_set, target_column="target")
-                
-                # Build metadata with snapshot reference
-                schema = current_feature_schema(predictor.feature_set)
-                feature_names = [f for f in schema.feature_names if f in snapshot_data.columns]
-                baseline = compute_distribution_baseline(snapshot_data, feature_names)
-                
-                import sklearn
-                price_metadata: Dict[str, Any] = {
-                    **schema_metadata(predictor.feature_set),
-                    "trained_at": datetime.utcnow().isoformat(),
-                    "metrics": price_metrics,
-                    "feature_names": feature_names,
-                    "feature_baseline": baseline,
-                    "seed": run_seed,
-                    "data_query_bounds": {
-                        "start_time": start_time.isoformat() if start_time else None,
-                        "end_time": end_time.isoformat() if end_time else None,
-                        "snapshot_id": snapshot_id,
-                        "snapshot_hash": _compute_data_hash(snapshot_data),
-                    },
-                    "row_count": len(snapshot_data),
-                    "library_versions": {
-                        "pandas": pd.__version__,
-                        "scikit-learn": sklearn.__version__,
-                    },
+                snapshot_bounds = {
+                    "start_time": start_time.isoformat() if start_time else None,
+                    "end_time": end_time.isoformat() if end_time else None,
+                    "snapshot_id": snapshot_id,
+                    "snapshot_hash": _compute_data_hash(snapshot_data),
                 }
-                price_evaluation_set = (
-                    evaluation_set.drop(columns=["target"]),
-                    evaluation_set["target"],
-                )
-                logger.info(f"PricePredictor retrained from snapshot: {price_metrics}")
-            else:
-                # Normal training path
                 (
                     predictor,
                     price_metrics,
                     price_metadata,
                     price_evaluation_set,
-                ) = _build_price_predictor(
+                ) = _build_price_ensemble_from_frame(
+                    snapshot_data, snapshot_bounds, run_seed
+                )
+            else:
+                (
+                    predictor,
+                    price_metrics,
+                    price_metadata,
+                    price_evaluation_set,
+                ) = _build_price_ensemble(
                     db_session, start_time=start_time, end_time=end_time, seed=run_seed
                 )
 
         passes_price_gate = force or price_metrics.get("r2", -999) >= _MIN_PRICE_R2
 
         if passes_price_gate:
+            member_versions = {}
+            for member_name, member in predictor.members.items():
+                member_versions[member_name] = save_model(
+                    "price_predictor_member",
+                    member,
+                    metadata={
+                        "member_name": member_name,
+                        "metrics": price_metadata["member_metrics"][member_name],
+                        "training_snapshot": snapshot_id,
+                    },
+                )
+            predictor.member_versions = member_versions
+            price_metadata["ensemble"]["member_versions"] = member_versions
             p_version = save_model(
                 "price_predictor", predictor, metadata=price_metadata
             )
@@ -560,6 +654,9 @@ def run_retraining(
                 result["models"]["price_predictor"] = {
                     "version": p_version,
                     "metrics": price_metrics,
+                    "member_metrics": price_metadata["member_metrics"],
+                    "member_versions": member_versions,
+                    "ensemble_strategy": predictor.strategy,
                     "promoted": True,
                     "schema_version": price_metadata.get("schema_version"),
                     "schema_fingerprint": price_metadata.get("schema_fingerprint"),
@@ -574,6 +671,9 @@ def run_retraining(
                 result["models"]["price_predictor"] = {
                     "version": p_version,
                     "metrics": price_metrics,
+                    "member_metrics": price_metadata["member_metrics"],
+                    "member_versions": member_versions,
+                    "ensemble_strategy": predictor.strategy,
                     "promoted": False,
                     "reason": "promotion_evaluation_failed",
                     "schema_version": price_metadata.get("schema_version"),
@@ -585,6 +685,8 @@ def run_retraining(
             MODEL_RETRAINING_TOTAL.labels(model_type="price_predictor", status="failed").inc()
             result["models"]["price_predictor"] = {
                 "metrics": price_metrics,
+                "member_metrics": price_metadata["member_metrics"],
+                "ensemble_strategy": predictor.strategy,
                 "promoted": False,
                 "reason": "quality_gate_failed",
             }
@@ -599,8 +701,11 @@ def run_retraining(
             from src.anomaly_detector import AnomalyDetector
             from src.ml.anomaly_evaluation import evaluate_detector
 
-            anomaly_report = evaluate_detector(lambda: AnomalyDetector(use_ml=False))
-            result["anomaly_detector_evaluation"] = anomaly_report
+            with profile_stage("model_retraining.anomaly_evaluation"):
+                anomaly_report = evaluate_detector(
+                    lambda: AnomalyDetector(use_ml=False)
+                )
+                result["anomaly_detector_evaluation"] = anomaly_report
             logger.info(
                 "Anomaly detector evaluation: precision=%.3f recall=%.3f false_positive_rate=%.3f",
                 anomaly_report["overall"]["precision"],
@@ -648,6 +753,29 @@ def run_retraining(
         _retrain_lock.release()
 
     return result
+
+
+def run_retraining(
+    db_session=None,
+    force: bool = False,
+    manifest: Optional[Dict[str, Any]] = None,
+    seed: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Profiled entry point for a full retraining run (#1454).
+
+    The whole run is measured as the ``model_retraining_daily`` stage, with its
+    compute broken out further into ``model_retraining.sentiment``,
+    ``model_retraining.price_predictor`` and
+    ``model_retraining.anomaly_evaluation``.
+    """
+    with profile_stage("model_retraining_daily"):
+        return _run_retraining(
+            db_session=db_session,
+            force=force,
+            manifest=manifest,
+            seed=seed,
+        )
 
 
 def get_last_run_status() -> Dict[str, Any]:

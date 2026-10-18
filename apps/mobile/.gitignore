@@ -47,3 +47,7 @@ yarn-error.*
 
 # Size budget report (issue #1413)
 /mobile-size.md
+
+# Startup budget measurements (issue #1576)
+/mobile-startup-measurements.json
+/mobile-startup.md

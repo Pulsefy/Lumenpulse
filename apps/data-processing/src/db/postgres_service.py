@@ -48,6 +48,7 @@ from .models import (
     PredictionLog,
     SentimentLabel,
     AnalyticsJob,
+    FeatureDriftRetrainingCooldown,
 )
 from .cohort_models import (
     GrantRound,
@@ -3475,6 +3476,69 @@ class PostgresService:
         except SQLAlchemyError as e:
             logger.error(f"Failed to look up active analytics job: {e}")
             return None
+
+    def claim_feature_drift_retraining_cooldown(
+        self,
+        drift_signature: str,
+        drift_event_id: str,
+        cooldown_seconds: float,
+    ) -> bool:
+        """Atomically claim a drift signature until its cooldown expires."""
+        try:
+            FeatureDriftRetrainingCooldown.__table__.create(
+                bind=self.engine, checkfirst=True
+            )
+            now = datetime.utcnow()
+            expires_before = now - timedelta(seconds=cooldown_seconds)
+            values = {
+                "drift_signature": drift_signature,
+                "drift_event_id": drift_event_id,
+                "triggered_at": now,
+            }
+            if self.engine.dialect.name == "postgresql":
+                from sqlalchemy.dialects.postgresql import insert
+            elif self.engine.dialect.name == "sqlite":
+                from sqlalchemy.dialects.sqlite import insert
+            else:
+                raise RuntimeError(
+                    "Drift retraining cooldown requires PostgreSQL or SQLite"
+                )
+
+            statement = insert(FeatureDriftRetrainingCooldown).values(**values)
+            statement = statement.on_conflict_do_update(
+                index_elements=["drift_signature"],
+                set_={
+                    "drift_event_id": drift_event_id,
+                    "triggered_at": now,
+                },
+                where=FeatureDriftRetrainingCooldown.triggered_at <= expires_before,
+            )
+            with self.get_session() as session:
+                result = session.execute(statement)
+                return result.rowcount == 1
+        except SQLAlchemyError as e:
+            logger.error("Failed to claim feature drift retraining cooldown: %s", e)
+            raise
+
+    def release_feature_drift_retraining_cooldown(
+        self, drift_signature: str, drift_event_id: str
+    ) -> None:
+        """Release a claim when retraining could not be submitted."""
+        try:
+            with self.get_session() as session:
+                session.execute(
+                    delete(FeatureDriftRetrainingCooldown).where(
+                        and_(
+                            FeatureDriftRetrainingCooldown.drift_signature
+                            == drift_signature,
+                            FeatureDriftRetrainingCooldown.drift_event_id
+                            == drift_event_id,
+                        )
+                    )
+                )
+        except SQLAlchemyError as e:
+            logger.error("Failed to release feature drift cooldown claim: %s", e)
+            raise
 
     def create_analytics_job(
         self,

@@ -7,6 +7,12 @@ import {
   IsArray,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { PaginatedQueryDto } from '../../common/pagination/pagination-query.dto';
+import {
+  PaginatedResponseDto,
+  ResolvedPagination,
+} from '../../common/pagination/pagination-response.dto';
+import { GrantRoundState } from '../round-lifecycle';
 
 export class CreateRoundDto {
   @ApiProperty({
@@ -160,9 +166,10 @@ export class RoundDto {
 
   @ApiProperty({
     description: 'Current status of the round',
-    example: 'ACTIVE',
+    enum: GrantRoundState,
+    example: GrantRoundState.OPEN,
   })
-  status: string;
+  status: GrantRoundState;
 }
 
 export class ProjectQfDto {
@@ -409,4 +416,25 @@ export class RoundExportDto extends RoundSummaryDto {
     type: [ContributionRecordDto],
   })
   contributions: ContributionRecordDto[];
+}
+
+// ── Paginated list DTOs ──────────────────────────────────────────────────────
+
+/**
+ * Query DTO for `GET /grants/rounds`. Extends the shared pagination contract
+ * so every list endpoint accepts the same `page` / `pageSize` parameters.
+ */
+export class RoundListQueryDto extends PaginatedQueryDto {}
+
+/**
+ * Paginated response for `GET /grants/rounds`.
+ */
+export class RoundListResponseDto extends PaginatedResponseDto<RoundDto> {
+  constructor(
+    items: RoundDto[],
+    pagination: ResolvedPagination,
+    total: number,
+  ) {
+    super(items, pagination, total);
+  }
 }

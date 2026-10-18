@@ -47,7 +47,7 @@ This document records what the system is defending against, where the trust boun
 | `JWT_SECRET` | Critical | Signs all access and refresh tokens |
 | `SOROBAN_INGEST_SECRET` | High | HMAC secret for Soroban event webhook ingestion |
 | `WEBHOOK_SECRET` / `WEBHOOK_PROVIDERS` | High | HMAC/RSA/Ed25519 secrets for internal service webhooks |
-| `PYTHON_API_KEY` | Medium | Shared secret between backend and data-processing service |
+| Managed service API keys | Medium | Per-consumer secrets; only SHA-256 verifiers are stored in PostgreSQL |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | High | S3 asset upload credentials |
 | `TELEGRAM_BOT_TOKEN` | Medium | Alerting bot token |
 | User wallet public keys | Low | Non-secret; cached in mobile SecureStore and DB |
@@ -67,8 +67,8 @@ This document records what the system is defending against, where the trust boun
 |---|---|
 | Authenticated user | Human who has completed email+password (+ optional 2FA) login and holds a valid JWT |
 | Contract admin | Holder of the admin keypair registered in a Soroban contract |
-| Backend service | The NestJS process; communicates with data-processing over an internal network using `PYTHON_API_KEY` |
-| Data-processing service | The FastAPI process; authenticates inbound requests with `X-API-Key` |
+| Backend service | The NestJS process; communicates with data-processing over an internal network using a scoped service API key |
+| Data-processing service | The FastAPI process; authenticates inbound requests with `X-API-Key` against managed verifiers or temporary legacy env keys |
 | Soroban RPC relay | Trusted Stellar network endpoint |
 
 ### Partially Trusted
@@ -159,7 +159,9 @@ The NestJS backend calls the Python FastAPI service for sentiment analysis and M
 
 | Control | Implementation |
 |---|---|
-| API key header auth | `apps/data-processing/src/security.py` — `SecurityConfig.validate_api_key()`; checks `X-API-Key` header against `API_KEY` env var; returns 401 if missing, 403 if wrong |
+| API key header auth | `apps/data-processing/src/security.py` — `SecurityConfig.validate_api_key()`; checks `X-API-Key` against active SHA-256 verifiers in `service_api_keys`, enforces scopes, and temporarily accepts `API_KEY`/`API_KEYS` environment credentials during migration |
+| Key management | Admin-only `service-consumers/:consumerId/api-keys` endpoints issue, list, rotate, and revoke keys; raw secrets are returned once and never stored or logged |
+| Consumer attribution | Python logs and `service_api_key_requests_total` metric use consumer ID, method, and required scope, never key values |
 | Rate limiting (inbound) | `security.py` — slowapi `Limiter`; default 100 req/min, strict 10 req/min; **currently uses in-memory storage — must be Redis in production** (see [Accepted Risks](#7-accepted-risks)) |
 | Path exclusions | Health (`/health`), metrics (`/metrics`), docs (`/docs`, `/redoc`, `/openapi.json`), and `/sentiment/legend` skip API key check |
 
@@ -251,7 +253,7 @@ News APIs and social platforms push untrusted free text (articles, posts, predic
 | Threat | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | Unauthenticated access to ML/analytics endpoints | Low | Medium | `X-API-Key` middleware in `security.py`; 401/403 on missing/invalid key |
-| Key leakage via environment | Low | Medium | `PYTHON_API_KEY` injected via platform secrets; not committed to repo |
+| Key leakage via environment | Low | Medium | Managed key values are injected via platform secrets; only verifiers are stored; legacy shared environment keys remain a temporary migration fallback |
 | Rate-limit saturation (in-memory) | Medium | Medium | **Accepted risk** — see Section 7; in-memory limiter resets on process restart |
 | Sensitive data exfiltration via exposed docs | Low | Low | `/docs`, `/redoc`, `/openapi.json` excluded from API key requirement — these pages describe the API but contain no user data |
 
@@ -314,7 +316,7 @@ News APIs and social platforms push untrusted free text (articles, posts, predic
 |---|---|---|---|
 | `JWT_SECRET` | Signs all JWT tokens | Platform secret manager / env injection | Rotate in env; existing tokens become invalid immediately; users re-login |
 | `STELLAR_SERVER_SECRET` | SEP-10-style wallet challenge signing | Platform secret manager / env injection | Rotate in env; outstanding challenges (5-minute TTL) expire naturally |
-| `PYTHON_API_KEY` | Backend → data-processing auth | Both services' env; never in source code | Rotate simultaneously in both services; brief downtime if not done atomically |
+| Managed service API keys | Service-consumer authentication | SHA-256 verifier in PostgreSQL; raw secret in consumer secret manager | Issue a replacement key, deploy it, then revoke the old key; overlap is supported |
 | `SOROBAN_INGEST_SECRET` | Webhook HMAC for Soroban event ingestion | Backend env | Rotate via runtime provider API or env restart |
 | `WEBHOOK_SECRET` / `WEBHOOK_PROVIDERS` secrets | Service-to-service webhook auth | Backend env | Rotate via `PUT /webhooks/admin/providers/:name` without restart |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | S3 asset uploads | Backend env | Rotate in AWS IAM; update env |

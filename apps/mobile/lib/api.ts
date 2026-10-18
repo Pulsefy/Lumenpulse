@@ -93,6 +93,33 @@ export interface LinkedStellarAccount {
   updatedAt: string;
 }
 
+export interface UserSession {
+  id: string;
+  deviceInfo: string | null;
+  ipAddress: string | null;
+  locationHint: string | null;
+  lastSeenAt: string | null;
+  createdAt: string;
+  expiresAt: string;
+  isCurrent: boolean;
+}
+
+export const sessionsApi = {
+  async list(): Promise<ApiResponse<{ sessions: UserSession[]; total: number }>> {
+    return apiClient.get<{ sessions: UserSession[]; total: number }>('/auth/sessions');
+  },
+
+  async revoke(sessionId: string): Promise<ApiResponse<{ message: string; sessionId: string }>> {
+    return apiClient.post<{ message: string; sessionId: string }>(
+      `/auth/sessions/${encodeURIComponent(sessionId)}/revoke`,
+    );
+  },
+
+  async revokeAll(): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.post<{ message: string }>('/auth/logout-all');
+  },
+};
+
 export interface LinkStellarAccountPayload {
   publicKey: string;
   label?: string;

@@ -39,6 +39,21 @@ export function getRoleFromToken(token: string | null): UserRole | null {
   }
 }
 
+export function getCurrentUserId(): string | null {
+  const token = getAuthToken();
+  if (!token) return null;
+
+  const [, payload] = token.split(".");
+  if (!payload) return null;
+
+  try {
+    const claims = JSON.parse(decodeBase64Url(payload)) as { sub?: unknown };
+    return typeof claims.sub === "string" ? claims.sub : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getCurrentUserRole(): UserRole | null {
   return getRoleFromToken(getAuthToken());
 }

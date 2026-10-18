@@ -22,6 +22,19 @@ export class SessionDto {
   })
   ipAddress?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Coarse location hint (city/country) from edge headers',
+    example: 'Lagos, NG',
+    nullable: true,
+  })
+  locationHint?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Last time the session was seen',
+    nullable: true,
+  })
+  lastSeenAt?: Date | null;
+
   @ApiProperty({
     description: 'When this session was created',
     example: '2024-01-15T10:30:00Z',

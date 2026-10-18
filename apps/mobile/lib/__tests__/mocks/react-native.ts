@@ -21,6 +21,13 @@ export const AppState = {
   addEventListener: jest.fn().mockReturnValue({ remove: jest.fn() }),
 };
 
+export const InteractionManager = {
+  runAfterInteractions: (callback: () => void) => {
+    callback();
+    return { cancel: jest.fn() };
+  },
+};
+
 export const StyleSheet = {
   create: (styles: any) => styles,
   hairlineWidth: 1,
@@ -33,6 +40,7 @@ const ReactNative = {
   Alert,
   AppState,
   StyleSheet,
+  InteractionManager,
 };
 
 export default ReactNative;

@@ -1,14 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
+import { DataProcessingClient } from '../data-processing/data-processing.client';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
-import { config } from '../lib/config';
-import {
-  CORRELATION_ID_HEADER,
-  REQUEST_ID_HEADER,
-} from '../common/constants/request.constants';
-import { RequestContextService } from '../common/services/request-context.service';
 
 export interface RetrainResult {
   status: string;
@@ -50,30 +43,8 @@ const TERMINAL_STATUSES = new Set(['succeeded', 'failed']);
 @Injectable()
 export class ModelRetrainingService {
   private readonly logger = new Logger(ModelRetrainingService.name);
-  private readonly pythonApiUrl: string;
-  private readonly apiKey: string;
 
-  constructor(
-    private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
-  ) {
-    this.pythonApiUrl =
-      this.configService.get<string>('PYTHON_API_URL') || config.python.apiUrl;
-    this.apiKey =
-      this.configService.get<string>('PYTHON_API_KEY') ||
-      config.python.apiKey ||
-      '';
-  }
-
-  private get headers() {
-    const correlationId = RequestContextService.getCorrelationId();
-    const requestId = RequestContextService.getRequestId();
-    return {
-      ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {}),
-      [CORRELATION_ID_HEADER]: correlationId,
-      [REQUEST_ID_HEADER]: requestId,
-    };
-  }
+  constructor(private readonly httpService: DataProcessingClient) {}
 
   /**
    * Submit a retraining run to the Python service's async job queue (#1248).
@@ -86,11 +57,7 @@ export class ModelRetrainingService {
     try {
       this.logger.log(`Submitting model retraining (force=${force})`);
       const response = await firstValueFrom(
-        this.httpService.post<JobSubmission>(
-          `${this.pythonApiUrl}/retrain`,
-          { force },
-          { headers: this.headers, timeout: 10_000 },
-        ),
+        this.httpService.post<JobSubmission>('/retrain', { force }, {}),
       );
       this.logger.log(
         `Retraining submitted: job_id=${response.data.job_id} status=${response.data.status}`,
@@ -109,8 +76,8 @@ export class ModelRetrainingService {
   async getJobStatus(jobId: string): Promise<JobStatus> {
     const response = await firstValueFrom(
       this.httpService.get<JobStatus>(
-        `${this.pythonApiUrl}/api/jobs/${jobId}`,
-        { headers: this.headers, timeout: 10_000 },
+        `/api/jobs/${encodeURIComponent(jobId)}`,
+        {},
       ),
     );
     return response.data;
@@ -153,10 +120,7 @@ export class ModelRetrainingService {
   async getModelStatus(): Promise<ModelStatusResult> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get<ModelStatusResult>(
-          `${this.pythonApiUrl}/model/status`,
-          { headers: this.headers, timeout: 10_000 },
-        ),
+        this.httpService.get<ModelStatusResult>('/model/status', {}),
       );
       return response.data;
     } catch (err) {

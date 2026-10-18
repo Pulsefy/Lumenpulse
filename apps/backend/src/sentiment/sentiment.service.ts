@@ -1,14 +1,10 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
-import { ConfigService } from '@nestjs/config';
-import { AxiosError } from 'axios';
-import { config } from '../lib/config';
 import {
-  CORRELATION_ID_HEADER,
-  REQUEST_ID_HEADER,
-} from '../common/constants/request.constants';
-import { RequestContextService } from '../common/services/request-context.service';
+  DataProcessingClient,
+  DataProcessingUnavailableError,
+} from '../data-processing/data-processing.client';
+import { firstValueFrom } from 'rxjs';
+import { AxiosError } from 'axios';
 
 export interface SentimentRequest {
   text: string;
@@ -70,17 +66,8 @@ function hasErrorCode(error: unknown): error is { code?: string } {
 @Injectable()
 export class SentimentService {
   private readonly logger = new Logger(SentimentService.name);
-  private readonly pythonApiUrl: string;
 
-  constructor(
-    private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
-  ) {
-    // Get Python API URL from environment or configuration
-    this.pythonApiUrl =
-      this.configService.get<string>('PYTHON_API_URL') || config.python.apiUrl;
-    this.logger.log(`Python API URL: ${this.pythonApiUrl}`);
-  }
+  constructor(private readonly httpService: DataProcessingClient) {}
 
   async analyzeSentiment(text: string): Promise<SentimentResponse> {
     try {
@@ -94,22 +81,13 @@ export class SentimentService {
         `Sending sentiment analysis request for text: "${text.substring(0, 50)}..."`,
       );
 
-      const correlationId = RequestContextService.getCorrelationId();
-      const requestId = RequestContextService.getRequestId();
-
       const response = await firstValueFrom(
-        this.httpService.post<SentimentResponse>(
-          `${this.pythonApiUrl}/analyze`,
-          request,
-          {
-            timeout: 10000, // 10 second timeout
-            headers: {
-              'Content-Type': 'application/json',
-              [CORRELATION_ID_HEADER]: correlationId,
-              [REQUEST_ID_HEADER]: requestId,
-            },
+        this.httpService.post<SentimentResponse>('/analyze', request, {
+          timeout: 10000, // 10 second timeout
+          headers: {
+            'Content-Type': 'application/json',
           },
-        ),
+        }),
       );
 
       this.logger.debug(`Received sentiment score: ${response.data.sentiment}`);
@@ -179,19 +157,15 @@ export class SentimentService {
   }
   async checkHealth(): Promise<HealthResponse> {
     try {
-      const correlationId = RequestContextService.getCorrelationId();
-      const requestId = RequestContextService.getRequestId();
       const response = await firstValueFrom(
-        this.httpService.get<HealthResponse>(`${this.pythonApiUrl}/health`, {
+        this.httpService.get<HealthResponse>('/health', {
           timeout: 5000,
-          headers: {
-            [CORRELATION_ID_HEADER]: correlationId,
-            [REQUEST_ID_HEADER]: requestId,
-          },
+          headers: {},
         }),
       );
       return response.data;
     } catch (error: unknown) {
+      if (error instanceof DataProcessingUnavailableError) throw error;
       if (isAxiosError(error) || error instanceof Error) {
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';

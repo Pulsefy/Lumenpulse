@@ -324,7 +324,10 @@ export class SecretRotationService {
     );
   }
 
-  private createVersion(value: string, expiresAt: number | null): SecretVersion {
+  private createVersion(
+    value: string,
+    expiresAt: number | null,
+  ): SecretVersion {
     return { id: randomUUID(), value, createdAt: Date.now(), expiresAt };
   }
 }

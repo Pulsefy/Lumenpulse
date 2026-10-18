@@ -29,7 +29,49 @@ export class DashboardController {
   })
   @ApiOkResponse({
     description: 'Aggregated dashboard payload',
-    type: Object,
+    schema: {
+      type: 'object',
+      properties: {
+        generatedAt: { type: 'string', format: 'date-time' },
+        cacheTtlMs: { type: 'number' },
+        portfolio: {
+          type: 'object',
+          properties: {
+            data: { type: 'object', nullable: true },
+            error: { type: 'string', nullable: true, enum: ['unavailable'] },
+          },
+        },
+        watchlist: {
+          type: 'object',
+          properties: {
+            data: { type: 'object', nullable: true },
+            error: { type: 'string', nullable: true, enum: ['unavailable'] },
+          },
+        },
+        signals: {
+          type: 'object',
+          properties: {
+            data: { type: 'object', nullable: true },
+            error: { type: 'string', nullable: true, enum: ['unavailable'] },
+          },
+        },
+        news: {
+          type: 'object',
+          properties: {
+            data: { type: 'object', nullable: true },
+            error: { type: 'string', nullable: true, enum: ['unavailable'] },
+          },
+        },
+      },
+      required: [
+        'generatedAt',
+        'cacheTtlMs',
+        'portfolio',
+        'watchlist',
+        'signals',
+        'news',
+      ],
+    },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getDashboard(@Req() req: AuthenticatedRequest): Promise<DashboardResponse> {

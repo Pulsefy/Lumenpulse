@@ -97,7 +97,25 @@
     "category": "Category",
     "matched_mention": "Matched: {{mention}}",
     "no_results": "No results found.",
-    "error_message": "Couldn't search right now. Please try again."
+    "error_message": "Couldn't search right now. Please try again.",
+    "save_search": "保存搜索",
+    "saved_searches": "已保存的搜索",
+    "saved_searches_empty": "尚无已保存的搜索。",
+    "saved_searches_load_error": "无法加载已保存的搜索。",
+    "save_search_title": "保存搜索",
+    "rename_search_title": "重命名已保存的搜索",
+    "search_name": "搜索名称",
+    "search_name_placeholder": "输入名称",
+    "save": "保存",
+    "rename": "重命名",
+    "delete": "删除",
+    "delete_search_title": "删除已保存的搜索？",
+    "delete_search_message": "此操作将永久删除此搜索。",
+    "notifications_on": "通知已开启",
+    "notifications_off": "通知已关闭",
+    "save_search_error": "无法保存此搜索。",
+    "update_search_error": "无法更新此已保存的搜索。",
+    "delete_search_error": "无法删除此已保存的搜索。"
   },
   "projects": {
     "title": "Projects",
@@ -192,6 +210,7 @@
       "active": "Active",
       "pending": "Pending",
       "ended": "Ended",
+      "matching": "Matching",
       "finalized": "Finalized",
       "distributed": "Distributed"
     },
@@ -495,6 +514,19 @@
           "description": "Searches saved on this device to make them easy to repeat."
         }
       }
+    },
+    "sessions": {
+      "title": "Active Sessions",
+      "description": "See where you are signed in and sign out any device.",
+      "empty": "No active sessions.",
+      "this_device": "This device",
+      "unknown_device": "Unknown device",
+      "unknown_location": "Unknown location",
+      "last_seen": "Last seen",
+      "revoke": "Revoke",
+      "revoke_confirm": "Sign this device out?",
+      "load_failed": "Could not load sessions.",
+      "revoke_failed": "Could not revoke session."
     }
   },
   "transaction_receipt": {
@@ -568,11 +600,11 @@
       "title": "Register this wallet",
       "hint": "Your wallet signs a registration request bound to a one-time code issued by the registry. Nothing is submitted if you decline.",
       "handle_placeholder": "GitHub handle (e.g. octocat)",
-      "stage_nonce": "Fetching your one-time registration code\u2026",
-      "stage_signature": "Waiting for your wallet to sign\u2026",
-      "stage_revalidate": "Checking the registration code is still valid\u2026",
-      "stage_submit": "Submitting your registration\u2026",
-      "stage_verify": "Confirming your registration\u2026",
+      "stage_nonce": "Fetching your one-time registration code…",
+      "stage_signature": "Waiting for your wallet to sign…",
+      "stage_revalidate": "Checking the registration code is still valid…",
+      "stage_submit": "Submitting your registration…",
+      "stage_verify": "Confirming your registration…",
       "success": "Registration submitted. Your on-chain record is now live."
     },
     "quorum_progress": "Quorum Approval Progress",
@@ -598,7 +630,7 @@
       "title": "Reconnect to {{network}}",
       "message": "Restore your saved wallet session on the new {{network}} network. Choose how you want to reconnect.",
       "button": "Reconnect Wallet",
-      "restoring": "Restoring wallet session\u2026"
+      "restoring": "Restoring wallet session…"
     },
     "network_mismatch": {
       "title": "Network Changed",

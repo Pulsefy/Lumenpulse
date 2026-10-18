@@ -5,6 +5,7 @@ for the Node.js backend to consume.
 """
 
 import asyncio
+import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -14,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+import pandas as pd
 
 # Import your existing SentimentAnalyzer
 import sys
@@ -23,9 +25,16 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from sentiment import SentimentAnalyzer
+from vaderSentiment.vaderSentiment import BOOSTER_DICT, NEGATE
 from src.config.latency_budget import record_latency
 from src.utils.logger import setup_logger, correlation_id_ctx, generate_correlation_id
-from src.utils.metrics import API_FAILURES_TOTAL, generate_latest, CONTENT_TYPE_LATEST
+from src.utils.metrics import (
+    API_FAILURES_TOTAL,
+    INFERENCE_OOD_TOTAL,
+    INFERENCE_REQUESTS_TOTAL,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+)
 from src.security import (
     security_config,
     setup_security_middleware,
@@ -33,6 +42,10 @@ from src.security import (
     get_rate_limit_decorator,
 )
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
+from src.observability.stage_profiler import profile_stage
+from src.ml.ood_detector import LexicalOODDetector, configured_unknown_token_ratio
+from src.ml.calibration import CONFIDENCE_GUIDANCE, calibrated_confidence
+from src.ml.calibration_data import sentiment_raw_confidence
 from src.ml.model_registry import (
     get_registry_status,
     # Shadow-mode deployment (Issue #1256)
@@ -52,6 +65,7 @@ from src.ml.model_registry import (
     get_live_model,
     rollback_model,
 )
+from src.ml.serving_cost import get_cost_report, record_inference
 from src.analytics.correlation_engine import CorrelationEngine
 from src.utils.pagination import (
     DEFAULT_PAGE_SIZE,
@@ -139,6 +153,14 @@ async def metrics_and_logging_middleware(request: Request, call_next):
 
 # Initialize your existing SentimentAnalyzer
 sentiment_analyzer = SentimentAnalyzer()
+ood_detector = LexicalOODDetector(
+    (
+        set(getattr(sentiment_analyzer.analyzer, "lexicon", {}))
+        | set(BOOSTER_DICT)
+        | set(NEGATE)
+    ),
+    configured_unknown_token_ratio(),
+)
 
 # Import and register routers
 from src.api.ingestion_quality_routes import router as ingestion_quality_router
@@ -198,12 +220,30 @@ def _get_embedding_service() -> Any:
 
 
 @app.on_event("startup")
-async def _reconcile_orphaned_analytics_jobs() -> None:
+async def _startup() -> None:
     """
-    Any job still queued/running at startup belongs to a process that died
-    before finishing it (#1248) — report the loss instead of leaving it
-    stuck forever.
+    Runs on every uvicorn worker startup.
+
+    1. Pre-warm the in-memory model cache so the first real request never
+       pays a cold-start disk read (issue #1628: inference-service startup).
+    2. Reconcile any analytics jobs that were left queued/running by a process
+       that died before finishing them (#1248).
     """
+    # ── 1. Pre-warm models (issue #1628) ──────────────────────────────────
+    # Import is lazy so this module stays importable even in minimal test
+    # contexts where the models/ directory does not exist.
+    try:
+        from src.ml.model_loader import warm_models, INFERENCE_MODELS
+
+        warm_models(*INFERENCE_MODELS)
+    except Exception as exc:
+        logger.warning(
+            "Model pre-warm at startup failed (non-fatal — endpoints will "
+            "attempt cold load on first request): %s",
+            exc,
+        )
+
+    # ── 2. Reconcile orphaned async jobs (#1248) ──────────────────────────
     from src.jobs.manager import reconcile_orphaned_jobs
 
     reconcile_orphaned_jobs(postgres_service)
@@ -287,12 +327,30 @@ class AnalyzeRequest(BaseModel):
     explain: bool = False  # Optionally include per-token contributions (#1456)
 
 
+class PricePredictionRequest(BaseModel):
+    features: Dict[str, float]
+    schema_version: Optional[str] = None
+
+
+class PricePredictionResponse(BaseModel):
+    predictions: List[float]
+    member_contributions: Dict[str, Dict[str, Any]]
+    model_version: str
+
+
 class AnalyzeResponse(BaseModel):
-    sentiment: float  # compound_score from SentimentResult
+    sentiment: Optional[float]  # None when the input was not scored
     asset_codes: List[str] = []  # Asset codes found in text
     sentiment_label: str = ""  # positive/negative/neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
     explanation: Optional[SentimentExplanationResponse] = None  # Token attribution (#1456)
+    scored: bool = True
+    confidence: float = 1.0  # RAW lexical support -- do not display (see confidence_guidance)
+    # Calibrated probability that sentiment_label is correct; None when unscored.
+    calibrated_confidence: Optional[float] = None
+    calibration: Optional[Dict[str, Any]] = None
+    confidence_guidance: Dict[str, Any] = CONFIDENCE_GUIDANCE
+    status: str = "scored"
 
 
 class AssetAnalysisResponse(BaseModel):
@@ -531,6 +589,7 @@ async def search_similar(
             "`python scripts/fetch_embedding_model.py` and rebuild the image.",
         )
 
+    embed_start = time.monotonic()
     try:
         query_vector = embedding_service.embed(q)
     except Exception as exc:
@@ -538,6 +597,15 @@ async def search_similar(
         raise HTTPException(
             status_code=503, detail="Semantic search model unavailable"
         )
+
+    # Attribute the embedding compute cost to the pinned model version and
+    # this serving path (#1643).
+    record_inference(
+        model_type="embedding",
+        endpoint="/search/similar",
+        duration_seconds=time.monotonic() - embed_start,
+        model_version=embedding_service.model_version,
+    )
 
     results = postgres_service.search_articles_by_embedding(
         query_vector=query_vector,
@@ -599,6 +667,53 @@ async def get_contributor_activity_timeline(
     )
 
 
+@app.post("/price/predict", response_model=PricePredictionResponse)
+@limiter.limit("50/minute") if limiter else lambda x: x
+async def predict_price(body: PricePredictionRequest, request: Request) -> PricePredictionResponse:
+    """Serve the promoted price model and log every ensemble member's contribution."""
+    if not body.features:
+        raise HTTPException(status_code=400, detail="At least one feature is required")
+
+    start_time = time.monotonic()
+    INFERENCE_REQUESTS_TOTAL.labels(endpoint="/price/predict").inc()
+    try:
+        model = get_live_model("price_predictor")
+        model_version = get_current_version("price_predictor") or "unversioned"
+        features = pd.DataFrame([body.features])
+        if body.schema_version:
+            features.attrs["schema_version"] = body.schema_version
+
+        predict_with_contributions = getattr(model, "predict_with_contributions", None)
+        if callable(predict_with_contributions):
+            predictions, contributions = predict_with_contributions(features)
+        else:
+            predictions = model.predict(features)
+            contributions = {}
+        response = PricePredictionResponse(
+            predictions=[float(value) for value in predictions],
+            member_contributions=contributions,
+            model_version=model_version,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail="Price prediction model is unavailable") from exc
+    except Exception as exc:
+        logger.exception("Price prediction failed")
+        raise HTTPException(status_code=500, detail="Price prediction failed") from exc
+
+    _log_prediction(
+        request_id=correlation_id_ctx.get(generate_correlation_id()),
+        model_type="price_predictor",
+        model_version=response.model_version,
+        input_text=json.dumps(body.features, sort_keys=True),
+        output={
+            "predictions": response.predictions,
+            "member_contributions": response.member_contributions,
+        },
+        latency_ms=(time.monotonic() - start_time) * 1000,
+    )
+    return response
+
+
 @app.post("/analyze", response_model=AnalyzeResponse)
 @limiter.limit("50/minute") if limiter else lambda x: x
 async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeResponse:
@@ -611,9 +726,35 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
         if not body.text or not body.text.strip():
             raise HTTPException(status_code=400, detail="Text cannot be empty")
 
+        INFERENCE_REQUESTS_TOTAL.labels(endpoint="/analyze").inc()
+        assessment = ood_detector.assess(body.text)
+        if assessment.is_out_of_distribution:
+            INFERENCE_OOD_TOTAL.labels(endpoint="/analyze").inc()
+            logger.info(
+                "Rejected out-of-distribution input before sentiment inference "
+                "| unknown_token_ratio=%.4f | client_ip=%s",
+                assessment.unknown_token_ratio,
+                request.client.host,
+            )
+            return AnalyzeResponse(
+                sentiment=None,
+                sentiment_label="unscored",
+                scored=False,
+                confidence=assessment.confidence,
+                status="out_of_distribution",
+            )
+
         # Use your existing SentimentAnalyzer with asset filter
+        inference_start = time.monotonic()
         result = sentiment_analyzer.analyze(
             body.text, body.asset, explain=body.explain
+        )
+        # Attribute the compute cost to this model version + serving path (#1643).
+        record_inference(
+            model_type="sentiment",
+            endpoint="/analyze",
+            duration_seconds=time.monotonic() - inference_start,
+            model_version=get_current_version("sentiment") or "1.0.0",
         )
 
         logger.info(
@@ -638,6 +779,11 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
             latency_ms=(time.monotonic() - start_time) * 1000,
         )
 
+        calibrated = calibrated_confidence(
+            "sentiment",
+            sentiment_raw_confidence(result.compound_score, result.sentiment_label),
+        )
+
         # Return enhanced response with asset information
         return AnalyzeResponse(
             sentiment=result.compound_score,
@@ -649,6 +795,11 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
                 if result.explanation
                 else None
             ),
+            scored=True,
+            confidence=assessment.confidence,
+            calibrated_confidence=calibrated["calibrated_confidence"],
+            calibration=calibrated["calibration"],
+            status="scored",
         )
 
     except HTTPException:
@@ -760,22 +911,79 @@ async def analyze_batch(request: Request, texts: list[str], asset: Optional[str]
         loop = asyncio.get_running_loop()
 
         def _run_batch() -> list:
-            return sentiment_analyzer.analyze_batch(texts, asset)
+            assessments = [ood_detector.assess(text) for text in texts]
+            for assessment in assessments:
+                INFERENCE_REQUESTS_TOTAL.labels(endpoint="/analyze-batch").inc()
+                if assessment.is_out_of_distribution:
+                    INFERENCE_OOD_TOTAL.labels(endpoint="/analyze-batch").inc()
 
+            in_distribution_texts = [
+                text
+                for text, assessment in zip(texts, assessments)
+                if not assessment.is_out_of_distribution
+            ]
+            scored_results = iter(
+                sentiment_analyzer.analyze_batch(in_distribution_texts, asset)
+            )
+            return [
+                (
+                    assessment,
+                    None
+                    if assessment.is_out_of_distribution
+                    else next(scored_results),
+                )
+                for assessment in assessments
+            ]
+
+        batch_start = time.monotonic()
         try:
-            results = await loop.run_in_executor(_batch_executor, _run_batch)
+            assessed_results = await loop.run_in_executor(_batch_executor, _run_batch)
         except Exception as e:
             logger.error("Batch inference failed: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
+        # One inference per scored batch item, all charged to this model
+        # version and serving path (#1643). Out-of-distribution items are
+        # rejected before sentiment inference, so they are not counted —
+        # matching how /analyze skips record_inference for rejected inputs.
+        record_inference(
+            model_type="sentiment",
+            endpoint="/analyze-batch",
+            duration_seconds=time.monotonic() - batch_start,
+            model_version=get_current_version("sentiment") or "1.0.0",
+            count=sum(1 for _, result in assessed_results if result is not None),
+        )
+
         # --- 4. Per-item error isolation ---------------------------------------
         item_results: list[Dict[str, Any]] = []
-        for idx, (text, result) in enumerate(zip(texts, results)):
+        for idx, (text, (assessment, result)) in enumerate(zip(texts, assessed_results)):
+            if assessment.is_out_of_distribution:
+                item_results.append(
+                    {
+                        "index": idx,
+                        "text": text[:100],
+                        "status": "out_of_distribution",
+                        "scored": False,
+                        "confidence": assessment.confidence,
+                        "sentiment": None,
+                        "sentiment_label": "unscored",
+                        "asset_codes": [],
+                    }
+                )
+                continue
             try:
                 item_results.append({
                     "index": idx,
                     "text": text[:100],
                     "status": "ok",
+                    "scored": True,
+                    "confidence": assessment.confidence,
+                    **calibrated_confidence(
+                        "sentiment",
+                        sentiment_raw_confidence(
+                            result.compound_score, result.sentiment_label
+                        ),
+                    ),
                     **result.to_dict(),
                 })
             except Exception as item_exc:
@@ -809,7 +1017,11 @@ async def analyze_batch(request: Request, texts: list[str], asset: Optional[str]
                 )
 
         # Recompute summary from successful items only
-        successful = [r for r in results if r is not None]
+        successful = [
+            result
+            for assessment, result in assessed_results
+            if not assessment.is_out_of_distribution and result is not None
+        ]
         summary = sentiment_analyzer.get_sentiment_summary(successful) if successful else {}
 
         return {
@@ -927,6 +1139,23 @@ async def model_status(request: Request) -> ModelStatusResponse:
         last_run=get_last_run_status(),
         registry=get_registry_status(),
     )
+
+
+@app.get("/model/cost-report")
+@limiter.limit("30/minute") if limiter else lambda x: x
+async def model_cost_report(request: Request) -> Dict[str, Any]:
+    """
+    Serving compute cost report (#1643).
+
+    Returns cost attributed per model version and per endpoint, cost per
+    thousand inferences for each model, the cost delta of a newly promoted
+    model against its predecessor, and the three most expensive serving
+    paths. The same data is exported as Prometheus metrics on ``/metrics``
+    alongside the stage-level profiling from #1454.
+
+    Requires X-API-Key header.
+    """
+    return get_cost_report()
 
 
 # ---------------------------------------------------------------------------
@@ -1346,6 +1575,12 @@ class ForecastResponse(BaseModel):
     data_points_used: int
     generated_at: str
     confidence_indication: str = "low"  # "high" | "medium" | "low" — derived from backtest
+    # Calibrated probabilities that the predicted trend is correct. Display
+    # these; confidence_24h / confidence_48h above are RAW scores to ignore.
+    calibrated_confidence_24h: Optional[float] = None
+    calibrated_confidence_48h: Optional[float] = None
+    calibration: Optional[Dict[str, Any]] = None
+    confidence_guidance: Dict[str, Any] = CONFIDENCE_GUIDANCE
 
 
 @app.get("/analytics/forecast", response_model=ForecastResponse)
@@ -1371,10 +1606,11 @@ async def get_forecast(request: Request) -> ForecastResponse:
         from src.analytics.backtester import BacktestHarness, load_config
 
         forecaster = SentimentForecaster()
-        df = forecaster.load_history()
-        if not forecaster._is_trained:
-            forecaster.train(df)
-        result = forecaster.predict(df)
+        with profile_stage("forecasting"):
+            df = forecaster.load_history()
+            if not forecaster._is_trained:
+                forecaster.train(df)
+            result = forecaster.predict(df)
 
         # Derive confidence indication from backtest (best-effort)
         confidence_indication = "low"
@@ -1390,6 +1626,7 @@ async def get_forecast(request: Request) -> ForecastResponse:
         return result, confidence_indication
 
     loop = asyncio.get_event_loop()
+    forecast_start = time.monotonic()
     try:
         result, confidence_indication = await loop.run_in_executor(None, _run_forecast)
     except Exception as exc:
@@ -1398,6 +1635,18 @@ async def get_forecast(request: Request) -> ForecastResponse:
 
     output_dict = result.to_dict()
     output_dict["confidence_indication"] = confidence_indication
+    cal_24h = calibrated_confidence("forecast", output_dict["confidence_24h"])
+    cal_48h = calibrated_confidence("forecast", output_dict["confidence_48h"])
+    output_dict["calibrated_confidence_24h"] = cal_24h["calibrated_confidence"]
+    output_dict["calibrated_confidence_48h"] = cal_48h["calibrated_confidence"]
+    output_dict["calibration"] = cal_24h["calibration"]
+    # Attribute forecast compute cost to the serving model backend + path (#1643).
+    record_inference(
+        model_type="forecast",
+        endpoint="/analytics/forecast",
+        duration_seconds=time.monotonic() - forecast_start,
+        model_version=str(output_dict.get("model_backend", "1.0.0")),
+    )
     _log_prediction(
         request_id=correlation_id_ctx.get(generate_correlation_id()),
         model_type="forecast",

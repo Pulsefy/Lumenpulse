@@ -27,12 +27,13 @@ from .model_registry import (
     save_model,
     unregister_shadow,
 )
-from .price_predictor import PricePredictor
+from .price_predictor import PriceEnsemble, PricePredictor
 from .retraining_pipeline import get_last_run_status, run_retraining
 from .shadow_predictor import ShadowPredictor
 
 __all__ = [
     "PricePredictor",
+    "PriceEnsemble",
     "save_model",
     "load_model",
     "load_metadata",

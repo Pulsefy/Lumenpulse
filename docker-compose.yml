@@ -1,49 +1,295 @@
+# Local development stack for Lumenpulse.
+#
+# Brings up the four services that make the platform runnable on one machine:
+#
+#   postgres        the database both the backend and data-processing use
+#   redis           cache, BullMQ queues and the rate-limit store
+#   data-processing the FastAPI inference service + batch scheduler
+#   backend         the NestJS API (63 controllers, auth, transaction signing)
+#   webapp          the Next.js front end
+#
+# Ordering is expressed with health checks, not `sleep`. Every application
+# service waits for `condition: service_healthy` on the services it needs, so a
+# slow first-run Postgres initialisation extends the wait instead of producing a
+# connection error twenty seconds later.
+#
+# Usage:
+#   docker compose up -d --build     # start everything
+#   docker compose ps                 # wait for the health columns
+#   curl localhost:3001/health        # smoke test (see docs/LOCAL_STACK.md)
+#   docker compose down -v            # stop and delete the database volume
+#
+# Add `--profile demo` to also seed testnet demo data (needs an admin JWT).
+#
+# Host ports, and why they differ from the ports inside the containers:
+#   3000  webapp   (the port a browser talks to)
+#   3001  backend  (matches apps/webapp/.env.local.example)
+#   5433  postgres (5432 is left free for a Postgres already running on the host)
+#   6379  redis
+#   8000  data-processing inference API
+#   9091  data-processing Prometheus metrics
+# Override any of them with the variables below in a local .env.
+
+name: lumenpulse
+
 services:
+  # ── Infrastructure ────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: lumenpulse-postgres
     restart: unless-stopped
     ports:
-      - "5433:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     environment:
-      POSTGRES_USER: lumenpulse
-      POSTGRES_PASSWORD: lumenpulse
-      POSTGRES_DB: lumenpulse
+      POSTGRES_USER: ${POSTGRES_USER:-lumenpulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lumenpulse}
+      POSTGRES_DB: ${POSTGRES_DB:-lumenpulse}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lumenpulse"]
-      interval: 10s
+      # -d/-U are explicit rather than relying on the image's default: the
+      # health check has to match the credentials the services are given, or it
+      # reports healthy for a database none of them can actually open.
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lumenpulse} -d ${POSTGRES_DB:-lumenpulse}"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 12
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
     container_name: lumenpulse-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
 
+  # ── Schema bootstrap ──────────────────────────────────────────────────────
+  # Runs migrations once, to completion, then exits. `backend` waits for this
+  # service to have *completed successfully* rather than merely to have started,
+  # so the API never boots against a half-migrated schema.
+  migrate:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+      # The migration toolchain (typeorm, ts-node) is a devDependency, so this
+      # one-shot job runs from the builder stage rather than the slim runtime
+      # image. Nothing serves traffic from it. See apps/backend/Dockerfile.
+      target: migrate
+    image: lumenpulse-backend-migrate:local
+    container_name: lumenpulse-migrate
+    restart: "no"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+      PORT: '3000'
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USERNAME: ${POSTGRES_USER:-lumenpulse}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-lumenpulse}
+      DB_DATABASE: ${POSTGRES_DB:-lumenpulse}
+      DB_NAME: ${POSTGRES_DB:-lumenpulse}
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      JWT_SECRET: ${JWT_SECRET:-local-development-jwt-secret-change-me}
+      STELLAR_SERVER_SECRET: ${STELLAR_SERVER_SECRET:-SB6RIPM3GJQ7RP3Q6R5F3QIBYZHP4N27SGGCQ3R4LWA2ZKXZWQ3NU3G4}
+      STELLAR_NETWORK: ${STELLAR_NETWORK:-testnet}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Data processing ───────────────────────────────────────────────────────
   data-processing:
     build:
       context: ./apps/data-processing
       dockerfile: Dockerfile
+    image: lumenpulse-data-processing:local
+    container_name: lumenpulse-data-processing
+    restart: unless-stopped
+    ports:
+      - "${DATA_PROCESSING_PORT:-8000}:8000"
+      - "${DATA_PROCESSING_METRICS_PORT:-9091}:9091"
     environment:
-      - RUN_IMMEDIATELY=${RUN_IMMEDIATELY}
-      - LOG_LEVEL=${LOG_LEVEL}
-      - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS}
-      - COINGECKO_API_KEY=${COINGECKO_API_KEY}
-      - NEWS_API_KEY=${NEWS_API_KEY}
-      - CRYPTOCOMPARE_API_KEY=${CRYPTOCOMPARE_API_KEY}
-      - NEWSAPI_API_KEY=${NEWSAPI_API_KEY}
+      # `combined` runs the FastAPI inference service and the APScheduler batch
+      # worker in one process. Without it, `python src/main.py` takes the
+      # "no CLI argument" path, runs the pipeline exactly once and exits -- which
+      # left this service permanently down and PYTHON_API_URL pointing at nothing.
+      SERVICE_MODE: ${SERVICE_MODE:-combined}
+      SERVICE_HOST: 0.0.0.0
+      SERVICE_PORT: '8000'
+      SERVICE_WORKERS: '1'
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RUN_IMMEDIATELY: ${RUN_IMMEDIATELY:-false}
+      DATA_RETENTION_DAYS: ${DATA_RETENTION_DAYS:-30}
+      NETWORK: ${NETWORK:-mainnet}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lumenpulse}:${POSTGRES_PASSWORD:-lumenpulse}@postgres:5432/${POSTGRES_DB:-lumenpulse}
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_NAME: ${POSTGRES_DB:-lumenpulse}
+      DB_USER: ${POSTGRES_USER:-lumenpulse}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-lumenpulse}
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_DB: '0'
+      API_KEY: ${DATA_PROCESSING_API_KEY:-local-development-api-key}
+      # Optional upstream credentials. Absent keys disable the corresponding
+      # source rather than failing the service.
+      COINGECKO_API_KEY: ${COINGECKO_API_KEY:-}
+      NEWS_API_KEY: ${NEWS_API_KEY:-}
+      CRYPTOCOMPARE_API_KEY: ${CRYPTOCOMPARE_API_KEY:-}
+      NEWSAPI_API_KEY: ${NEWSAPI_API_KEY:-}
+      MODEL_REGISTRY_PATH: /app/models
+    volumes:
+      - model_registry:/app/models
+      - data_processing_data:/app/data
+      - data_processing_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      # The image bakes FinBERT weights and runs the pinned-model gate before the
+      # API binds, so the first start is slower than later ones.
+      start_period: 90s
+
+  # ── Backend API ───────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    image: lumenpulse-backend:local
+    container_name: lumenpulse-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_HOST_PORT:-3001}:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+      PORT: '3000'
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USERNAME: ${POSTGRES_USER:-lumenpulse}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-lumenpulse}
+      DB_DATABASE: ${POSTGRES_DB:-lumenpulse}
+      DB_NAME: ${POSTGRES_DB:-lumenpulse}
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_URL: redis://redis:6379
+      RATE_LIMIT_REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-local-development-jwt-secret-change-me}
+      # config.ts requires CORS_ORIGIN whenever NODE_ENV=production. Setting it
+      # unconditionally means switching NODE_ENV in .env does not silently produce
+      # an API that rejects every browser request.
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      # config.ts requires PYTHON_API_URL whenever NODE_ENV is neither development
+      # nor test. `data-processing` is the service name, resolvable on the compose
+      # network.
+      PYTHON_API_URL: http://data-processing:8000
+      STELLAR_NETWORK: ${STELLAR_NETWORK:-testnet}
+      STELLAR_SERVER_SECRET: ${STELLAR_SERVER_SECRET:-SB6RIPM3GJQ7RP3Q6R5F3QIBYZHP4N27SGGCQ3R4LWA2ZKXZWQ3NU3G4}
+      STELLAR_HORIZON_URL: ${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
+      STELLAR_SOROBAN_RPC_URL: ${STELLAR_SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
+      BOOTSTRAP_DEMO_DATA_ENABLED: ${BOOTSTRAP_DEMO_DATA_ENABLED:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # `service_completed_successfully` is the point of the migrate service:
+      # the API starts only once every migration has been applied successfully.
+      migrate:
+        condition: service_completed_successfully
+      data-processing:
+        condition: service_healthy
+
+  # ── Webapp ────────────────────────────────────────────────────────────────
+  webapp:
+    build:
+      context: ./apps/webapp
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* are compiled into the client bundle at build time.
+        # Changing them requires `docker compose build webapp`, not just `up -d`.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        NEXT_PUBLIC_STELLAR_EXPLORER_URL: ${NEXT_PUBLIC_STELLAR_EXPLORER_URL:-https://stellar.expert/explorer}
+        BACKEND_API_URL: http://backend:3000
+    image: lumenpulse-webapp:local
+    container_name: lumenpulse-webapp
+    restart: unless-stopped
+    ports:
+      - "${WEBAPP_HOST_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      # Read by server components and API routes at request time, so this can be
+      # changed on a running container. The browser never sees it -- it points at
+      # the in-network hostname, which the browser cannot resolve.
+      BACKEND_API_URL: http://backend:3000
+      # Already baked into the bundle by the build stage. Repeated here so the
+      # value is discoverable in `docker compose config`, and documented as
+      # build-time in apps/webapp/Dockerfile.
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # ── Opt-in: demo data seeding ─────────────────────────────────────────────
+  # Behind a profile so the default stack never fails on a missing JWT.
+  #
+  # The backend exposes no seeding CLI: POST /v1/demo-bootstrap/seed is an
+  # admin-guarded endpoint that only runs when BOOTSTRAP_DEMO_DATA_ENABLED=true
+  # and STELLAR_NETWORK=testnet. So this job needs a real admin JWT, which no
+  # amount of compose configuration can mint.
+  #
+  # Enable with:
+  #   BOOTSTRAP_DEMO_DATA_ENABLED=true \
+  #   DEMO_SEED_ADMIN_JWT=<admin token> \
+  #   docker compose --profile demo up -d
+  seed:
+    image: curlimages/curl:8.10.1
+    container_name: lumenpulse-seed
+    profiles: ["demo"]
+    restart: "no"
+    environment:
+      BACKEND_URL: http://backend:3000
+      DEMO_SEED_ADMIN_JWT: ${DEMO_SEED_ADMIN_JWT:-}
+      SEED_SCENARIO: ${SEED_SCENARIO:-full}
+    depends_on:
+      backend:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -z "$$DEMO_SEED_ADMIN_JWT" ]; then
+          echo "DEMO_SEED_ADMIN_JWT is not set; cannot seed."
+          echo "Mint an admin token against the running backend, then re-run with --profile demo."
+          exit 1
+        fi
+        echo "Waiting for backend to accept requests..."
+        until curl -fsS "$$BACKEND_URL/health/live" > /dev/null; do sleep 2; done
+        echo "Seeding demo scenario '$$SEED_SCENARIO'..."
+        curl -fsS -X POST "$$BACKEND_URL/v1/demo-bootstrap/seed" \
+          -H "Authorization: Bearer $$DEMO_SEED_ADMIN_JWT" \
+          -H "Content-Type: application/json" \
+          -d "{\"scenario\":\"$$SEED_SCENARIO\",\"resetBeforeSeed\":true}" \
+          -w '\nHTTP %{http_code}\n'
 
 volumes:
   postgres_data:
   redis_data:
+  model_registry:
+  data_processing_data:
+  data_processing_logs:

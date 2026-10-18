@@ -2,6 +2,79 @@
 
 FastAPI server that exposes sentiment analysis for Node.js backend integration.
 
+## Out-of-distribution input handling
+
+`POST /analyze` checks lexical support before invoking VADER. The default
+threshold is `ANALYZE_OOD_MAX_UNKNOWN_TOKEN_RATIO=0.75`: if more than 75% of
+the input's word tokens are absent from VADER's sentiment lexicon, its
+modifier/negation vocabulary, common-English words, and known crypto
+project/ticker names, the text is not scored. Inputs without word tokens are
+also rejected. Configure the threshold from `0` to `1`; a lower value is
+stricter. Invalid values prevent the service from starting rather than silently
+disabling the check.
+
+An out-of-distribution response has `status: "out_of_distribution"`,
+`scored: false`, `sentiment: null`, and `sentiment_label: "unscored"`.
+`confidence` is the fraction of recognized tokens, not a calibrated
+probability. Scored responses include `status: "scored"`, `scored: true`, and
+the same lexical-support confidence alongside the normal sentiment fields.
+
+The batch endpoint applies the same check to each text. Rejected entries are
+returned with `status: "out_of_distribution"` and are excluded from sentiment
+summaries.
+
+### Threshold calibration and false-positive rate
+
+Before changing the threshold, evaluate it against a representative, labeled
+held-out sample of in-distribution texts using
+`src.ml.ood_detector.false_positive_rate(detector, texts)`. The measured false
+positive rate is the fraction of those known in-distribution examples rejected
+at the configured threshold; it depends on the sample, so validate on data
+representative of your clients before deployment. The lexical-support
+confidence is an OOD heuristic, not a statistical confidence estimate.
+
+```python
+from vaderSentiment.vaderSentiment import BOOSTER_DICT, NEGATE, SentimentIntensityAnalyzer
+from src.ml.ood_detector import (
+    LexicalOODDetector,
+    configured_unknown_token_ratio,
+    false_positive_rate,
+)
+
+vader = SentimentIntensityAnalyzer()
+vocabulary = set(vader.lexicon) | set(BOOSTER_DICT) | set(NEGATE)
+detector = LexicalOODDetector(vocabulary, configured_unknown_token_ratio())
+measured_fpr = false_positive_rate(detector, held_out_in_distribution_texts)
+```
+
+### Monitoring
+
+Prometheus exports `lumenpulse_inference_requests_total` and
+`lumenpulse_inference_ood_total`, both labeled by `endpoint` (`/analyze` or
+`/analyze-batch`). The OOD fraction can be monitored per endpoint with:
+
+```promql
+sum by (endpoint) (rate(lumenpulse_inference_ood_total[5m]))
+/
+sum by (endpoint) (rate(lumenpulse_inference_requests_total[5m]))
+```
+
+## Price prediction ensembles
+
+`POST /price/predict` accepts a numeric `features` object and an optional
+`schema_version`. The promoted price ensemble averages the successfully
+serving members equally; member failures are returned as failure records and
+the remaining members are re-weighted. The response and prediction log include
+each member's prediction, contribution, weight, and status. If all members
+fail, the endpoint returns an error rather than a fabricated prediction.
+
+```json
+{
+  "features": {"feature_a": 0.25, "feature_b": 12.0},
+  "schema_version": "1.0"
+}
+```
+
 ## Starting the API
 
 ### Option 1: Direct command

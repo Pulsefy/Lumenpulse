@@ -5,7 +5,7 @@ import { HealthCheckResult } from '@nestjs/terminus';
 import { firstValueFrom } from 'rxjs';
 import { DataSource } from 'typeorm';
 import { CacheService } from '../cache/cache.service';
-import { config } from '../lib/config';
+import { DataProcessingClient } from '../data-processing/data-processing.client';
 import {
   LatencyBudgetHealthService,
   LatencyBudgetReport,
@@ -33,6 +33,7 @@ export class HealthService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly cacheService: CacheService,
     private readonly httpService: HttpService,
+    private readonly python: DataProcessingClient,
     private readonly latencyBudgetHealthService: LatencyBudgetHealthService,
   ) {}
 
@@ -49,7 +50,12 @@ export class HealthService {
           this.get('https://api.exchangerate-api.com/v4/latest/USD'),
         ),
         this.probe('python', false, () =>
-          this.get(config.python.apiUrl.replace(/\/$/, '') + '/health'),
+          firstValueFrom(
+            this.python.get('/health', {
+              timeout: CHECK_TIMEOUT_MS,
+              retry: false,
+            }),
+          ),
         ),
       ]);
 

@@ -1,6 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, timingSafeEqual } from 'crypto';
 import { config } from '../lib/config';
+import { ServiceApiKeysService } from '../service-api-keys/service-api-keys.service';
 
 export type BotPrincipalType = 'bot' | 'service';
 
@@ -55,6 +56,8 @@ export class BotPrincipalService {
     @Optional()
     @Inject(BOT_PRINCIPAL_CREDENTIALS)
     credentials?: BotPrincipalCredentials,
+    @Optional()
+    private readonly serviceApiKeysService?: ServiceApiKeysService,
   ) {
     const source: BotPrincipalCredentials = credentials ?? {
       botTokens: config.botAuth?.botTokens,
@@ -103,6 +106,26 @@ export class BotPrincipalService {
     }
 
     return null;
+  }
+
+  async authenticateHeadersAsync(
+    headers: HeaderBag | undefined,
+  ): Promise<BotPrincipal | null> {
+    const configuredPrincipal = this.authenticateHeaders(headers);
+    if (configuredPrincipal || !headers || !this.serviceApiKeysService) {
+      return configuredPrincipal;
+    }
+
+    const serviceToken = BotPrincipalService.readHeader(
+      headers,
+      SERVICE_TOKEN_HEADER,
+    );
+    if (!serviceToken) {
+      return null;
+    }
+    const key =
+      await this.serviceApiKeysService.authenticateServiceToken(serviceToken);
+    return key ? { type: 'service', id: key.consumerId } : null;
   }
 
   /**

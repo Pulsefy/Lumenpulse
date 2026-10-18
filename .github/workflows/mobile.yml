@@ -12,14 +12,31 @@ on:
       - 'apps/mobile/**'
       - 'apps/mobile/.ci-trigger'
 
+# Issue #1713. See backend.yml for the rationale. Keying on `github.workflow`
+# keeps Backend CI, Mobile CI and the flake check in separate queues even when
+# they watch the same path, so a mobile push never cancels a backend run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   mobile-checks:
     runs-on: ubuntu-latest
+    # Issue #1714. See docs/ci-timeouts.md for the observed-duration table.
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: ./apps/mobile
 
     steps:
+      - name: Start timeout guard
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: start
+          job-id: mobile-checks
+          budget-minutes: '10'
+          note: npm ci + tsc --noEmit + jest with coverage. Observed p90 0.8 min.
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -39,16 +56,37 @@ jobs:
       - name: Run unit tests with coverage
         run: npm run test:coverage
 
+      - name: Report timeout guard
+        if: always()
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: finish
+          job-id: mobile-checks
+          budget-minutes: '10'
+          note: npm ci + tsc --noEmit + jest with coverage. Observed p90 0.8 min.
+
   # Issue #1413: keep the shipped payload inside a budget. `expo export` output
   # is what the installed app loads, so it is measured on every pull request
   # that touches apps/mobile/**.
   mobile-size:
     runs-on: ubuntu-latest
+    # Issue #1714. On a pull request this job exports the payload *twice* -- once
+    # for the branch and once for the base branch in a separate worktree -- so it
+    # runs at roughly double the cost of a push run. See docs/ci-timeouts.md.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: ./apps/mobile
 
     steps:
+      - name: Start timeout guard
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: start
+          job-id: mobile-size
+          budget-minutes: '15'
+          note: Two `expo export` runs (branch + base) and a four-way budget comparison.
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -145,15 +183,118 @@ jobs:
           echo "::error::apps/mobile exceeds its size budget. See the run summary for the per-metric breakdown."
           exit 1
 
-  # Issue #1402: end-to-end smoke suite, run headlessly against the Expo web
-  # build (the one Expo platform that needs no emulator/simulator in CI).
-  mobile-e2e:
+      - name: Report timeout guard
+        if: always()
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: finish
+          job-id: mobile-size
+          budget-minutes: '15'
+          note: Two `expo export` runs (branch + base) and a four-way budget comparison.
+
+  # Issue #1576: cold / warm / TTI budget on a throttled low-end web profile.
+  mobile-startup:
     runs-on: ubuntu-latest
+    # Issue #1714. `playwright install --with-deps` downloads browsers and
+    # system packages, so the cold-cache floor is minutes rather than seconds.
+    # See docs/ci-timeouts.md.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: ./apps/mobile
 
     steps:
+      - name: Start timeout guard
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: start
+          job-id: mobile-startup
+          budget-minutes: '15'
+          note: Playwright browser download + Expo web boot + three timed loads on a throttled profile.
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: './apps/mobile/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install root workspace dependencies (for Metro's monorepo resolution)
+        working-directory: .
+        run: npm install --no-audit --no-fund
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Measure startup (low-end profile)
+        run: npm run startup:measure
+        env:
+          CI: '1'
+
+      - name: Check against startup budgets
+        id: startup
+        continue-on-error: true
+        run: npm run startup:check -- --report "$RUNNER_TEMP/mobile-startup.md"
+
+      - name: Add startup report to the job summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/mobile-startup.md" ]; then
+            cat "$RUNNER_TEMP/mobile-startup.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'No startup report was produced; see the measure step above.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload startup report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-startup-report
+          path: ${{ runner.temp }}/mobile-startup.md
+          retention-days: 14
+
+      - name: Fail when a startup max budget is exceeded
+        if: steps.startup.outcome == 'failure'
+        run: |
+          echo "::error::apps/mobile exceeds its startup time budget. See the run summary."
+          exit 1
+
+      - name: Report timeout guard
+        if: always()
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: finish
+          job-id: mobile-startup
+          budget-minutes: '15'
+          note: Playwright browser download + Expo web boot + three timed loads on a throttled profile.
+
+  # Issue #1402: end-to-end smoke suite, run headlessly against the Expo web
+  # build (the one Expo platform that needs no emulator/simulator in CI).
+  mobile-e2e:
+    runs-on: ubuntu-latest
+    # Issue #1714. Longest job in this workflow by an order of magnitude: the
+    # worst observed run took 11.3 min against a 1.4 min median, so the budget is
+    # set from the tail, not the median. See docs/ci-timeouts.md.
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: ./apps/mobile
+
+    steps:
+      - name: Start timeout guard
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: start
+          job-id: mobile-e2e
+          budget-minutes: '25'
+          note: Playwright browser install + `expo start --web` boot + the full smoke suite. Observed p50 1.4 min, worst 11.3 min.
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -179,10 +320,28 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      # Issue #1714: `timeout` fires at 18 min, seven minutes before the job's
+      # own 25-minute `timeout-minutes`. Exit 124 is remapped to a titled error
+      # so a hung Expo server or a wedged browser is reported as a hang;
+      # without this the runner cancels the job and emits nothing, and the seven
+      # minute gap is what lets the Playwright report upload on failure.
       - name: Run E2E smoke suite
-        run: npm run e2e
         env:
           CI: '1'
+          MOBILE_E2E_SOFT_LIMIT_SECONDS: '1080'
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=30s "${MOBILE_E2E_SOFT_LIMIT_SECONDS}" npm run e2e
+          code=$?
+          if [ "$code" -eq 124 ] || [ "$code" -eq 137 ]; then
+            echo "::error title=mobile-e2e timed out::The smoke suite did not finish within" \
+                 "${MOBILE_E2E_SOFT_LIMIT_SECONDS}s and was terminated. The job's 25-minute timeout" \
+                 "would have cancelled it in 7 minutes with no output. Check whether" \
+                 "\`expo start --web\` finished booting before the suite began polling" \
+                 "(see docs/ci-timeouts.md)."
+            exit 1
+          fi
+          exit "$code"
 
       - name: Upload Playwright report
         if: failure()
@@ -191,3 +350,12 @@ jobs:
           name: playwright-report
           path: apps/mobile/playwright-report/
           retention-days: 7
+
+      - name: Report timeout guard
+        if: always()
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: finish
+          job-id: mobile-e2e
+          budget-minutes: '25'
+          note: Playwright browser install + `expo start --web` boot + the full smoke suite. Observed p50 1.4 min, worst 11.3 min.

@@ -53,11 +53,15 @@ State the chosen approach in clear terms.
 ## Consequences
 Describe the impact, the expected downsides, and the operational follow-through.
 
+8. [ADR-0008: Shared resilient data-processing client](./ADR-0008-shared-data-processing-client.md)
+
 ## Related implementation summaries
 - [path/to/implementation-summary.md](path/to/implementation-summary.md)
 ```
 
 ## Current ADR index
+
+Proposed for review: [ADR-0009: Serialize backend submissions per Stellar source](./ADR-0009-stellar-source-sequence-lock.md)
 
 1. [ADR-0001: Monorepo layout](./ADR-0001-monorepo-layout.md)
 2. [ADR-0002: Transactional outbox for reliable side effects](./ADR-0002-transactional-outbox.md)

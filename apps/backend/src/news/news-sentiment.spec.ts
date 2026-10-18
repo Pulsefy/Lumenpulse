@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { HttpService } from '@nestjs/axios';
+import { DataProcessingClient } from '../data-processing/data-processing.client';
 import { ConfigService } from '@nestjs/config';
 import { of, throwError } from 'rxjs';
 import { AxiosResponse } from 'axios';
@@ -65,14 +65,14 @@ describe('NewsSentimentService', () => {
   let newsService: jest.Mocked<
     Pick<NewsService, 'findUnscoredArticles' | 'update'>
   >;
-  let httpService: jest.Mocked<Pick<HttpService, 'post'>>;
+  let httpService: jest.Mocked<Pick<DataProcessingClient, 'post'>>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NewsSentimentService,
         {
-          provide: HttpService,
+          provide: DataProcessingClient,
           useValue: { post: jest.fn() },
         },
         {
@@ -113,9 +113,9 @@ describe('NewsSentimentService', () => {
     ) as unknown as jest.Mocked<
       Pick<NewsService, 'findUnscoredArticles' | 'update'>
     >;
-    httpService = module.get<HttpService>(
-      HttpService,
-    ) as unknown as jest.Mocked<Pick<HttpService, 'post'>>;
+    httpService = module.get<DataProcessingClient>(
+      DataProcessingClient,
+    ) as unknown as jest.Mocked<Pick<DataProcessingClient, 'post'>>;
   });
 
   // ── analyzeSentiment ───────────────────────────────────────────────────────

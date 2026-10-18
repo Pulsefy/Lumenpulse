@@ -1,3 +1,4 @@
+import { DataProcessingModule } from '../data-processing/data-processing.module';
 import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 import { TerminusModule } from '@nestjs/terminus';
@@ -13,6 +14,7 @@ import { ShutdownService } from './shutdown.service';
 
 @Module({
   imports: [
+    DataProcessingModule,
     TerminusModule,
     HttpModule.register({
       timeout: 3000,

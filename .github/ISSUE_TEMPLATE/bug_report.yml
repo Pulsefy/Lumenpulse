@@ -1,0 +1,131 @@
+name: Bug report
+description: Something behaves differently from what it is documented or expected to do.
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. The four sections below — **affected app**,
+        **environment**, **reproduction** and **expected behaviour** — are what let a
+        maintainer act on a report without asking a follow-up question first. If you
+        cannot fill one in, say so rather than deleting it.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: This is not a question about how to use Lumenpulse — those belong in a discussion.
+        - label: I have searched the existing issues for this.
+        - label: This is not a duplicate.
+
+  - type: dropdown
+    id: app
+    attributes:
+      label: Affected app
+      description: >-
+        Which part of the platform does this affect? If more than one, pick the one
+        where the symptom is visible.
+      options:
+        - Backend API (apps/backend)
+        - Webapp (apps/webapp)
+        - Mobile app (apps/mobile)
+        - Data processing / ML pipeline (apps/data-processing)
+        - Smart contracts / onchain (apps/onchain)
+        - Local development environment (docker-compose)
+        - CI / infrastructure
+        - Documentation only
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: A short factual description of the observed behaviour. No speculation about the cause.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What you expected instead, and where that expectation is documented if it is.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Impact
+      options:
+        - Data loss or corruption
+        - Security or auth problem
+        - Core flow unusable
+        - Feature broken, workaround exists
+        - Cosmetic or minor
+        - Unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: >-
+        Numbered, starting from a fresh state, so someone else can follow it verbatim.
+        Include the exact request, command or tap sequence.
+      placeholder: |
+        1. Start the stack with `docker compose up -d`
+        2. Sign in as a user with the contributor role
+        3. POST /v1/notifications/preferences with { ... }
+        4. Observe the 500 in the response and in `docker compose logs backend`
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, error output or screenshots
+      description: >-
+        Paste the relevant output. Redact secrets — API keys, JWTs, Stellar account
+        seeds and `.env` contents. A trimmed excerpt beats nothing; the full log beats
+        a trimmed one if you have redacted it properly.
+      render: shell
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >-
+        Every line that changes the outcome. Copy-paste from the machine rather than
+        reconstructing from memory.
+      value: |
+        - Lumenpulse commit / release:
+        - Branch, if not `main`:
+        - OS and version:
+        - Runtime and version (Node / Python / Rust / Docker):
+        - Deployment (local compose / hosted / Vercel / mobile store):
+        - Stellar network (testnet / mainnet):
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related issues or pull requests
+      description: Anything already filed about this area, even if it is not an exact match.
+
+  - type: checkboxes
+    id: contributing
+    attributes:
+      label: Contribution terms
+      options:
+        - label: >-
+            I have read [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) and this report
+            is accurate to the best of my knowledge.

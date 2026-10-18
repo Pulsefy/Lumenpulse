@@ -26,17 +26,17 @@ describe('SecretRotationService', () => {
   it('rejects an empty value', async () => {
     const service = createService();
 
-    await expect(
-      service.rotate(NAME, '   ', { actor: 'ops' }),
-    ).rejects.toThrow(/must not be empty/);
+    await expect(service.rotate(NAME, '   ', { actor: 'ops' })).rejects.toThrow(
+      /must not be empty/,
+    );
   });
 
   it('requires an actor', async () => {
     const service = createService();
 
-    await expect(
-      service.rotate(NAME, 'value', { actor: '' }),
-    ).rejects.toThrow(/actor is required/i);
+    await expect(service.rotate(NAME, 'value', { actor: '' })).rejects.toThrow(
+      /actor is required/i,
+    );
   });
 
   it('validates the overlap window', async () => {
@@ -142,9 +142,7 @@ describe('SecretRotationService', () => {
 
     await service.rotate(NAME, 'do-not-leak-me', { actor: 'ops' });
 
-    expect(JSON.stringify(service.getStatus())).not.toContain(
-      'do-not-leak-me',
-    );
+    expect(JSON.stringify(service.getStatus())).not.toContain('do-not-leak-me');
   });
 
   it('parses an untrusted rotation payload', () => {

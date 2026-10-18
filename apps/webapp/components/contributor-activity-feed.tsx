@@ -116,7 +116,7 @@ export function ContributorActivityFeed({
                   <p className="font-medium text-sm text-foreground">
                     {ACTIVITY_LABELS[item.activityType]}
                   </p>
-                  <renderTimestamp(item.timestamp) />
+                  {renderTimestamp(item.timestamp)}
                 </div>
 
                 <p className="text-foreground/60 text-sm mt-1 line-clamp-2">

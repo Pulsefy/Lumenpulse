@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsInt, Min, Max, IsEnum, IsString } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsOptional, IsEnum, IsString } from 'class-validator';
+import { PaginatedQueryDto } from '../../common/pagination/pagination-query.dto';
 
 export enum FeedActivityType {
   CONTRIBUTOR_REGISTERED = 'contributor_registered',
@@ -13,31 +13,14 @@ export enum FeedSortOrder {
   DESC = 'DESC',
 }
 
-export class ContributorFeedQueryDto {
-  @ApiPropertyOptional({
-    description: 'Page number (1-indexed)',
-    default: 1,
-    minimum: 1,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiPropertyOptional({
-    description: 'Items per page',
-    default: 20,
-    minimum: 1,
-    maximum: 100,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number = 20;
-
+/**
+ * Query DTO for `GET /contributor-feed`.
+ *
+ * Extends {@link PaginatedQueryDto} so the endpoint accepts the standard
+ * `page` / `pageSize` parameters. The old `limit` field has been replaced
+ * by `pageSize` (inherited) for consistency across all list endpoints.
+ */
+export class ContributorFeedQueryDto extends PaginatedQueryDto {
   @ApiPropertyOptional({
     description: 'Filter by activity type',
     enum: FeedActivityType,
@@ -109,6 +92,13 @@ export class FeedActivityItemDto {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Paginated response for `GET /contributor-feed`.
+ *
+ * Follows the standard envelope: `items / total / page / pageSize / totalPages`.
+ * The `isSparseContributor` flag is an endpoint-specific extension that
+ * indicates the filtered contributor has fewer than 2 recorded activities.
+ */
 export class ContributorFeedResponseDto {
   @ApiProperty({
     description: 'List of feed activity items for the current page',
@@ -123,19 +113,19 @@ export class ContributorFeedResponseDto {
   total: number;
 
   @ApiProperty({
-    description: 'Current page number',
+    description: 'Current page number (1-indexed)',
     example: 1,
   })
   page: number;
 
   @ApiProperty({
-    description: 'Items per page',
+    description: 'Number of items per page',
     example: 20,
   })
-  limit: number;
+  pageSize: number;
 
   @ApiProperty({
-    description: 'Total number of pages',
+    description: 'Total number of pages (always ≥ 1)',
     example: 3,
   })
   totalPages: number;

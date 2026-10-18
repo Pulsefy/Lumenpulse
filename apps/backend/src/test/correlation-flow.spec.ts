@@ -5,6 +5,8 @@ import { GlobalExceptionFilter } from '../filters/global-exception.filter';
 import { OutboxService } from '../outbox/outbox.service';
 import { OutboxEvent, OutboxEventStatus } from '../outbox/outbox-event.entity';
 import { SuspiciousContributionProcessor } from '../suspicious-contribution/suspicious-contribution.processor';
+import { DataProcessingClient } from '../data-processing/data-processing.client';
+import { MetricsService } from '../metrics/metrics.service';
 import { SentimentService } from '../sentiment/sentiment.service';
 import {
   CORRELATION_ID_HEADER,
@@ -181,7 +183,7 @@ describe('End-to-End Correlation ID Tracing: Worked Example (#1421)', () => {
                 // Component 5: Outbound Call to Python Service
                 // ──────────────────────────────────────────────────────────────────
                 const mockHttpService = {
-                  post: jest.fn((_url: string, _body: any, config: any) => {
+                  request: jest.fn((config: any) => {
                     pythonServiceHeaderReceived =
                       config.headers?.[CORRELATION_ID_HEADER];
                     return of({ data: { sentiment: 0.95 } });
@@ -192,8 +194,11 @@ describe('End-to-End Correlation ID Tracing: Worked Example (#1421)', () => {
                 };
 
                 const sentimentService = new SentimentService(
-                  mockHttpService as any,
-                  mockConfigService as any,
+                  new DataProcessingClient(
+                    mockHttpService as any,
+                    mockConfigService as any,
+                    new MetricsService(),
+                  ),
                 );
 
                 await sentimentService.analyzeSentiment(

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { HttpService } from '@nestjs/axios';
+import { DataProcessingClient } from '../data-processing/data-processing.client';
 import { ConfigService } from '@nestjs/config';
 import { of } from 'rxjs';
 import { ReadModelRebuildService } from './read-model-rebuild.service';
@@ -15,7 +15,7 @@ import { AdminAuditService } from '../admin-audit/admin-audit.service';
 
 describe('ReadModelRebuildService', () => {
   let service: ReadModelRebuildService;
-  let httpService: jest.Mocked<Pick<HttpService, 'post'>>;
+  let httpService: jest.Mocked<Pick<DataProcessingClient, 'post'>>;
   let configService: jest.Mocked<Pick<ConfigService, 'get'>>;
   let jobRepo: {
     save: jest.Mock;
@@ -40,7 +40,7 @@ describe('ReadModelRebuildService', () => {
   beforeEach(async () => {
     httpService = {
       post: jest.fn(),
-    } as unknown as jest.Mocked<Pick<HttpService, 'post'>>;
+    };
 
     configService = {
       get: jest.fn((key: string) => {
@@ -87,7 +87,7 @@ describe('ReadModelRebuildService', () => {
           provide: getRepositoryToken(ReadModelRebuildJob),
           useValue: jobRepo,
         },
-        { provide: HttpService, useValue: httpService },
+        { provide: DataProcessingClient, useValue: httpService },
         { provide: ConfigService, useValue: configService },
         { provide: JobLockService, useValue: jobLockService },
         { provide: JobHistoryService, useValue: jobHistoryService },
@@ -98,7 +98,7 @@ describe('ReadModelRebuildService', () => {
     service = module.get<ReadModelRebuildService>(ReadModelRebuildService);
   });
 
-  it('uses configured PYTHON_API_URL and PYTHON_API_KEY for rebuild requests', async () => {
+  it('delegates rebuild to the shared client and preserves the job correlation fallback', async () => {
     const job = new ReadModelRebuildJob();
     job.id = 'job-123';
     job.dataset = RebuildDataset.KPI_SNAPSHOTS;
@@ -117,11 +117,10 @@ describe('ReadModelRebuildService', () => {
     await (service as any).executeRebuild(job, 'user-1');
 
     expect(httpService.post).toHaveBeenCalledWith(
-      'http://localhost:8000/api/rebuild/kpi-snapshots',
+      '/api/rebuild/kpi-snapshots',
       { dataset: RebuildDataset.KPI_SNAPSHOTS, force: true },
       expect.objectContaining({
         headers: expect.objectContaining({
-          'X-API-Key': 'test-key',
           'X-Correlation-ID': 'rebuild-job-123',
         }),
       }),

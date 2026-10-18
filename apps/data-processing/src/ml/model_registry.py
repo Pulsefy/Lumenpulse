@@ -469,6 +469,21 @@ def promote_model(
     # Cached inference results from the previous model version must not be
     # served after promotion, so evict every entry for this model type.
     _invalidate_cached_inference(model_type)
+
+    # Attribute serving compute cost across the promotion boundary (#1643):
+    # the cost-per-thousand-inferences delta of the new version against its
+    # predecessor is exported as a metric and included in the cost report.
+    # Never let cost bookkeeping block an otherwise successful promotion.
+    try:
+        from src.ml.serving_cost import record_promotion
+
+        record_promotion(model_type, previous_version, version)
+    except Exception as exc:  # pragma: no cover - attribution is best-effort
+        logger.warning(
+            "Serving cost attribution skipped after promotion: type=%s error=%s",
+            model_type,
+            exc,
+        )
     return True
 
 

@@ -342,6 +342,12 @@ import { AuthContext } from '@/contexts/AuthContext';
 
 ## Shared Components & Key Utilities
 
+### Component catalogue (development builds)
+
+`app/dev/catalogue.tsx` renders the shared components from `components/` in their states: `StandardList` loading, empty, error and populated, `ListSkeleton`, `ListError` with and without retry, `NetworkBadge`, both modals (opened from a button, with stub handlers) and the guards with stub children. Open it from **Settings > Component catalogue**. The screen and the link exist only when `isCatalogueEnabled()` is true, that is in a development build (`EXPO_PUBLIC_APP_VARIANT=development`) running with `__DEV__`; anywhere else the route redirects home.
+
+The list lives in `lib/component-catalogue.ts`. When you add a shared component, add an entry with its variants and a preview in `app/dev/catalogue.tsx`. If it cannot be previewed in isolation (it renders nothing, or it loads its own data), add it to `CATALOGUE_EXEMPT` with the reason instead. `lib/__tests__/component-catalogue.test.ts` fails when a file in `components/` has neither.
+
 ### `components/ProtectedRoute.tsx`
 
 Wrap any screen that requires an authenticated user. It handles the redirect to login automatically:
@@ -406,6 +412,21 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const { user, login, logout, isLoading } = useAuth();
 ```
+
+### `lib/wallet/`: Wallet adapters
+
+Screens never talk to a wallet directly. `contexts/WalletContext.tsx` takes an adapter from `lib/wallet/registry.ts` and exposes `connect`, `signAndSubmitXdr`, `availableWallets`, `activeWalletId` and `selectWallet` through `useWallet()`. Switching wallets is refused while a signature is in flight, and it clears the current session first. The adapter interface (`lib/wallet/types.ts`) and the registry helpers (`getAvailableWalletAdapters`, `getDefaultWalletAdapter`, `findWalletAdapter`) use the same names as `apps/webapp/lib/wallet`.
+
+The two clients support these wallets:
+
+| Wallet (adapter id) | iOS and Android | Mobile web build | Webapp | Why |
+|---------------------|-----------------|------------------|--------|-----|
+| SEP-0007 deep link (`sep7`), e.g. LOBSTR | Yes, default | Yes, after xBull | No | Uses any installed wallet app that handles `web+stellar:` links. Browsers rarely do, and the webapp talks to extensions directly. |
+| xBull (`xbull`) | No | Yes, default when the extension is installed | Yes | xBull is a browser extension. On mobile, `signXdr` also submits the signed envelope through the Soroban RPC, so callers get a transaction hash as with SEP-0007. |
+| Freighter (`freighter`) | No | No | Yes, default | On mobile, Freighter is reached through WalletConnect, which needs native modules the app does not ship. The webapp uses `@stellar/freighter-api`. |
+| Mock (`mock`) | Development builds only | Development builds only | No | Signs nothing; a red banner is shown while it is active. |
+
+To add a wallet, implement `WalletAdapter`, register it in each client that can use it, and cover connect, sign and reject in `lib/__tests__/wallet-adapters.test.ts`.
 
 ---
 

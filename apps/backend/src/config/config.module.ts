@@ -11,11 +11,7 @@ import { SecretRotationTriggerGuard } from './secret-rotation-trigger.guard';
 @Module({
   imports: [NestConfigModule.forFeature(stellarConfig), AuditModule],
   controllers: [ConfigController, SecretRotationController],
-  providers: [
-    ConfigService,
-    SecretRotationService,
-    SecretRotationTriggerGuard,
-  ],
+  providers: [ConfigService, SecretRotationService, SecretRotationTriggerGuard],
   exports: [ConfigService, SecretRotationService],
 })
 export class AppConfigModule {}

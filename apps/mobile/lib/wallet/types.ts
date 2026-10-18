@@ -13,9 +13,12 @@ export type WalletSigningState = 'idle' | 'signing' | 'pending' | 'success' | 'r
  *
  * `pending` is used by deep-link adapters: the wallet app has been opened
  * and the final result will arrive asynchronously via the app's URL handler.
+ * Adapters that sign in-process (xBull) also return the signed envelope in
+ * `signedXdr`, next to the hash of the transaction they submitted.
  */
 export interface WalletSigningResult {
   status: 'success' | 'rejected' | 'failed' | 'pending';
+  signedXdr?: string;
   txHash?: string;
   error?: WalletError;
 }
@@ -30,6 +33,18 @@ export interface WalletConnectionResult {
 }
 
 /**
+ * Options a caller can pass with a signature request.
+ *
+ * Same naming as apps/webapp/lib/wallet/types.ts. Deep-link adapters ignore
+ * them because the wallet app picks the network and the account itself.
+ */
+export interface WalletSignOptions {
+  networkPassphrase?: string;
+  /** Account expected to sign; wallets that support it will use it. */
+  address?: string;
+}
+
+/**
  * Abstraction over a Stellar-compatible mobile wallet.
  *
  * New providers can be added by implementing this interface and registering
@@ -38,6 +53,8 @@ export interface WalletConnectionResult {
 export interface WalletAdapter {
   readonly id: string;
   readonly name: string;
+  /** Where users can install the wallet when it is not detected. */
+  readonly installUrl?: string;
 
   /**
    * True if the current device/runtime can use this adapter.
@@ -56,11 +73,20 @@ export interface WalletAdapter {
   connect(): Promise<WalletConnectionResult>;
 
   /**
+   * Return the address of an existing session without prompting the user,
+   * or null when the wallet is not already authorised for this app.
+   */
+  getConnectedAddress?(): Promise<string | null>;
+
+  /**
    * Request a signature for a base64-encoded Stellar transaction envelope.
    *
    * Deep-link-based adapters return the result asynchronously via the app's
    * URL handler. The context layer correlates the callback with the pending
    * signing promise.
    */
-  signXdr(xdr: string): Promise<WalletSigningResult>;
+  signXdr(xdr: string, options?: WalletSignOptions): Promise<WalletSigningResult>;
 }
+
+/** What a wallet picker needs to list an adapter. */
+export type WalletOption = Pick<WalletAdapter, 'id' | 'name' | 'installUrl'>;

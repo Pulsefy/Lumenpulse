@@ -24,6 +24,71 @@ npm run test
 npm run test:e2e
 ```
 
+## Container image
+
+[`Dockerfile`](Dockerfile) builds a minimal production image:
+
+```bash
+docker build -f apps/backend/Dockerfile -t lumenpulse-backend apps/backend
+docker run --rm -p 3000:3000 \
+  -e DB_HOST=localhost -e DB_PORT=5432 \
+  -e DB_USERNAME=lumenpulse -e DB_PASSWORD=lumenpulse -e DB_DATABASE=lumenpulse \
+  -e JWT_SECRET=dev-secret \
+  -e STELLAR_SERVER_SECRET=SB6RIPM3GJQ7RP3Q6R5F3QIBYZHP4N27SGGCQ3R4LWA2ZKXZWQ3NU3G4 \
+  lumenpulse-backend
+```
+
+Or as part of the full stack — see [docs/LOCAL_STACK.md](../../docs/LOCAL_STACK.md):
+
+```bash
+docker compose up -d --build backend
+```
+
+### Stages
+
+| Stage | Contents | Used for |
+|---|---|---|
+| `builder` | Full toolchain, dev dependencies, compiled `dist/` | Building |
+| `migrate` | The builder, runnable | The one-shot `migration:run` job |
+| `runtime` (default) | Production dependencies and `dist/` only | The service |
+
+`runtime` is the deployable image. It has no compiler and no dev dependencies —
+TypeScript, Jest and ESLint are all left behind in `builder`.
+
+`migrate` exists because the migration toolchain is a devDependency:
+`migration:run` is `typeorm-ts-node-commonjs -d src/database/data-source.ts`,
+which needs `typeorm`, `ts-node` and `tsconfig-paths`, none of which are in
+`dependencies`. Rather than ship those three packages inside the service image,
+the migration job builds from `builder` and exits. Nothing serves traffic from it.
+
+```bash
+docker compose run --rm migrate
+```
+
+### Runtime behaviour
+
+- **Non-root.** Runs as uid/gid 10001, matching the other service images.
+- **`tini` as PID 1.** `docker stop` forwards SIGTERM to Nest's shutdown hooks
+  so in-flight requests drain. See [Graceful
+  Shutdown](#graceful-shutdown--deployment-configuration).
+- **No `.env` is copied in.** `lib/config.ts` refuses to read one outside
+  development, and every variable arrives as a real environment variable.
+- **Health checks.** `/health/live` answers as soon as the server is bound;
+  `/health` additionally probes Postgres, Redis, Horizon, Soroban and
+  data-processing. The image's own `HEALTHCHECK` uses `/health/live` on purpose
+  — an upstream outage must not make Docker restart the process.
+
+### Required environment
+
+`lib/config.ts` validates configuration at import time and throws with the
+missing variable named, so the container exits immediately rather than serving
+traffic half-configured. The variables with no default are `PORT`, `DB_HOST`,
+`DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE`, `JWT_SECRET` and
+`STELLAR_SERVER_SECRET`; `CORS_ORIGIN` is additionally required when
+`NODE_ENV=production` and `PYTHON_API_URL` when `NODE_ENV` is neither
+`development` nor `test`. See
+[docs/ENVIRONMENT_VARIABLES.md](../../docs/ENVIRONMENT_VARIABLES.md).
+
 ## API contract (OpenAPI)
 
 `npm run build` regenerates the committed spec at `openapi.json`. Commit it with any API change, because CI fails when it is stale. `npm run openapi:check` checks it without writing. See [OPENAPI_CONTRACT.md](./OPENAPI_CONTRACT.md).

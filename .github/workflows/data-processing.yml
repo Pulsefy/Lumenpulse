@@ -12,14 +12,33 @@ on:
       - "apps/data-processing/**"
       - "apps/data-processing/.ci-trigger"
 
+# Issue #1713. See backend.yml for the rationale.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   data-processing-checks:
     runs-on: ubuntu-latest
+    # Issue #1714. This job installs the hash-pinned `requirements.lock`, which
+    # pulls the torch CPU wheel. That download dominates the runtime on a cache
+    # miss, so the budget is set from the observed p90 of 3.2 min with room for
+    # an uncached wheel rather than from the warm median.
+    # See docs/ci-timeouts.md.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: ./apps/data-processing
 
     steps:
+      - name: Start timeout guard
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: start
+          job-id: data-processing-checks
+          budget-minutes: '15'
+          note: Hash-pinned pip install (torch CPU wheel) + flake8 + pytest.
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -53,3 +72,12 @@ jobs:
           else
             echo "No tests directory found, skipping pytest"
           fi
+
+      - name: Report timeout guard
+        if: always()
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: finish
+          job-id: data-processing-checks
+          budget-minutes: '15'
+          note: Hash-pinned pip install (torch CPU wheel) + flake8 + pytest.

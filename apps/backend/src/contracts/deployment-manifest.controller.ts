@@ -138,7 +138,8 @@ export class DeploymentManifestController {
   @Roles(UserRole.ADMIN)
   @ApiSecurity({ [JWT_SECURITY_SCHEME]: [], [API_KEY_SECURITY_SCHEME]: [] })
   @ApiOperation({
-    summary: 'Refresh active contract deployment manifest from disk (admin only)',
+    summary:
+      'Refresh active contract deployment manifest from disk (admin only)',
     description:
       'Forces a reload of the testnet-manifest.json file to update contract IDs and caches.',
   })
@@ -230,7 +231,7 @@ export class DeploymentManifestController {
     description: 'Manifest record UUID',
   })
   @ApiResponse({
-    status: 24,
+    status: 204,
     description: 'Deployment manifest deleted successfully',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })

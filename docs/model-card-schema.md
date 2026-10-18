@@ -4,6 +4,20 @@
 
 Model cards are machine-readable metadata files that accompany each saved model version. They record training data information, hyperparameters, evaluation metrics, feature schema, and provenance information.
 
+## Price prediction ensembles
+
+Price predictor versions use an equal-weight mean of the successfully serving
+members: `linear_regression`, `random_forest`, and `gradient_boosting`. A member
+that raises an error or returns invalid predictions is excluded for that
+request; the remaining members are re-weighted equally. If every member fails,
+the request fails explicitly.
+
+Retraining evaluates the ensemble and every member against the same held-out
+rows. The ensemble's `r2` is passed through the existing price-predictor
+promotion gate, and the model metadata records the strategy, member versions,
+and held-out metrics for each member. `POST /price/predict` returns and logs
+each member's prediction, effective contribution, weight, and failure status.
+
 ## Location
 
 Model cards are saved alongside model artifacts in the registry:

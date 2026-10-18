@@ -7,9 +7,22 @@ name: Mobile E2E Flake Check
 on:
   workflow_dispatch:
 
+# Issue #1713. This workflow only runs on demand, but the same rule applies: if
+# a re-measurement is dispatched against a branch that already has one in
+# flight, the stale run is cancelled rather than left to report a number that
+# nobody is waiting for any more.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   repeat-suite:
     runs-on: ubuntu-latest
+    # Issue #1714. Each matrix leg is one full smoke suite, and the worst
+    # observed `mobile-e2e` run took 11.3 min. 30 min leaves headroom over that
+    # tail without letting a genuinely wedged leg hold a runner for hours. See
+    # docs/ci-timeouts.md.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -18,6 +31,14 @@ jobs:
       run:
         working-directory: ./apps/mobile
     steps:
+      - name: Start timeout guard
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: start
+          job-id: repeat-suite
+          budget-minutes: '30'
+          note: One full smoke suite per matrix leg; worst observed mobile-e2e run was 11.3 min.
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -43,13 +64,41 @@ jobs:
         env:
           CI: '1'
 
+      - name: Report timeout guard
+        if: always()
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: finish
+          job-id: repeat-suite
+          budget-minutes: '30'
+          note: One full smoke suite per matrix leg; worst observed mobile-e2e run was 11.3 min.
+
   report:
     needs: repeat-suite
     if: always()
     runs-on: ubuntu-latest
+    # Issue #1714. Four `echo` lines; 5 min is a ceiling, not an estimate.
+    timeout-minutes: 5
     steps:
+      - name: Start timeout guard
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: start
+          job-id: report
+          budget-minutes: '5'
+          note: Four `echo` lines into the job summary; runs after the 10 matrix legs finish.
+
       - name: Summarize flake rate
         run: |
           echo "### Mobile E2E flake check" >> "$GITHUB_STEP_SUMMARY"
           echo "10 consecutive runs of the smoke suite completed. See the" >> "$GITHUB_STEP_SUMMARY"
           echo "'repeat-suite' job matrix above for the pass/fail result of each run." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report timeout guard
+        if: always()
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: finish
+          job-id: report
+          budget-minutes: '5'
+          note: Four `echo` lines into the job summary; runs after the 10 matrix legs finish.

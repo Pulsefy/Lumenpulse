@@ -1,0 +1,57 @@
+# Keep the build context small and prevent host state leaking into the image.
+#
+# A local `node_modules` or `.next` copied into the build stage makes
+# `npm ci` and `next build` no-ops against the wrong tree, producing an image
+# that differs from CI with no error to explain why.
+
+# Dependencies and build output are produced inside the image, never copied in.
+node_modules
+.next
+out
+build
+dist
+coverage
+*.tsbuildinfo
+
+# Secrets and local environment. NEXT_PUBLIC_* values belong in build ARGs; a
+# .env file that reaches the builder silently wins over them.
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Tests and fixtures. They run in CI; they do not ship.
+__tests__
+e2e
+playwright-report
+test-results
+coverage
+vitest.config.ts
+vitest.setup.ts
+
+# Generated API types are checked in CI against the backend's openapi.json. They
+# are committed, so they are still copied -- listed here only to make the
+# decision explicit rather than incidental.
+
+# Tooling output and caches
+.cache
+.eslintcache
+.next/cache
+
+# Version control and CI
+.git
+.gitignore
+.github
+.dockerignore
+Dockerfile
+.ci-trigger
+
+# Editor and OS
+.vscode
+.idea
+.DS_Store
+*.swp
+
+# Reports and scratch files that have been committed by accident
+webapp-tsc.txt
+webapp-tsc-status.txt

@@ -282,20 +282,19 @@ describe('FeatureFlagsService', () => {
   });
 
   describe('Percentage targeting', () => {
-    const storedFlag = (overrides: Partial<FeatureFlag>): FeatureFlag =>
-      ({
-        id: 'id',
-        key: 'risky.migration',
-        enabled: false,
-        rolloutPercentage: null,
-        allowList: null,
-        denyList: null,
-        conditions: null,
-        changedBy: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ...overrides,
-      }) as FeatureFlag;
+    const storedFlag = (overrides: Partial<FeatureFlag>): FeatureFlag => ({
+      id: 'id',
+      key: 'risky.migration',
+      enabled: false,
+      rolloutPercentage: null,
+      allowList: null,
+      denyList: null,
+      conditions: null,
+      changedBy: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...overrides,
+    });
 
     beforeEach(() => {
       (repo.findOne as jest.Mock).mockReset();
@@ -515,7 +514,7 @@ describe('FeatureFlagsService', () => {
         changedBy: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as FeatureFlag);
+      });
 
       const result = await service.evaluate('risky.migration', 'user-1');
 
@@ -545,7 +544,7 @@ describe('FeatureFlagsService', () => {
         changedBy: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as FeatureFlag);
+      });
 
       const result = await service.evaluate('risky.migration', 'user-1');
 
@@ -580,7 +579,7 @@ describe('FeatureFlagsService', () => {
         changedBy: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as FeatureFlag);
+      });
 
       const result = await service.evaluate('risky.migration', 'someone');
 
@@ -601,7 +600,7 @@ describe('FeatureFlagsService', () => {
         changedBy: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as FeatureFlag);
+      });
 
       const first = await service.evaluate('risky.migration', 'user-42');
       for (let i = 0; i < 25; i++) {

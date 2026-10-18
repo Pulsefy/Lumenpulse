@@ -16,7 +16,6 @@ import os
 
 os.environ.setdefault("API_KEYS", '[{"id":"test","value":"test-key-123","scopes":["default"]}]')
 
-import pytest
 from fastapi.testclient import TestClient
 
 from src.api.server import app
@@ -69,3 +68,46 @@ def test_get_lineage_404_for_unknown_id():
 def test_get_lineage_requires_api_key():
     resp = client.get("/api/lineage/market_health_score")
     assert resp.status_code == 401
+
+
+def test_pipeline_dataset_registry_endpoint():
+    resp = client.get("/api/pipeline/datasets", headers=_AUTH_HEADERS)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["count"] == len(body["datasets"])
+
+    by_id = {dataset["id"]: dataset for dataset in body["datasets"]}
+    assert {
+        "news_articles",
+        "price_ticks",
+        "social_posts",
+        "stellar_ledger_events",
+        "contract_events",
+        "analytics_records",
+        "price_predictor_features",
+        "sentiment_model_features",
+        "market_health_score",
+        "sentiment_compound",
+        "cohort_metrics",
+        "attribution_score",
+        "round_anomaly_signals",
+        "project_verification_trend",
+        "correlation_result",
+        "market_forecast",
+        "anomaly_detection_result",
+    }.issubset(by_id)
+    price_ticks = by_id["price_ticks"]
+    assert price_ticks["owner"]
+    assert price_ticks["schema"]
+    assert price_ticks["update_cadence"]
+    assert price_ticks["retention"]
+    assert "price_predictor" in price_ticks["model_consumers"]
+    assert "model_retraining_daily" in price_ticks["pipeline_stages"]
+
+
+def test_pipeline_topology_response_does_not_change():
+    resp = client.get("/api/pipeline/topology", headers=_AUTH_HEADERS)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["stages"]
+    assert "dataset_ids" not in body["stages"][0]

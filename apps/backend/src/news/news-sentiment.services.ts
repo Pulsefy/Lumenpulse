@@ -1,18 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
+import { DataProcessingClient } from '../data-processing/data-processing.client';
 import { AxiosResponse } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { NewsService } from './news.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { JobLockService } from '../scheduler/job-lock.service';
 import { JobHistoryService } from '../scheduler/job-history.service';
-import { config } from '../lib/config';
-import {
-  CORRELATION_ID_HEADER,
-  REQUEST_ID_HEADER,
-} from '../common/constants/request.constants';
-import { RequestContextService } from '../common/services/request-context.service';
 
 const SENTIMENT_JOB_NAME = 'news-sentiment-update';
 
@@ -25,33 +18,20 @@ export class NewsSentimentService {
   private readonly logger = new Logger(NewsSentimentService.name);
 
   constructor(
-    private readonly httpService: HttpService,
+    private readonly httpService: DataProcessingClient,
     private readonly newsService: NewsService,
-    private readonly configService: ConfigService,
     private readonly jobLock: JobLockService,
     private readonly jobHistory: JobHistoryService,
   ) {}
 
   async analyzeSentiment(text: string): Promise<number | null> {
     try {
-      const baseUrl =
-        this.configService.get<string>('PYTHON_API_URL') ||
-        config.python.apiUrl;
       const response = await firstValueFrom<
         AxiosResponse<SentimentApiResponse>
       >(
-        this.httpService.post<SentimentApiResponse>(
-          `${baseUrl}/analyze`,
-          {
-            text,
-          },
-          {
-            headers: {
-              [CORRELATION_ID_HEADER]: RequestContextService.getCorrelationId(),
-              [REQUEST_ID_HEADER]: RequestContextService.getRequestId(),
-            },
-          },
-        ),
+        this.httpService.post<SentimentApiResponse>('/analyze', {
+          text,
+        }),
       );
       return response.data.sentiment;
     } catch {

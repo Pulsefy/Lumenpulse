@@ -7,6 +7,7 @@ import os
 import re
 import json
 import hmac
+import hashlib
 from typing import Optional, Callable, Dict, Any
 from functools import wraps
 from fastapi import Request, HTTPException, status, Header
@@ -16,6 +17,10 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from jose import JWTError, jwt
 from dotenv import load_dotenv
+from sqlalchemy import URL, create_engine, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
+from prometheus_client import Counter
 
 # Load environment variables
 load_dotenv()
@@ -23,6 +28,12 @@ load_dotenv()
 # Setup logger
 from src.utils.logger import setup_logger
 logger = setup_logger(__name__)
+
+SERVICE_API_KEY_REQUESTS = Counter(
+    "service_api_key_requests_total",
+    "Authenticated API requests attributed to their service consumer",
+    ["consumer", "method", "scope"],
+)
 
 
 class SecurityConfig:
@@ -48,6 +59,7 @@ class SecurityConfig:
         # Backward compatibility: expose a single api_key attribute for older code/tests
         # Initialize attribute so monkeypatch.setattr(...) won't raise AttributeError
         self.api_key: str = ""
+        self._managed_keys_engine: Optional[Engine] = None
 
         # If API_KEYS JSON produced no entries, fall back to single API_KEY env var
         if not self.api_keys:
@@ -109,8 +121,11 @@ class SecurityConfig:
         Raises:
             HTTPException: If API key is missing or invalid
         """
-        # Ensure API keys are configured
-        if not self.api_keys and not getattr(self, "api_key", ""):
+        if (
+            not self.api_keys
+            and not getattr(self, "api_key", "")
+            and not self.managed_keys_database_configured()
+        ):
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="API is not configured: no API_KEYS or API_KEY provided.",
@@ -140,9 +155,41 @@ class SecurityConfig:
                 matched = {"id": "default", "scopes": ["default"]}
 
         if not matched:
+            try:
+                matched = self.lookup_managed_api_key(api_key_header)
+            except SQLAlchemyError as exc:
+                logger.error("Managed API key lookup failed", exc_info=exc)
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="API key verification is temporarily unavailable.",
+                ) from exc
+
+        if not matched:
+            if (
+                not self.api_keys
+                and not getattr(self, "api_key", "")
+                and not self.managed_keys_database_configured()
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="API is not configured: no API_KEYS or API_KEY provided.",
+                )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Invalid API key",
+                headers={"WWW-Authenticate": "ApiKey"},
+            )
+
+        required_scope = self.required_scope(request)
+        scopes = matched.get("scopes", [])
+        if (
+            "default" not in scopes
+            and "admin" not in scopes
+            and required_scope not in scopes
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"API key does not have the required {required_scope} scope.",
                 headers={"WWW-Authenticate": "ApiKey"},
             )
 
@@ -150,8 +197,110 @@ class SecurityConfig:
         logger.info(f"API key {matched['id']} used for {request.url.path}")
         # Attach key info to request state for downstream checks
         request.state.api_key_id = matched['id']
-        request.state.api_key_scopes = matched.get('scopes', [])
+        request.state.api_key_scopes = scopes
+        SERVICE_API_KEY_REQUESTS.labels(
+            consumer=matched["id"],
+            method=request.method,
+            scope=required_scope,
+        ).inc()
         return True
+
+    @staticmethod
+    def required_scope(request: Request) -> str:
+        """Return the least-privilege scope for a protected route."""
+        read_only_posts = {
+            "/analyze",
+            "/analyze-batch",
+            "/price/predict",
+            "/correlation/analyze",
+            "/correlation/lag-analysis",
+        }
+        if request.method in {"GET", "HEAD", "OPTIONS"} or (
+            request.method == "POST" and request.url.path in read_only_posts
+        ):
+            return "data:read"
+        return "data:write"
+
+    @staticmethod
+    def managed_keys_database_configured() -> bool:
+        return bool(
+            os.getenv("DATABASE_URL")
+            or all(
+                (
+                    os.getenv("DB_HOST"),
+                    os.getenv("DB_NAME") or os.getenv("DB_DATABASE"),
+                    os.getenv("DB_USER") or os.getenv("DB_USERNAME"),
+                    os.getenv("DB_PASSWORD"),
+                )
+            )
+        )
+
+    def lookup_managed_api_key(self, api_key: str) -> Optional[Dict[str, Any]]:
+        """Look up a key by its SHA-256 verifier in the shared backend database."""
+        if self._managed_keys_engine is None:
+            database_url = os.getenv("DATABASE_URL")
+            if not database_url:
+                host = os.getenv("DB_HOST")
+                name = os.getenv("DB_NAME") or os.getenv("DB_DATABASE")
+                user = os.getenv("DB_USER") or os.getenv("DB_USERNAME")
+                password = os.getenv("DB_PASSWORD")
+                if not all((host, name, user, password)):
+                    return None
+                port = os.getenv("DB_PORT", "5432")
+                database_url = URL.create(
+                    "postgresql+psycopg2",
+                    username=user,
+                    password=password,
+                    host=host,
+                    port=int(port),
+                    database=name,
+                )
+            elif database_url.startswith("postgres://"):
+                database_url = database_url.replace(
+                    "postgres://", "postgresql+psycopg2://", 1
+                )
+            self._managed_keys_engine = create_engine(
+                database_url,
+                pool_pre_ping=True,
+                pool_size=3,
+                max_overflow=2,
+            )
+
+        key_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+        with self._managed_keys_engine.begin() as connection:
+            row = (
+                connection.execute(
+                    text(
+                        """
+                        SELECT "consumerId", "scopes"
+                        FROM "service_api_keys"
+                        WHERE "keyHash" = :key_hash
+                          AND "revokedAt" IS NULL
+                          AND ("expiresAt" IS NULL OR "expiresAt" > now())
+                        LIMIT 1
+                        """
+                    ),
+                    {"key_hash": key_hash},
+                )
+                .mappings()
+                .first()
+            )
+            if row is None:
+                return None
+            connection.execute(
+                text(
+                    """
+                    UPDATE "service_api_keys"
+                    SET "lastUsedAt" = now()
+                    WHERE "keyHash" = :key_hash
+                    """
+                ),
+                {"key_hash": key_hash},
+            )
+            scopes = row["scopes"]
+            if isinstance(scopes, str):
+                scopes = json.loads(scopes)
+            return {"id": row["consumerId"], "scopes": scopes}
     
     def verify_admin_token(self, authorization: Optional[str] = None) -> bool:
         """
@@ -296,8 +445,9 @@ def require_admin_token(func: Callable) -> Callable:
     """
     @wraps(func)
     async def wrapper(request: Request, *args, **kwargs) -> Any:
-        # First validate API key
-        security_config.validate_api_key(request)
+        # Middleware normally already authenticated the request.
+        if not getattr(request.state, "api_key_id", None):
+            security_config.validate_api_key(request)
         
         # Then validate admin token
         auth_header = request.headers.get("Authorization")

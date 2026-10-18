@@ -162,55 +162,57 @@ export class ContributorRegistryService {
 
     const contractId = this.requireContractId();
     const relayer = this.relayerKeypair();
-    const relayerAccount = await this.sorobanRpcClient.getAccount(
+    const result = await this.sorobanRpcClient.withSequence(
       relayer.publicKey(),
+      async (relayerAccount) => {
+        const contract = new Contract(contractId);
+
+        // The `signature` parameter is arbitrary bytes attached for auditability;
+        // the cryptographic proof lives in the SorobanAuthorizationEntry.
+        const signatureBytes = dto.signatureHex
+          ? Buffer.from(dto.signatureHex, 'hex')
+          : Buffer.alloc(64, 0);
+
+        const tx = new TransactionBuilder(relayerAccount, {
+          fee: BASE_FEE,
+          networkPassphrase: this.networkPassphrase,
+        })
+          .addOperation(
+            contract.call(
+              'register_contributor_with_sig',
+              nativeToScVal(dto.githubHandle, { type: 'string' }),
+              new Address(dto.address).toScVal(),
+              xdr.ScVal.scvBytes(signatureBytes),
+            ),
+          )
+          .setTimeout(30)
+          .build();
+
+        const simulation = await this.sorobanRpcClient.simulateTransaction(tx);
+
+        // Assemble (applies resource fee and simulation-derived soroban data)
+        const preparedTx = rpc.assembleTransaction(tx, simulation).build();
+
+        // Replace the simulation's unsigned auth entry with the contributor's signed one
+        const signedAuthEntry = xdr.SorobanAuthorizationEntry.fromXDR(
+          dto.signedAuthEntryXdr,
+          'base64',
+        );
+        preparedTx
+          .toEnvelope()
+          .v1()
+          .tx()
+          .operations()[0]
+          .body()
+          .invokeHostFunctionOp()
+          .auth([signedAuthEntry]);
+
+        // Relayer signs to authorize the fee payment
+        preparedTx.sign(relayer);
+
+        return this.sorobanRpcClient.sendTransaction(preparedTx);
+      },
     );
-    const contract = new Contract(contractId);
-
-    // The `signature` parameter is arbitrary bytes attached for auditability;
-    // the cryptographic proof lives in the SorobanAuthorizationEntry.
-    const signatureBytes = dto.signatureHex
-      ? Buffer.from(dto.signatureHex, 'hex')
-      : Buffer.alloc(64, 0);
-
-    const tx = new TransactionBuilder(relayerAccount, {
-      fee: BASE_FEE,
-      networkPassphrase: this.networkPassphrase,
-    })
-      .addOperation(
-        contract.call(
-          'register_contributor_with_sig',
-          nativeToScVal(dto.githubHandle, { type: 'string' }),
-          new Address(dto.address).toScVal(),
-          xdr.ScVal.scvBytes(signatureBytes),
-        ),
-      )
-      .setTimeout(30)
-      .build();
-
-    const simulation = await this.sorobanRpcClient.simulateTransaction(tx);
-
-    // Assemble (applies resource fee and simulation-derived soroban data)
-    const preparedTx = rpc.assembleTransaction(tx, simulation).build();
-
-    // Replace the simulation's unsigned auth entry with the contributor's signed one
-    const signedAuthEntry = xdr.SorobanAuthorizationEntry.fromXDR(
-      dto.signedAuthEntryXdr,
-      'base64',
-    );
-    preparedTx
-      .toEnvelope()
-      .v1()
-      .tx()
-      .operations()[0]
-      .body()
-      .invokeHostFunctionOp()
-      .auth([signedAuthEntry]);
-
-    // Relayer signs to authorize the fee payment
-    preparedTx.sign(relayer);
-
-    const result = await this.sorobanRpcClient.sendTransaction(preparedTx);
 
     this.logger.log(
       `Gasless registration submitted: address=${dto.address} handle=${dto.githubHandle} hash=${result.hash}`,

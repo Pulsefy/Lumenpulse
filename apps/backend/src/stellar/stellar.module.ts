@@ -1,3 +1,4 @@
+import { MetricsModule } from '../metrics/metrics.module';
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import stellarConfig from './config/stellar.config';
@@ -21,6 +22,7 @@ import { MatchingPoolAdminService } from './services/matching-pool-admin.service
 
 @Module({
   imports: [
+    MetricsModule,
     ConfigModule.forFeature(stellarConfig),
     forwardRef(() => TransactionModule),
     AuditModule,

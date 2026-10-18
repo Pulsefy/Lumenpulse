@@ -6,6 +6,7 @@ import {
   FeedActivityType,
   FeedSortOrder,
 } from './dto/contributor-feed.dto';
+import { resolvePagination } from '../common/pagination/pagination-response.dto';
 
 /**
  * Internal activity record used before pagination.
@@ -84,12 +85,14 @@ export class ContributorFeedService {
    */
   getFeed(query: ContributorFeedQueryDto): ContributorFeedResponseDto {
     const {
-      page = 1,
-      limit = 20,
+      page,
+      pageSize,
       activityType,
       contributorAddress,
       sortOrder = FeedSortOrder.DESC,
     } = query;
+
+    const resolved = resolvePagination(page, pageSize);
 
     // Filter
     let filtered = [...this.activities];
@@ -115,11 +118,11 @@ export class ContributorFeedService {
     });
 
     const total = filtered.length;
-    const effectiveLimit = Math.min(limit, 100);
-    const effectivePage = Math.max(page, 1);
-    const totalPages = Math.max(1, Math.ceil(total / effectiveLimit));
-    const start = (effectivePage - 1) * effectiveLimit;
-    const pageItems = filtered.slice(start, start + effectiveLimit);
+    const totalPages = Math.max(1, Math.ceil(total / resolved.pageSize));
+    const pageItems = filtered.slice(
+      resolved.offset,
+      resolved.offset + resolved.pageSize,
+    );
 
     // Sparse contributor detection: if filtering by address and they have < 2 activities
     const isSparseContributor = contributorAddress
@@ -131,8 +134,8 @@ export class ContributorFeedService {
     return {
       items: pageItems.map((a) => this.toDto(a)),
       total,
-      page: effectivePage,
-      limit: effectiveLimit,
+      page: resolved.page,
+      pageSize: resolved.pageSize,
       totalPages,
       isSparseContributor,
     };

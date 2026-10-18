@@ -1,0 +1,50 @@
+{
+  "correlation_analysis": {
+    "cpu_seconds": 0.140625,
+    "peak_memory_bytes": 292347.0,
+    "runs": 1.0,
+    "wall_seconds": 0.129663
+  },
+  "correlation_lag_analysis": {
+    "cpu_seconds": 0.4375,
+    "peak_memory_bytes": 148962.0,
+    "runs": 1.0,
+    "wall_seconds": 0.477179
+  },
+  "forecasting": {
+    "cpu_seconds": 0.015625,
+    "peak_memory_bytes": 93696.0,
+    "runs": 1.0,
+    "wall_seconds": 0.016881
+  },
+  "job.daily_kpi_snapshot": {
+    "cpu_seconds": 0.0,
+    "peak_memory_bytes": 56.0,
+    "runs": 1.0,
+    "wall_seconds": 5.1e-05
+  },
+  "model_retraining.anomaly_evaluation": {
+    "cpu_seconds": 0.015625,
+    "peak_memory_bytes": 19597.0,
+    "runs": 1.0,
+    "wall_seconds": 0.012678
+  },
+  "model_retraining.price_predictor": {
+    "cpu_seconds": 0.09375,
+    "peak_memory_bytes": 1010022.0,
+    "runs": 1.0,
+    "wall_seconds": 0.098662
+  },
+  "model_retraining.sentiment": {
+    "cpu_seconds": 0.140625,
+    "peak_memory_bytes": 5570458.0,
+    "runs": 1.0,
+    "wall_seconds": 0.136125
+  },
+  "model_retraining_daily": {
+    "cpu_seconds": 0.703125,
+    "peak_memory_bytes": 10136472.0,
+    "runs": 1.0,
+    "wall_seconds": 0.714068
+  }
+}

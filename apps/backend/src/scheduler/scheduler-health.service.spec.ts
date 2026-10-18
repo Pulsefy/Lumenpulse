@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getQueueToken } from '@nestjs/bullmq';
 import { JobRun, JobRunStatus } from './entities/job-run.entity';
 import { JobHistoryService } from './job-history.service';
 import { SchedulerHealthService, isJobStale } from './scheduler-health.service';
@@ -49,6 +50,10 @@ describe('SchedulerHealthService', () => {
     getLastSuccess: jest.Mock;
     getLastFailure: jest.Mock;
   };
+  let queueMocks: Record<
+    string,
+    { getJobCounts: jest.Mock; getWaiting: jest.Mock; getDelayed: jest.Mock }
+  >;
 
   const now = new Date('2026-08-27T12:00:00.000Z');
 
@@ -57,18 +62,17 @@ describe('SchedulerHealthService', () => {
     status: JobRunStatus,
     startedAt: Date,
     durationMs: number | null = 1000,
-  ): JobRun =>
-    ({
-      id: 'uuid',
-      jobName,
-      status,
-      startedAt,
-      finishedAt: startedAt,
-      durationMs,
-      triggeredBy: 'scheduled',
-      result: null,
-      errorMessage: null,
-    }) as JobRun;
+  ): JobRun => ({
+    id: 'uuid',
+    jobName,
+    status,
+    startedAt,
+    finishedAt: startedAt,
+    durationMs,
+    triggeredBy: 'scheduled',
+    result: null,
+    errorMessage: null,
+  });
 
   beforeEach(async () => {
     jobHistory = {
@@ -76,11 +80,57 @@ describe('SchedulerHealthService', () => {
       getLastSuccess: jest.fn(),
       getLastFailure: jest.fn(),
     };
+    queueMocks = {
+      'stellar-sync': {
+        getJobCounts: jest.fn().mockResolvedValue({ waiting: 3, delayed: 1 }),
+        getWaiting: jest
+          .fn()
+          .mockResolvedValue([{ timestamp: Date.now() - 60_000 }]),
+        getDelayed: jest
+          .fn()
+          .mockResolvedValue([{ timestamp: Date.now() - 120_000 }]),
+      },
+      'moderation-events': {
+        getJobCounts: jest.fn().mockResolvedValue({ waiting: 0, delayed: 0 }),
+        getWaiting: jest.fn().mockResolvedValue([]),
+        getDelayed: jest.fn().mockResolvedValue([]),
+      },
+      'soroban-events': {
+        getJobCounts: jest.fn().mockResolvedValue({ waiting: 8, delayed: 0 }),
+        getWaiting: jest
+          .fn()
+          .mockResolvedValue([{ timestamp: Date.now() - 300_000 }]),
+        getDelayed: jest.fn().mockResolvedValue([]),
+      },
+      'suspicious-contribution': {
+        getJobCounts: jest.fn().mockResolvedValue({ waiting: 2, delayed: 0 }),
+        getWaiting: jest
+          .fn()
+          .mockResolvedValue([{ timestamp: Date.now() - 600_000 }]),
+        getDelayed: jest.fn().mockResolvedValue([]),
+      },
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SchedulerHealthService,
         { provide: JobHistoryService, useValue: jobHistory },
+        {
+          provide: getQueueToken('stellar-sync'),
+          useValue: queueMocks['stellar-sync'],
+        },
+        {
+          provide: getQueueToken('moderation-events'),
+          useValue: queueMocks['moderation-events'],
+        },
+        {
+          provide: getQueueToken('soroban-events'),
+          useValue: queueMocks['soroban-events'],
+        },
+        {
+          provide: getQueueToken('suspicious-contribution'),
+          useValue: queueMocks['suspicious-contribution'],
+        },
       ],
     }).compile();
 
@@ -162,6 +212,37 @@ describe('SchedulerHealthService', () => {
       stale: true,
       staleReason: 'last-success-too-old',
     });
+  });
+
+  it('includes queue depth and oldest job age metrics for each queue', async () => {
+    const queueStatuses = await service.getQueueStatuses();
+
+    expect(queueStatuses).toEqual([
+      expect.objectContaining({
+        name: 'stellar-sync',
+        depth: 4,
+        oldestJobAgeMs: expect.any(Number),
+      }),
+      expect.objectContaining({
+        name: 'moderation-events',
+        depth: 0,
+        oldestJobAgeMs: 0,
+      }),
+      expect.objectContaining({
+        name: 'soroban-events',
+        depth: 8,
+        oldestJobAgeMs: expect.any(Number),
+      }),
+      expect.objectContaining({
+        name: 'suspicious-contribution',
+        depth: 2,
+        oldestJobAgeMs: expect.any(Number),
+      }),
+    ]);
+
+    expect(queueStatuses[0].oldestJobAgeMs).toBeGreaterThanOrEqual(60_000);
+    expect(queueStatuses[2].oldestJobAgeMs).toBeGreaterThanOrEqual(300_000);
+    expect(queueStatuses[3].oldestJobAgeMs).toBeGreaterThanOrEqual(600_000);
   });
 
   it('marks a job stale when it has only ever failed (never succeeded)', async () => {

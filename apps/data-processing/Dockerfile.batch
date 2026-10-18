@@ -1,0 +1,87 @@
+# syntax=docker/dockerfile:1
+# ---------------------------------------------------------------------------
+# Dockerfile.batch — batch/scheduler-only service image (issue #1628)
+#
+# Runs only src/main.py serve (APScheduler + all ingestion/retraining/KPI
+# batch jobs).  Does NOT start the FastAPI inference server.
+#
+# The model registry directory (./models) is written here after retraining and
+# should be shared with the inference service via a volume mount or an
+# object-storage sync side-car so the inference service can pick up newly
+# promoted model versions.
+# ---------------------------------------------------------------------------
+
+###############################################################################
+# Stage 1 — builder
+###############################################################################
+FROM python:3.9-slim AS builder
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HF_HOME=/opt/hf
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements.lock .
+
+RUN pip install --require-hashes -r requirements.lock \
+        --index-url https://pypi.org/simple \
+        --extra-index-url https://download.pytorch.org/whl/cpu
+
+# FinBERT weights are needed by the retraining pipeline (sentiment evaluation).
+RUN python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; m='ProsusAI/finbert'; AutoTokenizer.from_pretrained(m); AutoModelForSequenceClassification.from_pretrained(m)"
+
+###############################################################################
+# Stage 2 — runtime
+###############################################################################
+FROM python:3.9-slim
+
+LABEL org.opencontainers.image.title="lumenpulse-batch" \
+      org.opencontainers.image.description="Lumenpulse batch service — APScheduler only, no inference API" \
+      org.opencontainers.image.source="https://github.com/Pulsefy/Lumenpulse"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/app/.cache/huggingface \
+    TRANSFORMERS_CACHE=/app/.cache/huggingface/hub \
+    PATH="/opt/venv/bin:$PATH" \
+    # Force batch-only mode so even a misconfigured CMD cannot start the API.
+    SERVICE_MODE=batch
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 appuser \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin appuser
+
+COPY --from=builder /opt/venv /opt/venv
+
+WORKDIR /app
+COPY . .
+
+COPY --from=builder /opt/hf /app/.cache/huggingface
+
+RUN mkdir -p /app/logs /app/models /app/data /app/.cache/huggingface \
+    && chown -R appuser:appuser /app/logs /app/models /app/data /app/.cache/huggingface
+
+USER appuser
+
+# Vendor pinned NER and embedding models (used during retraining evaluation).
+RUN python scripts/fetch_ner_model.py && python scripts/fetch_ner_model.py --check-only
+RUN python scripts/fetch_embedding_model.py && python scripts/fetch_embedding_model.py --check-only
+
+# No EXPOSE — the batch worker does not listen on any port.
+# Prometheus metrics are published on port 9091 for scraping.
+EXPOSE 9091
+
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import os, sys; sys.exit(0 if os.path.exists('/app/logs/data_processor.log') else 1)"
+
+CMD ["python", "src/main.py", "serve"]

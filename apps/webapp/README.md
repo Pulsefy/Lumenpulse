@@ -42,6 +42,64 @@ npm run generate:api-types
 npm run check:api-types
 ```
 
+## Production deployment
+
+### Current path: Vercel
+
+The webapp is currently deployed on **Vercel**. There is no `vercel.json` in the
+repository — Vercel detects Next.js and runs `npm run build` with the root
+directory set to `apps/webapp`, then serves `next start` from the output.
+
+Environment variables are set in the Vercel project settings, not in the
+repository:
+
+| Variable | Where | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | Vercel env | **Rebuild required.** Inlined into the client bundle at build time. |
+| `NEXT_PUBLIC_STELLAR_EXPLORER_URL` | Vercel env | Rebuild required, if set. |
+| `BACKEND_API_URL` | Vercel env | Read at request time by server components and API routes. |
+
+The two variables are consumed by
+[`lib/config.ts`](lib/config.ts) as `clientConfig` (browser-visible) and
+`serverConfig` (server-only). Keeping that split intact is what allows
+`BACKEND_API_URL` to point at an internal hostname while the browser gets a
+public one.
+
+### Container image
+
+[`Dockerfile`](Dockerfile) builds a self-contained production image that does not
+depend on any platform. It exists so the webapp is not tied to one vendor, and
+so the local stack can run it.
+
+```bash
+docker build -f apps/webapp/Dockerfile -t lumenpulse-webapp apps/webapp
+docker run --rm -p 3000:3000 -e BACKEND_API_URL=http://localhost:3001 lumenpulse-webapp
+```
+
+Or as part of the full stack — see [docs/LOCAL_STACK.md](../../docs/LOCAL_STACK.md):
+
+```bash
+docker compose up -d --build webapp
+```
+
+**The image does not replace the Vercel deployment.** Both are supported and both
+should keep working; the image is the escape hatch, not a migration. They run the
+same `next build` and the same `next start`, so a difference in behaviour between
+them is a bug in one of them rather than an intended difference.
+
+#### Build-time versus runtime variables
+
+This is the one thing to get right when adapting the image to another platform.
+
+| Variable | When it is read | Changing it requires |
+|---|---|---|
+| `NEXT_PUBLIC_*` | `next build` — inlined into the bundle | A rebuild |
+| `BACKEND_API_URL` | Request time, on the server | A restart |
+
+In the Dockerfile, `NEXT_PUBLIC_*` are build `ARG`s and `BACKEND_API_URL` is a
+runtime environment variable. Passing `NEXT_PUBLIC_API_URL` to `docker run` does
+nothing; it has to be passed to `docker build`.
+
 ## Development
 
 ```bash

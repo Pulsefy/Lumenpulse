@@ -21,6 +21,7 @@ import {
   EntityLinkingQueryDto,
   EntityLinkingResponseDto,
 } from './dto/entity-linking.dto';
+import { resolvePagination } from '../common/pagination/pagination-response.dto';
 
 type TagRow = { value: string; count: number };
 type CategoryRow = { value: string; count: number };
@@ -35,8 +36,7 @@ export class SearchService {
   ) {}
 
   searchProjects(query: ProjectSearchQueryDto): ProjectSearchResponseDto {
-    const limit = Math.min(query.limit ?? 20, 100);
-    const offset = Math.max(query.offset ?? 0, 0);
+    const pagination = resolvePagination(query.page, query.pageSize);
     const normalizedQuery = (query.q ?? '').trim();
     const normalizedQueryLower = normalizedQuery.toLowerCase();
     const queryId = Number.isFinite(Number(normalizedQuery))
@@ -69,8 +69,19 @@ export class SearchService {
       return b.registeredAt - a.registeredAt;
     });
 
-    const items = filtered.slice(offset, offset + limit);
-    return { items, total: filtered.length, limit, offset };
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / pagination.pageSize));
+    const items = filtered.slice(
+      pagination.offset,
+      pagination.offset + pagination.pageSize,
+    );
+    return {
+      items,
+      total,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      totalPages,
+    };
   }
 
   async searchAssets(query: AssetSearchQueryDto): Promise<{

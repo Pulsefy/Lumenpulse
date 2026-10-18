@@ -8,6 +8,8 @@ import {
   Contract,
   Transaction,
 } from '@stellar/stellar-sdk';
+import { extractTransactionResultCode } from '../utils/stellar-result-code';
+import { MetricsService } from '../../metrics/metrics.service';
 import { Counter, Histogram, Registry } from 'prom-client';
 import { config } from '../../lib/config';
 import { RequestContextService } from '../../common/services/request-context.service';
@@ -17,6 +19,7 @@ export enum SorobanErrorCode {
   SIMULATION_FAILED = 'SOROBAN_SIMULATION_FAILED',
   ACCOUNT_NOT_FOUND = 'SOROBAN_ACCOUNT_NOT_FOUND',
   SUBMISSION_FAILED = 'SOROBAN_SUBMISSION_FAILED',
+  BAD_SEQUENCE = 'SOROBAN_BAD_SEQUENCE',
   NETWORK_ERROR = 'SOROBAN_NETWORK_ERROR',
   MAX_RETRIES_EXCEEDED = 'SOROBAN_MAX_RETRIES_EXCEEDED',
 }
@@ -26,6 +29,7 @@ export class SorobanRpcError extends Error {
     public readonly code: SorobanErrorCode,
     message: string,
     public readonly cause?: unknown,
+    public readonly resultCode?: string,
   ) {
     super(message);
     this.name = 'SorobanRpcError';
@@ -38,8 +42,6 @@ export interface SorobanClientOptions {
   initialBackoffMs?: number;
   isReadOnly?: boolean;
 }
-
-type SimulationTraceLevel = 'off' | 'summary' | 'verbose';
 
 interface ContractInvocationSummary {
   contract: string;
@@ -78,10 +80,13 @@ export class SorobanRpcClientService {
   private readonly rpcLatency: Histogram;
   private readonly rpcErrors: Counter;
   private readonly rpcRequests: Counter;
+  private readonly submissionFailures: Counter;
+  private readonly sourceLocks = new Map<string, Promise<void>>();
 
   constructor(
     private readonly requestContextService: RequestContextService,
     @Optional() private readonly registry?: Registry,
+    @Optional() metrics?: MetricsService,
   ) {
     const rpcUrl =
       config.stellar.sorobanRpcUrl ??
@@ -94,7 +99,7 @@ export class SorobanRpcClientService {
       allowHttp: rpcUrl.startsWith('http://'),
     });
 
-    const reg = this.registry ?? new Registry();
+    const reg = this.registry ?? metrics?.registry ?? new Registry();
 
     this.rpcLatency = new Histogram({
       name: 'soroban_rpc_latency_ms',
@@ -115,6 +120,12 @@ export class SorobanRpcClientService {
       name: 'soroban_rpc_requests_total',
       help: 'Total Soroban RPC requests by method',
       labelNames: ['method'],
+      registers: [reg],
+    });
+    this.submissionFailures = new Counter({
+      name: 'stellar_submission_failures_total',
+      help: 'Rejected Stellar submissions by transaction result code',
+      labelNames: ['result_code'],
       registers: [reg],
     });
   }
@@ -227,13 +238,85 @@ export class SorobanRpcClientService {
         tx as Parameters<rpc.Server['sendTransaction']>[0],
       );
       if (result.status === 'ERROR') {
-        throw new SorobanRpcError(
-          SorobanErrorCode.SUBMISSION_FAILED,
-          `Transaction submission failed: ${JSON.stringify(result.errorResult ?? 'Unknown')}`,
-        );
+        throw this.submissionError(result.errorResult);
       }
       return result;
     });
+  }
+
+  /**
+   * Hold a FIFO lock from account lookup through ledger inclusion. Retrying a
+   * sequence rejection MUST rebuild, simulate, and sign with a freshly read account.
+   * All server-signed call sites share this singleton, regardless of module.
+   */
+  async withSequence<T extends { hash: string; status: string }>(
+    source: string,
+    operation: (account: Account) => Promise<T>,
+  ): Promise<T> {
+    const previous = this.sourceLocks.get(source) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.sourceLocks.set(source, current);
+    await previous;
+    try {
+      for (let attempt = 0; ; attempt++) {
+        const account = await this.getAccount(source);
+        try {
+          const result = await operation(account);
+          // Treasury/vesting callbacks already wait for SUCCESS. Other callers
+          // must not release the source while a transaction is merely PENDING.
+          if (result.status !== 'SUCCESS')
+            await this.waitForInclusion(result.hash);
+          return result;
+        } catch (error: unknown) {
+          if (
+            !(error instanceof SorobanRpcError) ||
+            error.code !== SorobanErrorCode.BAD_SEQUENCE ||
+            attempt >= 2
+          )
+            throw error;
+          await this.sleep(250 * 2 ** attempt);
+        }
+      }
+    } finally {
+      release();
+      if (this.sourceLocks.get(source) === current)
+        this.sourceLocks.delete(source);
+    }
+  }
+
+  private submissionError(result: unknown, count = true): SorobanRpcError {
+    const resultCode = extractTransactionResultCode(result);
+    if (count) this.submissionFailures.inc({ result_code: resultCode });
+    return new SorobanRpcError(
+      resultCode === 'tx_bad_seq'
+        ? SorobanErrorCode.BAD_SEQUENCE
+        : SorobanErrorCode.SUBMISSION_FAILED,
+      `Transaction submission failed: ${resultCode}`,
+      undefined,
+      resultCode,
+    );
+  }
+
+  private async waitForInclusion(hash: string): Promise<void> {
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      const result = await this.getTransaction(hash, {
+        maxRetries: 0,
+        timeoutMs: Math.min(DEFAULT_OPTIONS.timeoutMs, deadline - Date.now()),
+      });
+      if (result.status === rpc.Api.GetTransactionStatus.SUCCESS) return;
+      if (result.status === rpc.Api.GetTransactionStatus.FAILED)
+        throw this.submissionError(result.resultXdr, false);
+      await this.sleep(Math.min(500, Math.max(0, deadline - Date.now())));
+    }
+    // An ambiguous timeout never causes a freshly signed resubmission.
+    throw new SorobanRpcError(
+      SorobanErrorCode.TIMEOUT,
+      `Transaction ${hash} was not confirmed within 30000ms`,
+    );
   }
 
   /** Poll for transaction status until finalized */
@@ -242,7 +325,13 @@ export class SorobanRpcClientService {
     opts?: SorobanClientOptions,
   ): Promise<rpc.Api.GetTransactionResponse> {
     return this.withRetry('getTransaction', opts, async () => {
-      return this.server.getTransaction(hash);
+      const result = await this.server.getTransaction(hash);
+      if (result.status === rpc.Api.GetTransactionStatus.FAILED) {
+        this.submissionFailures.inc({
+          result_code: extractTransactionResultCode(result.resultXdr),
+        });
+      }
+      return result;
     });
   }
 
@@ -361,8 +450,7 @@ export class SorobanRpcClientService {
     tx: unknown,
     result: rpc.Api.SimulateTransactionErrorResponse,
   ): void {
-    const traceLevel = config.stellar
-      .simulationTraceLevel as SimulationTraceLevel;
+    const traceLevel = config.stellar.simulationTraceLevel;
     if (traceLevel === 'off') {
       return;
     }

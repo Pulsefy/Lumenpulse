@@ -1,7 +1,9 @@
 import { NotificationSeverity } from './notification.entity';
 
-export interface DataProcessingTemplateVariables
-  extends Record<string, string> {
+export interface DataProcessingTemplateVariables extends Record<
+  string,
+  string
+> {
   severityUpper: string;
   label: string;
   metricDisplay: string;

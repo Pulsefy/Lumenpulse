@@ -328,19 +328,27 @@ def _feature_drift_detection_job() -> None:
     baseline recorded with the live price-predictor model and raises an alert
     through the existing alerting path when any feature drifts beyond the
     configured PSI threshold (or the feature schema version/fingerprint no
-    longer matches). Read-only; errors are caught so the scheduler keeps running.
+    longer matches). Drift also queues evaluation-gated retraining unless
+    automatic retraining is disabled; errors are caught so the scheduler keeps
+    running.
     """
     try:
         from src.ml.feature_drift_detector import FeatureDriftDetector
 
         detector = FeatureDriftDetector()
         report = detector.detect()
+        if report.drift_detected:
+            from src.ml.drift_retraining import enqueue_drift_retraining
+
+            report.retraining = enqueue_drift_retraining(report.to_dict())
         logger.info(
-            "Feature drift detection: status=%s drifted=%s schema_mismatch=%s alerted=%s",
+            "Feature drift detection: status=%s drifted=%s schema_mismatch=%s "
+            "alerted=%s retraining=%s",
             report.status,
             report.drifted_features,
             report.schema_mismatch,
             report.alerted,
+            report.retraining,
         )
     except Exception as exc:
         logger.error(f"Feature drift detector job failed: {exc}", exc_info=True)

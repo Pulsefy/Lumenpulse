@@ -17,6 +17,7 @@ import { BadRequestException } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import {
   SorobanRpcError,
+  SorobanErrorCode,
   SorobanRpcClientService,
 } from '../stellar/services/soroban-rpc-client.service';
 import {
@@ -114,44 +115,46 @@ export class TreasurySorobanClient {
     const keypair = this.getAdminKeypair();
 
     try {
-      const sourceAccount = await this.sorobanRpc.getAccount(
+      return await this.sorobanRpc.withSequence(
         keypair.publicKey(),
+        async (sourceAccount) => {
+          if (!(sourceAccount instanceof Account)) {
+            throw new Error('Failed to retrieve source account');
+          }
+
+          const contract = new Contract(contractId);
+          const operation = contract.call(
+            'allocate_budget',
+            Address.fromString(keypair.publicKey()).toScVal(),
+            Address.fromString(params.beneficiary).toScVal(),
+            nativeToScVal(BigInt(params.amount), { type: 'i128' }),
+            nativeToScVal(BigInt(params.startTime), { type: 'u64' }),
+            nativeToScVal(BigInt(params.duration), { type: 'u64' }),
+          );
+
+          const tx = new TransactionBuilder(sourceAccount, {
+            fee: BASE_INCLUSION_FEE,
+            networkPassphrase: this.getNetworkPassphrase(),
+          })
+            .addOperation(operation)
+            .setTimeout(30)
+            .build();
+
+          const simulation = await this.sorobanRpc.simulateTransaction(tx);
+          if (rpc.Api.isSimulationError(simulation)) {
+            const errorMsg =
+              typeof simulation.error === 'string'
+                ? simulation.error
+                : String(simulation.error);
+            throw toTreasuryException(errorMsg, params.beneficiary);
+          }
+
+          const prepared = rpc.assembleTransaction(tx, simulation).build();
+          prepared.sign(keypair);
+
+          return await this.submitAndConfirm(prepared);
+        },
       );
-      if (!(sourceAccount instanceof Account)) {
-        throw new Error('Failed to retrieve source account');
-      }
-
-      const contract = new Contract(contractId);
-      const operation = contract.call(
-        'allocate_budget',
-        Address.fromString(keypair.publicKey()).toScVal(),
-        Address.fromString(params.beneficiary).toScVal(),
-        nativeToScVal(BigInt(params.amount), { type: 'i128' }),
-        nativeToScVal(BigInt(params.startTime), { type: 'u64' }),
-        nativeToScVal(BigInt(params.duration), { type: 'u64' }),
-      );
-
-      const tx = new TransactionBuilder(sourceAccount, {
-        fee: BASE_INCLUSION_FEE,
-        networkPassphrase: this.getNetworkPassphrase(),
-      })
-        .addOperation(operation)
-        .setTimeout(30)
-        .build();
-
-      const simulation = await this.sorobanRpc.simulateTransaction(tx);
-      if (rpc.Api.isSimulationError(simulation)) {
-        const errorMsg =
-          typeof simulation.error === 'string'
-            ? simulation.error
-            : String(simulation.error);
-        throw toTreasuryException(errorMsg, params.beneficiary);
-      }
-
-      const prepared = rpc.assembleTransaction(tx, simulation).build();
-      prepared.sign(keypair);
-
-      return await this.submitAndConfirm(prepared);
     } catch (error: unknown) {
       throw this.normalizeError(error);
     }
@@ -172,42 +175,44 @@ export class TreasurySorobanClient {
     const keypair = this.getAdminKeypair();
 
     try {
-      const sourceAccount = await this.sorobanRpc.getAccount(
+      return await this.sorobanRpc.withSequence(
         keypair.publicKey(),
+        async (sourceAccount) => {
+          if (!(sourceAccount instanceof Account)) {
+            throw new Error('Failed to retrieve source account');
+          }
+
+          const contract = new Contract(contractId);
+          const operation = contract.call(
+            'rotate_beneficiary',
+            Address.fromString(keypair.publicKey()).toScVal(),
+            Address.fromString(params.oldBeneficiary).toScVal(),
+            Address.fromString(params.newBeneficiary).toScVal(),
+          );
+
+          const tx = new TransactionBuilder(sourceAccount, {
+            fee: BASE_INCLUSION_FEE,
+            networkPassphrase: this.getNetworkPassphrase(),
+          })
+            .addOperation(operation)
+            .setTimeout(30)
+            .build();
+
+          const simulation = await this.sorobanRpc.simulateTransaction(tx);
+          if (rpc.Api.isSimulationError(simulation)) {
+            const errorMsg =
+              typeof simulation.error === 'string'
+                ? simulation.error
+                : String(simulation.error);
+            throw toTreasuryException(errorMsg, params.oldBeneficiary);
+          }
+
+          const prepared = rpc.assembleTransaction(tx, simulation).build();
+          prepared.sign(keypair);
+
+          return await this.submitAndConfirm(prepared);
+        },
       );
-      if (!(sourceAccount instanceof Account)) {
-        throw new Error('Failed to retrieve source account');
-      }
-
-      const contract = new Contract(contractId);
-      const operation = contract.call(
-        'rotate_beneficiary',
-        Address.fromString(keypair.publicKey()).toScVal(),
-        Address.fromString(params.oldBeneficiary).toScVal(),
-        Address.fromString(params.newBeneficiary).toScVal(),
-      );
-
-      const tx = new TransactionBuilder(sourceAccount, {
-        fee: BASE_INCLUSION_FEE,
-        networkPassphrase: this.getNetworkPassphrase(),
-      })
-        .addOperation(operation)
-        .setTimeout(30)
-        .build();
-
-      const simulation = await this.sorobanRpc.simulateTransaction(tx);
-      if (rpc.Api.isSimulationError(simulation)) {
-        const errorMsg =
-          typeof simulation.error === 'string'
-            ? simulation.error
-            : String(simulation.error);
-        throw toTreasuryException(errorMsg, params.oldBeneficiary);
-      }
-
-      const prepared = rpc.assembleTransaction(tx, simulation).build();
-      prepared.sign(keypair);
-
-      return await this.submitAndConfirm(prepared);
     } catch (error: unknown) {
       throw this.normalizeError(error);
     }
@@ -329,6 +334,15 @@ export class TreasurySorobanClient {
       typeof error.getStatus === 'function'
     ) {
       return error as unknown as Error;
+    }
+
+    if (
+      error instanceof SorobanRpcError &&
+      error.code === SorobanErrorCode.BAD_SEQUENCE
+    ) {
+      return new TreasuryTransactionFailedException(error.message, {
+        resultCode: error.resultCode,
+      });
     }
 
     if (error instanceof SorobanRpcError) {

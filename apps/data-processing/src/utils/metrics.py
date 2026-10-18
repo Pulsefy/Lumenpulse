@@ -20,6 +20,18 @@ API_FAILURES_TOTAL = Counter(
     ["method", "endpoint"]
 )
 
+INFERENCE_REQUESTS_TOTAL = Counter(
+    "lumenpulse_inference_requests_total",
+    "Total number of text inputs evaluated for inference, by endpoint",
+    ["endpoint"],
+)
+
+INFERENCE_OOD_TOTAL = Counter(
+    "lumenpulse_inference_ood_total",
+    "Total number of text inputs rejected as out of distribution, by endpoint",
+    ["endpoint"],
+)
+
 ANOMALIES_DETECTED_TOTAL = Counter(
     "anomalies_detected", 
     "Total number of anomalies detected",

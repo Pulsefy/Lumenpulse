@@ -14,10 +14,21 @@ on:
       - 'apps/onchain/.ci-trigger'
       - 'docs/MAINNET_READINESS_CHECKLIST.md'
 
+# Issue #1713. See backend.yml for the rationale.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   onchain-checks:
     name: Test Suite
     runs-on: ubuntu-latest
+    # Issue #1714. This job compiles the workspace to wasm32 twice on a pull
+    # request (once for the branch, once for a base-branch worktree) and its
+    # runtime is bimodal: 1 min when Swatinem/rust-cache hits, 4.5 min when it
+    # misses. The budget is set from the cache-miss tail, not the median.
+    # See docs/ci-timeouts.md.
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: write
@@ -26,6 +37,14 @@ jobs:
         working-directory: ./apps/onchain
 
     steps:
+    - name: Start timeout guard
+      uses: ./.github/actions/job-timeout-guard
+      with:
+        phase: start
+        job-id: onchain-checks
+        budget-minutes: '30'
+        note: Two full wasm32 release builds on a PR, clippy, contract tests, wasm optimisation.
+
     - name: Checkout code
       uses: actions/checkout@v4
       with:
@@ -56,6 +75,9 @@ jobs:
 
     - name: Validate manifest
       run: node scripts/validate-manifest.js
+
+    - name: Enforce contract test modules
+      run: node scripts/check-contract-tests.mjs
 
     - name: Build Contracts
       run: cargo build --target wasm32-unknown-unknown --release
@@ -104,3 +126,12 @@ jobs:
 
     - name: Verify mainnet readiness checklist is current
       run: node scripts/mainnet-readiness.mjs --check
+
+    - name: Report timeout guard
+      if: always()
+      uses: ./.github/actions/job-timeout-guard
+      with:
+        phase: finish
+        job-id: onchain-checks
+        budget-minutes: '30'
+        note: Two full wasm32 release builds on a PR, clippy, contract tests, wasm optimisation.

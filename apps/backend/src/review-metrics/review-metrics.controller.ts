@@ -35,7 +35,10 @@ export class ReviewMetricsController {
     description: 'Aging metrics computed successfully',
     type: ReviewMetricsResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Forbidden – reviewer or admin role required' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden – reviewer or admin role required',
+  })
   async getAgingMetrics(
     @Query() query: ReviewMetricsQueryDto,
   ): Promise<ReviewMetricsResponseDto> {

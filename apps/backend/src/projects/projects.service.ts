@@ -14,6 +14,7 @@ import {
   OnChainStatusDto,
   ProjectMetadataDto,
 } from './dto/projects.dto';
+import { resolvePagination } from '../common/pagination/pagination-response.dto';
 
 @Injectable()
 export class ProjectsService {
@@ -37,14 +38,15 @@ export class ProjectsService {
 
     try {
       const {
-        page = 1,
-        limit = 10,
+        page,
+        pageSize,
         status,
         owner,
         sortBy = 'createdAt',
         sortOrder = 'DESC',
       } = query;
-      const skip = (page - 1) * limit;
+
+      const pagination = resolvePagination(page, pageSize);
 
       // Build query conditions
       const where: Record<string, unknown> = {};
@@ -59,8 +61,8 @@ export class ProjectsService {
       const [projects, total] = await this.projectRepository.findAndCount({
         where,
         order: { [sortBy]: sortOrder },
-        skip,
-        take: limit,
+        skip: pagination.offset,
+        take: pagination.pageSize,
       });
 
       // FIX (N+1 → 1): preload all project on-chain states concurrently in a
@@ -97,13 +99,11 @@ export class ProjectsService {
         }),
       );
 
-      const response: ProjectListResponseDto = {
-        projects: projectItems,
+      const response = new ProjectListResponseDto(
+        projectItems,
+        pagination,
         total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      };
+      );
 
       const duration = Date.now() - startTime;
       this.metricsService.recordHistogram(

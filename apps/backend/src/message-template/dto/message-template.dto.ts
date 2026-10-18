@@ -122,10 +122,10 @@ export class MessageTemplateAuditLogResponseDto {
   @ApiProperty()
   newVersion: number;
 
-  @ApiProperty({ type: Object, additionalProperties: true })
+  @ApiProperty({ type: 'object', additionalProperties: true })
   previousSnapshot: Record<string, unknown>;
 
-  @ApiProperty({ type: Object, additionalProperties: true })
+  @ApiProperty({ type: 'object', additionalProperties: true })
   newSnapshot: Record<string, unknown>;
 
   @ApiPropertyOptional({ nullable: true })

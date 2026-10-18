@@ -16,7 +16,11 @@
     "size:export": "expo export --platform android --platform ios --platform web --output-dir dist",
     "size:check": "node scripts/check-mobile-size.mjs",
     "size:baseline": "npm run size:export && node scripts/check-mobile-size.mjs --write-baseline",
-    "size:record-binary": "node scripts/check-mobile-size.mjs --record-binary"
+    "size:record-binary": "node scripts/check-mobile-size.mjs --record-binary",
+    "startup:measure": "playwright test e2e/startup-budget.spec.ts",
+    "startup:check": "node scripts/check-mobile-startup.mjs",
+    "startup:baseline": "npm run startup:measure && node scripts/check-mobile-startup.mjs --write-baseline",
+    "startup:verify": "npm run startup:measure && npm run startup:check"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

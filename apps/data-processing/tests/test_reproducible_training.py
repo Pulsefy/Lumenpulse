@@ -48,13 +48,14 @@ def test_reproducible_training():
     
     # Assert models are identical by comparing metrics, feature_baseline
     assert metadata1["metrics"] == metadata2["metrics"]
+    assert metadata1["member_metrics"] == metadata2["member_metrics"]
     assert metadata1["feature_baseline"] == metadata2["feature_baseline"]
-    
-    # We can also compare model weights directly
+
+    # Check the fitted linear member remains reproducible within the ensemble.
     model1 = load_model("price_predictor", version1)
     model2 = load_model("price_predictor", version2)
-    
-    coef1 = model1.pipeline.named_steps["regressor"].coef_
-    coef2 = model2.pipeline.named_steps["regressor"].coef_
-    
+
+    coef1 = model1.members["linear_regression"].pipeline.named_steps["regressor"].coef_
+    coef2 = model2.members["linear_regression"].pipeline.named_steps["regressor"].coef_
+
     np.testing.assert_array_almost_equal(coef1, coef2)

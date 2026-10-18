@@ -1,12 +1,18 @@
-import { Controller, Get, Res } from '@nestjs/common';
+import { Controller, Get, Res, UseGuards } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
   ApiServiceUnavailableResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/decorators/auth.decorators';
+import { RolesGuard } from '../auth/roles.guard';
+import { UserRole } from '../users/entities/user.entity';
 import {
+  QueueHealthMetric,
   SchedulerHealthService,
   SchedulerJobStatus,
 } from './scheduler-health.service';
@@ -17,9 +23,13 @@ interface SchedulerHealthPayload {
   checkedAt: string;
   staleJobs: SchedulerJobStatus[];
   jobs: SchedulerJobStatus[];
+  queues: QueueHealthMetric[];
 }
 
 @ApiTags('health')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('health/schedulers')
 export class SchedulerHealthController {
   constructor(private readonly schedulerHealth: SchedulerHealthService) {}
@@ -50,7 +60,10 @@ export class SchedulerHealthController {
   async getSchedulerHealth(
     @Res({ passthrough: true }) response: Response,
   ): Promise<SchedulerHealthPayload> {
-    const jobs = await this.schedulerHealth.getJobStatuses();
+    const [jobs, queues] = await Promise.all([
+      this.schedulerHealth.getJobStatuses(),
+      this.schedulerHealth.getQueueStatuses(),
+    ]);
     const staleJobs = jobs.filter((job) => job.stale);
 
     response.status(staleJobs.length > 0 ? 503 : 200);
@@ -61,6 +74,7 @@ export class SchedulerHealthController {
       checkedAt: new Date().toISOString(),
       staleJobs,
       jobs,
+      queues,
     };
   }
 }

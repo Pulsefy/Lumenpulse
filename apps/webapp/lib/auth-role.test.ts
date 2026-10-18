@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { canViewReviewMetrics, getCurrentUserRole, getRoleFromToken } from "./auth-role";
+import { canViewReviewMetrics, getCurrentUserId, getCurrentUserRole, getRoleFromToken } from "./auth-role";
 
 function tokenWith(claims: Record<string, unknown>): string {
   const b64url = (s: string) => btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -27,6 +27,16 @@ describe("auth-role", () => {
   it("reads the role from the auth-token cookie", () => {
     document.cookie = `auth-token=${tokenWith({ role: "admin" })}; path=/`;
     expect(getCurrentUserRole()).toBe("admin");
+  });
+
+  it("reads the user id from the auth-token cookie", () => {
+    document.cookie = `auth-token=${tokenWith({ sub: "user-1" })}; path=/`;
+    expect(getCurrentUserId()).toBe("user-1");
+  });
+
+  it("returns null when the token has no valid user id", () => {
+    document.cookie = `auth-token=${tokenWith({ sub: 1 })}; path=/`;
+    expect(getCurrentUserId()).toBeNull();
   });
 
   it("only allows reviewer and admin to view review metrics", () => {

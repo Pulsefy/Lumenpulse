@@ -109,7 +109,9 @@ export function redactPersonalData(value: unknown): unknown {
   }
   if (value !== null && typeof value === 'object') {
     const redacted: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    for (const [key, entry] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
       redacted[key] = PERSONAL_DATA_KEYS.has(key.toLowerCase())
         ? ANONYMISED_PLACEHOLDER
         : redactPersonalData(entry);
@@ -143,7 +145,8 @@ export const USER_DATA_INVENTORY: readonly UserDataStore[] = [
     disposition: UserDataDisposition.DELETE,
     retentionDays: null,
     retention: 'Account lifetime (erased on request)',
-    rationale: 'Wallet links are user-owned; the erasure flow unlinks them all.',
+    rationale:
+      'Wallet links are user-owned; the erasure flow unlinks them all.',
   },
   {
     table: 'refresh_tokens',
@@ -181,7 +184,7 @@ export const USER_DATA_INVENTORY: readonly UserDataStore[] = [
     retentionDays: 90,
     retention: '90 days since last registration',
     rationale:
-      'A push token addresses the user\'s device; it is removed on erasure.',
+      "A push token addresses the user's device; it is removed on erasure.",
   },
   {
     table: 'notifications',
@@ -263,7 +266,7 @@ export const USER_DATA_INVENTORY: readonly UserDataStore[] = [
     disposition: UserDataDisposition.DELETE,
     retentionDays: null,
     retention: 'Account lifetime (erased on request)',
-    rationale: 'Alert rules describe the user\'s positions and interests.',
+    rationale: "Alert rules describe the user's positions and interests.",
   },
   {
     table: 'price_alert_evaluation_logs',

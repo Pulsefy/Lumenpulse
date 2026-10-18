@@ -11,6 +11,20 @@ the API process reads (to build the pipeline topology response).
 Only the *latest* run of each stage is kept - enough to report last run,
 duration and outcome, and to tell a stage that failed apart from one that has
 not run yet.
+
+New in this revision (#1451)
+----------------------------
+* ``record_retry`` — called each time a transient failure triggers a retry;
+  increments the stored ``retry_count`` and timestamps the attempt.
+* ``record_skip`` — called when a stage is skipped because an upstream
+  dependency failed; records the ``skip_reason`` and sets the outcome to
+  ``"skipped"``.
+* Each persisted entry now carries:
+
+  - ``retry_count``     — how many retry attempts have been made this run.
+  - ``last_retry_at``   — ISO-8601 timestamp of the most recent retry attempt.
+  - ``skip_reason``     — why the stage was skipped (or ``None``).
+  - ``alerted``         — ``True`` once a retry-exhausted alert has fired.
 """
 
 from __future__ import annotations
@@ -26,6 +40,7 @@ from typing import Any, Dict, Optional
 # Outcome values persisted for a finished run.
 OUTCOME_SUCCESS = "success"
 OUTCOME_FAILED = "failed"
+OUTCOME_SKIPPED = "skipped"
 
 # Marker written while a stage is executing but has not finished yet.
 STATE_RUNNING = "running"
@@ -47,7 +62,13 @@ def _utcnow_iso() -> str:
 
 
 class PipelineRunRegistry:
-    """A tiny JSON-file-backed store of the latest run per stage id."""
+    """A tiny JSON-file-backed store of the latest run per stage id.
+
+    In addition to the original start / finish lifecycle, this class now
+    exposes :meth:`record_retry` and :meth:`record_skip` so that retry
+    attempts and downstream skips are visible in the registry and therefore
+    surfaced through the pipeline topology API.
+    """
 
     def __init__(self, path: Optional[str] = None) -> None:
         self._path = path or _default_state_path()
@@ -103,6 +124,11 @@ class PipelineRunRegistry:
                     "started_at": datetime.fromtimestamp(
                         start, tz=timezone.utc
                     ).isoformat(),
+                    # Reset retry counter and skip reason for the new run.
+                    "retry_count": 0,
+                    "last_retry_at": None,
+                    "skip_reason": None,
+                    "alerted": False,
                 }
             )
             data[stage_id] = entry
@@ -142,6 +168,114 @@ class PipelineRunRegistry:
                         else None
                     ),
                     "error": error,
+                }
+            )
+            data[stage_id] = entry
+            self._write_all(data)
+
+    def record_retry(
+        self,
+        stage_id: str,
+        attempt: int,
+        error: Optional[str] = None,
+        when: Optional[float] = None,
+    ) -> None:
+        """
+        Record that a transient failure triggered a retry for ``stage_id``.
+
+        Parameters
+        ----------
+        stage_id:
+            The stage that is being retried.
+        attempt:
+            The attempt number (1 = first retry after initial failure).
+        error:
+            The error message from the failed attempt, stored for visibility.
+        when:
+            Wall-clock time of the retry (defaults to now).
+        """
+        ts = datetime.fromtimestamp(
+            when if when is not None else time.time(), tz=timezone.utc
+        ).isoformat()
+
+        with self._lock:
+            data = self._read_all()
+            entry = data.get(stage_id, {})
+            entry.update(
+                {
+                    "stage_id": stage_id,
+                    # Keep state as running — the stage is still executing.
+                    "state": STATE_RUNNING,
+                    "retry_count": attempt,
+                    "last_retry_at": ts,
+                    # Persist the last transient error for observability.
+                    "last_retry_error": error,
+                }
+            )
+            data[stage_id] = entry
+            self._write_all(data)
+
+    def record_skip(
+        self,
+        stage_id: str,
+        skip_reason: str,
+        when: Optional[float] = None,
+    ) -> None:
+        """
+        Record that ``stage_id`` was skipped rather than executed.
+
+        Typically called when one or more upstream dependencies are in the
+        ``"failed"`` state, making the stage's inputs incomplete or
+        untrustworthy.
+
+        Parameters
+        ----------
+        stage_id:
+            The stage that is being skipped.
+        skip_reason:
+            Human-readable explanation, e.g.
+            ``"upstream stage 'market_analyzer_hourly' failed"``.
+        when:
+            Wall-clock time of the skip decision (defaults to now).
+        """
+        ts = datetime.fromtimestamp(
+            when if when is not None else time.time(), tz=timezone.utc
+        ).isoformat()
+
+        self._started_at.pop(stage_id, None)
+
+        with self._lock:
+            data = self._read_all()
+            entry = data.get(stage_id, {})
+            entry.update(
+                {
+                    "stage_id": stage_id,
+                    "state": OUTCOME_SKIPPED,
+                    "outcome": OUTCOME_SKIPPED,
+                    "last_run": ts,
+                    "skip_reason": skip_reason,
+                    "duration_seconds": 0.0,
+                    "error": None,
+                }
+            )
+            data[stage_id] = entry
+            self._write_all(data)
+
+    def record_alert(self, stage_id: str) -> None:
+        """
+        Mark that a retry-exhausted alert has been sent for ``stage_id``.
+
+        Prevents duplicate alerts if the stage keeps failing across
+        scheduler ticks.
+        """
+        with self._lock:
+            data = self._read_all()
+            entry = data.get(stage_id, {})
+            entry.update(
+                {
+                    "stage_id": stage_id,
+                    "alerted": True,
+                    "alerted_at": _utcnow_iso(),
                 }
             )
             data[stage_id] = entry

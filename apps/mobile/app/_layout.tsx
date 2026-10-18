@@ -1,9 +1,13 @@
+import '../lib/startup-metrics-bootstrap';
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { View } from 'react-native';
+import { DataPreloader } from '../components/DataPreloader';
+import { StartupInteractiveGate } from '../components/StartupInteractiveGate';
 import { applyPrivacyPreferences } from '../lib/privacy-preferences';
 import { OfflineIndicator } from '../lib/offline-indicator';
-import { startMutationQueueReplayOnReconnect } from '../lib/mutation-queue';
+import { mutationQueue, startMutationQueueReplayOnReconnect } from '../lib/mutation-queue';
+import { replaySavedSearchMutation } from '../lib/saved-searches';
 import { AuthProvider } from '../contexts/AuthContext';
 import { DeepLinkProvider } from '../contexts/DeepLinkContext';
 import { EnvironmentProvider } from '../contexts/EnvironmentContext';
@@ -24,7 +28,14 @@ export default function RootLayout() {
   // Replay queued offline mutations whenever connectivity returns. The queue
   // records replay failures and conflicts instead of dropping them, and the
   // mounted OfflineIndicator links the user to the review screen.
-  useEffect(() => startMutationQueueReplayOnReconnect(), []);
+  useEffect(() => {
+    mutationQueue.setReplayer(replaySavedSearchMutation);
+    const stopReplay = startMutationQueueReplayOnReconnect();
+    return () => {
+      stopReplay();
+      mutationQueue.setReplayer(null);
+    };
+  }, []);
 
   return (
     <LocalizationProvider>
@@ -42,9 +53,11 @@ export default function RootLayout() {
         <EnvironmentProvider>
           <BiometricLockGuard>
             <AuthProvider>
+              <DataPreloader />
               <WalletProvider>
                 <NotificationsProvider>
                   <DeepLinkProvider>
+                    <StartupInteractiveGate>
                     <View style={{ flex: 1 }}>
                       <OfflineIndicator />
                       <Stack
@@ -59,6 +72,7 @@ export default function RootLayout() {
                       </Stack>
                       <NetworkBadge />
                     </View>
+                    </StartupInteractiveGate>
                   </DeepLinkProvider>
                 </NotificationsProvider>
               </WalletProvider>
