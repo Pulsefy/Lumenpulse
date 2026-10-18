@@ -59,8 +59,8 @@ import { ExportModule } from './export/export.module';
 import { SignalsModule } from './signals/signals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppConfigModule } from './config/config.module';
-import { CrowdfundModule } from './crowdfund/crowdfund.module';
-import { CrowdfundSyncModule } from './crowdfund-sync/crowdfund-sync.module';
+import { CrowdundModule } from './crowdfund/crowdfund.module';
+import { CrowdundSyncModule } from './crowdfund-sync/crowdfund-sync.module';
 import { ContributorRegistryModule } from './contributor-registry/contributor-registry.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
@@ -86,6 +86,9 @@ import { QueryCountMiddleware } from './common/profiling/query-count.middleware'
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SavedSearchesModule } from './saved-searches/saved-searches.module';
 import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module';
+import { SupportAccessModule } from './support-access/support-access.module';
+import { SupportAccessGuard } from './support-access/support-access.guard';
+import { SupportAccessAuditInterceptor } from './support-access/support-access-audit.interceptor';
 
 @Module({
   imports: [
@@ -168,7 +171,7 @@ import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module
     MessageTemplateModule,
 
     // Crowdfund modules
-    CrowdfundModule,
+    CrowdundModule,
     CrowdfundSyncModule, // New: Crowdfund vault sync with DLQ support
 
     // Registry modules
@@ -179,6 +182,9 @@ import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module
 
     // Audit
     AuditModule,
+
+    // Support access (read-only impersonation with full audit)
+    SupportAccessModule,
 
     // Data retention and user erasure
     DataRetentionModule,
@@ -246,12 +252,20 @@ import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module
       useClass: RateLimitGuard,
     },
     {
+      provide: APP_GUARD,
+      useClass: SupportAccessGuard,
+    },
+    {
       provide: APP_INTERCEPTOR,
       useClass: IdempotencyInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditLogInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: SupportAccessAuditInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,

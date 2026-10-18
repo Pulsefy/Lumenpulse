@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-1596-backend-add-support-access-with-full-audit",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-1596-backend-add-support-access-with-full-audit": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-1596-backend-add-support-access-with-full-audit",
+    "origin"
+  ]
+}

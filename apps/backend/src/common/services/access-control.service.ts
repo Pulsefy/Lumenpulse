@@ -133,6 +133,26 @@ export class AccessControlService implements IAccessControlService {
   async checkPermission(request: PermissionRequest): Promise<PermissionResult> {
     const { action, resource, context } = request;
 
+    // Support mode is explicitly read-only and is enforced server-side.
+    // This must be checked before any admin or owner bypass so that a
+    // support session can never perform a write.
+    if (context.supportSession) {
+      if (action !== AccessAction.READ) {
+        this.logger.warn(
+          `Blocked ${action} on ${resource.type}:${resource.id} during support session ${context.supportSession.id} (actor ${context.userId}, subject ${context.supportSession.subjectUserId})`,
+        );
+        return {
+          granted: false,
+          reason: 'support_mode_read_only',
+          metadata: {
+            action,
+            resourceType: resource.type,
+            supportSessionId: context.supportSession.id,
+          },
+        };
+      }
+    }
+
     // Admin users have access to everything
     if (context.userRole === UserRole.ADMIN) {
       return {
@@ -324,7 +344,7 @@ export class AccessControlService implements IAccessControlService {
     resource: AccessControlResource,
     context: AccessControlContext,
   ): boolean {
-    // Metrics can be read by authenticated users or allowed IPs
+    // Metrics can be read by authenticated users or allowed IPs 
     if (action === AccessAction.READ) {
       return !!(context.userId || context.metadata?.ipAllowed);
     }
@@ -365,7 +385,7 @@ export class AccessControlService implements IAccessControlService {
       case VerificationType.WEBHOOK_SIGNATURE:
         return this.verifyWebhookSignature(verificationData, rawData);
 
-      case VerificationType.IP_ALLOWLIST:
+      case VerificationType.IP_ALLOWLISTH:
         return this.verifyIpAllowlist(verificationData);
 
       case VerificationType.API_KEY:
@@ -430,150 +450,32 @@ export class AccessControlService implements IAccessControlService {
     verificationData: Record<string, any>,
   ): Promise<TrustedCallerResult> {
     const ip = verificationData.ip as string;
-    const service = verificationData.service as string | undefined;
+    const allowlist = verificationData.allowlist as string[] | undefined;
 
-    return this.isIpAllowed(ip, service).then((allowed) => ({
-      trusted: allowed,
-      callerId: allowed ? `ip:${ip}` : undefined,
-      error: allowed ? undefined : 'IP not in allowlist',
-      metadata: { service },
-    }));
+    if (!ip) {
+      return Promise.resolve({ trusted: false, error: 'IP address required' });
+    }
+
+    const ranges = allowlist ?? [];
+    const trusted = ranges.some((range) => this.isIpInRange(ip, range));
+
+    return Promise.resolve({ trusted, metadata: { ip } });
   }
 
   /**
-   * Verify API key against configured admin API keys.
-   * Checks the provided key against CONTRACT_ADMIN_API_KEY env var.
+   * Verify API key
    */
   private verifyApiKey(
     verificationData: Record<string, any>,
   ): Promise<TrustedCallerResult> {
-    const providedKey = verificationData.apiKey as string | undefined;
+    const apiKey = verificationData.apiKey as string;
+    const expected = verificationData.expected as string | undefined;
 
-    if (!providedKey) {
-      return Promise.resolve({
-        trusted: false,
-        error: 'API key is required',
-      });
+    if (!apiKey) {
+      return Promise.resolve({ trusted: false, error: 'API key required' });
     }
 
-    const configuredKey = this.configService.get<string>(
-      'CONTRACT_ADMIN_API_KEY',
-    );
-
-    // Once a rotation has happened the rotation store owns the value; fall
-    // back to the boot-time value when nothing has been rotated yet.
-    const rotatedKeys = this.secretRotationService.acceptableValues(
-      'CONTRACT_ADMIN_API_KEY',
-    );
-    const candidates = rotatedKeys.length
-      ? rotatedKeys
-      : configuredKey
-        ? [configuredKey]
-        : [];
-
-    if (candidates.length === 0) {
-      this.logger.warn(
-        'CONTRACT_ADMIN_API_KEY not configured. API key verification cannot proceed.',
-      );
-      return Promise.resolve({
-        trusted: false,
-        error: 'API key verification not configured',
-      });
-    }
-
-    // Constant-time comparison to prevent timing attacks. During a rotation
-    // overlap window the previous value is still accepted.
-    const trusted = candidates.some((candidate) =>
-      this.constantTimeCompare(providedKey, candidate),
-    );
-
-    return Promise.resolve({
-      trusted,
-      callerId: trusted ? 'api-key:contract-admin' : undefined,
-      error: trusted ? undefined : 'Invalid API key',
-      metadata: {
-        verificationMethod: 'api_key',
-      },
-    });
-  }
-
-  /**
-   * Constant-time string comparison to prevent timing attacks
-   */
-  private constantTimeCompare(a: string, b: string): boolean {
-    if (a.length !== b.length) {
-      return false;
-    }
-
-    let result = 0;
-    for (let i = 0; i < a.length; i++) {
-      result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-    }
-    return result === 0;
-  }
-
-  /**
-   * Check if an IP address is in the allowlist for a specific service
-   */
-  isIpAllowed(ipAddress: string, service?: string): Promise<boolean> {
-    try {
-      // Get service-specific or default allowlist
-      const configKey = service
-        ? `${service.toUpperCase()}_ALLOWED_IPS`
-        : 'ALLOWED_IPS';
-      const allowedIpsStr = this.configService.get<string>(configKey);
-
-      if (!allowedIpsStr) {
-        return Promise.resolve(false);
-      }
-
-      const allowedIps = allowedIpsStr.split(',').map((ip) => ip.trim());
-
-      const isAllowed = allowedIps.some((allowedIp) =>
-        this.isIpInRange(ipAddress, allowedIp),
-      );
-      return Promise.resolve(isAllowed);
-    } catch (error) {
-      this.logger.error(`Error checking IP allowlist for ${ipAddress}:`, error);
-      return Promise.resolve(false);
-    }
-  }
-
-  /**
-   * Create an access control context from request data
-   */
-  createContext(requestData: {
-    user?: { id?: string; role?: UserRole; stellarPublicKey?: string };
-    ip?: string;
-    headers?: Record<string, string>;
-  }): AccessControlContext {
-    const { user, ip, headers } = requestData;
-
-    return {
-      userId: user?.id,
-      userRole: user?.role,
-      stellarPublicKey: user?.stellarPublicKey,
-      ipAddress: ip,
-      webhookProvider: headers?.['x-webhook-provider'],
-      metadata: {
-        userAgent: headers?.['user-agent'],
-        origin: headers?.['origin'],
-      },
-    };
-  }
-
-  /**
-   * Validate that a context has the required permissions for a resource
-   */
-  async validateAccess(
-    context: AccessControlContext,
-    action: string,
-    resource: AccessControlResource,
-  ): Promise<PermissionResult> {
-    return this.checkPermission({
-      action,
-      resource,
-      context,
-    });
+    const trusted = !!expected && apiKey === expected;
+    return Promise.resolve({ trusted });
   }
 }
