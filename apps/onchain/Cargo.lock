@@ -1096,6 +1096,7 @@ dependencies = [
 name = "pricing_adapter"
 version = "0.1.0"
 dependencies = [
+ "event-versioning",
  "soroban-sdk",
  "test_utils",
 ]

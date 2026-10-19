@@ -6,11 +6,22 @@ on:
     branches: [ "main" ]
     paths:
       - 'apps/mobile/**'
+      - 'package*.json'
+      - 'pnpm-*.yaml'
+      - 'turbo.json'
+      - '.nvmrc'
+      - '.github/actions/**'
+      - '.github/workflows/mobile.yml'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'apps/mobile/**'
-      - 'apps/mobile/.ci-trigger'
+      - 'package*.json'
+      - 'pnpm-*.yaml'
+      - 'turbo.json'
+      - '.nvmrc'
+      - '.github/actions/**'
+      - '.github/workflows/mobile.yml'
 
 # Issue #1713. See backend.yml for the rationale. Keying on `github.workflow`
 # keeps Backend CI, Mobile CI and the flake check in separate queues even when
@@ -31,24 +42,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
           phase: start
-          job-id: mobile-checks
-          budget-minutes: '10'
-          note: npm ci + tsc --noEmit + jest with coverage. Observed p90 0.8 min.
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
+      - name: Set up Node and install dependencies
+        uses: ./.github/actions/setup-node-app
         with:
-          node-version: '20.x'
-          cache: 'npm'
-          cache-dependency-path: './apps/mobile/package-lock.json'
-
-      - name: Install dependencies
-        run: npm ci
+          working-directory: apps/mobile
 
       - name: Type check
         run: npm run tsc -- --noEmit
@@ -81,6 +87,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
@@ -92,26 +99,17 @@ jobs:
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
+
+      - name: Set up Node and install dependencies
+        uses: ./.github/actions/setup-node-app
         with:
+          working-directory: apps/mobile
           # The base branch is installed as well on pull requests, so both
           # lockfiles feed the dependency cache.
-          cache: 'npm'
           cache-dependency-path: |
-            ./apps/mobile/package-lock.json
-            ./base/apps/mobile/package-lock.json
-          node-version: '20.x'
-
-      - name: Install dependencies
-        run: npm ci
-
-      # `expo export` runs Metro, and Metro resolves this as a monorepo from
-      # apps/mobile/package.json's "lumenpulse": "file:../.." dependency, then
-      # looks for node_modules at the repo root. Without that install the export
-      # dies with `ENOENT ... stat '<root>/node_modules'`. mobile-checks does not
-      # hit this (tsc/jest do not invoke Metro); mobile-e2e and this job do.
-      - name: Install root workspace dependencies (for Metro's monorepo resolution)
-        working-directory: .
-        run: npm install --no-audit --no-fund
+            apps/mobile/package-lock.json
+            base/apps/mobile/package-lock.json
+          root-workspace: 'true'
 
       - name: Export the app payload
         run: npm run size:export
@@ -123,7 +121,7 @@ jobs:
       - name: Checkout the base branch
         if: github.event_name == 'pull_request'
         continue-on-error: true
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: base
@@ -171,7 +169,7 @@ jobs:
 
       - name: Upload the size report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mobile-size-report
           path: ${{ runner.temp }}/mobile-size.md
@@ -206,6 +204,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
@@ -217,17 +216,20 @@ jobs:
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
+
+      - name: Set up Node and install dependencies
+        uses: ./.github/actions/setup-node-app
         with:
-          node-version: '20.x'
-          cache: 'npm'
-          cache-dependency-path: './apps/mobile/package-lock.json'
+          working-directory: apps/mobile
+          root-workspace: 'true'
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install root workspace dependencies (for Metro's monorepo resolution)
-        working-directory: .
-        run: npm install --no-audit --no-fund
+      # Issue #1724: the Chromium download (~20 s) is cached by lockfile; the
+      # install step below still installs the OS packages and verifies the browser.
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/mobile/package-lock.json') }}
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -253,7 +255,7 @@ jobs:
 
       - name: Upload startup report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mobile-startup-report
           path: ${{ runner.temp }}/mobile-startup.md
@@ -289,6 +291,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
@@ -300,22 +303,20 @@ jobs:
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
+
+      - name: Set up Node and install dependencies
+        uses: ./.github/actions/setup-node-app
         with:
-          node-version: '20.x'
-          cache: 'npm'
-          cache-dependency-path: './apps/mobile/package-lock.json'
+          working-directory: apps/mobile
+          root-workspace: 'true'
 
-      - name: Install dependencies
-        run: npm ci
-
-      # Metro (via expo/metro-config) auto-detects this as a monorepo from
-      # apps/mobile/package.json's "lumenpulse": "file:../.." dependency and
-      # walks up to the repo root looking for node_modules there too. The
-      # mobile-checks job never hits this (tsc/jest don't invoke Metro), but
-      # `expo start --web` does, so the root workspace needs its own install.
-      - name: Install root workspace dependencies (for Metro's monorepo resolution)
-        working-directory: .
-        run: npm install --no-audit --no-fund
+      # Issue #1724: the Chromium download (~20 s) is cached by lockfile; the
+      # install step below still installs the OS packages and verifies the browser.
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/mobile/package-lock.json') }}
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -345,7 +346,7 @@ jobs:
 
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report
           path: apps/mobile/playwright-report/

@@ -1,0 +1,105 @@
+name: Staging
+
+# Keeps the staging environment on the tip of main (issue #1728): builds the
+# backend and webapp images, pushes them to GHCR and rolls the staging host.
+# Needs the `staging` environment with STAGING_SSH_HOST / STAGING_SSH_KEY secrets
+# and the STAGING_API_URL variable; without STAGING_SSH_HOST the deploy job is
+# skipped. See docs/STAGING.md.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/backend/**'
+      - 'apps/webapp/**'
+      - 'apps/data-processing/**'
+      - 'docker-compose.yml'
+      - 'docker-compose.staging.yml'
+      - '.github/workflows/staging.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: staging
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  images:
+    name: Build staging images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [backend, webapp]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: apps/${{ matrix.app }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/lumenpulse-${{ matrix.app }}:staging
+            ghcr.io/${{ github.repository_owner }}/lumenpulse-${{ matrix.app }}:sha-${{ github.sha }}
+          build-args: |
+            APP_VERSION=staging
+            GIT_SHA=${{ github.sha }}
+            NEXT_PUBLIC_API_URL=${{ vars.STAGING_API_URL }}
+            NEXT_PUBLIC_ENV_LABEL=Staging
+          cache-from: type=gha,scope=staging-${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=staging-${{ matrix.app }}
+
+  deploy:
+    name: Deploy to staging
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    env:
+      STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
+    steps:
+      - name: Check configuration
+        id: cfg
+        run: |
+          if [ -z "$STAGING_HOST" ]; then
+            echo "STAGING_SSH_HOST is not configured; skipping deploy."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.cfg.outputs.enabled == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Roll staging
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          OWNER: ${{ github.repository_owner }}
+          SHA: ${{ github.sha }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$STAGING_HOST" >> ~/.ssh/known_hosts
+          rsync -az -e "ssh -i ~/.ssh/id_deploy" docker-compose.staging.yml "deploy@${STAGING_HOST}:lumenpulse-staging/"
+          ssh -i ~/.ssh/id_deploy "deploy@${STAGING_HOST}" \
+            "cd lumenpulse-staging && STAGING_TAG=sha-${SHA} IMAGE_OWNER=${OWNER} docker compose -f docker-compose.staging.yml pull && STAGING_TAG=sha-${SHA} IMAGE_OWNER=${OWNER} docker compose -f docker-compose.staging.yml up -d --wait"

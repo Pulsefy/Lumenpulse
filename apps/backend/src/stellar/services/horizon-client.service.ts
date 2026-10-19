@@ -135,8 +135,7 @@ export class HorizonClientService {
     try {
       const response = await this.instrumentedFetch(url, method);
       const data = (await response.json()) as
-        | HorizonTransactionsResponse
-        | HorizonErrorResponse;
+        HorizonTransactionsResponse | HorizonErrorResponse;
 
       if (!response.ok) {
         const errorDetail = (data as HorizonErrorResponse).detail;

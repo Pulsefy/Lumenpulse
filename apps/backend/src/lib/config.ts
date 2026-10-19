@@ -639,7 +639,88 @@ const envSchema = z
         path: ['PYTHON_API_URL'],
       });
     }
+
+    // Network-specific configuration separation (Issue #1587)
+    if (values.STELLAR_NETWORK === 'mainnet') {
+      if (values.BOOTSTRAP_DEMO_DATA_ENABLED) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'BOOTSTRAP_DEMO_DATA_ENABLED is a testnet-only facility and must not be enabled under mainnet configuration.',
+          path: ['BOOTSTRAP_DEMO_DATA_ENABLED'],
+        });
+      }
+      if (values.FRIENDBOT_BOOTSTRAP_ENABLED) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'FRIENDBOT_BOOTSTRAP_ENABLED is a testnet-only facility and must not be enabled under mainnet configuration.',
+          path: ['FRIENDBOT_BOOTSTRAP_ENABLED'],
+        });
+      }
+      if (values.USE_MOCK_TRANSACTIONS) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'USE_MOCK_TRANSACTIONS is prohibited under mainnet configuration.',
+          path: ['USE_MOCK_TRANSACTIONS'],
+        });
+      }
+      if (
+        values.STELLAR_HORIZON_URL &&
+        /testnet|friendbot/i.test(values.STELLAR_HORIZON_URL)
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'STELLAR_HORIZON_URL must not point to testnet or friendbot under mainnet configuration.',
+          path: ['STELLAR_HORIZON_URL'],
+        });
+      }
+      if (
+        values.STELLAR_SOROBAN_RPC_URL &&
+        /testnet/i.test(values.STELLAR_SOROBAN_RPC_URL)
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'STELLAR_SOROBAN_RPC_URL must not point to testnet under mainnet configuration.',
+          path: ['STELLAR_SOROBAN_RPC_URL'],
+        });
+      }
+    } else if (values.STELLAR_NETWORK === 'testnet') {
+      if (
+        values.STELLAR_HORIZON_URL &&
+        (values.STELLAR_HORIZON_URL === 'https://horizon.stellar.org' ||
+          values.STELLAR_HORIZON_URL === 'https://horizon.stellar.org/')
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'STELLAR_HORIZON_URL must not point to public mainnet under testnet configuration.',
+          path: ['STELLAR_HORIZON_URL'],
+        });
+      }
+      if (
+        values.STELLAR_SOROBAN_RPC_URL &&
+        (values.STELLAR_SOROBAN_RPC_URL === 'https://soroban.stellar.org' ||
+          values.STELLAR_SOROBAN_RPC_URL === 'https://soroban.stellar.org/')
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'STELLAR_SOROBAN_RPC_URL must not point to public mainnet under testnet configuration.',
+          path: ['STELLAR_SOROBAN_RPC_URL'],
+        });
+      }
+    }
   });
+
+export { envSchema };
+
+export function validateConfiguration(raw: Record<string, unknown>) {
+  return envSchema.safeParse(raw);
+}
 
 const rawEnvironment = {
   ...process.env,
@@ -647,6 +728,9 @@ const rawEnvironment = {
   ENVIRONMENT: process.env.ENVIRONMENT || runtime.environment,
   DB_DATABASE:
     process.env.DB_DATABASE || process.env.DB_NAME || process.env.DB_DATABASE,
+  USE_MOCK_TRANSACTIONS:
+    process.env.USE_MOCK_TRANSACTIONS ??
+    (process.env.STELLAR_NETWORK === 'mainnet' ? 'false' : undefined),
 };
 
 const parseResult = envSchema.safeParse(rawEnvironment);

@@ -1,0 +1,87 @@
+{
+  "repo": "Pulsefy/Lumenpulse",
+  "collectedAt": "2026-10-19T07:02:08.122Z",
+  "sampledRuns": 30,
+  "workflows": {
+    "backend.yml": {
+      "samples": 30,
+      "p50": 2.8,
+      "p90": 2.9,
+      "max": 3.3
+    },
+    "data-processing.yml": {
+      "samples": 30,
+      "p50": 2.7,
+      "p90": 3.3,
+      "max": 3.5
+    },
+    "mobile.yml": {
+      "samples": 30,
+      "p50": 1.7,
+      "p90": 2.2,
+      "max": 11.4
+    },
+    "onchain.yml": {
+      "samples": 30,
+      "p50": 3.9,
+      "p90": 6.2,
+      "max": 6.5
+    }
+  },
+  "jobs": {
+    "backend.yml/backend-checks": {
+      "samples": 30,
+      "p50": 1.6,
+      "p90": 1.9,
+      "max": 2
+    },
+    "backend.yml/db-e2e": {
+      "samples": 30,
+      "p50": 2.7,
+      "p90": 2.8,
+      "max": 3.3
+    },
+    "backend.yml/migration-safety": {
+      "samples": 30,
+      "p50": 1.1,
+      "p90": 1.2,
+      "max": 1.2
+    },
+    "data-processing.yml/data-processing-checks": {
+      "samples": 30,
+      "p50": 2.6,
+      "p90": 3.2,
+      "max": 3.5
+    },
+    "mobile.yml/mobile-startup": {
+      "samples": 12,
+      "p50": 1.4,
+      "p90": 1.8,
+      "max": 1.9
+    },
+    "mobile.yml/mobile-e2e": {
+      "samples": 30,
+      "p50": 1.4,
+      "p90": 1.7,
+      "max": 11.4
+    },
+    "mobile.yml/mobile-checks": {
+      "samples": 30,
+      "p50": 0.7,
+      "p90": 0.8,
+      "max": 0.9
+    },
+    "mobile.yml/mobile-size": {
+      "samples": 21,
+      "p50": 1.6,
+      "p90": 2.2,
+      "max": 2.2
+    },
+    "onchain.yml/Test Suite": {
+      "samples": 30,
+      "p50": 3.9,
+      "p90": 6.1,
+      "max": 6.5
+    }
+  }
+}

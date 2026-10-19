@@ -1,0 +1,36 @@
+# Alertmanager routing. Destinations are mounted from monitoring/secrets/:
+#   slack-webhook-url  - Slack incoming webhook URL (all alerts)
+#   pagerduty-key      - PagerDuty Events v2 routing key (critical only)
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: team-slack
+  group_by: [alertname, service]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="critical"]
+      receiver: oncall-pager
+      continue: true
+    - matchers: [severity="critical"]
+      receiver: team-slack
+
+receivers:
+  - name: team-slack
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack-webhook-url
+        channel: '#lumenpulse-alerts'
+        send_resolved: true
+        title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}: {{ .Annotations.description }}{{ "\n" }}{{ end }}'
+  - name: oncall-pager
+    pagerduty_configs:
+      - routing_key_file: /etc/alertmanager/secrets/pagerduty-key
+        send_resolved: true
+
+inhibit_rules:
+  - source_matchers: [severity="critical"]
+    target_matchers: [severity="warning"]
+    equal: [alertname, service]

@@ -27,9 +27,11 @@ WORKDIR /app
 # which they still matter.
 ARG NEXT_PUBLIC_API_URL=http://localhost:3000
 ARG NEXT_PUBLIC_STELLAR_EXPLORER_URL=https://stellar.expert/explorer
+ARG NEXT_PUBLIC_ENV_LABEL=
 
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
-    NEXT_PUBLIC_STELLAR_EXPLORER_URL=$NEXT_PUBLIC_STELLAR_EXPLORER_URL
+    NEXT_PUBLIC_STELLAR_EXPLORER_URL=$NEXT_PUBLIC_STELLAR_EXPLORER_URL \
+    NEXT_PUBLIC_ENV_LABEL=$NEXT_PUBLIC_ENV_LABEL
 
 # ── Runtime-only (read by server components and API routes, never bundled) ────
 # BACKEND_API_URL is read at request time from the server's environment, so it
@@ -53,6 +55,16 @@ RUN npm run build
 # Stage 2 - runtime
 ###############################################################################
 FROM node:20-bookworm-slim AS runtime
+
+# Release identity (issue #1725). `docker build --build-arg APP_VERSION=v1.2.3
+# --build-arg GIT_SHA=<sha>` stamps the image; the running container reports it
+# (backend: GET /health -> release) and `docker inspect` shows the same labels.
+ARG APP_VERSION=dev
+ARG GIT_SHA=unknown
+ENV APP_VERSION=$APP_VERSION \
+    GIT_SHA=$GIT_SHA
+LABEL org.opencontainers.image.version="$APP_VERSION" \
+      org.opencontainers.image.revision="$GIT_SHA"
 
 LABEL org.opencontainers.image.title="lumenpulse-webapp" \
       org.opencontainers.image.description="Lumenpulse Next.js webapp (production, non-root)" \

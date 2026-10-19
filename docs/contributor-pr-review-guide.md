@@ -599,7 +599,7 @@ neighbouring CI policies.
 | `apps/mobile/` | @praise-idise @monique-7arch @OmniZlatoon |
 | `apps/data-processing/` | @CHKM001 @paris27-A @Rosemary-ux |
 | `apps/onchain/` | @cybermax4200 @Ayinkx |
-| `docs/`, `CONTRIBUTING.md`, `CODE_REVIEW_GUIDE.md` | @fadee26 @eleven-smg |
+| `docs/`, `CONTRIBUTING.md`, `docs/CODE_REVIEW_GUIDE.md` | @fadee26 @eleven-smg |
 | Root config (`package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `turbo.json`) | @fadee26 @paris27-A |
 | `docker-compose*.yml`, `prometheus*.yml`, Grafana dashboard | @fadee26 @eleven-smg |
 | `.claude/`, `.vscode/` | @fadee26 @paris27-A |
