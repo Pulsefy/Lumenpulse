@@ -11,8 +11,7 @@ interface E2EState {
 /** Drops the disposable DB and reports total suite runtime (setup + specs). */
 export default async function globalTeardown(): Promise<void> {
   const state = (globalThis as Record<string, unknown>).__E2E__ as
-    | E2EState
-    | undefined;
+    E2EState | undefined;
   if (!state) return;
 
   await dropDatabase(state.name);

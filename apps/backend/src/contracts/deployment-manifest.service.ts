@@ -31,8 +31,7 @@ export class DeploymentManifestService implements OnModuleInit {
     @Optional()
     @InjectRepository(ContractDeploymentManifest)
     private readonly manifestRepo:
-      | Repository<ContractDeploymentManifest>
-      | undefined,
+      Repository<ContractDeploymentManifest> | undefined,
     private readonly configService: ConfigService,
     private readonly contractCapabilityService: ContractCapabilityService,
   ) {}
@@ -54,7 +53,7 @@ export class DeploymentManifestService implements OnModuleInit {
           this.logger.log(
             'testnet-manifest.json changed on disk. Reloading...',
           );
-          this.refreshManifest();
+          void this.refreshManifest();
         }
       });
     }

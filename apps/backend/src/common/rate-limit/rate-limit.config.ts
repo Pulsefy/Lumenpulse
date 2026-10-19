@@ -364,8 +364,7 @@ export function getTrackerForRequest(
   settings: RateLimitSettings,
 ): string {
   const principal = request[RATE_LIMIT_PRINCIPAL_REQUEST_KEY] as
-    | RateLimitPrincipal
-    | undefined;
+    RateLimitPrincipal | undefined;
 
   if (principal && principal.type !== 'anonymous' && principal.trackerKey) {
     return principal.trackerKey;

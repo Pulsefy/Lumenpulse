@@ -19,6 +19,9 @@ import { BootstrapRunsModule } from '../bootstrap-runs/bootstrap-runs.module';
 import { ContractAdminModule } from '../contract-admin/contract-admin.module';
 import { AccessControlModule } from '../common/access-control.module';
 import { MatchingPoolAdminService } from './services/matching-pool-admin.service';
+import { config } from '../lib/config';
+
+const isMainnet = config.stellar.network === 'mainnet';
 
 @Module({
   imports: [
@@ -35,7 +38,7 @@ import { MatchingPoolAdminService } from './services/matching-pool-admin.service
   controllers: [
     StellarController,
     MatchingPoolAdminController,
-    TestnetBootstrapController,
+    ...(!isMainnet ? [TestnetBootstrapController] : []),
   ],
   providers: [
     StellarService,

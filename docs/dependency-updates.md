@@ -26,7 +26,7 @@ importantly, the exclusions.
 | npm | `/scripts` | `package-lock.json` | `npm ci --prefix ../../scripts` in `onchain.yml` |
 | pip | `/apps/data-processing` | `requirements.txt` | `pip install --require-hashes -r requirements.lock` |
 | cargo | `/apps/onchain` | `Cargo.toml` + `Cargo.lock` | `cargo build/test` in `onchain.yml` |
-| github-actions | `/` | workflow `uses:` refs | itself |
+| github-actions | `/` | workflow and composite-action `uses:` refs, pinned to commit SHAs (the bump updates the SHA and the `# vX.Y.Z` comment together; see the CI supply-chain section of [threat-model.md](threat-model.md)) | itself |
 
 ## Cadence
 

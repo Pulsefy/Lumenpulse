@@ -7,12 +7,17 @@ on:
     paths:
       - 'apps/onchain/**'
       - 'docs/MAINNET_READINESS_CHECKLIST.md'
+      - 'scripts/**'
+      - '.github/actions/**'
+      - '.github/workflows/onchain.yml'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'apps/onchain/**'
-      - 'apps/onchain/.ci-trigger'
       - 'docs/MAINNET_READINESS_CHECKLIST.md'
+      - 'scripts/**'
+      - '.github/actions/**'
+      - '.github/workflows/onchain.yml'
 
 # Issue #1713. See backend.yml for the rationale.
 concurrency:
@@ -38,6 +43,7 @@ jobs:
 
     steps:
     - name: Checkout code
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
         fetch-depth: 0

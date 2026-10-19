@@ -35,7 +35,7 @@
     },
     "pricing_adapter": {
       "id": "CCW2EF3M5GXWM2ZTOAUPKC3CY7W42T3QJEK72WO7VEOR5ONBUTCUWDVM",
-      "wasm_hash": "5520afef74693a866f967b338e3f32bae58927967235e4f81c362b4a515f2207"
+      "wasm_hash": "52f5f0528ac0c4a5a53cf48a9fa1a32046b338bfc1d3f1ed77ff9869d3fd4549"
     },
     "feature_flags": {
       "reason": "Not deployed on testnet: feature flags remain off-chain during the initial release and are not intended to be publicly deployed yet."

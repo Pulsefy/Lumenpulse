@@ -6,6 +6,7 @@ import {
   Post,
   Body,
   Logger,
+  HttpCode,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -244,6 +245,7 @@ export class TestExceptionController {
   // ===== New Sentiment Analysis Endpoints =====
 
   @Post('sentiment/analyze')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Analyze text sentiment polarity',
     description:
@@ -295,6 +297,7 @@ export class TestExceptionController {
   }
 
   @Post('sentiment/test')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Run sentiment test suite',
     description:

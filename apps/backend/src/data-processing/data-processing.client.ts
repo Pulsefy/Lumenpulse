@@ -1,5 +1,9 @@
 import { HttpService } from '@nestjs/axios';
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Optional,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AxiosResponse, isAxiosError } from 'axios';
 import { Counter, Gauge } from 'prom-client';
@@ -7,6 +11,7 @@ import { defer, firstValueFrom, Observable, timeout, TimeoutError } from 'rxjs';
 import { config } from '../lib/config';
 import { MetricsService } from '../metrics/metrics.service';
 import { RequestContextService } from '../common/services/request-context.service';
+import { TracerService } from '../tracing/tracer.service';
 import {
   CORRELATION_ID_HEADER,
   REQUEST_ID_HEADER,
@@ -50,6 +55,7 @@ export class DataProcessingClient {
     private readonly http: HttpService,
     settings: ConfigService,
     metrics: MetricsService,
+    @Optional() private readonly tracer?: TracerService,
   ) {
     this.baseUrl = (
       settings.get<string>('PYTHON_API_URL') || config.python.apiUrl
@@ -148,10 +154,12 @@ export class DataProcessingClient {
       (method === 'POST' && path !== '/analyze')
         ? 0
         : this.retries;
+    const traceparent = this.tracer?.getTraceparent();
     const headers = {
       'Content-Type': 'application/json',
       [CORRELATION_ID_HEADER]: RequestContextService.getCorrelationId(),
       [REQUEST_ID_HEADER]: RequestContextService.getRequestId(),
+      ...(traceparent ? { traceparent } : {}),
       ...options.headers,
       ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {}),
     };

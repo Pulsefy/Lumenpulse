@@ -1,0 +1,29 @@
+# One pull-request preview: just the webapp, pointed at the shared staging
+# backend. Started as `docker compose -p preview-pr-<n> -f docker-compose.preview.yml up`
+# on the preview host, where a Traefik instance on the `preview-proxy` network
+# routes pr-<n>.<domain> to the container (see docs/STAGING.md).
+services:
+  webapp:
+    image: ${PREVIEW_IMAGE}
+    restart: unless-stopped
+    environment:
+      BACKEND_API_URL: ${PREVIEW_BACKEND_URL:-http://staging-backend:3000}
+    mem_limit: 384m
+    networks: [preview-proxy]
+    labels:
+      lumenpulse.preview: "true"
+      traefik.enable: "true"
+      traefik.docker.network: preview-proxy
+      traefik.http.routers.${PREVIEW_ID}.rule: Host(`${PREVIEW_HOST_NAME}`)
+      traefik.http.routers.${PREVIEW_ID}.tls.certresolver: letsencrypt
+      traefik.http.services.${PREVIEW_ID}.loadbalancer.server.port: "3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+networks:
+  preview-proxy:
+    external: true
