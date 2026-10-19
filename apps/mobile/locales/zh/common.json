@@ -544,5 +544,31 @@
       "rejected": "钱包连接被拒绝。",
       "unknown": "钱包出现未知问题，请重试。"
     }
+  },
+  "contributor_profile": {
+    "title": "贡献者个人资料",
+    "subtitle": "链上身份与声誉",
+    "verification_requests": {
+      "title": "验证申请",
+      "submit_new": "提交验证申请",
+      "create_title": "新建验证申请",
+      "create_desc": "提供照片、文档或位置等证据以验证身份。",
+      "evidence_label": "证据详情",
+      "evidence_placeholder": "描述您的证据、证明链接或贡献...",
+      "note_label": "审核人备注（选填）",
+      "note_placeholder": "为审核人添加任何说明或背景信息...",
+      "add_image": "拍照",
+      "add_file": "选择文件",
+      "add_location": "附加位置",
+      "attachments_title": "已附加证据",
+      "uploading": "正在上传证据 ({{percentage}}%)...",
+      "submit_button": "提交申请",
+      "draft_saved": "草稿已自动保存。",
+      "draft_restored": "已从上次会话恢复草稿申请。",
+      "discard_draft": "丢弃草稿",
+      "no_requests": "暂无提交的验证申请。",
+      "request_submitted": "验证申请提交成功。",
+      "size_limit_exceeded": "文件大小超过 10MB 限制。"
+    }
   }
 }

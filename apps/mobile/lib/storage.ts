@@ -5,6 +5,9 @@ import {
   ContributionDraft,
   parseContributionDraft,
 } from './contribution-drafts';
+import type { VerificationRequestDraft } from './verification';
+
+export const VERIFICATION_REQUEST_DRAFT_KEY = 'verification_request_draft';
 
 const ACCESS_TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
@@ -372,6 +375,42 @@ export const storage = {
       await AsyncStorage.removeItem(CONTRIBUTION_DRAFT_STORAGE_KEY);
     } catch (error) {
       console.error('Error clearing contribution draft:', error);
+    }
+  },
+
+  /**
+   * Persists in-progress verification request draft.
+   */
+  async storeVerificationDraft(draft: VerificationRequestDraft) {
+    try {
+      await AsyncStorage.setItem(VERIFICATION_REQUEST_DRAFT_KEY, JSON.stringify(draft));
+    } catch (error) {
+      console.error('Error storing verification draft:', error);
+    }
+  },
+
+  /**
+   * Retrieves in-progress verification request draft, or null if none or malformed.
+   */
+  async getVerificationDraft(): Promise<VerificationRequestDraft | null> {
+    try {
+      const raw = await AsyncStorage.getItem(VERIFICATION_REQUEST_DRAFT_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as VerificationRequestDraft;
+    } catch (error) {
+      console.error('Error getting verification draft:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Clears the in-progress verification request draft.
+   */
+  async clearVerificationDraft() {
+    try {
+      await AsyncStorage.removeItem(VERIFICATION_REQUEST_DRAFT_KEY);
+    } catch (error) {
+      console.error('Error clearing verification draft:', error);
     }
   },
 };

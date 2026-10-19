@@ -37,40 +37,50 @@ describe('storage utilities', () => {
   });
 
   it('sanitizes wallet metadata and keeps only valid public keys', async () => {
-    (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(JSON.stringify({
-      linkedAccounts: [{
-        id: '1',
-        publicKey: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-        label: 'Primary',
-        isActive: true,
-        createdAt: '2024-01-01',
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(
+      JSON.stringify({
+        linkedAccounts: [
+          {
+            id: '1',
+            publicKey: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+            label: 'Primary',
+            isActive: true,
+            createdAt: '2024-01-01',
+            updatedAt: '2024-01-01',
+          },
+        ],
+        activePublicKey: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
         updatedAt: '2024-01-01',
-      }],
-      activePublicKey: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-      updatedAt: '2024-01-01',
-      lastConnectedEnvironment: 'testnet',
-    }));
+        lastConnectedEnvironment: 'testnet',
+      }),
+    );
 
     const metadata = await storage.getWalletMetadata();
 
     expect(metadata.linkedAccounts).toHaveLength(1);
-    expect(metadata.activePublicKey).toBe('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF');
+    expect(metadata.activePublicKey).toBe(
+      'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+    );
   });
 
   it('clears the active wallet pointer without dropping linked accounts', async () => {
-    (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(JSON.stringify({
-      linkedAccounts: [{
-        id: '1',
-        publicKey: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-        label: 'Primary',
-        isActive: true,
-        createdAt: '2024-01-01',
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(
+      JSON.stringify({
+        linkedAccounts: [
+          {
+            id: '1',
+            publicKey: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+            label: 'Primary',
+            isActive: true,
+            createdAt: '2024-01-01',
+            updatedAt: '2024-01-01',
+          },
+        ],
+        activePublicKey: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
         updatedAt: '2024-01-01',
-      }],
-      activePublicKey: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-      updatedAt: '2024-01-01',
-      lastConnectedEnvironment: 'mainnet',
-    }));
+        lastConnectedEnvironment: 'mainnet',
+      }),
+    );
 
     await storage.clearActiveWalletSession();
 

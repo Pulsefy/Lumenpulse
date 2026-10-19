@@ -27,6 +27,16 @@ import {
   getVerificationStatusLabel,
 } from '../../lib/contributor';
 import {
+  verificationApi,
+  VerificationRequestItem,
+  VerificationEvidenceAttachment,
+  MAX_ATTACHMENT_SIZE_BYTES,
+  uploadEvidenceAttachment,
+  requestStatusColor,
+  requestStatusLabel,
+} from '../../lib/verification';
+import { storage } from '../../lib/storage';
+import {
   runContributorRegistration,
   RegistrationFailure,
   RegistrationStage,
@@ -71,7 +81,77 @@ export default function ContributorProfileScreen() {
   const [registrationFailure, setRegistrationFailure] = useState<RegistrationFailure | null>(null);
   const [registrationConfirmed, setRegistrationConfirmed] = useState(false);
 
+  // Verification Requests State
+  const [verificationRequests, setVerificationRequests] = useState<VerificationRequestItem[]>([]);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [evidenceInput, setEvidenceInput] = useState('');
+  const [noteInput, setNoteInput] = useState('');
+  const [attachments, setAttachments] = useState<VerificationEvidenceAttachment[]>([]);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+  const [uploadProgressPercent, setUploadProgressPercent] = useState<number | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestSuccessMessage, setRequestSuccessMessage] = useState<string | null>(null);
+
   const effectiveAddress = activeWalletPublicKey || userProfile?.stellarPublicKey || null;
+
+  // Restore verification request draft if available
+  useEffect(() => {
+    storage.getVerificationDraft().then((draft) => {
+      if (draft && (draft.note || (draft.attachments && draft.attachments.length > 0))) {
+        setEvidenceInput(draft.note || '');
+        setAttachments(draft.attachments || []);
+      }
+    });
+  }, []);
+
+  const saveDraft = useCallback(
+    (text: string, atts: VerificationEvidenceAttachment[]) => {
+      if (text.trim() || atts.length > 0) {
+        storage.storeVerificationDraft({
+          targetType: 'CONTRIBUTOR',
+          targetId: effectiveAddress || userProfile?.id || 'contributor',
+          note: text,
+          attachments: atts,
+          savedAt: new Date().toISOString(),
+        });
+      } else {
+        storage.clearVerificationDraft();
+      }
+    },
+    [effectiveAddress, userProfile?.id],
+  );
+
+  const handleEvidenceChange = (text: string) => {
+    setEvidenceInput(text);
+    saveDraft(text, attachments);
+  };
+
+  const handleAddAttachment = (attachment: VerificationEvidenceAttachment) => {
+    if (attachment.size && attachment.size > MAX_ATTACHMENT_SIZE_BYTES) {
+      Alert.alert(
+        t('common.warning'),
+        t('contributor_profile.verification_requests.size_limit_exceeded'),
+      );
+      return;
+    }
+    const updated = [...attachments, attachment];
+    setAttachments(updated);
+    saveDraft(evidenceInput, updated);
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    const updated = attachments.filter((_, i) => i !== index);
+    setAttachments(updated);
+    saveDraft(evidenceInput, updated);
+  };
+
+  const handleDiscardDraft = async () => {
+    setEvidenceInput('');
+    setNoteInput('');
+    setAttachments([]);
+    await storage.clearVerificationDraft();
+    setShowRequestModal(false);
+  };
 
   const loadData = useCallback(async () => {
     setError(null);
@@ -82,6 +162,12 @@ export default function ContributorProfileScreen() {
         if (userRes.success && userRes.data) {
           fetchedUser = userRes.data;
           setUserProfile(fetchedUser);
+        }
+
+        // Load submitted verification requests
+        const requestsRes = await verificationApi.getMyVerificationRequests();
+        if (requestsRes.success && requestsRes.data) {
+          setVerificationRequests(requestsRes.data);
         }
       }
 
@@ -116,6 +202,82 @@ export default function ContributorProfileScreen() {
     setRegistrationFailure(null);
     setRegistrationConfirmed(false);
     loadData();
+  };
+
+  const handleSubmitVerificationRequest = async () => {
+    if (!evidenceInput.trim() && attachments.length === 0) {
+      setRequestError('Please provide evidence or description for the verification request.');
+      return;
+    }
+
+    setIsSubmittingRequest(true);
+    setRequestError(null);
+    setUploadProgressPercent(0);
+
+    try {
+      // Process attachments and upload if needed
+      const uploadedAttachments: VerificationEvidenceAttachment[] = [];
+      for (let i = 0; i < attachments.length; i++) {
+        const att = attachments[i];
+        if (att.type === 'location') {
+          uploadedAttachments.push(att);
+          continue;
+        }
+
+        const uploadRes = await uploadEvidenceAttachment(att, {
+          onProgress: (p) => {
+            const overallPercent = Math.round(
+              ((i + p.percentage / 100) / attachments.length) * 100,
+            );
+            setUploadProgressPercent(overallPercent);
+          },
+        });
+
+        if (!uploadRes.success) {
+          throw new Error(uploadRes.error || 'Failed to upload attached evidence');
+        }
+
+        uploadedAttachments.push({
+          ...att,
+          url: uploadRes.url,
+        });
+      }
+
+      setUploadProgressPercent(100);
+
+      const targetId = effectiveAddress || userProfile?.id || 'contributor';
+      const res = await verificationApi.createVerificationRequest({
+        targetType: 'CONTRIBUTOR',
+        targetId,
+        evidence: evidenceInput,
+        requesterNote: noteInput.trim() || undefined,
+        attachments: uploadedAttachments,
+      });
+
+      if (!res.success || !res.data) {
+        throw new Error(res.error?.message || 'Failed to submit verification request');
+      }
+
+      // Clear draft upon successful submit
+      await storage.clearVerificationDraft();
+      setEvidenceInput('');
+      setNoteInput('');
+      setAttachments([]);
+      setShowRequestModal(false);
+      setRequestSuccessMessage(t('contributor_profile.verification_requests.request_submitted'));
+
+      // Reload verification requests
+      const requestsRes = await verificationApi.getMyVerificationRequests();
+      if (requestsRes.success && requestsRes.data) {
+        setVerificationRequests(requestsRes.data);
+      }
+    } catch (err) {
+      console.error('Error submitting verification request:', err);
+      setRequestError(err instanceof Error ? err.message : 'Submission failed');
+    } finally {
+      setIsSubmittingRequest(false);
+      setUploadProgressPercent(null);
+    }
   };
 
   const handleCopyAddress = (addr: string) => {
@@ -954,6 +1116,447 @@ export default function ContributorProfileScreen() {
                 </Text>
               </View>
             </View>
+
+            {/* 6. Submitted Verification Requests & Creation Card */}
+            <View
+              style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <View style={styles.cardHeaderRow}>
+                <Ionicons name="document-text-outline" size={20} color={colors.accent} />
+                <Text style={[styles.cardSectionTitle, { color: colors.text }]}>
+                  {t('contributor_profile.verification_requests.title')}
+                </Text>
+              </View>
+
+              {requestSuccessMessage && (
+                <View
+                  style={[
+                    styles.feedbackBanner,
+                    {
+                      backgroundColor: colors.success + '15',
+                      borderColor: colors.success + '40',
+                      marginBottom: 12,
+                    },
+                  ]}
+                >
+                  <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                  <Text style={[styles.feedbackText, { color: colors.success }]}>
+                    {requestSuccessMessage}
+                  </Text>
+                </View>
+              )}
+
+              {/* Action Button to Open Request Creation Modal */}
+              <TouchableOpacity
+                style={[
+                  styles.primaryButtonInline,
+                  { backgroundColor: colors.accent, marginBottom: 12 },
+                ]}
+                onPress={() => {
+                  setRequestError(null);
+                  setRequestSuccessMessage(null);
+                  setShowRequestModal(true);
+                }}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={t('contributor_profile.verification_requests.submit_new')}
+              >
+                <Ionicons
+                  name="add-circle-outline"
+                  size={18}
+                  color="#ffffff"
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.primaryButtonText}>
+                  {t('contributor_profile.verification_requests.submit_new')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Verification Request List */}
+              {verificationRequests.length === 0 ? (
+                <Text
+                  style={[
+                    styles.progressHintText,
+                    { color: colors.textSecondary, textAlign: 'center', marginVertical: 8 },
+                  ]}
+                >
+                  {t('contributor_profile.verification_requests.no_requests')}
+                </Text>
+              ) : (
+                <View style={{ gap: 10 }}>
+                  {verificationRequests.map((req) => {
+                    const reqColor = requestStatusColor(req.status);
+                    return (
+                      <View
+                        key={req.id}
+                        style={[
+                          styles.requestItemCard,
+                          { backgroundColor: colors.card, borderColor: colors.border },
+                        ]}
+                      >
+                        <View style={styles.requestItemHeader}>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[styles.requestItemTarget, { color: colors.text }]}
+                              numberOfLines={1}
+                            >
+                              {req.targetType}: {req.targetId}
+                            </Text>
+                            <Text style={[styles.requestItemDate, { color: colors.textSecondary }]}>
+                              {new Date(req.createdAt).toLocaleDateString()}
+                            </Text>
+                          </View>
+                          <View
+                            style={[
+                              styles.requestStatusBadge,
+                              { backgroundColor: reqColor + '20', borderColor: reqColor },
+                            ]}
+                          >
+                            <Text style={[styles.requestStatusText, { color: reqColor }]}>
+                              {requestStatusLabel(req.status)}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text
+                          style={[styles.requestItemEvidence, { color: colors.textSecondary }]}
+                          numberOfLines={2}
+                        >
+                          {req.evidence}
+                        </Text>
+
+                        {req.reviewNote && (
+                          <View style={[styles.reviewNoteBox, { backgroundColor: colors.surface }]}>
+                            <Text style={[styles.reviewNoteLabel, { color: colors.textSecondary }]}>
+                              Reviewer Note:
+                            </Text>
+                            <Text style={[styles.reviewNoteText, { color: colors.text }]}>
+                              {req.reviewNote}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+
+            {/* Verification Request Creation Modal / Form */}
+            {showRequestModal && (
+              <View
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.accent,
+                    borderWidth: 2,
+                    marginTop: 8,
+                  },
+                ]}
+              >
+                <View style={styles.cardHeaderRow}>
+                  <Ionicons name="create-outline" size={20} color={colors.accent} />
+                  <Text style={[styles.cardSectionTitle, { color: colors.text }]}>
+                    {t('contributor_profile.verification_requests.create_title')}
+                  </Text>
+                </View>
+
+                <Text
+                  style={[
+                    styles.registrationHint,
+                    { color: colors.textSecondary, marginBottom: 8 },
+                  ]}
+                >
+                  {t('contributor_profile.verification_requests.create_desc')}
+                </Text>
+
+                <Text style={[styles.checklistHeader, { color: colors.text, marginBottom: 4 }]}>
+                  {t('contributor_profile.verification_requests.evidence_label')}
+                </Text>
+                <TextInput
+                  style={[
+                    styles.registrationInput,
+                    styles.textAreaInput,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
+                  value={evidenceInput}
+                  onChangeText={handleEvidenceChange}
+                  placeholder={t('contributor_profile.verification_requests.evidence_placeholder')}
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={3}
+                  editable={!isSubmittingRequest}
+                />
+
+                <Text
+                  style={[
+                    styles.checklistHeader,
+                    { color: colors.text, marginTop: 10, marginBottom: 4 },
+                  ]}
+                >
+                  {t('contributor_profile.verification_requests.note_label')}
+                </Text>
+                <TextInput
+                  style={[
+                    styles.registrationInput,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
+                  value={noteInput}
+                  onChangeText={setNoteInput}
+                  placeholder={t('contributor_profile.verification_requests.note_placeholder')}
+                  placeholderTextColor={colors.textSecondary}
+                  editable={!isSubmittingRequest}
+                />
+
+                {/* Evidence Attachment Triggers */}
+                <View style={styles.attachmentButtonRow}>
+                  {/* Photo / Camera Capture */}
+                  <TouchableOpacity
+                    style={[
+                      styles.attachmentPillButton,
+                      { backgroundColor: colors.card, borderColor: colors.border },
+                    ]}
+                    onPress={() => {
+                      handleAddAttachment({
+                        type: 'image',
+                        name: `Photo_${Date.now()}.jpg`,
+                        size: 1024 * 512, // 512KB
+                        uri: `file:///photos/photo_${Date.now()}.jpg`,
+                        mimeType: 'image/jpeg',
+                      });
+                    }}
+                    disabled={isSubmittingRequest}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="camera-outline" size={16} color={colors.accent} />
+                    <Text style={[styles.attachmentPillText, { color: colors.text }]}>
+                      {t('contributor_profile.verification_requests.add_image')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Document / File Selection */}
+                  <TouchableOpacity
+                    style={[
+                      styles.attachmentPillButton,
+                      { backgroundColor: colors.card, borderColor: colors.border },
+                    ]}
+                    onPress={() => {
+                      handleAddAttachment({
+                        type: 'file',
+                        name: `Document_${Date.now()}.pdf`,
+                        size: 1024 * 1024, // 1MB
+                        uri: `file:///documents/doc_${Date.now()}.pdf`,
+                        mimeType: 'application/pdf',
+                      });
+                    }}
+                    disabled={isSubmittingRequest}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="document-attach-outline" size={16} color={colors.accent} />
+                    <Text style={[styles.attachmentPillText, { color: colors.text }]}>
+                      {t('contributor_profile.verification_requests.add_file')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Location Attachment */}
+                  <TouchableOpacity
+                    style={[
+                      styles.attachmentPillButton,
+                      { backgroundColor: colors.card, borderColor: colors.border },
+                    ]}
+                    onPress={() => {
+                      handleAddAttachment({
+                        type: 'location',
+                        latitude: 37.7749,
+                        longitude: -122.4194,
+                        name: 'San Francisco, CA',
+                      });
+                    }}
+                    disabled={isSubmittingRequest}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="location-outline" size={16} color={colors.accent} />
+                    <Text style={[styles.attachmentPillText, { color: colors.text }]}>
+                      {t('contributor_profile.verification_requests.add_location')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* List of Attached Evidence */}
+                {attachments.length > 0 && (
+                  <View style={{ marginTop: 10, gap: 6 }}>
+                    <Text style={[styles.checklistHeader, { color: colors.text }]}>
+                      {t('contributor_profile.verification_requests.attachments_title')} (
+                      {attachments.length})
+                    </Text>
+                    {attachments.map((att, idx) => (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.attachmentItemRow,
+                          { backgroundColor: colors.card, borderColor: colors.border },
+                        ]}
+                      >
+                        <Ionicons
+                          name={
+                            att.type === 'image'
+                              ? 'image-outline'
+                              : att.type === 'file'
+                                ? 'document-outline'
+                                : 'location-outline'
+                          }
+                          size={18}
+                          color={colors.accent}
+                        />
+                        <Text
+                          style={[styles.attachmentItemName, { color: colors.text }]}
+                          numberOfLines={1}
+                        >
+                          {att.type === 'location'
+                            ? `Lat: ${att.latitude?.toFixed(4)}, Lon: ${att.longitude?.toFixed(4)}`
+                            : att.name}
+                        </Text>
+                        {att.size && (
+                          <Text
+                            style={[styles.attachmentItemSize, { color: colors.textSecondary }]}
+                          >
+                            {Math.round(att.size / 1024)} KB
+                          </Text>
+                        )}
+                        <TouchableOpacity
+                          onPress={() => handleRemoveAttachment(idx)}
+                          disabled={isSubmittingRequest}
+                          style={styles.attachmentRemoveBtn}
+                        >
+                          <Ionicons name="close-circle" size={18} color={colors.danger} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Upload Progress Bar / Text */}
+                {uploadProgressPercent !== null && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text
+                      style={[styles.progressHintText, { color: colors.accent, marginBottom: 4 }]}
+                    >
+                      {t('contributor_profile.verification_requests.uploading', {
+                        percentage: uploadProgressPercent,
+                      })}
+                    </Text>
+                    <View style={[styles.trackBar, { backgroundColor: colors.card }]}>
+                      <View
+                        style={[
+                          styles.fillBar,
+                          { width: `${uploadProgressPercent}%`, backgroundColor: colors.accent },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                )}
+
+                {/* Error Banner */}
+                {requestError && (
+                  <View
+                    style={[
+                      styles.feedbackBanner,
+                      {
+                        backgroundColor: colors.danger + '15',
+                        borderColor: colors.danger + '40',
+                        marginTop: 10,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="alert-circle" size={18} color={colors.danger} />
+                    <Text style={[styles.feedbackText, { color: colors.danger }]}>
+                      {requestError}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Submit & Cancel Actions */}
+                <View style={styles.modalActionRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryButtonInline,
+                      {
+                        backgroundColor: isSubmittingRequest ? colors.textSecondary : colors.accent,
+                        flex: 1,
+                      },
+                    ]}
+                    onPress={handleSubmitVerificationRequest}
+                    disabled={isSubmittingRequest}
+                    activeOpacity={0.8}
+                  >
+                    {isSubmittingRequest ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Ionicons
+                        name="cloud-upload-outline"
+                        size={16}
+                        color="#ffffff"
+                        style={{ marginRight: 6 }}
+                      />
+                    )}
+                    <Text style={styles.primaryButtonText}>
+                      {t('contributor_profile.verification_requests.submit_button')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.secondaryButton,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                        height: 40,
+                        paddingHorizontal: 14,
+                      },
+                    ]}
+                    onPress={handleDiscardDraft}
+                    disabled={isSubmittingRequest}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[styles.secondaryButtonText, { color: colors.danger, fontSize: 13 }]}
+                    >
+                      {t('contributor_profile.verification_requests.discard_draft')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.secondaryButton,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                        height: 40,
+                        paddingHorizontal: 14,
+                      },
+                    ]}
+                    onPress={() => setShowRequestModal(false)}
+                    disabled={isSubmittingRequest}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[styles.secondaryButtonText, { color: colors.text, fontSize: 13 }]}
+                    >
+                      {t('common.cancel')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -1371,5 +1974,103 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  /* Verification Requests Styles */
+  requestItemCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    gap: 6,
+  },
+  requestItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  requestItemTarget: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  requestItemDate: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  requestStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  requestStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  requestItemEvidence: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  reviewNoteBox: {
+    padding: 8,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  reviewNoteLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  reviewNoteText: {
+    fontSize: 12,
+  },
+  textAreaInput: {
+    height: 80,
+    textAlignVertical: 'top',
+    paddingTop: 10,
+  },
+  attachmentButtonRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  attachmentPillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  attachmentPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  attachmentItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+  },
+  attachmentItemName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  attachmentItemSize: {
+    fontSize: 11,
+  },
+  attachmentRemoveBtn: {
+    padding: 2,
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
   },
 });
