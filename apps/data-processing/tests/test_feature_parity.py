@@ -142,3 +142,70 @@ def test_feature_parity_check_actually_catches_a_real_divergence(mock_read_sql, 
 
     with pytest.raises(AssertionError, match="sentiment_score"):
         _assert_features_match(offline_df, online_df)
+
+
+@patch("src.ml.feature_store.pd.read_sql")
+def test_chunked_feature_context_matches_live_range(mock_read_sql, mock_db_session):
+    """Carrying each source's prior row keeps chunk boundaries feature-identical."""
+    start = datetime(2024, 1, 15, tzinfo=timezone.utc)
+    boundary = start + timedelta(hours=1)
+    end = start + timedelta(hours=3)
+    rows = {
+        "sentiment": pd.DataFrame(
+            {
+                "timestamp": [start, start + timedelta(hours=2)],
+                "sentiment_score": [0.42, 0.77],
+            }
+        ),
+        "volume": pd.DataFrame(
+            {"timestamp": [boundary], "volume": [1234.5]}
+        ),
+        "volatility": pd.DataFrame(
+            {
+                "timestamp": [end],
+                "volatility": [0.033],
+            }
+        ),
+    }
+
+    def source_rows(query, _conn, params=None):
+        query_str = str(query).lower()
+        name = next(key for key in rows if key in query_str)
+        source = rows[name]
+        selected = source.loc[
+            (source["timestamp"] >= params["start_time"])
+            & (source["timestamp"] <= params["end_time"])
+        ]
+        if "select max(previous.timestamp)" in query_str:
+            prior = source.loc[
+                (source["timestamp"] >= params["context_start_time"])
+                & (source["timestamp"] < params["start_time"])
+            ].tail(1)
+            selected = pd.concat([prior, selected], ignore_index=True)
+        return selected.reset_index(drop=True)
+
+    mock_read_sql.side_effect = source_rows
+    store = FeatureStore(mock_db_session)
+    live = store.get_features_for_asset(
+        "BTC", start_time=start, end_time=end
+    )
+    first_chunk = store.get_features_for_asset(
+        "BTC",
+        start_time=start,
+        end_time=boundary,
+        context_start_time=start,
+    )
+    second_start = boundary + timedelta(microseconds=1)
+    second_chunk = store.get_features_for_asset(
+        "BTC",
+        start_time=second_start,
+        end_time=end,
+        context_start_time=start,
+    )
+    chunked = pd.concat([first_chunk, second_chunk], ignore_index=True)
+
+    pd.testing.assert_frame_equal(
+        live.reset_index(drop=True),
+        chunked.reset_index(drop=True),
+        check_attrs=False,
+    )
