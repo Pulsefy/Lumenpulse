@@ -4,6 +4,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { GrantsService } from './grants.service';
 import { CONTRIBUTION_QUEUE } from '../suspicious-contribution/types';
+import { GrantRoundState } from './round-lifecycle';
 
 describe('GrantsService', () => {
   let service: GrantsService;
@@ -38,7 +39,33 @@ describe('GrantsService', () => {
     expect(round.id).toBe(0);
     expect(round.name).toBe('Round 1');
     expect(round.totalPool).toBe('0');
-    expect(round.status).toBe('ACTIVE');
+    expect(round.status).toBe(GrantRoundState.OPEN);
+  });
+
+  it('advances a scheduled round through its time-based states', () => {
+    const now = Date.now();
+    const startTime = Math.floor(now / 1000) + 60;
+    const endTime = startTime + 60;
+
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(now);
+      const round = service.createRound({
+        name: 'Scheduled',
+        tokenAddress: 'GT',
+        startTime,
+        endTime,
+      });
+      expect(round.status).toBe(GrantRoundState.DRAFT);
+
+      jest.setSystemTime(new Date(startTime * 1000));
+      expect(service.getRound(round.id).status).toBe(GrantRoundState.OPEN);
+
+      jest.setSystemTime(new Date((endTime + 1) * 1000));
+      expect(service.getRound(round.id).status).toBe(GrantRoundState.MATCHING);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('rejects invalid round dates', () => {
@@ -241,7 +268,7 @@ describe('GrantsService', () => {
     });
     const finalized = service.finalizeRound(round.id);
     expect(finalized.isFinalized).toBe(true);
-    expect(finalized.status).toBe('FINALIZED');
+    expect(finalized.status).toBe(GrantRoundState.CLOSED);
   });
 
   it('rejects finalizing a round still open', () => {
@@ -252,16 +279,19 @@ describe('GrantsService', () => {
       endTime: future,
     });
     expect(() => service.finalizeRound(round.id)).toThrow(BadRequestException);
+    expect(service.getRound(round.id).status).toBe(GrantRoundState.OPEN);
   });
 
   // ── Distribution ─────────────────────────────────────────────────────────
 
-  it('distributes pool proportionally via QF', () => {
+  it('runs an open round through matching, close, and disbursement', () => {
+    const startTime = Math.floor(Date.now() / 1000) - 60;
+    const endTime = startTime + 120;
     const round = service.createRound({
       name: 'R',
       tokenAddress: 'GT',
-      startTime: past - 3600,
-      endTime: past,
+      startTime,
+      endTime,
     });
     service.fundPool({
       roundId: round.id,
@@ -269,63 +299,37 @@ describe('GrantsService', () => {
       amount: '1000000',
     });
     service.approveProject({ roundId: round.id, projectId: 1 });
-    service.approveProject({ roundId: round.id, projectId: 2 });
-
-    // Simulate contributions before end (bypass window check by using past round)
-    // We directly call recordContribution — it checks now vs endTime, so use a round still open
-    const activeRound = service.createRound({
-      name: 'Active',
-      tokenAddress: 'GT',
-      startTime: past,
-      endTime: future,
-    });
-    service.fundPool({
-      roundId: activeRound.id,
-      funderPublicKey: 'GF',
-      amount: '1000000',
-    });
-    service.approveProject({ roundId: activeRound.id, projectId: 1 });
-    service.approveProject({ roundId: activeRound.id, projectId: 2 });
-    ['GA', 'GB', 'GC', 'GD'].forEach((pk) =>
-      service.recordContribution({
-        roundId: activeRound.id,
-        projectId: 1,
-        contributorPublicKey: pk,
-        amount: '25',
-      }),
-    );
     service.recordContribution({
-      roundId: activeRound.id,
-      projectId: 2,
-      contributorPublicKey: 'GE',
+      roundId: round.id,
+      projectId: 1,
+      contributorPublicKey: 'GA',
       amount: '100',
     });
 
-    // Finalize by creating a past-ended round with same data
-    const endedRound = service.createRound({
-      name: 'Ended',
-      tokenAddress: 'GT',
-      startTime: past - 7200,
-      endTime: past - 3600,
-    });
-    service.fundPool({
-      roundId: endedRound.id,
-      funderPublicKey: 'GF',
-      amount: '1000000',
-    });
-    service.approveProject({ roundId: endedRound.id, projectId: 1 });
-    service.approveProject({ roundId: endedRound.id, projectId: 2 });
-    // Manually inject contributions via the active round summary scores
-    // (service stores contributions per-round, so we test distribution math directly)
-    service.finalizeRound(endedRound.id);
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date((endTime + 1) * 1000));
+      expect(service.getRound(round.id).status).toBe(GrantRoundState.MATCHING);
+      expect(service.finalizeRound(round.id).status).toBe(
+        GrantRoundState.CLOSED,
+      );
 
-    // With no contributions, total_qf = 0 → distribute returns error
-    expect(() =>
-      service.distribute({
-        roundId: endedRound.id,
-        projectOwners: ['GOWNER1', 'GOWNER2'],
-      }),
-    ).toThrow(BadRequestException);
+      const result = service.distribute({
+        roundId: round.id,
+        projectOwners: ['GOWNER'],
+      });
+
+      expect(result.totalDistributed).toBe('1000000');
+      expect(service.getRound(round.id).status).toBe(GrantRoundState.DISBURSED);
+      expect(() =>
+        service.distribute({
+          roundId: round.id,
+          projectOwners: ['GOWNER'],
+        }),
+      ).toThrow(BadRequestException);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('rejects distributing before finalization', () => {
@@ -341,28 +345,6 @@ describe('GrantsService', () => {
       amount: '100',
     });
     service.approveProject({ roundId: round.id, projectId: 1 });
-    expect(() =>
-      service.distribute({ roundId: round.id, projectOwners: ['GOWNER'] }),
-    ).toThrow(BadRequestException);
-  });
-
-  it('rejects double distribution', () => {
-    // Build a round with contributions, finalize, distribute, then try again
-    const round = service.createRound({
-      name: 'R',
-      tokenAddress: 'GT',
-      startTime: past - 7200,
-      endTime: past - 3600,
-    });
-    service.fundPool({
-      roundId: round.id,
-      funderPublicKey: 'GF',
-      amount: '1000000',
-    });
-    service.approveProject({ roundId: round.id, projectId: 1 });
-    service.finalizeRound(round.id);
-
-    // No contributions → distribute throws "No contributions recorded"
     expect(() =>
       service.distribute({ roundId: round.id, projectOwners: ['GOWNER'] }),
     ).toThrow(BadRequestException);

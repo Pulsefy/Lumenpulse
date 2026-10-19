@@ -1,0 +1,556 @@
+{
+  "version": "1.0.0",
+  "description": "Explicit, time-limited vulnerability allowlist for apps/backend. High and critical findings must state an unavoidable reason and an expiration date.",
+  "allowlist": [
+    {
+      "id": "GHSA-35jp-ww65-95wh",
+      "package": "axios",
+      "severity": "high",
+      "title": "axios Vulnerable to Full Man-in-the-Middle via Prototype Pollution Gadget in `config.proxy`",
+      "range": ">=1.0.0 <1.16.0",
+      "url": "https://github.com/advisories/GHSA-35jp-ww65-95wh",
+      "reason": "Axios client used for internal outbound service requests with trusted URLs. Upgrade to axios 1.20+ and @nestjs/axios requires regression testing on custom interceptors.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-3g43-6gmg-66jw",
+      "package": "axios",
+      "severity": "high",
+      "title": "axios Vulnerable to Credential Theft and Response Hijacking via Prototype Pollution Gadget in Config Merge",
+      "range": ">=1.0.0 <1.15.2",
+      "url": "https://github.com/advisories/GHSA-3g43-6gmg-66jw",
+      "reason": "Axios client used for internal outbound service requests with trusted URLs. Upgrade to axios 1.20+ and @nestjs/axios requires regression testing on custom interceptors.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-3pq3-5fj3-cg6v",
+      "package": "axios",
+      "severity": "high",
+      "title": "Axios: HTTP/2 adapter bypasses configured DNS lookup and proxy controls",
+      "range": ">=1.13.0 <1.20.0",
+      "url": "https://github.com/advisories/GHSA-3pq3-5fj3-cg6v",
+      "reason": "Axios client used for internal outbound service requests with trusted URLs. Upgrade to axios 1.20+ and @nestjs/axios requires regression testing on custom interceptors.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-542g-h47m-68v8",
+      "package": "axios",
+      "severity": "high",
+      "title": "Axios: Denial of Service via Unhandled 'error' Event in HTTP/2 ClientHttp2Session Initialization",
+      "range": ">=1.13.0 <1.20.0",
+      "url": "https://github.com/advisories/GHSA-542g-h47m-68v8",
+      "reason": "Axios client used for internal outbound service requests with trusted URLs. Upgrade to axios 1.20+ and @nestjs/axios requires regression testing on custom interceptors.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-6chq-wfr3-2hj9",
+      "package": "axios",
+      "severity": "high",
+      "title": "Axios: Header Injection via Prototype Pollution",
+      "range": ">=1.0.0 <1.15.1",
+      "url": "https://github.com/advisories/GHSA-6chq-wfr3-2hj9",
+      "reason": "Axios client used for internal outbound service requests with trusted URLs. Upgrade to axios 1.20+ and @nestjs/axios requires regression testing on custom interceptors.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-777c-7fjr-54vf",
+      "package": "axios",
+      "severity": "high",
+      "title": "Allocation of Resources Without Limits or Throttling in Axios",
+      "range": ">=1.7.0 <1.16.0",
+      "url": "https://github.com/advisories/GHSA-777c-7fjr-54vf",
+      "reason": "Axios client used for internal outbound service requests with trusted URLs. Upgrade to axios 1.20+ and @nestjs/axios requires regression testing on custom interceptors.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-hfxv-24rg-xrqf",
+      "package": "axios",
+      "severity": "high",
+      "title": "Axios: Regular Expression Denial of Service (ReDoS) via Cookie Name Injection",
+      "range": ">=1.0.0 <1.16.0",
+      "url": "https://github.com/advisories/GHSA-hfxv-24rg-xrqf",
+      "reason": "Axios client used for internal outbound service requests with trusted URLs. Upgrade to axios 1.20+ and @nestjs/axios requires regression testing on custom interceptors.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-j5f8-grm9-p9fc",
+      "package": "axios",
+      "severity": "high",
+      "title": "Axios: Proxy-Authorization header leaks to redirect target when proxy is re-evaluated to direct connection",
+      "range": ">=1.0.0 <1.16.0",
+      "url": "https://github.com/advisories/GHSA-j5f8-grm9-p9fc",
+      "reason": "Axios client used for internal outbound service requests with trusted URLs. Upgrade to axios 1.20+ and @nestjs/axios requires regression testing on custom interceptors.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-p92q-9vqr-4j8v",
+      "package": "axios",
+      "severity": "high",
+      "title": "Axios: Proxy-Authorization Credential Leak to Origin Server Across HTTP-to-HTTPS Redirect in Axios Node.js HTTP Adapter",
+      "range": ">=1.0.0 <1.16.0",
+      "url": "https://github.com/advisories/GHSA-p92q-9vqr-4j8v",
+      "reason": "Axios client used for internal outbound service requests with trusted URLs. Upgrade to axios 1.20+ and @nestjs/axios requires regression testing on custom interceptors.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-pf86-5x62-jrwf",
+      "package": "axios",
+      "severity": "high",
+      "title": "Axios: Prototype Pollution Gadgets - Response Tampering, Data Exfiltration, and Request Hijacking",
+      "range": ">=1.0.0 <1.15.1",
+      "url": "https://github.com/advisories/GHSA-pf86-5x62-jrwf",
+      "reason": "Axios client used for internal outbound service requests with trusted URLs. Upgrade to axios 1.20+ and @nestjs/axios requires regression testing on custom interceptors.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-pmwg-cvhr-8vh7",
+      "package": "axios",
+      "severity": "high",
+      "title": "Axios: Incomplete Fix for CVE-2025-62718 ÔÇö NO_PROXY Protection Bypassed via RFC 1122 Loopback Subnet (127.0.0.0/8) in Axios 1.15.0",
+      "range": ">=1.0.0 <1.15.1",
+      "url": "https://github.com/advisories/GHSA-pmwg-cvhr-8vh7",
+      "reason": "Axios client used for internal outbound service requests with trusted URLs. Upgrade to axios 1.20+ and @nestjs/axios requires regression testing on custom interceptors.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-q8qp-cvcw-x6jj",
+      "package": "axios",
+      "severity": "high",
+      "title": "Axios has prototype pollution read-side gadgets in HTTP adapter that allow credential injection and request hijacking",
+      "range": ">=1.0.0 <1.15.2",
+      "url": "https://github.com/advisories/GHSA-q8qp-cvcw-x6jj",
+      "reason": "Axios client used for internal outbound service requests with trusted URLs. Upgrade to axios 1.20+ and @nestjs/axios requires regression testing on custom interceptors.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-3jxr-9vmj-r5cp",
+      "package": "brace-expansion",
+      "severity": "high",
+      "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+      "range": ">=3.0.0 <5.0.7",
+      "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-6j4f-fj2g-mc7p",
+      "package": "brace-expansion",
+      "severity": "high",
+      "title": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+      "range": ">=4.0.0 <5.0.10",
+      "url": "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-mh99-v99m-4gvg",
+      "package": "brace-expansion",
+      "severity": "high",
+      "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+      "range": ">=4.0.0 <5.0.8",
+      "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-qhr7-859c-m2p7",
+      "package": "brace-expansion",
+      "severity": "high",
+      "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+      "range": ">=4.0.0 <5.0.11",
+      "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-rgw5-rvv9-x895",
+      "package": "brace-expansion",
+      "severity": "high",
+      "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+      "range": "<1.1.18",
+      "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "severity": "high",
+      "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+      "range": "<=3.0.3",
+      "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-73wf-gq98-2v4g",
+      "package": "browserslist",
+      "severity": "high",
+      "title": "Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)",
+      "range": "<=4.28.6",
+      "url": "https://github.com/advisories/GHSA-73wf-gq98-2v4g",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-c83g-rgw3-j3cx",
+      "package": "browserslist",
+      "severity": "high",
+      "title": "Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM",
+      "range": "<=4.28.6",
+      "url": "https://github.com/advisories/GHSA-c83g-rgw3-j3cx",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-2gc4-cqfq-p2gv",
+      "package": "engine.io",
+      "severity": "high",
+      "title": "Socket.IO: Engine.IO Protocol Revision Mismatch DoS",
+      "range": ">=6.6.0 <6.6.10",
+      "url": "https://github.com/advisories/GHSA-2gc4-cqfq-p2gv",
+      "reason": "WebSocket dependency tied to socket.io/engine.io protocol version compatibility with @nestjs/websockets and mobile/web clients. Protocol changes require coordinated client updates.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-gr94-w7qr-f4j3",
+      "package": "engine.io",
+      "severity": "high",
+      "title": "Socket.IO: Engine.IO WebTransport SID DoS",
+      "range": ">=6.5.0 <6.6.7",
+      "url": "https://github.com/advisories/GHSA-gr94-w7qr-f4j3",
+      "reason": "WebSocket dependency tied to socket.io/engine.io protocol version compatibility with @nestjs/websockets and mobile/web clients. Protocol changes require coordinated client updates.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-r635-g3xr-vw7x",
+      "package": "engine.io",
+      "severity": "high",
+      "title": "Socket.IO: Engine.IO Polling Transport Connection Exhaustion",
+      "range": ">=4.1.0 <6.6.7",
+      "url": "https://github.com/advisories/GHSA-r635-g3xr-vw7x",
+      "reason": "WebSocket dependency tied to socket.io/engine.io protocol version compatibility with @nestjs/websockets and mobile/web clients. Protocol changes require coordinated client updates.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-4c8g-83qw-93j6",
+      "package": "fast-uri",
+      "severity": "high",
+      "title": "fast-uri vulnerable to host confusion via failed IDN canonicalization",
+      "range": ">=3.0.0 <3.1.3",
+      "url": "https://github.com/advisories/GHSA-4c8g-83qw-93j6",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-7p8r-x3mc-p8w7",
+      "package": "fast-uri",
+      "severity": "high",
+      "title": "fast-uri vulnerable to host confusion via backslash authority introducer",
+      "range": ">=3.0.0 <3.1.5",
+      "url": "https://github.com/advisories/GHSA-7p8r-x3mc-p8w7",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-f65p-4m7j-42xc",
+      "package": "fast-uri",
+      "severity": "high",
+      "title": "fast-uri vulnerable to server-side request forgery via malformed IPv6 normalization",
+      "range": ">=3.0.0 <3.1.6",
+      "url": "https://github.com/advisories/GHSA-f65p-4m7j-42xc",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-jqff-g426-hqxp",
+      "package": "fast-uri",
+      "severity": "high",
+      "title": "fast-uri vulnerable to host confusion via percent-encoded scheme normalization",
+      "range": ">=3.0.0 <3.1.6",
+      "url": "https://github.com/advisories/GHSA-jqff-g426-hqxp",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-q3j6-qgpj-74h6",
+      "package": "fast-uri",
+      "severity": "high",
+      "title": "fast-uri vulnerable to path traversal via percent-encoded dot segments",
+      "range": ">=3.0.0 <=3.1.0",
+      "url": "https://github.com/advisories/GHSA-q3j6-qgpj-74h6",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-qw65-cvwx-89v3",
+      "package": "fast-uri",
+      "severity": "high",
+      "title": "fast-uri vulnerable to authority injection via an unvalidated port in serialize",
+      "range": ">=3.0.0 <3.1.7",
+      "url": "https://github.com/advisories/GHSA-qw65-cvwx-89v3",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-v2hh-gcrm-f6hx",
+      "package": "fast-uri",
+      "severity": "high",
+      "title": "fast-uri vulnerable to host confusion via literal backslash authority delimiter",
+      "range": ">=3.0.0 <=3.1.3",
+      "url": "https://github.com/advisories/GHSA-v2hh-gcrm-f6hx",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-v39h-62p7-jpjc",
+      "package": "fast-uri",
+      "severity": "high",
+      "title": "fast-uri vulnerable to host confusion via percent-encoded authority delimiters",
+      "range": ">=3.0.0 <=3.1.1",
+      "url": "https://github.com/advisories/GHSA-v39h-62p7-jpjc",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-5wm8-gmm8-39j9",
+      "package": "fast-xml-builder",
+      "severity": "high",
+      "title": "fast-xml-builder allows attribute values with unwanted quotes to bypass malicious or unwanted attributes",
+      "range": "<=1.1.6",
+      "url": "https://github.com/advisories/GHSA-5wm8-gmm8-39j9",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-fjxv-7rqg-78g4",
+      "package": "form-data",
+      "severity": "critical",
+      "title": "form-data uses unsafe random function in form-data for choosing boundary",
+      "range": "<2.5.4",
+      "url": "https://github.com/advisories/GHSA-fjxv-7rqg-78g4",
+      "reason": "Transitive dependency via node-telegram-bot-api / swagger codegen tooling. Not exposed to untrusted external input; pending node-telegram-bot-api migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-hmw2-7cc7-3qxx",
+      "package": "form-data",
+      "severity": "high",
+      "title": "form-data: CRLF injection in form-data via unescaped multipart field names and filenames",
+      "range": "<2.5.6",
+      "url": "https://github.com/advisories/GHSA-hmw2-7cc7-3qxx",
+      "reason": "Transitive dependency via node-telegram-bot-api / swagger codegen tooling. Not exposed to untrusted external input; pending node-telegram-bot-api migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-5j98-mcp5-4vw2",
+      "package": "glob",
+      "severity": "high",
+      "title": "glob CLI: Command injection via -c/--cmd executes matches with shell:true",
+      "range": ">=10.2.0 <10.5.0",
+      "url": "https://github.com/advisories/GHSA-5j98-mcp5-4vw2",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-8r5x-fm3f-whwj",
+      "package": "handlebars",
+      "severity": "critical",
+      "title": "Handlebars: JavaScript Injection via AST Type Confusion in compile (bypass of CVE-2026-33937)",
+      "range": ">=4.0.0 <=4.7.9",
+      "url": "https://github.com/advisories/GHSA-8r5x-fm3f-whwj",
+      "reason": "Transitive dependency via node-telegram-bot-api / swagger codegen tooling. Not exposed to untrusted external input; pending node-telegram-bot-api migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-p8wg-vrv2-v86f",
+      "package": "handlebars",
+      "severity": "critical",
+      "title": "Handlebars: JavaScript Injection via Own Property Check Bypass",
+      "range": ">=3.0.0 <=4.7.9",
+      "url": "https://github.com/advisories/GHSA-p8wg-vrv2-v86f",
+      "reason": "Transitive dependency via node-telegram-bot-api / swagger codegen tooling. Not exposed to untrusted external input; pending node-telegram-bot-api migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-2883-xcg3-v3hh",
+      "package": "js-yaml",
+      "severity": "high",
+      "title": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources",
+      "range": ">=4.0.0 <4.3.2",
+      "url": "https://github.com/advisories/GHSA-2883-xcg3-v3hh",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-52cp-r559-cp3m",
+      "package": "js-yaml",
+      "severity": "high",
+      "title": "js-yaml: YAML merge-key chains can force quadratic CPU consumption",
+      "range": ">=3.0.0 <3.15.0",
+      "url": "https://github.com/advisories/GHSA-52cp-r559-cp3m",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-5p4m-2wfm-xmqj",
+      "package": "js-yaml",
+      "severity": "high",
+      "title": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) ÔÇö CVE-2026-59870 fix not backported",
+      "range": ">=4.0.0 <4.3.1",
+      "url": "https://github.com/advisories/GHSA-5p4m-2wfm-xmqj",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-r5fr-rjxr-66jc",
+      "package": "lodash",
+      "severity": "high",
+      "title": "lodash vulnerable to Code Injection via `_.template` imports key names",
+      "range": ">=4.0.0 <=4.17.23",
+      "url": "https://github.com/advisories/GHSA-r5fr-rjxr-66jc",
+      "reason": "Transitive dependency of @nestjs/config. Template evaluation is not used on user input. Awaits upstream @nestjs/config patch.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-535w-7cp7-47q4",
+      "package": "multer",
+      "severity": "high",
+      "title": "multer vulnerable to Denial of Service via oversized array index in field names",
+      "range": "<2.3.0",
+      "url": "https://github.com/advisories/GHSA-535w-7cp7-47q4",
+      "reason": "Multer 2.x breaking changes and NestJS multipart integration compatibility. File upload endpoints are guarded by size and mime validators.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-72gw-mp4g-v24j",
+      "package": "multer",
+      "severity": "high",
+      "title": "Multer vulnerable to Denial of Service via deeply nested field names",
+      "range": ">=1.0.0 <2.2.0",
+      "url": "https://github.com/advisories/GHSA-72gw-mp4g-v24j",
+      "reason": "Multer 2.x breaking changes and NestJS multipart integration compatibility. File upload endpoints are guarded by size and mime validators.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-wc9g-mqfw-jrwm",
+      "package": "multer",
+      "severity": "high",
+      "title": "multer vulnerable to Denial of Service via crafted multipart field names",
+      "range": "<2.3.0",
+      "url": "https://github.com/advisories/GHSA-wc9g-mqfw-jrwm",
+      "reason": "Multer 2.x breaking changes and NestJS multipart integration compatibility. File upload endpoints are guarded by size and mime validators.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-j3q9-mxjg-w52f",
+      "package": "path-to-regexp",
+      "severity": "high",
+      "title": "path-to-regexp vulnerable to Denial of Service via sequential optional groups",
+      "range": ">=8.0.0 <8.4.0",
+      "url": "https://github.com/advisories/GHSA-j3q9-mxjg-w52f",
+      "reason": "Transitive dependency pinned by NestJS router. Cannot bump path-to-regexp independently without breaking NestJS route matching. NestJS framework update pending in Wave 11.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-c2c7-rcm5-vvqj",
+      "package": "picomatch",
+      "severity": "high",
+      "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+      "range": ">=4.0.0 <4.0.4",
+      "url": "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-jqcg-44mw-7w3h",
+      "package": "proxy-addr",
+      "severity": "critical",
+      "title": "proxy-addr vulnerable to IP spoofing via IPv4-mapped IPv6 trust subnet",
+      "range": ">=1.1.0 <2.0.8",
+      "url": "https://github.com/advisories/GHSA-jqcg-44mw-7w3h",
+      "reason": "Transitive dependency of express under @nestjs/platform-express. Upgrading requires upstream @nestjs/platform-express release with updated express tree. Lumenpulse runs behind reverse proxy with strict trusted header handling.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-f88m-g3jw-g9cj",
+      "package": "sharp",
+      "severity": "high",
+      "title": "sharp inherited vulnerabilities in libvips: CVE-2026-33327, CVE-2026-33328, CVE-2026-35590, CVE-2026-35591",
+      "range": "<0.35.0",
+      "url": "https://github.com/advisories/GHSA-f88m-g3jw-g9cj",
+      "reason": "Upgrading sharp to 0.35+ moves libvips ABI and image encoding outputs, requiring dedicated QA validation on asset transformations. Held per docs/dependency-updates.md.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-rgj7-g3m4-5g8c",
+      "package": "sharp",
+      "severity": "high",
+      "title": "sharp: Vulnerabilities in libheif: GHSA-g89c-p67h-r497 and GHSA-2jg2-4ch7-h545",
+      "range": "<0.35.4",
+      "url": "https://github.com/advisories/GHSA-rgj7-g3m4-5g8c",
+      "reason": "Upgrading sharp to 0.35+ moves libvips ABI and image encoding outputs, requiring dedicated QA validation on asset transformations. Held per docs/dependency-updates.md.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-wq5f-xc86-pv6w",
+      "package": "sharp",
+      "severity": "high",
+      "title": "sharp : Vulnerability in librsvg dependency CVE-2026-96889",
+      "range": "<0.35.5",
+      "url": "https://github.com/advisories/GHSA-wq5f-xc86-pv6w",
+      "reason": "Upgrading sharp to 0.35+ moves libvips ABI and image encoding outputs, requiring dedicated QA validation on asset transformations. Held per docs/dependency-updates.md.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-2m8v-j782-fhvr",
+      "package": "socket.io-parser",
+      "severity": "high",
+      "title": "Socket.IO: Zero-attachment Memory Exhaustion",
+      "range": ">=4.0.0 <4.2.7",
+      "url": "https://github.com/advisories/GHSA-2m8v-j782-fhvr",
+      "reason": "WebSocket dependency tied to socket.io/engine.io protocol version compatibility with @nestjs/websockets and mobile/web clients. Protocol changes require coordinated client updates.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-ph9p-34f9-6g65",
+      "package": "tmp",
+      "severity": "high",
+      "title": "tmp has Path Traversal via unsanitized prefix/postfix that enables directory escape",
+      "range": "<0.2.6",
+      "url": "https://github.com/advisories/GHSA-ph9p-34f9-6g65",
+      "reason": "Build-time devDependency used only during compilation / test execution; not included in production runtime artifacts. Upgrading requires @nestjs/cli 12 major migration.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-82x6-q7mm-w9cf",
+      "package": "toml",
+      "severity": "high",
+      "title": "toml-node: Uncontrolled Recursion",
+      "range": "<4.2.0",
+      "url": "https://github.com/advisories/GHSA-82x6-q7mm-w9cf",
+      "reason": "Transitive dependency of @stellar/stellar-sdk and stellar-sdk. Stellar SDK majors are pinned per docs/dependency-updates.md because transaction envelope encoding and signing semantics move across majors. Upgrades require scheduled testnet rehearsal.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-v5mp-jgw5-2x6j",
+      "package": "toml",
+      "severity": "high",
+      "title": "toml-node: Prototype Pollution Leads to `Object.prototype` Corruption via `__proto__` Key-Path Desynchronization",
+      "range": "<4.1.2",
+      "url": "https://github.com/advisories/GHSA-v5mp-jgw5-2x6j",
+      "reason": "Transitive dependency of @stellar/stellar-sdk and stellar-sdk. Stellar SDK majors are pinned per docs/dependency-updates.md because transaction envelope encoding and signing semantics move across majors. Upgrades require scheduled testnet rehearsal.",
+      "expiresAt": "2026-12-01"
+    },
+    {
+      "id": "GHSA-96hv-2xvq-fx4p",
+      "package": "ws",
+      "severity": "high",
+      "title": "ws: Memory exhaustion DoS from tiny fragments and data chunks",
+      "range": ">=8.0.0 <8.21.0",
+      "url": "https://github.com/advisories/GHSA-96hv-2xvq-fx4p",
+      "reason": "WebSocket dependency tied to socket.io/engine.io protocol version compatibility with @nestjs/websockets and mobile/web clients. Protocol changes require coordinated client updates.",
+      "expiresAt": "2026-12-01"
+    }
+  ]
+}

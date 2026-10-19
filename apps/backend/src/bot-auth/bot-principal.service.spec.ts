@@ -25,6 +25,27 @@ describe('BotPrincipalService', () => {
     ).toEqual({ type: 'service', id: 'data-processing' });
   });
 
+  it('authenticates managed service keys without accepting them as bot keys', async () => {
+    const serviceApiKeys = {
+      authenticateServiceToken: jest.fn().mockResolvedValue({
+        consumerId: 'data-worker',
+        scopes: ['data:read'],
+      }),
+    };
+    const managed = new BotPrincipalService({}, serviceApiKeys as never);
+
+    await expect(
+      managed.authenticateHeadersAsync({
+        [SERVICE_TOKEN_HEADER]: 'managed-key',
+      }),
+    ).resolves.toEqual({ type: 'service', id: 'data-worker' });
+    await expect(
+      managed.authenticateHeadersAsync({
+        [BOT_TOKEN_HEADER]: 'managed-key',
+      }),
+    ).resolves.toBeNull();
+  });
+
   it('does not accept a bot token as a service credential (or vice versa)', () => {
     expect(
       service.authenticateHeaders({ [SERVICE_TOKEN_HEADER]: 'bot-secret' }),

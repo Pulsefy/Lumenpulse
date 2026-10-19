@@ -45,6 +45,7 @@ const NON_TAPPABLE_ROUTES = [
   '/settings/data-privacy',
   '/settings/exports',
   '/settings/manage-accounts',
+  '/settings/sessions',
   '/settings/mutation-queue',
   '/settings/notification-settings',
   '/settings/status',

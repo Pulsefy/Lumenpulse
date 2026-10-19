@@ -1,0 +1,154 @@
+{
+  "accuracy": 0.8571,
+  "after": {
+    "brier": 0.0827,
+    "curve": [
+      {
+        "count": 4,
+        "lower": 0.0,
+        "mean_confidence": 0.0,
+        "observed_accuracy": 0.0,
+        "upper": 0.1
+      },
+      {
+        "count": 2,
+        "lower": 0.3,
+        "mean_confidence": 0.3251,
+        "observed_accuracy": 1.0,
+        "upper": 0.4
+      },
+      {
+        "count": 1,
+        "lower": 0.4,
+        "mean_confidence": 0.4816,
+        "observed_accuracy": 1.0,
+        "upper": 0.5
+      },
+      {
+        "count": 1,
+        "lower": 0.5,
+        "mean_confidence": 0.578,
+        "observed_accuracy": 1.0,
+        "upper": 0.6
+      },
+      {
+        "count": 2,
+        "lower": 0.7,
+        "mean_confidence": 0.7586,
+        "observed_accuracy": 1.0,
+        "upper": 0.8
+      },
+      {
+        "count": 2,
+        "lower": 0.8,
+        "mean_confidence": 0.873,
+        "observed_accuracy": 1.0,
+        "upper": 0.9
+      },
+      {
+        "count": 30,
+        "lower": 0.9,
+        "mean_confidence": 0.9796,
+        "observed_accuracy": 0.9333,
+        "upper": 1.0
+      }
+    ],
+    "ece_held_out": 0.1036,
+    "ece_in_sample": 0.1051
+  },
+  "before": {
+    "brier": 0.1386,
+    "curve": [
+      {
+        "count": 1,
+        "lower": 0.3,
+        "mean_confidence": 0.373,
+        "observed_accuracy": 0.0,
+        "upper": 0.4
+      },
+      {
+        "count": 3,
+        "lower": 0.4,
+        "mean_confidence": 0.484,
+        "observed_accuracy": 0.0,
+        "upper": 0.5
+      },
+      {
+        "count": 15,
+        "lower": 0.5,
+        "mean_confidence": 0.5632,
+        "observed_accuracy": 1.0,
+        "upper": 0.6
+      },
+      {
+        "count": 11,
+        "lower": 0.6,
+        "mean_confidence": 0.6247,
+        "observed_accuracy": 0.8182,
+        "upper": 0.7
+      },
+      {
+        "count": 1,
+        "lower": 0.7,
+        "mean_confidence": 0.792,
+        "observed_accuracy": 1.0,
+        "upper": 0.8
+      },
+      {
+        "count": 1,
+        "lower": 0.8,
+        "mean_confidence": 0.811,
+        "observed_accuracy": 1.0,
+        "upper": 0.9
+      },
+      {
+        "count": 10,
+        "lower": 0.9,
+        "mean_confidence": 0.95,
+        "observed_accuracy": 1.0,
+        "upper": 1.0
+      }
+    ],
+    "ece": 0.2715
+  },
+  "dataset": "data/experiments/anomaly_pump_and_dump_v1.json (sentiment series, walk-forward)",
+  "discarded_no_held_out_gain": false,
+  "mapping": {
+    "x": [
+      0.373,
+      0.475,
+      0.483,
+      0.494,
+      0.5695,
+      0.623,
+      0.632,
+      0.656,
+      0.682,
+      0.792,
+      0.811,
+      0.95
+    ],
+    "y": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.909091,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "material_ece_threshold": 0.05,
+  "material_gap": true,
+  "method": "isotonic",
+  "model": "forecast",
+  "n_samples": 42,
+  "notes": "Walk-forward over the committed snapshot; outcome = predicted trend equals realised trend.",
+  "raw_field": "confidence_24h / confidence_48h",
+  "reliable": true
+}

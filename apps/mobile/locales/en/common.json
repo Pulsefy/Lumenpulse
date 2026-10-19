@@ -210,6 +210,7 @@
       "active": "Active",
       "pending": "Pending",
       "ended": "Ended",
+      "matching": "Matching",
       "finalized": "Finalized",
       "distributed": "Distributed"
     },
@@ -513,6 +514,19 @@
           "description": "Searches saved on this device to make them easy to repeat."
         }
       }
+    },
+    "sessions": {
+      "title": "Active Sessions",
+      "description": "See where you are signed in and sign out any device.",
+      "empty": "No active sessions.",
+      "this_device": "This device",
+      "unknown_device": "Unknown device",
+      "unknown_location": "Unknown location",
+      "last_seen": "Last seen",
+      "revoke": "Revoke",
+      "revoke_confirm": "Sign this device out?",
+      "load_failed": "Could not load sessions.",
+      "revoke_failed": "Could not revoke session."
     }
   },
   "transaction_receipt": {
@@ -586,11 +600,11 @@
       "title": "Register this wallet",
       "hint": "Your wallet signs a registration request bound to a one-time code issued by the registry. Nothing is submitted if you decline.",
       "handle_placeholder": "GitHub handle (e.g. octocat)",
-      "stage_nonce": "Fetching your one-time registration code\u2026",
-      "stage_signature": "Waiting for your wallet to sign\u2026",
-      "stage_revalidate": "Checking the registration code is still valid\u2026",
-      "stage_submit": "Submitting your registration\u2026",
-      "stage_verify": "Confirming your registration\u2026",
+      "stage_nonce": "Fetching your one-time registration code…",
+      "stage_signature": "Waiting for your wallet to sign…",
+      "stage_revalidate": "Checking the registration code is still valid…",
+      "stage_submit": "Submitting your registration…",
+      "stage_verify": "Confirming your registration…",
       "success": "Registration submitted. Your on-chain record is now live."
     },
     "quorum_progress": "Quorum Approval Progress",
@@ -616,7 +630,7 @@
       "title": "Reconnect to {{network}}",
       "message": "Restore your saved wallet session on the new {{network}} network. Choose how you want to reconnect.",
       "button": "Reconnect Wallet",
-      "restoring": "Restoring wallet session\u2026"
+      "restoring": "Restoring wallet session…"
     },
     "network_mismatch": {
       "title": "Network Changed",

@@ -9,6 +9,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
+import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import { User } from '../users/entities/user.entity';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
@@ -53,6 +54,7 @@ describe('AuthService – Password Reset', () => {
   let userRepository: Record<string, jest.Mock>;
   let resetTokenRepository: Record<string, jest.Mock>;
   let emailService: Record<string, jest.Mock>;
+  let auditService: { log: jest.Mock };
   let refreshTokenRepository: Record<string, jest.Mock>;
 
   const mockUser: Partial<User> = {
@@ -82,6 +84,8 @@ describe('AuthService – Password Reset', () => {
       update: jest.fn().mockResolvedValue({ affected: 1 }),
     };
 
+    auditService = { log: jest.fn().mockResolvedValue({}) };
+
     emailService = {
       sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
     };
@@ -105,6 +109,10 @@ describe('AuthService – Password Reset', () => {
         {
           provide: getRepositoryToken(PasswordResetToken),
           useValue: resetTokenRepository,
+        },
+        {
+          provide: AuditService,
+          useValue: auditService,
         },
         {
           provide: EmailService,
@@ -303,6 +311,7 @@ describe('AuthService – Password Reset', () => {
 
 describe('AuthService – Refresh Tokens', () => {
   let service: AuthService;
+  let auditService: { log: jest.Mock };
   let userRepository: Record<string, jest.Mock>;
   let refreshTokenRepository: Record<string, jest.Mock>;
 
@@ -317,6 +326,7 @@ describe('AuthService – Refresh Tokens', () => {
   };
 
   beforeEach(async () => {
+    auditService = { log: jest.fn().mockResolvedValue({}) };
     userRepository = {
       findOne: jest.fn(),
       create: jest.fn(),
@@ -343,6 +353,7 @@ describe('AuthService – Refresh Tokens', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
+        { provide: AuditService, useValue: auditService },
         {
           provide: getRepositoryToken(User),
           useValue: userRepository,
@@ -445,16 +456,17 @@ describe('AuthService – Refresh Tokens', () => {
         access_token: 'jwt-token',
         refresh_token: expect.any(String),
       });
+      // Rotated in place: same session row (id), new secret, still active
       expect(refreshTokenRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ revokedAt: expect.any(Date) }),
-      );
-      expect(refreshTokenRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          userId: 'user-uuid-1',
+          id: 'refresh-token-uuid-1',
           deviceInfo: 'iPhone 15',
           ipAddress: '192.168.1.1',
+          lastSeenAt: expect.any(Date),
+          revokedAt: null,
         }),
       );
+      expect(validRefreshToken.tokenHash).not.toBe(tokenHash);
     });
 
     it('should reject invalid refresh token', async () => {
@@ -604,6 +616,8 @@ describe('AuthService – Refresh Tokens', () => {
               id: 'session-1',
               deviceInfo: 'iPhone 15 Pro',
               ipAddress: '192.168.1.1',
+              locationHint: null,
+              lastSeenAt: null,
               createdAt: activeToken1.createdAt,
               expiresAt: activeToken1.expiresAt,
               isCurrent: false,
@@ -612,6 +626,8 @@ describe('AuthService – Refresh Tokens', () => {
               id: 'session-2',
               deviceInfo: 'Chrome on Windows',
               ipAddress: '10.0.0.5',
+              locationHint: null,
+              lastSeenAt: null,
               createdAt: activeToken2.createdAt,
               expiresAt: activeToken2.expiresAt,
               isCurrent: false,
@@ -632,6 +648,17 @@ describe('AuthService – Refresh Tokens', () => {
         );
       });
 
+      it('should flag the current session', async () => {
+        findMock.mockResolvedValue([activeToken1, activeToken2]);
+
+        const result = await service.getActiveSessions(
+          'user-uuid-1',
+          'session-2',
+        );
+
+        expect(result.sessions.map((s) => s.isCurrent)).toEqual([false, true]);
+      });
+
       it('should return empty list when no active sessions', async () => {
         findMock.mockResolvedValue([]);
 
@@ -639,6 +666,43 @@ describe('AuthService – Refresh Tokens', () => {
 
         expect(result.sessions).toEqual([]);
         expect(result.total).toBe(0);
+      });
+    });
+
+    describe('adminRevokeAllSessions', () => {
+      it('revokes all active sessions and writes an audit entry', async () => {
+        userRepository.findOne.mockResolvedValue(mockUser);
+        refreshTokenRepository.update.mockResolvedValue({ affected: 3 });
+
+        const result = await service.adminRevokeAllSessions(
+          'user-uuid-1',
+          'admin-uuid',
+          '9.9.9.9',
+        );
+
+        expect(result.revokedCount).toBe(3);
+        expect(refreshTokenRepository.update).toHaveBeenCalledWith(
+          { userId: 'user-uuid-1', revokedAt: IsNull() },
+          { revokedAt: expect.any(Date) },
+        );
+        expect(auditService.log).toHaveBeenCalledWith(
+          'admin_session_revoke_all',
+          'admin-uuid',
+          '9.9.9.9',
+          expect.objectContaining({
+            targetUserId: 'user-uuid-1',
+            revokedCount: 3,
+          }),
+        );
+      });
+
+      it('throws NotFoundException for unknown user', async () => {
+        userRepository.findOne.mockResolvedValue(null);
+
+        await expect(
+          service.adminRevokeAllSessions('nope', 'admin-uuid'),
+        ).rejects.toThrow(NotFoundException);
+        expect(auditService.log).not.toHaveBeenCalled();
       });
     });
 
@@ -650,7 +714,11 @@ describe('AuthService – Refresh Tokens', () => {
         };
         findOneMock.mockResolvedValue(token);
 
-        const result = await service.revokeSession('session-1', 'user-uuid-1');
+        const result = await service.revokeSession(
+          'session-1',
+          'user-uuid-1',
+          '1.2.3.4',
+        );
 
         expect(result).toEqual({
           message: 'Session revoked successfully',
@@ -658,6 +726,12 @@ describe('AuthService – Refresh Tokens', () => {
         });
         expect(token.revokedAt).toBeInstanceOf(Date);
         expect(refreshTokenRepository.save).toHaveBeenCalledWith(token);
+        expect(auditService.log).toHaveBeenCalledWith(
+          'session_revoke',
+          'user-uuid-1',
+          '1.2.3.4',
+          expect.objectContaining({ sessionId: 'session-1' }),
+        );
       });
 
       it('should return success if session is already revoked (idempotent)', async () => {

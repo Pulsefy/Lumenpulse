@@ -49,6 +49,31 @@ import {
   RevokeSessionResponseDto,
 } from './dto/session.dto';
 
+/** [deviceInfo, ipAddress, locationHint] derived from the request. */
+function sessionMeta(
+  req: ExpressRequest,
+): [string | undefined, string | undefined, string | undefined] {
+  const header = (name: string): string | undefined => {
+    const v = req.headers?.[name];
+    return (Array.isArray(v) ? v[0] : v) || undefined;
+  };
+  const device = (header('x-device-name') ?? header('user-agent'))?.slice(
+    0,
+    255,
+  );
+  const ip = req.ip || req.socket?.remoteAddress || undefined;
+  const country = header('cf-ipcountry') ?? header('x-vercel-ip-country');
+  const rawCity = header('x-vercel-ip-city');
+  let city: string | undefined;
+  try {
+    city = rawCity ? decodeURIComponent(rawCity) : undefined;
+  } catch {
+    city = rawCity;
+  }
+  const location = [city, country].filter(Boolean).join(', ');
+  return [device, ip, location ? location.slice(0, 128) : undefined];
+}
+
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -92,7 +117,7 @@ export class AuthController {
     },
   })
   @AuditLogAction('login')
-  async login(@Body() body: LoginDto) {
+  async login(@Body() body: LoginDto, @Request() req: ExpressRequest) {
     const user = await this.authService.validateUser(body.email, body.password);
     if (!user) {
       throw new UnauthorizedException();
@@ -103,7 +128,7 @@ export class AuthController {
       return { requiresTwoFactor: true };
     }
 
-    return this.authService.login(user);
+    return this.authService.login(user, ...sessionMeta(req));
   }
 
   @Post('register')
@@ -201,11 +226,12 @@ export class AuthController {
     @Body() body: RefreshTokenDto,
     @Request() req: ExpressRequest,
   ) {
-    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const [deviceInfo, ipAddress, locationHint] = sessionMeta(req);
     return this.authService.refreshToken(
       body.refreshToken,
-      body.deviceInfo,
+      body.deviceInfo ?? deviceInfo,
       ipAddress,
+      locationHint,
     );
   }
 
@@ -234,8 +260,8 @@ export class AuthController {
     status: 200,
     description: 'Logout from all devices successful',
   })
-  async logoutAll(@Request() req: { user: { sub: string } }) {
-    return this.authService.logoutAll(req.user.sub);
+  async logoutAll(@Request() req: ExpressRequest & { user: { id: string } }) {
+    return this.authService.logoutAll(req.user.id, req.ip);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -341,7 +367,10 @@ export class AuthController {
     status: 401,
     description: 'Invalid signature or expired challenge',
   })
-  async verifyChallenge(@Body() verifyChallengeDto: VerifyChallengeDto) {
+  async verifyChallenge(
+    @Body() verifyChallengeDto: VerifyChallengeDto,
+    @Request() req: ExpressRequest,
+  ) {
     try {
       this.logger.log(
         `Verification requested for public key: ${verifyChallengeDto.publicKey}`,
@@ -350,6 +379,7 @@ export class AuthController {
       const result = await this.authService.verifyChallenge(
         verifyChallengeDto.publicKey,
         verifyChallengeDto.signedChallenge,
+        ...sessionMeta(req),
       );
 
       this.logger.log(`Authentication successful for user: ${result.user.id}`);
@@ -380,9 +410,10 @@ export class AuthController {
     description: 'Active sessions retrieved successfully',
     type: ActiveSessionsResponseDto,
   })
-  async getActiveSessions(@Request() req: { user: { id: string } }) {
-    const sessions = await this.authService.getActiveSessions(req.user.id);
-    return sessions;
+  async getActiveSessions(
+    @Request() req: { user: { id: string; sessionId?: string } },
+  ) {
+    return this.authService.getActiveSessions(req.user.id, req.user.sessionId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -397,10 +428,10 @@ export class AuthController {
   })
   @ApiResponse({ status: 404, description: 'Session not found' })
   async revokeSession(
-    @Request() req: { user: { id: string } },
+    @Request() req: ExpressRequest & { user: { id: string } },
     @Param('id') sessionId: string,
   ): Promise<{ message: string; sessionId: string }> {
-    return this.authService.revokeSession(sessionId, req.user.id);
+    return this.authService.revokeSession(sessionId, req.user.id, req.ip);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -463,7 +494,10 @@ export class AuthController {
     status: 401,
     description: 'Invalid credentials or TOTP token',
   })
-  async verifyTwoFactor(@Body() body: TwoFactorVerifyDto) {
+  async verifyTwoFactor(
+    @Body() body: TwoFactorVerifyDto,
+    @Request() req: ExpressRequest,
+  ) {
     const user = await this.authService.validateUser(body.email, body.password);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -482,7 +516,7 @@ export class AuthController {
       throw new UnauthorizedException('Invalid TOTP token');
     }
 
-    return this.authService.login(user);
+    return this.authService.login(user, ...sessionMeta(req));
   }
 
   @UseGuards(JwtAuthGuard)

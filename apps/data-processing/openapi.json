@@ -3135,6 +3135,44 @@
             "title": "Confidence",
             "default": 1.0
           },
+          "calibrated_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibrated Confidence"
+          },
+          "calibration": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibration"
+          },
+          "confidence_guidance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Confidence Guidance",
+            "default": {
+              "display": "calibrated_confidence",
+              "ignore": [
+                "confidence",
+                "confidence_24h",
+                "confidence_48h",
+                "severity_score"
+              ],
+              "note": "Raw model scores are not probabilities. Show calibrated_confidence (the empirically observed probability the prediction is correct) and ignore the raw fields; they are kept only for backward compatibility."
+            }
+          },
           "status": {
             "type": "string",
             "title": "Status",
@@ -3978,6 +4016,55 @@
             "type": "string",
             "title": "Confidence Indication",
             "default": "low"
+          },
+          "calibrated_confidence_24h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibrated Confidence 24H"
+          },
+          "calibrated_confidence_48h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibrated Confidence 48H"
+          },
+          "calibration": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibration"
+          },
+          "confidence_guidance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Confidence Guidance",
+            "default": {
+              "display": "calibrated_confidence",
+              "ignore": [
+                "confidence",
+                "confidence_24h",
+                "confidence_48h",
+                "severity_score"
+              ],
+              "note": "Raw model scores are not probabilities. Show calibrated_confidence (the empirically observed probability the prediction is correct) and ignore the raw fields; they are kept only for backward compatibility."
+            }
           }
         },
         "type": "object",

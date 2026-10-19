@@ -218,9 +218,10 @@ touching `apps/mobile/**` and must be green:
 - **`mobile-e2e`** — the Playwright smoke suite against the Expo web build (`npm run e2e`); the
   report uploads as an artifact on failure
 
-If a release touches no files under `apps/mobile/**`, the path filter means Mobile CI will not
-have run. Trigger it by hand — `workflow_dispatch`, or touch `apps/mobile/.ci-trigger` — rather
-than shipping on a stale result.
+If a release touches no files under `apps/mobile/**` (or the shared root files and workflow
+definitions listed in [`.github/ci-paths.json`](../.github/ci-paths.json)), the path filter means
+Mobile CI will not have run. Trigger it by hand with `workflow_dispatch` rather than shipping on a
+stale result. There is no sentinel file any more: see [CI path filters](ci-path-filters.md).
 
 Before a store release, also run
 [Mobile E2E Flake Check](../.github/workflows/mobile-e2e-flake-check.yml) (`workflow_dispatch`,

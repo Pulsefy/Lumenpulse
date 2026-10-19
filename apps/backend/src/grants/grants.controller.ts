@@ -50,8 +50,7 @@ export class GrantsController {
   @Get('rounds')
   @ApiOperation({
     summary: 'List all grant rounds',
-    description:
-      'Retrieves all available grant rounds (active, pending, finalized).',
+    description: 'Retrieves all grant rounds and their lifecycle state.',
   })
   @ApiResponse({
     status: 200,
@@ -141,7 +140,7 @@ export class GrantsController {
   @ApiOperation({
     summary: 'Finalize a grant round (admin only)',
     description:
-      'Flags the round as finalized, calculating final matching pool allocations. Requires admin role.',
+      'Closes a round after matching is complete. Requires admin role.',
   })
   @ApiResponse({
     status: 200,

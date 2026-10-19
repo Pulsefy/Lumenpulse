@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ShieldCheck, ShieldAlert, Clock, Users } from "lucide-react";
+import Link from "next/link";
+import { ShieldCheck, ShieldAlert, Clock, Users, ClipboardCheck } from "lucide-react";
 import { VerificationBadge } from "@/components/verification-badge";
+import { canViewReviewMetrics, getCurrentUserRole } from "@/lib/auth-role";
 
 type Status = "PENDING" | "VERIFIED" | "REJECTED";
 
@@ -34,6 +36,11 @@ export default function VerificationPageClient() {
   const [filter, setFilter] = useState<Status | "ALL">("ALL");
   const [isLoading, setIsLoading] = useState(true);
   const [votingId, setVotingId] = useState<number | null>(null);
+  const [isReviewer, setIsReviewer] = useState(false);
+
+  useEffect(() => {
+    setIsReviewer(canViewReviewMetrics(getCurrentUserRole()));
+  }, []);
 
   const fetchProjects = (status?: Status) => {
     setIsLoading(true);
@@ -86,6 +93,15 @@ export default function VerificationPageClient() {
             become eligible for matching funds. Voting weight is determined by your reputation score
             or governance token balance.
           </p>
+          {isReviewer && (
+            <Link
+              href="/verification/review"
+              className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border bg-primary/10 border-primary/30 text-primary"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5" />
+              Review verification requests
+            </Link>
+          )}
         </div>
       </section>
 

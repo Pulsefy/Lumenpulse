@@ -1,12 +1,22 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as Linking from 'expo-linking';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { useLocalization } from '../src/context';
 import { useEnvironment } from './EnvironmentContext';
 import { storage, WalletNetworkTag, sanitizePublicKey } from '../lib/storage';
 import { WalletError } from '../lib/wallet/errors';
-import { getDefaultWalletAdapter } from '../lib/wallet/registry';
-import { WalletAdapter, WalletSigningResult, WalletSigningState } from '../lib/wallet/types';
+import { parseWalletCallback, signingOutcomeFromCallback } from '../lib/wallet/callback';
+import {
+  getAvailableWalletAdapters,
+  getDefaultWalletAdapter,
+  resolveWalletSwitch,
+} from '../lib/wallet/registry';
+import {
+  WalletAdapter,
+  WalletOption,
+  WalletSigningResult,
+  WalletSigningState,
+} from '../lib/wallet/types';
 import config from '../lib/config';
 
 export type WalletStatus =
@@ -64,6 +74,16 @@ interface WalletContextType {
   disconnect: () => void;
   /** Sign a base64 Stellar transaction envelope using the active wallet adapter. */
   signAndSubmitXdr: (xdr: string) => Promise<WalletSigningResult>;
+  /** Wallets usable on this device, in registry order. */
+  availableWallets: WalletOption[];
+  /** Id of the adapter in use, or null until the first connect or signature. */
+  activeWalletId: string | null;
+  /**
+   * Switch to another wallet adapter. Refused (resolves to false) while a
+   * signature is in flight or when the id is unknown; otherwise the current
+   * session is cleared before the new adapter is used.
+   */
+  selectWallet: (id: string) => Promise<boolean>;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -93,6 +113,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [signingState, setSigningState] = useState<WalletSigningState>('idle');
   const [lastSigningError, setLastSigningError] = useState<WalletError | null>(null);
   const [activeAdapterId, setActiveAdapterId] = useState<string | null>(null);
+  const [availableWallets, setAvailableWallets] = useState<WalletOption[]>([]);
   const { t } = useLocalization();
   const { environment, isInitialized: isEnvironmentReady } = useEnvironment();
   // Tracks whether a restore attempt has completed at least once so we
@@ -202,26 +223,25 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     const handleDeepLink = ({ url }: { url: string }) => {
       try {
-        const parsedUrl = Linking.parse(url);
+        const callback = parseWalletCallback(Linking.parse(url));
 
-        if (parsedUrl.path === 'wallet-callback') {
-          const { status: cbStatus, tx_hash: txHash, pubkey } = parsedUrl.queryParams || {};
-
+        if (callback) {
           // If a signing flow is pending, the callback belongs to it.
           if (pendingSignRef.current) {
             const deferred = pendingSignRef.current;
             pendingSignRef.current = null;
+            const outcome = signingOutcomeFromCallback(callback);
 
-            if (cbStatus === 'success' && typeof txHash === 'string' && txHash.length > 0) {
+            if (outcome.status === 'success') {
               setSigningState('success');
-              deferred.resolve({ status: 'success', txHash });
-            } else if (cbStatus === 'rejected') {
+              deferred.resolve({ status: 'success', txHash: outcome.txHash });
+            } else if (outcome.status === 'rejected') {
               setSigningState('rejected');
               deferred.resolve({ status: 'rejected' });
             } else {
               const err = new WalletError(
                 'unknown',
-                cbStatus === 'failed'
+                outcome.status === 'failed'
                   ? t('wallet.sign.error_failed')
                   : t('wallet.sign.error_unknown'),
               );
@@ -234,15 +254,15 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
           // Otherwise this is a connection callback.
           if (status === 'connecting' || status === 'reconnecting') {
-            if (pubkey) {
-              const cleanKey = sanitizePublicKey(pubkey);
+            if (callback.pubkey) {
+              const cleanKey = sanitizePublicKey(callback.pubkey);
               setPublicKey(cleanKey);
               setStatus('connected');
               setLastConnectedNetwork(environment);
               if (cleanKey) {
                 void storage.setActiveWalletPublicKey(cleanKey, environment);
               }
-            } else if (cbStatus === 'rejected') {
+            } else if (callback.status === 'rejected') {
               setStatus('rejected');
             }
           }
@@ -278,6 +298,19 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     [environment],
   );
 
+  // ------- Wallets usable on this device --------------------------------
+  useEffect(() => {
+    let cancelled = false;
+    void getAvailableWalletAdapters().then((adapters) => {
+      if (!cancelled) {
+        setAvailableWallets(adapters.map(({ id, name, installUrl }) => ({ id, name, installUrl })));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const ensureAdapter = useCallback(async () => {
     if (!activeAdapterRef.current) {
       activeAdapterRef.current = await getDefaultWalletAdapter();
@@ -296,34 +329,45 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           : t('wallet.connect.message', { network: environment });
 
       return new Promise<void>((resolve) => {
-        Alert.alert(title, message, [
-          {
-            text: t('common.cancel'),
-            style: 'cancel',
-            onPress: () => {
-              setStatus((prev) =>
-                intent === 'reconnect' && prev === 'network_mismatch'
-                  ? 'network_mismatch'
-                  : 'disconnected',
-              );
+        const cancel = () => {
+          setStatus((prev) =>
+            intent === 'reconnect' && prev === 'network_mismatch'
+              ? 'network_mismatch'
+              : 'disconnected',
+          );
+          resolve();
+        };
+        const proceed = () => {
+          void (async () => {
+            try {
+              await action();
+            } catch (error) {
+              console.error(`${intent} action failed:`, error);
+              setStatus('rejected');
+            } finally {
               resolve();
-            },
-          },
-          {
-            text: t('wallet.connect.continue_button'),
-            onPress: () => {
-              void (async () => {
-                try {
-                  await action();
-                } catch (error) {
-                  console.error(`${intent} action failed:`, error);
-                  setStatus('rejected');
-                } finally {
-                  resolve();
-                }
-              })();
-            },
-          },
+            }
+          })();
+        };
+
+        // react-native-web implements Alert.alert as a no-op, so on the web
+        // target the dialog below would never resolve. Ask with the browser's
+        // own confirm() there instead.
+        if (Platform.OS === 'web') {
+          const confirmed =
+            typeof globalThis.confirm !== 'function' ||
+            globalThis.confirm(`${title}\n\n${message}`);
+          if (confirmed) {
+            proceed();
+          } else {
+            cancel();
+          }
+          return;
+        }
+
+        Alert.alert(title, message, [
+          { text: t('common.cancel'), style: 'cancel', onPress: cancel },
+          { text: t('wallet.connect.continue_button'), onPress: proceed },
         ]);
       });
     },
@@ -392,6 +436,24 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.error('Error clearing wallet session during disconnect:', error);
     }
   }, []);
+
+  const selectWallet = useCallback(
+    async (id: string): Promise<boolean> => {
+      // Compare against the adapter in use, or the default one when nothing
+      // has been used yet, so picking the current wallet keeps the session.
+      const current = await ensureAdapter();
+      const decision = resolveWalletSwitch(current.id, id, signingState);
+      if (decision.status === 'unchanged') return true;
+      if (decision.status !== 'switch') return false;
+
+      // The session and any signing state belong to the previous wallet.
+      await disconnect();
+      activeAdapterRef.current = decision.adapter;
+      setActiveAdapterId(decision.adapter.id);
+      return true;
+    },
+    [disconnect, ensureAdapter, signingState],
+  );
 
   const signAndSubmitXdr = useCallback(
     async (xdr: string): Promise<WalletSigningResult> => {
@@ -468,6 +530,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         adoptLinkedAccount,
         disconnect,
         signAndSubmitXdr,
+        availableWallets,
+        activeWalletId: activeAdapterId,
+        selectWallet,
       }}
     >
       <View style={styles.providerContainer}>

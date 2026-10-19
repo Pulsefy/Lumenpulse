@@ -301,7 +301,7 @@ export default function ReviewAgingDashboard() {
               <select
                 value={query.domain || ""}
                 onChange={(e) =>
-                  setQuery({ ...query, domain: e.target.value || undefined })
+                  setQuery({ ...query, domain: (e.target.value || undefined) as ReviewDomain | undefined })
                 }
                 className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.02] text-sm focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
               >
@@ -316,7 +316,7 @@ export default function ReviewAgingDashboard() {
                 <select
                   value={query.moderationStatus || ""}
                   onChange={(e) =>
-                    setQuery({ ...query, moderationStatus: e.target.value || undefined })
+                    setQuery({ ...query, moderationStatus: (e.target.value || undefined) as ReportStatus | undefined })
                   }
                   className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.02] text-sm focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
                 >
@@ -334,7 +334,7 @@ export default function ReviewAgingDashboard() {
                 <select
                   value={query.anomalyStatus || ""}
                   onChange={(e) =>
-                    setQuery({ ...query, anomalyStatus: e.target.value || undefined })
+                    setQuery({ ...query, anomalyStatus: (e.target.value || undefined) as AnomalyStatus | undefined })
                   }
                   className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.02] text-sm focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
                 >

@@ -1,0 +1,153 @@
+{
+  "accuracy": 0.7973,
+  "after": {
+    "brier": 0.0327,
+    "curve": [
+      {
+        "count": 6,
+        "lower": 0.0,
+        "mean_confidence": 0.0468,
+        "observed_accuracy": 0.0,
+        "upper": 0.1
+      },
+      {
+        "count": 2,
+        "lower": 0.1,
+        "mean_confidence": 0.1236,
+        "observed_accuracy": 0.0,
+        "upper": 0.2
+      },
+      {
+        "count": 3,
+        "lower": 0.2,
+        "mean_confidence": 0.238,
+        "observed_accuracy": 0.0,
+        "upper": 0.3
+      },
+      {
+        "count": 3,
+        "lower": 0.3,
+        "mean_confidence": 0.3443,
+        "observed_accuracy": 0.3333,
+        "upper": 0.4
+      },
+      {
+        "count": 2,
+        "lower": 0.4,
+        "mean_confidence": 0.4741,
+        "observed_accuracy": 1.0,
+        "upper": 0.5
+      },
+      {
+        "count": 2,
+        "lower": 0.5,
+        "mean_confidence": 0.5623,
+        "observed_accuracy": 0.0,
+        "upper": 0.6
+      },
+      {
+        "count": 1,
+        "lower": 0.6,
+        "mean_confidence": 0.6689,
+        "observed_accuracy": 1.0,
+        "upper": 0.7
+      },
+      {
+        "count": 3,
+        "lower": 0.7,
+        "mean_confidence": 0.758,
+        "observed_accuracy": 1.0,
+        "upper": 0.8
+      },
+      {
+        "count": 52,
+        "lower": 0.9,
+        "mean_confidence": 0.9979,
+        "observed_accuracy": 1.0,
+        "upper": 1.0
+      }
+    ],
+    "ece_held_out": 0.0624,
+    "ece_in_sample": 0.0624
+  },
+  "before": {
+    "brier": 0.0327,
+    "curve": [
+      {
+        "count": 6,
+        "lower": 0.0,
+        "mean_confidence": 0.0468,
+        "observed_accuracy": 0.0,
+        "upper": 0.1
+      },
+      {
+        "count": 2,
+        "lower": 0.1,
+        "mean_confidence": 0.1236,
+        "observed_accuracy": 0.0,
+        "upper": 0.2
+      },
+      {
+        "count": 3,
+        "lower": 0.2,
+        "mean_confidence": 0.238,
+        "observed_accuracy": 0.0,
+        "upper": 0.3
+      },
+      {
+        "count": 3,
+        "lower": 0.3,
+        "mean_confidence": 0.3443,
+        "observed_accuracy": 0.3333,
+        "upper": 0.4
+      },
+      {
+        "count": 2,
+        "lower": 0.4,
+        "mean_confidence": 0.4741,
+        "observed_accuracy": 1.0,
+        "upper": 0.5
+      },
+      {
+        "count": 2,
+        "lower": 0.5,
+        "mean_confidence": 0.5623,
+        "observed_accuracy": 0.0,
+        "upper": 0.6
+      },
+      {
+        "count": 1,
+        "lower": 0.6,
+        "mean_confidence": 0.6689,
+        "observed_accuracy": 1.0,
+        "upper": 0.7
+      },
+      {
+        "count": 3,
+        "lower": 0.7,
+        "mean_confidence": 0.758,
+        "observed_accuracy": 1.0,
+        "upper": 0.8
+      },
+      {
+        "count": 52,
+        "lower": 0.9,
+        "mean_confidence": 0.9979,
+        "observed_accuracy": 1.0,
+        "upper": 1.0
+      }
+    ],
+    "ece": 0.0624
+  },
+  "dataset": "SEED_ANOMALY_EXAMPLES + data/experiments/anomaly_pump_and_dump_v1.json",
+  "discarded_no_held_out_gain": true,
+  "mapping": {},
+  "material_ece_threshold": 0.05,
+  "material_gap": true,
+  "method": "none",
+  "model": "anomaly",
+  "n_samples": 74,
+  "notes": "Wave 8/9 labelled anomalies; only flagged points are scored; outcome = label confirmed.",
+  "raw_field": "severity_score",
+  "reliable": true
+}

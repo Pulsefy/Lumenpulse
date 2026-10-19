@@ -11,7 +11,7 @@ export interface GrantRound {
   totalPool: string;
   isFinalized: boolean;
   isDistributed: boolean;
-  status: 'PENDING' | 'ACTIVE' | 'ENDED' | 'FINALIZED' | 'DISTRIBUTED';
+  status: 'DRAFT' | 'OPEN' | 'MATCHING' | 'CLOSED' | 'DISBURSED';
 }
 
 export interface ProjectQf {
@@ -75,11 +75,11 @@ export function roundStatusLabel(
   t?: (key: string) => string,
 ): string {
   const labels: Record<GrantRound['status'], string> = {
-    PENDING: t ? t('grants.status.pending') : 'Upcoming',
-    ACTIVE: t ? t('grants.status.active') : 'Active',
-    ENDED: t ? t('grants.status.ended') : 'Ended',
-    FINALIZED: t ? t('grants.status.finalized') : 'Finalized',
-    DISTRIBUTED: t ? t('grants.status.distributed') : 'Distributed',
+    DRAFT: t ? t('grants.status.pending') : 'Upcoming',
+    OPEN: t ? t('grants.status.active') : 'Active',
+    MATCHING: t ? t('grants.status.matching') : 'Matching',
+    CLOSED: t ? t('grants.status.finalized') : 'Finalized',
+    DISBURSED: t ? t('grants.status.distributed') : 'Distributed',
   };
   return labels[status] ?? status;
 }

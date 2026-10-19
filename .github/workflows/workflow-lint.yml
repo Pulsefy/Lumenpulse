@@ -1,0 +1,61 @@
+name: Workflow Lint
+
+# Static checks on the CI definitions themselves: valid YAML, every third-party
+# action pinned to a commit SHA (issue #1722), and path filters in sync with
+# .github/ci-paths.json (issue #1723).
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - '.github/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - '.github/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Workflows and actions are valid YAML
+        run: |
+          python3 - <<'PY'
+          import glob, sys, yaml
+          files = glob.glob('.github/workflows/*.yml') + glob.glob('.github/actions/*/action.yml')
+          bad = 0
+          for f in sorted(files):
+              try:
+                  yaml.safe_load(open(f))
+              except Exception as e:
+                  bad += 1
+                  print(f'::error file={f}::{e}')
+          print(f'checked {len(files)} files')
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Every action is pinned to a commit SHA
+        run: node scripts/check-action-pins.mjs
+
+      - name: Local actions are used after checkout
+        run: node scripts/check-local-action-order.mjs
+
+      - name: Path filters match .github/ci-paths.json
+        run: node --test scripts/test-ci-coverage.mjs

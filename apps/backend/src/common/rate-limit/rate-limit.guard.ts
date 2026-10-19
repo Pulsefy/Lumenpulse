@@ -141,7 +141,7 @@ export class RateLimitGuard extends ThrottlerGuard {
     // Resolve (and cache on the request) the principal before any throttler
     // runs, so the tracker is keyed by the authenticated principal where one
     // exists and by source address otherwise.
-    this.principalResolver.resolve(
+    await this.principalResolver.resolveAsync(
       request as unknown as Record<string, unknown>,
       getTrackerId(
         request as unknown as Record<string, unknown>,
@@ -174,7 +174,7 @@ export class RateLimitGuard extends ThrottlerGuard {
       }
     }
 
-    const principal = this.principalResolver.resolve(
+    const principal = await this.principalResolver.resolveAsync(
       req,
       getTrackerId(req, this.settings),
     );

@@ -1,0 +1,89 @@
+name: Monitoring
+
+# Validates the monitoring stack as code (issue #1727): Prometheus config and
+# rules, alert unit tests, Alertmanager config and routing, and the Grafana
+# dashboard render. Runs promtool/amtool from the same images the stack uses.
+on:
+  pull_request:
+    paths:
+      - 'monitoring/**'
+      - 'prometheus.yml'
+      - 'prometheus-rules.yml'
+      - 'lumenpulse-grafana-dashboard.json'
+      - 'docker-compose.monitoring.yml'
+      - 'scripts/test-monitoring.mjs'
+      - '.github/workflows/monitoring.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'monitoring/**'
+      - 'prometheus.yml'
+      - 'prometheus-rules.yml'
+      - 'lumenpulse-grafana-dashboard.json'
+      - 'docker-compose.monitoring.yml'
+
+concurrency:
+  group: monitoring-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PROMETHEUS_IMAGE: prom/prometheus:v2.53.0
+  ALERTMANAGER_IMAGE: prom/alertmanager:v0.27.0
+
+jobs:
+  validate:
+    name: monitoring-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Dashboard is rendered and committed
+        run: node --test scripts/test-monitoring.mjs
+
+      - name: Prometheus config and rules
+        run: |
+          docker run --rm --entrypoint promtool \
+            -v "$PWD/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+            -v "$PWD/prometheus-rules.yml:/etc/prometheus/prometheus-rules.yml:ro" \
+            "$PROMETHEUS_IMAGE" check config /etc/prometheus/prometheus.yml
+
+      - name: Alert rules fire as expected
+        run: |
+          docker run --rm --entrypoint promtool \
+            -v "$PWD:/work:ro" \
+            "$PROMETHEUS_IMAGE" test rules /work/monitoring/tests/alerts.test.yml
+
+      - name: Alertmanager config
+        run: |
+          mkdir -p "$RUNNER_TEMP/secrets"
+          echo https://hooks.example.invalid/placeholder > "$RUNNER_TEMP/secrets/slack-webhook-url"
+          echo placeholder > "$RUNNER_TEMP/secrets/pagerduty-key"
+          docker run --rm --entrypoint amtool \
+            -v "$PWD/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro" \
+            -v "$RUNNER_TEMP/secrets:/etc/alertmanager/secrets:ro" \
+            "$ALERTMANAGER_IMAGE" check-config /etc/alertmanager/alertmanager.yml
+
+      - name: Alerts are routed to the right receivers
+        run: |
+          amtool() {
+            docker run --rm --entrypoint amtool \
+              -v "$PWD/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro" \
+              "$ALERTMANAGER_IMAGE" config routes test --config.file=/etc/alertmanager/alertmanager.yml "$@"
+          }
+          amtool --verify.receivers=oncall-pager,team-slack severity=critical service=backend
+          amtool --verify.receivers=team-slack severity=warning service=backend
+
+      - name: Compose file is valid
+        run: |
+          mkdir -p monitoring/secrets
+          docker compose -f docker-compose.monitoring.yml config --quiet

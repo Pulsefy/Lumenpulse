@@ -1,0 +1,70 @@
+name: Webapp CI
+
+# Path filters are generated from .github/ci-paths.json (issue #1723). Before
+# this workflow existed, a pull request touching only apps/webapp ran no checks
+# at all (see docs/ci-path-filters.md).
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'apps/webapp/**'
+      - 'apps/backend/openapi.json'
+      - 'package*.json'
+      - 'pnpm-*.yaml'
+      - 'turbo.json'
+      - '.nvmrc'
+      - '.github/actions/**'
+      - '.github/workflows/webapp.yml'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'apps/webapp/**'
+      - 'apps/backend/openapi.json'
+      - 'package*.json'
+      - 'pnpm-*.yaml'
+      - 'turbo.json'
+      - '.nvmrc'
+      - '.github/actions/**'
+      - '.github/workflows/webapp.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  webapp-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ./apps/webapp
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Node and install dependencies
+        uses: ./.github/actions/setup-node-app
+        with:
+          working-directory: apps/webapp
+
+      - name: Webapp API types match the committed OpenAPI spec
+        run: npm run check:api-types
+
+      # Three test files were already failing when this workflow was added: the
+      # webapp had no CI, so regressions merged unnoticed (10 tests; see
+      # docs/ci-path-filters.md). They are excluded explicitly so the other 39
+      # files gate every pull request. Remove a name from VITEST_EXCLUDE as its file is fixed.
+      - name: Unit tests
+        env:
+          VITEST_EXCLUDE: __tests__/price-alerts.test.tsx,app/layout.test.tsx,contexts/StellarConfigContext.test.tsx
+        run: npx vitest run
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'

@@ -10,18 +10,18 @@ global:
   evaluation_interval: 15s      # How often to evaluate rules
   external_labels:
     cluster: 'lumenpulse-dev'
-    environment: 'development'
+    environment: '${DEPLOY_ENVIRONMENT}'
 
 # Alert configuration
 alerting:
   alertmanagers:
     - static_configs:
         - targets:
-            # - 'alertmanager:9093'
+            - 'alertmanager:9093'
 
 # Rule files
 rule_files:
-  - './prometheus-rules.yml'
+  - '/etc/prometheus/prometheus-rules.yml'
 
 scrape_configs:
   # LumenPulse Backend Metrics

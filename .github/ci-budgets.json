@@ -1,0 +1,49 @@
+{
+  "$comment": "CI run-time budgets in minutes (issue #1724). Checked weekly by ci-metrics.yml against measured p90 values; see docs/ci-run-time.md. Budgets sit roughly 1.5x above the committed baseline in docs/ci-baseline.json so a real regression warns without flapping on cache variance.",
+  "workflows": {
+    "backend.yml": {
+      "p90Minutes": 4.5
+    },
+    "data-processing.yml": {
+      "p90Minutes": 5
+    },
+    "mobile.yml": {
+      "p90Minutes": 3.5
+    },
+    "onchain.yml": {
+      "p90Minutes": 9
+    },
+    "webapp.yml": {
+      "p90Minutes": 6
+    }
+  },
+  "jobs": {
+    "backend.yml/backend-checks": {
+      "p90Minutes": 3
+    },
+    "backend.yml/migration-safety": {
+      "p90Minutes": 2
+    },
+    "backend.yml/db-e2e": {
+      "p90Minutes": 4.5
+    },
+    "data-processing.yml/data-processing-checks": {
+      "p90Minutes": 5
+    },
+    "mobile.yml/mobile-checks": {
+      "p90Minutes": 1.5
+    },
+    "mobile.yml/mobile-size": {
+      "p90Minutes": 3.5
+    },
+    "mobile.yml/mobile-startup": {
+      "p90Minutes": 3
+    },
+    "mobile.yml/mobile-e2e": {
+      "p90Minutes": 3
+    },
+    "onchain.yml/Test Suite": {
+      "p90Minutes": 9
+    }
+  }
+}

@@ -592,7 +592,7 @@ export default function TreasuryPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <a
-                        href={buildExplorerUrl.tx(item.transactionHash)}
+                        href={buildExplorerUrl("tx", item.transactionHash)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors flex items-center gap-1"

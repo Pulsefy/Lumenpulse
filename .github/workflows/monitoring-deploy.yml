@@ -1,0 +1,72 @@
+name: Monitoring Deploy
+
+# Brings the monitoring stack up on the host that runs the application stack.
+# Manual and approval-gated through the `monitoring` environment, whose secrets
+# supply the alert destinations. See docs/MONITORING.md.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Start/refresh the stack, or tear it down
+        type: choice
+        options: [up, down]
+        default: up
+
+concurrency:
+  group: monitoring-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy monitoring stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: monitoring
+    env:
+      DEPLOY_HOST: ${{ secrets.MONITORING_SSH_HOST }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Render dashboard
+        run: node monitoring/render-dashboard.mjs
+
+      - name: Install SSH key
+        env:
+          SSH_KEY: ${{ secrets.MONITORING_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_HOST" || { echo "MONITORING_SSH_HOST is not set in the monitoring environment" >&2; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync configuration
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ALERT_SLACK_WEBHOOK_URL }}
+          PAGERDUTY_KEY: ${{ secrets.ALERT_PAGERDUTY_KEY }}
+        run: |
+          mkdir -p secrets
+          printf '%s' "$SLACK_WEBHOOK_URL" > secrets/slack-webhook-url
+          printf '%s' "$PAGERDUTY_KEY" > secrets/pagerduty-key
+          rsync -az -e "ssh -i ~/.ssh/id_deploy" \
+            docker-compose.monitoring.yml prometheus.yml prometheus-rules.yml monitoring \
+            "deploy@${DEPLOY_HOST}:lumenpulse-monitoring/"
+          rsync -az -e "ssh -i ~/.ssh/id_deploy" secrets/ \
+            "deploy@${DEPLOY_HOST}:lumenpulse-monitoring/monitoring/secrets/"
+
+      - name: Apply
+        env:
+          ACTION: ${{ inputs.action }}
+        run: |
+          if [ "$ACTION" = down ]; then cmd='down'; else cmd='up -d --wait'; fi
+          ssh -i ~/.ssh/id_deploy "deploy@${DEPLOY_HOST}" \
+            "cd lumenpulse-monitoring && docker compose -f docker-compose.monitoring.yml $cmd"

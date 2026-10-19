@@ -413,6 +413,21 @@ import { useAuth } from '@/contexts/AuthContext';
 const { user, login, logout, isLoading } = useAuth();
 ```
 
+### `lib/wallet/`: Wallet adapters
+
+Screens never talk to a wallet directly. `contexts/WalletContext.tsx` takes an adapter from `lib/wallet/registry.ts` and exposes `connect`, `signAndSubmitXdr`, `availableWallets`, `activeWalletId` and `selectWallet` through `useWallet()`. Switching wallets is refused while a signature is in flight, and it clears the current session first. The adapter interface (`lib/wallet/types.ts`) and the registry helpers (`getAvailableWalletAdapters`, `getDefaultWalletAdapter`, `findWalletAdapter`) use the same names as `apps/webapp/lib/wallet`.
+
+The two clients support these wallets:
+
+| Wallet (adapter id) | iOS and Android | Mobile web build | Webapp | Why |
+|---------------------|-----------------|------------------|--------|-----|
+| SEP-0007 deep link (`sep7`), e.g. LOBSTR | Yes, default | Yes, after xBull | No | Uses any installed wallet app that handles `web+stellar:` links. Browsers rarely do, and the webapp talks to extensions directly. |
+| xBull (`xbull`) | No | Yes, default when the extension is installed | Yes | xBull is a browser extension. On mobile, `signXdr` also submits the signed envelope through the Soroban RPC, so callers get a transaction hash as with SEP-0007. |
+| Freighter (`freighter`) | No | No | Yes, default | On mobile, Freighter is reached through WalletConnect, which needs native modules the app does not ship. The webapp uses `@stellar/freighter-api`. |
+| Mock (`mock`) | Development builds only | Development builds only | No | Signs nothing; a red banner is shown while it is active. |
+
+To add a wallet, implement `WalletAdapter`, register it in each client that can use it, and cover connect, sign and reject in `lib/__tests__/wallet-adapters.test.ts`.
+
 ---
 
 ## Available Scripts

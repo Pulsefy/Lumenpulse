@@ -1,0 +1,81 @@
+{
+  "$comment": "Single source of truth for which files trigger which workflow (issue #1723). The `paths:` blocks in each workflow must match this file exactly; scripts/test-ci-coverage.mjs enforces it. ci-gate.yml and mobile-e2e-flake-check.yml have no path filter by design.",
+  "workflows": {
+    "backend.yml": [
+      "apps/backend/**",
+      "apps/webapp/generated/**",
+      "apps/webapp/scripts/generate-api-types.mjs",
+      "scripts/audit-dependencies.mjs",
+      "docker-compose.yml",
+      "package*.json",
+      "pnpm-*.yaml",
+      "turbo.json",
+      ".nvmrc",
+      ".github/actions/**",
+      ".github/workflows/backend.yml"
+    ],
+    "webapp.yml": [
+      "apps/webapp/**",
+      "apps/backend/openapi.json",
+      "package*.json",
+      "pnpm-*.yaml",
+      "turbo.json",
+      ".nvmrc",
+      ".github/actions/**",
+      ".github/workflows/webapp.yml"
+    ],
+    "mobile.yml": [
+      "apps/mobile/**",
+      "package*.json",
+      "pnpm-*.yaml",
+      "turbo.json",
+      ".nvmrc",
+      ".github/actions/**",
+      ".github/workflows/mobile.yml"
+    ],
+    "data-processing.yml": [
+      "apps/data-processing/**",
+      "docker-compose.yml",
+      ".python-version",
+      ".github/actions/**",
+      ".github/workflows/data-processing.yml"
+    ],
+    "onchain.yml": [
+      "apps/onchain/**",
+      "docs/MAINNET_READINESS_CHECKLIST.md",
+      "scripts/**",
+      ".github/actions/**",
+      ".github/workflows/onchain.yml"
+    ],
+    "scripts-ci.yml": [
+      "scripts/**",
+      ".github/ci-paths.json",
+      ".github/ci-budgets.json",
+      ".github/workflows/scripts-ci.yml"
+    ],
+    "workflow-lint.yml": [
+      ".github/**"
+    ]
+  },
+  "noCiRequired": [
+    "docs/**",
+    "**/*.md",
+    ".claude/**",
+    ".vscode/**",
+    "memory/**",
+    "LICENSE",
+    "**/.gitignore",
+    "**/.dockerignore",
+    ".github/CODEOWNERS",
+    ".github/ISSUE_TEMPLATE/**",
+    ".github/pull_request_template.md",
+    "*.bat",
+    "*.txt",
+    "*.stackdump"
+  ],
+  "codeRoots": [
+    "apps/",
+    "scripts/",
+    ".github/"
+  ]
+}

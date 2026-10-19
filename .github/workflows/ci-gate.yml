@@ -1,0 +1,36 @@
+name: CI Gate
+
+# Runs on EVERY pull request, with no path filter, so a pull request can never
+# run zero checks (issue #1723). It maps the changed files to the workflows that
+# should cover them and fails when a code file under apps/, scripts/ or .github/
+# is covered by none.
+on:
+  pull_request:
+    branches: [ "main" ]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Check that CI covers the changed files
+        run: node scripts/ci-coverage.mjs --base "origin/${{ github.base_ref }}" --head HEAD

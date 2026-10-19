@@ -1,0 +1,224 @@
+name: Deploy
+
+# Deploys a tagged release's Soroban contracts to testnet, gated on a manual
+# approval, smoke-tests the result and records who deployed what (issue #1726).
+#
+#   gh workflow run deploy.yml -f version=v1.2.0                (deploy)
+#   gh workflow run deploy.yml -f action=rollback               (roll back one release)
+#
+# The `testnet` environment (Settings -> Environments) must have required
+# reviewers: that is the approval gate. Secrets and variables come from that
+# environment, never from the repository. See docs/DEPLOYMENT.md.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: deploy a release, or roll back to the previous one
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+      version:
+        description: Release tag to deploy (e.g. v1.2.0). For rollback, optional - defaults to the previous deployment.
+        type: string
+        required: false
+      environment:
+        description: Target environment
+        type: choice
+        options: [testnet]
+        default: testnet
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  select:
+    name: Select the release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+    outputs:
+      version: ${{ steps.pick.outputs.version }}
+      active: ${{ steps.pick.outputs.active }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download earlier deployment records
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          mkdir -p records
+          for id in $(gh run list --workflow deploy.yml --status success --limit 30 --json databaseId --jq '.[].databaseId'); do
+            gh run download "$id" --name "deployment-record-${ENVIRONMENT}" --dir "records/${id}" 2>/dev/null || true
+          done
+          echo "found $(find records -name deployment-record.json | wc -l) earlier deployment record(s)"
+
+      - name: Pick the version
+        id: pick
+        env:
+          ACTION: ${{ inputs.action }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$ACTION" = "rollback" ]; then
+            if [ -n "$INPUT_VERSION" ]; then
+              node scripts/deploy/select-rollback.mjs records --to "$INPUT_VERSION" | tee -a "$GITHUB_OUTPUT"
+            else
+              node scripts/deploy/select-rollback.mjs records | tee -a "$GITHUB_OUTPUT"
+            fi
+          else
+            if ! printf '%s' "$INPUT_VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "::error::Deploying needs a release tag such as v1.2.0 (got '${INPUT_VERSION}')."
+              exit 1
+            fi
+            echo "version=${INPUT_VERSION}" | tee -a "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the rollback target record
+        if: ${{ inputs.action == 'rollback' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rollback-record
+          path: rollback-record.json
+
+      - name: The release must exist and its commit must have passing CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.pick.outputs.version }}
+        run: |
+          gh release view "$VERSION" --json tagName,targetCommitish --jq '"release \(.tagName) targets \(.targetCommitish)"'
+          sha=$(git ls-remote origin "refs/tags/${VERSION}" | cut -f1)
+          [ -n "$sha" ] || { echo "::error::Tag ${VERSION} not found."; exit 1; }
+          failed=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" \
+            --jq '[.check_runs[] | select(.conclusion == "failure" or .conclusion == "timed_out")] | length')
+          if [ "$failed" -gt 0 ]; then
+            echo "::error::${failed} check run(s) failed on the commit behind ${VERSION}; refusing to deploy it."
+            exit 1
+          fi
+
+      - name: Download the release artefacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.pick.outputs.version }}
+        run: |
+          mkdir -p release
+          gh release download "$VERSION" --dir release --pattern '*.wasm' --pattern 'wasm-hashes.json' --pattern 'release-manifest.json'
+          ls -l release
+
+      - name: Upload the release artefacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-artefacts
+          path: release/
+
+  deploy:
+    name: ${{ inputs.action }} to ${{ inputs.environment }}
+    needs: select
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Required reviewers on this environment are the manual approval gate.
+    environment:
+      name: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.select.outputs.version }}
+    steps:
+      - name: Checkout the release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: refs/tags/${{ needs.select.outputs.version }}
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download the release artefacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-artefacts
+          path: release
+
+      - name: Install the deployment scripts
+        run: npm ci --prefix scripts
+
+      # ── deploy ────────────────────────────────────────────────────────────
+      - name: Verify the WASM matches the release
+        if: ${{ inputs.action == 'deploy' }}
+        run: node scripts/deploy/verify-hashes.mjs release release/wasm-hashes.json
+
+      - name: Deploy the contracts
+        if: ${{ inputs.action == 'deploy' }}
+        env:
+          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+          SOROBAN_RPC_URL: ${{ vars.SOROBAN_RPC_URL }}
+          HORIZON_URL: ${{ vars.HORIZON_URL }}
+          NETWORK_PASSPHRASE: ${{ vars.NETWORK_PASSPHRASE }}
+        run: |
+          if [ -z "$ADMIN_SECRET" ]; then
+            echo "::error::The ${{ inputs.environment }} environment has no ADMIN_SECRET secret (docs/DEPLOYMENT.md)."
+            exit 1
+          fi
+          mkdir -p apps/onchain/target/wasm32-unknown-unknown/release/optimized
+          cp release/*.wasm apps/onchain/target/wasm32-unknown-unknown/release/optimized/
+          npm run --prefix scripts deploy
+          node scripts/deploy/build-manifest.mjs \
+            --ids scripts/contract-ids.json \
+            --wasm release/wasm-hashes.json \
+            --rpc "${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}" \
+            --out deployment-manifest.json
+
+      # ── rollback ──────────────────────────────────────────────────────────
+      - name: Re-activate the previous deployment
+        if: ${{ inputs.action == 'rollback' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rollback-record
+          path: rollback
+
+      - name: Use the previous deployment's manifest
+        if: ${{ inputs.action == 'rollback' }}
+        run: node -e "const r=require('./rollback/rollback-record.json');require('fs').writeFileSync('deployment-manifest.json',JSON.stringify(r.manifest,null,2))"
+
+      # ── smoke (both paths); a bad result fails the run ───────────────────
+      - name: Smoke test the deployment
+        env:
+          SMOKE_MANIFEST: ${{ github.workspace }}/deployment-manifest.json
+          SOROBAN_RPC_URL: ${{ vars.SOROBAN_RPC_URL }}
+          HORIZON_URL: ${{ vars.HORIZON_URL }}
+          NETWORK_PASSPHRASE: ${{ vars.NETWORK_PASSPHRASE }}
+        run: |
+          set -o pipefail
+          npm run --prefix scripts --silent smoke | tee smoke-result.json
+          { echo '### Smoke test'; echo; echo '```json'; cat smoke-result.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record the deployment
+        env:
+          ACTION: ${{ inputs.action }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ROLLED_BACK_FROM: ${{ inputs.action == 'rollback' && needs.select.outputs.active || '' }}
+        run: node scripts/deploy/record.mjs --manifest deployment-manifest.json --out deployment-record.json
+
+      - name: Upload the deployment record
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: deployment-record-${{ inputs.environment }}
+          path: |
+            deployment-record.json
+            deployment-manifest.json
+            smoke-result.json
+          retention-days: 365

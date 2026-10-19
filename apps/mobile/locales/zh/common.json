@@ -209,6 +209,7 @@
       "active": "活跃中",
       "pending": "待开始",
       "ended": "已结束",
+      "matching": "匹配中",
       "finalized": "已确认",
       "distributed": "已分配"
     },
@@ -469,6 +470,19 @@
           "description": "保存在本设备上，便于再次搜索的记录。"
         }
       }
+    },
+    "sessions": {
+      "title": "活跃会话",
+      "description": "查看登录位置并可注销任意设备。",
+      "empty": "没有活跃会话。",
+      "this_device": "当前设备",
+      "unknown_device": "未知设备",
+      "unknown_location": "未知位置",
+      "last_seen": "最后活跃",
+      "revoke": "注销",
+      "revoke_confirm": "要注销此设备吗？",
+      "load_failed": "无法加载会话。",
+      "revoke_failed": "无法注销会话。"
     }
   },
   "errors": {
@@ -494,7 +508,7 @@
       "title": "重新连接到 {{network}}",
       "message": "在新的 {{network}} 网络上恢复已保存的钱包会话。请选择重新连接的方式。",
       "button": "重新连接钱包",
-      "restoring": "正在恢复钱包会话\u2026"
+      "restoring": "正在恢复钱包会话…"
     },
     "network_mismatch": {
       "title": "网络已更改",

@@ -409,42 +409,22 @@ The pull request template (`/.github/pull_request_template.md`) already lists a 
 
 | Workflow file                | Trigger paths                       | Required before review? | Checks performed                                                                                                    |
 |------------------------------|-------------------------------------|:-----------------------:|---------------------------------------------------------------------------------------------------------------------|
-| `backend.yml`                | `apps/backend/**` + `.ci-trigger`   |           YES           | Lint (`eslint`) · Type-check (conditional script) · Tests (`jest`) · Build (`nest build`)                           |
-| **Webapp** (new workflow)    | `apps/webapp/**` (tracked below)    |           YES           | `next lint` · Vitest (`npm run test`) · `next build`                                                                |
-| `mobile.yml`                  | `apps/mobile/**` + `.ci-trigger`    |           YES           | Typecheck (`tsc --noEmit`) · Unit tests w/ coverage floor (`npm run test:coverage`)                                 |
-| `data-processing.yml`        | `apps/data-processing/**` + trigger |           YES           | flake8 syntax gate · flake8 style gate · pytest                                                                     |
-| `onchain.yml`                | `apps/onchain/**` + `.ci-trigger`   |           YES           | `cargo fmt` · `cargo clippy -- -Dw` · `cargo build --release wasm32` · `cargo test`                                 |
+| `backend.yml`                | `apps/backend/**` + shared files    |           YES           | Lint (`eslint`) · Type-check (conditional script) · Tests (`jest`) · Build (`nest build`)                           |
+| `webapp.yml`                 | `apps/webapp/**` + shared files     |           YES           | `next lint` · Vitest (`npm run test`) · `next build`                                                                |
+| `mobile.yml`                  | `apps/mobile/**` + shared files     |           YES           | Typecheck (`tsc --noEmit`) · Unit tests w/ coverage floor (`npm run test:coverage`)                                 |
+| `data-processing.yml`        | `apps/data-processing/**` + shared  |           YES           | flake8 syntax gate · flake8 style gate · pytest                                                                     |
+| `onchain.yml`                | `apps/onchain/**` + shared files    |           YES           | `cargo fmt` · `cargo clippy -- -Dw` · `cargo build --release wasm32` · `cargo test`                                 |
 
-### 6.2 Webapp Workflow (to be created — reflected in the new strategy)
+### 6.2 Webapp Workflow
 
-The webapp currently lacks a `webapp.yml` in `.github/workflows/`. The required new-webapp gate, and the one reviewers must treat as blocking per this document, is:
-
-```yaml
-# .github/workflows/webapp.yml  (not yet committed — adopt this alongside this strategy doc)
-name: Webapp CI
-on:
-  push: { branches: [main], paths: ['apps/webapp/**'] }
-  pull_request: { branches: [main], paths: ['apps/webapp/**', 'apps/webapp/.ci-trigger'] }
-jobs:
-  webapp-checks:
-    runs-on: ubuntu-latest
-    defaults: { run: { working-directory: ./apps/webapp } }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20.x', cache: 'npm', cache-dependency-path: './apps/webapp/package-lock.json' }
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run test            # vitest run
-      - run: npm run build           # next build
-```
-
-Until the workflow above is present, reviewers **must ask** the author to confirm they ran `lint` + `test` + `build` locally and paste evidence, before approving.
+`webapp.yml` gates `apps/webapp/**` (and the backend `openapi.json` the webapp types are generated
+from): the API type check plus Vitest (`npm test`) and `next build`. Before it existed, a pull request
+touching only the webapp ran no checks at all; see [CI path filters](ci-path-filters.md).
 
 ### 6.3 Mobile Workflow
 
-`mobile.yml` (triggered on push to `main` and on pull requests touching `apps/mobile/**`
-or `apps/mobile/.ci-trigger`) is the single required gate for mobile changes:
+`mobile.yml` (triggered on push to `main` and on pull requests touching `apps/mobile/**`, the
+shared root files or its own definition) is the single required gate for mobile changes:
 
 - **Type safety:** `npm run tsc -- --noEmit` in `apps/mobile`.
 - **Tests + coverage floors:** `npm run test:coverage` in `apps/mobile` — must pass *without*

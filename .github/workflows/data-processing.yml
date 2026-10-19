@@ -3,31 +3,53 @@ name: Data Processing CI
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
     paths:
-      - "apps/data-processing/**"
+      - 'apps/data-processing/**'
+      - 'docker-compose.yml'
+      - '.python-version'
+      - '.github/actions/**'
+      - '.github/workflows/data-processing.yml'
   pull_request:
-    branches: ["main"]
+    branches: [ "main" ]
     paths:
-      - "apps/data-processing/**"
-      - "apps/data-processing/.ci-trigger"
+      - 'apps/data-processing/**'
+      - 'docker-compose.yml'
+      - '.python-version'
+      - '.github/actions/**'
+      - '.github/workflows/data-processing.yml'
+
+# Issue #1713. See backend.yml for the rationale.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   data-processing-checks:
     runs-on: ubuntu-latest
+    # Issue #1714. This job installs the hash-pinned `requirements.lock`, which
+    # pulls the torch CPU wheel. That download dominates the runtime on a cache
+    # miss, so the budget is set from the observed p90 of 3.2 min with room for
+    # an uncached wheel rather than from the warm median.
+    # See docs/ci-timeouts.md.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: ./apps/data-processing
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v5
+      - name: Start timeout guard
+        uses: ./.github/actions/job-timeout-guard
         with:
-          python-version: "3.9"
-          cache: "pip"
+          phase: start
+
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-app
+        with:
+          working-directory: apps/data-processing
 
       - name: Install dependencies
         run: |
@@ -53,3 +75,12 @@ jobs:
           else
             echo "No tests directory found, skipping pytest"
           fi
+
+      - name: Report timeout guard
+        if: always()
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: finish
+          job-id: data-processing-checks
+          budget-minutes: '15'
+          note: Hash-pinned pip install (torch CPU wheel) + flake8 + pytest.

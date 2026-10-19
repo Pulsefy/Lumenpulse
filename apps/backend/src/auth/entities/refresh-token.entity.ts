@@ -39,6 +39,12 @@ export class RefreshToken {
   @Column({ type: 'varchar', length: 45, nullable: true })
   ipAddress: string | null;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  locationHint: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  lastSeenAt: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 }

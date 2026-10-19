@@ -75,6 +75,34 @@ export class RateLimitPrincipalResolver {
     return principal;
   }
 
+  async resolveAsync(
+    request: RequestLike,
+    anonymousTracker: string,
+  ): Promise<RateLimitPrincipal> {
+    const cached = request[RATE_LIMIT_PRINCIPAL_REQUEST_KEY];
+    if (cached) {
+      return cached;
+    }
+
+    const userPrincipal = this.fromRequestUser(request.user);
+    if (userPrincipal) {
+      request[RATE_LIMIT_PRINCIPAL_REQUEST_KEY] = userPrincipal;
+      return userPrincipal;
+    }
+
+    const machine = await this.botPrincipalService.authenticateHeadersAsync(
+      request.headers,
+    );
+    const principal =
+      (machine
+        ? RateLimitPrincipalResolver.build(machine.type, machine.id)
+        : null) ??
+      this.fromBearerToken(request.headers) ??
+      RateLimitPrincipalResolver.anonymous(anonymousTracker);
+    request[RATE_LIMIT_PRINCIPAL_REQUEST_KEY] = principal;
+    return principal;
+  }
+
   private fromRequestUser(user: unknown): RateLimitPrincipal | null {
     if (!user || typeof user !== 'object') {
       return null;

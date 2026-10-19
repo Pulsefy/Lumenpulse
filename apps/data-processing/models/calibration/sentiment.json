@@ -1,0 +1,71 @@
+{
+  "accuracy": 0.8889,
+  "after": {
+    "brier": 0.1038,
+    "curve": [
+      {
+        "count": 9,
+        "lower": 0.8,
+        "mean_confidence": 0.8182,
+        "observed_accuracy": 0.8889,
+        "upper": 0.9
+      }
+    ],
+    "ece_held_out": null,
+    "ece_in_sample": 0.0707
+  },
+  "before": {
+    "brier": 0.162,
+    "curve": [
+      {
+        "count": 1,
+        "lower": 0.5,
+        "mean_confidence": 0.5386,
+        "observed_accuracy": 1.0,
+        "upper": 0.6
+      },
+      {
+        "count": 1,
+        "lower": 0.6,
+        "mean_confidence": 0.648,
+        "observed_accuracy": 1.0,
+        "upper": 0.7
+      },
+      {
+        "count": 2,
+        "lower": 0.7,
+        "mean_confidence": 0.7706,
+        "observed_accuracy": 1.0,
+        "upper": 0.8
+      },
+      {
+        "count": 1,
+        "lower": 0.8,
+        "mean_confidence": 0.8753,
+        "observed_accuracy": 1.0,
+        "upper": 0.9
+      },
+      {
+        "count": 4,
+        "lower": 0.9,
+        "mean_confidence": 1.0,
+        "observed_accuracy": 0.75,
+        "upper": 1.0
+      }
+    ],
+    "ece": 0.2663
+  },
+  "dataset": "data/sentiment_labels.seed.json",
+  "discarded_no_held_out_gain": false,
+  "mapping": {
+    "value": 0.818182
+  },
+  "material_ece_threshold": 0.05,
+  "material_gap": true,
+  "method": "base_rate",
+  "model": "sentiment",
+  "n_samples": 9,
+  "notes": "Wave 8 labelled sentiment set; outcome = predicted label matches ground truth.",
+  "raw_field": "sentiment_raw_confidence(compound_score, sentiment_label)",
+  "reliable": false
+}

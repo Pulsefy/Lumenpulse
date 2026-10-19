@@ -1,3 +1,5 @@
 packages:
   - "apps/*"
   - "scripts"
+minimumReleaseAgeExclude:
+  - '@rollup/rollup-linux-arm64-gnu@4.64.8'

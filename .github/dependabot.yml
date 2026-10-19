@@ -1,0 +1,405 @@
+# Automated dependency updates for Lumenpulse.
+#
+# Issue #1716. Five dependency trees drift independently -- backend, webapp,
+# mobile, data-processing and the Rust workspace -- and until now none of them
+# had an automated update path.
+#
+# Rationale, grouping rules, cadence and every exclusion are documented in
+# docs/dependency-updates.md. Read that before changing anything here: an
+# exclusion that looks over-cautious is usually load-bearing.
+
+version: 2
+
+updates:
+  # ── npm: apps/backend ─────────────────────────────────────────────────────
+  # Driven by apps/backend/package-lock.json, which is what every CI job in
+  # backend.yml installs with `npm ci`.
+  - package-ecosystem: npm
+    directory: /apps/backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - Backend
+      - Stellar Wave
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
+      include: "scope"
+    groups:
+      # Patch-level fixes, grouped so a busy week produces one PR instead of
+      # twenty. Safe by construction: same major, no API surface change.
+      npm-patch:
+        applies-to: version-updates
+        update-types:
+          - patch
+      # Minor bumps inside one major line. NestJS and the AWS SDK are the usual
+      # sources and they routinely touch generated code, so the PR needs a
+      # human -- but the diff is expected, so it is grouped too.
+      npm-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+      # Security updates are grouped separately and are always raised
+      # immediately, regardless of the weekly cadence above.
+      npm-security:
+        applies-to: security-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Soroban/Stellar SDK majors change transaction envelope encoding and
+      # signing semantics. Every hash and signature produced by the backend and
+      # by the mobile wallet depends on them staying put across a release.
+      # Bump by hand, on a branch with the corresponding testnet rehearsal.
+      # See docs/SOROBAN_MIGRATION_NOTES.md.
+      - dependency-name: stellar-sdk
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@stellar/stellar-sdk"
+        update-types:
+          - version-update:semver-major
+      # bcrypt majors change hashing parameters and cost factors, which
+      # silently invalidates every existing password hash at deploy time.
+      - dependency-name: bcrypt
+        update-types:
+          - version-update:semver-major
+      # speakeasy majors change TOTP derivation; same failure mode against
+      # every active 2FA enrolment.
+      - dependency-name: speakeasy
+        update-types:
+          - version-update:semver-major
+      # NestJS majors require the CLI, the config module and the platform
+      # adapters to move together. A partial bump does not boot, and an
+      # unattended bump that does boot is the more dangerous outcome.
+      - dependency-name: "@nestjs/core"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@nestjs/common"
+        update-types:
+          - version-update:semver-major
+      # sharp majors move the libvips version underneath it; the image pipeline
+      # changes output encoding without changing the API.
+      - dependency-name: sharp
+        update-types:
+          - version-update:semver-major
+
+  # ── npm: apps/webapp ──────────────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /apps/webapp
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - Frontend
+      - Stellar Wave
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
+      include: "scope"
+    groups:
+      npm-patch:
+        applies-to: version-updates
+        update-types:
+          - patch
+      npm-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+      npm-security:
+        applies-to: security-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # The webapp deploys on Vercel today. A Next.js major changes the App
+      # Router's async request APIs and the image pipeline; that is a migration
+      # PR with its own issue, and it must not arrive as an unattended bump
+      # that fails only in the Vercel build. See
+      # docs/dependency-updates.md#the-webapp-and-vercel.
+      - dependency-name: next
+        update-types:
+          - version-update:semver-major
+      # Pinned to exactly 13.5.1 to match the app's Next version. Any bump
+      # detaches the SWC build from the framework and fails in a way that reads
+      # as a bundler bug rather than a version skew.
+      - dependency-name: "@next/swc-wasm-nodejs"
+      # React 19 changes the type surface across every component and every
+      # Radix primitive. Same reasoning as Next majors.
+      - dependency-name: react
+        update-types:
+          - version-update:semver-major
+      - dependency-name: react-dom
+        update-types:
+          - version-update:semver-major
+      # The SDK keys the webapp's Freighter signing path.
+      - dependency-name: "@stellar/stellar-sdk"
+        update-types:
+          - version-update:semver-major
+
+  # ── npm: apps/mobile ──────────────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /apps/mobile
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - Stellar Wave
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
+      include: "scope"
+    groups:
+      npm-patch:
+        applies-to: version-updates
+        update-types:
+          - patch
+      npm-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+      npm-security:
+        applies-to: security-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Expo SDK releases are coordinated with React Native and the native
+      # modules; they change the project layout, the config plugin API and the
+      # bundle format. They must go through the release runbook in
+      # docs/MOBILE_RELEASE_AND_OTA.md, because the mobile-size budget in CI is
+      # measured against a payload an unattended bump would resize -- which
+      # fails the budget check for a reason that has nothing to do with the
+      # change under review.
+      - dependency-name: expo
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      - dependency-name: expo-router
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      # React Native minors are coupled to the Expo SDK above.
+      - dependency-name: react-native
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      # reanimated ships native code; a minor can change the worklet runtime
+      # and break the UI on device while every JS test still passes.
+      - dependency-name: react-native-reanimated
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      # The SDK signs the mobile wallet's transactions.
+      - dependency-name: "@stellar/stellar-sdk"
+        update-types:
+          - version-update:semver-major
+
+  # ── npm: scripts (Stellar SDK used by deploy.ts and wasm:optimize) ───────
+  - package-ecosystem: npm
+    directory: /scripts
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - devops
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
+      include: "scope"
+    groups:
+      npm-patch:
+        applies-to: version-updates
+        update-types:
+          - patch
+      npm-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+      npm-security:
+        applies-to: security-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # binaryen is pinned to an exact version (132.0.0) because the WASM
+      # optimisation it performs is part of the deploy artefact: the output
+      # hash is recorded in the contract manifest and verified in CI. A
+      # different binaryen produces different bytes for the same input.
+      - dependency-name: binaryen
+      # The SDK used to build the transaction that deploys contracts.
+      - dependency-name: "@stellar/stellar-sdk"
+        update-types:
+          - version-update:semver-major
+
+  # ── pip: apps/data-processing ─────────────────────────────────────────────
+  # Dependabot manages requirements.txt only. `requirements.lock` and
+  # `requirements-docker.in` are deliberately outside its file discovery
+  # (see docs/dependency-updates.md#refreshing-the-lockfiles), which is why
+  # they are safe to keep hash-pinned.
+  - package-ecosystem: pip
+    directory: /apps/data-processing
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - devops
+      - Stellar Wave
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
+      include: "scope"
+    groups:
+      pip-patch:
+        applies-to: version-updates
+        update-types:
+          - patch
+      pip-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+      pip-security:
+        applies-to: security-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # torch and transformers move together and the pinned FinBERT weights are
+      # cached on disk and loaded at import time. A partial bump desynchronises
+      # the checkpoint from the tokenizer version that produced it, and the
+      # failure looks like a model-quality regression rather than a mismatch.
+      - dependency-name: torch
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      - dependency-name: transformers
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      # Python is pinned to 3.9 in CI and in the image. Any dependency that
+      # drops 3.9 must wait until the interpreter moves.
+      - dependency-name: numpy
+        update-types:
+          - version-update:semver-major
+      - dependency-name: scikit-learn
+        update-types:
+          - version-update:semver-major
+
+  # ── cargo: apps/onchain workspace ─────────────────────────────────────────
+  # One Cargo.lock covers all 22 workspace members; Dependabot reads the
+  # workspace root manifest.
+  - package-ecosystem: cargo
+    directory: /apps/onchain
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - Stellar Wave
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
+      include: "scope"
+    groups:
+      cargo-patch:
+        applies-to: version-updates
+        update-types:
+          - patch
+      cargo-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+      cargo-security:
+        applies-to: security-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # soroban-sdk majors change the host-function ABI and the guest/host
+      # serialisation format. The compiled WASM is hash-pinned in a manifest
+      # that CI verifies byte for byte, and a bump rewrites every contract hash
+      # at once. That is release engineering, not a dependency bump.
+      - dependency-name: soroban-sdk
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      - dependency-name: soroban-sdk-macros
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      # The toolchain is pinned to 1.85.0 in rust-toolchain.toml precisely
+      # because soroban-sdk 23 pulls in zeroize_derive, which uses edition
+      # 2024. A transitive bump that requires a newer compiler breaks the
+      # contract build for every contributor at once.
+      - dependency-name: zeroize_derive
+        update-types:
+          - version-update:semver-major
+
+  # ── GitHub Actions ────────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - devops
+      - Stellar Wave
+    commit-message:
+      prefix: "build(deps)"
+      include: "scope"
+    groups:
+      actions-patch:
+        applies-to: version-updates
+        update-types:
+          - patch
+      actions-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+      actions-security:
+        applies-to: security-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # dtolnay/rust-toolchain is referenced at @master with the compiler
+      # version supplied through the `toolchain:` input rather than the ref. An
+      # unattended ref bump would change the compiler for every contract build
+      # at once, and the WASM it produces is hash-pinned in the manifest.
+      - dependency-name: dtolnay/rust-toolchain
+      # Runs inside the backend job and writes into the release artefacts.
+      - dependency-name: anchore/sbom-action
+        update-types:
+          - version-update:semver-major
+      # Posts comments to pull requests. An unattended bump is a change to
+      # something with write access on this repository.
+      - dependency-name: marocchino/sticky-pull-request-comment
+        update-types:
+          - version-update:semver-major

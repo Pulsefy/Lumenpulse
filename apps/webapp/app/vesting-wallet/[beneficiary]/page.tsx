@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { clientConfig } from "@/lib/config";
 import { useStellarWallet } from "@/app/providers";
+import { useStellarConfig } from "@/contexts/StellarConfigContext";
 import { signTransaction } from "@stellar/freighter-api";
 import { Address, Contract, TransactionBuilder, nativeToScVal, rpc } from "@stellar/stellar-sdk";
 import { useExplorerUrl } from "@/hooks/useExplorerUrl";
@@ -48,6 +49,7 @@ interface ClaimablePreview {
   totalAmount: string;
   claimedAmount: string;
   claimableAmount: string;
+  unlockedAmount?: string;
   remainingAmount: string;
   startTime: number;
   duration: number;
@@ -107,6 +109,7 @@ export default function VestingWalletPage() {
   const beneficiary = params.beneficiary as string;
   const { publicKey, connect: connectWallet } = useStellarWallet();
   const buildExplorerUrl = useExplorerUrl();
+  const { config } = useStellarConfig();
 
   const [schedule, setSchedule] = useState<VestingSchedule | null>(null);
   const [preview, setPreview] = useState<ClaimablePreview | null>(null);
@@ -164,8 +167,76 @@ export default function VestingWalletPage() {
   const timeRemaining = schedule ? getTimeRemaining(schedule.startTime, schedule.duration) : 0;
   const endTime = schedule ? schedule.startTime + schedule.duration : 0;
   const endDate = schedule ? formatDate(endTime) : "";
-  const previewAmount = preview?.claimableAmount || schedule.claimableAmount;
-  const previewUnlocked = preview?.unlockedAmount || schedule.claimableAmount;
+  const handleClaim = async () => {
+    if (!publicKey || !config || !schedule?.vaultContract) return;
+
+    setTxState("building");
+    setErrorMsg(null);
+    setTxHash(null);
+    setShowReceiptModal(true);
+
+    try {
+      const networkPassphrase = config.networkPassphrase;
+      const server = new rpc.Server(config.sorobanRpcUrl || "https://soroban-testnet.stellar.org");
+
+      let sourceAccount;
+      try {
+        sourceAccount = await server.getAccount(publicKey);
+      } catch {
+        throw new Error("Failed to fetch account info from RPC. Make sure your account is active and funded.");
+      }
+
+      const operation = new Contract(schedule.vaultContract).call("claim", Address.fromString(publicKey).toScVal());
+      const tx = new TransactionBuilder(sourceAccount, { fee: "100000", networkPassphrase })
+        .addOperation(operation)
+        .setTimeout(60)
+        .build();
+
+      setTxState("simulating");
+      const simulation = await server.simulateTransaction(tx);
+      if (rpc.Api.isSimulationError(simulation)) {
+        throw new Error(`Simulation failed: ${simulation.error}`);
+      }
+
+      const preparedTx = rpc.assembleTransaction(tx, simulation).build();
+      setTxState("signing");
+      const signed = await signTransaction(preparedTx.toXDR(), { networkPassphrase });
+      if (signed.error || !signed.signedTxXdr) {
+        throw new Error(`Signing failed: ${signed.error?.message ?? "no signed transaction returned"}`);
+      }
+
+      setTxState("submitting");
+      const sendResponse = await server.sendTransaction(
+        TransactionBuilder.fromXDR(signed.signedTxXdr, networkPassphrase)
+      );
+      if (sendResponse.status === "ERROR") {
+        throw new Error(`Submission failed: ${JSON.stringify(sendResponse.errorResult)}`);
+      }
+
+      setTxState("polling");
+      const hash = sendResponse.hash;
+      setTxHash(hash);
+      const deadline = Date.now() + 45000;
+      while (Date.now() < deadline) {
+        const res = await server.getTransaction(hash);
+        if (res.status === rpc.Api.GetTransactionStatus.SUCCESS) {
+          setTxState("success");
+          toast.success("Vested funds claimed");
+          fetchSchedule();
+          fetchPreview();
+          return;
+        }
+        if (res.status === rpc.Api.GetTransactionStatus.FAILED) {
+          throw new Error(`Transaction failed on-chain: ${hash}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+      throw new Error("Transaction timed out waiting for confirmation.");
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to claim vested funds.");
+      setTxState("error");
+    }
+  };
 
   if (isLoading) {
     return (
@@ -317,7 +388,7 @@ export default function VestingWalletPage() {
                   <p className="font-medium text-emerald-400">{formatAmount(previewAmount)} XLM</p>
                   {preview && preview.unlockedAmount !== preview.claimableAmount && (
                     <p className="text-foreground/40 text-xs mt-1">
-                      Unlocked: {formatAmount(preview.unlockedAmount)} XLM
+                      Unlocked: {formatAmount(preview.unlockedAmount ?? "0")} XLM
                     </p>
                   )}
                 </div>
@@ -342,7 +413,7 @@ export default function VestingWalletPage() {
                   <div className="flex items-center gap-2 text-sm text-foreground/50 font-mono">
                     <span>Vault:</span>
                     <a
-                      href={buildExplorerUrl.contract(schedule.vaultContract)}
+                      href={buildExplorerUrl("contract", schedule.vaultContract)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary hover:underline"
@@ -501,7 +572,7 @@ export default function VestingWalletPage() {
                         <div className="flex items-center gap-2">
                           <code className="flex-1 text-sm font-mono truncate">{txHash}</code>
                           <a
-                            href={buildExplorerUrl.tx(txHash)}
+                            href={buildExplorerUrl("tx", txHash)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors"

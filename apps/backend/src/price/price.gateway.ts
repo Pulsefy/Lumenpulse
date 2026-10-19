@@ -13,7 +13,9 @@ import { PriceService } from './price.service';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: process.env.CORS_ORIGIN?.split(',')
+      .map((o) => o.trim())
+      .filter(Boolean) ?? ['http://localhost:3000'],
   },
 })
 export class PriceGateway implements OnGatewayConnection, OnGatewayDisconnect {

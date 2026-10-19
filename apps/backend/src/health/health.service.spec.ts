@@ -155,4 +155,32 @@ describe('HealthService', () => {
       jest.useRealTimers();
     }
   });
+
+  describe('release identity', () => {
+    const saved = {
+      version: process.env.APP_VERSION,
+      sha: process.env.GIT_SHA,
+    };
+
+    afterEach(() => {
+      if (saved.version === undefined) delete process.env.APP_VERSION;
+      else process.env.APP_VERSION = saved.version;
+      if (saved.sha === undefined) delete process.env.GIT_SHA;
+      else process.env.GIT_SHA = saved.sha;
+    });
+
+    it('identifies the release from APP_VERSION and GIT_SHA', async () => {
+      process.env.APP_VERSION = 'v1.2.3';
+      process.env.GIT_SHA = 'abc1234';
+      const report = await service.getHealthReport();
+      expect(report.release).toEqual({ version: 'v1.2.3', gitSha: 'abc1234' });
+    });
+
+    it('falls back to dev/unknown outside a release build', async () => {
+      delete process.env.APP_VERSION;
+      delete process.env.GIT_SHA;
+      const report = await service.getHealthReport();
+      expect(report.release).toEqual({ version: 'dev', gitSha: 'unknown' });
+    });
+  });
 });

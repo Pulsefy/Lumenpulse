@@ -44,6 +44,8 @@ from src.security import (
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
 from src.observability.stage_profiler import profile_stage
 from src.ml.ood_detector import LexicalOODDetector, configured_unknown_token_ratio
+from src.ml.calibration import CONFIDENCE_GUIDANCE, calibrated_confidence
+from src.ml.calibration_data import sentiment_raw_confidence
 from src.ml.model_registry import (
     get_registry_status,
     # Shadow-mode deployment (Issue #1256)
@@ -343,7 +345,11 @@ class AnalyzeResponse(BaseModel):
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
     explanation: Optional[SentimentExplanationResponse] = None  # Token attribution (#1456)
     scored: bool = True
-    confidence: float = 1.0  # Lexical support; not a calibrated probability
+    confidence: float = 1.0  # RAW lexical support -- do not display (see confidence_guidance)
+    # Calibrated probability that sentiment_label is correct; None when unscored.
+    calibrated_confidence: Optional[float] = None
+    calibration: Optional[Dict[str, Any]] = None
+    confidence_guidance: Dict[str, Any] = CONFIDENCE_GUIDANCE
     status: str = "scored"
 
 
@@ -773,6 +779,11 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
             latency_ms=(time.monotonic() - start_time) * 1000,
         )
 
+        calibrated = calibrated_confidence(
+            "sentiment",
+            sentiment_raw_confidence(result.compound_score, result.sentiment_label),
+        )
+
         # Return enhanced response with asset information
         return AnalyzeResponse(
             sentiment=result.compound_score,
@@ -786,6 +797,8 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
             ),
             scored=True,
             confidence=assessment.confidence,
+            calibrated_confidence=calibrated["calibrated_confidence"],
+            calibration=calibrated["calibration"],
             status="scored",
         )
 
@@ -965,6 +978,12 @@ async def analyze_batch(request: Request, texts: list[str], asset: Optional[str]
                     "status": "ok",
                     "scored": True,
                     "confidence": assessment.confidence,
+                    **calibrated_confidence(
+                        "sentiment",
+                        sentiment_raw_confidence(
+                            result.compound_score, result.sentiment_label
+                        ),
+                    ),
                     **result.to_dict(),
                 })
             except Exception as item_exc:
@@ -1556,6 +1575,12 @@ class ForecastResponse(BaseModel):
     data_points_used: int
     generated_at: str
     confidence_indication: str = "low"  # "high" | "medium" | "low" — derived from backtest
+    # Calibrated probabilities that the predicted trend is correct. Display
+    # these; confidence_24h / confidence_48h above are RAW scores to ignore.
+    calibrated_confidence_24h: Optional[float] = None
+    calibrated_confidence_48h: Optional[float] = None
+    calibration: Optional[Dict[str, Any]] = None
+    confidence_guidance: Dict[str, Any] = CONFIDENCE_GUIDANCE
 
 
 @app.get("/analytics/forecast", response_model=ForecastResponse)
@@ -1610,6 +1635,11 @@ async def get_forecast(request: Request) -> ForecastResponse:
 
     output_dict = result.to_dict()
     output_dict["confidence_indication"] = confidence_indication
+    cal_24h = calibrated_confidence("forecast", output_dict["confidence_24h"])
+    cal_48h = calibrated_confidence("forecast", output_dict["confidence_48h"])
+    output_dict["calibrated_confidence_24h"] = cal_24h["calibrated_confidence"]
+    output_dict["calibrated_confidence_48h"] = cal_48h["calibrated_confidence"]
+    output_dict["calibration"] = cal_24h["calibration"]
     # Attribute forecast compute cost to the serving model backend + path (#1643).
     record_inference(
         model_type="forecast",

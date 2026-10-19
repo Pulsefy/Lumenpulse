@@ -23,6 +23,7 @@ this guide defines how a reviewer confirms it was met.
 | [11. Fast MVP review strategy](#11-fast-mvp-review-strategy) | Where to spend review effort |
 | [12. Reviewer quick reference](#12-reviewer-quick-reference) | The checklist to run every time |
 | [13. Maintaining this guide](#13-maintaining-this-guide) | Changing the standard |
+| [14. Code ownership](#14-code-ownership) | Who is asked to review, and what to do about an unowned path |
 
 ---
 
@@ -566,3 +567,103 @@ Update this file whenever:
 
 The **lead maintainer** owns this guide: reviewing it once per release cycle for gaps, curating
 guide-update issues, and ensuring maintainer onboarding includes reading it.
+
+---
+
+## 14. Code ownership
+
+`.github/CODEOWNERS` maps every path in the repository to the people whose review is requested
+when a pull request touches it. GitHub assigns those review requests automatically when the PR is
+opened — no reviewer needs to be found by hand.
+
+Introduced in [#1715](https://github.com/Pulsefy/Lumenpulse/issues/1715). See
+[ci-concurrency.md](ci-concurrency.md) and [ci-timeouts.md](ci-timeouts.md) for the two
+neighbouring CI policies.
+
+### 14.1 What the mapping is, and what it is not
+
+| It is | It is not |
+|---|---|
+| A **review request**, issued automatically on PR open | A merge permission — required approvals are a branch protection setting, not CODEOWNERS |
+| A statement about *who can explain this code* | An exhaustive org chart — a handle may be listed twice across areas |
+| Advisory — GitHub will not block a PR without an owner | Complete — a path matched only by the catch-all `*` is unowned, and §14.4 covers that |
+
+### 14.2 The mapping
+
+| Path | Owners |
+|---|---|
+| `.github/` | @fadee26 @eleven-smg |
+| `scripts/` | @cybermax4200 @fadee26 |
+| `apps/backend/` | @paris27-A @eleven-smg @Chrisland-ui |
+| `apps/webapp/` | @datagerl @feyishola @paris27-A |
+| `apps/mobile/` | @praise-idise @monique-7arch @OmniZlatoon |
+| `apps/data-processing/` | @CHKM001 @paris27-A @Rosemary-ux |
+| `apps/onchain/` | @cybermax4200 @Ayinkx |
+| `docs/`, `CONTRIBUTING.md`, `CODE_REVIEW_GUIDE.md` | @fadee26 @eleven-smg |
+| Root config (`package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `turbo.json`) | @fadee26 @paris27-A |
+| `docker-compose*.yml`, `prometheus*.yml`, Grafana dashboard | @fadee26 @eleven-smg |
+| `.claude/`, `.vscode/` | @fadee26 @paris27-A |
+| Everything else (catch-all) | @fadee26 @paris27-A |
+
+**Provenance.** Each area was mapped to the contributors with the most *merged* pull requests
+touching that area on `main`. That is evidence of familiarity with the code, not a statement about
+authority over it. Anyone who can see this table and knows the mapping is wrong should open a PR
+that corrects it rather than working around it.
+
+### 14.3 Ordering — why the catch-all is first
+
+GitHub applies the **last** matching pattern, so the catch-all `*` sits at the **top** of
+`.github/CODEOWNERS` and the specific rules follow it. A catch-all placed at the bottom would win
+against every specific rule below it and the file would do nothing at all. Do not "tidy" it by
+moving the `*` down.
+
+### 14.4 A PR touching an unowned path
+
+A new top-level directory lands, matches the catch-all, and nobody notices — because GitHub
+reports the catch-all owner exactly as happily as it reports a real one. `scripts/check-codeowners.mjs`
+closes that gap:
+
+```bash
+# Diff against the base branch and list paths with no explicit owner.
+node scripts/check-codeowners.mjs
+
+# Against a different base, or an explicit list of paths.
+node scripts/check-codeowners.mjs --base origin/main
+node scripts/check-codeowners.mjs apps/backend/src/main.ts docs/ARCHITECTURE.md
+```
+
+It exits `1` and prints the offending paths, `2` if `.github/CODEOWNERS` itself is malformed. It
+validates that the catch-all is present and correctly positioned, so a reordering mistake fails
+loudly rather than silently disabling the file.
+
+**When it reports a hit**, a reviewer has three options, in order of preference:
+
+1. **Add a rule.** Most hits are a genuinely new surface — a top-level directory, a new config
+   family — and the owner is whoever has been working in that area.
+2. **Record why not.** If the path genuinely needs no owner (a vendored asset, a generated file), say
+   so in the PR body. Silence is what this check exists to eliminate.
+3. **Ignore it** only if you can articulate, in review, why the catch-all owner is correct here.
+
+### 14.5 What to do when you *are* the owner
+
+Being listed means a review request lands in your queue. It is not a demand to review everything —
+but when you do:
+
+- **Say something.** An unaddressed request for a week is the exact failure that built the review
+  backlog in the first place. A one-line "no concerns" is worth more than silence.
+- **You are not required to approve.** Ownership is about accountability for the area, not a veto.
+  If you lack context on a change, say who does have it and request them explicitly — that is a
+  successful review outcome under §11.
+- **Disagreeing with the code and approving anyway is not review.** Use the ⛔ path in §12.
+
+### 14.6 Ownership changes
+
+`.github/CODEOWNERS` is owned by @fadee26. To change the mapping:
+
+1. Open a PR that edits `.github/CODEOWNERS`.
+2. Explain in the body which mapping is wrong and what the evidence is (merged history in that area,
+   or who has actually been reviewing it).
+3. Run `node scripts/check-codeowners.mjs <the paths you changed>` to confirm nothing you introduced
+   is left unowned.
+4. Do not bundle unrelated changes — per §5, "fix the ownership map and also upgrade a dependency"
+   is two PRs.

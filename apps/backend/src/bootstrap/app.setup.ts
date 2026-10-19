@@ -20,11 +20,31 @@ export function setupApp(app: INestApplication): void {
   app.use(
     helmet({
       crossOriginEmbedderPolicy: false,
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          frameAncestors: ["'none'"],
+          formAction: ["'self'"],
+          baseUri: ["'self'"],
+        },
+      },
     }),
   );
   app.enableCors({
     origin: getCorsOrigin(),
     // Allow browser clients to read rate-limit headers (incl. Retry-After).
     exposedHeaders: [...RATE_LIMIT_RESPONSE_HEADERS],
+    // Permit credentialed requests only for single-origin dev environments.
+    credentials: false,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Accept',
+      'Authorization',
+      'Content-Type',
+      'Idempotency-Key',
+      'X-API-Key',
+      'X-Request-Id',
+    ],
+    maxAge: 86400,
   });
 }

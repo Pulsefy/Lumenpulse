@@ -57,6 +57,28 @@ describe('RateLimitPrincipalResolver', () => {
     ).toEqual({ type: 'service', id: 'etl', trackerKey: 'service:etl' });
   });
 
+  it('resolves managed service keys asynchronously to their consumer identity', async () => {
+    const resolver = new RateLimitPrincipalResolver(
+      {
+        authenticateHeaders: () => null,
+        authenticateHeadersAsync: jest
+          .fn()
+          .mockResolvedValue({ type: 'service', id: 'data-worker' }),
+        fromVerifiedJwtPayload: () => null,
+      } as unknown as BotPrincipalService,
+      secret,
+    );
+    const request = req({ 'x-service-token': 'managed-key' });
+
+    await expect(
+      resolver.resolveAsync(request, 'ip:10.0.0.1'),
+    ).resolves.toEqual({
+      type: 'service',
+      id: 'data-worker',
+      trackerKey: 'service:data-worker',
+    });
+  });
+
   it('classifies bot-typed JWTs as bot principals', () => {
     const token = jwt.sign({ sub: 'tg-2', type: 'bot' });
     expect(

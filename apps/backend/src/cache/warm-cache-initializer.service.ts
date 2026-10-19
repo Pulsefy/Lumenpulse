@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { GrantsService } from '../grants/grants.service';
+import { GrantRoundState } from '../grants/round-lifecycle';
 import { WarmCacheRegistry } from './warm-cache.registry';
 import { ConfigService } from '@nestjs/config';
 
@@ -57,7 +58,7 @@ export class WarmCacheInitializerService implements OnModuleInit {
         // Preload leaderboard for the most relevant round (active or latest)
         const rounds = this.grantsService.listRounds().items;
         const activeRound =
-          rounds.find((r) => r.status === 'ACTIVE') || rounds[0];
+          rounds.find((r) => r.status === GrantRoundState.OPEN) || rounds[0];
         if (!activeRound)
           return Promise.resolve({
             entries: [],

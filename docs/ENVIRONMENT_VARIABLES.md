@@ -54,7 +54,7 @@ The matrix distinguishes between local development, CI/test usage, and testnet d
 | `DB_PASSWORD` | Required    |     ✓ |       ✓ |              — | **Yes** | PostgreSQL password.                             |
 | `NODE_ENV`    | Optional    |     ✓ |       ✓ |              — |      No | Node.js runtime environment.                     |
 | `ENVIRONMENT` | Optional    |     ✓ |       ✓ |              — |      No | Lumenpulse environment identifier.               |
-| `CORS_ORIGIN` | Optional    |     ✓ |       ✓ |              — |      No | Comma-separated allowed CORS origins.            |
+| `CORS_ORIGIN` | Conditional |     ✓ |       ✓ |              — |      No | Comma-separated allowed CORS origins. Required in production; the backend refuses to start when unset there. The value is an explicit allowlist — no wildcard `*` origins. |
 
 ## Authentication
 

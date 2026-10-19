@@ -337,9 +337,64 @@ X-RateLimit-Reset: 1614556800
 
 ## CORS
 
-CORS is configured to allow requests from:
-- Development: `http://localhost:3000`, `http://localhost:3001`
-- Production: Configured via `CORS_ORIGIN` environment variable
+The API serves an explicit per-origin CORS allowlist. The policy is configured
+via the `CORS_ORIGIN` environment variable and is enforced by NestJS CORS
+middleware.
+
+### Allowlist
+
+- Single origin: the value of `CORS_ORIGIN` is used verbatim.
+- Multiple origins: a comma-separated `CORS_ORIGIN` becomes an allowlist.
+- No wildcard `*` origin is permitted.
+- Credentialed cross-origin requests are not permitted in the global policy
+  (`credentials: false`). Endpoints that need them must opt in explicitly.
+
+### Environment values
+
+| Environment | Typical value | Notes |
+|---|---|---|
+| Development | `http://localhost:3000,http://localhost:3001,http://localhost:8081` | Local frontend variants |
+| Production | Set via `CORS_ORIGIN` | Refusal to start when unset in production |
+
+### Exposed headers
+
+Browser callers can read the following rate-limit headers (listed in
+`Access-Control-Expose-Headers`):
+
+- `RateLimit-Limit`
+- `RateLimit-Remaining`
+- `RateLimit-Reset`
+- `Retry-After`
+
+### Preflight
+
+Preflight `OPTIONS` responses include:
+
+- `Access-Control-Allow-Origin`
+- `Access-Control-Allow-Methods`
+- `Access-Control-Allow-Headers`
+- `Access-Control-Max-Age` (24 hours)
+
+### Allowed headers
+
+The following request headers are accepted by the CORS middleware:
+
+- `Accept`
+- `Authorization`
+- `Content-Type`
+- `Idempotency-Key`
+- `X-API-Key`
+- `X-Request-Id`
+
+### Security headers
+
+Every response includes security headers set by `helmet`:
+
+- Content-Security-Policy with tight defaults
+- X-Content-Type-Options: nosniff
+- X-Frame-Options
+- Strict-Transport-Security (on HTTPS)
+- Referrer-Policy
 
 ## Best Practices
 

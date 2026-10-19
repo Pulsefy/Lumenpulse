@@ -12,6 +12,7 @@ import {
   PaginatedResponseDto,
   ResolvedPagination,
 } from '../../common/pagination/pagination-response.dto';
+import { GrantRoundState } from '../round-lifecycle';
 
 export class CreateRoundDto {
   @ApiProperty({
@@ -165,9 +166,10 @@ export class RoundDto {
 
   @ApiProperty({
     description: 'Current status of the round',
-    example: 'ACTIVE',
+    enum: GrantRoundState,
+    example: GrantRoundState.OPEN,
   })
-  status: string;
+  status: GrantRoundState;
 }
 
 export class ProjectQfDto {
