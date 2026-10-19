@@ -10,10 +10,15 @@ export const STELLAR_ACCOUNT_BALANCE_PREFIX = 'stellar:account:balance';
 export const STELLAR_ACCOUNT_OPERATIONS_PREFIX = 'stellar:account:operations';
 export const CONTRACT_READ_PREFIX = 'contract:read';
 
+export const WATCHLIST_CACHE_PREFIX = 'watchlist';
+export const PORTFOLIO_CACHE_PREFIX = 'portfolio';
+
 export interface CacheConfig {
   balanceCacheTTL: number;
   operationsCacheTTL: number;
   contractReadTTL: number;
+  watchlistCacheTTL?: number;
+  portfolioCacheTTL?: number;
 }
 
 @Injectable()
@@ -132,6 +137,91 @@ export class CacheService {
         `Could not invalidate operations cache for: ${publicKey} (Redis client not available or keys not supported)`,
       );
     }
+  }
+
+  // ── Watchlist / Portfolio Background Refresh Caching ─────────────────────────
+
+  getWatchlistKey(publicKey: string): string {
+    return `${WATCHLIST_CACHE_PREFIX}:${publicKey}`;
+  }
+
+  getPortfolioKey(publicKey: string): string {
+    return `${PORTFOLIO_CACHE_PREFIX}:${publicKey}`;
+  }
+
+  /**
+   * Cache watchlist data so a background refresh can warm it for immediate
+   * display when the app is opened.
+   */
+  async getWatchlistCached<T>(
+    publicKey: string,
+    fetcher: () => Promise<T>,
+  ): Promise<T> {
+    const key = this.getWatchlistKey(publicKey);
+    const ttl = this.cacheConfig?.watchlistCacheTTL ?? 5 * 60_000;
+    return this.getOrSet(key, fetcher, ttl);
+  }
+
+  /**
+   * Cache portfolio data so a background refresh can warm it for immediate
+   * display when the app is opened.
+   */
+  async getPortfolioCached<T>(
+    publicKey: string,
+    fetcher: () => Promise<T>,
+  ): Promise<T> {
+    const key = this.getPortfolioKey(publicKey);
+    const ttl = this.cacheConfig?.portfolioCacheTTL ?? 5 * 60_000;
+    return this.getOrSet(key, fetcher, ttl);
+  }
+
+  /**
+   * Warm the watchlist and portfolio caches for a user. Used by the scheduled
+   * background refresh job. Failures are swallowed here (and surfaced via
+   * metrics/error reporting by the caller) so a background run never throws.
+   */
+  async warmUserCaches(
+    publicKey: string,
+    fetchers: {
+      watchlist?: () => Promise<unknown>;
+      portfolio?: () => Promise<unknown>;
+    },
+  ): Promise<{ watchlist: boolean; portfolio: boolean }> {
+    const result = { watchlist: false, portfolio: false };
+
+    if (fetchers.watchlist) {
+      try {
+        await this.getWatchlistCached(publicKey, fetchers.watchlist);
+        result.watchlist = true;
+      } catch (error) {
+        this.logger.warn(
+          `Background watchlist refresh failed for ${publicKey}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+      }
+    }
+
+    if (fetchers.portfolio) {
+      try {
+        await this.getPortfolioCached(publicKey, fetchers.portfolio);
+        result.portfolio = true;
+      } catch (error) {
+        this.logger.warn(
+          `Background portfolio refresh failed for ${publicKey}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+      }
+    }
+
+    return result;
+  }
+
+  async invalidateWatchlist(publicKey: string): Promise<void> {
+    await this.del(this.getWatchlistKey(publicKey));
+    this.logger.debug(`Invalidated watchlist cache for: ${publicKey}`);
+  }
+
+  async invalidatePortfolio(publicKey: string): Promise<void> {
+    await this.del(this.getPortfolioKey(publicKey));
+    this.logger.debug(`Invalidated portfolio cache for: ${publicKey}`);
   }
 
   async checkHealth(): Promise<boolean> {
@@ -272,6 +362,8 @@ export class CacheService {
     if (key.startsWith(CONTRACT_READ_PREFIX)) return 'contract_read';
     if (key.startsWith(STELLAR_ASSETS_CACHE_PREFIX)) return 'stellar_assets';
     if (key.startsWith(NEWS_CACHE_KEY)) return 'news';
+    if (key.startsWith(WATCHLIST_CACHE_PREFIX)) return 'watchlist';
+    if (key.startsWith(PORTFOLIO_CACHE_PREFIX)) return 'portfolio';
     return 'other';
   }
 

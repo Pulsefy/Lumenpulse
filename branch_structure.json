@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-1577-mobile-refresh-watchlist-and-portfolio-in-the",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-1577-mobile-refresh-watchlist-and-portfolio-in-the": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-1577-mobile-refresh-watchlist-and-portfolio-in-the",
+    "origin"
+  ]
+}

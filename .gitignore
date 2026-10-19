@@ -11,9 +11,7 @@ out/
 build/
 
 # Environment variables
-.env
 *.env
-.env.local
 .env.development.local
 .env.test.local
 .env.production.local
@@ -25,7 +23,6 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # IDE / System
-.vscode/
 .idea/
 .DS_Store
 Thumbs.db
@@ -42,3 +39,4 @@ myenv/
 # monitoring
 monitoring/secrets/*
 !monitoring/secrets/README.md
+config.bat
