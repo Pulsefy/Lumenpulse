@@ -14,7 +14,7 @@ import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { useLocalization } from '../../src/context';
 import { config } from '../../lib/config';
 import { getReleaseMetadata, ReleaseInfo } from '../../lib/release-metadata';
-import axios from 'axios';
+import { checkConnection } from '../../lib/check-connection';
 
 type ConnectionStatus = 'idle' | 'testing' | 'online' | 'offline';
 
@@ -45,18 +45,7 @@ export default function StatusScreen() {
     }
 
     try {
-      // Use axios or fetch with a 5 second timeout to test endpoint reachability
-      const source = axios.CancelToken.source();
-      const timeout = setTimeout(() => {
-        source.cancel('Timeout');
-      }, 5000);
-
-      await axios.get(targetUrl, {
-        cancelToken: source.token,
-        validateStatus: () => true, // resolve on any status code (even 404 means server is up)
-      });
-
-      clearTimeout(timeout);
+      await checkConnection(targetUrl);
       setConnectionStatus('online');
     } catch (error) {
       console.warn('Connection test failed:', error);
@@ -190,7 +179,11 @@ export default function StatusScreen() {
             <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
               {t('settings.status_info.api_url')}
             </Text>
-            <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={1} ellipsizeMode="tail">
+            <Text
+              style={[styles.detailValue, { color: colors.text }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {environmentConfig.apiBaseUrl || t('settings.network.endpoint_not_configured')}
             </Text>
           </View>
@@ -212,7 +205,11 @@ export default function StatusScreen() {
             <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
               {t('settings.status_info.soroban_rpc')}
             </Text>
-            <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={1} ellipsizeMode="middle">
+            <Text
+              style={[styles.detailValue, { color: colors.text }]}
+              numberOfLines={1}
+              ellipsizeMode="middle"
+            >
               {environmentConfig.sorobanRpcUrl || t('settings.network.endpoint_not_configured')}
             </Text>
           </View>
@@ -224,7 +221,11 @@ export default function StatusScreen() {
                 <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
                   {t('settings.status_info.contract_id')}
                 </Text>
-                <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={1} ellipsizeMode="middle">
+                <Text
+                  style={[styles.detailValue, { color: colors.text }]}
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                >
                   {environmentConfig.crowdfundContractId}
                 </Text>
               </View>
@@ -252,7 +253,9 @@ export default function StatusScreen() {
           ) : (
             releaseNotes.map((release, idx) => (
               <View key={`${release.version}-${idx}`} style={styles.releaseContainer}>
-                {idx > 0 && <View style={[styles.releaseDivider, { backgroundColor: colors.border }]} />}
+                {idx > 0 && (
+                  <View style={[styles.releaseDivider, { backgroundColor: colors.border }]} />
+                )}
                 <View style={styles.releaseHeader}>
                   <Text style={[styles.releaseVersion, { color: colors.accent }]}>
                     {t('settings.status_info.version_prefix', { version: release.version })}
@@ -264,9 +267,7 @@ export default function StatusScreen() {
                   )}
                 </View>
                 {release.title && (
-                  <Text style={[styles.releaseTitle, { color: colors.text }]}>
-                    {release.title}
-                  </Text>
+                  <Text style={[styles.releaseTitle, { color: colors.text }]}>{release.title}</Text>
                 )}
                 <View style={styles.notesList}>
                   {release.notes.map((note, noteIdx) => (

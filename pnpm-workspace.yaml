@@ -3,3 +3,6 @@ packages:
   - "scripts"
 minimumReleaseAgeExclude:
   - '@rollup/rollup-linux-arm64-gnu@4.64.8'
+overrides:
+  'brace-expansion@1': '1.1.21'
+  '@expo/metro-config>postcss': '8.5.29'
