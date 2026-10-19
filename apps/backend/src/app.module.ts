@@ -76,6 +76,7 @@ import { SnapshotsModule } from './snapshot/snapshot.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { PriceAlertModule } from './price-alert/price-alert.module';
+import { SavedSearchesModule } from './saved-searches/saved-searches.module';
 
 @Module({
   imports: [
@@ -205,6 +206,9 @@ import { PriceAlertModule } from './price-alert/price-alert.module';
 
     // Price alerts
     PriceAlertModule,
+
+    // Saved searches
+    SavedSearchesModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
