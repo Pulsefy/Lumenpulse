@@ -41,7 +41,14 @@ runs:
       id: start
       if: inputs.phase == 'start'
       shell: bash
-      run: echo "started=$(date +%s)" >> "$GITHUB_OUTPUT"
+      env:
+        JOB_ID: ${{ inputs.job-id }}
+      run: |
+        set -euo pipefail
+        marker_dir="$RUNNER_TEMP/job-timeout-guard"
+        mkdir -p "$marker_dir"
+        marker_file="$marker_dir/${JOB_ID}-${GITHUB_RUN_ID}.started"
+        printf '%s\n' "$(date +%s)" > "$marker_file"
 
     - name: Report the observed runtime
       id: report
@@ -52,15 +59,20 @@ runs:
         BUDGET_MINUTES: ${{ inputs.budget-minutes }}
         SOFT_THRESHOLD: ${{ inputs.soft-threshold }}
         NOTE: ${{ inputs.note }}
-        STARTED_AT: ${{ steps.start.outputs.started }}
       run: |
         set -euo pipefail
 
-        if [ -z "${STARTED_AT:-}" ]; then
+        marker_dir="$RUNNER_TEMP/job-timeout-guard"
+        marker_file="$marker_dir/${JOB_ID}-${GITHUB_RUN_ID}.started"
+
+        if [ ! -f "$marker_file" ]; then
           echo "::warning title=timeout guard::Job '${JOB_ID}' finished without a matching" \
                "'phase: start' step, so no runtime was recorded."
           exit 0
         fi
+
+        STARTED_AT=$(cat "$marker_file")
+        rm -f "$marker_file"
 
         now=$(date +%s)
         elapsed_secs=$(( now - STARTED_AT ))
