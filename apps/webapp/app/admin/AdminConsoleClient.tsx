@@ -100,34 +100,6 @@ interface FeatureFlagHistoryEntry {
   changedAt: string;
 }
 
-function getAuthToken(): string | null {
-  if (typeof document === 'undefined') return null;
-  const match = document.cookie
-    .split(';')
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith('auth-token='));
-
-  if (!match) return null;
-  return decodeURIComponent(match.slice('auth-token='.length));
-}
-
-function decodeJwtRole(token: string | null): string | null {
-  if (!token) return null;
-
-  try {
-    const payload = token.split('.')[1];
-    if (!payload) return null;
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-    const decoded = window.atob(padded);
-    const json = decodeURIComponent(
-      Array.from(decoded).map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`).join(''),
-    );
-    const data = JSON.parse(json) as { role?: string };
-    return data.role ?? null;
-  } catch {
-    return null;
-  }
 interface SchedulerQueueMetric {
   name: string;
   depth: number;
@@ -197,7 +169,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 }
 
 // Environment Banner Component
-function EnvironmentBanner({ config }: { config: { network: string; contracts?: Record<string, string> } | null }) {
+function EnvironmentBanner({ config }: { config: { network: string; contracts?: object } | null }) {
   const isTestnet = config?.network === 'testnet';
   const isMainnet = config?.network === 'mainnet';
 
@@ -578,6 +550,10 @@ function FeatureFlagRow({
           {error}
         </div>
       )}
+    </div>
+  );
+}
+
 function formatDurationMs(durationMs: number | null): string {
   if (durationMs === null || Number.isNaN(durationMs)) return '—';
   if (durationMs < 1000) return `${durationMs} ms`;
@@ -725,9 +701,9 @@ export default function AdminConsoleClient() {
   const [error, setError] = useState<string | null>(null);
 
   const token = getAuthToken();
-  const isAdmin = decodeJwtRole(token)?.toUpperCase() === 'ADMIN';
-  const isTestnet = config?.network === 'testnet';
   const currentUserRole = getCurrentUserRole();
+  const isAdmin = currentUserRole === 'admin';
+  const isTestnet = config?.network === 'testnet';
   const isMainnet = config?.network === 'mainnet';
   const hasValidConfig = configStatus === 'ready' && config;
 

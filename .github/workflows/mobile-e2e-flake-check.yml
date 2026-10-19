@@ -32,7 +32,7 @@ jobs:
         working-directory: ./apps/mobile
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
@@ -43,7 +43,7 @@ jobs:
           note: One full smoke suite per matrix leg; worst observed mobile-e2e run was 11.3 min.
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20.x'
           cache: 'npm'
@@ -82,7 +82,7 @@ jobs:
     steps:
       # Needed only so the local timeout-guard action exists on disk.
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           sparse-checkout: .github/actions
 

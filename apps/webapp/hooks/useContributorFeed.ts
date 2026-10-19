@@ -75,7 +75,7 @@ export function useContributorFeed(initialQuery: ContributorFeedQuery = {}) {
     items: data?.items ?? [],
     total: data?.total ?? 0,
     page: data?.page ?? 1,
-    limit: data?.limit ?? 20,
+    limit: query.limit ?? 20,
     totalPages: data?.totalPages ?? 0,
     isSparseContributor: data?.isSparseContributor ?? false,
     isLoading,

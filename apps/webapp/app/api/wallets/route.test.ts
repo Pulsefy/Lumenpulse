@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { DEFAULT_WALLETS } from './route';
+import { DEFAULT_WALLETS } from './default-wallets';
 
 vi.mock('next/server', () => ({
   NextResponse: {
