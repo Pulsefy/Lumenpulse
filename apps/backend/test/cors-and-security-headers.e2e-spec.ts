@@ -33,7 +33,7 @@ describe('CORS and security headers (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
+    app = moduleFixture.createNestApplication({ bodyParser: false });
     setupApp(app);
     await app.init();
   }, 60000);

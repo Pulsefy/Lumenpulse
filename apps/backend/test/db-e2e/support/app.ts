@@ -9,7 +9,10 @@ export async function createApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
   }).compile();
-  const app = moduleRef.createNestApplication({ rawBody: true });
+  const app = moduleRef.createNestApplication({
+    rawBody: true,
+    bodyParser: false,
+  });
   setupApp(app);
   app.enableVersioning({ type: VersioningType.URI });
   await app.init();

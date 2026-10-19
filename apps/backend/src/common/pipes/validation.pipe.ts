@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ArgumentMetadata,
   ValidationPipe as NestValidationPipe,
   ValidationError,
   Optional,
@@ -7,6 +8,10 @@ import {
 } from '@nestjs/common';
 import { ErrorCode } from '../enums/error-code.enum';
 import { ErrorDetail } from '../../interfaces/error-response.interface';
+import {
+  MAX_REQUEST_ARRAY_LENGTH,
+  MAX_REQUEST_NESTING_DEPTH,
+} from '../constants/request.constants';
 
 /**
  * Global validation pipe with enhanced security and error formatting.
@@ -38,6 +43,75 @@ export class CustomValidationPipe
           details,
         });
       },
+    });
+  }
+
+  override async transform(
+    value: unknown,
+    metadata: ArgumentMetadata,
+  ): Promise<any> {
+    CustomValidationPipe.assertWithinRequestLimits(value);
+    return super.transform(value, metadata);
+  }
+
+  private static assertWithinRequestLimits(value: unknown): void {
+    const pending: Array<{ value: unknown; depth: number; field: string }> = [
+      { value, depth: 0, field: 'request' },
+    ];
+    const visited = new WeakSet<object>();
+
+    while (pending.length > 0) {
+      const current = pending.pop()!;
+      if (typeof current.value !== 'object' || current.value === null) {
+        continue;
+      }
+
+      const depth = current.depth + 1;
+      if (depth > MAX_REQUEST_NESTING_DEPTH) {
+        CustomValidationPipe.throwLimitError(
+          current.field,
+          `Request nesting depth exceeds the maximum of ${MAX_REQUEST_NESTING_DEPTH}`,
+        );
+      }
+
+      if (visited.has(current.value)) {
+        continue;
+      }
+      visited.add(current.value);
+
+      if (Array.isArray(current.value)) {
+        if (current.value.length > MAX_REQUEST_ARRAY_LENGTH) {
+          CustomValidationPipe.throwLimitError(
+            current.field,
+            `Array length exceeds the maximum of ${MAX_REQUEST_ARRAY_LENGTH}`,
+          );
+        }
+
+        current.value.forEach((item, index) => {
+          pending.push({
+            value: item,
+            depth,
+            field: `${current.field}[${index}]`,
+          });
+        });
+        continue;
+      }
+
+      Object.entries(current.value).forEach(([key, item]) => {
+        pending.push({
+          value: item,
+          depth,
+          field: `${current.field}.${key}`,
+        });
+      });
+    }
+  }
+
+  private static throwLimitError(field: string, message: string): never {
+    throw new BadRequestException({
+      code: ErrorCode.SYS_VALIDATION_FAILED,
+      message: 'Request validation limits exceeded',
+      details: [{ field, message }],
     });
   }
 

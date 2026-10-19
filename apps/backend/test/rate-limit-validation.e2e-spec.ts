@@ -125,7 +125,7 @@ describe('Security hardening (e2e)', () => {
       imports: [SecurityTestModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
+    app = moduleFixture.createNestApplication({ bodyParser: false });
     setupApp(app);
     await app.init();
   });
