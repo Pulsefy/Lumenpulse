@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -56,11 +57,30 @@ interface RoundRecord {
   eligibleProjects: Set<number>;
 }
 
+interface SoftDeleteMeta {
+  deletedAt: number;
+  deletedBy: string;
+  purgeAfter: number;
+}
+
+interface DeletedRoundDto {
+  id: number;
+  name: string;
+  deletedAt: number;
+  deletedBy: string;
+  purgeAfter: number;
+}
+
+const DEFAULT_RETENTION_DAYS = 30;
+const DEFAULT_PURGE_INTERVAL_HOURS = 24;
+
 @Injectable()
 export class GrantsService {
   private readonly logger = new Logger(GrantsService.name);
   private rounds = new Map<number, RoundRecord>();
   private nextRoundId = 0;
+  private softDeletedRounds = new Map<number, SoftDeleteMeta>();
+  private purgeTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly config: ConfigService,
@@ -71,7 +91,147 @@ export class GrantsService {
       process.env.NODE_ENV !== 'test'
     ) {
       this.seedRounds();
+      this.schedulePurge();
     }
+  }
+
+  private getRetentionMs(): number {
+    const days = Number(
+      this.config?.get?.('SOFT_DELETE_RETENTION_DAYS') ??
+        DEFAULT_RETENTION_DAYS,
+    );
+    return (Number.isFinite(days) && days > 0 ? days : DEFAULT_RETENTION_DAYS) *
+      24 *
+      60 *
+      60 *
+      1000;
+  }
+
+  private getPurgeIntervalMs(): number {
+    const hours = Number(
+      this.config?.get?.('SOFT_DELETE_PURGE_INTERVAL_HOURS') ??
+        DEFAULT_PURGE_INTERVAL_HOURS,
+    );
+    return (Number.isFinite(hours) && hours > 0
+      ? hours
+      : DEFAULT_PURGE_INTERVAL_HOURS) *
+      60 *
+      60 *
+      1000;
+  }
+
+  /**
+   * Schedule periodic purge of soft-deleted rounds whose retention window
+   * has elapsed. Runs every SOFT_DELETE_PURGE_INTERVAL_HOURS (default 24h).
+   * Documented schedule: soft-deleted records are permanently purged on the
+   * first purge tick after their purgeAfter timestamp.
+   */
+  private schedulePurge(): void {
+    if (this.purgeTimer) return;
+    const interval = this.getPurgeIntervalMs();
+    this.purgeTimer = setInterval(() => {
+      try {
+        this.purgeExpired();
+      } catch (err) {
+        this.logger.error('Soft-delete purge failed', err as Error);
+      }
+    }, interval);
+    if (typeof this.purgeTimer.unref === 'function') {
+      this.purgeTimer.unref();
+    }
+  }
+
+  /**
+   * Permanently remove soft-deleted rounds whose retention window has passed.
+   * Returns the number of records purged.
+   */
+  purgeExpired(now: number = Date.now()): number {
+    let purged = 0;
+    for (const [id, meta] of this.softDeletedRounds.entries()) {
+      if (meta.purgeAfter <= now) {
+        this.rounds.delete(id);
+        this.softDeletedRounds.delete(id);
+        purged += 1;
+        this.logger.log(`Round ${id} permanently purged`);
+      }
+    }
+    return purged;
+  }
+
+  /**
+   * Soft-delete a round. Records actor and timestamp; excludes the round from
+   * all normal queries. Only admins may call this.
+   */
+  softDeleteRound(roundId: number, actor: string): DeletedRoundDto {
+    if (!actor) {
+      throw new ForbiddenException('Actor is required to delete a round');
+    }
+    const record = this.rounds.get(roundId);
+    if (!record || this.softDeletedRounds.has(roundId)) {
+      throw new NotFoundException(`Round ${roundId} not found`);
+    }
+    const now = Date.now();
+    const meta: SoftDeleteMeta = {
+      deletedAt: now,
+      deletedBy: actor,
+      purgeAfter: now + this.getRetentionMs(),
+    };
+    this.softDeletedRounds.set(roundId, meta);
+    this.logger.log(`Round ${roundId} soft-deleted by ${actor}`);
+    return {
+      id: record.id,
+      name: record.name,
+      deletedAt: meta.deletedAt,
+      deletedBy: meta.deletedBy,
+      purgeAfter: meta.purgeAfter,
+    };
+  }
+
+  /**
+   * List soft-deleted rounds still within the retention window.
+   */
+  listDeletedRounds(): DeletedRoundDto[] {
+    const now = Date.now();
+    const result: DeletedRoundDto[] = [];
+    for (const [id, meta] of this.softDeletedRounds.entries()) {
+      if (meta.purgeAfter <= now) continue;
+      const record = this.rounds.get(id);
+      if (!record) continue;
+      result.push({
+        id: record.id,
+        name: record.name,
+        deletedAt: meta.deletedAt,
+        deletedBy: meta.deletedBy,
+        purgeAfter: meta.purgeAfter,
+      });
+    }
+    result.sort((a, b) => b.deletedAt - a.deletedAt);
+    return result;
+  }
+
+  /**
+   * Restore a soft-deleted round if still within the retention window.
+   */
+  restoreRound(roundId: number, actor: string): RoundDto {
+    if (!actor) {
+      throw new ForbiddenException('Actor is required to restore a round');
+    }
+    const meta = this.softDeletedRounds.get(roundId);
+    if (!meta) {
+      throw new NotFoundException(`Round ${roundId} is not soft-deleted`);
+    }
+    if (meta.purgeAfter <= Date.now()) {
+      throw new BadRequestException(
+        `Round ${roundId} retention window has expired`,
+      );
+    }
+    this.softDeletedRounds.delete(roundId);
+    const record = this.rounds.get(roundId);
+    if (!record) {
+      throw new NotFoundException(`Round ${roundId} not found`);
+    }
+    this.logger.log(`Round ${roundId} restored by ${actor}`);
+    return this.toRoundDto(record);
   }
 
   private computeRoundTotal(roundId: number): bigint {
@@ -224,7 +384,9 @@ export class GrantsService {
 
   listRounds(query?: RoundListQueryDto): RoundListResponseDto {
     const pagination = resolvePagination(query?.page, query?.pageSize);
-    const allRounds = [...this.rounds.values()].map((r) => {
+    const allRounds = [...this.rounds.values()]
+      .filter((r) => !this.softDeletedRounds.has(r.id))
+      .map((r) => {
       this.advanceScheduledState(r);
       return this.toRoundDto(r);
     });
@@ -704,6 +866,9 @@ export class GrantsService {
   private getRecord(roundId: number): RoundRecord {
     const record = this.rounds.get(roundId);
     if (!record) throw new NotFoundException(`Round ${roundId} not found`);
+    if (this.softDeletedRounds.has(roundId)) {
+      throw new NotFoundException(`Round ${roundId} not found`);
+    }
     this.advanceScheduledState(record);
     return record;
   }

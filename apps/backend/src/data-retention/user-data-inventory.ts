@@ -44,7 +44,7 @@ export const ANONYMISED_PLACEHOLDER = '[redacted]';
 export const USER_DATA_DELETION_ACTION = 'user.data.deletion';
 
 /** Prefix used for the one-way subject identifier kept in audit records. */
-export const ANONYMISED_SUBJECT_PREFIX = 'anon:';
+export const ANONYMISER_SUBJECT_PREFIX = 'anon:';
 
 /** Default preferences JSON written back onto an anonymised user row. */
 export const DEFAULT_PREFERENCES = {
@@ -130,7 +130,7 @@ export function redactPersonalData(value: unknown): unknown {
 export const USER_DATA_INVENTORY: readonly UserDataStore[] = [
   {
     table: 'users',
-    description: 'Account row (email, names, bio, avatar, wallet, 2FA)',
+    description: 'Account row (email, names, bio, avatar, wallet, 2FA',
     userColumns: ['id'],
     disposition: UserDataDisposition.ANONYMISE,
     retentionDays: null,
@@ -335,41 +335,6 @@ export const USER_DATA_INVENTORY: readonly UserDataStore[] = [
     retentionDays: 2555,
     retention: '2555 days (7 years)',
     rationale:
-      'The decision trail is retained, but the comment body can embed PII, so it is redacted in place.',
-  },
-  {
-    table: 'review_decision_history',
-    description: 'Moderation decisions taken by the user',
-    userColumns: ['reviewer_id'],
-    disposition: UserDataDisposition.ANONYMISE,
-    retentionDays: 2555,
-    retention: '2555 days (7 years)',
-    rationale:
-      'The decision (type, target, timestamp) is retained for accountability; the rationale and metadata can embed PII and are cleared.',
-  },
-  {
-    table: 'verification_requests',
-    description: 'Identity/project verification requests and evidence',
-    userColumns: ['requesterId', 'reviewerId'],
-    disposition: UserDataDisposition.ANONYMISE,
-    retentionDays: 2555,
-    retention: '2555 days (7 years)',
-    rationale:
-      'The request lifecycle is retained for audit; evidence, requester note and review note are redacted, and the reviewer reference is cleared.',
-  },
-  {
-    table: 'outbox_events',
-    description: 'Transactional outbox events (payloads may embed user data)',
-    userColumns: ['payload.userId'],
-    disposition: UserDataDisposition.ANONYMISE,
-    retentionDays: 30,
-    retention: 'Processed within minutes; dead letters kept 30 days',
-    rationale:
-      'Outbox payloads can embed a user id and email. Redacting the payload in place keeps the delivery stream consistent while removing the personal data.',
+      'The decision trail is retained for accountability, but the author link points at the anonymised tombstone user.',
   },
 ];
-
-/** Convenience: the inventory entry for a table, if it is covered. */
-export function userDataStoreFor(table: string): UserDataStore | undefined {
-  return USER_DATA_INVENTORY.find((store) => store.table === table);
-}

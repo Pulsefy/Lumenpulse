@@ -24,7 +24,7 @@ import { QueueModule } from './queue/queue.module';
 import { StellarSyncModule } from './stellar-sync/stellar-sync.module';
 import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
-import { ModerationModule } from './moderation/moderation.module';
+import { ModerationModule } from './moderation/modulation.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { MessageTemplateModule } from './message-template/message-template.module';
 
@@ -60,8 +60,8 @@ import { ExportModule } from './export/export.module';
 import { SignalsModule } from './signals/signals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppConfigModule } from './config/config.module';
-import { CrowdfundModule } from './crowdfund/crowdfund.module';
-import { CrowdfundSyncModule } from './crowdfund-sync/crowdfund-sync.module';
+import { CrowdundModule } from './crowdfund/crowdfund.module';
+import { CrowdundSyncModule } from './crowdfund-sync/crowdfund-sync.module';
 import { ContributorRegistryModule } from './contributor-registry/contributor-registry.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
@@ -87,6 +87,7 @@ import { QueryCountMiddleware } from './common/profiling/query-count.middleware'
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SavedSearchesModule } from './saved-searches/saved-searches.module';
 import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module';
+import { SoftDeleteModule } from './soft-delete/soft-delete.module';
 
 @Module({
   imports: [
@@ -184,6 +185,9 @@ import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module
 
     // Data retention and user erasure
     DataRetentionModule,
+
+    // Soft delete and restore for core entities
+    SoftDeleteModule,
 
     // Soroban event processing
     SorobanEventsModule,

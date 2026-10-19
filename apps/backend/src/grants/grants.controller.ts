@@ -10,6 +10,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   ApiTags,
   ApiOperation,
@@ -45,7 +46,7 @@ import { AdminAuditInterceptor } from '../admin-audit/interceptors/admin-audit.i
 export class GrantsController {
   constructor(private readonly grantsService: GrantsService) {}
 
-  // ΓöÇΓöÇ Rounds ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // Rounds
 
   @Get('rounds')
   @ApiOperation({
@@ -153,7 +154,7 @@ export class GrantsController {
     return this.grantsService.finalizeRound(id);
   }
 
-  // ΓöÇΓöÇ Pool funding ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // Pool funding
 
   @Post('rounds/fund')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -197,7 +198,7 @@ export class GrantsController {
     return this.grantsService.fundPool(dto);
   }
 
-  // ΓöÇΓöÇ Eligibility ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // Eligibility
 
   @Post('rounds/projects/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -257,12 +258,52 @@ export class GrantsController {
   removeProject(
     @Param('roundId', ParseIntPipe) roundId: number,
     @Param('projectId', ParseIntPipe) projectId: number,
+    @CurrentUser('id') actorId: number,
   ) {
-    this.grantsService.removeProject(roundId, projectId);
+    this.grantsService.removeProject(roundId, projectId, actorId);
     return { success: true };
   }
 
-  // ΓöÇΓöÇ Contributions ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  @Get('rounds/:roundId/projects/deleted')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'List soft-deleted projects in a round (admin only)',
+    description:
+      'Lists recently soft-deleted project eligibility records within the retention window. Requires admin role.',
+  })
+  @ApiResponse({ status: 200, description: 'Deleted records retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
+  listDeletedProjects(@Param('roundId', ParseIntPipe) roundId: number) {
+    return this.grantsService.listDeletedProjects(roundId);
+  }
+
+  @Post('rounds/:roundId/projects/:projectId/restore')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Roles(UserRole.ADMIN)
+  @UseInterceptors(AdminAuditInterceptor)
+  @AuditBlockchainAction({ contractField: 'roundId' })
+  @ApiOperation({
+    summary: 'Restore a soft-deleted project in a round (admin only)',
+    description:
+      'Restores a previously soft-deleted project eligibility record. Requires admin role.',
+  })
+  @ApiResponse({ status: 200, description: 'Project restored successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
+  @ApiResponse({ status: 404, description: 'Deleted record not found' })
+  restoreProject(
+    @Param('roundId', ParseIntPipe) roundId: number,
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @CurrentUser('id') actorId: number,
+  ) {
+    return this.grantsService.restoreProject(roundId, projectId, actorId);
+  }
+
+  // Contributions
 
   @Post('contributions')
   @ApiOperation({
@@ -294,7 +335,7 @@ export class GrantsController {
     return { success: true };
   }
 
-  // ΓöÇΓöÇ Distribution ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // Distribution
 
   @Post('rounds/distribute')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -303,69 +344,25 @@ export class GrantsController {
   @UseInterceptors(AdminAuditInterceptor)
   @AuditBlockchainAction({ contractField: 'roundId' })
   @ApiOperation({
-    summary: 'Distribute matching pool allocations (admin only)',
+    summary: 'Distribute matching funds (admin only)',
     description:
-      'Distributes pool allocations to approved project owners. Requires admin role.',
+      'Triggers distribution of matching funds for a completed round. Requires admin role.',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Distribution completed successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        totalDistributed: { type: 'string' },
-        allocations: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              projectId: { type: 'integer' },
-              owner: { type: 'string' },
-              amount: { type: 'string' },
-            },
-            required: ['projectId', 'owner', 'amount'],
-          },
-        },
-      },
-      required: ['totalDistributed', 'allocations'],
-    },
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Distribution completed successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        totalDistributed: { type: 'string' },
-        allocations: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              projectId: { type: 'integer' },
-              owner: { type: 'string' },
-              amount: { type: 'string' },
-            },
-            required: ['projectId', 'owner', 'amount'],
-          },
-        },
-      },
-      required: ['totalDistributed', 'allocations'],
-    },
-  })
+  @ApiResponse({ status: 200, description: 'Funds distributed successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   @ApiResponse({ status: 404, description: 'Round not found' })
   distribute(@Body() dto: DistributeDto) {
     return this.grantsService.distribute(dto);
   }
-  @Get('leaderboard')
+
+  // Leaderboard
+
+  @Get('rounds/:id/leaderboard')
   @ApiOperation({
-    summary: 'Get leaderboard for a matching round',
+    summary: 'Get round leaderboard',
     description:
-      'Returns ranked projects for a round with contribution and match figures. ' +
-      'Supports top-N (e.g. ?roundId=1&topN=5) or paginated responses ' +
-      '(e.g. ?roundId=1&page=2&limit=10). Projects are ranked by QF score descending.',
+      'Retrieves the ranked leaderboard of projects for a round based on contributions.',
   })
   @ApiResponse({
     status: 200,
@@ -373,7 +370,10 @@ export class GrantsController {
     type: LeaderboardResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Round not found' })
-  getLeaderboard(@Query() query: LeaderboardQueryDto): LeaderboardResponseDto {
-    return this.grantsService.getLeaderboard(query);
+  getLeaderboard(
+    @Param('id', ParseIntPipe) roundId: number,
+    @Query() query: LeaderboardQueryDto,
+  ) {
+    return this.grantsService.getLeaderboard(roundId, query);
   }
 }
