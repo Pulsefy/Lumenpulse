@@ -125,6 +125,25 @@ CACHE_HIT_RATE = Gauge(
     ["namespace"],
 )
 
+FEATURE_STORE_CACHE_STALENESS_SECONDS = Gauge(
+    "lumenpulse_feature_store_cache_staleness_seconds",
+    "Age in seconds of cached feature source data returned to serving lookups",
+    ["feature"],
+)
+
+FEATURE_STORE_LOOKUP_SECONDS = Histogram(
+    "lumenpulse_feature_store_lookup_seconds",
+    "Feature-store source lookup latency by feature and cache outcome",
+    ["feature", "cache_status"],
+    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5],
+)
+
+FEATURE_STORE_CACHE_INVALIDATIONS_TOTAL = Counter(
+    "lumenpulse_feature_store_cache_invalidations_total",
+    "Number of feature-store cache namespaces invalidated after ingestion",
+    ["feature"],
+)
+
 # ── Feature-store schema versioning & drift (#1239) ─────────────────────────
 FEATURE_DRIFT_PSI = Gauge(
     "lumenpulse_feature_drift_psi",
