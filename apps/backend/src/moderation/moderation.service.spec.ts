@@ -155,6 +155,28 @@ describe('ModerationService', () => {
     });
   });
 
+  describe('recordBulkItemFailure', () => {
+    it('audits the actor, operation, item, and failure reason', async () => {
+      await service.recordBulkItemFailure(
+        'admin-1',
+        'bulk-operation-1',
+        'report-1',
+        'Report not found',
+      );
+
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        'bulk_admin_operation_item_failed',
+        'admin-1',
+        null,
+        {
+          bulkOperationId: 'bulk-operation-1',
+          itemId: 'report-1',
+          error: 'Report not found',
+        },
+      );
+    });
+  });
+
   describe('getModerationStats', () => {
     it('should return moderation statistics', async () => {
       mockRepository.count.mockResolvedValue(10);
