@@ -17,8 +17,13 @@ import {
 } from "lucide-react";
 import { DependencyStatusBanner } from "@/components/DependencyStatusBanner";
 import { useWatchlist } from "@/hooks/use-watchlist";
+import { ListSkeleton } from "@/components/ui/list-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ListError } from "@/components/ui/list-error";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { clientConfig } from '@/lib/config';
+
+const API_BASE = clientConfig.apiUrl;
 
 interface ProjectSummary {
   id: number;
@@ -371,16 +376,20 @@ export default function ProjectsPageClient() {
       <section className="px-4 pb-20">
         <div className="container mx-auto max-w-4xl">
           {isLoading ? (
-            <div className="flex justify-center py-20">
-              <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            <div className="py-20">
+              <ListSkeleton count={4} rowHeight={180} variant="grid" gridCols={2} />
             </div>
           ) : error ? (
-            <div className="text-center py-20 text-foreground/40">{error}</div>
+            <ListError
+              message={error}
+              onRetry={() => window.location.reload()}
+            />
           ) : projects.length === 0 ? (
-            <div className="text-center py-20">
-              <Trophy className="w-12 h-12 text-foreground/20 mx-auto mb-4" />
-              <p className="text-foreground/40">No projects available yet.</p>
-            </div>
+            <EmptyState
+              icon={Trophy}
+              title="No projects available"
+              description="Projects will appear here once they are created. Check back later!"
+            />
           ) : (
             <div className="flex flex-col gap-4">
               {/* Filters */}
@@ -422,24 +431,22 @@ export default function ProjectsPageClient() {
 
               {/* Results */}
               {filtered.length === 0 ? (
-                <div className="text-center py-20 border border-white/5 rounded-2xl bg-white/[0.02]">
-                  <Search className="w-10 h-10 text-foreground/20 mx-auto mb-4" />
-                  <p className="text-foreground/40">
-                    {showSavedOnly
-                      ? "Your watchlist is empty."
-                      : searchQuery
-                        ? `No projects found matching "${searchQuery}"`
-                        : `No projects with status "${getStatusLabel(status)}".`}
-                  </p>
-                  {hasActiveFilters && (
-                    <button
-                      onClick={clearFilters}
-                      className="mt-4 text-sm text-primary hover:underline"
-                    >
-                      Clear all filters
-                    </button>
-                  )}
-                </div>
+                <EmptyState
+                  icon={Search}
+                  title={showSavedOnly ? "Watchlist is empty" : searchQuery ? "No matching projects" : "No matching projects"}
+                  description={showSavedOnly
+                    ? "Save projects to your watchlist to see them here."
+                    : searchQuery
+                      ? `No projects found matching "${searchQuery}"`
+                      : `No projects with status "${getStatusLabel(status)}".`}
+                  action={hasActiveFilters ? {
+                    label: "Clear all filters",
+                    onClick: clearFilters,
+                  } : showSavedOnly ? {
+                    label: "Browse all projects",
+                    onClick: () => setShowSavedOnly(false),
+                  } : undefined}
+                />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {filtered.map((project) => (

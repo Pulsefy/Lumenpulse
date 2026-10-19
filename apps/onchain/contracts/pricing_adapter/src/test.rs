@@ -1,13 +1,14 @@
 use super::*;
+use crate::LEDGER_THRESHOLD;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Env,
 };
+use test_utils::test_env;
 
 #[test]
 fn test_initialization() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let admin = Address::generate(&env);
 
     let contract_id = env.register(PricingAdapterContract, ());
@@ -22,8 +23,7 @@ fn test_initialization() {
 
 #[test]
 fn test_set_and_get_price() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
 
     let admin = Address::generate(&env);
     let asset = Address::generate(&env);
@@ -47,8 +47,7 @@ fn test_set_and_get_price() {
 
 #[test]
 fn test_normalize_amount_same_decimals() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
 
     let admin = Address::generate(&env);
     let asset = Address::generate(&env);
@@ -83,8 +82,7 @@ fn test_normalize_amount_same_decimals() {
 
 #[test]
 fn test_normalize_amount_different_decimals() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
 
     let admin = Address::generate(&env);
     let eth_asset = Address::generate(&env);
@@ -120,8 +118,7 @@ fn setup<'a>(env: &Env) -> (PricingAdapterContractClient<'a>, Address, Address) 
 
 #[test]
 fn test_price_is_fresh_immediately_after_set() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin, asset) = setup(&env);
 
     env.ledger().set_timestamp(1_000);
@@ -134,8 +131,7 @@ fn test_price_is_fresh_immediately_after_set() {
 
 #[test]
 fn test_price_still_fresh_at_exact_staleness_boundary() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin, asset) = setup(&env);
 
     env.ledger().set_timestamp(1_000);
@@ -148,8 +144,7 @@ fn test_price_still_fresh_at_exact_staleness_boundary() {
 
 #[test]
 fn test_price_stale_one_second_past_boundary() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin, asset) = setup(&env);
 
     env.ledger().set_timestamp(1_000);
@@ -166,8 +161,7 @@ fn test_price_stale_one_second_past_boundary() {
 
 #[test]
 fn test_normalize_amount_rejects_stale_price() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin, asset) = setup(&env);
 
     env.ledger().set_timestamp(1_000);
@@ -183,8 +177,7 @@ fn test_normalize_amount_rejects_stale_price() {
 
 #[test]
 fn test_invalidate_price_rejects_get_price_even_when_fresh() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin, asset) = setup(&env);
 
     env.ledger().set_timestamp(1_000);
@@ -204,8 +197,7 @@ fn test_invalidate_price_rejects_get_price_even_when_fresh() {
 
 #[test]
 fn test_set_price_after_invalidation_clears_flag() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin, asset) = setup(&env);
 
     env.ledger().set_timestamp(1_000);
@@ -220,8 +212,7 @@ fn test_set_price_after_invalidation_clears_flag() {
 
 #[test]
 fn test_invalidate_price_rejects_non_admin() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin, asset) = setup(&env);
     let intruder = Address::generate(&env);
 
@@ -235,8 +226,7 @@ fn test_invalidate_price_rejects_non_admin() {
 
 #[test]
 fn test_invalidate_price_rejects_nonexistent_asset() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin, asset) = setup(&env);
 
     assert_eq!(
@@ -247,8 +237,7 @@ fn test_invalidate_price_rejects_nonexistent_asset() {
 
 #[test]
 fn test_get_price_state_rejects_nonexistent_asset() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, _admin, asset) = setup(&env);
 
     assert_eq!(
@@ -259,8 +248,7 @@ fn test_get_price_state_rejects_nonexistent_asset() {
 
 #[test]
 fn test_staleness_window_defaults_then_reflects_configured_value() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin, _asset) = setup(&env);
 
     assert_eq!(client.get_staleness_window(), DEFAULT_MAX_PRICE_AGE);
@@ -271,8 +259,7 @@ fn test_staleness_window_defaults_then_reflects_configured_value() {
 
 #[test]
 fn test_set_staleness_window_rejects_non_admin() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, _admin, _asset) = setup(&env);
     let intruder = Address::generate(&env);
 
@@ -284,8 +271,7 @@ fn test_set_staleness_window_rejects_non_admin() {
 
 #[test]
 fn test_custom_staleness_window_governs_get_price() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin, asset) = setup(&env);
 
     client.set_staleness_window(&admin, &100u64);
@@ -301,4 +287,29 @@ fn test_custom_staleness_window_governs_get_price() {
         client.try_get_price(&asset),
         Err(Ok(PricingAdapterError::StalePrice))
     );
+}
+
+#[test]
+fn test_ttl_extended_across_read_and_write() {
+    let env = test_env();
+    let (client, admin, asset) = setup(&env);
+
+    client.set_price(&admin, &asset, &10_000_000i128, &7u32);
+
+    // Advance past LEDGER_THRESHOLD once: a read should re-bump both the
+    // instance (Admin/MaxPriceAge) and the per-asset persistent keys.
+    env.ledger().set_sequence_number(LEDGER_THRESHOLD + 1);
+    assert_eq!(client.get_price(&asset), 10_000_000i128);
+    assert_eq!(client.get_asset_decimals(&asset), 7u32);
+
+    // Advance past LEDGER_THRESHOLD again — this only survives if the prior
+    // read actually extended the TTL rather than leaving it to expire.
+    env.ledger().set_sequence_number(2 * LEDGER_THRESHOLD + 2);
+    assert_eq!(client.get_price(&asset), 10_000_000i128);
+
+    // A write after a long gap must also succeed and keep protecting reads.
+    client.set_price(&admin, &asset, &20_000_000i128, &7u32);
+    env.ledger().set_sequence_number(3 * LEDGER_THRESHOLD + 3);
+    assert_eq!(client.get_price(&asset), 20_000_000i128);
+    assert_eq!(client.get_staleness_window(), DEFAULT_MAX_PRICE_AGE);
 }

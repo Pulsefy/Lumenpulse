@@ -1,0 +1,1450 @@
+{
+  "dataset": "anomaly_pump_and_dump",
+  "description": "Synthetic volume/sentiment series with labelled pump-and-dump episodes. Generated once from a fixed seed and committed as an immutable experiment snapshot.",
+  "generator": "scripts/generate_experiment_dataset.py",
+  "records": [
+    {
+      "index": 0,
+      "label": "refuted",
+      "sentiment": 0.2143,
+      "volume": 119.6009
+    },
+    {
+      "index": 1,
+      "label": "refuted",
+      "sentiment": 0.3067,
+      "volume": 107.9503
+    },
+    {
+      "index": 2,
+      "label": "refuted",
+      "sentiment": 0.446,
+      "volume": 87.5326
+    },
+    {
+      "index": 3,
+      "label": "refuted",
+      "sentiment": 0.5002,
+      "volume": 120.0847
+    },
+    {
+      "index": 4,
+      "label": "confirmed",
+      "sentiment": 0.7,
+      "volume": 400.0
+    },
+    {
+      "index": 5,
+      "label": "confirmed",
+      "sentiment": 0.82,
+      "volume": 560.0
+    },
+    {
+      "index": 6,
+      "label": "confirmed",
+      "sentiment": 0.94,
+      "volume": 720.0
+    },
+    {
+      "index": 7,
+      "label": "refuted",
+      "sentiment": 0.2212,
+      "volume": 107.3817
+    },
+    {
+      "index": 8,
+      "label": "refuted",
+      "sentiment": 0.3765,
+      "volume": 98.0199
+    },
+    {
+      "index": 9,
+      "label": "refuted",
+      "sentiment": 0.3778,
+      "volume": 106.7601
+    },
+    {
+      "index": 10,
+      "label": "refuted",
+      "sentiment": 0.4346,
+      "volume": 107.9983
+    },
+    {
+      "index": 11,
+      "label": "refuted",
+      "sentiment": 0.2575,
+      "volume": 90.2781
+    },
+    {
+      "index": 12,
+      "label": "refuted",
+      "sentiment": 0.2856,
+      "volume": 97.6133
+    },
+    {
+      "index": 13,
+      "label": "refuted",
+      "sentiment": 0.3657,
+      "volume": 76.8504
+    },
+    {
+      "index": 14,
+      "label": "refuted",
+      "sentiment": 0.2548,
+      "volume": 111.2327
+    },
+    {
+      "index": 15,
+      "label": "refuted",
+      "sentiment": 0.3804,
+      "volume": 108.8143
+    },
+    {
+      "index": 16,
+      "label": "refuted",
+      "sentiment": 0.3815,
+      "volume": 110.1308
+    },
+    {
+      "index": 17,
+      "label": "refuted",
+      "sentiment": 0.3733,
+      "volume": 113.4434
+    },
+    {
+      "index": 18,
+      "label": "refuted",
+      "sentiment": 0.3329,
+      "volume": 98.3529
+    },
+    {
+      "index": 19,
+      "label": "refuted",
+      "sentiment": 0.3784,
+      "volume": 88.5486
+    },
+    {
+      "index": 20,
+      "label": "refuted",
+      "sentiment": 0.4475,
+      "volume": 122.6555
+    },
+    {
+      "index": 21,
+      "label": "refuted",
+      "sentiment": 0.4318,
+      "volume": 94.9768
+    },
+    {
+      "index": 22,
+      "label": "refuted",
+      "sentiment": 0.3081,
+      "volume": 102.6358
+    },
+    {
+      "index": 23,
+      "label": "refuted",
+      "sentiment": 0.3894,
+      "volume": 101.7165
+    },
+    {
+      "index": 24,
+      "label": "refuted",
+      "sentiment": 0.3251,
+      "volume": 97.0877
+    },
+    {
+      "index": 25,
+      "label": "refuted",
+      "sentiment": 0.3716,
+      "volume": 87.6972
+    },
+    {
+      "index": 26,
+      "label": "refuted",
+      "sentiment": 0.3911,
+      "volume": 83.3089
+    },
+    {
+      "index": 27,
+      "label": "refuted",
+      "sentiment": 0.278,
+      "volume": 108.0058
+    },
+    {
+      "index": 28,
+      "label": "confirmed",
+      "sentiment": 0.7,
+      "volume": 400.0
+    },
+    {
+      "index": 29,
+      "label": "confirmed",
+      "sentiment": 0.82,
+      "volume": 560.0
+    },
+    {
+      "index": 30,
+      "label": "confirmed",
+      "sentiment": 0.94,
+      "volume": 720.0
+    },
+    {
+      "index": 31,
+      "label": "refuted",
+      "sentiment": 0.3719,
+      "volume": 83.9342
+    },
+    {
+      "index": 32,
+      "label": "refuted",
+      "sentiment": 0.4007,
+      "volume": 112.3121
+    },
+    {
+      "index": 33,
+      "label": "refuted",
+      "sentiment": 0.304,
+      "volume": 96.3339
+    },
+    {
+      "index": 34,
+      "label": "refuted",
+      "sentiment": 0.3054,
+      "volume": 100.7285
+    },
+    {
+      "index": 35,
+      "label": "refuted",
+      "sentiment": 0.3486,
+      "volume": 101.7674
+    },
+    {
+      "index": 36,
+      "label": "refuted",
+      "sentiment": 0.3046,
+      "volume": 90.6041
+    },
+    {
+      "index": 37,
+      "label": "refuted",
+      "sentiment": 0.4155,
+      "volume": 113.5543
+    },
+    {
+      "index": 38,
+      "label": "refuted",
+      "sentiment": 0.2857,
+      "volume": 108.8709
+    },
+    {
+      "index": 39,
+      "label": "refuted",
+      "sentiment": 0.4228,
+      "volume": 93.3622
+    },
+    {
+      "index": 40,
+      "label": "refuted",
+      "sentiment": 0.3613,
+      "volume": 105.529
+    },
+    {
+      "index": 41,
+      "label": "refuted",
+      "sentiment": 0.3617,
+      "volume": 127.8433
+    },
+    {
+      "index": 42,
+      "label": "refuted",
+      "sentiment": 0.222,
+      "volume": 113.9203
+    },
+    {
+      "index": 43,
+      "label": "refuted",
+      "sentiment": 0.3575,
+      "volume": 91.5995
+    },
+    {
+      "index": 44,
+      "label": "refuted",
+      "sentiment": 0.4299,
+      "volume": 110.0412
+    },
+    {
+      "index": 45,
+      "label": "refuted",
+      "sentiment": 0.4364,
+      "volume": 85.8427
+    },
+    {
+      "index": 46,
+      "label": "refuted",
+      "sentiment": 0.3395,
+      "volume": 94.6473
+    },
+    {
+      "index": 47,
+      "label": "refuted",
+      "sentiment": 0.3871,
+      "volume": 101.9307
+    },
+    {
+      "index": 48,
+      "label": "refuted",
+      "sentiment": 0.3767,
+      "volume": 98.3483
+    },
+    {
+      "index": 49,
+      "label": "refuted",
+      "sentiment": 0.4181,
+      "volume": 100.4307
+    },
+    {
+      "index": 50,
+      "label": "refuted",
+      "sentiment": 0.4317,
+      "volume": 101.5178
+    },
+    {
+      "index": 51,
+      "label": "refuted",
+      "sentiment": 0.4764,
+      "volume": 73.6526
+    },
+    {
+      "index": 52,
+      "label": "confirmed",
+      "sentiment": 0.7,
+      "volume": 400.0
+    },
+    {
+      "index": 53,
+      "label": "confirmed",
+      "sentiment": 0.82,
+      "volume": 560.0
+    },
+    {
+      "index": 54,
+      "label": "confirmed",
+      "sentiment": 0.94,
+      "volume": 720.0
+    },
+    {
+      "index": 55,
+      "label": "refuted",
+      "sentiment": 0.4857,
+      "volume": 102.4988
+    },
+    {
+      "index": 56,
+      "label": "refuted",
+      "sentiment": 0.322,
+      "volume": 95.8056
+    },
+    {
+      "index": 57,
+      "label": "refuted",
+      "sentiment": 0.464,
+      "volume": 105.6194
+    },
+    {
+      "index": 58,
+      "label": "refuted",
+      "sentiment": 0.3273,
+      "volume": 121.4011
+    },
+    {
+      "index": 59,
+      "label": "refuted",
+      "sentiment": 0.4394,
+      "volume": 85.6421
+    },
+    {
+      "index": 60,
+      "label": "refuted",
+      "sentiment": 0.4283,
+      "volume": 117.7075
+    },
+    {
+      "index": 61,
+      "label": "refuted",
+      "sentiment": 0.2492,
+      "volume": 102.3497
+    },
+    {
+      "index": 62,
+      "label": "refuted",
+      "sentiment": 0.3012,
+      "volume": 103.16
+    },
+    {
+      "index": 63,
+      "label": "refuted",
+      "sentiment": 0.4055,
+      "volume": 118.2708
+    },
+    {
+      "index": 64,
+      "label": "refuted",
+      "sentiment": 0.2269,
+      "volume": 91.0012
+    },
+    {
+      "index": 65,
+      "label": "refuted",
+      "sentiment": 0.2558,
+      "volume": 85.1737
+    },
+    {
+      "index": 66,
+      "label": "refuted",
+      "sentiment": 0.3673,
+      "volume": 97.4575
+    },
+    {
+      "index": 67,
+      "label": "refuted",
+      "sentiment": 0.3053,
+      "volume": 95.0567
+    },
+    {
+      "index": 68,
+      "label": "refuted",
+      "sentiment": 0.2774,
+      "volume": 109.9785
+    },
+    {
+      "index": 69,
+      "label": "refuted",
+      "sentiment": 0.2745,
+      "volume": 97.8559
+    },
+    {
+      "index": 70,
+      "label": "refuted",
+      "sentiment": 0.4141,
+      "volume": 101.2334
+    },
+    {
+      "index": 71,
+      "label": "refuted",
+      "sentiment": 0.5854,
+      "volume": 96.098
+    },
+    {
+      "index": 72,
+      "label": "refuted",
+      "sentiment": 0.3109,
+      "volume": 88.435
+    },
+    {
+      "index": 73,
+      "label": "refuted",
+      "sentiment": 0.339,
+      "volume": 94.2429
+    },
+    {
+      "index": 74,
+      "label": "refuted",
+      "sentiment": 0.3246,
+      "volume": 101.7249
+    },
+    {
+      "index": 75,
+      "label": "refuted",
+      "sentiment": 0.4239,
+      "volume": 95.0737
+    },
+    {
+      "index": 76,
+      "label": "confirmed",
+      "sentiment": 0.7,
+      "volume": 400.0
+    },
+    {
+      "index": 77,
+      "label": "confirmed",
+      "sentiment": 0.82,
+      "volume": 560.0
+    },
+    {
+      "index": 78,
+      "label": "confirmed",
+      "sentiment": 0.94,
+      "volume": 720.0
+    },
+    {
+      "index": 79,
+      "label": "refuted",
+      "sentiment": 0.2949,
+      "volume": 83.3835
+    },
+    {
+      "index": 80,
+      "label": "refuted",
+      "sentiment": 0.3094,
+      "volume": 103.2377
+    },
+    {
+      "index": 81,
+      "label": "refuted",
+      "sentiment": 0.4089,
+      "volume": 104.1527
+    },
+    {
+      "index": 82,
+      "label": "refuted",
+      "sentiment": 0.2986,
+      "volume": 96.9908
+    },
+    {
+      "index": 83,
+      "label": "refuted",
+      "sentiment": 0.3243,
+      "volume": 108.9294
+    },
+    {
+      "index": 84,
+      "label": "refuted",
+      "sentiment": 0.3322,
+      "volume": 103.8074
+    },
+    {
+      "index": 85,
+      "label": "refuted",
+      "sentiment": 0.3539,
+      "volume": 103.7125
+    },
+    {
+      "index": 86,
+      "label": "refuted",
+      "sentiment": 0.2733,
+      "volume": 120.8098
+    },
+    {
+      "index": 87,
+      "label": "refuted",
+      "sentiment": 0.2562,
+      "volume": 101.8087
+    },
+    {
+      "index": 88,
+      "label": "refuted",
+      "sentiment": 0.2285,
+      "volume": 108.5759
+    },
+    {
+      "index": 89,
+      "label": "refuted",
+      "sentiment": 0.3448,
+      "volume": 81.5976
+    },
+    {
+      "index": 90,
+      "label": "refuted",
+      "sentiment": 0.1836,
+      "volume": 90.944
+    },
+    {
+      "index": 91,
+      "label": "refuted",
+      "sentiment": 0.509,
+      "volume": 103.9875
+    },
+    {
+      "index": 92,
+      "label": "refuted",
+      "sentiment": 0.3806,
+      "volume": 105.0289
+    },
+    {
+      "index": 93,
+      "label": "refuted",
+      "sentiment": 0.3702,
+      "volume": 106.9601
+    },
+    {
+      "index": 94,
+      "label": "refuted",
+      "sentiment": 0.3182,
+      "volume": 100.3803
+    },
+    {
+      "index": 95,
+      "label": "refuted",
+      "sentiment": 0.3662,
+      "volume": 111.1991
+    },
+    {
+      "index": 96,
+      "label": "refuted",
+      "sentiment": 0.2531,
+      "volume": 93.4658
+    },
+    {
+      "index": 97,
+      "label": "refuted",
+      "sentiment": 0.4138,
+      "volume": 94.469
+    },
+    {
+      "index": 98,
+      "label": "refuted",
+      "sentiment": 0.3764,
+      "volume": 105.8427
+    },
+    {
+      "index": 99,
+      "label": "refuted",
+      "sentiment": 0.4684,
+      "volume": 87.9147
+    },
+    {
+      "index": 100,
+      "label": "confirmed",
+      "sentiment": 0.7,
+      "volume": 400.0
+    },
+    {
+      "index": 101,
+      "label": "confirmed",
+      "sentiment": 0.82,
+      "volume": 560.0
+    },
+    {
+      "index": 102,
+      "label": "confirmed",
+      "sentiment": 0.94,
+      "volume": 720.0
+    },
+    {
+      "index": 103,
+      "label": "refuted",
+      "sentiment": 0.4073,
+      "volume": 112.2207
+    },
+    {
+      "index": 104,
+      "label": "refuted",
+      "sentiment": 0.4315,
+      "volume": 112.2568
+    },
+    {
+      "index": 105,
+      "label": "refuted",
+      "sentiment": 0.3119,
+      "volume": 115.198
+    },
+    {
+      "index": 106,
+      "label": "refuted",
+      "sentiment": 0.2554,
+      "volume": 119.008
+    },
+    {
+      "index": 107,
+      "label": "refuted",
+      "sentiment": 0.3827,
+      "volume": 119.5914
+    },
+    {
+      "index": 108,
+      "label": "refuted",
+      "sentiment": 0.3698,
+      "volume": 90.6954
+    },
+    {
+      "index": 109,
+      "label": "refuted",
+      "sentiment": 0.3084,
+      "volume": 109.8026
+    },
+    {
+      "index": 110,
+      "label": "refuted",
+      "sentiment": 0.3518,
+      "volume": 105.646
+    },
+    {
+      "index": 111,
+      "label": "refuted",
+      "sentiment": 0.3439,
+      "volume": 95.753
+    },
+    {
+      "index": 112,
+      "label": "refuted",
+      "sentiment": 0.2299,
+      "volume": 96.2906
+    },
+    {
+      "index": 113,
+      "label": "refuted",
+      "sentiment": 0.2726,
+      "volume": 102.7518
+    },
+    {
+      "index": 114,
+      "label": "refuted",
+      "sentiment": 0.3926,
+      "volume": 95.9128
+    },
+    {
+      "index": 115,
+      "label": "refuted",
+      "sentiment": 0.3041,
+      "volume": 96.5794
+    },
+    {
+      "index": 116,
+      "label": "refuted",
+      "sentiment": 0.2338,
+      "volume": 117.0428
+    },
+    {
+      "index": 117,
+      "label": "refuted",
+      "sentiment": 0.3602,
+      "volume": 99.1433
+    },
+    {
+      "index": 118,
+      "label": "refuted",
+      "sentiment": 0.3572,
+      "volume": 91.7544
+    },
+    {
+      "index": 119,
+      "label": "refuted",
+      "sentiment": 0.4621,
+      "volume": 108.8106
+    },
+    {
+      "index": 120,
+      "label": "refuted",
+      "sentiment": 0.4413,
+      "volume": 100.4292
+    },
+    {
+      "index": 121,
+      "label": "refuted",
+      "sentiment": 0.298,
+      "volume": 93.2284
+    },
+    {
+      "index": 122,
+      "label": "refuted",
+      "sentiment": 0.422,
+      "volume": 105.4572
+    },
+    {
+      "index": 123,
+      "label": "refuted",
+      "sentiment": 0.3984,
+      "volume": 102.8525
+    },
+    {
+      "index": 124,
+      "label": "confirmed",
+      "sentiment": 0.7,
+      "volume": 400.0
+    },
+    {
+      "index": 125,
+      "label": "confirmed",
+      "sentiment": 0.82,
+      "volume": 560.0
+    },
+    {
+      "index": 126,
+      "label": "confirmed",
+      "sentiment": 0.94,
+      "volume": 720.0
+    },
+    {
+      "index": 127,
+      "label": "refuted",
+      "sentiment": 0.3635,
+      "volume": 106.1777
+    },
+    {
+      "index": 128,
+      "label": "refuted",
+      "sentiment": 0.2888,
+      "volume": 92.7536
+    },
+    {
+      "index": 129,
+      "label": "refuted",
+      "sentiment": 0.3256,
+      "volume": 85.8552
+    },
+    {
+      "index": 130,
+      "label": "refuted",
+      "sentiment": 0.3014,
+      "volume": 98.0655
+    },
+    {
+      "index": 131,
+      "label": "refuted",
+      "sentiment": 0.4014,
+      "volume": 103.1237
+    },
+    {
+      "index": 132,
+      "label": "refuted",
+      "sentiment": 0.2104,
+      "volume": 102.0226
+    },
+    {
+      "index": 133,
+      "label": "refuted",
+      "sentiment": 0.2804,
+      "volume": 103.0525
+    },
+    {
+      "index": 134,
+      "label": "refuted",
+      "sentiment": 0.3804,
+      "volume": 103.3636
+    },
+    {
+      "index": 135,
+      "label": "refuted",
+      "sentiment": 0.2861,
+      "volume": 96.197
+    },
+    {
+      "index": 136,
+      "label": "refuted",
+      "sentiment": 0.2903,
+      "volume": 90.7478
+    },
+    {
+      "index": 137,
+      "label": "refuted",
+      "sentiment": 0.2498,
+      "volume": 86.5258
+    },
+    {
+      "index": 138,
+      "label": "refuted",
+      "sentiment": 0.4506,
+      "volume": 100.9447
+    },
+    {
+      "index": 139,
+      "label": "refuted",
+      "sentiment": 0.3372,
+      "volume": 86.1928
+    },
+    {
+      "index": 140,
+      "label": "refuted",
+      "sentiment": 0.4429,
+      "volume": 111.3943
+    },
+    {
+      "index": 141,
+      "label": "refuted",
+      "sentiment": 0.4447,
+      "volume": 97.4123
+    },
+    {
+      "index": 142,
+      "label": "refuted",
+      "sentiment": 0.4615,
+      "volume": 98.7849
+    },
+    {
+      "index": 143,
+      "label": "refuted",
+      "sentiment": 0.3342,
+      "volume": 98.5842
+    },
+    {
+      "index": 144,
+      "label": "refuted",
+      "sentiment": 0.2372,
+      "volume": 113.8099
+    },
+    {
+      "index": 145,
+      "label": "refuted",
+      "sentiment": 0.3684,
+      "volume": 88.2525
+    },
+    {
+      "index": 146,
+      "label": "refuted",
+      "sentiment": 0.2969,
+      "volume": 105.6707
+    },
+    {
+      "index": 147,
+      "label": "refuted",
+      "sentiment": 0.4139,
+      "volume": 114.374
+    },
+    {
+      "index": 148,
+      "label": "confirmed",
+      "sentiment": 0.7,
+      "volume": 400.0
+    },
+    {
+      "index": 149,
+      "label": "confirmed",
+      "sentiment": 0.82,
+      "volume": 560.0
+    },
+    {
+      "index": 150,
+      "label": "confirmed",
+      "sentiment": 0.94,
+      "volume": 720.0
+    },
+    {
+      "index": 151,
+      "label": "refuted",
+      "sentiment": 0.3895,
+      "volume": 114.4739
+    },
+    {
+      "index": 152,
+      "label": "refuted",
+      "sentiment": 0.3397,
+      "volume": 105.1605
+    },
+    {
+      "index": 153,
+      "label": "refuted",
+      "sentiment": 0.4262,
+      "volume": 111.7175
+    },
+    {
+      "index": 154,
+      "label": "refuted",
+      "sentiment": 0.3213,
+      "volume": 106.3598
+    },
+    {
+      "index": 155,
+      "label": "refuted",
+      "sentiment": 0.1525,
+      "volume": 92.6563
+    },
+    {
+      "index": 156,
+      "label": "refuted",
+      "sentiment": 0.4031,
+      "volume": 95.0836
+    },
+    {
+      "index": 157,
+      "label": "refuted",
+      "sentiment": 0.2631,
+      "volume": 111.7754
+    },
+    {
+      "index": 158,
+      "label": "refuted",
+      "sentiment": 0.3318,
+      "volume": 123.2159
+    },
+    {
+      "index": 159,
+      "label": "refuted",
+      "sentiment": 0.3741,
+      "volume": 96.9108
+    },
+    {
+      "index": 160,
+      "label": "refuted",
+      "sentiment": 0.4039,
+      "volume": 106.8085
+    },
+    {
+      "index": 161,
+      "label": "refuted",
+      "sentiment": 0.3962,
+      "volume": 101.1236
+    },
+    {
+      "index": 162,
+      "label": "refuted",
+      "sentiment": 0.3011,
+      "volume": 105.1856
+    },
+    {
+      "index": 163,
+      "label": "refuted",
+      "sentiment": 0.3221,
+      "volume": 115.4131
+    },
+    {
+      "index": 164,
+      "label": "refuted",
+      "sentiment": 0.2267,
+      "volume": 98.3669
+    },
+    {
+      "index": 165,
+      "label": "refuted",
+      "sentiment": 0.3711,
+      "volume": 112.7548
+    },
+    {
+      "index": 166,
+      "label": "refuted",
+      "sentiment": 0.2774,
+      "volume": 127.7265
+    },
+    {
+      "index": 167,
+      "label": "refuted",
+      "sentiment": 0.3404,
+      "volume": 103.3546
+    },
+    {
+      "index": 168,
+      "label": "refuted",
+      "sentiment": 0.5665,
+      "volume": 96.6538
+    },
+    {
+      "index": 169,
+      "label": "refuted",
+      "sentiment": 0.2836,
+      "volume": 96.1703
+    },
+    {
+      "index": 170,
+      "label": "refuted",
+      "sentiment": 0.1321,
+      "volume": 104.6301
+    },
+    {
+      "index": 171,
+      "label": "refuted",
+      "sentiment": 0.4308,
+      "volume": 109.5575
+    },
+    {
+      "index": 172,
+      "label": "confirmed",
+      "sentiment": 0.7,
+      "volume": 400.0
+    },
+    {
+      "index": 173,
+      "label": "confirmed",
+      "sentiment": 0.82,
+      "volume": 560.0
+    },
+    {
+      "index": 174,
+      "label": "confirmed",
+      "sentiment": 0.94,
+      "volume": 720.0
+    },
+    {
+      "index": 175,
+      "label": "refuted",
+      "sentiment": 0.4341,
+      "volume": 95.434
+    },
+    {
+      "index": 176,
+      "label": "refuted",
+      "sentiment": 0.2824,
+      "volume": 85.5546
+    },
+    {
+      "index": 177,
+      "label": "refuted",
+      "sentiment": 0.2733,
+      "volume": 94.6258
+    },
+    {
+      "index": 178,
+      "label": "refuted",
+      "sentiment": 0.408,
+      "volume": 106.1034
+    },
+    {
+      "index": 179,
+      "label": "refuted",
+      "sentiment": 0.4259,
+      "volume": 83.1492
+    },
+    {
+      "index": 180,
+      "label": "refuted",
+      "sentiment": 0.3501,
+      "volume": 93.6674
+    },
+    {
+      "index": 181,
+      "label": "refuted",
+      "sentiment": 0.4242,
+      "volume": 101.2711
+    },
+    {
+      "index": 182,
+      "label": "refuted",
+      "sentiment": 0.2928,
+      "volume": 115.0285
+    },
+    {
+      "index": 183,
+      "label": "refuted",
+      "sentiment": 0.3659,
+      "volume": 109.8691
+    },
+    {
+      "index": 184,
+      "label": "refuted",
+      "sentiment": 0.3924,
+      "volume": 91.0734
+    },
+    {
+      "index": 185,
+      "label": "refuted",
+      "sentiment": 0.3497,
+      "volume": 103.534
+    },
+    {
+      "index": 186,
+      "label": "refuted",
+      "sentiment": 0.5317,
+      "volume": 102.5624
+    },
+    {
+      "index": 187,
+      "label": "refuted",
+      "sentiment": 0.3216,
+      "volume": 100.4642
+    },
+    {
+      "index": 188,
+      "label": "refuted",
+      "sentiment": 0.3799,
+      "volume": 99.2673
+    },
+    {
+      "index": 189,
+      "label": "refuted",
+      "sentiment": 0.3812,
+      "volume": 73.9968
+    },
+    {
+      "index": 190,
+      "label": "refuted",
+      "sentiment": 0.2875,
+      "volume": 92.5319
+    },
+    {
+      "index": 191,
+      "label": "refuted",
+      "sentiment": 0.257,
+      "volume": 110.5198
+    },
+    {
+      "index": 192,
+      "label": "refuted",
+      "sentiment": 0.4739,
+      "volume": 83.764
+    },
+    {
+      "index": 193,
+      "label": "refuted",
+      "sentiment": 0.3009,
+      "volume": 100.1161
+    },
+    {
+      "index": 194,
+      "label": "refuted",
+      "sentiment": 0.3648,
+      "volume": 107.5337
+    },
+    {
+      "index": 195,
+      "label": "refuted",
+      "sentiment": 0.3521,
+      "volume": 106.6595
+    },
+    {
+      "index": 196,
+      "label": "confirmed",
+      "sentiment": 0.7,
+      "volume": 400.0
+    },
+    {
+      "index": 197,
+      "label": "confirmed",
+      "sentiment": 0.82,
+      "volume": 560.0
+    },
+    {
+      "index": 198,
+      "label": "confirmed",
+      "sentiment": 0.94,
+      "volume": 720.0
+    },
+    {
+      "index": 199,
+      "label": "refuted",
+      "sentiment": 0.3985,
+      "volume": 95.6792
+    },
+    {
+      "index": 200,
+      "label": "refuted",
+      "sentiment": 0.3898,
+      "volume": 98.7227
+    },
+    {
+      "index": 201,
+      "label": "refuted",
+      "sentiment": 0.3616,
+      "volume": 103.6688
+    },
+    {
+      "index": 202,
+      "label": "refuted",
+      "sentiment": 0.4717,
+      "volume": 90.5529
+    },
+    {
+      "index": 203,
+      "label": "refuted",
+      "sentiment": 0.3288,
+      "volume": 111.4549
+    },
+    {
+      "index": 204,
+      "label": "refuted",
+      "sentiment": 0.506,
+      "volume": 97.7166
+    },
+    {
+      "index": 205,
+      "label": "refuted",
+      "sentiment": 0.3835,
+      "volume": 105.6343
+    },
+    {
+      "index": 206,
+      "label": "refuted",
+      "sentiment": 0.3789,
+      "volume": 101.0882
+    },
+    {
+      "index": 207,
+      "label": "refuted",
+      "sentiment": 0.4013,
+      "volume": 99.8658
+    },
+    {
+      "index": 208,
+      "label": "refuted",
+      "sentiment": 0.4117,
+      "volume": 108.1626
+    },
+    {
+      "index": 209,
+      "label": "refuted",
+      "sentiment": 0.3159,
+      "volume": 98.254
+    },
+    {
+      "index": 210,
+      "label": "refuted",
+      "sentiment": 0.4071,
+      "volume": 90.3226
+    },
+    {
+      "index": 211,
+      "label": "refuted",
+      "sentiment": 0.4259,
+      "volume": 108.922
+    },
+    {
+      "index": 212,
+      "label": "refuted",
+      "sentiment": 0.3152,
+      "volume": 96.2338
+    },
+    {
+      "index": 213,
+      "label": "refuted",
+      "sentiment": 0.385,
+      "volume": 83.9578
+    },
+    {
+      "index": 214,
+      "label": "refuted",
+      "sentiment": 0.3069,
+      "volume": 103.0897
+    },
+    {
+      "index": 215,
+      "label": "refuted",
+      "sentiment": 0.415,
+      "volume": 98.306
+    },
+    {
+      "index": 216,
+      "label": "refuted",
+      "sentiment": 0.3268,
+      "volume": 97.4727
+    },
+    {
+      "index": 217,
+      "label": "refuted",
+      "sentiment": 0.3816,
+      "volume": 84.5968
+    },
+    {
+      "index": 218,
+      "label": "refuted",
+      "sentiment": 0.3215,
+      "volume": 112.6109
+    },
+    {
+      "index": 219,
+      "label": "refuted",
+      "sentiment": 0.2361,
+      "volume": 103.2012
+    },
+    {
+      "index": 220,
+      "label": "confirmed",
+      "sentiment": 0.7,
+      "volume": 400.0
+    },
+    {
+      "index": 221,
+      "label": "confirmed",
+      "sentiment": 0.82,
+      "volume": 560.0
+    },
+    {
+      "index": 222,
+      "label": "confirmed",
+      "sentiment": 0.94,
+      "volume": 720.0
+    },
+    {
+      "index": 223,
+      "label": "refuted",
+      "sentiment": 0.29,
+      "volume": 111.3
+    },
+    {
+      "index": 224,
+      "label": "refuted",
+      "sentiment": 0.3023,
+      "volume": 96.2537
+    },
+    {
+      "index": 225,
+      "label": "refuted",
+      "sentiment": 0.4027,
+      "volume": 97.0933
+    },
+    {
+      "index": 226,
+      "label": "refuted",
+      "sentiment": 0.3838,
+      "volume": 104.401
+    },
+    {
+      "index": 227,
+      "label": "refuted",
+      "sentiment": 0.2774,
+      "volume": 89.1077
+    },
+    {
+      "index": 228,
+      "label": "refuted",
+      "sentiment": 0.3049,
+      "volume": 98.6258
+    },
+    {
+      "index": 229,
+      "label": "refuted",
+      "sentiment": 0.359,
+      "volume": 109.0715
+    },
+    {
+      "index": 230,
+      "label": "refuted",
+      "sentiment": 0.4613,
+      "volume": 111.3198
+    },
+    {
+      "index": 231,
+      "label": "refuted",
+      "sentiment": 0.344,
+      "volume": 111.1769
+    },
+    {
+      "index": 232,
+      "label": "refuted",
+      "sentiment": 0.298,
+      "volume": 113.1637
+    },
+    {
+      "index": 233,
+      "label": "refuted",
+      "sentiment": 0.569,
+      "volume": 100.0728
+    },
+    {
+      "index": 234,
+      "label": "refuted",
+      "sentiment": 0.3176,
+      "volume": 102.7261
+    },
+    {
+      "index": 235,
+      "label": "refuted",
+      "sentiment": 0.3909,
+      "volume": 107.9108
+    },
+    {
+      "index": 236,
+      "label": "refuted",
+      "sentiment": 0.3031,
+      "volume": 112.2752
+    },
+    {
+      "index": 237,
+      "label": "refuted",
+      "sentiment": 0.3216,
+      "volume": 104.8702
+    },
+    {
+      "index": 238,
+      "label": "refuted",
+      "sentiment": 0.3408,
+      "volume": 121.1182
+    },
+    {
+      "index": 239,
+      "label": "refuted",
+      "sentiment": 0.3462,
+      "volume": 97.2781
+    }
+  ],
+  "seed": 1234,
+  "snapshot_ref": "anomaly-pump-and-dump/v1",
+  "version": 1
+}

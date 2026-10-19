@@ -214,7 +214,7 @@ def create_model_card(
 
 def model_card_path(model_type: str, version: str) -> Path:
     """Return the path to the model card file."""
-    from model_registry import _MODELS_ROOT
+    from src.ml.model_registry import _MODELS_ROOT
     return _MODELS_ROOT / model_type / f"{version}.card.json"
 
 
@@ -230,7 +230,7 @@ def save_model_with_card(
     This is a convenience wrapper that saves both the pickled model
     and the model card in the same directory.
     """
-    from model_registry import save_model
+    from src.ml.model_registry import save_model
     
     # Save the model
     saved_version = save_model(model_type, model_obj, version)
@@ -248,19 +248,17 @@ def load_model_card(model_type: str, version: str = "current") -> Optional[Model
     
     Args:
         model_type: e.g. "sentiment" or "price_predictor"
-        version: Specific version string or "current" (follows symlink).
+        version: Specific version string or "current" (follows the pointer).
     
     Returns:
         ModelCard object or None if not found.
     """
-    from model_registry import _symlink_path, _MODELS_ROOT
+    from model_registry import _MODELS_ROOT, get_current_version
     
     if version == "current":
-        sym = _symlink_path(model_type)
-        if not sym.exists():
+        version = get_current_version(model_type)
+        if version is None:
             return None
-        # Get the actual version from the symlink target
-        version = sym.resolve().stem
     
     card_path = _MODELS_ROOT / model_type / f"{version}.card.json"
     if not card_path.exists():

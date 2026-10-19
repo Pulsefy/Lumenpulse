@@ -6,32 +6,66 @@ on:
     branches: [ "main" ]
     paths:
       - 'apps/onchain/**'
+      - 'docs/MAINNET_READINESS_CHECKLIST.md'
+      - 'scripts/**'
+      - '.github/actions/**'
+      - '.github/workflows/onchain.yml'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'apps/onchain/**'
-      - 'apps/onchain/.ci-trigger'
+      - 'docs/MAINNET_READINESS_CHECKLIST.md'
+      - 'scripts/**'
+      - '.github/actions/**'
+      - '.github/workflows/onchain.yml'
+
+# Issue #1713. See backend.yml for the rationale.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   onchain-checks:
     name: Test Suite
     runs-on: ubuntu-latest
+    # Issue #1714. This job compiles the workspace to wasm32 twice on a pull
+    # request (once for the branch, once for a base-branch worktree) and its
+    # runtime is bimodal: 1 min when Swatinem/rust-cache hits, 4.5 min when it
+    # misses. The budget is set from the cache-miss tail, not the median.
+    # See docs/ci-timeouts.md.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
     defaults:
       run:
         working-directory: ./apps/onchain
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        fetch-depth: 0
+
+    - name: Start timeout guard
+      uses: ./.github/actions/job-timeout-guard
+      with:
+        phase: start
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
       with:
-        toolchain: stable
+        # The toolchain version is pinned in rust-toolchain.toml so that
+        # every contributor and CI run uses the same compiler and produces
+        # byte-identical WASM.  1.85.0 is the minimum because soroban-sdk 23
+        # pulls in zeroize_derive 1.5.0 which uses Cargo edition 2024,
+        # stabilised in Rust 1.85.0.
+        toolchain: 1.85.0
         targets: wasm32-unknown-unknown
+        components: rustfmt,clippy
 
     - name: Cache dependencies
-      uses: Swatinem/rust-cache@v2
+      uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       with:
         workspaces: "apps/onchain"
 
@@ -41,9 +75,65 @@ jobs:
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
 
+    - name: Validate manifest
+      run: node scripts/validate-manifest.js
+
+    - name: Enforce contract test modules
+      run: node scripts/check-contract-tests.mjs
+
     - name: Build Contracts
       run: cargo build --target wasm32-unknown-unknown --release
+
+    - name: Verify WASM hashes against manifest
+      run: node scripts/verify-wasm-hashes.mjs
+
+    - name: Produce deployable (optimized) WASM
+      # deploy.ts uploads these; the raw build is rejected by Soroban
+      # (reference-types). See docs/MAINNET_READINESS.md.
+      run: |
+        npm ci --prefix ../../scripts
+        npm run --prefix ../../scripts wasm:optimize
+
+    - name: Build base contracts for size comparison
+      if: github.event_name == 'pull_request'
+      run: |
+        git worktree add --detach "$RUNNER_TEMP/lumenpulse-base" "origin/${{ github.base_ref }}"
+        cargo build --manifest-path "$RUNNER_TEMP/lumenpulse-base/apps/onchain/Cargo.toml" --target wasm32-unknown-unknown --release
+
+    - name: Report and enforce contract WASM sizes
+      env:
+        BASELINE_ROOT: ${{ github.event_name == 'pull_request' && format('{0}/lumenpulse-base/apps/onchain/target/wasm32-unknown-unknown/release', runner.temp) || '' }}
+      run: |
+        baseline_args=()
+        if [ -n "$BASELINE_ROOT" ]; then
+          baseline_args=(--baseline-root "$BASELINE_ROOT")
+        fi
+        node ../../scripts/check-wasm-size.mjs "${baseline_args[@]}" | tee wasm-size.md >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Add WASM size report to pull request
+      if: github.event_name == 'pull_request'
+      uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405 # v2.9.4
+      continue-on-error: true
+      with:
+        header: wasm-size
+        path: apps/onchain/wasm-size.md
+
+    - name: Remove base worktree
+      if: always() && github.event_name == 'pull_request'
+      run: git worktree remove --force "$RUNNER_TEMP/lumenpulse-base"
 
     - name: Run tests
       if: env.SKIP_TESTS != 'true'
       run: cargo test
+
+    - name: Verify mainnet readiness checklist is current
+      run: node scripts/mainnet-readiness.mjs --check
+
+    - name: Report timeout guard
+      if: always()
+      uses: ./.github/actions/job-timeout-guard
+      with:
+        phase: finish
+        job-id: onchain-checks
+        budget-minutes: '30'
+        note: Two full wasm32 release builds on a PR, clippy, contract tests, wasm optimisation.

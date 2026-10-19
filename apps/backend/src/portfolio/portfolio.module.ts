@@ -85,6 +85,7 @@ import { PortfolioAnomalyController } from './portfolio-anomaly.controller';
     PortfolioAnomalyService,
     MaterializedSnapshotService,
     PortfolioSnapshotQueueService,
+    StellarBalanceService,
     TypeOrmModule,
   ],
 })

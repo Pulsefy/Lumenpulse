@@ -8,6 +8,7 @@ import {
   ReportType,
   ReportReason,
 } from '../moderation/entities/content-report.entity';
+import { RequestContextService } from '../common/services/request-context.service';
 
 const SYSTEM_REPORTER = 'system-fraud-detector';
 
@@ -27,40 +28,47 @@ export class SuspiciousContributionProcessor extends WorkerHost {
     job: Job<ContributionJobPayload>,
   ): Promise<{ flagged: boolean; findingCount: number }> {
     const payload = job.data;
-    this.logger.debug(
-      `Processing fraud detection for contribution in round ${payload.roundId}`,
-    );
+    const correlationId = payload.correlationId || String(job.id) || 'unknown';
 
-    const findings = await this.detectionService.detect(payload);
-
-    if (findings.length === 0) {
-      return { flagged: false, findingCount: 0 };
-    }
-
-    const description = this.formatDescription(payload, findings);
-
-    try {
-      await this.moderationService.createReport(SYSTEM_REPORTER, {
-        targetType: ReportType.PROJECT,
-        targetId: String(payload.projectId),
-        reason: ReportReason.FRAUD,
-        description,
-      });
-    } catch (err) {
-      if (err instanceof BadRequestException) {
+    return RequestContextService.run(
+      { correlationId, requestId: correlationId },
+      async () => {
         this.logger.debug(
-          `Report already exists for project ${payload.projectId}, skipping`,
+          `Processing fraud detection for contribution in round ${payload.roundId}`,
         );
+
+        const findings = await this.detectionService.detect(payload);
+
+        if (findings.length === 0) {
+          return { flagged: false, findingCount: 0 };
+        }
+
+        const description = this.formatDescription(payload, findings);
+
+        try {
+          await this.moderationService.createReport(SYSTEM_REPORTER, {
+            targetType: ReportType.PROJECT,
+            targetId: String(payload.projectId),
+            reason: ReportReason.FRAUD,
+            description,
+          });
+        } catch (err) {
+          if (err instanceof BadRequestException) {
+            this.logger.debug(
+              `Report already exists for project ${payload.projectId}, skipping`,
+            );
+            return { flagged: true, findingCount: findings.length };
+          }
+          throw err;
+        }
+
+        this.logger.log(
+          `Flagged contribution: round=${payload.roundId} project=${payload.projectId} contributor=${payload.contributorPublicKey} rules=${findings.length}`,
+        );
+
         return { flagged: true, findingCount: findings.length };
-      }
-      throw err;
-    }
-
-    this.logger.log(
-      `Flagged contribution: round=${payload.roundId} project=${payload.projectId} contributor=${payload.contributorPublicKey} rules=${findings.length}`,
+      },
     );
-
-    return { flagged: true, findingCount: findings.length };
   }
 
   private formatDescription(

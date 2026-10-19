@@ -10,16 +10,19 @@ import ContributionInsightsWidget from "@/components/contribution-insights-widge
 import PortfolioOverviewCard from "@/components/portfolio-overview-card";
 import MarketInsightsCard from "@/components/market-insights-card";
 import { SavedSearchesPanel } from "@/components/saved-searches-panel";
+import AnalyticsChartsSection from "@/components/analytics-charts-section";
 
 import { useStellarAccount } from "@/hooks/useStellarAccount";
 import { useStellarWallet } from "@/app/providers";
 import { usePortfolioSnapshot } from "@/hooks/usePortfolioSnapshot";
+import { useSignals } from "@/hooks/useSignals";
+import SignalsPanel from "@/components/signals-panel";
 import { getExplorerUrl } from "@/lib/utils";
 
 export default function DashboardPage() {
   const router = useRouter();
   const { publicKey } = useStellarWallet();
-  const [selectedAsset, setSelectedAsset] = useState<{
+   const [selectedAsset, setSelectedAsset] = useState<{
     code: string;
     issuer?: string;
     balance: string;
@@ -39,6 +42,15 @@ export default function DashboardPage() {
     lastUpdatedLabel: portfolioLastUpdatedLabel,
     refresh: refreshPortfolio,
   } = usePortfolioSnapshot(publicKey);
+
+  const { data: signalsData, isLoading: isSignalsLoading, error: signalsError, isFresh: signalsIsFresh, ageLabel: signalsAgeLabel, refresh: refreshSignals, isAuthenticated: signalsAuthenticated } = useSignals();
+
+  const portfolioAssetCodes = portfolioSummary?.assets
+    ? portfolioSummary.assets.map((asset) => ({
+        code: asset.assetCode || "XLM",
+        issuer: asset.assetIssuer || undefined,
+      }))
+    : [];
 
   return (
     <>

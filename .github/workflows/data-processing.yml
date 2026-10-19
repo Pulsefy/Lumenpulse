@@ -6,48 +6,81 @@ on:
     branches: [ "main" ]
     paths:
       - 'apps/data-processing/**'
+      - 'docker-compose.yml'
+      - '.python-version'
+      - '.github/actions/**'
+      - '.github/workflows/data-processing.yml'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'apps/data-processing/**'
-      - 'apps/data-processing/.ci-trigger'
+      - 'docker-compose.yml'
+      - '.python-version'
+      - '.github/actions/**'
+      - '.github/workflows/data-processing.yml'
+
+# Issue #1713. See backend.yml for the rationale.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   data-processing-checks:
     runs-on: ubuntu-latest
+    # Issue #1714. This job installs the hash-pinned `requirements.lock`, which
+    # pulls the torch CPU wheel. That download dominates the runtime on a cache
+    # miss, so the budget is set from the observed p90 of 3.2 min with room for
+    # an uncached wheel rather than from the warm median.
+    # See docs/ci-timeouts.md.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: ./apps/data-processing
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.9"
-        cache: 'pip'
+      - name: Start timeout guard
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: start
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install flake8 pytest
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-app
+        with:
+          working-directory: apps/data-processing
 
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest pytest-mock pytest-asyncio
+          pip install --require-hashes -r requirements.lock \
+            --index-url https://pypi.org/simple \
+            --extra-index-url https://download.pytorch.org/whl/cpu
 
-    - name: Test with pytest
-      if: env.SKIP_TESTS != 'true'
-      # Checks if tests folder exists before running to prevent failure on empty repo
-      run: |
-        if [ -d "tests" ]; then
-          pytest
-        else
-          echo "No tests directory found, skipping pytest"
-        fi
+      - name: Lint with flake8
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Test with pytest
+        if: env.SKIP_TESTS != 'true'
+        # Checks if tests folder exists before running to prevent failure on empty repo
+        run: |
+          if [ -d "tests" ]; then
+            pytest
+          else
+            echo "No tests directory found, skipping pytest"
+          fi
+
+      - name: Report timeout guard
+        if: always()
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: finish
+          job-id: data-processing-checks
+          budget-minutes: '15'
+          note: Hash-pinned pip install (torch CPU wheel) + flake8 + pytest.

@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 from datetime import datetime, timedelta
+from sqlalchemy import select
 from src.analytics.cohort_analyzer import (
     CohortAnalyzer,
     CohortType,
@@ -124,7 +125,7 @@ class TestCohortAnalyzer:
         # Verify data was saved
         with analyzer.db_service.get_session() as session:
             participations = session.execute(
-                session.query(ContributorRoundParticipation).filter(
+                select(ContributorRoundParticipation).where(
                     ContributorRoundParticipation.round_id == 1
                 )
             ).scalars().all()
@@ -154,7 +155,7 @@ class TestCohortAnalyzer:
         # Verify cohort was saved
         with analyzer.db_service.get_session() as session:
             cohort = session.execute(
-                session.query(ContributorCohort).filter(
+                select(ContributorCohort).where(
                     ContributorCohort.cohort_id == "first_round_1"
                 )
             ).scalar_one_or_none()
@@ -191,7 +192,7 @@ class TestCohortAnalyzer:
         # Verify retention summary was saved
         with analyzer.db_service.get_session() as session:
             summary = session.execute(
-                session.query(CohortRetentionSummary).filter(
+                select(CohortRetentionSummary).where(
                     CohortRetentionSummary.cohort_id == "first_round_1",
                     CohortRetentionSummary.round_id == 2
                 )
@@ -227,7 +228,7 @@ class TestCohortAnalyzer:
         # Verify summaries were saved
         with analyzer.db_service.get_session() as session:
             summaries = session.execute(
-                session.query(RepeatContributorSummary)
+                select(RepeatContributorSummary)
             ).scalars().all()
             
             assert len(summaries) >= 4
@@ -251,7 +252,7 @@ class TestCohortAnalyzer:
         # Verify cohort was saved
         with analyzer.db_service.get_session() as session:
             cohort = session.execute(
-                session.query(ContributorCohort).filter(
+                select(ContributorCohort).where(
                     ContributorCohort.cohort_type == CohortType.TIME_WINDOW.value
                 )
             ).scalar_one_or_none()

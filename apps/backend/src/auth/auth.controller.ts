@@ -18,7 +18,6 @@ import {
   Param,
   BadRequestException,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
 import type { Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -42,13 +41,38 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { ProfileResponseDto } from '../users/dto/profile-response.dto';
-import { getAuthThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 import { AuditLogAction } from '../audit/decorators/audit-log.decorator';
 
 import {
   ActiveSessionsResponseDto,
   RevokeSessionResponseDto,
 } from './dto/session.dto';
+
+/** [deviceInfo, ipAddress, locationHint] derived from the request. */
+function sessionMeta(
+  req: ExpressRequest,
+): [string | undefined, string | undefined, string | undefined] {
+  const header = (name: string): string | undefined => {
+    const v = req.headers?.[name];
+    return (Array.isArray(v) ? v[0] : v) || undefined;
+  };
+  const device = (header('x-device-name') ?? header('user-agent'))?.slice(
+    0,
+    255,
+  );
+  const ip = req.ip || req.socket?.remoteAddress || undefined;
+  const country = header('cf-ipcountry') ?? header('x-vercel-ip-country');
+  const rawCity = header('x-vercel-ip-city');
+  let city: string | undefined;
+  try {
+    city = rawCity ? decodeURIComponent(rawCity) : undefined;
+  } catch {
+    city = rawCity;
+  }
+  const location = [city, country].filter(Boolean).join(', ');
+  return [device, ip, location ? location.slice(0, 128) : undefined];
+}
 
 @ApiTags('auth')
 @Controller('auth')
@@ -60,7 +84,7 @@ export class AuthController {
   ) {}
 
   @Post('login')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({
@@ -93,7 +117,7 @@ export class AuthController {
     },
   })
   @AuditLogAction('login')
-  async login(@Body() body: LoginDto) {
+  async login(@Body() body: LoginDto, @Request() req: ExpressRequest) {
     const user = await this.authService.validateUser(body.email, body.password);
     if (!user) {
       throw new UnauthorizedException();
@@ -104,11 +128,11 @@ export class AuthController {
       return { requiresTwoFactor: true };
     }
 
-    return this.authService.login(user);
+    return this.authService.login(user, ...sessionMeta(req));
   }
 
   @Post('register')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new user account' })
   @ApiResponse({
@@ -142,7 +166,7 @@ export class AuthController {
   }
 
   @Post('forgot-password')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request a password reset token' })
   @ApiResponse({
@@ -159,7 +183,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password using a one-time token' })
   @ApiResponse({
@@ -181,7 +205,7 @@ export class AuthController {
   }
 
   @Post('refresh')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
   @ApiResponse({
@@ -202,11 +226,12 @@ export class AuthController {
     @Body() body: RefreshTokenDto,
     @Request() req: ExpressRequest,
   ) {
-    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const [deviceInfo, ipAddress, locationHint] = sessionMeta(req);
     return this.authService.refreshToken(
       body.refreshToken,
-      body.deviceInfo,
+      body.deviceInfo ?? deviceInfo,
       ipAddress,
+      locationHint,
     );
   }
 
@@ -227,6 +252,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Post('logout-all')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout from all devices' })
@@ -234,8 +260,8 @@ export class AuthController {
     status: 200,
     description: 'Logout from all devices successful',
   })
-  async logoutAll(@Request() req: { user: { sub: string } }) {
-    return this.authService.logoutAll(req.user.sub);
+  async logoutAll(@Request() req: ExpressRequest & { user: { id: string } }) {
+    return this.authService.logoutAll(req.user.id, req.ip);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -312,7 +338,7 @@ export class AuthController {
   }
 
   @Post('verify')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @ApiOperation({ summary: 'Verify signed challenge and issue JWT' })
   @ApiResponse({
     status: 200,
@@ -326,10 +352,25 @@ export class AuthController {
     },
   })
   @ApiResponse({
+    status: 201,
+    description: 'Authentication successful',
+    schema: {
+      properties: {
+        success: { type: 'boolean' },
+        token: { type: 'string' },
+        refresh_token: { type: 'string' },
+        user: { type: 'object' },
+      },
+    },
+  })
+  @ApiResponse({
     status: 401,
     description: 'Invalid signature or expired challenge',
   })
-  async verifyChallenge(@Body() verifyChallengeDto: VerifyChallengeDto) {
+  async verifyChallenge(
+    @Body() verifyChallengeDto: VerifyChallengeDto,
+    @Request() req: ExpressRequest,
+  ) {
     try {
       this.logger.log(
         `Verification requested for public key: ${verifyChallengeDto.publicKey}`,
@@ -338,6 +379,7 @@ export class AuthController {
       const result = await this.authService.verifyChallenge(
         verifyChallengeDto.publicKey,
         verifyChallengeDto.signedChallenge,
+        ...sessionMeta(req),
       );
 
       this.logger.log(`Authentication successful for user: ${result.user.id}`);
@@ -360,6 +402,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Get('sessions')
   @ApiOperation({ summary: 'Get active sessions for current user' })
   @ApiResponse({
@@ -367,12 +410,14 @@ export class AuthController {
     description: 'Active sessions retrieved successfully',
     type: ActiveSessionsResponseDto,
   })
-  async getActiveSessions(@Request() req: { user: { id: string } }) {
-    const sessions = await this.authService.getActiveSessions(req.user.id);
-    return sessions;
+  async getActiveSessions(
+    @Request() req: { user: { id: string; sessionId?: string } },
+  ) {
+    return this.authService.getActiveSessions(req.user.id, req.user.sessionId);
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Post('sessions/:id/revoke')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Revoke a specific session' })
@@ -383,10 +428,10 @@ export class AuthController {
   })
   @ApiResponse({ status: 404, description: 'Session not found' })
   async revokeSession(
-    @Request() req: { user: { id: string } },
+    @Request() req: ExpressRequest & { user: { id: string } },
     @Param('id') sessionId: string,
   ): Promise<{ message: string; sessionId: string }> {
-    return this.authService.revokeSession(sessionId, req.user.id);
+    return this.authService.revokeSession(sessionId, req.user.id, req.ip);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -432,7 +477,7 @@ export class AuthController {
   }
 
   @Post('2fa/verify')
-  @Throttle(getAuthThrottleOverride())
+  @RateLimitPolicy('auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify 2FA token during login' })
   @ApiResponse({
@@ -449,7 +494,10 @@ export class AuthController {
     status: 401,
     description: 'Invalid credentials or TOTP token',
   })
-  async verifyTwoFactor(@Body() body: TwoFactorVerifyDto) {
+  async verifyTwoFactor(
+    @Body() body: TwoFactorVerifyDto,
+    @Request() req: ExpressRequest,
+  ) {
     const user = await this.authService.validateUser(body.email, body.password);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -468,7 +516,7 @@ export class AuthController {
       throw new UnauthorizedException('Invalid TOTP token');
     }
 
-    return this.authService.login(user);
+    return this.authService.login(user, ...sessionMeta(req));
   }
 
   @UseGuards(JwtAuthGuard)

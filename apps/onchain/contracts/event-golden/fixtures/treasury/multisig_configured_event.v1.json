@@ -1,0 +1,20 @@
+{
+  "contract": "treasury",
+  "data_xdr": "AAAAEQAAAAEAAAACAAAADwAAAAxzaWduZXJfY291bnQAAAADAAAABQAAAA8AAAAJdGhyZXNob2xkAAAAAAAAAwAAAAM=",
+  "event": "multisig_configured_event",
+  "fields": {
+    "signer_count": 5,
+    "threshold": 3
+  },
+  "topics": [
+    "multisig_configured_event",
+    1,
+    "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA"
+  ],
+  "topics_xdr": [
+    "AAAADwAAABltdWx0aXNpZ19jb25maWd1cmVkX2V2ZW50AAAA",
+    "AAAAAwAAAAE=",
+    "AAAAEgAAAAAAAAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="
+  ],
+  "version": 1
+}

@@ -7,6 +7,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
+from src.privacy import scrub_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -111,6 +113,14 @@ class NewsFetcher:
         market_news = self.fetch_market_news()
 
         all_news = crypto_news + market_news
+
+        # Scrub personal data at the ingestion boundary, before sentiment
+        # scoring, persistence and any feature computation (#1452).
+        for item in all_news:
+            item.title = scrub_text(item.title)
+            item.content = scrub_text(item.content)
+            item.url = scrub_text(item.url)
+
         logger.info(f"Total news items fetched: {len(all_news)}")
 
         return all_news

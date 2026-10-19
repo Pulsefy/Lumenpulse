@@ -71,51 +71,53 @@ export class PortfolioService {
       const stellarBalances =
         await this.stellarBalanceService.getAccountBalances(user.id);
 
-      // Calculate USD values for each asset
-      assetBalances = await Promise.all(
-        stellarBalances.map(async (balance) => {
-          const price = await this.priceService.getCurrentPrice(
-            balance.assetCode,
-          );
-          const valueUsd = parseFloat(balance.balance) * price;
-
-          totalValueUsd += valueUsd;
-
-          return {
-            assetCode: balance.assetCode,
-            assetIssuer: balance.assetIssuer,
-            amount: balance.balance,
-            valueUsd,
-          };
-        }),
+      // FIX (N+1 → 1): batch-fetch all asset prices in a single call instead
+      // of calling getCurrentPrice() once per balance inside a .map().
+      const enriched = await this.stellarBalanceService.getAssetValuesUsd(
+        stellarBalances.map((b) => ({
+          assetCode: b.assetCode,
+          assetIssuer: b.assetIssuer,
+          amount: b.balance,
+        })),
       );
+
+      assetBalances = enriched.map((e) => {
+        totalValueUsd += e.valueUsd;
+        return {
+          assetCode: e.assetCode,
+          assetIssuer: e.assetIssuer,
+          amount: e.amount,
+          valueUsd: e.valueUsd,
+        };
+      });
     } catch {
       this.logger.warn(
         `Failed to fetch Stellar balances for user ${userId}, using portfolio assets as fallback`,
       );
 
-      // Fallback to portfolio_assets table if Stellar fetch fails
+      // Fallback to portfolio_assets table if Stellar fetch fails.
+      // FIX (N+1 → 1): batch-fetch all prices instead of one per asset.
       const portfolioAssets = await this.assetRepository.find({
         where: { userId },
       });
 
-      assetBalances = await Promise.all(
-        portfolioAssets.map(async (asset) => {
-          const price = await this.priceService.getCurrentPrice(
-            asset.assetCode,
-          );
-          const valueUsd = parseFloat(asset.amount) * price;
-
-          totalValueUsd += valueUsd;
-
-          return {
-            assetCode: asset.assetCode,
-            assetIssuer: asset.assetIssuer,
-            amount: asset.amount,
-            valueUsd,
-          };
-        }),
+      const enriched = await this.stellarBalanceService.getAssetValuesUsd(
+        portfolioAssets.map((a) => ({
+          assetCode: a.assetCode,
+          assetIssuer: a.assetIssuer,
+          amount: a.amount,
+        })),
       );
+
+      assetBalances = enriched.map((e) => {
+        totalValueUsd += e.valueUsd;
+        return {
+          assetCode: e.assetCode,
+          assetIssuer: e.assetIssuer,
+          amount: e.amount,
+          valueUsd: e.valueUsd,
+        };
+      });
     }
 
     // Create and save snapshot
@@ -367,23 +369,23 @@ export class PortfolioService {
     const balances =
       await this.stellarBalanceService.getAccountBalances(publicKey);
 
-    const assets = await Promise.all(
-      balances.map(async (balance) => {
-        const valueUsd = await this.stellarBalanceService.getAssetValueUsd(
-          balance.assetCode,
-          balance.assetIssuer,
-          balance.balance,
-        );
-
-        return {
-          assetCode: balance.assetCode,
-          assetIssuer: balance.assetIssuer,
-          amount: balance.balance,
-          value: valueUsd,
-          valueUsd,
-        };
-      }),
+    // FIX (N+1 → 1): batch-fetch USD values for all balances in a single
+    // price call instead of calling getAssetValueUsd() once per balance.
+    const enriched = await this.stellarBalanceService.getAssetValuesUsd(
+      balances.map((b) => ({
+        assetCode: b.assetCode,
+        assetIssuer: b.assetIssuer,
+        amount: b.balance,
+      })),
     );
+
+    const assets = enriched.map((e) => ({
+      assetCode: e.assetCode,
+      assetIssuer: e.assetIssuer,
+      amount: e.amount,
+      value: e.valueUsd,
+      valueUsd: e.valueUsd,
+    }));
 
     const totalValueUsd = assets.reduce(
       (sum, asset) => sum + asset.valueUsd,
@@ -473,17 +475,32 @@ export class PortfolioService {
         .getRawMany();
 
       let refreshed = 0;
-      for (const { userId } of staleUsers) {
-        try {
-          const didRefresh =
-            await this.materializedSnapshotService.refreshForUser(userId);
-          if (didRefresh) refreshed++;
-        } catch (error: unknown) {
-          const message =
-            error instanceof Error ? error.message : 'Unknown error';
-          this.logger.warn(
-            `Failed to refresh materialized snapshot for user ${userId}: ${message}`,
-          );
+
+      // FIX (sequential N+1 → batched): process stale users concurrently
+      // with a concurrency cap of 10 to avoid overwhelming downstream
+      // services.  Previously this was a sequential `for` loop that awaited
+      // one user before starting the next.
+      const CONCURRENCY = 10;
+      for (let i = 0; i < staleUsers.length; i += CONCURRENCY) {
+        const batch = staleUsers.slice(i, i + CONCURRENCY);
+        const results = await Promise.allSettled(
+          batch.map(({ userId }) =>
+            this.materializedSnapshotService.refreshForUser(userId),
+          ),
+        );
+        for (let j = 0; j < results.length; j++) {
+          const result = results[j];
+          if (result.status === 'fulfilled') {
+            if (result.value) refreshed++;
+          } else {
+            const message =
+              result.reason instanceof Error
+                ? result.reason.message
+                : 'Unknown error';
+            this.logger.warn(
+              `Failed to refresh materialized snapshot for user ${batch[j].userId}: ${message}`,
+            );
+          }
         }
       }
 
@@ -636,22 +653,16 @@ export class PortfolioService {
       }
     }
 
-    // Calculate USD value for each aggregated asset concurrently
-    const allocationWithValue = await Promise.all(
-      Array.from(aggregatedBalances.values()).map(async (asset) => {
-        const valueUsd = await this.stellarBalanceService.getAssetValueUsd(
-          asset.assetCode,
-          asset.assetIssuer,
-          asset.amount.toString(),
-        );
-        return {
+    // FIX (N+1 → 1): batch-compute USD values for all aggregated assets in a
+    // single price fetch instead of calling getAssetValueUsd() once per asset.
+    const allocationWithValue =
+      await this.stellarBalanceService.getAssetValuesUsd(
+        Array.from(aggregatedBalances.values()).map((asset) => ({
           assetCode: asset.assetCode,
           assetIssuer: asset.assetIssuer,
           amount: asset.amount.toString(),
-          valueUsd,
-        };
-      }),
-    );
+        })),
+      );
 
     // Calculate total value from the results
     const totalValueUsd = allocationWithValue.reduce(

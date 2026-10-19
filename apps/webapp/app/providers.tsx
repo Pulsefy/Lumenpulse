@@ -3,14 +3,26 @@
 import { WalletProvider } from "@/contexts/WalletContext";
 import { StellarConfigProvider, useStellarConfig } from "@/contexts/StellarConfigContext";
 import { ConfigErrorBanner } from "@/components/config-error-banner";
+import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import {
   ReactNode,
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
+import {
+  WalletAdapter,
+  WalletError,
+  WalletSignOptions,
+  WalletSigningResult,
+  createWalletAdapterRegistry,
+  findWalletAdapter,
+  getAvailableWalletAdapters,
+} from "@/lib/wallet";
+import { WalletPickerDialog } from "@/components/wallet/WalletPickerDialog";
 
 /**
  * Inner wrapper that gates the rest of the app behind a successful config load.
@@ -70,7 +82,10 @@ export function Providers({ children }: { children: ReactNode }) {
             <ThemeProvider>
               <WatchlistProvider>
                 <OnboardingProvider>
-                  {children}
+                  <ToastProvider>
+                    {children}
+                    <ToastViewport />
+                  </ToastProvider>
                 </OnboardingProvider>
               </WatchlistProvider>
             </ThemeProvider>
@@ -80,12 +95,6 @@ export function Providers({ children }: { children: ReactNode }) {
     </StellarConfigProvider>
   );
 }
-
-import {
-  isConnected as freighterIsConnected,
-  getAddress as freighterGetAddress,
-  requestAccess,
-} from "@stellar/freighter-api";
 
 export type WalletStatus =
   | "disconnected"
@@ -101,19 +110,41 @@ export type WalletErrorType =
   | "unknown"
   | null;
 
+export interface WalletOption {
+  id: string;
+  name: string;
+  installUrl?: string;
+}
+
 interface StellarWalletState {
   publicKey: string | null;
   lastAddress: string | null;
   status: WalletStatus;
   errorType: WalletErrorType;
   error: string | null;
-  connect: () => Promise<void>;
+  /** Id of the adapter backing the current session (e.g. "freighter"). */
+  walletId: string | null;
+  /** Wallets detected in this browser. */
+  availableWallets: WalletOption[];
+  /**
+   * Connect a wallet. With no id, connects the only installed wallet or
+   * shows a picker when several are installed. Non-string arguments (e.g. a
+   * click event from `onClick={connect}`) are ignored.
+   */
+  connect: (walletId?: unknown) => Promise<void>;
   disconnect: () => void;
   resetError: () => void;
+  /** Sign a base64 transaction envelope with the connected wallet. */
+  signXdr: (xdr: string, options?: WalletSignOptions) => Promise<WalletSigningResult>;
 }
 
 const STORAGE_KEY = "lumenpulse_wallet_previously_connected";
 const STORAGE_ADDRESS_KEY = "lumenpulse_wallet_last_address";
+const STORAGE_ADAPTER_KEY = "lumenpulse_wallet_adapter";
+const DEFAULT_ADAPTER_ID = "freighter";
+
+const NO_WALLET_MESSAGE =
+  "No Stellar wallet extension found. Install Freighter (freighter.app) or xBull (xbull.app) to connect your Stellar wallet.";
 
 const StellarWalletContext = createContext<StellarWalletState>({
   publicKey: null,
@@ -121,51 +152,74 @@ const StellarWalletContext = createContext<StellarWalletState>({
   status: "disconnected",
   errorType: null,
   error: null,
+  walletId: null,
+  availableWallets: [],
   connect: async () => {},
   disconnect: () => {},
   resetError: () => {},
+  signXdr: async () => ({
+    status: "failed",
+    error: new WalletError("not_available", "Wallet provider is not mounted."),
+  }),
 });
 
 export function useStellarWallet() {
   return useContext(StellarWalletContext);
 }
 
-export function StellarProvider({ children }: { children: ReactNode }) {
+function toOption(adapter: WalletAdapter): WalletOption {
+  return { id: adapter.id, name: adapter.name, installUrl: adapter.installUrl };
+}
+
+export function StellarProvider({
+  children,
+  adapters: adaptersProp,
+}: {
+  children: ReactNode;
+  /** Injected for tests; defaults to the shared registry. */
+  adapters?: WalletAdapter[];
+}) {
+  const [adapters] = useState<WalletAdapter[]>(() => adaptersProp ?? createWalletAdapterRegistry());
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [lastAddress, setLastAddress] = useState<string | null>(null);
   const [status, setStatus] = useState<WalletStatus>("disconnected");
   const [error, setError] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<WalletErrorType>(null);
-
-  const checkFreighterInstalled = (): boolean => {
-    return typeof window !== "undefined" && "freighter" in window;
-  };
+  const [walletId, setWalletId] = useState<string | null>(null);
+  const [availableWallets, setAvailableWallets] = useState<WalletOption[]>([]);
+  const [pickerOptions, setPickerOptions] = useState<WalletOption[] | null>(null);
+  const pickerResolver = useRef<((id: string | null) => void) | null>(null);
 
   useEffect(() => {
     async function checkConnection() {
       try {
+        const available = await getAvailableWalletAdapters(adapters);
+        setAvailableWallets(available.map(toOption));
+
         const wasConnected = localStorage.getItem(STORAGE_KEY) === "true";
         const storedAddress = localStorage.getItem(STORAGE_ADDRESS_KEY);
-        const installed = checkFreighterInstalled();
+        const storedAdapterId = localStorage.getItem(STORAGE_ADAPTER_KEY) ?? DEFAULT_ADAPTER_ID;
 
         if (storedAddress) setLastAddress(storedAddress);
 
-        if (!installed) {
+        const adapter = available.find((a) => a.id === storedAdapterId);
+        if (!adapter) {
           if (wasConnected) setStatus("missing_extension");
           return;
         }
 
-        const { isConnected } = await freighterIsConnected();
-        if (isConnected) {
-          const { address } = await freighterGetAddress();
-          if (address) {
-            setPublicKey(address);
-            setLastAddress(address);
-            setStatus("connected");
-            localStorage.setItem(STORAGE_KEY, "true");
-            localStorage.setItem(STORAGE_ADDRESS_KEY, address);
-            return;
-          }
+        const address = adapter.getConnectedAddress
+          ? await adapter.getConnectedAddress()
+          : null;
+        if (address) {
+          setPublicKey(address);
+          setLastAddress(address);
+          setWalletId(adapter.id);
+          setStatus("connected");
+          localStorage.setItem(STORAGE_KEY, "true");
+          localStorage.setItem(STORAGE_ADDRESS_KEY, address);
+          localStorage.setItem(STORAGE_ADAPTER_KEY, adapter.id);
+          return;
         }
 
         if (wasConnected) setStatus("previously_connected");
@@ -175,64 +229,108 @@ export function StellarProvider({ children }: { children: ReactNode }) {
     }
 
     checkConnection();
-  }, []);
+  }, [adapters]);
 
-  const connect = useCallback(async () => {
-    setError(null);
-    setErrorType(null);
-
-    if (!checkFreighterInstalled()) {
-      setStatus("missing_extension");
-      setErrorType("missing_extension");
-      setError("Freighter extension not found. Please install it to connect your Stellar wallet.");
-      return;
-    }
-
+  const connectWith = useCallback(async (adapter: WalletAdapter) => {
     setStatus("connecting");
 
-    try {
-      const result = await requestAccess();
+    const result = await adapter.connect();
 
-      if (result.error) {
-        const errLower = result.error.toLowerCase();
-        const isRejection =
-          errLower.includes("user") ||
-          errLower.includes("denied") ||
-          errLower.includes("reject") ||
-          errLower.includes("cancelled") ||
-          errLower.includes("canceled");
-
-        if (isRejection) {
-          setStatus("rejected");
-          setErrorType("rejected");
-          setError("You declined the connection request. Click below to try again.");
-          return;
-        }
-
-        throw new Error(result.error);
-      }
-
-      if (!result.address) {
-        setStatus("missing_extension");
-        setErrorType("missing_extension");
-        setError("Freighter wallet extension not detected. Please install it from freighter.app");
-        return;
-      }
-
-      setPublicKey(result.address);
-      setLastAddress(result.address);
+    if (result.status === "connected" && result.pubkey) {
+      setPublicKey(result.pubkey);
+      setLastAddress(result.pubkey);
+      setWalletId(adapter.id);
       setStatus("connected");
       setError(null);
       setErrorType(null);
       localStorage.setItem(STORAGE_KEY, "true");
-      localStorage.setItem(STORAGE_ADDRESS_KEY, result.address);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to connect wallet";
-      setError(message);
-      setErrorType("unknown");
-      setStatus("disconnected");
+      localStorage.setItem(STORAGE_ADDRESS_KEY, result.pubkey);
+      localStorage.setItem(STORAGE_ADAPTER_KEY, adapter.id);
+      return;
     }
+
+    if (result.status === "rejected") {
+      setStatus("rejected");
+      setErrorType("rejected");
+      setError("You declined the connection request. Click below to try again.");
+      return;
+    }
+
+    if (result.error?.code === "missing_wallet") {
+      setStatus("missing_extension");
+      setErrorType("missing_extension");
+      setError(result.error.message);
+      return;
+    }
+
+    setError(result.error?.message ?? "Failed to connect wallet");
+    setErrorType("unknown");
+    setStatus("disconnected");
   }, []);
+
+  const choose = useCallback((options: WalletOption[]) => {
+    return new Promise<string | null>((resolve) => {
+      pickerResolver.current = resolve;
+      setPickerOptions(options);
+    });
+  }, []);
+
+  const closePicker = useCallback((id: string | null) => {
+    setPickerOptions(null);
+    pickerResolver.current?.(id);
+    pickerResolver.current = null;
+  }, []);
+
+  const connect = useCallback(
+    async (requestedId?: unknown) => {
+      setError(null);
+      setErrorType(null);
+
+      // Buttons pass `onClick={connect}` directly, so ignore non-string args.
+      const explicit =
+        typeof requestedId === "string" ? findWalletAdapter(requestedId, adapters) : undefined;
+      if (explicit) {
+        await connectWith(explicit);
+        return;
+      }
+
+      const available = await getAvailableWalletAdapters(adapters);
+      setAvailableWallets(available.map(toOption));
+
+      if (available.length === 0) {
+        setStatus("missing_extension");
+        setErrorType("missing_extension");
+        setError(NO_WALLET_MESSAGE);
+        return;
+      }
+
+      if (available.length === 1) {
+        await connectWith(available[0]);
+        return;
+      }
+
+      const chosenId = await choose(available.map(toOption));
+      const chosen = available.find((a) => a.id === chosenId);
+      if (chosen) await connectWith(chosen);
+    },
+    [adapters, choose, connectWith],
+  );
+
+  const signXdr = useCallback(
+    async (xdr: string, options?: WalletSignOptions): Promise<WalletSigningResult> => {
+      const adapter =
+        findWalletAdapter(walletId, adapters) ??
+        findWalletAdapter(DEFAULT_ADAPTER_ID, adapters);
+      if (!adapter) {
+        return {
+          status: "failed",
+          error: new WalletError("not_available", "No wallet is connected."),
+        };
+      }
+      return adapter.signXdr(xdr, { address: publicKey ?? undefined, ...options });
+    },
+    [adapters, walletId, publicKey],
+  );
 
   const disconnect = useCallback(() => {
     // Clean up wallet-scoped localStorage entries before clearing state
@@ -242,11 +340,13 @@ export function StellarProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("activeWalletId");
     setPublicKey(null);
     setLastAddress(null);
+    setWalletId(null);
     setStatus("disconnected");
     setError(null);
     setErrorType(null);
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(STORAGE_ADDRESS_KEY);
+    localStorage.removeItem(STORAGE_ADAPTER_KEY);
   }, [publicKey]);
 
   const resetError = useCallback(() => {
@@ -256,11 +356,37 @@ export function StellarProvider({ children }: { children: ReactNode }) {
     setStatus(wasConnected ? "previously_connected" : "disconnected");
   }, []);
 
+  let lastUsedId: string | null = null;
+  try {
+    lastUsedId = typeof window !== "undefined" ? localStorage.getItem(STORAGE_ADAPTER_KEY) : null;
+  } catch {
+    lastUsedId = null;
+  }
+
   return (
     <StellarWalletContext.Provider
-      value={{ publicKey, lastAddress, status, errorType, error, connect, disconnect, resetError }}
+      value={{
+        publicKey,
+        lastAddress,
+        status,
+        errorType,
+        error,
+        walletId,
+        availableWallets,
+        connect,
+        disconnect,
+        resetError,
+        signXdr,
+      }}
     >
       {children}
+      <WalletPickerDialog
+        open={pickerOptions !== null}
+        options={pickerOptions ?? []}
+        lastUsedId={lastUsedId}
+        onSelect={(id) => closePicker(id)}
+        onClose={() => closePicker(null)}
+      />
     </StellarWalletContext.Provider>
   );
 }

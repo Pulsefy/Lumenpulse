@@ -93,6 +93,33 @@ export interface LinkedStellarAccount {
   updatedAt: string;
 }
 
+export interface UserSession {
+  id: string;
+  deviceInfo: string | null;
+  ipAddress: string | null;
+  locationHint: string | null;
+  lastSeenAt: string | null;
+  createdAt: string;
+  expiresAt: string;
+  isCurrent: boolean;
+}
+
+export const sessionsApi = {
+  async list(): Promise<ApiResponse<{ sessions: UserSession[]; total: number }>> {
+    return apiClient.get<{ sessions: UserSession[]; total: number }>('/auth/sessions');
+  },
+
+  async revoke(sessionId: string): Promise<ApiResponse<{ message: string; sessionId: string }>> {
+    return apiClient.post<{ message: string; sessionId: string }>(
+      `/auth/sessions/${encodeURIComponent(sessionId)}/revoke`,
+    );
+  },
+
+  async revokeAll(): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.post<{ message: string }>('/auth/logout-all');
+  },
+};
+
 export interface LinkStellarAccountPayload {
   publicKey: string;
   label?: string;
@@ -111,6 +138,23 @@ export interface UpdateProfilePayload {
  * Auth API Service
  * Uses the shared API client for all requests
  */
+export interface PushTokenRegistration {
+  token: string;
+  deviceId: string;
+  platform: 'ios' | 'android' | 'web';
+  deviceName?: string;
+}
+
+export const notificationDevicesApi = {
+  async register(payload: PushTokenRegistration): Promise<ApiResponse<void>> {
+    return apiClient.post<void>('/notification-devices', payload);
+  },
+
+  async deregister(deviceId: string): Promise<ApiResponse<void>> {
+    return apiClient.deleteWithBody<void>('/notification-devices', { deviceId });
+  },
+};
+
 export const authApi = {
   /**
    * Login user
@@ -223,3 +267,6 @@ export const stellarApi = {
 
 // Re-export the client for direct use if needed
 export { apiClient };
+
+// Export API
+export * from './exports';

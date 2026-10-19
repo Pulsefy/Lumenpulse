@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from './secure-storage';
 import {
   CONTRIBUTION_DRAFT_STORAGE_KEY,
   ContributionDraft,
@@ -17,6 +17,7 @@ export interface WalletAccountMetadata {
   id: string;
   publicKey: string;
   label?: string | null;
+  isPrimary?: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -60,6 +61,7 @@ const sanitizeWalletAccounts = (accounts: WalletAccountMetadata[]): WalletAccoun
       id: account.id,
       publicKey: account.publicKey,
       label: account.label ?? null,
+      isPrimary: Boolean(account.isPrimary),
       isActive: account.isActive,
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,
@@ -315,6 +317,14 @@ export const storage = {
   },
 
   async removeTokens() {
+    await this.clearAuthState();
+  },
+
+  async rotateStorageKey() {
+    await this.clearAuthState();
+  },
+
+  async invalidateOnSessionEnd() {
     await this.clearAuthState();
   },
 

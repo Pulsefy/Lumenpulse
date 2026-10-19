@@ -25,9 +25,10 @@ import {
 } from './dto/notification-preference.dto';
 import { NotificationPreference } from './notification-preference.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JWT_SECURITY_SCHEME } from '../openapi/openapi.constants';
 
 @ApiTags('notification-preferences')
-@ApiBearerAuth()
+@ApiBearerAuth(JWT_SECURITY_SCHEME)
 @UseGuards(JwtAuthGuard)
 @Controller('notification-preferences')
 export class NotificationPreferenceController {

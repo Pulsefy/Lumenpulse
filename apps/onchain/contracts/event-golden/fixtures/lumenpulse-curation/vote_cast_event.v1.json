@@ -1,0 +1,20 @@
+{
+  "contract": "lumenpulse-curation",
+  "data_xdr": "AAAAEQAAAAEAAAAEAAAADwAAAAdhcHByb3ZlAAAAAAAAAAABAAAADwAAAApwcm9qZWN0X2lkAAAAAAAFAAAAAAAAACoAAAAPAAAABXZvdGVyAAAAAAAAEgAAAAAAAAAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAAAAPAAAADHZvdGluZ19wb3dlcgAAAAUAAAAAAAAF3A==",
+  "event": "vote_cast_event",
+  "fields": {
+    "approve": true,
+    "project_id": "42",
+    "voter": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+    "voting_power": "1500"
+  },
+  "topics": [
+    "vote_cast_event",
+    1
+  ],
+  "topics_xdr": [
+    "AAAADwAAAA92b3RlX2Nhc3RfZXZlbnQA",
+    "AAAAAwAAAAE="
+  ],
+  "version": 1
+}

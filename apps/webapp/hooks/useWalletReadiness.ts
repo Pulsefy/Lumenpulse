@@ -112,9 +112,9 @@ export function useWalletReadiness(
       case "missing_extension":
         issues.push({
           reason: "wallet_missing_extension",
-          title: "Freighter not installed",
+          title: "No wallet installed",
           guidance:
-            "Install the Freighter browser extension from freighter.app, then refresh this page.",
+            "Install a Stellar wallet extension such as Freighter (freighter.app) or xBull (xbull.app), then refresh this page.",
           blocking: true,
         });
         break;

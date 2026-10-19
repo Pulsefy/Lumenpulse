@@ -16,9 +16,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
 import { GrantsService } from './grants.service';
-import { getProjectReadThrottleOverride } from '../common/rate-limit/rate-limit.config';
+import { RateLimitPolicy } from '../common/rate-limit/rate-limit.config';
 import {
   ApproveProjectDto,
   CreateRoundDto,
@@ -30,6 +29,8 @@ import {
   RoundExportDto,
   LeaderboardQueryDto,
   LeaderboardResponseDto,
+  RoundListQueryDto,
+  RoundListResponseDto,
 } from './dto/grants.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -40,7 +41,7 @@ import { AdminAuditInterceptor } from '../admin-audit/interceptors/admin-audit.i
 
 @ApiTags('grants')
 @Controller('grants')
-@Throttle(getProjectReadThrottleOverride())
+@RateLimitPolicy('projectRead')
 export class GrantsController {
   constructor(private readonly grantsService: GrantsService) {}
 
@@ -49,16 +50,15 @@ export class GrantsController {
   @Get('rounds')
   @ApiOperation({
     summary: 'List all grant rounds',
-    description:
-      'Retrieves all available grant rounds (active, pending, finalized).',
+    description: 'Retrieves all grant rounds and their lifecycle state.',
   })
   @ApiResponse({
     status: 200,
     description: 'List of rounds retrieved successfully',
-    type: [RoundDto],
+    type: RoundListResponseDto,
   })
-  listRounds() {
-    return this.grantsService.listRounds();
+  listRounds(@Query() query: RoundListQueryDto): RoundListResponseDto {
+    return this.grantsService.listRounds(query);
   }
 
   @Get('rounds/:id')
@@ -140,7 +140,7 @@ export class GrantsController {
   @ApiOperation({
     summary: 'Finalize a grant round (admin only)',
     description:
-      'Flags the round as finalized, calculating final matching pool allocations. Requires admin role.',
+      'Closes a round after matching is complete. Requires admin role.',
   })
   @ApiResponse({
     status: 200,
@@ -169,6 +169,26 @@ export class GrantsController {
   @ApiResponse({
     status: 200,
     description: 'Matching pool funded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        roundId: { type: 'integer' },
+        newBalance: { type: 'string' },
+      },
+      required: ['roundId', 'newBalance'],
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Matching pool funded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        roundId: { type: 'integer' },
+        newBalance: { type: 'string' },
+      },
+      required: ['roundId', 'newBalance'],
+    },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
@@ -193,6 +213,20 @@ export class GrantsController {
   @ApiResponse({
     status: 200,
     description: 'Project approved successfully',
+    schema: {
+      type: 'object',
+      properties: { success: { type: 'boolean' } },
+      required: ['success'],
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Project approved successfully',
+    schema: {
+      type: 'object',
+      properties: { success: { type: 'boolean' } },
+      required: ['success'],
+    },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
@@ -239,6 +273,20 @@ export class GrantsController {
   @ApiResponse({
     status: 200,
     description: 'Contribution recorded successfully',
+    schema: {
+      type: 'object',
+      properties: { success: { type: 'boolean' } },
+      required: ['success'],
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Contribution recorded successfully',
+    schema: {
+      type: 'object',
+      properties: { success: { type: 'boolean' } },
+      required: ['success'],
+    },
   })
   @ApiResponse({ status: 400, description: 'Invalid round or project' })
   recordContribution(@Body() dto: RecordContributionDto) {
@@ -262,6 +310,48 @@ export class GrantsController {
   @ApiResponse({
     status: 200,
     description: 'Distribution completed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        totalDistributed: { type: 'string' },
+        allocations: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              projectId: { type: 'integer' },
+              owner: { type: 'string' },
+              amount: { type: 'string' },
+            },
+            required: ['projectId', 'owner', 'amount'],
+          },
+        },
+      },
+      required: ['totalDistributed', 'allocations'],
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Distribution completed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        totalDistributed: { type: 'string' },
+        allocations: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              projectId: { type: 'integer' },
+              owner: { type: 'string' },
+              amount: { type: 'string' },
+            },
+            required: ['projectId', 'owner', 'amount'],
+          },
+        },
+      },
+      required: ['totalDistributed', 'allocations'],
+    },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })

@@ -11,10 +11,15 @@ import {
   ReportStatus,
 } from './entities/content-report.entity';
 
+import { AuditService } from '../audit/audit.service';
+
 describe('ModerationService - Event Integration', () => {
   let service: ModerationService;
   let repository: Repository<ContentReport>;
   let mockQueue: any;
+  const mockAuditService = {
+    log: jest.fn().mockResolvedValue({ id: 'audit-1' }),
+  };
 
   const mockReport: Partial<ContentReport> = {
     id: 'test-report-id',
@@ -55,6 +60,10 @@ describe('ModerationService - Event Integration', () => {
         {
           provide: getQueueToken('moderation-events'),
           useValue: mockQueue,
+        },
+        {
+          provide: AuditService,
+          useValue: mockAuditService,
         },
       ],
     }).compile();

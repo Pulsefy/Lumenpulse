@@ -1,0 +1,30 @@
+# Points contributors at the right place before they file the wrong kind of issue.
+blank_issues_enabled: false
+contact_links:
+  - name: Question or usage help
+    url: https://github.com/Pulsefy/Lumenpulse/discussions
+    about: >-
+      "How do I…", "why does this error mean…", "what is the right way to use X".
+      Questions get answered faster in Discussions than in Issues, and a question in
+      Issues blocks the release checklist.
+  - name: Security vulnerability
+    url: https://github.com/Pulsefy/Lumenpulse/blob/main/docs/threat-model.md
+    about: >-
+      Do not open a public issue for a suspected vulnerability. Read
+      docs/threat-model.md for the disclosure process first — a public issue
+      permanently exposes the flaw and withdraws the chance to ship a fix.
+  - name: Contributing guide
+    url: https://github.com/Pulsefy/Lumenpulse/blob/main/CONTRIBUTING.md
+    about: >-
+      Branch naming, commit format, the definition of done for issue closure, and the
+      local setup commands. Worth reading before your first pull request.
+  - name: Local development setup
+    url: https://github.com/Pulsefy/Lumenpulse/blob/main/docs/LOCAL_SETUP.md
+    about: >-
+      Getting the stack running locally without Docker, or understanding what each
+      service in the stack is for.
+  - name: Reviewer guide
+    url: https://github.com/Pulsefy/Lumenpulse/blob/main/docs/contributor-pr-review-guide.md
+    about: >-
+      If your question is about the review process, what a reviewer will check, or why
+      a pull request was sent back — this is the document that answers it.

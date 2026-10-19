@@ -1,12 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, LessThan, Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { OutboxEvent, OutboxEventStatus } from './outbox-event.entity';
 import { JobLockService } from '../scheduler/job-lock.service';
-
-/** Maximum dispatch attempts before an event is permanently marked failed */
-const MAX_ATTEMPTS = 5;
+import { MetricsService } from '../metrics/metrics.service';
+import { RequestContextService } from '../common/services/request-context.service';
+import { config } from '../lib/config';
 
 /** How many pending events to process per poll cycle */
 const BATCH_SIZE = 50;
@@ -18,6 +23,14 @@ export type OutboxEventHandler = (
   payload: Record<string, unknown>,
 ) => Promise<void>;
 
+export interface PaginatedOutboxEvents {
+  data: OutboxEvent[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 @Injectable()
 export class OutboxService {
   private readonly logger = new Logger(OutboxService.name);
@@ -27,6 +40,7 @@ export class OutboxService {
     @InjectRepository(OutboxEvent)
     private readonly outboxRepo: Repository<OutboxEvent>,
     private readonly jobLock: JobLockService,
+    private readonly metricsService: MetricsService,
   ) {}
 
   /**
@@ -51,16 +65,27 @@ export class OutboxService {
     eventType: string,
     payload: Record<string, unknown>,
     manager?: EntityManager,
+    correlationId?: string,
   ): Promise<OutboxEvent> {
     const repo = manager ? manager.getRepository(OutboxEvent) : this.outboxRepo;
+    const resolvedCorrelationId =
+      correlationId ||
+      (typeof payload._correlationId === 'string'
+        ? payload._correlationId
+        : undefined) ||
+      (RequestContextService.getCorrelationId() !== 'unknown'
+        ? RequestContextService.getCorrelationId()
+        : null);
 
     const event = repo.create({
       eventType,
       payload,
+      correlationId: resolvedCorrelationId,
       status: OutboxEventStatus.PENDING,
       attempts: 0,
       lastError: null,
       processedAt: null,
+      deadLetterAt: null,
     });
 
     return repo.save(event);
@@ -68,7 +93,8 @@ export class OutboxService {
 
   /**
    * Poll for pending events and dispatch them to all registered handlers.
-   * Runs every 5 seconds. Events exceeding MAX_ATTEMPTS are marked failed.
+   * Runs every 5 seconds. Events exceeding the configured attempt limit are
+   * moved to the dead-letter queue so they stop blocking the relay.
    * Advisory lock prevents two instances from processing the same batch.
    */
   @Cron(CronExpression.EVERY_5_SECONDS)
@@ -80,17 +106,31 @@ export class OutboxService {
       const events = await this.outboxRepo.find({
         where: {
           status: OutboxEventStatus.PENDING,
-          attempts: LessThan(MAX_ATTEMPTS),
+          attempts: LessThan(config.outbox.maxAttempts),
         },
         order: { createdAt: 'ASC' },
         take: BATCH_SIZE,
       });
 
-      if (events.length === 0) return;
+      if (events.length === 0) {
+        this.metricsService.setOutboxRelayLagSeconds(0);
+        await this.refreshDeadLetterVolume();
+        return;
+      }
+
+      // Relay lag = age of the oldest event still waiting to be dispatched.
+      const oldest = events[0];
+      const oldestCreatedAt = oldest.createdAt?.getTime();
+      const lagSeconds = oldestCreatedAt
+        ? (Date.now() - oldestCreatedAt) / 1000
+        : 0;
+      this.metricsService.setOutboxRelayLagSeconds(lagSeconds);
 
       for (const event of events) {
         await this.dispatch(event);
       }
+
+      await this.refreshDeadLetterVolume();
     } finally {
       await this.jobLock.release(OUTBOX_LOCK);
     }
@@ -98,31 +138,115 @@ export class OutboxService {
 
   private async dispatch(event: OutboxEvent): Promise<void> {
     event.attempts += 1;
+    const correlationId =
+      event.correlationId ||
+      (event.payload?._correlationId as string) ||
+      'unknown';
 
-    try {
-      await Promise.all(
-        this.handlers.map((h) => h(event.eventType, event.payload)),
-      );
+    await RequestContextService.run(
+      { correlationId, requestId: correlationId },
+      async () => {
+        try {
+          await Promise.all(
+            this.handlers.map((h) => h(event.eventType, event.payload)),
+          );
 
-      event.status = OutboxEventStatus.PROCESSED;
-      event.processedAt = new Date();
-      event.lastError = null;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(
-        `Outbox dispatch failed for event ${event.id} (${event.eventType}), attempt ${event.attempts}: ${message}`,
-      );
+          event.status = OutboxEventStatus.PROCESSED;
+          event.processedAt = new Date();
+          event.lastError = null;
+          this.metricsService.recordOutboxAttempt('processed');
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger.warn(
+            `Outbox dispatch failed for event ${event.id} (${event.eventType}), attempt ${event.attempts}: ${message}`,
+          );
 
-      event.lastError = message;
+          event.lastError = message;
 
-      if (event.attempts >= MAX_ATTEMPTS) {
-        event.status = OutboxEventStatus.FAILED;
-        this.logger.error(
-          `Outbox event ${event.id} (${event.eventType}) permanently failed after ${event.attempts} attempts.`,
-        );
-      }
-    }
+          if (event.attempts >= config.outbox.maxAttempts) {
+            event.status = OutboxEventStatus.DEAD_LETTER;
+            event.deadLetterAt = new Date();
+            this.metricsService.recordOutboxAttempt('dead_letter');
+            this.logger.error(
+              `Outbox event ${event.id} (${event.eventType}) moved to dead-letter after ${event.attempts} attempts.`,
+            );
+          } else {
+            this.metricsService.recordOutboxAttempt('failed');
+          }
+        }
+      },
+    );
 
     await this.outboxRepo.save(event);
+  }
+
+  /**
+   * List dead-lettered outbox events (poison messages) with pagination.
+   */
+  async listDeadLetters(page = 0, limit = 20): Promise<PaginatedOutboxEvents> {
+    const [data, total] = await this.outboxRepo.findAndCount({
+      where: { status: OutboxEventStatus.DEAD_LETTER },
+      order: { createdAt: 'DESC' },
+      skip: page * limit,
+      take: limit,
+    });
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Inspect a single dead-lettered outbox event.
+   */
+  async inspectDeadLetter(id: string): Promise<OutboxEvent> {
+    const event = await this.outboxRepo.findOneBy({ id });
+    if (!event || event.status !== OutboxEventStatus.DEAD_LETTER) {
+      throw new NotFoundException(`Dead-letter outbox event not found: ${id}`);
+    }
+    return event;
+  }
+
+  /**
+   * Replay a dead-lettered outbox event. Resets the attempt counter and
+   * dispatches it immediately; a failure that exhausts the attempt limit
+   * moves the event back to the dead-letter queue.
+   */
+  async replayDeadLetter(id: string): Promise<OutboxEvent> {
+    const event = await this.outboxRepo.findOneBy({ id });
+    if (!event) {
+      throw new NotFoundException(`Outbox event not found: ${id}`);
+    }
+    if (event.status !== OutboxEventStatus.DEAD_LETTER) {
+      throw new BadRequestException(
+        `Outbox event ${id} is not in the dead-letter queue`,
+      );
+    }
+
+    event.status = OutboxEventStatus.PENDING;
+    event.attempts = 0;
+    event.lastError = null;
+    event.deadLetterAt = null;
+    event.processedAt = null;
+
+    await this.outboxRepo.save(event);
+    this.logger.log(
+      `Replaying dead-lettered outbox event ${event.id} (${event.eventType})`,
+    );
+
+    await this.dispatch(event);
+    return event;
+  }
+
+  /** Keep the dead-letter volume gauge up to date. */
+  private async refreshDeadLetterVolume(): Promise<void> {
+    const volume = await this.outboxRepo.countBy({
+      status: OutboxEventStatus.DEAD_LETTER,
+    });
+    this.metricsService.setOutboxDeadLetterVolume(volume);
   }
 }

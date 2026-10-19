@@ -21,7 +21,9 @@ import {
 import { useStellarConfig } from '@/contexts/StellarConfigContext';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+import { clientConfig } from '@/lib/config';
+
+const API_BASE = clientConfig.apiUrl;
 
 interface AuditLog {
   id: string;

@@ -1,0 +1,22 @@
+{
+  "contract": "treasury",
+  "data_xdr": "AAAAEQAAAAEAAAACAAAADwAAAA5jbGFpbWVkX2Ftb3VudAAAAAAACgAAAAAAAAAAAAAAAAAAAGQAAAAPAAAAEHJlbWFpbmluZ19hbW91bnQAAAAKAAAAAAAAAAAAAAAAAAADhA==",
+  "event": "beneficiary_rotated_event",
+  "fields": {
+    "claimed_amount": "100",
+    "remaining_amount": "900"
+  },
+  "topics": [
+    "beneficiary_rotated_event",
+    1,
+    "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
+    "GACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAJJHP"
+  ],
+  "topics_xdr": [
+    "AAAADwAAABliZW5lZmljaWFyeV9yb3RhdGVkX2V2ZW50AAAA",
+    "AAAAAwAAAAE=",
+    "AAAAEgAAAAAAAAAAAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=",
+    "AAAAEgAAAAAAAAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ="
+  ],
+  "version": 1
+}

@@ -1,11 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpException } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
+import { DataProcessingClient } from '../data-processing/data-processing.client';
 import { ConfigService } from '@nestjs/config';
 import { of, throwError } from 'rxjs';
 import { SentimentService } from './sentiment.service';
 import { AxiosError } from 'axios';
 import { Logger } from '@nestjs/common';
+import { RequestContextService } from '../common/services/request-context.service';
 
 jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
 
@@ -53,8 +54,7 @@ const createMockAxiosError = (options: {
 
 describe('SentimentService', () => {
   let service: SentimentService;
-  let httpService: HttpService;
-  let configService: ConfigService;
+  let httpService: DataProcessingClient;
 
   // Mock objects
   const mockHttpService = {
@@ -80,15 +80,14 @@ describe('SentimentService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SentimentService,
-        { provide: HttpService, useValue: mockHttpService },
+        { provide: DataProcessingClient, useValue: mockHttpService },
         { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
     service = module.get<SentimentService>(SentimentService);
 
-    httpService = module.get<HttpService>(HttpService);
-    configService = module.get<ConfigService>(ConfigService);
+    httpService = module.get<DataProcessingClient>(DataProcessingClient);
   });
 
   afterEach(() => {
@@ -98,14 +97,14 @@ describe('SentimentService', () => {
   describe('constructor', () => {
     it('should initialize with default Python API URL', () => {
       mockConfigService.get.mockReturnValue('http://localhost:8000');
-      const newService = new SentimentService(httpService, configService);
+      const newService = new SentimentService(httpService);
       expect(newService).toBeDefined();
     });
 
     it('should initialize with custom Python API URL from config', () => {
       const customUrl = 'http://python-api:8080';
       mockConfigService.get.mockReturnValue(customUrl);
-      const newService = new SentimentService(httpService, configService);
+      const newService = new SentimentService(httpService);
       expect(newService).toBeDefined();
     });
   });
@@ -131,12 +130,34 @@ describe('SentimentService', () => {
 
       expect(result).toEqual({ sentiment: 0.85 });
       expect(mockHttpService.post).toHaveBeenCalledWith(
-        'http://localhost:8000/analyze',
+        '/analyze',
         { text },
         {
           timeout: 10000,
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+          },
         },
+      );
+    });
+
+    it('delegates analysis to the shared client within an active request context', async () => {
+      const text = 'Testing correlation propagation';
+      mockHttpService.post.mockReturnValue(of(mockSuccessResponse));
+
+      await RequestContextService.run(
+        { correlationId: 'corr-sentiment-123' },
+        async () => {
+          await service.analyzeSentiment(text);
+        },
+      );
+
+      expect(mockHttpService.post).toHaveBeenCalledWith(
+        '/analyze',
+        { text },
+        expect.objectContaining({
+          timeout: 10000,
+        }),
       );
     });
 
@@ -269,10 +290,10 @@ describe('SentimentService', () => {
       const result = await service.checkHealth();
 
       expect(result).toEqual(mockHealthResponse.data);
-      expect(mockHttpService.get).toHaveBeenCalledWith(
-        'http://localhost:8000/health',
-        { timeout: 5000 },
-      );
+      expect(mockHttpService.get).toHaveBeenCalledWith('/health', {
+        timeout: 5000,
+        headers: {},
+      });
     });
 
     it('should throw HttpException when Python API health check fails', async () => {

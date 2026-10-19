@@ -1,0 +1,45 @@
+name: Scripts CI
+
+# Unit tests for the repository-level scripts in scripts/ and the CI tooling
+# (path coverage, action pinning, run-time statistics). Before this existed a
+# scripts-only change ran no checks.
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'scripts/**'
+      - '.github/ci-paths.json'
+      - '.github/ci-budgets.json'
+      - '.github/workflows/scripts-ci.yml'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'scripts/**'
+      - '.github/ci-paths.json'
+      - '.github/ci-budgets.json'
+      - '.github/workflows/scripts-ci.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  scripts-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Run script tests
+        run: node --test scripts/test-*.mjs

@@ -8,6 +8,7 @@ import { PriceAlertRuleController } from './price-alert-rule.controller';
 import { PriceModule } from '../price/price.module';
 import { NotificationModule } from '../notification/notification.module';
 import { SchedulerModule } from '../scheduler/scheduler.module';
+import { MessageTemplateModule } from '../message-template/message-template.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { SchedulerModule } from '../scheduler/scheduler.module';
     PriceModule,
     NotificationModule,
     SchedulerModule,
+    MessageTemplateModule,
   ],
   controllers: [PriceAlertRuleController],
   providers: [PriceAlertRuleService, PriceAlertEvaluationService],

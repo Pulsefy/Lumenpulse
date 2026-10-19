@@ -1,3 +1,4 @@
+import { MetricsModule } from '../metrics/metrics.module';
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import stellarConfig from './config/stellar.config';
@@ -14,14 +15,22 @@ import { MatchingPoolAdminController } from './controllers/matching-pool-admin.c
 import { TestnetBootstrapController } from './controllers/testnet-bootstrap.controller';
 import { TestnetBootstrapService } from './services/testnet-bootstrap.service';
 import { AppCacheModule } from '../cache/cache.module';
+import { BootstrapRunsModule } from '../bootstrap-runs/bootstrap-runs.module';
+import { ContractAdminModule } from '../contract-admin/contract-admin.module';
+import { AccessControlModule } from '../common/access-control.module';
+import { MatchingPoolAdminService } from './services/matching-pool-admin.service';
 
 @Module({
   imports: [
+    MetricsModule,
     ConfigModule.forFeature(stellarConfig),
     forwardRef(() => TransactionModule),
     AuditModule,
     AppConfigModule,
     AppCacheModule,
+    BootstrapRunsModule,
+    ContractAdminModule,
+    AccessControlModule,
   ],
   controllers: [
     StellarController,
@@ -35,6 +44,7 @@ import { AppCacheModule } from '../cache/cache.module';
     ContractRotationService,
     StellarContractRotationService,
     TestnetBootstrapService,
+    MatchingPoolAdminService,
   ],
   exports: [
     StellarService,

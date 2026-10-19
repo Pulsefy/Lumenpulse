@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,9 +11,23 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
 import { stellarApi, StellarAsset } from '../../lib/api';
+import { CachedApi } from '../../lib/cached-api';
+import { resolveDeepLink } from '../../lib/deep-links';
+import {
+  SIGNAL_CATEGORY_LABELS,
+  SIGNAL_SEVERITY_LABELS,
+  UserSignal,
+  formatSignalAge,
+  isSignalStale,
+  signalDeepLink,
+  signalKey,
+  signalSubjectLabel,
+  sortSignalsByStrength,
+} from '../../lib/signals';
 import { useCachedData } from '../../hooks/useCachedData';
 import { CACHE_CONFIGS } from '../../lib/cache';
 import { useWatchlist } from '../../contexts/WatchlistContext';
@@ -198,11 +212,102 @@ function AssetItem({
   );
 }
 
+/** Badge colour for a signal's strength. */
+function severityColor(severity: UserSignal['severity'], colors: ThemeColors): string {
+  switch (severity) {
+    case 'high':
+      return colors.danger;
+    case 'medium':
+      return colors.warning;
+    default:
+      return colors.textSecondary;
+  }
+}
+
+interface SignalRowProps {
+  signal: UserSignal;
+  colors: ThemeColors;
+  feedStale: boolean;
+  feedAge: string;
+  onPress: (signal: UserSignal) => void;
+}
+
+/**
+ * One market signal. It shows the signal's type (category), the subject it is
+ * about and its strength, then routes through the deep link route table when
+ * tapped so a renamed route cannot silently produce a dead tap.
+ */
+function SignalRow({ signal, colors, feedStale, feedAge, onPress }: SignalRowProps) {
+  const strengthColor = severityColor(signal.severity, colors);
+
+  return (
+    <TouchableOpacity
+      testID={`signal-item-${signal.category}-${signal.severity}`}
+      style={[styles.signalItem, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}
+      onPress={() => onPress(signal)}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={`${SIGNAL_CATEGORY_LABELS[signal.category]} signal about ${signalSubjectLabel(
+        signal,
+      )}, ${SIGNAL_SEVERITY_LABELS[signal.severity]} strength. ${signal.title}`}
+      accessibilityHint="Opens the screen this signal is about"
+    >
+      <View style={styles.signalHeader}>
+        <View style={[styles.signalCategoryBadge, { backgroundColor: `${colors.accent}22` }]}>
+          <Text style={[styles.signalCategoryText, { color: colors.accent }]}>
+            {SIGNAL_CATEGORY_LABELS[signal.category]}
+          </Text>
+        </View>
+        <View style={[styles.signalCategoryBadge, { backgroundColor: `${strengthColor}22` }]}>
+          <Text style={[styles.signalCategoryText, { color: strengthColor }]}>
+            {SIGNAL_SEVERITY_LABELS[signal.severity]}
+          </Text>
+        </View>
+        <Text style={[styles.signalSubject, { color: colors.textSecondary }]} numberOfLines={1}>
+          {signalSubjectLabel(signal)}
+        </Text>
+      </View>
+
+      <Text style={[styles.signalTitle, { color: colors.text }]}>{signal.title}</Text>
+      <Text style={[styles.signalDetail, { color: colors.textSecondary }]}>{signal.detail}</Text>
+
+      <Text style={[styles.signalAge, { color: feedStale ? colors.warning : colors.textSecondary }]}>
+        {feedStale ? `Stale · ${feedAge}` : feedAge}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function AssetDiscoveryScreen() {
   const { colors } = useTheme();
   const { t } = useLocalization();
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [signals, setSignals] = useState<UserSignal[]>([]);
+  const [signalsGeneratedAt, setSignalsGeneratedAt] = useState<string | null>(null);
+  const [signalsStale, setSignalsStale] = useState(false);
+
+  /**
+   * Latest computed signals for the signed-in user, read through
+   * `CachedApi.getSignals()` so the section still renders offline.
+   */
+  const loadSignals = useCallback(async () => {
+    const response = await CachedApi.getSignals();
+    if (response.success && response.data) {
+      setSignals(sortSignalsByStrength(response.data.signals));
+      setSignalsGeneratedAt(response.data.generatedAt);
+      setSignalsStale(Boolean(response.isStale));
+      return;
+    }
+    setSignals([]);
+    setSignalsGeneratedAt(null);
+    setSignalsStale(false);
+  }, []);
+
+  useEffect(() => {
+    void loadSignals();
+  }, [loadSignals]);
 
   const {
     data: assetsData,
@@ -227,11 +332,24 @@ export default function AssetDiscoveryScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await refresh();
+      await Promise.all([refresh(), loadSignals()]);
     } finally {
       setRefreshing(false);
     }
   };
+
+  /** Routes a tapped signal through the route table to a real screen. */
+  const handleSignalPress = useCallback(
+    (signal: UserSignal) => {
+      const resolved = resolveDeepLink(signalDeepLink(signal));
+      if (!resolved.routeKey) return;
+      router.push(resolved.route as never);
+    },
+    [router],
+  );
+
+  const signalAge = formatSignalAge(signalsGeneratedAt);
+  const signalsAreStale = signalsStale || isSignalStale(signalsGeneratedAt);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -343,6 +461,39 @@ export default function AssetDiscoveryScreen() {
                 <Text style={[styles.staleText, { color: colors.warning }]} accessible>
                   {t('discover.showing_cached')}
                 </Text>
+              </View>
+            )}
+
+            {signals.length > 0 && (
+              <View style={styles.signalsSection} accessibilityRole="list">
+                <View style={styles.signalsHeader}>
+                  <Text
+                    style={[styles.signalsTitle, { color: colors.text }]}
+                    accessible
+                    accessibilityRole="header"
+                  >
+                    Market signals
+                  </Text>
+                  <Text
+                    style={[
+                      styles.signalsAge,
+                      { color: signalsAreStale ? colors.warning : colors.textSecondary },
+                    ]}
+                    accessible
+                  >
+                    {signalsAreStale ? `Stale · ${signalAge}` : signalAge}
+                  </Text>
+                </View>
+                {signals.map((signal, index) => (
+                  <SignalRow
+                    key={signalKey(signal, index)}
+                    signal={signal}
+                    colors={colors}
+                    feedStale={signalsAreStale}
+                    feedAge={signalAge}
+                    onPress={handleSignalPress}
+                  />
+                ))}
               </View>
             )}
 
@@ -533,5 +684,63 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     marginLeft: 6,
+  },
+  signalsSection: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
+    gap: 10,
+  },
+  signalsHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
+  signalsTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  signalsAge: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  signalItem: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    gap: 6,
+  },
+  signalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  signalCategoryBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  signalCategoryText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  signalSubject: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 'auto',
+    maxWidth: 110,
+  },
+  signalTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  signalDetail: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  signalAge: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

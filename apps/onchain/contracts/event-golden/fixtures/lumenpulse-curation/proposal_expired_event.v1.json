@@ -1,0 +1,17 @@
+{
+  "contract": "lumenpulse-curation",
+  "data_xdr": "AAAAEQAAAAEAAAABAAAADwAAAApwcm9qZWN0X2lkAAAAAAAFAAAAAAAAACo=",
+  "event": "proposal_expired_event",
+  "fields": {
+    "project_id": "42"
+  },
+  "topics": [
+    "proposal_expired_event",
+    1
+  ],
+  "topics_xdr": [
+    "AAAADwAAABZwcm9wb3NhbF9leHBpcmVkX2V2ZW50AAA=",
+    "AAAAAwAAAAE="
+  ],
+  "version": 1
+}

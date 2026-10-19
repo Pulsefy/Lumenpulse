@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { CrowdfundSyncService } from './crowdfund-sync.service';
@@ -11,8 +11,9 @@ import { CrowdfundVaultProject } from './entities/crowdfund-vault-project.entity
 import { SorobanEventsModule } from '../soroban-events/soroban-events.module';
 import { StellarModule } from '../stellar/stellar.module';
 import { SchedulerModule } from '../scheduler/scheduler.module';
+import { CROWDFUND_VAULT_QUEUE } from './crowdfund-sync.constants';
 
-export const CROWDFUND_VAULT_QUEUE = 'crowdfund-vault-sync';
+export { CROWDFUND_VAULT_QUEUE };
 
 @Module({
   imports: [
@@ -34,7 +35,7 @@ export const CROWDFUND_VAULT_QUEUE = 'crowdfund-vault-sync';
         removeOnFail: { count: 200 },
       },
     }),
-    SorobanEventsModule,
+    forwardRef(() => SorobanEventsModule),
     StellarModule,
     SchedulerModule,
   ],

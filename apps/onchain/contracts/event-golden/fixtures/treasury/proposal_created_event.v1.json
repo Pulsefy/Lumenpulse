@@ -1,0 +1,24 @@
+{
+  "contract": "treasury",
+  "data_xdr": "AAAAEQAAAAEAAAAEAAAADwAAAAZhY3Rpb24AAAAAABAAAAABAAAAAQAAAA8AAAAIU2V0QWRtaW4AAAAPAAAACHByb3Bvc2VyAAAAEgAAAAAAAAAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAAAAPAAAACXRocmVzaG9sZAAAAAAAAAMAAAADAAAADwAAABB3ZWlnaHRfY29sbGVjdGVkAAAAAwAAAAI=",
+  "event": "proposal_created_event",
+  "fields": {
+    "action": [
+      "SetAdmin"
+    ],
+    "proposer": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+    "threshold": 3,
+    "weight_collected": 2
+  },
+  "topics": [
+    "proposal_created_event",
+    1,
+    "7"
+  ],
+  "topics_xdr": [
+    "AAAADwAAABZwcm9wb3NhbF9jcmVhdGVkX2V2ZW50AAA=",
+    "AAAAAwAAAAE=",
+    "AAAABQAAAAAAAAAH"
+  ],
+  "version": 1
+}

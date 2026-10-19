@@ -18,3 +18,19 @@ pub struct AdminTransferredEvent {
     pub old_admin: Address,
     pub new_admin: Address,
 }
+
+#[contractevent]
+pub struct ContractPauseEvent {
+    #[topic]
+    pub admin: Address,
+    pub paused: bool,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct ContractUnpauseEvent {
+    #[topic]
+    pub admin: Address,
+    pub paused: bool,
+    pub timestamp: u64,
+}

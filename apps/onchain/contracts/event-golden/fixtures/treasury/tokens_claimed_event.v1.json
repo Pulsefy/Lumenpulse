@@ -1,0 +1,20 @@
+{
+  "contract": "treasury",
+  "data_xdr": "AAAAEQAAAAEAAAACAAAADwAAAA5hbW91bnRfY2xhaW1lZAAAAAAACgAAAAAAAAAAAAAAAAAD0JAAAAAPAAAACXJlbWFpbmluZwAAAAAAAAoAAAAAAAAAAAAAAAAAC3Gw",
+  "event": "tokens_claimed_event",
+  "fields": {
+    "amount_claimed": "250000",
+    "remaining": "750000"
+  },
+  "topics": [
+    "tokens_claimed_event",
+    1,
+    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
+  ],
+  "topics_xdr": [
+    "AAAADwAAABR0b2tlbnNfY2xhaW1lZF9ldmVudA==",
+    "AAAAAwAAAAE=",
+    "AAAAEgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  ],
+  "version": 1
+}

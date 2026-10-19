@@ -6,32 +6,65 @@ on:
     branches: [ "main" ]
     paths:
       - 'apps/backend/**'
+      - 'apps/webapp/generated/**'
+      - 'apps/webapp/scripts/generate-api-types.mjs'
+      - 'scripts/audit-dependencies.mjs'
+      - 'docker-compose.yml'
+      - 'package*.json'
+      - 'pnpm-*.yaml'
+      - 'turbo.json'
+      - '.nvmrc'
+      - '.github/actions/**'
+      - '.github/workflows/backend.yml'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'apps/backend/**'
-      - 'apps/backend/.ci-trigger'
+      - 'apps/webapp/generated/**'
+      - 'apps/webapp/scripts/generate-api-types.mjs'
+      - 'scripts/audit-dependencies.mjs'
+      - 'docker-compose.yml'
+      - 'package*.json'
+      - 'pnpm-*.yaml'
+      - 'turbo.json'
+      - '.nvmrc'
+      - '.github/actions/**'
+      - '.github/workflows/backend.yml'
+
+# Issue #1713. One group per workflow+ref, so a second push to the same PR
+# cancels the now-obsolete run instead of paying for both. `main` is excluded
+# from cancellation: post-merge checks and deploys must always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   backend-checks:
     runs-on: ubuntu-latest
+    # Issue #1714. See docs/ci-timeouts.md for the observed-duration table.
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: ./apps/backend
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
-        node-version: '20.x'
-        cache: 'npm'
-        cache-dependency-path: './apps/backend/package-lock.json'
+        fetch-depth: 0
 
-    - name: Install dependencies
-      run: npm ci
+    - name: Start timeout guard
+      uses: ./.github/actions/job-timeout-guard
+      with:
+        phase: start
+
+    - name: Set up Node and install dependencies
+      uses: ./.github/actions/setup-node-app
+      with:
+        working-directory: apps/backend
+
+    - name: Scan dependencies for vulnerabilities
+      run: npm run audit:ci
 
     - name: Lint
       run: npm run lint
@@ -44,5 +77,200 @@ jobs:
       if: env.SKIP_TESTS != 'true'
       run: npm run test
 
-    - name: Build
+    - name: Build (also regenerates openapi.json)
       run: npm run build
+
+    - name: Verify committed OpenAPI spec is up to date
+      run: |
+        if ! git diff --exit-code -- openapi.json; then
+          echo "::error file=apps/backend/openapi.json::openapi.json is stale. Run 'npm run build' in apps/backend and commit the updated openapi.json."
+          exit 1
+        fi
+
+    - name: Verify webapp API types match the spec
+      working-directory: ./apps/webapp
+      run: node scripts/generate-api-types.mjs --check
+
+    - name: Generate Software Bill of Materials (SBOM)
+      uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      with:
+        format: cyclonedx-json
+        output-file: sbom.cdx.json
+
+    - name: Upload SBOM Artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: software-bill-of-materials
+        path: sbom.cdx.json
+
+    - name: Report timeout guard
+      if: always()
+      uses: ./.github/actions/job-timeout-guard
+      with:
+        phase: finish
+        job-id: backend-checks
+        budget-minutes: '10'
+        note: npm ci + lint + type-check + jest + nest build + SBOM. Observed p90 1.8 min; cold-cache variance dominates.
+
+  migration-safety:
+    runs-on: ubuntu-latest
+    # Issue #1714. See docs/ci-timeouts.md for the observed-duration table.
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ./apps/backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lumenpulse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        fetch-depth: 0
+
+    - name: Start timeout guard
+      uses: ./.github/actions/job-timeout-guard
+      with:
+        phase: start
+
+    - name: Set up Node and install dependencies
+      uses: ./.github/actions/setup-node-app
+      with:
+        working-directory: apps/backend
+
+    - name: Enable uuid-ossp extension
+      run: >
+        PGPASSWORD=postgres psql -h localhost -U postgres -d lumenpulse
+        -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
+      env:
+        PGPASSWORD: postgres
+
+    - name: Migration safety checks
+      run: npm run migration:check
+
+    - name: Verify migrations on clean database (up, schema drift, down)
+      env:
+        NODE_ENV: test
+        ENVIRONMENT: test
+        PORT: '3000'
+        DB_HOST: localhost
+        DB_PORT: '5432'
+        DB_USERNAME: postgres
+        DB_PASSWORD: postgres
+        DB_DATABASE: lumenpulse
+        JWT_SECRET: ci-jwt-secret
+        STELLAR_SERVER_SECRET: 'SB6RIPM3GJQ7RP3Q6R5F3QIBYZHP4N27SGGCQ3R4LWA2ZKXZWQ3NU3G4'
+      run: npm run migration:verify
+
+    - name: Report timeout guard
+      if: always()
+      uses: ./.github/actions/job-timeout-guard
+      with:
+        phase: finish
+        job-id: migration-safety
+        budget-minutes: '10'
+        note: Postgres service + npm ci + static migration check + full up/drift/down verification.
+
+  db-e2e:
+    runs-on: ubuntu-latest
+    # Issue #1714. Kept at 20 rather than lowered to match the observed p90 of
+    # 2.8 min: this job is the one that provisions Postgres and Redis from
+    # scratch and migrates every migration onto a clean database, so a cold
+    # runner is several times the warm p90 before any assertion runs.
+    # See docs/ci-timeouts.md.
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ./apps/backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Start timeout guard
+      uses: ./.github/actions/job-timeout-guard
+      with:
+        phase: start
+
+    - name: Set up Node and install dependencies
+      uses: ./.github/actions/setup-node-app
+      with:
+        working-directory: apps/backend
+
+    # Each run creates a disposable database, runs all migrations, and drops it
+    # in Jest's global teardown (also on failure). Runtime is printed and added
+    # to the job summary.
+    #
+    # Issue #1714: `timeout` fires at 15 min, five minutes before the job's own
+    # 20-minute `timeout-minutes`. Exit 124 is remapped to a titled error so a
+    # hang is reported as a hang, not as a generic e2e failure -- the runner
+    # would otherwise cancel the job with no step output at all.
+    - name: Run DB-backed e2e suite
+      env:
+        NODE_ENV: test
+        ENVIRONMENT: test
+        DB_HOST: localhost
+        DB_PORT: '5432'
+        DB_USERNAME: postgres
+        DB_PASSWORD: postgres
+        REDIS_HOST: localhost
+        REDIS_PORT: '6379'
+        JWT_SECRET: ci-jwt-secret
+        DB_E2E_SOFT_LIMIT_SECONDS: '900'
+      run: |
+        set +e
+        timeout --signal=TERM --kill-after=30s "${DB_E2E_SOFT_LIMIT_SECONDS}" npm run test:e2e:db
+        code=$?
+        if [ "$code" -eq 124 ] || [ "$code" -eq 137 ]; then
+          echo "::error title=db-e2e timed out::The DB-backed e2e suite did not finish within" \
+               "${DB_E2E_SOFT_LIMIT_SECONDS}s and was terminated. The job's 20-minute timeout would" \
+               "have cancelled it in 5 minutes with no output. Suspect a blocked Postgres/Redis" \
+               "connection or a migration that never completes -- see docs/ci-timeouts.md."
+          exit 1
+        fi
+        exit "$code"
+
+    - name: Report timeout guard
+      if: always()
+      uses: ./.github/actions/job-timeout-guard
+      with:
+        phase: finish
+        job-id: db-e2e
+        budget-minutes: '20'
+        note: Provisions Postgres+Redis, migrates a clean database, runs the serial DB-backed e2e suite.

@@ -2,7 +2,8 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 export interface RequestContext {
-  requestId: string;
+  correlationId?: string;
+  requestId?: string;
   [key: string]: unknown;
 }
 
@@ -14,41 +15,85 @@ export interface RequestContext {
  * anywhere in the call stack without explicit parameter passing.
  *
  * Usage:
- *   // In middleware/interceptor:
- *   requestContextService.run({ requestId: 'abc-123' }, () => {
+ *   // In middleware/interceptor/queue/outbox:
+ *   requestContextService.run({ correlationId: 'abc-123', requestId: 'abc-123' }, () => {
  *     // All code here can access the context
  *   });
  *
  *   // In any service:
- *   const requestId = requestContextService.getRequestId();
+ *   const correlationId = requestContextService.getCorrelationId();
+ *   // Or statically (useful for custom loggers):
+ *   const correlationId = RequestContextService.getCorrelationId();
  */
 @Injectable()
 export class RequestContextService implements OnModuleInit {
-  private readonly storage = new AsyncLocalStorage<RequestContext>();
+  private static readonly globalStorage =
+    new AsyncLocalStorage<RequestContext>();
+  private readonly storage = RequestContextService.globalStorage;
 
   onModuleInit(): void {
     // AsyncLocalStorage is ready to use
   }
 
   /**
+   * Static access to the current correlation ID
+   */
+  static getCorrelationId(): string {
+    const store = RequestContextService.globalStorage.getStore();
+    return (
+      (typeof store?.correlationId === 'string' && store.correlationId) ||
+      (typeof store?.requestId === 'string' && store.requestId) ||
+      'unknown'
+    );
+  }
+
+  /**
+   * Static access to the current request ID (alias of correlation ID)
+   */
+  static getRequestId(): string {
+    return RequestContextService.getCorrelationId();
+  }
+
+  /**
+   * Static access to the current context
+   */
+  static getContext(): RequestContext | undefined {
+    return RequestContextService.globalStorage.getStore();
+  }
+
+  /**
+   * Static helper to run within context
+   */
+  static run<T>(context: RequestContext, fn: () => T): T {
+    return RequestContextService.globalStorage.run(context, fn);
+  }
+
+  /**
    * Run a function with the given request context
    */
   run<T>(context: RequestContext, fn: () => T): T {
-    return this.storage.run(context, fn);
+    return RequestContextService.run(context, fn);
   }
 
   /**
    * Get the current request context, or undefined if outside a request
    */
   getContext(): RequestContext | undefined {
-    return this.storage.getStore();
+    return RequestContextService.getContext();
+  }
+
+  /**
+   * Get the current correlation ID, or 'unknown' if outside a request
+   */
+  getCorrelationId(): string {
+    return RequestContextService.getCorrelationId();
   }
 
   /**
    * Get the current request ID, or 'unknown' if outside a request
    */
   getRequestId(): string {
-    return this.storage.getStore()?.requestId ?? 'unknown';
+    return RequestContextService.getRequestId();
   }
 
   /**

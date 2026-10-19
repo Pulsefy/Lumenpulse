@@ -6,18 +6,24 @@ mod storage;
 
 use errors::ContractError;
 use events::{
-    AdminChangedEvent, OperationCancelledEvent, OperationExecutedEvent, OperationQueuedEvent,
-    UpgradedEvent,
+    AdminChangedEvent, AdminRotationCancelledEvent, AdminRotationProposedEvent,
+    OperationCancelledEvent, OperationExecutedEvent, OperationQueuedEvent, UpgradedEvent,
 };
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 use storage::{
     OperationStatus, QueuedOperation, TimelockAction, GRACE_PERIOD_SECONDS, LEDGER_BUMP,
     LEDGER_THRESHOLD, MIN_DELAY_SECONDS,
 };
+use version_interface::{ContractVersion, VersionedContract};
+
+/// Bumped on storage-layout or interface changes that break compatibility
+/// with prior deployments; see [`version_interface::ContractVersion`].
+const CONTRACT_VERSION: ContractVersion = ContractVersion::new(1, 0, 0);
 
 #[contracttype]
 pub enum DataKey {
     Admin,
+    ProposedAdmin,
     Counter,
     NextOperationId,
     QueuedOperation(u32),
@@ -99,6 +105,11 @@ impl UpgradableContract {
         env.storage()
             .persistent()
             .set(&DataKey::QueuedOperation(id), &op);
+        env.storage().persistent().extend_ttl(
+            &DataKey::QueuedOperation(id),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
 
         env.storage()
             .instance()
@@ -120,10 +131,17 @@ impl UpgradableContract {
 
     /// Inspect a queued operation by its ID.
     pub fn get_operation(env: Env, operation_id: u32) -> Result<QueuedOperation, ContractError> {
-        env.storage()
+        let op = env
+            .storage()
             .persistent()
             .get(&DataKey::QueuedOperation(operation_id))
-            .ok_or(ContractError::OperationNotFound)
+            .ok_or(ContractError::OperationNotFound)?;
+        env.storage().persistent().extend_ttl(
+            &DataKey::QueuedOperation(operation_id),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+        Ok(op)
     }
 
     /// Pending / Ready / Expired classification for a queued operation,
@@ -137,6 +155,11 @@ impl UpgradableContract {
             .persistent()
             .get(&DataKey::QueuedOperation(operation_id))
             .ok_or(ContractError::OperationNotFound)?;
+        env.storage().persistent().extend_ttl(
+            &DataKey::QueuedOperation(operation_id),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         Ok(Self::operation_status(&env, &op))
     }
 
@@ -248,8 +271,77 @@ impl UpgradableContract {
         env.storage().instance().get(&DataKey::Counter).unwrap_or(0)
     }
 
+    pub fn propose_admin_rotation(
+        env: Env,
+        proposer: Address,
+        new_admin: Address,
+    ) -> Result<(), ContractError> {
+        Self::require_admin(&env, &proposer)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::ProposedAdmin, &new_admin);
+        AdminRotationProposedEvent {
+            proposer,
+            proposed_admin: new_admin,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    pub fn accept_admin_rotation(env: Env, new_admin: Address) -> Result<(), ContractError> {
+        let proposed: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProposedAdmin)
+            .ok_or(ContractError::OperationNotFound)?;
+        if new_admin != proposed {
+            return Err(ContractError::Unauthorized);
+        }
+        new_admin.require_auth();
+        let old_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(ContractError::NotInitialized)?;
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        env.storage().instance().remove(&DataKey::ProposedAdmin);
+        AdminChangedEvent {
+            old_admin,
+            new_admin,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    pub fn cancel_admin_rotation(env: Env, canceller: Address) -> Result<(), ContractError> {
+        Self::require_admin(&env, &canceller)?;
+        let proposed_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProposedAdmin)
+            .ok_or(ContractError::OperationNotFound)?;
+        env.storage().instance().remove(&DataKey::ProposedAdmin);
+        AdminRotationCancelledEvent {
+            canceller,
+            proposed_admin,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Legacy single-integer version identifier, kept for backward
+    /// compatibility with existing callers. Prefer [`Self::contract_version`]
+    /// (issue #1046), which reports a standardized SemVer triple and
+    /// distinguishes breaking (`major`) from non-breaking upgrades.
     pub fn version() -> u32 {
         1
+    }
+}
+
+#[contractimpl]
+impl VersionedContract for UpgradableContract {
+    fn contract_version(_env: Env) -> ContractVersion {
+        CONTRACT_VERSION
     }
 }
 

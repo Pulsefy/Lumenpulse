@@ -28,6 +28,7 @@ import {
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { EmailService } from '../email/email.service';
+import { AuditService } from '../audit/audit.service';
 import * as QRCode from 'qrcode';
 import * as speakeasy from 'speakeasy';
 
@@ -65,6 +66,7 @@ export class AuthService implements OnModuleDestroy {
     private jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
+    private readonly auditService: AuditService,
   ) {
     // Initialize server keypair
     const serverSecret = this.configService.get<string>(
@@ -120,13 +122,25 @@ export class AuthService implements OnModuleDestroy {
     user: { id: string; email: string; role?: string },
     deviceInfo?: string,
     ipAddress?: string,
+    locationHint?: string,
   ) {
-    const payload = { email: user.email, sub: user.id, role: user.role };
-    const accessToken = this.jwtService.sign(payload);
-
-    // Generate and store refresh token
+    // Generate and store refresh token; its row id is the session id (sid)
     const refreshToken = this.generateRefreshToken();
-    await this.storeRefreshToken(refreshToken, user.id, deviceInfo, ipAddress);
+    const session = await this.storeRefreshToken(
+      refreshToken,
+      user.id,
+      deviceInfo,
+      ipAddress,
+      locationHint,
+    );
+
+    const payload = {
+      email: user.email,
+      sub: user.id,
+      role: user.role,
+      sid: session?.id,
+    };
+    const accessToken = this.jwtService.sign(payload);
 
     return {
       access_token: accessToken,
@@ -273,6 +287,9 @@ export class AuthService implements OnModuleDestroy {
   async verifyChallenge(
     publicKey: string,
     signedChallenge: string,
+    deviceInfo?: string,
+    ipAddress?: string,
+    locationHint?: string,
   ): Promise<{
     success: boolean;
     token: string;
@@ -348,17 +365,24 @@ export class AuthService implements OnModuleDestroy {
     }
 
     // Generate JWT
+    // Generate and store refresh token for Stellar auth
+    const refreshToken = this.generateRefreshToken();
+    const session = await this.storeRefreshToken(
+      refreshToken,
+      user.id,
+      deviceInfo,
+      ipAddress,
+      locationHint,
+    );
+
     const payload = {
       sub: user.id,
       stellarPublicKey: publicKey,
       type: 'stellar-auth',
+      sid: session?.id,
     };
 
     const token = this.jwtService.sign(payload);
-
-    // Generate and store refresh token for Stellar auth
-    const refreshToken = this.generateRefreshToken();
-    await this.storeRefreshToken(refreshToken, user.id);
 
     return {
       success: true,
@@ -510,7 +534,8 @@ export class AuthService implements OnModuleDestroy {
     userId: string,
     deviceInfo?: string,
     ipAddress?: string,
-  ): Promise<void> {
+    locationHint?: string,
+  ): Promise<RefreshToken> {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
     const refreshToken = this.refreshTokenRepository.create({
@@ -522,9 +547,11 @@ export class AuthService implements OnModuleDestroy {
       ),
       deviceInfo,
       ipAddress,
+      locationHint,
+      lastSeenAt: new Date(),
     });
 
-    await this.refreshTokenRepository.save(refreshToken);
+    return this.refreshTokenRepository.save(refreshToken);
   }
 
   /**
@@ -564,6 +591,7 @@ export class AuthService implements OnModuleDestroy {
     refreshToken: string,
     deviceInfo?: string,
     ipAddress?: string,
+    locationHint?: string,
   ): Promise<{
     access_token: string;
     refresh_token?: string;
@@ -571,22 +599,26 @@ export class AuthService implements OnModuleDestroy {
     const { user, refreshToken: storedToken } =
       await this.validateRefreshToken(refreshToken);
 
-    // Generate new access token
-    const payload = { email: user.email, sub: user.id };
-    const accessToken = this.jwtService.sign(payload);
-
-    // Token rotation: invalidate old refresh token and create new one
-    storedToken.revokedAt = new Date();
+    // Token rotation in place: the session keeps its id (so the access token's
+    // sid and the session list stay stable) while the secret changes.
+    const newRefreshToken = this.generateRefreshToken();
+    storedToken.tokenHash = crypto
+      .createHash('sha256')
+      .update(newRefreshToken)
+      .digest('hex');
+    storedToken.lastSeenAt = new Date();
+    if (deviceInfo) storedToken.deviceInfo = deviceInfo;
+    if (ipAddress) storedToken.ipAddress = ipAddress;
+    if (locationHint) storedToken.locationHint = locationHint;
     await this.refreshTokenRepository.save(storedToken);
 
-    // Generate new refresh token
-    const newRefreshToken = this.generateRefreshToken();
-    await this.storeRefreshToken(
-      newRefreshToken,
-      user.id,
-      deviceInfo,
-      ipAddress,
-    );
+    const payload = {
+      email: user.email,
+      sub: user.id,
+      role: user.role,
+      sid: storedToken.id,
+    };
+    const accessToken = this.jwtService.sign(payload);
 
     this.logger.log(`Token refreshed for user ${user.id}`);
 
@@ -634,10 +666,24 @@ export class AuthService implements OnModuleDestroy {
   /**
    * Logout from all devices by revoking all refresh tokens for a user
    */
-  async logoutAll(userId: string): Promise<{ message: string }> {
-    await this.refreshTokenRepository.update(
+  async logoutAll(
+    userId: string,
+    ipAddress?: string,
+  ): Promise<{ message: string }> {
+    const result = await this.refreshTokenRepository.update(
       { userId, revokedAt: IsNull() },
       { revokedAt: new Date() },
+    );
+
+    await this.auditService.log(
+      'session_revoke_all',
+      userId,
+      ipAddress ?? null,
+      {
+        targetUserId: userId,
+        revokedCount: result?.affected ?? 0,
+        by: 'self',
+      },
     );
 
     this.logger.log(`All refresh tokens revoked for user ${userId}`);
@@ -646,10 +692,47 @@ export class AuthService implements OnModuleDestroy {
   }
 
   /**
+   * Administrator action: terminate every active session of a user.
+   * Access tokens die immediately because JwtStrategy checks the session row.
+   */
+  async adminRevokeAllSessions(
+    targetUserId: string,
+    adminId: string,
+    ipAddress?: string,
+  ): Promise<{ message: string; revokedCount: number }> {
+    const target = await this.userRepository.findOne({
+      where: { id: targetUserId },
+    });
+    if (!target) {
+      throw new NotFoundException('User not found');
+    }
+
+    const result = await this.refreshTokenRepository.update(
+      { userId: targetUserId, revokedAt: IsNull() },
+      { revokedAt: new Date() },
+    );
+    const revokedCount = result?.affected ?? 0;
+
+    await this.auditService.log(
+      'admin_session_revoke_all',
+      adminId,
+      ipAddress ?? null,
+      { targetUserId, revokedCount, by: 'admin' },
+    );
+
+    this.logger.warn(
+      `Admin ${adminId} revoked ${revokedCount} sessions for user ${targetUserId}`,
+    );
+
+    return { message: 'All sessions revoked', revokedCount };
+  }
+
+  /**
    * Get all active sessions for a user
    */
   async getActiveSessions(
     userId: string,
+    currentSessionId?: string,
   ): Promise<{ sessions: any[]; total: number }> {
     const now = new Date();
 
@@ -666,9 +749,11 @@ export class AuthService implements OnModuleDestroy {
       id: token.id,
       deviceInfo: token.deviceInfo,
       ipAddress: token.ipAddress,
+      locationHint: token.locationHint ?? null,
+      lastSeenAt: token.lastSeenAt ?? null,
       createdAt: token.createdAt,
       expiresAt: token.expiresAt,
-      isCurrent: false, // Will be set by controller if session ID from JWT is available
+      isCurrent: !!currentSessionId && token.id === currentSessionId,
     }));
 
     return {
@@ -683,6 +768,7 @@ export class AuthService implements OnModuleDestroy {
   async revokeSession(
     sessionId: string,
     userId: string,
+    ipAddress?: string,
   ): Promise<{ message: string; sessionId: string }> {
     const token = await this.refreshTokenRepository.findOne({
       where: { id: sessionId, userId },
@@ -699,6 +785,12 @@ export class AuthService implements OnModuleDestroy {
 
     token.revokedAt = new Date();
     await this.refreshTokenRepository.save(token);
+
+    await this.auditService.log('session_revoke', userId, ipAddress ?? null, {
+      sessionId,
+      deviceInfo: token.deviceInfo,
+      by: 'self',
+    });
 
     this.logger.log(`Session ${sessionId} revoked for user ${userId}`);
 

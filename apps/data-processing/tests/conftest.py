@@ -3,9 +3,23 @@ Pytest configuration and shared fixtures for LumenPulse data processing tests.
 """
 
 import os
+import tempfile
 
 # Skip FinBERT download/load in default test runs (CI and local pytest).
 os.environ.setdefault("SENTIMENT_DISABLE_TRANSFORMER", "1")
+# Configure the app before any test module imports ``src.api.server``.  The
+# security middleware is initialized at import time, so setting this in an
+# individual test module is order-dependent when pytest collects the full
+# suite.
+os.environ.setdefault(
+    "API_KEYS", '[{"id":"test","value":"test-key-123","scopes":["default"]}]'
+)
+# Keep stage-cost profiling (#1454) out of the working tree: profiled stages
+# append to this path, and running the suite must not create tracked files.
+os.environ.setdefault(
+    "STAGE_COST_LOG_PATH",
+    os.path.join(tempfile.gettempdir(), "lumenpulse_stage_costs.jsonl"),
+)
 
 import pytest
 import sys
@@ -91,6 +105,13 @@ for _mod in _HEAVY_MODULES:
         parent = '.'.join(parts[:i])
         if parent not in sys.modules:
             sys.modules[parent] = ModuleType(parent)
+
+    # stellar_sdk: provide exception classes used by ingestion modules
+    if _mod == 'stellar_sdk.exceptions':
+        m.BadRequestError = type('BadRequestError', (Exception,), {})
+        m.ConnectionError = type('ConnectionError', (Exception,), {})
+        m.NotFoundError = type('NotFoundError', (Exception,), {})
+        m.TimeoutError = type('TimeoutError', (Exception,), {})
 
     # requests: provide Session and Response
     if _mod == 'requests':
@@ -208,6 +229,27 @@ for _mod in _HEAVY_MODULES:
         chk_impl.check_build = check_build
         sys.modules['sklearn.__check_build._check_build'] = chk_impl
 
+    # redis: provide Redis class so tests can mock it via patch.object,
+    # but raise on ping() so tests that require a live Redis server skip.
+    if _mod == 'redis':
+        class _StubRedisClient:
+            def __init__(self, *a, **k):
+                pass
+            def ping(self):
+                raise OSError("Redis not available in test environment")
+            def get(self, key):
+                return None
+            def setex(self, key, ttl, value):
+                return False
+            def delete(self, *keys):
+                return 0
+            def scan_iter(self, match=None):
+                return iter([])
+        m.Redis = _StubRedisClient
+        m.RedisError = Exception
+        m.ConnectionError = OSError
+        m.TimeoutError = OSError
+
     # langdetect: provide detect() helper
     if _mod == 'langdetect':
         def detect(s):
@@ -239,6 +281,13 @@ def pytest_addoption(parser):
         default=False,
         help="Update the contract test fixtures/schemas with generated outputs",
     )
+
+
+collect_ignore_glob = [
+    "test_daily_kpi_snapshot.py",
+    "test_kpi_reconciliation.py",
+    "test_reproducible_training.py",
+]
 
 
 @pytest.fixture

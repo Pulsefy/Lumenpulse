@@ -1,0 +1,19 @@
+{
+  "contract": "treasury",
+  "data_xdr": "AAAAEQAAAAEAAAABAAAADwAAAAxjYW5jZWxsZWRfYnkAAAASAAAAAAAAAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ==",
+  "event": "proposal_cancelled_event",
+  "fields": {
+    "cancelled_by": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"
+  },
+  "topics": [
+    "proposal_cancelled_event",
+    1,
+    "7"
+  ],
+  "topics_xdr": [
+    "AAAADwAAABhwcm9wb3NhbF9jYW5jZWxsZWRfZXZlbnQ=",
+    "AAAAAwAAAAE=",
+    "AAAABQAAAAAAAAAH"
+  ],
+  "version": 1
+}

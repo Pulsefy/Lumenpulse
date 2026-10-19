@@ -14,7 +14,9 @@ import {
   ApiResponse,
   ApiHeader,
   ApiBody,
+  ApiSecurity,
 } from '@nestjs/swagger';
+import { WEBHOOK_SIGNATURE_SECURITY_SCHEME } from '../openapi/openapi.constants';
 import { Request } from 'express';
 import { IngestSorobanEventDto } from './dto/ingest-soroban-event.dto';
 import { IngestSorobanEventResponseDto } from './dto/ingest-soroban-event-response.dto';
@@ -36,6 +38,7 @@ export class SorobanEventsController {
 
   @Post('ingest')
   @UseGuards(SorobanEventIngestionGuard)
+  @ApiSecurity(WEBHOOK_SIGNATURE_SECURITY_SCHEME)
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
     summary: 'Ingest a Soroban contract event',

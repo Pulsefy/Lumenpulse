@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-from src.ml.price_predictor import PricePredictor
+from src.ml.price_predictor import PriceEnsemble, PricePredictor
 from src.ml.feature_schema import SchemaVersionMismatch, current_feature_schema
 
 def test_price_predictor_initialization():
@@ -53,6 +53,58 @@ def test_price_predictor_invalid_target():
     df = pd.DataFrame([[1, 2]], columns=['f1', 'f2'])
     with pytest.raises(ValueError, match="Target column 'missing' not found"):
         predictor.fit(df, target_column='missing')
+
+
+def test_price_ensemble_averages_members_and_reports_contributions():
+    class FixedModel:
+        def __init__(self, values):
+            self.values = np.asarray(values, dtype=float)
+
+        def predict(self, features):
+            return self.values[:len(features)]
+
+    ensemble = PriceEnsemble({
+        "first": FixedModel([2.0, 4.0]),
+        "second": FixedModel([4.0, 8.0]),
+    })
+    predictions, contributions = ensemble.predict_with_contributions(
+        pd.DataFrame({"feature": [1, 2]})
+    )
+
+    np.testing.assert_array_equal(predictions, [3.0, 6.0])
+    assert contributions["first"]["contributions"] == [1.0, 2.0]
+    assert contributions["second"]["contributions"] == [2.0, 4.0]
+    assert contributions["first"]["weight"] == 0.5
+
+
+def test_price_ensemble_skips_failing_member_and_errors_if_all_fail():
+    class FixedModel:
+        def __init__(self, values):
+            self.values = values
+
+        def predict(self, features):
+            if isinstance(self.values, Exception):
+                raise self.values
+            return self.values
+
+    features = pd.DataFrame({"feature": [1]})
+    ensemble = PriceEnsemble({
+        "healthy": FixedModel([3.0]),
+        "broken": FixedModel(RuntimeError("unavailable")),
+    })
+    predictions, contributions = ensemble.predict_with_contributions(features)
+
+    np.testing.assert_array_equal(predictions, [3.0])
+    assert contributions["healthy"]["weight"] == 1.0
+    assert contributions["broken"]["status"] == "failed"
+    assert contributions["broken"]["error"] == "unavailable"
+
+    unavailable = PriceEnsemble({
+        "first": FixedModel(RuntimeError("offline")),
+        "second": FixedModel(RuntimeError("offline")),
+    })
+    with pytest.raises(RuntimeError, match="All price ensemble members failed"):
+        unavailable.predict(features)
 
 
 # ── feature schema versioning (#1239) ──────────────────────────────────────

@@ -1,5 +1,4 @@
 import { Footer } from "@/components/footer";
-import { Navbar } from "@/components/navbar";
 import { Raleway } from "next/font/google";
 
 const raleway = Raleway({
@@ -15,7 +14,6 @@ export default function NewsLayout({
 }) {
   return (
     <div className={`min-h-screen flex flex-col ${raleway.className}`}>
-      <Navbar />
       <main className="flex-grow">{children}</main>
       <Footer />
     </div>

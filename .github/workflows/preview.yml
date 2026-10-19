@@ -1,0 +1,145 @@
+name: Preview
+
+# Per-PR preview environments (issue #1728). A pull request that touches the
+# webapp gets https://pr-<number>.<PREVIEW_DOMAIN>, announced in a PR comment and
+# torn down when the PR closes. Previews run on the staging host as their own
+# compose project (preview-pr-<number>), labelled "Preview" in the UI.
+#
+# Cost control: at most PREVIEW_MAX_ACTIVE (default 5) previews exist at once;
+# opening another removes the least recently updated one. Each preview is one
+# webapp container (~256 MB RAM), sharing the staging backend. Without
+# PREVIEW_SSH_HOST the workflow does nothing. See docs/STAGING.md.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+    paths:
+      - 'apps/webapp/**'
+      - 'docker-compose.preview.yml'
+      - '.github/workflows/preview.yml'
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy preview
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: preview
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+    env:
+      PREVIEW_HOST: ${{ secrets.PREVIEW_SSH_HOST }}
+      PREVIEW_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Check configuration
+        id: cfg
+        run: |
+          if [ -z "$PREVIEW_HOST" ] || [ -z "$PREVIEW_DOMAIN" ]; then
+            echo "Preview hosting is not configured; skipping."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.cfg.outputs.enabled == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Docker Buildx
+        if: steps.cfg.outputs.enabled == 'true'
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to GHCR
+        if: steps.cfg.outputs.enabled == 'true'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build preview image
+        if: steps.cfg.outputs.enabled == 'true'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: apps/webapp
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/lumenpulse-webapp:pr-${{ env.PR }}
+          build-args: |
+            APP_VERSION=pr-${{ env.PR }}
+            GIT_SHA=${{ github.event.pull_request.head.sha }}
+            NEXT_PUBLIC_API_URL=${{ vars.STAGING_API_URL }}
+            NEXT_PUBLIC_ENV_LABEL=Preview - PR #${{ env.PR }}
+          cache-from: type=gha,scope=preview-webapp
+          cache-to: type=gha,mode=max,scope=preview-webapp
+
+      - name: Start preview
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          SSH_KEY: ${{ secrets.PREVIEW_SSH_KEY }}
+          OWNER: ${{ github.repository_owner }}
+          MAX_ACTIVE: ${{ vars.PREVIEW_MAX_ACTIVE || '5' }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
+          rsync -az -e "ssh -i ~/.ssh/id_deploy" docker-compose.preview.yml "deploy@${PREVIEW_HOST}:lumenpulse-previews/"
+          ssh -i ~/.ssh/id_deploy "deploy@${PREVIEW_HOST}" \
+            "OWNER=${OWNER} PR=${PR} DOMAIN=${PREVIEW_DOMAIN} MAX_ACTIVE=${MAX_ACTIVE} bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd lumenpulse-previews
+          # Cap the number of live previews: drop the oldest beyond the limit.
+          mapfile -t live < <(docker ps --filter label=lumenpulse.preview=true --format '{{.Label "com.docker.compose.project"}}' | sort -u)
+          if [ "${#live[@]}" -ge "$MAX_ACTIVE" ] && ! printf '%s\n' "${live[@]}" | grep -qx "preview-pr-$PR"; then
+            oldest=$(docker ps -a --filter label=lumenpulse.preview=true --format '{{.CreatedAt}} {{.Label "com.docker.compose.project"}}' | sort | head -n1 | awk '{print $NF}')
+            docker compose -p "$oldest" down --remove-orphans || true
+          fi
+          PREVIEW_ID="preview-pr-${PR}" PREVIEW_IMAGE="ghcr.io/${OWNER}/lumenpulse-webapp:pr-${PR}" PREVIEW_HOST_NAME="pr-${PR}.${DOMAIN}" \
+            docker compose -p "preview-pr-${PR}" -f docker-compose.preview.yml pull
+          PREVIEW_ID="preview-pr-${PR}" PREVIEW_IMAGE="ghcr.io/${OWNER}/lumenpulse-webapp:pr-${PR}" PREVIEW_HOST_NAME="pr-${PR}.${DOMAIN}" \
+            docker compose -p "preview-pr-${PR}" -f docker-compose.preview.yml up -d --wait
+          REMOTE
+
+      - name: Comment preview URL
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="Preview deployed: https://pr-${PR}.${PREVIEW_DOMAIN} (commit ${GITHUB_SHA::7}). It is removed when this pull request closes."
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --jq '[.[] | select(.body | startswith("Preview deployed:"))][0].id // empty')
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -f body="$body"
+          else
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$body"
+          fi
+
+  teardown:
+    name: Tear down preview
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: preview
+    env:
+      PREVIEW_HOST: ${{ secrets.PREVIEW_SSH_HOST }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Remove preview
+        env:
+          SSH_KEY: ${{ secrets.PREVIEW_SSH_KEY }}
+        run: |
+          if [ -z "$PREVIEW_HOST" ]; then echo "Preview hosting is not configured; nothing to remove."; exit 0; fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id_deploy "deploy@${PREVIEW_HOST}" \
+            "docker compose -p preview-pr-${PR} down --remove-orphans --rmi local || true"

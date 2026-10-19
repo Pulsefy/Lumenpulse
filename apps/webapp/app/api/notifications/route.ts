@@ -21,8 +21,10 @@ const fallbackItems = [
   },
 ];
 
+import { serverConfig } from '@/lib/config';
+
 export async function GET() {
-  const backendUrl = process.env.BACKEND_API_URL ?? 'http://localhost:3001';
+  const backendUrl = serverConfig.backendApiUrl;
 
   try {
     const response = await fetch(`${backendUrl}/notifications`, {

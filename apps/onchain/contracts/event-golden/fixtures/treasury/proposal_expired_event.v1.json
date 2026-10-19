@@ -1,0 +1,19 @@
+{
+  "contract": "treasury",
+  "data_xdr": "AAAAEQAAAAEAAAABAAAADwAAAApleHBpcmVkX2F0AAAAAAAFAAAAAGVVd6A=",
+  "event": "proposal_expired_event",
+  "fields": {
+    "expired_at": "1700100000"
+  },
+  "topics": [
+    "proposal_expired_event",
+    1,
+    "7"
+  ],
+  "topics_xdr": [
+    "AAAADwAAABZwcm9wb3NhbF9leHBpcmVkX2V2ZW50AAA=",
+    "AAAAAwAAAAE=",
+    "AAAABQAAAAAAAAAH"
+  ],
+  "version": 1
+}

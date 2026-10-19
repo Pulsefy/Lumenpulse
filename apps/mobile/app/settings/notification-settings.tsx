@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { NotificationPreferences, usersApi } from '../../lib/api';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
+import { useNotifications } from '../../contexts/NotificationsContext';
 
 const DEFAULT_PREFERENCES: NotificationPreferences = {
   priceAlerts: true,
@@ -35,6 +36,8 @@ export default function NotificationSettingsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useLocalization();
+  const { registrationStatus, registrationError, retryRegistration, deregisterDevice } =
+    useNotifications();
   const [preferences, setPreferences] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<keyof NotificationPreferences | null>(null);
@@ -122,10 +125,24 @@ export default function NotificationSettingsScreen() {
       return;
     }
 
-    setPreferences({
+    const savedPreferences = {
       ...DEFAULT_PREFERENCES,
       ...(response.data?.preferences?.notifications ?? nextPreferences),
-    });
+    };
+    setPreferences(savedPreferences);
+    const notificationsEnabled = Object.values(savedPreferences).some(Boolean);
+    try {
+      if (notificationsEnabled) {
+        await retryRegistration();
+      } else {
+        await deregisterDevice();
+      }
+    } catch (error) {
+      Alert.alert(
+        t('errors.error'),
+        error instanceof Error ? error.message : 'Could not update device notifications',
+      );
+    }
   };
 
   return (
@@ -195,6 +212,7 @@ export default function NotificationSettingsScreen() {
                   <Switch
                     value={preferences[row.key]}
                     onValueChange={(value) => void handleToggle(row.key, value)}
+                    disabled={savingKey === row.key}
                     trackColor={{
                       false: colors.cardBorder,
                       true: colors.accent,
@@ -207,6 +225,56 @@ export default function NotificationSettingsScreen() {
                 </View>
               </View>
             ))
+          )}
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.statusCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+          onPress={() => router.push('/settings/price-alerts')}
+          accessibilityRole="button"
+          accessibilityLabel="Manage price alerts"
+        >
+          <View style={styles.manageRow}>
+            <Ionicons name="pulse-outline" size={20} color={colors.accent} />
+            <View style={styles.headerCopy}>
+              <Text style={[styles.statusTitle, { color: colors.text }]}>Manage price alerts</Text>
+              <Text style={[styles.statusText, { color: colors.textSecondary }]}>
+                Create, edit and delete the rules that trigger price alerts.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </View>
+        </TouchableOpacity>
+
+        <View
+          style={[
+            styles.statusCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={[styles.statusTitle, { color: colors.text }]}>Device notifications</Text>
+          <Text style={[styles.statusText, { color: colors.textSecondary }]}>
+            {registrationStatus === 'registered'
+              ? 'This device is registered for push notifications.'
+              : registrationStatus === 'registering'
+                ? 'Registering this device…'
+                : (registrationError ?? 'Push notifications are not registered on this device.')}
+          </Text>
+          {registrationStatus === 'error' && (
+            <TouchableOpacity
+              style={[styles.retryButton, { borderColor: colors.accent }]}
+              onPress={() => void retryRegistration()}
+              accessibilityRole="button"
+              accessibilityLabel="Retry device notification registration"
+            >
+              <Text style={[styles.retryButtonText, { color: colors.accent }]}>
+                Retry registration
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
       </ScrollView>
@@ -292,5 +360,35 @@ const styles = StyleSheet.create({
   preferenceDescription: {
     fontSize: 13,
     lineHeight: 18,
+  },
+  statusCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 18,
+    gap: 8,
+  },
+  manageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statusTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  statusText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  retryButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

@@ -32,4 +32,6 @@ pub enum TreasuryError {
     InvalidScheduleStep = 21,
     /// preview_schedule asked for too many entries (caps iteration cost).
     TooManyInstallments = 22,
+    /// Total unreleased obligations across all streams exceed held balance.
+    Insolvent = 23,
 }

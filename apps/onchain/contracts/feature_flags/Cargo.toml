@@ -13,6 +13,7 @@ soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+test_utils = { path = "../test_utils" }
 
 [features]
 testutils = ["soroban-sdk/testutils"]

@@ -10,6 +10,7 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass, asdict
 from .news_deduplicator import NewsDeduplicator
 from datetime import datetime
+from src.privacy import scrub_record
 from src.utils.translator import translate_and_normalize
 import requests
 from requests.exceptions import RequestException
@@ -294,6 +295,10 @@ class NewsFetcher:
 
         # Convert to dictionaries
         articles_as_dicts = [article.to_dict() for article in all_articles]
+
+        # Scrub personal data at the ingestion boundary, before deduplication,
+        # persistence and any feature computation (#1452).
+        articles_as_dicts = [scrub_record(article) for article in articles_as_dicts]
 
         # Apply deduplication filter
         deduplicated_articles = self.deduplicator.filter_duplicates(articles_as_dicts)

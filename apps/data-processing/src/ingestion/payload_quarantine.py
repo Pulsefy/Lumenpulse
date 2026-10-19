@@ -34,11 +34,15 @@ import threading
 import uuid
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
+from dataclasses import fields as dataclass_fields
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Generator, Iterable, Iterator, List, Optional
 
 logger = logging.getLogger("payload_quarantine")
+
+REPLAY_STATUS_PENDING = "pending"
+REPLAY_STATUS_REPLAYED = "replayed"
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +76,15 @@ class QuarantinedPayload:
 
     tags: List[str] = field(default_factory=list)
     """Optional free-form tags for filtering (e.g. ['stellar', 'testnet'])."""
+
+    status: Optional[str] = None
+    """Replay lifecycle status: 'pending', 'replayed', or None for legacy entries."""
+
+    replayed_at: Optional[str] = None
+    """ISO-8601 timestamp of the most recent successful replay."""
+
+    last_attempted_at: Optional[str] = None
+    """ISO-8601 timestamp of the most recent replay attempt."""
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -227,6 +240,53 @@ class QuarantineStore:
     def count(self) -> int:
         """Return total number of quarantined entries."""
         return sum(1 for _ in self.iter_entries())
+
+    def update_entry(
+        self, quarantine_id: str, **fields: Any
+    ) -> Optional[QuarantinedPayload]:
+        """
+        Update one persisted entry in place and rewrite the log atomically.
+
+        Only field names of :class:`QuarantinedPayload` are accepted.  Setting
+        ``status`` to ``"replayed"`` / ``"pending"`` also syncs the legacy
+        ``replayed`` boolean.  Returns the updated entry, or ``None`` if no
+        entry matches *quarantine_id*.
+        """
+        allowed = {f.name for f in dataclass_fields(QuarantinedPayload)}
+        unknown = sorted(set(fields) - allowed)
+        if unknown:
+            raise ValueError(f"Unknown QuarantinedPayload fields: {unknown}")
+
+        updated: Optional[QuarantinedPayload] = None
+        with self._lock:
+            entries = list(self.iter_entries())
+            for index, entry in enumerate(entries):
+                if entry.quarantine_id != quarantine_id:
+                    continue
+                for name, value in fields.items():
+                    setattr(entry, name, value)
+                status = fields.get("status")
+                if status == REPLAY_STATUS_REPLAYED:
+                    entry.replayed = True
+                elif status == REPLAY_STATUS_PENDING:
+                    entry.replayed = False
+                entries[index] = entry
+                updated = entry
+                break
+            if updated is None:
+                return None
+            self._rewrite_locked(entries)
+        return updated
+
+    def _rewrite_locked(self, entries: List[QuarantinedPayload]) -> None:
+        """Replace the log file with the given entries atomically."""
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = self._path.with_name(self._path.name + ".tmp")
+        with tmp_path.open("w", encoding="utf-8") as fh:
+            for entry in entries:
+                fh.write(json.dumps(entry.to_dict(), ensure_ascii=False, default=str))
+                fh.write("\n")
+        os.replace(tmp_path, self._path)
 
     # ------------------------------------------------------------------
     # Replay support

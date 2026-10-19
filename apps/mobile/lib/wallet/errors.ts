@@ -24,3 +24,25 @@ export class WalletError extends Error {
     this.name = 'WalletError';
   }
 }
+
+/** Normalise the many error shapes wallet SDKs return into a string. */
+export function walletErrorMessage(error: unknown, fallback = 'Unknown wallet error'): string {
+  if (typeof error === 'string') return error || fallback;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+  }
+  return fallback;
+}
+
+/** Heuristic used by wallet SDKs that report user rejection as free text. */
+export function isRejectionMessage(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes('user') ||
+    lower.includes('denied') ||
+    lower.includes('reject') ||
+    lower.includes('cancelled') ||
+    lower.includes('canceled')
+  );
+}

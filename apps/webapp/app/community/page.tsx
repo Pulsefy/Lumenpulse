@@ -17,7 +17,9 @@ import {
   Bug,
   Lightbulb,
   CheckCircle2,
+  Activity,
 } from "lucide-react";
+import { ContributorActivityFeed } from "@/components/contributor-activity-feed";
 
 const CHANNELS = [
   {
@@ -52,28 +54,28 @@ const AREAS = [
     icon: Code2,
     label: "Frontend (webapp)",
     stack: "Next.js 15 · React 18 · TypeScript · Tailwind",
-    guide: "document/mobile-contributing.md",
+    guide: "docs/mobile-contributing.md",
     color: "text-pink-400",
   },
   {
     icon: Cpu,
     label: "Backend (API)",
     stack: "NestJS · TypeORM · PostgreSQL · Redis",
-    guide: "document/backend-contributing.md",
+    guide: "docs/backend-contributing.md",
     color: "text-purple-400",
   },
   {
     icon: GitFork,
     label: "Smart Contracts (onchain)",
     stack: "Rust · Soroban · Stellar SDK",
-    guide: "document/contracts-contributing.md",
+    guide: "docs/contracts-contributing.md",
     color: "text-blue-400",
   },
   {
     icon: Smartphone,
     label: "Mobile",
     stack: "React Native · Expo · TypeScript",
-    guide: "document/mobile-contributing.md",
+    guide: "docs/mobile-contributing.md",
     color: "text-emerald-400",
   },
 ];
@@ -218,6 +220,24 @@ export default function CommunityPage() {
               ),
             )}
           </div>
+        </div>
+      </section>
+
+      {/* Contributor Activity Feed */}
+      <section className="py-16 px-4 border-t border-white/5">
+        <div className="container mx-auto max-w-3xl">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" />
+                Contributor Activity Feed
+              </h2>
+              <p className="text-foreground/50 text-sm">
+                Live activity from contributors across the platform.
+              </p>
+            </div>
+          </div>
+          <ContributorActivityFeed limit={10} paginated={true} />
         </div>
       </section>
 

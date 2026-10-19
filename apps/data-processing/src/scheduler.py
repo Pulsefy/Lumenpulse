@@ -29,6 +29,7 @@ from src.ingestion.rpc_benchmark import RPCProviderBenchmark
 from src.round_analyzer import _round_analyzer_job
 from src.metadata_drift_detector import MetadataDriftDetector
 from src.kpi_reconciliation import KPIReconciler
+from src.pipeline_run_registry import attach_scheduler_listener
 
 
 
@@ -199,10 +200,21 @@ def _ingestion_quality_checks_job() -> None:
     try:
         run_ingestion_quality_checks(argv=None)
     except SystemExit:
-        # CLI may call sys.exit; ignore to keep scheduler alive.
         pass
-    except Exception as e:
-        logger.error(f"Ingestion quality checks failed: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error(f"Scheduled ingestion quality checks raised an exception: {exc}", exc_info=True)
+
+
+def _prediction_logs_cleanup_job() -> None:
+    """Clean up old prediction logs to enforce retention policy."""
+    logger.info("Scheduled prediction logs cleanup job triggered")
+    try:
+        retention_days = int(os.getenv("PREDICTION_LOG_RETENTION_DAYS", "30"))
+        db = PostgresService()
+        deleted = db.cleanup_prediction_logs(retention_days=retention_days)
+        logger.info(f"Cleaned up {deleted} old prediction logs.")
+    except Exception as exc:
+        logger.error(f"Scheduled prediction logs cleanup raised an exception: {exc}", exc_info=True)
 
 
 def _ingestion_alerting_job() -> None:
@@ -316,19 +328,27 @@ def _feature_drift_detection_job() -> None:
     baseline recorded with the live price-predictor model and raises an alert
     through the existing alerting path when any feature drifts beyond the
     configured PSI threshold (or the feature schema version/fingerprint no
-    longer matches). Read-only; errors are caught so the scheduler keeps running.
+    longer matches). Drift also queues evaluation-gated retraining unless
+    automatic retraining is disabled; errors are caught so the scheduler keeps
+    running.
     """
     try:
         from src.ml.feature_drift_detector import FeatureDriftDetector
 
         detector = FeatureDriftDetector()
         report = detector.detect()
+        if report.drift_detected:
+            from src.ml.drift_retraining import enqueue_drift_retraining
+
+            report.retraining = enqueue_drift_retraining(report.to_dict())
         logger.info(
-            "Feature drift detection: status=%s drifted=%s schema_mismatch=%s alerted=%s",
+            "Feature drift detection: status=%s drifted=%s schema_mismatch=%s "
+            "alerted=%s retraining=%s",
             report.status,
             report.drifted_features,
             report.schema_mismatch,
             report.alerted,
+            report.retraining,
         )
     except Exception as exc:
         logger.error(f"Feature drift detector job failed: {exc}", exc_info=True)
@@ -534,6 +554,20 @@ class AnalyticsScheduler:
                 replace_existing=True,
             )
 
+
+            # ── Prediction Logs Cleanup: daily at 02:00 UTC ──────
+            self.scheduler.add_job(
+                func=_prediction_logs_cleanup_job,
+                trigger=CronTrigger(hour=2, minute=0, timezone="UTC"),
+                id="prediction_logs_cleanup",
+                name="Prediction Logs Cleanup Scheduler",
+                replace_existing=True,
+            )
+
+
+            # Record per-stage run start/duration/outcome for the pipeline
+            # topology API (#1451) before the scheduler begins firing jobs.
+            attach_scheduler_listener(self.scheduler)
 
             self.scheduler.start()
             logger.info("✓ Analytics scheduler started")

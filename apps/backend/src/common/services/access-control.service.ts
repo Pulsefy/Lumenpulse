@@ -7,6 +7,7 @@ import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { User, UserRole } from '../../users/entities/user.entity';
 import { WebhookVerificationService } from '../../webhook/webhook-verification.service';
+import { SecretRotationService } from '../../config/secret-rotation.service';
 import {
   IAccessControlService,
   AccessControlContext,
@@ -32,6 +33,7 @@ export class AccessControlService implements IAccessControlService {
     private readonly userRepository: Repository<User>,
     private readonly configService: ConfigService,
     private readonly webhookVerificationService: WebhookVerificationService,
+    private readonly secretRotationService: SecretRotationService,
   ) {}
 
   /**
@@ -458,7 +460,18 @@ export class AccessControlService implements IAccessControlService {
       'CONTRACT_ADMIN_API_KEY',
     );
 
-    if (!configuredKey) {
+    // Once a rotation has happened the rotation store owns the value; fall
+    // back to the boot-time value when nothing has been rotated yet.
+    const rotatedKeys = this.secretRotationService.acceptableValues(
+      'CONTRACT_ADMIN_API_KEY',
+    );
+    const candidates = rotatedKeys.length
+      ? rotatedKeys
+      : configuredKey
+        ? [configuredKey]
+        : [];
+
+    if (candidates.length === 0) {
       this.logger.warn(
         'CONTRACT_ADMIN_API_KEY not configured. API key verification cannot proceed.',
       );
@@ -468,8 +481,11 @@ export class AccessControlService implements IAccessControlService {
       });
     }
 
-    // Constant-time comparison to prevent timing attacks
-    const trusted = this.constantTimeCompare(providedKey, configuredKey);
+    // Constant-time comparison to prevent timing attacks. During a rotation
+    // overlap window the previous value is still accepted.
+    const trusted = candidates.some((candidate) =>
+      this.constantTimeCompare(providedKey, candidate),
+    );
 
     return Promise.resolve({
       trusted,

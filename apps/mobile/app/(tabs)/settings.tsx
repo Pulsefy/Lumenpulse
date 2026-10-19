@@ -16,6 +16,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { useLocalization } from '../../src/context';
 import { config, AppEnvironment } from '../../lib/config';
+import { isCatalogueEnabled } from '../../lib/component-catalogue';
 import {
   authenticateBiometricPrompt,
   getBiometricLockEnabled,
@@ -121,6 +122,30 @@ export default function SettingsScreen() {
       return;
     }
 
+    // For mainnet, require explicit confirmation due to the critical nature
+    // of switching to production network with real funds
+    if (value === 'mainnet') {
+      Alert.alert(
+        t('settings.network.mainnet_confirmation_title'),
+        t('settings.network.mainnet_confirmation_message'),
+        [
+          {
+            text: t('common.cancel'),
+            style: 'cancel',
+          },
+          {
+            text: t('settings.network.mainnet_confirmation_confirm'),
+            onPress: async () => {
+              await setEnvironment(value);
+            },
+            style: 'destructive',
+          },
+        ],
+      );
+      return;
+    }
+
+    // Testnet switch doesn't require confirmation
     await setEnvironment(value);
   };
 
@@ -198,6 +223,32 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.navRow}
             activeOpacity={0.75}
+            onPress={() => router.push('/settings/sessions')}
+            accessibilityRole="link"
+            accessibilityLabel={t('settings.sessions.title')}
+            accessibilityHint={t('settings.sessions.description')}
+          >
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="phone-portrait-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.sessions.title')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t('settings.sessions.description')}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <TouchableOpacity
+            style={styles.navRow}
+            activeOpacity={0.75}
             onPress={() => router.push('/settings/notification-settings')}
             accessibilityRole="link"
             accessibilityLabel={t('settings.notification_settings.title')}
@@ -213,6 +264,65 @@ export default function SettingsScreen() {
                 </Text>
                 <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
                   {t('settings.notification_settings.description')}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <TouchableOpacity
+            style={styles.navRow}
+            activeOpacity={0.75}
+            onPress={() => router.push('/settings/data-privacy')}
+            accessibilityRole="link"
+            accessibilityLabel={t('settings.data_privacy.title')}
+            accessibilityHint={t('settings.data_privacy.description')}
+          >
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="shield-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.data_privacy.title')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t('settings.data_privacy.description')}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <TouchableOpacity
+            testID="settings-data-exports-nav"
+            style={styles.navRow}
+            activeOpacity={0.75}
+            onPress={() => router.push('/settings/exports')}
+            accessibilityRole="link"
+            accessibilityLabel={t('settings.exports.title', 'Data Exports')}
+            accessibilityHint={t(
+              'settings.exports.description',
+              'Request and download your transaction and portfolio history',
+            )}
+          >
+            <View style={styles.navRowCopy}>
+              <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                <Ionicons name="cloud-download-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.navTextWrap}>
+                <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                  {t('settings.exports.title', 'Data Exports')}
+                </Text>
+                <Text style={[styles.navDescription, { color: colors.textSecondary }]} accessible>
+                  {t(
+                    'settings.exports.description',
+                    'Request and download your transaction and portfolio history',
+                  )}
                 </Text>
               </View>
             </View>
@@ -457,6 +567,39 @@ export default function SettingsScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
+
+          {isCatalogueEnabled() && (
+            <>
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              <TouchableOpacity
+                style={styles.navRow}
+                activeOpacity={0.75}
+                onPress={() => router.push('/dev/catalogue')}
+                accessibilityRole="link"
+                accessibilityLabel="Component catalogue"
+                accessibilityHint="Shared components in each of their states, development builds only"
+              >
+                <View style={styles.navRowCopy}>
+                  <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                    <Ionicons name="grid-outline" size={18} color={colors.accent} />
+                  </View>
+                  <View style={styles.navTextWrap}>
+                    <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                      Component catalogue
+                    </Text>
+                    <Text
+                      style={[styles.navDescription, { color: colors.textSecondary }]}
+                      accessible
+                    >
+                      Shared components in each of their states (development builds only)
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {isAuthenticated && (

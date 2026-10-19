@@ -5,6 +5,7 @@ Database package for analytics data persistence
 from .models import (
     Base,
     Article,
+    ArticleEmbedding,
     ArticleOnchainEntityLink,
     SocialPost,
     AnalyticsRecord,
@@ -17,6 +18,7 @@ from .models import (
     NewsInsight,
     AssetTrend,
     EntityLinkingReview,
+    SentimentLabel,
 )
 from .cohort_models import (
     GrantRound,
@@ -30,6 +32,7 @@ from .postgres_service import PostgresService
 __all__ = [
     "Base",
     "Article",
+    "ArticleEmbedding",
     "ArticleOnchainEntityLink",
     "SocialPost",
     "AnalyticsRecord",
@@ -47,5 +50,6 @@ __all__ = [
     "CohortRetentionSummary",
     "RepeatContributorSummary",
     "EntityLinkingReview",
+    "SentimentLabel",
     "PostgresService",
 ]

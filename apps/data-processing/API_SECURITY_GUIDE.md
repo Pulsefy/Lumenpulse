@@ -3,9 +3,68 @@
 ## Overview
 
 The Data Processing FastAPI server is now secured with:
-1. **API Key Authentication** - Middleware to validate `X-API-Key` header
-2. **Rate Limiting** - Per-client rate limiting using SlowAPI
-3. **Configurable Security** - All settings via environment variables in `.env`
+1. **API Key Authentication** - Middleware validates `X-API-Key` credentials
+2. **Per-consumer keys and scopes** - Managed in the backend and verified against the shared PostgreSQL database
+3. **Rate Limiting** - Per-client rate limiting using SlowAPI
+4. **Configurable Security** - Legacy keys and rate limits remain configurable via environment variables
+
+## Managed service-consumer keys
+
+Administrators can manage credentials through the backend using a JWT for an
+admin user. The Python service must use the same PostgreSQL database as the
+backend, and the backend database migration must be applied before managed keys
+can be used. The Python service checks the stored SHA-256 verifier on each
+request, so revocation takes effect on the next request without restarting
+either service.
+
+| Operation | Endpoint |
+|---|---|
+| List a consumer's keys | `GET /service-consumers/:consumerId/api-keys` |
+| Issue a key | `POST /service-consumers/:consumerId/api-keys` |
+| Rotate a key | `POST /service-consumers/:consumerId/api-keys/:id/rotate` |
+| Revoke a key | `DELETE /service-consumers/:consumerId/api-keys/:id` |
+
+Issue a key with an explicit least-privilege scope:
+
+```json
+{
+  "name": "backend production",
+  "scopes": ["data:read"]
+}
+```
+
+Supported scopes are `data:read`, `data:write`, and `admin`. Analysis and other
+read-only operations use `data:read`; state-changing operations use
+`data:write`. `admin` is additionally required by endpoints protected with the
+admin-token decorator. The generated secret is returned only by issue/rotate;
+the database stores only its SHA-256 verifier. Listing keys exposes metadata
+and a short prefix, never the secret.
+
+Rotation creates a second active key with the same scopes and expiry. Deploy
+the newly returned value to the consumer, verify its traffic, then revoke the
+old key. Key logs and `service_api_key_requests_total` metrics use the consumer
+identifier, HTTP method, and required scope; they never include the key value.
+
+### Migrating from shared environment keys
+
+1. Apply the backend migration and configure the Python service with the same
+   `DATABASE_URL` (or the equivalent `DB_*` connection variables).
+2. Issue a key for each service consumer. Configure the consumer's existing
+   secret setting (for example, backend `PYTHON_API_KEY`) with its new key.
+3. Verify successful requests and the corresponding consumer in Python logs or
+   the `service_api_key_requests_total` metric.
+4. Remove the old shared `API_KEY`, `API_KEYS`, and/or
+   `BOT_AUTH_SERVICE_TOKENS` entry after all callers have moved.
+
+`API_KEY` and `API_KEYS` remain accepted as a migration fallback for existing
+deployments. Environment-configured keys should be removed after migration;
+they are not revocable through the backend management endpoints.
+
+The same managed service key can also replace a configured
+`BOT_AUTH_SERVICE_TOKENS` credential and be presented to backend
+machine-principal endpoints using `X-Service-Token`; the backend associates it
+with the same consumer ID for rate-limit attribution. `X-Bot-Token` remains
+reserved for configured bot credentials.
 
 ## 🔒 Security Features
 

@@ -1,0 +1,19 @@
+[package]
+name = "test_utils"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# This crate is intentionally *not* a workspace member (it is listed under
+# `exclude` in `apps/onchain/Cargo.toml`). It depends on `soroban-sdk` with the
+# `testutils` feature, which pulls in `soroban-env-host` and cannot be compiled
+# for `wasm32-unknown-unknown`. Keeping it out of the workspace means the CI
+# wasm build never tries to build it; contracts pick it up as a dev-dependency
+# only. Because it is not a member it cannot use `workspace = true` inheritance,
+# so the SDK version is pinned explicitly.
+[lib]
+crate-type = ["lib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { version = "23", features = ["testutils"] }

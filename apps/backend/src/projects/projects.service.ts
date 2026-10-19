@@ -14,6 +14,7 @@ import {
   OnChainStatusDto,
   ProjectMetadataDto,
 } from './dto/projects.dto';
+import { resolvePagination } from '../common/pagination/pagination-response.dto';
 
 @Injectable()
 export class ProjectsService {
@@ -37,14 +38,15 @@ export class ProjectsService {
 
     try {
       const {
-        page = 1,
-        limit = 10,
+        page,
+        pageSize,
         status,
         owner,
         sortBy = 'createdAt',
         sortOrder = 'DESC',
       } = query;
-      const skip = (page - 1) * limit;
+
+      const pagination = resolvePagination(page, pageSize);
 
       // Build query conditions
       const where: Record<string, unknown> = {};
@@ -59,22 +61,49 @@ export class ProjectsService {
       const [projects, total] = await this.projectRepository.findAndCount({
         where,
         order: { [sortBy]: sortOrder },
-        skip,
-        take: limit,
+        skip: pagination.offset,
+        take: pagination.pageSize,
       });
 
-      // Fetch on-chain state for each project
-      const projectItems = await Promise.all(
-        projects.map((project) => this.enrichProjectWithOnChainState(project)),
+      // FIX (N+1 → 1): preload all project on-chain states concurrently in a
+      // single pass, then map synchronously rather than issuing one
+      // getContractReadCached call per project in a .map().
+      //
+      // Before: Promise.all(projects.map(p => enrichProjectWithOnChainState(p)))
+      //         → N independent cache/RPC lookups, one per project row.
+      //
+      // After: one Promise.all of N cache lookups that all start at the same
+      // time (no sequential dependency), then a synchronous map over the
+      // pre-fetched states.  When a real batched RPC endpoint is available
+      // this can be reduced to a single call.
+      const onChainStates = await Promise.all(
+        projects.map((project) =>
+          this.fetchOnChainState(project.projectId).catch((err) => {
+            this.logger.warn(
+              `Failed to fetch on-chain state for project ${project.projectId}:`,
+              err,
+            );
+            return this.getDefaultOnChainState(project);
+          }),
+        ),
       );
 
-      const response: ProjectListResponseDto = {
-        projects: projectItems,
+      const projectItems: ProjectListItemDto[] = projects.map(
+        (project, idx) => ({
+          projectId: project.projectId,
+          owner: project.owner,
+          metadata: this.parseMetadata(project),
+          onChainStatus: onChainStates[idx],
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+        }),
+      );
+
+      const response = new ProjectListResponseDto(
+        projectItems,
+        pagination,
         total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      };
+      );
 
       const duration = Date.now() - startTime;
       this.metricsService.recordHistogram(

@@ -11,7 +11,11 @@ export interface DeploymentContext {
 export interface ContractConfig {
     /** Key to use in the output JSON */
     name: string;
-    /** Path to the WASM file relative to the scripts directory */
+    /**
+     * Path to the WASM file relative to the scripts directory. Points at the
+     * binaryen-optimized output of optimize-wasm.mjs: the raw cargo build is
+     * rejected by Soroban (reference-types) and costs ~30% more to upload.
+     */
     wasmPath: string;
     /** Initialization configuration */
     init?: {
@@ -32,7 +36,7 @@ export function getContractConfigs(): ContractConfig[] {
     return [
         {
             name: 'token',
-            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/lumen_token.wasm',
+            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/optimized/lumen_token.wasm',
             init: {
                 fn: 'initialize',
                 args: ({ adminPublicKey }) => {
@@ -47,7 +51,7 @@ export function getContractConfigs(): ContractConfig[] {
         },
         {
             name: 'registry',
-            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/contributor_registry.wasm',
+            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/optimized/contributor_registry.wasm',
             init: {
                 fn: 'initialize',
                 args: ({ adminPublicKey }) => {
@@ -57,7 +61,7 @@ export function getContractConfigs(): ContractConfig[] {
         },
         {
             name: 'vault',
-            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/crowdfund_vault.wasm',
+            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/optimized/crowdfund_vault.wasm',
             init: {
                 fn: 'initialize',
                 args: ({ adminPublicKey }) => {
@@ -67,7 +71,7 @@ export function getContractConfigs(): ContractConfig[] {
         },
         {
             name: 'vesting_wallet',
-            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/vesting_wallet.wasm',
+            wasmPath: '../apps/onchain/target/wasm32-unknown-unknown/release/optimized/vesting_wallet.wasm',
             init: {
                 fn: 'initialize',
                 args: ({ adminPublicKey, deployedContracts }) => {

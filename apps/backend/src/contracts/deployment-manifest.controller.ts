@@ -17,9 +17,10 @@ import {
   ApiTags,
   ApiOperation,
   ApiResponse,
+  ApiOkResponse,
   ApiParam,
   ApiQuery,
-  ApiBearerAuth,
+  ApiSecurity,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ContractAdminGuard } from '../common/guards/contract-admin.guard';
@@ -36,6 +37,10 @@ import {
 } from './dto/deployment-manifest.dto';
 import { CustomValidationPipe } from '../common/pipes/validation.pipe';
 import { Request as ExpressRequest } from 'express';
+import {
+  API_KEY_SECURITY_SCHEME,
+  JWT_SECURITY_SCHEME,
+} from '../openapi/openapi.constants';
 
 interface RequestUser {
   id: string;
@@ -127,11 +132,39 @@ export class DeploymentManifestController {
     return this.manifestService.findOne(id);
   }
 
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, ContractAdminGuard, ContractAdminTrustedCallerGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiSecurity({ [JWT_SECURITY_SCHEME]: [], [API_KEY_SECURITY_SCHEME]: [] })
+  @ApiOperation({
+    summary:
+      'Refresh active contract deployment manifest from disk (admin only)',
+    description:
+      'Forces a reload of the testnet-manifest.json file to update contract IDs and caches.',
+  })
+  @ApiOkResponse({
+    description: 'Manifest refreshed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Manifest refresh triggered' },
+      },
+      required: ['message'],
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Requires admin role' })
+  async refreshManifest(): Promise<{ message: string }> {
+    await this.manifestService.refreshManifest();
+    return { message: 'Manifest refresh triggered' };
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard, ContractAdminGuard, ContractAdminTrustedCallerGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth('JWT-auth')
+  @ApiSecurity({ [JWT_SECURITY_SCHEME]: [], [API_KEY_SECURITY_SCHEME]: [] })
   @ApiOperation({
     summary: 'Create a new contract deployment manifest record (admin only)',
     description:
@@ -157,7 +190,7 @@ export class DeploymentManifestController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, ContractAdminGuard, ContractAdminTrustedCallerGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth('JWT-auth')
+  @ApiSecurity({ [JWT_SECURITY_SCHEME]: [], [API_KEY_SECURITY_SCHEME]: [] })
   @ApiOperation({
     summary: 'Update contract deployment manifest record (admin only)',
     description:
@@ -188,7 +221,7 @@ export class DeploymentManifestController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(JwtAuthGuard, ContractAdminGuard, ContractAdminTrustedCallerGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth('JWT-auth')
+  @ApiSecurity({ [JWT_SECURITY_SCHEME]: [], [API_KEY_SECURITY_SCHEME]: [] })
   @ApiOperation({
     summary: 'Delete contract deployment manifest record (admin only)',
     description: 'Deletes a deployment manifest entry by ID.',
@@ -198,7 +231,7 @@ export class DeploymentManifestController {
     description: 'Manifest record UUID',
   })
   @ApiResponse({
-    status: 24,
+    status: 204,
     description: 'Deployment manifest deleted successfully',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })

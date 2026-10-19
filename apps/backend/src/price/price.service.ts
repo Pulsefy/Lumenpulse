@@ -77,4 +77,35 @@ export class PriceService implements OnModuleInit, OnModuleDestroy {
 
     return Promise.resolve(mockPrices[assetCode] || 0);
   }
+
+  /**
+   * Batch-fetch USD prices for multiple asset codes in a single call.
+   *
+   * Replaces the N+1 pattern of calling `getCurrentPrice()` once per asset
+   * inside a `.map()`.  When a real price feed is introduced, this method
+   * should issue a single batched request to that feed rather than N
+   * individual requests.
+   *
+   * @param assetCodes Deduplicated list of asset code strings (e.g. ["XLM", "USDC"]).
+   * @returns Map from assetCode → USD price.  Missing codes map to 0.
+   */
+  getPricesForAssets(assetCodes: string[]): Promise<Map<string, number>> {
+    // Deduplicate so we only resolve each code once.
+    const unique = [...new Set(assetCodes)];
+
+    // When a real price-feed API is integrated, replace this with a single
+    // batched HTTP call and populate the map from the response.
+    const mockPrices: Record<string, number> = {
+      XLM: 0.12,
+      USDC: 1.0,
+      BTC: 45000.0,
+      ETH: 2500.0,
+    };
+
+    const result = new Map<string, number>();
+    for (const code of unique) {
+      result.set(code, mockPrices[code] ?? 0);
+    }
+    return Promise.resolve(result);
+  }
 }

@@ -60,7 +60,7 @@ export default function HomeScreen() {
                   ? `${t('notifications.title')}, ${unreadCount} ${t('notifications.title')}`
                   : t('notifications.title')
               }
-              accessibilityState={{ unread: unreadCount > 0 }}
+              accessibilityState={{ selected: unreadCount > 0 }}
               accessibilityRole="button"
             >
               <Ionicons name="notifications-outline" size={28} color={colors.accent} />

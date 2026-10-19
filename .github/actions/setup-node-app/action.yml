@@ -1,0 +1,51 @@
+name: Set up Node app
+description: >-
+  Node runtime, npm cache and `npm ci` for one app in this monorepo. The Node
+  version comes from the root `.nvmrc`, so changing it means editing exactly
+  one file. Call it right after `actions/checkout` (a local action can only be
+  resolved from disk once the repository has been checked out).
+
+inputs:
+  working-directory:
+    description: App directory relative to the repository root, e.g. `apps/backend`.
+    required: true
+  cache-dependency-path:
+    description: >-
+      Lockfile(s) feeding the npm cache key, newline separated. Defaults to
+      `<working-directory>/package-lock.json`.
+    default: ''
+  install:
+    description: Run `npm ci` in the app directory. Set to `false` to skip.
+    default: 'true'
+  root-workspace:
+    description: >-
+      Also run `npm install` at the repository root. Metro resolves
+      `apps/mobile` as a monorepo (via its `"lumenpulse": "file:../.."`
+      dependency) and looks for `node_modules` at the root, so `expo export`
+      and `expo start --web` fail with ENOENT without it. tsc and jest do not
+      need it.
+    default: 'false'
+
+runs:
+  using: composite
+  # Cache keys: setup-node derives the npm cache key from the hash of the
+  # lockfile(s) above, so every app gets the same, lockfile-accurate behaviour.
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version-file: .nvmrc
+        cache: npm
+        cache-dependency-path: ${{ inputs.cache-dependency-path != '' && inputs.cache-dependency-path || format('{0}/package-lock.json', inputs.working-directory) }}
+
+    - name: Install dependencies
+      if: inputs.install == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npm ci
+
+    - name: Install root workspace dependencies
+      if: inputs.root-workspace == 'true'
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: npm install --no-audit --no-fund

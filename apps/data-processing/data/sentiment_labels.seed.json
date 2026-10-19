@@ -1,0 +1,11 @@
+[
+  {"text": "Bitcoin rallies to a new all time high", "label": "positive", "labeller": "seed", "is_held_out": false},
+  {"text": "The market crash wiped out gains", "label": "negative", "labeller": "seed", "is_held_out": false},
+  {"text": "The protocol published its weekly update", "label": "neutral", "labeller": "seed", "is_held_out": false},
+  {"text": "XLM mooning after a strong breakout", "label": "positive", "labeller": "seed", "is_held_out": false},
+  {"text": "Bearish sell pressure is accelerating", "label": "negative", "labeller": "seed", "is_held_out": false},
+  {"text": "Trading volume was unchanged today", "label": "neutral", "labeller": "seed", "is_held_out": false},
+  {"text": "Investors celebrate a massive pump", "label": "positive", "labeller": "seed", "is_held_out": true},
+  {"text": "The exploit caused panic and losses", "label": "negative", "labeller": "seed", "is_held_out": true},
+  {"text": "The token announcement is scheduled for Friday", "label": "neutral", "labeller": "seed", "is_held_out": true}
+]

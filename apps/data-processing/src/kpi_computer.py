@@ -777,24 +777,45 @@ class KPIComputer:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         period: str = "daily",
-    ) -> List[Dict[str, Any]]:
-        """Get KPI time series data."""
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ):
+        """
+        Get KPI time series data with stable ascending date order and
+        pagination (#1458).
+
+        Returns ``(page_items, total_matching)``.
+        """
+        from src.utils.pagination import clamp_limit, clamp_offset, DEFAULT_PAGE_SIZE
+        from sqlalchemy import and_, func
+
+        limit = clamp_limit(limit if limit is not None else DEFAULT_PAGE_SIZE)
+        offset = clamp_offset(offset)
+
         with self.db_service.get_session() as session:
-            stmt = select(DailyOnchainKPISnapshot).where(
-                DailyOnchainKPISnapshot.period == period
-            )
-            
+            filters = [DailyOnchainKPISnapshot.period == period]
             if start_date:
-                stmt = stmt.where(DailyOnchainKPISnapshot.snapshot_date >= start_date)
-            
+                filters.append(DailyOnchainKPISnapshot.snapshot_date >= start_date)
             if end_date:
-                stmt = stmt.where(DailyOnchainKPISnapshot.snapshot_date <= end_date)
-            
-            stmt = stmt.order_by(DailyOnchainKPISnapshot.snapshot_date.asc())
-            
+                filters.append(DailyOnchainKPISnapshot.snapshot_date <= end_date)
+
+            total = session.execute(
+                select(func.count()).select_from(DailyOnchainKPISnapshot).where(and_(*filters))
+            ).scalar_one()
+
+            stmt = (
+                select(DailyOnchainKPISnapshot)
+                .where(and_(*filters))
+                .order_by(
+                    DailyOnchainKPISnapshot.snapshot_date.asc(),
+                    DailyOnchainKPISnapshot.id.asc(),
+                )
+                .limit(limit)
+                .offset(offset)
+            )
             snapshots = session.execute(stmt).scalars().all()
-            
-            return [
+
+            items = [
                 {
                     "date": s.snapshot_date,
                     "tvl": s.tvl,
@@ -806,6 +827,7 @@ class KPIComputer:
                 }
                 for s in snapshots
             ]
+            return items, int(total or 0)
 
 
 # Convenience functions
@@ -834,7 +856,14 @@ def get_current_kpis() -> Optional[Dict[str, Any]]:
 def get_kpi_history(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-) -> List[Dict[str, Any]]:
-    """Get KPI history over time."""
+    limit: Optional[int] = None,
+    offset: int = 0,
+):
+    """Get KPI history over time (paginated; returns ``(items, total)``)."""
     computer = KPIComputer()
-    return computer.get_kpi_series(start_date=start_date, end_date=end_date)
+    return computer.get_kpi_series(
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+        offset=offset,
+    )

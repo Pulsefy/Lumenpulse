@@ -41,6 +41,10 @@ _ENDPOINT_DEFAULTS_MS: Dict[str, int] = {
     "/correlation/lag-analysis": 1000,
     "/analytics/forecast": 2000,
     "/retrain": 30000,
+    # Semantic news search (#1455). Excludes the fixed cost of vendored model
+    # I/O (spaCy pipeline load happens once at import time); the budget applies
+    # to the cosine ranking pass over the stored 300-dim article vectors.
+    "/search/similar": 300,
 }
 
 # Environment variable used to override each endpoint's default budget.
@@ -51,6 +55,7 @@ _ENDPOINT_ENV_VARS: Dict[str, str] = {
     "/correlation/lag-analysis": "CORRELATION_LAG_LATENCY_BUDGET_MS",
     "/analytics/forecast": "FORECAST_LATENCY_BUDGET_MS",
     "/retrain": "RETRAIN_LATENCY_BUDGET_MS",
+    "/search/similar": "SEARCH_SIMILAR_LATENCY_BUDGET_MS",
 }
 
 

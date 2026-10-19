@@ -1,0 +1,62 @@
+# Keep the build context small and prevent host state leaking into the image.
+#
+# Without this, a local `node_modules` or a `.env` sitting in the working tree is
+# copied into the build stage, and `npm ci` becomes a no-op against the wrong
+# tree -- producing an image that differs from CI without any error.
+
+# Dependencies and build output are installed inside the image, never copied in.
+node_modules
+dist
+.next
+out
+build
+coverage
+*.tsbuildinfo
+
+# Secrets and local environment. config.ts refuses to read .env outside
+# development anyway, and a secret baked into a layer stays in the image history
+# even if a later layer deletes it.
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Tests and fixtures. They run in CI; they do not ship.
+test
+tests
+__tests__
+e2e
+playwright-report
+test-results
+vitest.config.*
+jest.config.*
+
+# Tooling output and caches
+.cache
+.eslintcache
+.nyc_output
+.pytest_cache
+
+# Version control and CI
+.git
+.gitignore
+.github
+.dockerignore
+Dockerfile
+.ci-trigger
+
+# Editor and OS
+.vscode
+.idea
+.DS_Store
+*.swp
+
+# Scratch files that have been committed by accident. Listed individually rather
+# than by glob: `*.txt` also matches openapi-adjacent fixtures, and a blanket
+# `*.md` exclusion hides real documents from anyone debugging the image.
+null.txt
+exit-status.txt
+output.txt
+test-output.txt
+test_output.txt
+tsc.out

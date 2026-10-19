@@ -50,7 +50,9 @@ async function main() {
             // 1. Resolve WASM Path
             const wasmPath = path.resolve(__dirname, config.wasmPath);
             if (!fs.existsSync(wasmPath)) {
-                throw new Error(`WASM file not found at ${wasmPath}`);
+                throw new Error(
+                    `WASM file not found at ${wasmPath}. Build the contracts and run \`npm run --prefix scripts wasm:optimize\` first.`
+                );
             }
             const wasmFile = fs.readFileSync(wasmPath);
 

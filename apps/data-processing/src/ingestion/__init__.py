@@ -9,6 +9,18 @@ from .payload_quarantine import (
     process_with_quarantine,
 )
 
+try:
+    from .quarantine_replay import (
+        QuarantineReplayService,
+        ReplaySink,
+        ReplaySummary,
+        payload_fingerprint,
+        select_entries,
+        select_validator,
+    )
+except ImportError:
+    pass
+
 from .freshness_monitor import (
     FreshnessResult,
     FreshnessThreshold,
@@ -111,6 +123,12 @@ __all__ = [
     "QuarantinedPayload",
     "quarantine_on_error",
     "process_with_quarantine",
+    "QuarantineReplayService",
+    "ReplaySink",
+    "ReplaySummary",
+    "payload_fingerprint",
+    "select_entries",
+    "select_validator",
     # Persistent ledger cursor store & recovery coordinator
     "LedgerCursorStore",
     "LedgerCursorRow",

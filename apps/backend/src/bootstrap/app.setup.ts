@@ -4,22 +4,47 @@ import helmet from 'helmet';
 import { GlobalExceptionFilter } from '../filters/global-exception.filter';
 import { CustomValidationPipe } from '../common/pipes/validation.pipe';
 import { SanitizationPipe } from '../common/pipes/sanitization.pipe';
+import { StructuredLoggerService } from '../common/services/structured-logger.service';
 import { resolveCorsOrigin } from '../lib/config';
+import { RATE_LIMIT_RESPONSE_HEADERS } from '../common/rate-limit/rate-limit.constants';
 
 function getCorsOrigin(): string | string[] {
   return resolveCorsOrigin();
 }
 
 export function setupApp(app: INestApplication): void {
+  app.useLogger(new StructuredLoggerService());
   app.useWebSocketAdapter(new IoAdapter(app));
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalPipes(new CustomValidationPipe(), new SanitizationPipe());
   app.use(
     helmet({
       crossOriginEmbedderPolicy: false,
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          frameAncestors: ["'none'"],
+          formAction: ["'self'"],
+          baseUri: ["'self'"],
+        },
+      },
     }),
   );
   app.enableCors({
     origin: getCorsOrigin(),
+    // Allow browser clients to read rate-limit headers (incl. Retry-After).
+    exposedHeaders: [...RATE_LIMIT_RESPONSE_HEADERS],
+    // Permit credentialed requests only for single-origin dev environments.
+    credentials: false,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Accept',
+      'Authorization',
+      'Content-Type',
+      'Idempotency-Key',
+      'X-API-Key',
+      'X-Request-Id',
+    ],
+    maxAge: 86400,
   });
 }

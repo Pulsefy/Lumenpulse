@@ -6,4 +6,6 @@ export interface Article {
   description?: string;
   content?: string;
   url?: string;
+  /** Remote URL of the article's hero/thumbnail image, if provided by the API. */
+  imageUrl?: string;
 }

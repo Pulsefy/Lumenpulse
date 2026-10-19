@@ -1,3 +1,13 @@
 {
-    "kiroAgent.configureMCP": "Disabled"
+    "kiroAgent.configureMCP": "Disabled",
+    "chat.tools.terminal.autoApprove": {
+        "/^gh pr list --repo Pulsefy/Lumenpulse --state all --search '1244' --json number,title,state,headRefName,url --limit 10; git branch -vv; git remote -v$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^cd apps/data-processing && pytest -q tests/test_backtester\\.py$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }

@@ -5,8 +5,8 @@
 #           produced so contributors can trace lineage, avoid
 #           accidental drift, and know who to contact.
 #
-# Schema version : 1.1
-# Last updated   : 2026-08-24
+# Schema version : 1.2
+# Last updated   : 2026-10-17
 # Maintainer     : data-team@lumenpulse.io
 #
 # How to validate this file:
@@ -19,7 +19,7 @@
 #   fingerprint is the sha256(name:dtype|…)[:12] of the ordered features).
 # ============================================================
 
-manifest_version: "1.1"
+manifest_version: "1.2"
 project: lumenpulse
 module: data-processing
 
@@ -532,3 +532,262 @@ kpi_datasets:
       - src/api/server.py (GET /api/anomalies)
 
     storage: in-memory rolling window (deque); alerts emitted on trigger
+
+# ============================================================
+# DATASET REGISTRY
+# Operational datasets consumed or produced by this service.
+# Pipeline consumers are cross-checked against StageSpec.dataset_ids.
+# ============================================================
+datasets:
+  - id: news_articles
+    display_name: News articles
+    description: Fetched and analyzed crypto news article records.
+    owner: data-team@lumenpulse.io
+    schema:
+      article_id: str
+      source: str
+      title: str
+      published_at: datetime
+      content: str
+      sentiment_score: float
+    update_cadence: hourly
+    retention: No application-level TTL; retention is managed by the backing store.
+    model_consumers: [sentiment]
+    pipeline_stages: [market_analyzer_hourly, ingestion_lag_alerting, model_retraining_daily]
+
+  - id: price_ticks
+    display_name: Price ticks
+    description: Latest asset price observations used by analytics and model training.
+    owner: data-team@lumenpulse.io
+    schema:
+      asset: str
+      price: float
+      observed_at: datetime
+      source: str
+    update_cadence: Every 15 minutes or on source update.
+    retention: No application-level TTL; retention is managed by the backing store.
+    model_consumers: [price_predictor]
+    pipeline_stages: [market_analyzer_hourly, ingestion_lag_alerting, model_retraining_daily]
+
+  - id: social_posts
+    display_name: Social posts
+    description: Posts fetched from configured platforms for sentiment analysis.
+    owner: data-team@lumenpulse.io
+    schema:
+      post_id: str
+      platform: str
+      text: str
+      created_at: datetime
+      sentiment_score: float
+    update_cadence: Hourly or on source update.
+    retention: No application-level TTL; retention is managed by the backing store.
+    model_consumers: [sentiment]
+    pipeline_stages: [market_analyzer_hourly, ingestion_lag_alerting, model_retraining_daily]
+
+  - id: stellar_ledger_events
+    display_name: Stellar ledger events
+    description: Latest Stellar ledger and event ingestion signal used for quality and lag monitoring.
+    owner: data-team@lumenpulse.io
+    schema:
+      ledger: int
+      event_type: str
+      observed_at: datetime
+      source: str
+    update_cadence: Every ledger close.
+    retention: No application-level TTL; retention is managed by the backing store.
+    model_consumers: []
+    pipeline_stages: [stellar_ingestion_quality_checks_hourly, ingestion_lag_alerting, contract_ingestion_lag_metrics]
+
+  - id: contract_events
+    display_name: Soroban contract events
+    description: Raw and materialized Soroban contract event records.
+    owner: data-team@lumenpulse.io
+    schema:
+      contract_id: str
+      event_id: str
+      ledger: int
+      event_type: str
+      timestamp: datetime
+    update_cadence: On ledger ingestion.
+    retention: No application-level TTL; retention is managed by the backing store.
+    model_consumers: []
+    pipeline_stages:
+      - stellar_ingestion_quality_checks_hourly
+      - ingestion_lag_alerting
+      - project_verification_trend
+      - round_anomaly_detection
+      - contributor_reputation_snapshot_daily
+      - kpi_reconciliation
+      - daily_onchain_kpi_snapshot
+      - contract_ingestion_lag_metrics
+
+  - id: analytics_records
+    display_name: Analytics records
+    description: Derived analytics records consumed by API endpoints and dashboards.
+    owner: data-team@lumenpulse.io
+    schema:
+      record_type: str
+      asset: str
+      metric_name: str
+      window: str
+      value: float
+      timestamp: datetime
+    update_cadence: Hourly or when analytics are computed.
+    retention: No application-level TTL; retention is managed by the backing store.
+    model_consumers: []
+    pipeline_stages: [ingestion_lag_alerting, kpi_reconciliation]
+
+  - id: price_predictor_features
+    display_name: Price predictor feature set
+    description: Time-aligned features consumed by the price prediction model.
+    owner: data-team@lumenpulse.io
+    schema:
+      sentiment_score: float
+      volume: float
+      volatility: float
+    update_cadence: On demand during retraining and inference.
+    retention: Not persisted; generated for the training or inference operation.
+    model_consumers: [price_predictor]
+    pipeline_stages: [model_retraining_daily]
+
+  - id: sentiment_model_features
+    display_name: Sentiment model features
+    description: Base and domain-specific sentiment lexicon and model inputs.
+    owner: data-team@lumenpulse.io
+    schema:
+      vader_base_lexicon: dict[str, float]
+      crypto_slang_lexicon: dict[str, float]
+      finbert_transformer: model_weights
+    update_cadence: During scheduled sentiment model retraining.
+    retention: Model artifact retention follows the model registry GC policy.
+    model_consumers: [sentiment]
+    pipeline_stages: [model_retraining_daily]
+
+  - id: market_health_score
+    display_name: Market health score
+    description: Weighted sentiment and normalized volume score for an asset.
+    owner: data-team@lumenpulse.io
+    schema:
+      asset: str
+      market_health_score: float
+      timestamp: datetime
+    update_cadence: Hourly when market analytics are computed.
+    retention: No application-level TTL; retained in data/analytics.jsonl.
+    model_consumers: []
+    pipeline_stages: []
+
+  - id: sentiment_compound
+    display_name: Article and social sentiment score
+    description: Per-text sentiment score with language and support metadata.
+    owner: data-team@lumenpulse.io
+    schema:
+      score: float
+      language: str
+      language_supported: bool
+      language_unsupported: bool
+    update_cadence: When an article or social post is analyzed.
+    retention: No application-level TTL; persisted with the source article where applicable.
+    model_consumers: [price_predictor]
+    pipeline_stages: [market_analyzer_hourly]
+
+  - id: cohort_metrics
+    display_name: Contributor cohort metrics
+    description: Participation and retention aggregates for contributor cohorts.
+    owner: data-team@lumenpulse.io
+    schema:
+      cohort_id: str
+      member_count: int
+      total_contributed: float
+      retention_rate: float
+    update_cadence: On demand when cohort analysis is requested.
+    retention: Persisted in cohort analysis tables; no application-level TTL.
+    model_consumers: []
+    pipeline_stages: []
+
+  - id: attribution_score
+    display_name: Contributor and project attribution score
+    description: Weighted signal score associating narratives with contributors or projects.
+    owner: data-team@lumenpulse.io
+    schema:
+      score: float
+      confidence_tier: str
+    update_cadence: On demand when attribution is computed.
+    retention: No application-level TTL; persisted in narrative attribution storage.
+    model_consumers: []
+    pipeline_stages: []
+
+  - id: round_anomaly_signals
+    display_name: Round anomaly signals
+    description: Statistical anomaly signals for quadratic-funding rounds.
+    owner: data-team@lumenpulse.io
+    schema:
+      anomaly_type: str
+      severity_score: float
+      detection_rationale: str
+      metric_values: dict
+      threshold_used: float
+    update_cadence: Every 6 hours.
+    retention: In-memory rolling window; alerts emitted on trigger.
+    model_consumers: []
+    pipeline_stages: []
+
+  - id: project_verification_trend
+    display_name: Project verification trend
+    description: Aggregated verification-event approval and rejection rates.
+    owner: data-team@lumenpulse.io
+    schema:
+      approval_rate: float
+      rejection_rate: float
+      trend_direction: str
+      delta: float
+      total: int
+    update_cadence: Every 6 hours.
+    retention: In-memory result; persistence is managed by the caller.
+    model_consumers: []
+    pipeline_stages: []
+
+  - id: correlation_result
+    display_name: Sentiment and price/volume correlation
+    description: Pearson correlation result between sentiment and market observations.
+    owner: data-team@lumenpulse.io
+    schema:
+      correlation_score: float
+      p_value: float
+      confidence_level: str
+      lag_hours: int
+      scatter_data: list
+    update_cadence: On demand when correlation is requested.
+    retention: Not persisted; returned in the API response.
+    model_consumers: []
+    pipeline_stages: []
+
+  - id: market_forecast
+    display_name: Market forecast
+    description: 24-hour and 48-hour forecasts of market health score.
+    owner: data-team@lumenpulse.io
+    schema:
+      predicted_trend_24h: str
+      predicted_trend_48h: str
+      confidence_24h: float
+      confidence_48h: float
+      forecast_score_24h: float
+      forecast_score_48h: float
+    update_cadence: On demand when a forecast is requested.
+    retention: Not persisted; historical source data is read from data/analytics.jsonl.
+    model_consumers: []
+    pipeline_stages: []
+
+  - id: anomaly_detection_result
+    display_name: Volume and sentiment anomaly result
+    description: Statistical and ML detection of abnormal volume or sentiment observations.
+    owner: data-team@lumenpulse.io
+    schema:
+      is_anomaly: bool
+      severity_score: float
+      z_score: float
+      ml_anomaly_score: float
+      ml_is_anomaly: bool
+    update_cadence: As observations arrive within the rolling detection window.
+    retention: In-memory rolling window; alerts emitted on trigger.
+    model_consumers: []
+    pipeline_stages: []

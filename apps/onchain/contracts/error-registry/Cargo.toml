@@ -1,0 +1,17 @@
+[package]
+name = "error-registry"
+version = "0.1.0"
+edition = "2021"
+description = "Standardized error code allocation scheme and reference for LumenPulse contracts"
+
+# This crate is intentionally dependency-free. It is a plain-Rust definition of
+# the error-code allocation scheme plus the resolver/reference helpers that the
+# backend and a build-time lint consume. It contains no `#[contracterror]`
+# enums, so it does not need soroban-sdk — and keeping it dependency-free means
+# it can be used from build scripts and non-Rust tooling without pulling in the
+# SDK.
+[dependencies]
+
+[lib]
+name = "error_registry"
+path = "src/lib.rs"

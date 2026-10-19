@@ -51,4 +51,15 @@ export class TestnetBootstrapResponseDto {
     required: false,
   })
   fundingAmount?: string;
+
+  @ApiProperty({
+    description:
+      'Identifier of the recorded bootstrap run. Pass it to ' +
+      'POST /demo-bootstrap/runs/{runId}/teardown to discard the local record ' +
+      'of this account. Absent when the run could not be recorded (the account ' +
+      'was still funded).',
+    example: '3f6c1a6e-2f4b-4b2a-9c0a-5d8f0b1c2d3e',
+    required: false,
+  })
+  runId?: string;
 }

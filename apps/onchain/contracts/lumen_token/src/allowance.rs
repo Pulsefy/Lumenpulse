@@ -43,6 +43,19 @@ pub fn write_allowance(
             expiration_ledger,
         },
     );
+
+    // The physical storage TTL is a separate concern from the logical
+    // `expiration_ledger` enforced in `spend_allowance` below: without this,
+    // the entry could be archived (and silently read back as a zero
+    // allowance via `read_allowance`'s `unwrap_or`) long before the caller's
+    // chosen expiration is reached. Align the two by extending the storage
+    // TTL out to `expiration_ledger` itself whenever the allowance is live.
+    if amount > 0 {
+        let live_for = expiration_ledger.saturating_sub(e.ledger().sequence());
+        if live_for > 0 {
+            e.storage().temporary().extend_ttl(&key, live_for, live_for);
+        }
+    }
 }
 
 pub fn spend_allowance(e: &Env, from: Address, spender: Address, amount: i128) {

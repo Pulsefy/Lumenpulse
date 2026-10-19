@@ -10,7 +10,7 @@ export class CreatePortfolioAnomalies1803000000000 implements MigrationInterface
         "userId" UUID NOT NULL,
         title VARCHAR(255) NOT NULL,
         description TEXT,
-        anomaly_type VARCHAR(100) NOT NULL,
+        "anomalyType" VARCHAR(100) NOT NULL,
         severity VARCHAR(20) NOT NULL DEFAULT 'medium',
         status VARCHAR(20) NOT NULL DEFAULT 'unresolved',
         "reviewerId" UUID,

@@ -76,6 +76,7 @@ describe("usePortfolioSnapshot", () => {
     expect(result.current.allocation).toBeNull();
     expect(result.current.summaryError).toBeNull();
     expect(result.current.performanceError).toBeNull();
+    expect(result.current.allocationError).toBe("allocation unavailable");
     expect(result.current.isFresh).toBe(true);
     expect(result.current.lastUpdatedLabel).toBe("25 min ago");
   });
@@ -93,7 +94,19 @@ describe("usePortfolioSnapshot", () => {
     vi.spyOn(PortfolioApiService, "getPerformance").mockRejectedValue(
       new Error("performance unavailable"),
     );
-    vi.spyOn(PortfolioApiService, "getAllocation").mockResolvedValue([]);
+    const allocation = [
+      {
+        assetCode: "XLM",
+        assetIssuer: null,
+        amount: "1250",
+        valueUsd: 1250,
+        percentage: 100,
+      },
+    ];
+    vi.spyOn(PortfolioApiService, "getAllocation").mockResolvedValue({
+      totalValueUsd: 1250,
+      allocation,
+    });
 
     const { result } = renderHook(() =>
       usePortfolioSnapshot("GBRPYHIL2C6Q2XQY5W4O6OQK5C6G3XQ2M3NQ5H1R8S9T0U1V2W3X4Y5Z"),
@@ -107,5 +120,7 @@ describe("usePortfolioSnapshot", () => {
     expect(result.current.performance).toBeNull();
     expect(result.current.summaryError).toBeNull();
     expect(result.current.performanceError).toBe("performance unavailable");
+    expect(result.current.allocationError).toBeNull();
+    expect(result.current.allocation).toEqual(allocation);
   });
 });

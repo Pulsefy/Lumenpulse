@@ -4,7 +4,6 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  Index,
 } from 'typeorm';
 
 @Entity('project_registry')
@@ -13,7 +12,6 @@ export class ProjectRegistryEntity {
   id: string;
 
   @Column({ unique: true })
-  @Index()
   projectId: string;
 
   @Column()

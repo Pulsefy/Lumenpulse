@@ -1,0 +1,16 @@
+# Pin the Rust toolchain so every contributor and CI run builds with the
+# same compiler, linker, and standard library.  Changing this value requires
+# a deliberate review because it affects the reproducibility guarantee described
+# in docs/CONTRACT_DEPLOYMENT_ROLLBACK_PLAYBOOK.md.
+#
+# Minimum version is 1.85.0: soroban-sdk 23 pulls in zeroize_derive 1.5.0,
+# which uses Cargo edition 2024 (stabilised in Rust 1.85.0).
+#
+# Paired with Cargo.lock (committed) and the codegen-units = 1 / lto = true
+# release profile in Cargo.toml, this ensures byte-identical WASM across
+# machines and CI runs.
+
+[toolchain]
+channel = "1.85.0"
+targets  = ["wasm32-unknown-unknown"]
+components = ["rustfmt", "clippy"]

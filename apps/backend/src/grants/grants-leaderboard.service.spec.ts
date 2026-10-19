@@ -79,7 +79,7 @@ describe('GrantsService.getLeaderboard', () => {
   });
 
   it('returns ranked entries with rank, contributions, and match figures', () => {
-    const rounds = service.listRounds();
+    const rounds = service.listRounds().items;
     const roundId = rounds[rounds.length - 1].id;
 
     const result = service.getLeaderboard({ roundId, limit: 10 });
@@ -93,7 +93,7 @@ describe('GrantsService.getLeaderboard', () => {
   });
 
   it('entries are sorted by QF score descending', () => {
-    const rounds = service.listRounds();
+    const rounds = service.listRounds().items;
     const roundId = rounds[rounds.length - 1].id;
 
     const result = service.getLeaderboard({ roundId, limit: 10 });
@@ -106,7 +106,7 @@ describe('GrantsService.getLeaderboard', () => {
   });
 
   it('supports top-N response', () => {
-    const rounds = service.listRounds();
+    const rounds = service.listRounds().items;
     const roundId = rounds[rounds.length - 1].id;
 
     const result = service.getLeaderboard({ roundId, topN: 2 });
@@ -116,7 +116,7 @@ describe('GrantsService.getLeaderboard', () => {
   });
 
   it('supports pagination', () => {
-    const rounds = service.listRounds();
+    const rounds = service.listRounds().items;
     const roundId = rounds[rounds.length - 1].id;
 
     const page1 = service.getLeaderboard({ roundId, page: 1, limit: 2 });
@@ -156,7 +156,7 @@ describe('GrantsService.getLeaderboard', () => {
   });
 
   it('returns correct totalProjects count', () => {
-    const rounds = service.listRounds();
+    const rounds = service.listRounds().items;
     const roundId = rounds[rounds.length - 1].id;
 
     const result = service.getLeaderboard({ roundId, limit: 10 });
@@ -165,7 +165,7 @@ describe('GrantsService.getLeaderboard', () => {
   });
 
   it('includes poolBalance in response', () => {
-    const rounds = service.listRounds();
+    const rounds = service.listRounds().items;
     const roundId = rounds[rounds.length - 1].id;
 
     const result = service.getLeaderboard({ roundId, limit: 10 });

@@ -668,5 +668,5 @@ ANALYZE soroban_event_dead_letter;
 ## References
 
 - Dead Letter Queue Guide: `DEAD_LETTER_QUEUE_GUIDE.md`
-- Architecture Documentation: `document/ARCHITECTURE.md`
+- Architecture Documentation: `docs/ARCHITECTURE.md`
 - NestJS Testing: https://docs.nestjs.com/fundamentals/testing

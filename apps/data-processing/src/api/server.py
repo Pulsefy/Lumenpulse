@@ -4,12 +4,18 @@ FastAPI server to expose sentiment analysis as an HTTP API
 for the Node.js backend to consume.
 """
 
+import asyncio
+import json
+import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException, Request, Response, Query
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+import pandas as pd
 
 # Import your existing SentimentAnalyzer
 import sys
@@ -19,9 +25,16 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from sentiment import SentimentAnalyzer
+from vaderSentiment.vaderSentiment import BOOSTER_DICT, NEGATE
 from src.config.latency_budget import record_latency
 from src.utils.logger import setup_logger, correlation_id_ctx, generate_correlation_id
-from src.utils.metrics import API_FAILURES_TOTAL, generate_latest, CONTENT_TYPE_LATEST
+from src.utils.metrics import (
+    API_FAILURES_TOTAL,
+    INFERENCE_OOD_TOTAL,
+    INFERENCE_REQUESTS_TOTAL,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+)
 from src.security import (
     security_config,
     setup_security_middleware,
@@ -29,6 +42,10 @@ from src.security import (
     get_rate_limit_decorator,
 )
 from src.ml.retraining_pipeline import run_retraining, get_last_run_status
+from src.observability.stage_profiler import profile_stage
+from src.ml.ood_detector import LexicalOODDetector, configured_unknown_token_ratio
+from src.ml.calibration import CONFIDENCE_GUIDANCE, calibrated_confidence
+from src.ml.calibration_data import sentiment_raw_confidence
 from src.ml.model_registry import (
     get_registry_status,
     # Shadow-mode deployment (Issue #1256)
@@ -46,13 +63,23 @@ from src.ml.model_registry import (
     clear_comparison_log,
     flush_all_comparisons,
     get_live_model,
+    rollback_model,
 )
+from src.ml.serving_cost import get_cost_report, record_inference
 from src.analytics.correlation_engine import CorrelationEngine
+from src.utils.pagination import (
+    DEFAULT_PAGE_SIZE,
+    MAX_CORRELATION_POINTS,
+    MAX_PAGE_SIZE,
+    pagination_headers,
+)
 from src.db import PostgresService
 from src.ingestion.stellar_ingestion_checks import run_all_checks
+from src.privacy import scrub_record, scrub_text
 
 from src.analytics.sentiment_indicators import SentimentIndicatorMapper, get_legend as sentiment_legend
 from src.api.rebuild_routes import router as rebuild_router
+from src.api.sentiment_label_routes import router as sentiment_label_router
 
 _indicator_mapper = SentimentIndicatorMapper()
 
@@ -90,6 +117,15 @@ app.add_middleware(
 )
 
 
+# ---------------------------------------------------------------------------
+# Batch inference backpressure configuration (Issue #1240)
+# ---------------------------------------------------------------------------
+MAX_BATCH_SIZE = int(os.getenv("BATCH_MAX_SIZE", "200"))
+MAX_CONCURRENT_BATCHES = int(os.getenv("BATCH_MAX_CONCURRENT", "4"))
+_batch_semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+_batch_executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_BATCHES)
+
+
 @app.middleware("http")
 async def metrics_and_logging_middleware(request: Request, call_next):
     corr_id = request.headers.get("X-Correlation-ID", generate_correlation_id())
@@ -117,6 +153,14 @@ async def metrics_and_logging_middleware(request: Request, call_next):
 
 # Initialize your existing SentimentAnalyzer
 sentiment_analyzer = SentimentAnalyzer()
+ood_detector = LexicalOODDetector(
+    (
+        set(getattr(sentiment_analyzer.analyzer, "lexicon", {}))
+        | set(BOOSTER_DICT)
+        | set(NEGATE)
+    ),
+    configured_unknown_token_ratio(),
+)
 
 # Import and register routers
 from src.api.ingestion_quality_routes import router as ingestion_quality_router
@@ -124,6 +168,9 @@ from src.api.review_queue_routes import router as review_queue_router
 from src.api.ledger_cursor_routes import router as ledger_cursor_router
 from src.api.kpi_routes import router as kpi_router
 from src.api.account_operation_routes import router as account_operation_router
+from src.api.lineage_routes import router as lineage_router
+from src.api.job_routes import router as job_router
+from src.api.pipeline_topology_routes import router as pipeline_topology_router
 
 app.include_router(ingestion_quality_router)
 app.include_router(review_queue_router)
@@ -131,6 +178,10 @@ app.include_router(ledger_cursor_router)
 app.include_router(kpi_router)  # KPI routes for TVL and volume computation
 app.include_router(account_operation_router)  # Account operation ingestion
 app.include_router(rebuild_router)  # Rebuild routes for admin
+app.include_router(sentiment_label_router)
+app.include_router(lineage_router)  # Feature/KPI lineage graph (#1254)
+app.include_router(job_router)  # Async analytics job status (#1248)
+app.include_router(pipeline_topology_router)  # Pipeline topology (#1451)
 
 
 try:
@@ -138,6 +189,102 @@ try:
 except Exception as exc:
     postgres_service = None
     logger.warning("PostgreSQL service unavailable for /news endpoint: %s", exc)
+
+
+# Lazy pinned embedding pipeline for /search/similar (#1455). The model is
+# loaded once on first use; when it is not vendored the endpoint returns 503
+# instead of silently searching over empty vectors.
+_embedding_service: Any = None
+
+
+def _get_embedding_service() -> Any:
+    global _embedding_service
+    if _embedding_service is None:
+        from src.analytics.embedding_service import (
+            EmbeddingService,
+            MissingEmbeddingModelError,
+        )
+
+        try:
+            _embedding_service = EmbeddingService()
+        except MissingEmbeddingModelError as exc:
+            logger.warning(
+                "Semantic search embedding model unavailable: %s", exc
+            )
+            _embedding_service = exc
+    return (
+        None
+        if isinstance(_embedding_service, MissingEmbeddingModelError)
+        else _embedding_service
+    )
+
+
+@app.on_event("startup")
+async def _startup() -> None:
+    """
+    Runs on every uvicorn worker startup.
+
+    1. Pre-warm the in-memory model cache so the first real request never
+       pays a cold-start disk read (issue #1628: inference-service startup).
+    2. Reconcile any analytics jobs that were left queued/running by a process
+       that died before finishing them (#1248).
+    """
+    # ── 1. Pre-warm models (issue #1628) ──────────────────────────────────
+    # Import is lazy so this module stays importable even in minimal test
+    # contexts where the models/ directory does not exist.
+    try:
+        from src.ml.model_loader import warm_models, INFERENCE_MODELS
+
+        warm_models(*INFERENCE_MODELS)
+    except Exception as exc:
+        logger.warning(
+            "Model pre-warm at startup failed (non-fatal — endpoints will "
+            "attempt cold load on first request): %s",
+            exc,
+        )
+
+    # ── 2. Reconcile orphaned async jobs (#1248) ──────────────────────────
+    from src.jobs.manager import reconcile_orphaned_jobs
+
+    reconcile_orphaned_jobs(postgres_service)
+
+
+import hashlib
+from typing import Optional
+
+def _log_prediction(
+    request_id: str,
+    model_type: str,
+    model_version: str,
+    input_text: str,
+    output: Dict[str, Any],
+    latency_ms: float,
+):
+    """Log prediction to database using PostgresService."""
+    if not postgres_service:
+        return
+        
+    try:
+        # Prediction request logging follows the same personal-data rules as
+        # ingestion: both the stored copy and its hash are derived from the
+        # scrubbed text (#1452, docs/personal-data-policy.md).
+        scrubbed_input = scrub_text(input_text)
+        scrubbed_output = scrub_record(output)
+        store_raw_input = os.getenv("LOG_PREDICTION_RAW_INPUT", "false").lower() == "true"
+        raw_input = scrubbed_input if store_raw_input else None
+        input_hash = hashlib.sha256(scrubbed_input.encode("utf-8")).hexdigest()
+        
+        postgres_service.log_prediction(
+            request_id=request_id,
+            model_type=model_type,
+            model_version=model_version,
+            input_hash=input_hash,
+            output=scrubbed_output,
+            latency_ms=latency_ms,
+            raw_input=raw_input,
+        )
+    except Exception as e:
+        logger.error(f"Failed to log prediction (non-fatal) in helper: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -154,16 +301,56 @@ class SentimentIndicatorResponse(BaseModel):
     display_text: str  # e.g. "0.85 Bullish"
 
 
+class TokenContributionResponse(BaseModel):
+    """A single token's contribution to the analyzed sentiment score (#1456)."""
+
+    token: str
+    contribution: float
+    feature: str  # lexicon entry or model feature responsible
+    kind: str  # "lexicon" | "model"
+    note: str = ""
+
+
+class SentimentExplanationResponse(BaseModel):
+    """Per-token decomposition of a sentiment score (#1456)."""
+
+    method: str
+    score: float
+    contributions: List[TokenContributionResponse] = []
+    unattributed: float = 0.0
+    model: Optional[str] = None
+
+
 class AnalyzeRequest(BaseModel):
     text: str
     asset: Optional[str] = None  # Optional asset filter
+    explain: bool = False  # Optionally include per-token contributions (#1456)
+
+
+class PricePredictionRequest(BaseModel):
+    features: Dict[str, float]
+    schema_version: Optional[str] = None
+
+
+class PricePredictionResponse(BaseModel):
+    predictions: List[float]
+    member_contributions: Dict[str, Dict[str, Any]]
+    model_version: str
 
 
 class AnalyzeResponse(BaseModel):
-    sentiment: float  # compound_score from SentimentResult
+    sentiment: Optional[float]  # None when the input was not scored
     asset_codes: List[str] = []  # Asset codes found in text
     sentiment_label: str = ""  # positive/negative/neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
+    explanation: Optional[SentimentExplanationResponse] = None  # Token attribution (#1456)
+    scored: bool = True
+    confidence: float = 1.0  # RAW lexical support -- do not display (see confidence_guidance)
+    # Calibrated probability that sentiment_label is correct; None when unscored.
+    calibrated_confidence: Optional[float] = None
+    calibration: Optional[Dict[str, Any]] = None
+    confidence_guidance: Dict[str, Any] = CONFIDENCE_GUIDANCE
+    status: str = "scored"
 
 
 class AssetAnalysisResponse(BaseModel):
@@ -199,6 +386,20 @@ class NewsArticleResponse(BaseModel):
     sentiment_score: Optional[float] = None  # Raw compound score stored in DB
     sentiment_label: Optional[str] = None  # positive / negative / neutral
     indicator: Optional[SentimentIndicatorResponse] = None  # Visual colour indicator
+
+
+class SemanticSearchResult(BaseModel):
+    """One ranked result from the semantic news search (#1455)."""
+
+    article_id: str
+    title: str
+    url: Optional[str] = None
+    source: Optional[str] = None
+    summary: Optional[str] = None
+    categories: List[str] = []
+    primary_asset: Optional[str] = None
+    published_at: Optional[str] = None
+    similarity_score: float
 
 
 class ContributorActivityEventResponse(BaseModel):
@@ -241,14 +442,17 @@ async def root(request: Request) -> Dict[str, Any]:
             "GET /health": "Health check (no auth required)",
             "GET /metrics": "Prometheus metrics (no auth required)",
             "GET /news": "Get recent news with optional ?entity=... filter (requires X-API-Key header)",
-            "POST /analyze": "Analyze text sentiment (requires X-API-Key header)",
+"GET /search/similar": "Rank news by semantic similarity to a query (#1455) (requires X-API-Key header)",
+            "POST /analyze": "Analyze text sentiment (requires X-API-Key header; set explain=true to include token-level attribution #1456)",
             "GET /analyze": "Get asset-specific sentiment analysis (requires X-API-Key header)",
             "POST /analyze-batch": "Batch analyze multiple texts (requires X-API-Key header)",
             "GET /contributors/{contributor}/timeline": "Get contributor activity timeline from on-chain events (requires X-API-Key header)",
             "GET /sentiment/legend": "Get colour legend for sentiment indicators (no auth required)",
             # KPI endpoints (Issue #734)
             "GET /api/kpi/latest": "Get latest KPI snapshot (TVL, Volume) (requires X-API-Key header)",
-            "GET /api/kpi/series": "Get KPI time series data (requires X-API-Key header)",
+            "GET /api/kpi/series": "Get paginated KPI time series (limit/offset; max page size enforced) (requires X-API-Key header)",
+            "GET /analytics/kpis/daily-snapshots": "Get paginated daily KPI snapshots (limit/offset; stable ordering) (requires X-API-Key header)",
+            "GET /analytics/kpis/daily-snapshots/stream": "Stream daily KPI snapshots as NDJSON for large exports (requires X-API-Key header)",
             "POST /api/kpi/recompute": "Trigger KPI recompute from events (Admin only, requires X-API-Key header)",
             "POST /api/kpi/recompute-async": "Trigger async KPI recompute (Admin only, requires X-API-Key header)",
             # Account operation endpoints (Issue #743)
@@ -257,8 +461,10 @@ async def root(request: Request) -> Dict[str, Any]:
             "POST /api/account-operations/reset-cursor": "Reset ingestion cursor (Admin only, requires X-API-Key header)",
             "GET /api/account-operations/operations": "Get account operations from database (Admin only, requires X-API-Key header)",
             # Model management endpoints
-            "POST /retrain": "Trigger manual model retraining (Admin only, requires X-API-Key header)",
+            "POST /retrain": "Submit a model retraining run to the async job queue; returns a job_id immediately (Admin only, requires X-API-Key header)",
             "GET /model/status": "Get model registry status (Admin only, requires X-API-Key header)",
+            # Async analytics job queue (Issue #1248)
+            "GET /api/jobs/{job_id}": "Poll the status/result of a job submitted to /retrain, /correlation/analyze, /correlation/lag-analysis, or /analytics/kpis/daily-snapshots/run (requires X-API-Key header)",
             # Shadow-mode deployment (Issue #1256)
             "POST /model/shadow/register": "Register a candidate model for shadow evaluation (Admin only)",
             "POST /model/shadow/promote": "Promote shadow model to live (Admin only)",
@@ -354,6 +560,68 @@ async def get_news(
         raise HTTPException(status_code=500, detail="Failed to fetch news articles")
 
 
+@app.get("/search/similar", response_model=List[SemanticSearchResult])
+@limiter.limit("30/minute") if limiter else lambda x: x
+async def search_similar(
+    request: Request,
+    q: str = Query(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Natural-language query embedded with the pinned model",
+    ),
+    limit: int = Query(10, ge=1, le=50),
+    model_version: Optional[str] = Query(
+        None,
+        description="Scope search to a stored pinned model version (defaults to "
+        "the latest version present in the store)",
+    ),
+) -> List[SemanticSearchResult]:
+    """Rank ingested news articles by semantic similarity to a query (#1455)."""
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    embedding_service = _get_embedding_service()
+    if embedding_service is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Semantic search model unavailable; run "
+            "`python scripts/fetch_embedding_model.py` and rebuild the image.",
+        )
+
+    embed_start = time.monotonic()
+    try:
+        query_vector = embedding_service.embed(q)
+    except Exception as exc:
+        logger.error("Failed to embed search query: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=503, detail="Semantic search model unavailable"
+        )
+
+    # Attribute the embedding compute cost to the pinned model version and
+    # this serving path (#1643).
+    record_inference(
+        model_type="embedding",
+        endpoint="/search/similar",
+        duration_seconds=time.monotonic() - embed_start,
+        model_version=embedding_service.model_version,
+    )
+
+    results = postgres_service.search_articles_by_embedding(
+        query_vector=query_vector,
+        model_version=model_version,
+        limit=limit,
+    )
+    logger.info(
+        "Semantic search q=%r | limit=%d | model_version=%r | hits=%d",
+        q,
+        limit,
+        model_version,
+        len(results),
+    )
+    return results
+
+
 @app.get(
     "/contributors/{contributor}/timeline",
     response_model=ContributorActivityTimelineResponse,
@@ -399,38 +667,122 @@ async def get_contributor_activity_timeline(
     )
 
 
+@app.post("/price/predict", response_model=PricePredictionResponse)
+@limiter.limit("50/minute") if limiter else lambda x: x
+async def predict_price(body: PricePredictionRequest, request: Request) -> PricePredictionResponse:
+    """Serve the promoted price model and log every ensemble member's contribution."""
+    if not body.features:
+        raise HTTPException(status_code=400, detail="At least one feature is required")
+
+    start_time = time.monotonic()
+    INFERENCE_REQUESTS_TOTAL.labels(endpoint="/price/predict").inc()
+    try:
+        model = get_live_model("price_predictor")
+        model_version = get_current_version("price_predictor") or "unversioned"
+        features = pd.DataFrame([body.features])
+        if body.schema_version:
+            features.attrs["schema_version"] = body.schema_version
+
+        predict_with_contributions = getattr(model, "predict_with_contributions", None)
+        if callable(predict_with_contributions):
+            predictions, contributions = predict_with_contributions(features)
+        else:
+            predictions = model.predict(features)
+            contributions = {}
+        response = PricePredictionResponse(
+            predictions=[float(value) for value in predictions],
+            member_contributions=contributions,
+            model_version=model_version,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail="Price prediction model is unavailable") from exc
+    except Exception as exc:
+        logger.exception("Price prediction failed")
+        raise HTTPException(status_code=500, detail="Price prediction failed") from exc
+
+    _log_prediction(
+        request_id=correlation_id_ctx.get(generate_correlation_id()),
+        model_type="price_predictor",
+        model_version=response.model_version,
+        input_text=json.dumps(body.features, sort_keys=True),
+        output={
+            "predictions": response.predictions,
+            "member_contributions": response.member_contributions,
+        },
+        latency_ms=(time.monotonic() - start_time) * 1000,
+    )
+    return response
+
+
 @app.post("/analyze", response_model=AnalyzeResponse)
 @limiter.limit("50/minute") if limiter else lambda x: x
 async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeResponse:
     """
     Analyze the sentiment of provided text.
-
-    This endpoint connects to your existing SentimentAnalyzer class
-    and returns the compound_score as the sentiment value.
-
-    Args:
-        request: Contains the text to analyze and optional asset filter
-
-    Returns:
-        sentiment: float between -1 and 1
-        asset_codes: List of asset codes found in text
-        sentiment_label: positive/negative/neutral
     """
+    start_time = time.monotonic()
     try:
         # Validate input
         if not body.text or not body.text.strip():
             raise HTTPException(status_code=400, detail="Text cannot be empty")
 
+        INFERENCE_REQUESTS_TOTAL.labels(endpoint="/analyze").inc()
+        assessment = ood_detector.assess(body.text)
+        if assessment.is_out_of_distribution:
+            INFERENCE_OOD_TOTAL.labels(endpoint="/analyze").inc()
+            logger.info(
+                "Rejected out-of-distribution input before sentiment inference "
+                "| unknown_token_ratio=%.4f | client_ip=%s",
+                assessment.unknown_token_ratio,
+                request.client.host,
+            )
+            return AnalyzeResponse(
+                sentiment=None,
+                sentiment_label="unscored",
+                scored=False,
+                confidence=assessment.confidence,
+                status="out_of_distribution",
+            )
+
         # Use your existing SentimentAnalyzer with asset filter
-        result = sentiment_analyzer.analyze(body.text, body.asset)
+        inference_start = time.monotonic()
+        result = sentiment_analyzer.analyze(
+            body.text, body.asset, explain=body.explain
+        )
+        # Attribute the compute cost to this model version + serving path (#1643).
+        record_inference(
+            model_type="sentiment",
+            endpoint="/analyze",
+            duration_seconds=time.monotonic() - inference_start,
+            model_version=get_current_version("sentiment") or "1.0.0",
+        )
 
         logger.info(
             f"Analyzed text: '{body.text[:50]}...' -> sentiment: {result.compound_score} | "
-            f"asset: {body.asset} | client_ip: {request.client.host}"
+            f"asset: {body.asset} | explain: {body.explain} | client_ip: {request.client.host}"
         )
 
         # Build visual indicator
         ind = _indicator_mapper.score_to_indicator(result.compound_score)
+
+        # Log prediction for auditability
+        _log_prediction(
+            request_id=correlation_id_ctx.get(generate_correlation_id()),
+            model_type="sentiment",
+            model_version=get_current_version("sentiment") or "1.0.0",
+            input_text=body.text,
+            output={
+                "sentiment": result.compound_score,
+                "asset_codes": result.asset_codes,
+                "sentiment_label": result.sentiment_label,
+            },
+            latency_ms=(time.monotonic() - start_time) * 1000,
+        )
+
+        calibrated = calibrated_confidence(
+            "sentiment",
+            sentiment_raw_confidence(result.compound_score, result.sentiment_label),
+        )
 
         # Return enhanced response with asset information
         return AnalyzeResponse(
@@ -438,6 +790,16 @@ async def analyze_text(body: AnalyzeRequest, request: Request) -> AnalyzeRespons
             asset_codes=result.asset_codes,
             sentiment_label=result.sentiment_label,
             indicator=SentimentIndicatorResponse(**ind.to_dict()),
+            explanation=(
+                SentimentExplanationResponse(**result.explanation)
+                if result.explanation
+                else None
+            ),
+            scored=True,
+            confidence=assessment.confidence,
+            calibrated_confidence=calibrated["calibrated_confidence"],
+            calibration=calibrated["calibration"],
+            status="scored",
         )
 
     except HTTPException:
@@ -497,26 +859,181 @@ async def get_asset_analysis(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-# Optional: Batch analysis endpoint if needed
+# ---------------------------------------------------------------------------
+# Batch inference endpoint with backpressure (Issue #1240)
+# ---------------------------------------------------------------------------
 @app.post("/analyze-batch")
 @limiter.limit("10/minute") if limiter else lambda x: x
 async def analyze_batch(request: Request, texts: list[str], asset: Optional[str] = None) -> Dict[str, Any]:
-    """Batch analyze multiple texts with optional asset filter"""
-    try:
-        if not texts:
-            raise HTTPException(status_code=400, detail="Texts list cannot be empty")
+    """Batch analyze multiple texts with optional asset filter.
 
-        results = sentiment_analyzer.analyze_batch(texts, asset)
-        summary = sentiment_analyzer.get_sentiment_summary(results)
+    Backpressure controls:
+    - ``MAX_BATCH_SIZE`` (env ``BATCH_MAX_SIZE``, default 200): oversized
+      requests are rejected with 413.
+    - ``MAX_CONCURRENT_BATCHES`` (env ``BATCH_MAX_CONCURRENT``, default 4):
+      concurrent batch work is bounded by an ``asyncio.Semaphore``.
+      Requests beyond the bound receive 429 with ``Retry-After``.
+    - Per-item error isolation: individual item failures are returned as
+      error entries instead of failing the whole batch.
+    - Synchronous sentiment analysis is offloaded to a
+      ``ThreadPoolExecutor`` so the event loop stays responsive for
+      ``/health`` and ``/metrics``.
+    """
+    start_time = time.monotonic()
+
+    # --- 1. Validate batch size ------------------------------------------------
+    if not texts:
+        raise HTTPException(status_code=400, detail="Texts list cannot be empty")
+
+    if len(texts) > MAX_BATCH_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Batch size {len(texts)} exceeds maximum of {MAX_BATCH_SIZE}. "
+                "Please split your request into smaller batches."
+            ),
+        )
+
+    # --- 2. Acquire concurrency semaphore (backpressure) ----------------------
+    if _batch_semaphore.locked():
+        logger.warning(
+            "Batch concurrency limit reached (%d); rejecting request",
+            MAX_CONCURRENT_BATCHES,
+        )
+        raise HTTPException(
+            status_code=429,
+            detail="Server is at capacity. Please retry after a short delay.",
+            headers={"Retry-After": "5"},
+        )
+
+    async with _batch_semaphore:
+        # --- 3. Run CPU-bound work off the event loop --------------------------
+        loop = asyncio.get_running_loop()
+
+        def _run_batch() -> list:
+            assessments = [ood_detector.assess(text) for text in texts]
+            for assessment in assessments:
+                INFERENCE_REQUESTS_TOTAL.labels(endpoint="/analyze-batch").inc()
+                if assessment.is_out_of_distribution:
+                    INFERENCE_OOD_TOTAL.labels(endpoint="/analyze-batch").inc()
+
+            in_distribution_texts = [
+                text
+                for text, assessment in zip(texts, assessments)
+                if not assessment.is_out_of_distribution
+            ]
+            scored_results = iter(
+                sentiment_analyzer.analyze_batch(in_distribution_texts, asset)
+            )
+            return [
+                (
+                    assessment,
+                    None
+                    if assessment.is_out_of_distribution
+                    else next(scored_results),
+                )
+                for assessment in assessments
+            ]
+
+        batch_start = time.monotonic()
+        try:
+            assessed_results = await loop.run_in_executor(_batch_executor, _run_batch)
+        except Exception as e:
+            logger.error("Batch inference failed: %s", e, exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+        # One inference per scored batch item, all charged to this model
+        # version and serving path (#1643). Out-of-distribution items are
+        # rejected before sentiment inference, so they are not counted —
+        # matching how /analyze skips record_inference for rejected inputs.
+        record_inference(
+            model_type="sentiment",
+            endpoint="/analyze-batch",
+            duration_seconds=time.monotonic() - batch_start,
+            model_version=get_current_version("sentiment") or "1.0.0",
+            count=sum(1 for _, result in assessed_results if result is not None),
+        )
+
+        # --- 4. Per-item error isolation ---------------------------------------
+        item_results: list[Dict[str, Any]] = []
+        for idx, (text, (assessment, result)) in enumerate(zip(texts, assessed_results)):
+            if assessment.is_out_of_distribution:
+                item_results.append(
+                    {
+                        "index": idx,
+                        "text": text[:100],
+                        "status": "out_of_distribution",
+                        "scored": False,
+                        "confidence": assessment.confidence,
+                        "sentiment": None,
+                        "sentiment_label": "unscored",
+                        "asset_codes": [],
+                    }
+                )
+                continue
+            try:
+                item_results.append({
+                    "index": idx,
+                    "text": text[:100],
+                    "status": "ok",
+                    "scored": True,
+                    "confidence": assessment.confidence,
+                    **calibrated_confidence(
+                        "sentiment",
+                        sentiment_raw_confidence(
+                            result.compound_score, result.sentiment_label
+                        ),
+                    ),
+                    **result.to_dict(),
+                })
+            except Exception as item_exc:
+                logger.warning("Item %d failed: %s", idx, item_exc)
+                item_results.append({
+                    "index": idx,
+                    "text": text[:100] if text else "",
+                    "status": "error",
+                    "error": str(item_exc),
+                })
+
+        # --- 5. Build response -------------------------------------------------
+        req_id = correlation_id_ctx.get(generate_correlation_id())
+        model_version = get_current_version("sentiment") or "1.0.0"
+        latency_ms = (time.monotonic() - start_time) * 1000
+
+        # Log each successful prediction
+        for item in item_results:
+            if item.get("status") == "ok":
+                _log_prediction(
+                    request_id=req_id,
+                    model_type="sentiment",
+                    model_version=model_version,
+                    input_text=item.get("text", ""),
+                    output={
+                        "sentiment": item.get("compound_score", 0),
+                        "asset_codes": item.get("asset_codes", []),
+                        "sentiment_label": item.get("sentiment_label", "neutral"),
+                    },
+                    latency_ms=latency_ms / len(texts),
+                )
+
+        # Recompute summary from successful items only
+        successful = [
+            result
+            for assessment, result in assessed_results
+            if not assessment.is_out_of_distribution and result is not None
+        ]
+        summary = sentiment_analyzer.get_sentiment_summary(successful) if successful else {}
 
         return {
-            "results": [r.to_dict() for r in results],
+            "results": item_results,
             "summary": summary,
-            "count": len(results),
+            "count": len(item_results),
+            "errors": sum(1 for r in item_results if r.get("status") == "error"),
             "asset_filter": asset,
+            "latency_ms": round(latency_ms, 2),
+            "concurrency_slots_remaining": MAX_CONCURRENT_BATCHES - _batch_semaphore._value,
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.get("/sentiment/legend")
@@ -557,21 +1074,11 @@ if __name__ == "__main__":
 
 
 # ---------------------------------------------------------------------------
-# Model retraining endpoints (Issue #454)
+# Model retraining endpoints (Issue #454; async job queue: #1248)
 # ---------------------------------------------------------------------------
 
 class RetrainRequest(BaseModel):
     force: bool = False  # Skip quality gates when True
-
-
-class RetrainResponse(BaseModel):
-    status: str
-    started_at: Optional[str] = None
-    finished_at: Optional[str] = None
-    duration_seconds: Optional[float] = None
-    models: Dict[str, Any] = {}
-    registry: Dict[str, Any] = {}
-    error: Optional[str] = None
 
 
 class ModelStatusResponse(BaseModel):
@@ -579,34 +1086,45 @@ class ModelStatusResponse(BaseModel):
     registry: Dict[str, Any]
 
 
-@app.post("/retrain", response_model=RetrainResponse)
+class JobSubmitResponse(BaseModel):
+    """Returned immediately by long-running analytics endpoints (#1248)."""
+
+    job_id: str
+    job_type: str
+    status: str  # queued | running (running means collapsed onto an in-flight job)
+    created: bool  # False when this collapsed onto an already in-flight duplicate
+
+
+@app.post("/retrain", response_model=JobSubmitResponse, status_code=202)
 @limiter.limit("5/minute") if limiter else lambda x: x
 async def trigger_retraining(
     body: RetrainRequest,
     request: Request,
-) -> RetrainResponse:
+) -> JobSubmitResponse:
     """
-    Trigger an immediate model retraining run.
-
-    Runs synchronously in a thread pool so the HTTP response is returned
-    only after retraining completes (or fails). For long-running production
-    retrains, consider making this async with a task queue.
+    Submit a model retraining run to the async job queue and return
+    immediately with a job identifier. Poll GET /api/jobs/{job_id} for the
+    outcome — retraining only ever runs one at a time, so a submission made
+    while one is already in flight is collapsed onto that job.
 
     Requires X-API-Key header.
     """
-    import asyncio
+    from src.jobs.manager import submit_job
 
     logger.info(
-        f"Retraining triggered via API | force={body.force} | "
+        f"Retraining submitted via API | force={body.force} | "
         f"client_ip={request.client.host}"
     )
 
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        None, lambda: run_retraining(force=body.force)
+    job, created = submit_job(
+        postgres_service,
+        job_type="retrain",
+        idempotency_payload={"singleton": True},
+        work_fn=lambda: run_retraining(force=body.force),
     )
-
-    return RetrainResponse(**{k: result.get(k) for k in RetrainResponse.model_fields if k in result})
+    return JobSubmitResponse(
+        job_id=job["job_id"], job_type=job["job_type"], status=job["status"], created=created
+    )
 
 
 @app.get("/model/status", response_model=ModelStatusResponse)
@@ -621,6 +1139,23 @@ async def model_status(request: Request) -> ModelStatusResponse:
         last_run=get_last_run_status(),
         registry=get_registry_status(),
     )
+
+
+@app.get("/model/cost-report")
+@limiter.limit("30/minute") if limiter else lambda x: x
+async def model_cost_report(request: Request) -> Dict[str, Any]:
+    """
+    Serving compute cost report (#1643).
+
+    Returns cost attributed per model version and per endpoint, cost per
+    thousand inferences for each model, the cost delta of a newly promoted
+    model against its predecessor, and the three most expensive serving
+    paths. The same data is exported as Prometheus metrics on ``/metrics``
+    alongside the stage-level profiling from #1454.
+
+    Requires X-API-Key header.
+    """
+    return get_cost_report()
 
 
 # ---------------------------------------------------------------------------
@@ -683,6 +1218,7 @@ class ComparisonLogResponse(BaseModel):
 class RollbackRequest(BaseModel):
     model_type: str
     target_version: Optional[str] = None  # If omitted, rollback to previous version
+    reason: str = "Operator-requested rollback"
 
 
 class RollbackResponse(BaseModel):
@@ -848,49 +1384,16 @@ async def model_rollback(
     Requires X-API-Key header.
     """
     previous_live = get_current_version(body.model_type)
-    available = list_versions(body.model_type)
-
-    if len(available) < 2:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Only one version available for '{body.model_type}'. "
-                f"Cannot rollback."
-            ),
+    actor = request.headers.get("X-Actor", "api-operator")
+    try:
+        target = rollback_model(
+            body.model_type,
+            body.target_version,
+            actor=actor,
+            reason=body.reason,
         )
-
-    target = body.target_version
-    if target is None:
-        # Auto-select: the version just before current
-        if previous_live and previous_live in available:
-            idx = available.index(previous_live)
-            if idx > 0:
-                target = available[idx - 1]
-            else:
-                target = available[1] if len(available) > 1 else available[0]
-        else:
-            target = available[0]
-
-    if target == previous_live:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Target version '{target}' is already the current live version."
-            ),
-        )
-
-    if target not in available:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Target version '{target}' not found for '{body.model_type}'. "
-                f"Available: {available}"
-            ),
-        )
-
-    # Promote the targeted version
-    from src.ml.model_registry import promote_model
-    promote_model(body.model_type, target)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Also clear any shadow so it doesn't conflict
     if get_shadow_version(body.model_type):
@@ -1027,6 +1530,36 @@ async def shadow_clear_comparison_log(
 # Predictive analytics endpoint (forecast market trends)
 # ---------------------------------------------------------------------------
 
+@app.get("/model/prediction-logs")
+@limiter.limit("20/minute") if limiter else lambda x: x
+async def get_prediction_logs(
+    request: Request,
+    model_version: str = Query(..., description="Model version to filter by"),
+    model_type: Optional[str] = Query(None, description="Optional model type"),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+) -> Dict[str, Any]:
+    """
+    Query prediction logs by model version to isolate suspect outputs.
+    Requires X-API-Key header.
+    """
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+        
+    logs = postgres_service.query_prediction_logs(
+        model_version=model_version,
+        model_type=model_type,
+        limit=limit,
+        offset=offset,
+    )
+    
+    return {
+        "model_version": model_version,
+        "model_type": model_type,
+        "count": len(logs),
+        "logs": logs
+    }
+
 
 class ForecastResponse(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
@@ -1041,6 +1574,13 @@ class ForecastResponse(BaseModel):
     model_backend: str
     data_points_used: int
     generated_at: str
+    confidence_indication: str = "low"  # "high" | "medium" | "low" — derived from backtest
+    # Calibrated probabilities that the predicted trend is correct. Display
+    # these; confidence_24h / confidence_48h above are RAW scores to ignore.
+    calibrated_confidence_24h: Optional[float] = None
+    calibrated_confidence_48h: Optional[float] = None
+    calibration: Optional[Dict[str, Any]] = None
+    confidence_guidance: Dict[str, Any] = CONFIDENCE_GUIDANCE
 
 
 @app.get("/analytics/forecast", response_model=ForecastResponse)
@@ -1059,21 +1599,64 @@ async def get_forecast(request: Request) -> ForecastResponse:
     import asyncio
 
     logger.info(f"Forecast requested | client_ip={request.client.host}")
+    start_time = time.monotonic()
 
     def _run_forecast():
         from src.analytics.forecaster import SentimentForecaster
+        from src.analytics.backtester import BacktestHarness, load_config
 
         forecaster = SentimentForecaster()
-        return forecaster.run()
+        with profile_stage("forecasting"):
+            df = forecaster.load_history()
+            if not forecaster._is_trained:
+                forecaster.train(df)
+            result = forecaster.predict(df)
+
+        # Derive confidence indication from backtest (best-effort)
+        confidence_indication = "low"
+        try:
+            cfg = load_config()
+            harness = BacktestHarness(cfg)
+            if df is not None and len(df) >= cfg.initial_train_size + max(cfg.horizons):
+                report = harness.run(df)
+                confidence_indication = report.confidence_indication
+        except Exception as bt_exc:
+            logger.warning(f"Backtest skipped during forecast: {bt_exc}")
+
+        return result, confidence_indication
 
     loop = asyncio.get_event_loop()
+    forecast_start = time.monotonic()
     try:
-        result = await loop.run_in_executor(None, _run_forecast)
+        result, confidence_indication = await loop.run_in_executor(None, _run_forecast)
     except Exception as exc:
         logger.error(f"Forecast failed: {exc}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Forecast error: {exc}")
 
-    return ForecastResponse(**result.to_dict())
+    output_dict = result.to_dict()
+    output_dict["confidence_indication"] = confidence_indication
+    cal_24h = calibrated_confidence("forecast", output_dict["confidence_24h"])
+    cal_48h = calibrated_confidence("forecast", output_dict["confidence_48h"])
+    output_dict["calibrated_confidence_24h"] = cal_24h["calibrated_confidence"]
+    output_dict["calibrated_confidence_48h"] = cal_48h["calibrated_confidence"]
+    output_dict["calibration"] = cal_24h["calibration"]
+    # Attribute forecast compute cost to the serving model backend + path (#1643).
+    record_inference(
+        model_type="forecast",
+        endpoint="/analytics/forecast",
+        duration_seconds=time.monotonic() - forecast_start,
+        model_version=str(output_dict.get("model_backend", "1.0.0")),
+    )
+    _log_prediction(
+        request_id=correlation_id_ctx.get(generate_correlation_id()),
+        model_type="forecast",
+        model_version=output_dict.get("model_backend", "1.0.0"),
+        input_text="no_input_get_request",
+        output=output_dict,
+        latency_ms=(time.monotonic() - start_time) * 1000,
+    )
+
+    return ForecastResponse(**output_dict)
 
 
 # ---------------------------------------------------------------------------
@@ -1097,11 +1680,21 @@ class CorrelationRequest(BaseModel):
     volume_data: Optional[List[MetricDataPoint]] = None
     lag_hours: int = 0
 
-
-class CorrelationResponse(BaseModel):
-    price_correlation: Optional[Dict[str, Any]] = None
-    volume_correlation: Optional[Dict[str, Any]] = None
-    summary: Dict[str, Any]
+    def enforce_size_limits(self) -> None:
+        """Reject uncapped correlation payloads larger than MAX_CORRELATION_POINTS (#1458)."""
+        for name, series in (
+            ("sentiment_data", self.sentiment_data),
+            ("price_data", self.price_data or []),
+            ("volume_data", self.volume_data or []),
+        ):
+            if len(series) > MAX_CORRELATION_POINTS:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        f"{name} exceeds maximum uncapped size of "
+                        f"{MAX_CORRELATION_POINTS} points; paginate or downsample the series"
+                    ),
+                )
 
 
 class LagAnalysisRequest(BaseModel):
@@ -1110,26 +1703,42 @@ class LagAnalysisRequest(BaseModel):
     metric_type: str = "volume"
     max_lag_hours: int = 24
 
+    def enforce_size_limits(self) -> None:
+        """Reject uncapped lag-analysis payloads larger than MAX_CORRELATION_POINTS (#1458)."""
+        for name, series in (
+            ("sentiment_data", self.sentiment_data),
+            ("metric_data", self.metric_data),
+        ):
+            if len(series) > MAX_CORRELATION_POINTS:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        f"{name} exceeds maximum uncapped size of "
+                        f"{MAX_CORRELATION_POINTS} points; paginate or downsample the series"
+                    ),
+                )
 
-class LagAnalysisResponse(BaseModel):
-    best_lag_hours: int
-    best_correlation: float
-    lag_analysis: List[Dict[str, Any]]
-    recommendation: str
 
-
-@app.post("/correlation/analyze", response_model=CorrelationResponse)
+@app.post("/correlation/analyze", response_model=JobSubmitResponse, status_code=202)
 @limiter.limit("20/minute") if limiter else lambda x: x
 async def analyze_correlation(
     body: CorrelationRequest,
     request: Request,
-) -> CorrelationResponse:
+) -> JobSubmitResponse:
     """
-    Analyze correlation between sentiment and price/volume data.
+    Submit a correlation analysis between sentiment and price/volume data to
+    the async job queue and return immediately with a job identifier.
 
-    Returns correlation scores (-1 to 1) and scatter plot data points.
-    Requires X-API-Key header.
+    Poll GET /api/jobs/{job_id} for the result: price_correlation,
+    volume_correlation, and summary (correlation scores -1 to 1 and scatter
+    plot data points). Requires X-API-Key header.
+
+    Input series are capped at MAX_CORRELATION_POINTS (#1458).
     """
+    from src.jobs.manager import submit_job
+
+    body.enforce_size_limits()
+
     sentiment_list = [{"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data]
     price_list = (
         [{"timestamp": dp.timestamp, "value": dp.value} for dp in body.price_data]
@@ -1143,57 +1752,101 @@ async def analyze_correlation(
     )
 
     logger.info(
-        f"Correlation analysis requested | sentiment_points={len(sentiment_list)} | "
+        f"Correlation analysis submitted | sentiment_points={len(sentiment_list)} | "
         f"price_points={len(price_list)} | volume_points={len(volume_list)} | "
         f"lag_hours={body.lag_hours} | client_ip={request.client.host}"
     )
 
-    result = CorrelationEngine.full_analysis(
-        sentiment_data=sentiment_list,
-        price_data=price_list,
-        volume_data=volume_list,
-        lag_hours=body.lag_hours,
+    def _run() -> Dict[str, Any]:
+        start_time = time.monotonic()
+        result = CorrelationEngine.full_analysis(
+            sentiment_data=sentiment_list,
+            price_data=price_list,
+            volume_data=volume_list,
+            lag_hours=body.lag_hours,
+        )
+        # Cap scatter payloads so job results stay within the uncapped max (#1458).
+        for key in ("price_correlation", "volume_correlation"):
+            corr = result.get(key) if isinstance(result, dict) else None
+            if isinstance(corr, dict) and isinstance(corr.get("scatter_data"), list):
+                if len(corr["scatter_data"]) > MAX_CORRELATION_POINTS:
+                    corr["scatter_data"] = corr["scatter_data"][:MAX_CORRELATION_POINTS]
+                    corr["scatter_truncated"] = True
+        _log_prediction(
+            request_id=correlation_id_ctx.get(generate_correlation_id()),
+            model_type="correlation_analysis",
+            model_version="1.0.0",
+            input_text=body.json(),
+            output=result,
+            latency_ms=(time.monotonic() - start_time) * 1000,
+        )
+        return result
+
+    job, created = submit_job(
+        postgres_service,
+        job_type="correlation_analyze",
+        idempotency_payload=body.model_dump(),
+        work_fn=_run,
+    )
+    return JobSubmitResponse(
+        job_id=job["job_id"], job_type=job["job_type"], status=job["status"], created=created
     )
 
-    return CorrelationResponse(
-        price_correlation=result.get("price_correlation"),
-        volume_correlation=result.get("volume_correlation"),
-        summary=result.get("summary", {}),
-    )
 
-
-@app.post("/correlation/lag-analysis", response_model=LagAnalysisResponse)
+@app.post("/correlation/lag-analysis", response_model=JobSubmitResponse, status_code=202)
 @limiter.limit("10/minute") if limiter else lambda x: x
 async def analyze_lag_correlation(
     body: LagAnalysisRequest,
     request: Request,
-) -> LagAnalysisResponse:
+) -> JobSubmitResponse:
     """
-    Analyze correlation across multiple time lags to find optimal lead time.
+    Submit a lagged correlation analysis to the async job queue and return
+    immediately with a job identifier.
 
-    Returns the best lag hours and correlation strength for predicting market changes.
-    Requires X-API-Key header.
+    Poll GET /api/jobs/{job_id} for the result: best_lag_hours,
+    best_correlation, lag_analysis, and recommendation. Requires X-API-Key
+    header.
+
+    Input series are capped at MAX_CORRELATION_POINTS (#1458).
     """
+    from src.jobs.manager import submit_job
+
+    body.enforce_size_limits()
+
     sentiment_list = [{"timestamp": dp.timestamp, "score": dp.score} for dp in body.sentiment_data]
     metric_list = [{"timestamp": dp.timestamp, "value": dp.value} for dp in body.metric_data]
 
     logger.info(
-        f"Lag correlation analysis | metric_type={body.metric_type} | "
+        f"Lag correlation analysis submitted | metric_type={body.metric_type} | "
         f"max_lag={body.max_lag_hours}h | client_ip={request.client.host}"
     )
 
-    result = CorrelationEngine.analyze_with_lags(
-        sentiment_data=sentiment_list,
-        metric_data=metric_list,
-        metric_type=body.metric_type,
-        max_lag_hours=body.max_lag_hours,
-    )
+    def _run() -> Dict[str, Any]:
+        start_time = time.monotonic()
+        result = CorrelationEngine.analyze_with_lags(
+            sentiment_data=sentiment_list,
+            metric_data=metric_list,
+            metric_type=body.metric_type,
+            max_lag_hours=body.max_lag_hours,
+        )
+        _log_prediction(
+            request_id=correlation_id_ctx.get(generate_correlation_id()),
+            model_type="lag_analysis",
+            model_version="1.0.0",
+            input_text=body.json(),
+            output=result,
+            latency_ms=(time.monotonic() - start_time) * 1000,
+        )
+        return result
 
-    return LagAnalysisResponse(
-        best_lag_hours=result["best_lag_hours"],
-        best_correlation=result["best_correlation"],
-        lag_analysis=result["lag_analysis"],
-        recommendation=result["recommendation"],
+    job, created = submit_job(
+        postgres_service,
+        job_type="correlation_lag_analysis",
+        idempotency_payload=body.model_dump(),
+        work_fn=_run,
+    )
+    return JobSubmitResponse(
+        job_id=job["job_id"], job_type=job["job_type"], status=job["status"], created=created
     )
 
 
@@ -1214,82 +1867,147 @@ class DailyKPISnapshotResponse(BaseModel):
     created_at: Optional[str] = None
 
 
-class DailyKPISnapshotRunResponse(BaseModel):
-    status: str
-    message: str
-    date: str
-    period: str
-    tvl: float
-    volume: float
-    active_rounds: int
-    contribution_count: int
-    unique_contributors: int
+def _serialize_daily_kpi_snapshot(s) -> DailyKPISnapshotResponse:
+    return DailyKPISnapshotResponse(
+        snapshot_date=s.snapshot_date,
+        period=s.period,
+        tvl=s.tvl,
+        volume=s.volume,
+        active_rounds=s.active_rounds,
+        contribution_count=s.contribution_count,
+        unique_contributors=s.unique_contributors,
+        extra_data=s.extra_data,
+        created_at=s.created_at.isoformat() if s.created_at else None,
+    )
 
 
 @app.get("/analytics/kpis/daily-snapshots", response_model=List[DailyKPISnapshotResponse])
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def get_daily_kpi_snapshots(
     request: Request,
+    response: Response,
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     period: str = Query("daily", description="Period type (default: daily)"),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(
+        DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=MAX_PAGE_SIZE,
+        description=f"Page size (max {MAX_PAGE_SIZE}; uncapped responses are rejected)",
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Number of rows to skip (stable snapshot_date DESC, id DESC order)",
+    ),
 ) -> List[DailyKPISnapshotResponse]:
     """
-    Retrieve historical daily on-chain KPI snapshots.
+    Retrieve historical daily on-chain KPI snapshots with pagination (#1458).
+
+    Stable ordering: snapshot_date DESC, id DESC.
+    Response headers: X-Total-Count, X-Limit, X-Offset, X-Has-More, X-Max-Page-Size.
+    For genuinely large exports use GET /analytics/kpis/daily-snapshots/stream.
     Requires X-API-Key header.
     """
     if postgres_service is None:
         raise HTTPException(status_code=503, detail="Database service unavailable")
 
-    snapshots = postgres_service.get_daily_onchain_kpi_snapshots(
+    snapshots, total = postgres_service.get_daily_onchain_kpi_snapshots(
         start_date=start_date,
         end_date=end_date,
         period=period,
         limit=limit,
+        offset=offset,
     )
 
-    return [
-        DailyKPISnapshotResponse(
-            snapshot_date=s.snapshot_date,
-            period=s.period,
-            tvl=s.tvl,
-            volume=s.volume,
-            active_rounds=s.active_rounds,
-            contribution_count=s.contribution_count,
-            unique_contributors=s.unique_contributors,
-            extra_data=s.extra_data,
-            created_at=s.created_at.isoformat() if s.created_at else None,
-        )
-        for s in snapshots
-    ]
+    items = [_serialize_daily_kpi_snapshot(s) for s in snapshots]
+    for key, value in pagination_headers(
+        total=total, limit=limit, offset=offset, returned=len(items)
+    ).items():
+        response.headers[key] = value
+    return items
 
 
-@app.post("/analytics/kpis/daily-snapshots/run", response_model=DailyKPISnapshotRunResponse)
+@app.get("/analytics/kpis/daily-snapshots/stream")
+@limiter.limit("10/minute") if limiter else lambda x: x
+async def stream_daily_kpi_snapshots(
+    request: Request,
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    period: str = Query("daily", description="Period type (default: daily)"),
+    page_size: int = Query(
+        DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=MAX_PAGE_SIZE,
+        description="Internal page size used while streaming",
+    ),
+):
+    """
+    Stream daily on-chain KPI snapshots as NDJSON for large exports (#1458).
+
+    Walks pages server-side with stable ordering so callers never need an
+    uncapped in-memory response. Requires X-API-Key header.
+    """
+    import json as _json
+
+    if postgres_service is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+
+    def _generate():
+        offset = 0
+        while True:
+            snapshots, total = postgres_service.get_daily_onchain_kpi_snapshots(
+                start_date=start_date,
+                end_date=end_date,
+                period=period,
+                limit=page_size,
+                offset=offset,
+            )
+            if not snapshots:
+                break
+            for s in snapshots:
+                payload = _serialize_daily_kpi_snapshot(s).model_dump()
+                yield _json.dumps(payload, default=str) + "\n"
+            offset += len(snapshots)
+            if offset >= total:
+                break
+
+    return StreamingResponse(
+        _generate(),
+        media_type="application/x-ndjson",
+        headers={"X-Stream-Format": "ndjson", "X-Max-Page-Size": str(MAX_PAGE_SIZE)},
+    )
+
+
+@app.post("/analytics/kpis/daily-snapshots/run", response_model=JobSubmitResponse, status_code=202)
 @limiter.limit("10/minute") if limiter else lambda x: x
 async def trigger_daily_kpi_snapshot(
     request: Request,
     target_date: Optional[str] = Query(None, description="Target date (YYYY-MM-DD)"),
     period: str = Query("daily", description="Period identifier"),
-) -> DailyKPISnapshotRunResponse:
+) -> JobSubmitResponse:
     """
-    Trigger manual generation of a daily on-chain KPI snapshot.
-    Skips duplicate snapshot creation if a snapshot for target_date and period already exists.
+    Submit generation of a daily on-chain KPI snapshot to the async job
+    queue and return immediately with a job identifier. Poll
+    GET /api/jobs/{job_id} for the result. Concurrent submissions for the
+    same target_date/period are collapsed onto one job; the generator itself
+    still skips duplicate snapshot creation if one already exists.
+
     Requires X-API-Key header.
     """
     from src.analytics.daily_kpi_snapshot import DailyKPISnapshotGenerator
+    from src.jobs.manager import submit_job
 
-    generator = DailyKPISnapshotGenerator(db_service=postgres_service)
-    result = generator.run_snapshot(target_date=target_date, period=period)
+    def _run() -> Dict[str, Any]:
+        generator = DailyKPISnapshotGenerator(db_service=postgres_service)
+        return generator.run_snapshot(target_date=target_date, period=period)
 
-    return DailyKPISnapshotRunResponse(
-        status=result["status"],
-        message=result["message"],
-        date=result["date"],
-        period=result["period"],
-        tvl=result["tvl"],
-        volume=result["volume"],
-        active_rounds=result["active_rounds"],
-        contribution_count=result["contribution_count"],
-        unique_contributors=result["unique_contributors"],
+    job, created = submit_job(
+        postgres_service,
+        job_type="daily_kpi_snapshot",
+        idempotency_payload={"target_date": target_date, "period": period},
+        work_fn=_run,
+    )
+    return JobSubmitResponse(
+        job_id=job["job_id"], job_type=job["job_type"], status=job["status"], created=created
     )

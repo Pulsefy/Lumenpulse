@@ -2,6 +2,8 @@
 Cohort Analyzer - Builds datasets for contributor cohorts, repeat participation, and retention patterns
 """
 
+from sqlalchemy import select, distinct
+
 from src.utils.logger import setup_logger
 from src.db.postgres_service import PostgresService
 from typing import Dict, Any, List, Optional, Set
@@ -223,7 +225,7 @@ class CohortAnalyzer:
                     
                     # Check if record exists
                     existing = session.execute(
-                        session.query(ContributorRoundParticipation).filter(
+                        select(ContributorRoundParticipation).where(
                             ContributorRoundParticipation.round_id == round_id,
                             ContributorRoundParticipation.contributor == contributor
                         )
@@ -289,22 +291,22 @@ class CohortAnalyzer:
             # Get all contributors who participated in this round
             with self.db_service.get_session() as session:
                 participants = session.execute(
-                    session.query(ContributorRoundParticipation).filter(
+                    select(ContributorRoundParticipation).where(
                         ContributorRoundParticipation.round_id == round_id
                     )
                 ).scalars().all()
                 
                 # Filter for first-time contributors (not in previous rounds)
                 all_previous_rounds = session.execute(
-                    session.query(ContributorRoundParticipation.round_id).filter(
+                    select(distinct(ContributorRoundParticipation.round_id)).where(
                         ContributorRoundParticipation.round_id < round_id
-                    ).distinct()
+                    )
                 ).scalars().all()
                 
                 previous_contributors = set()
                 for prev_round in all_previous_rounds:
                     prev_participants = session.execute(
-                        session.query(ContributorRoundParticipation.contributor).filter(
+                        select(ContributorRoundParticipation.contributor).where(
                             ContributorRoundParticipation.round_id == prev_round
                         )
                     ).scalars().all()
@@ -371,7 +373,7 @@ class CohortAnalyzer:
             with self.db_service.get_session() as session:
                 # Get cohort members
                 cohort = session.execute(
-                    session.query(ContributorCohort).filter(
+                    select(ContributorCohort).where(
                         ContributorCohort.cohort_id == cohort_id
                     )
                 ).scalar_one_or_none()
@@ -384,7 +386,7 @@ class CohortAnalyzer:
                 
                 # Get contributors in the target round
                 round_participants = session.execute(
-                    session.query(ContributorRoundParticipation).filter(
+                    select(ContributorRoundParticipation).where(
                         ContributorRoundParticipation.round_id == round_id
                     )
                 ).scalars().all()
@@ -461,7 +463,7 @@ class CohortAnalyzer:
             with self.db_service.get_session() as session:
                 # Get all participation records
                 all_participation = session.execute(
-                    session.query(ContributorRoundParticipation)
+                    select(ContributorRoundParticipation)
                 ).scalars().all()
                 
                 # Aggregate by contributor
@@ -503,7 +505,7 @@ class CohortAnalyzer:
                     
                     # Check if summary exists
                     existing = session.execute(
-                        session.query(RepeatContributorSummary).filter(
+                        select(RepeatContributorSummary).where(
                             RepeatContributorSummary.contributor == contributor
                         )
                     ).scalar_one_or_none()
@@ -610,7 +612,7 @@ class CohortAnalyzer:
             with self.db_service.get_session() as session:
                 # Get rounds within the time window
                 rounds_in_window = session.execute(
-                    session.query(GrantRound.id).filter(
+                    select(GrantRound.id).where(
                         GrantRound.start_time >= window_start,
                         GrantRound.end_time <= window_end
                     )
@@ -626,7 +628,7 @@ class CohortAnalyzer:
                 
                 for round_id in rounds_in_window:
                     participants = session.execute(
-                        session.query(ContributorRoundParticipation).filter(
+                        select(ContributorRoundParticipation).where(
                             ContributorRoundParticipation.round_id == round_id
                         )
                     ).scalars().all()
@@ -687,7 +689,7 @@ class CohortAnalyzer:
             
             with self.db_service.get_session() as session:
                 summaries = session.execute(
-                    session.query(CohortRetentionSummary).filter(
+                    select(CohortRetentionSummary).where(
                         CohortRetentionSummary.cohort_id == cohort_id
                     ).order_by(CohortRetentionSummary.round_id)
                 ).scalars().all()

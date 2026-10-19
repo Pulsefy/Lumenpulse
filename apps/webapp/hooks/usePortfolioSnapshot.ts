@@ -18,6 +18,8 @@ export interface PortfolioSnapshotState {
   summaryError: string | null;
   /** Performance-specific error surfaced when no performance data is available. */
   performanceError: string | null;
+  /** Allocation-specific error surfaced when allocation could not be loaded. */
+  allocationError: string | null;
   /**
    * True when `summary.lastUpdated` is within the freshness threshold.
    * Null when there is no data yet.
@@ -44,6 +46,7 @@ export function usePortfolioSnapshot(publicKey: string | null): PortfolioSnapsho
   const [isLoading, setIsLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [performanceError, setPerformanceError] = useState<string | null>(null);
+  const [allocationError, setAllocationError] = useState<string | null>(null);
 
   // A counter bump triggers a re-fetch without changing publicKey.
   const [fetchTrigger, setFetchTrigger] = useState(0);
@@ -57,6 +60,7 @@ export function usePortfolioSnapshot(publicKey: string | null): PortfolioSnapsho
       setAllocation(null);
       setSummaryError(null);
       setPerformanceError(null);
+      setAllocationError(null);
       setIsLoading(false);
       return;
     }
@@ -68,6 +72,7 @@ export function usePortfolioSnapshot(publicKey: string | null): PortfolioSnapsho
       setAllocation(null);
       setSummaryError(null);
       setPerformanceError(null);
+      setAllocationError(null);
       setIsLoading(false);
       return;
     }
@@ -80,6 +85,7 @@ export function usePortfolioSnapshot(publicKey: string | null): PortfolioSnapsho
     setIsLoading(true);
     setSummaryError(null);
     setPerformanceError(null);
+    setAllocationError(null);
 
     Promise.allSettled([
       PortfolioApiService.getSummary('USD', abortRef.current.signal),
@@ -116,7 +122,16 @@ export function usePortfolioSnapshot(publicKey: string | null): PortfolioSnapsho
         }
 
         if (allocationResult.status === 'fulfilled') {
-          setAllocation(allocationResult.value);
+          setAllocation(allocationResult.value.allocation);
+          setAllocationError(null);
+        } else if (
+          (allocationResult.reason as { name?: string } | undefined)?.name !== 'AbortError'
+        ) {
+          const message =
+            allocationResult.reason instanceof Error
+              ? allocationResult.reason.message
+              : 'Failed to load portfolio allocation';
+          setAllocationError(message);
         }
       })
       .catch((err: unknown) => {
@@ -125,6 +140,7 @@ export function usePortfolioSnapshot(publicKey: string | null): PortfolioSnapsho
           err instanceof Error ? err.message : 'Failed to load portfolio data';
         setSummaryError((prev) => prev ?? message);
         setPerformanceError((prev) => prev ?? message);
+        setAllocationError((prev) => prev ?? message);
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -191,6 +207,7 @@ export function usePortfolioSnapshot(publicKey: string | null): PortfolioSnapsho
     isLoading,
     summaryError,
     performanceError,
+    allocationError,
     isFresh,
     lastUpdatedLabel,
     refresh,

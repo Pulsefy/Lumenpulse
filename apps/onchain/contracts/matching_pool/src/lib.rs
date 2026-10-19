@@ -9,14 +9,35 @@ use errors::MatchingPoolError;
 use math::{sqrt_scaled, unscale};
 use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, Symbol, Vec};
-use storage::{DataKey, PauseScope, RoundData};
+use soroban_sdk::{contract, contractimpl, vec, Address, BytesN, Env, IntoVal, Symbol, Val, Vec};
+use storage::{DataKey, PauseScope, RoundData, LEDGER_BUMP, LEDGER_THRESHOLD};
 
 #[contract]
 pub struct MatchingPoolContract;
 
 #[contractimpl]
 impl MatchingPoolContract {
+    /// Extends the contract's shared instance TTL (covers `Admin`, `Paused`,
+    /// every `ScopePaused(*)`, and `NextRoundId` in one call, since instance
+    /// storage has a single TTL for the whole tier).
+    fn touch_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+    }
+
+    /// Extends a persistent key's TTL, but only if the key actually exists —
+    /// calling `extend_ttl` on an absent key panics, and many call sites
+    /// below read persistent keys that legitimately may not have been
+    /// written yet (e.g. `RoundCap` before `set_round_cap` is ever called).
+    fn touch_persistent<K: IntoVal<Env, Val>>(env: &Env, key: &K) {
+        if env.storage().persistent().has(key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+    }
+
     fn require_admin(env: &Env, caller: &Address) -> Result<(), MatchingPoolError> {
         let admin: Address = env
             .storage()
@@ -27,6 +48,7 @@ impl MatchingPoolContract {
             return Err(MatchingPoolError::Unauthorized);
         }
         caller.require_auth();
+        Self::touch_instance(env);
         Ok(())
     }
 
@@ -38,6 +60,7 @@ impl MatchingPoolContract {
     ///  1. Its own `ScopePaused(scope)` key is `true`, **or**
     ///  2. The legacy global `Paused` key is `true` (backward-compat).
     fn is_scope_paused(env: &Env, scope: PauseScope) -> bool {
+        Self::touch_instance(env);
         let global: bool = env
             .storage()
             .instance()
@@ -124,6 +147,7 @@ impl MatchingPoolContract {
             .instance()
             .set(&DataKey::ScopePaused(PauseScope::Governance), &false);
         env.storage().instance().set(&DataKey::NextRoundId, &0u64);
+        Self::touch_instance(&env);
         events::InitializedEvent { admin }.publish(&env);
         Ok(())
     }
@@ -159,19 +183,24 @@ impl MatchingPoolContract {
         env.storage()
             .persistent()
             .set(&DataKey::Round(round_id), &round);
+        Self::touch_persistent(&env, &DataKey::Round(round_id));
         env.storage()
             .persistent()
             .set(&DataKey::RoundPool(round_id), &0i128);
+        Self::touch_persistent(&env, &DataKey::RoundPool(round_id));
         env.storage()
             .persistent()
             .set(&DataKey::EligibleProjectCount(round_id), &0u32);
+        Self::touch_persistent(&env, &DataKey::EligibleProjectCount(round_id));
         env.storage()
             .persistent()
             .set(&DataKey::MatchDistributed(round_id), &false);
+        Self::touch_persistent(&env, &DataKey::MatchDistributed(round_id));
         env.storage().persistent().set(
             &DataKey::RoundStatus(round_id),
             &Symbol::new(&env, "ACTIVE"),
         );
+        Self::touch_persistent(&env, &DataKey::RoundStatus(round_id));
         env.storage()
             .instance()
             .set(&DataKey::NextRoundId, &(round_id + 1));
@@ -203,6 +232,7 @@ impl MatchingPoolContract {
                 .persistent()
                 .get(&DataKey::Round(round_id))
                 .ok_or(MatchingPoolError::RoundNotFound)?;
+            Self::touch_persistent(&env, &DataKey::Round(round_id));
             if round.is_finalized {
                 return Err(MatchingPoolError::RoundAlreadyFinalized);
             }
@@ -211,10 +241,12 @@ impl MatchingPoolContract {
             env.storage()
                 .persistent()
                 .set(&pool_key, &(current + amount));
+            Self::touch_persistent(&env, &pool_key);
             round.total_pool += amount;
             env.storage()
                 .persistent()
                 .set(&DataKey::Round(round_id), &round);
+            Self::touch_persistent(&env, &DataKey::Round(round_id));
 
             let contract_addr = env.current_contract_address();
             TokenClient::new(&env, &round.token_address).transfer(&funder, &contract_addr, &amount);
@@ -242,6 +274,7 @@ impl MatchingPoolContract {
             .persistent()
             .get(&DataKey::Round(round_id))
             .ok_or(MatchingPoolError::RoundNotFound)?;
+        Self::touch_persistent(&env, &DataKey::Round(round_id));
         if round.is_finalized {
             return Err(MatchingPoolError::RoundAlreadyFinalized);
         }
@@ -255,18 +288,27 @@ impl MatchingPoolContract {
             return Err(MatchingPoolError::ProjectAlreadyEligible);
         }
         env.storage().persistent().set(&eligible_key, &true);
+        Self::touch_persistent(&env, &eligible_key);
         let count_key = DataKey::EligibleProjectCount(round_id);
         let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        Self::touch_persistent(&env, &count_key);
         env.storage()
             .persistent()
             .set(&DataKey::EligibleProjectAt(round_id, count), &project_id);
+        Self::touch_persistent(&env, &DataKey::EligibleProjectAt(round_id, count));
         env.storage().persistent().set(&count_key, &(count + 1));
+        Self::touch_persistent(&env, &count_key);
         env.storage()
             .persistent()
             .set(&DataKey::ProjectContributions(round_id, project_id), &0i128);
+        Self::touch_persistent(&env, &DataKey::ProjectContributions(round_id, project_id));
         env.storage().persistent().set(
             &DataKey::ProjectContributorCount(round_id, project_id),
             &0u32,
+        );
+        Self::touch_persistent(
+            &env,
+            &DataKey::ProjectContributorCount(round_id, project_id),
         );
         events::ProjectApprovedEvent {
             round_id,
@@ -289,6 +331,7 @@ impl MatchingPoolContract {
             .persistent()
             .get(&DataKey::Round(round_id))
             .ok_or(MatchingPoolError::RoundNotFound)?;
+        Self::touch_persistent(&env, &DataKey::Round(round_id));
         if round.is_finalized {
             return Err(MatchingPoolError::RoundAlreadyFinalized);
         }
@@ -302,6 +345,7 @@ impl MatchingPoolContract {
             return Err(MatchingPoolError::ProjectNotEligible);
         }
         env.storage().persistent().set(&eligible_key, &false);
+        Self::touch_persistent(&env, &eligible_key);
         events::ProjectRemovedEvent {
             round_id,
             project_id,
@@ -331,12 +375,14 @@ impl MatchingPoolContract {
             .persistent()
             .get(&DataKey::Round(round_id))
             .ok_or(MatchingPoolError::RoundNotFound)?;
+        Self::touch_persistent(&env, &DataKey::Round(round_id));
         if round.is_finalized {
             return Err(MatchingPoolError::RoundAlreadyFinalized);
         }
         env.storage()
             .persistent()
             .set(&DataKey::RoundCap(round_id), &cap);
+        Self::touch_persistent(&env, &DataKey::RoundCap(round_id));
         events::RoundCapUpdatedEvent {
             admin,
             round_id,
@@ -362,6 +408,7 @@ impl MatchingPoolContract {
             .persistent()
             .get(&DataKey::Round(round_id))
             .ok_or(MatchingPoolError::RoundNotFound)?;
+        Self::touch_persistent(&env, &DataKey::Round(round_id));
         if round.is_finalized {
             return Err(MatchingPoolError::RoundAlreadyFinalized);
         }
@@ -369,28 +416,29 @@ impl MatchingPoolContract {
         if now < round.start_time || now > round.end_time {
             return Err(MatchingPoolError::RoundNotActive);
         }
+        let eligible_key = DataKey::EligibleProject(round_id, project_id);
         if !env
             .storage()
             .persistent()
-            .get::<_, bool>(&DataKey::EligibleProject(round_id, project_id))
+            .get::<_, bool>(&eligible_key)
             .unwrap_or(false)
         {
             return Err(MatchingPoolError::ProjectNotEligible);
         }
+        Self::touch_persistent(&env, &eligible_key);
         let round_total_key = DataKey::ContributorRoundTotal(round_id, contributor.clone());
         let prior_round_total: i128 = env
             .storage()
             .persistent()
             .get(&round_total_key)
             .unwrap_or(0);
+        Self::touch_persistent(&env, &round_total_key);
         let new_round_total = prior_round_total
             .checked_add(amount)
             .ok_or(MatchingPoolError::InvalidAmount)?;
-        let cap: i128 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::RoundCap(round_id))
-            .unwrap_or(0);
+        let cap_key = DataKey::RoundCap(round_id);
+        let cap: i128 = env.storage().persistent().get(&cap_key).unwrap_or(0);
+        Self::touch_persistent(&env, &cap_key);
         if cap > 0 && new_round_total > cap {
             return Err(MatchingPoolError::ContributionCapExceeded);
         }
@@ -399,23 +447,29 @@ impl MatchingPoolContract {
         if prev == 0 {
             let cnt_key = DataKey::ProjectContributorCount(round_id, project_id);
             let cnt: u32 = env.storage().persistent().get(&cnt_key).unwrap_or(0);
-            env.storage().persistent().set(
-                &DataKey::ProjectContributor(round_id, project_id, cnt),
-                &contributor,
-            );
+            Self::touch_persistent(&env, &cnt_key);
+            let contributor_at_key = DataKey::ProjectContributor(round_id, project_id, cnt);
+            env.storage()
+                .persistent()
+                .set(&contributor_at_key, &contributor);
+            Self::touch_persistent(&env, &contributor_at_key);
             env.storage().persistent().set(&cnt_key, &(cnt + 1));
+            Self::touch_persistent(&env, &cnt_key);
         }
         env.storage()
             .persistent()
             .set(&contrib_key, &(prev + amount));
+        Self::touch_persistent(&env, &contrib_key);
         let total_key = DataKey::ProjectContributions(round_id, project_id);
         let total: i128 = env.storage().persistent().get(&total_key).unwrap_or(0);
         env.storage()
             .persistent()
             .set(&total_key, &(total + amount));
+        Self::touch_persistent(&env, &total_key);
         env.storage()
             .persistent()
             .set(&round_total_key, &new_round_total);
+        Self::touch_persistent(&env, &round_total_key);
         events::ContributionRecordedEvent {
             round_id,
             project_id,
@@ -440,6 +494,7 @@ impl MatchingPoolContract {
                 .persistent()
                 .get(&DataKey::Round(round_id))
                 .ok_or(MatchingPoolError::RoundNotFound)?;
+            Self::touch_persistent(&env, &DataKey::Round(round_id));
 
             if round.is_finalized {
                 return Err(MatchingPoolError::RoundAlreadyFinalized);
@@ -454,13 +509,15 @@ impl MatchingPoolContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::Round(round_id), &round);
-            env.storage().persistent().set(
-                &DataKey::RoundStatus(round_id),
-                &Symbol::new(&env, "FINALIZED"),
-            );
+            Self::touch_persistent(&env, &DataKey::Round(round_id));
+            let status_key = DataKey::RoundStatus(round_id);
             env.storage()
                 .persistent()
-                .set(&DataKey::FinalizedAt(round_id), &now);
+                .set(&status_key, &Symbol::new(&env, "FINALIZED"));
+            Self::touch_persistent(&env, &status_key);
+            let finalized_at_key = DataKey::FinalizedAt(round_id);
+            env.storage().persistent().set(&finalized_at_key, &now);
+            Self::touch_persistent(&env, &finalized_at_key);
 
             events::RoundFinalizedEvent {
                 round_id,
@@ -486,17 +543,20 @@ impl MatchingPoolContract {
                 .persistent()
                 .get(&DataKey::Round(round_id))
                 .ok_or(MatchingPoolError::RoundNotFound)?;
+            Self::touch_persistent(&env, &DataKey::Round(round_id));
             if !round.is_finalized {
                 return Err(MatchingPoolError::RoundNotFinalized);
             }
             if round.is_distributed {
                 return Err(MatchingPoolError::MatchAlreadyDistributed);
             }
+            let eligible_count_key = DataKey::EligibleProjectCount(round_id);
             let count: u32 = env
                 .storage()
                 .persistent()
-                .get(&DataKey::EligibleProjectCount(round_id))
+                .get(&eligible_count_key)
                 .unwrap_or(0);
+            Self::touch_persistent(&env, &eligible_count_key);
             if count == 0 {
                 return Err(MatchingPoolError::NoEligibleProjects);
             }
@@ -506,19 +566,19 @@ impl MatchingPoolContract {
             let mut total_qf: i128 = 0;
 
             for i in 0..count {
-                let pid: u64 = env
-                    .storage()
-                    .persistent()
-                    .get(&DataKey::EligibleProjectAt(round_id, i))
-                    .unwrap_or(u64::MAX);
+                let at_key = DataKey::EligibleProjectAt(round_id, i);
+                let pid: u64 = env.storage().persistent().get(&at_key).unwrap_or(u64::MAX);
+                Self::touch_persistent(&env, &at_key);
+                let eligible_key = DataKey::EligibleProject(round_id, pid);
                 if !env
                     .storage()
                     .persistent()
-                    .get::<_, bool>(&DataKey::EligibleProject(round_id, pid))
+                    .get::<_, bool>(&eligible_key)
                     .unwrap_or(false)
                 {
                     continue;
                 }
+                Self::touch_persistent(&env, &eligible_key);
                 let score = Self::compute_qf_score(&env, round_id, pid);
                 project_ids.push_back(pid);
                 qf_scores.push_back(score);
@@ -529,11 +589,9 @@ impl MatchingPoolContract {
                 return Ok(0);
             }
 
-            let pool: i128 = env
-                .storage()
-                .persistent()
-                .get(&DataKey::RoundPool(round_id))
-                .unwrap_or(0);
+            let pool_key = DataKey::RoundPool(round_id);
+            let pool: i128 = env.storage().persistent().get(&pool_key).unwrap_or(0);
+            Self::touch_persistent(&env, &pool_key);
             if pool == 0 {
                 return Err(MatchingPoolError::InsufficientPoolBalance);
             }
@@ -571,16 +629,19 @@ impl MatchingPoolContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::Round(round_id), &round);
-            env.storage().persistent().set(
-                &DataKey::RoundStatus(round_id),
-                &Symbol::new(&env, "DISTRIBUTED"),
-            );
+            Self::touch_persistent(&env, &DataKey::Round(round_id));
+            let status_key = DataKey::RoundStatus(round_id);
             env.storage()
                 .persistent()
-                .set(&DataKey::MatchDistributed(round_id), &true);
+                .set(&status_key, &Symbol::new(&env, "DISTRIBUTED"));
+            Self::touch_persistent(&env, &status_key);
+            let match_distributed_key = DataKey::MatchDistributed(round_id);
             env.storage()
                 .persistent()
-                .set(&DataKey::RoundPool(round_id), &0i128);
+                .set(&match_distributed_key, &true);
+            Self::touch_persistent(&env, &match_distributed_key);
+            env.storage().persistent().set(&pool_key, &0i128);
+            Self::touch_persistent(&env, &pool_key);
 
             let contract_addr = env.current_contract_address();
             let token = TokenClient::new(&env, &round.token_address);
@@ -607,33 +668,23 @@ impl MatchingPoolContract {
     }
 
     fn compute_qf_score(env: &Env, round_id: u64, project_id: u64) -> i128 {
-        let cnt: u32 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::ProjectContributorCount(round_id, project_id))
-            .unwrap_or(0);
+        let cnt_key = DataKey::ProjectContributorCount(round_id, project_id);
+        let cnt: u32 = env.storage().persistent().get(&cnt_key).unwrap_or(0);
+        Self::touch_persistent(env, &cnt_key);
         if cnt == 0 {
             return 0;
         }
         let mut sum_sqrt: i128 = 0;
         for i in 0..cnt {
-            let contributor: Address = match env
-                .storage()
-                .persistent()
-                .get(&DataKey::ProjectContributor(round_id, project_id, i))
-            {
+            let contributor_key = DataKey::ProjectContributor(round_id, project_id, i);
+            let contributor: Address = match env.storage().persistent().get(&contributor_key) {
                 Some(a) => a,
                 None => continue,
             };
-            let amount: i128 = env
-                .storage()
-                .persistent()
-                .get(&DataKey::ContributorAmount(
-                    round_id,
-                    project_id,
-                    contributor,
-                ))
-                .unwrap_or(0);
+            Self::touch_persistent(env, &contributor_key);
+            let amount_key = DataKey::ContributorAmount(round_id, project_id, contributor);
+            let amount: i128 = env.storage().persistent().get(&amount_key).unwrap_or(0);
+            Self::touch_persistent(env, &amount_key);
             if amount > 0 {
                 sum_sqrt = sum_sqrt.saturating_add(sqrt_scaled(amount));
             }
@@ -642,23 +693,30 @@ impl MatchingPoolContract {
         unscale(unscale(squared))
     }
 
-    pub fn get_round(env: Env, round_id: u64) -> Result<RoundData, MatchingPoolError> {
-        env.storage()
+    /// Reads `Round(round_id)`, bumping its TTL, or fails with
+    /// `RoundNotFound`. Shared by every read-only query below so a round
+    /// stays alive as long as anyone is still querying it.
+    fn read_round(env: &Env, round_id: u64) -> Result<RoundData, MatchingPoolError> {
+        let key = DataKey::Round(round_id);
+        let round = env
+            .storage()
             .persistent()
-            .get(&DataKey::Round(round_id))
-            .ok_or(MatchingPoolError::RoundNotFound)
+            .get(&key)
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        Self::touch_persistent(env, &key);
+        Ok(round)
+    }
+
+    pub fn get_round(env: Env, round_id: u64) -> Result<RoundData, MatchingPoolError> {
+        Self::read_round(&env, round_id)
     }
 
     pub fn get_pool_balance(env: Env, round_id: u64) -> Result<i128, MatchingPoolError> {
-        env.storage()
-            .persistent()
-            .get::<_, RoundData>(&DataKey::Round(round_id))
-            .ok_or(MatchingPoolError::RoundNotFound)?;
-        Ok(env
-            .storage()
-            .persistent()
-            .get(&DataKey::RoundPool(round_id))
-            .unwrap_or(0))
+        Self::read_round(&env, round_id)?;
+        let pool_key = DataKey::RoundPool(round_id);
+        let pool = env.storage().persistent().get(&pool_key).unwrap_or(0);
+        Self::touch_persistent(&env, &pool_key);
+        Ok(pool)
     }
 
     pub fn get_project_qf_score(
@@ -666,28 +724,18 @@ impl MatchingPoolContract {
         round_id: u64,
         project_id: u64,
     ) -> Result<i128, MatchingPoolError> {
-        env.storage()
-            .persistent()
-            .get::<_, RoundData>(&DataKey::Round(round_id))
-            .ok_or(MatchingPoolError::RoundNotFound)?;
+        Self::read_round(&env, round_id)?;
         Ok(Self::compute_qf_score(&env, round_id, project_id))
     }
 
     pub fn preview_distribution(env: Env, round_id: u64) -> Result<Vec<i128>, MatchingPoolError> {
-        env.storage()
-            .persistent()
-            .get::<_, RoundData>(&DataKey::Round(round_id))
-            .ok_or(MatchingPoolError::RoundNotFound)?;
-        let count: u32 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::EligibleProjectCount(round_id))
-            .unwrap_or(0);
-        let pool: i128 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::RoundPool(round_id))
-            .unwrap_or(0);
+        Self::read_round(&env, round_id)?;
+        let count_key = DataKey::EligibleProjectCount(round_id);
+        let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        Self::touch_persistent(&env, &count_key);
+        let pool_key = DataKey::RoundPool(round_id);
+        let pool: i128 = env.storage().persistent().get(&pool_key).unwrap_or(0);
+        Self::touch_persistent(&env, &pool_key);
         let mut result: Vec<i128> = vec![&env];
         if count == 0 || pool == 0 {
             return Ok(result);
@@ -696,19 +744,19 @@ impl MatchingPoolContract {
         let mut scores: Vec<i128> = vec![&env];
         let mut pids: Vec<i128> = vec![&env];
         for i in 0..count {
-            let pid: u64 = env
-                .storage()
-                .persistent()
-                .get(&DataKey::EligibleProjectAt(round_id, i))
-                .unwrap_or(u64::MAX);
+            let at_key = DataKey::EligibleProjectAt(round_id, i);
+            let pid: u64 = env.storage().persistent().get(&at_key).unwrap_or(u64::MAX);
+            let eligible_key = DataKey::EligibleProject(round_id, pid);
             if !env
                 .storage()
                 .persistent()
-                .get::<_, bool>(&DataKey::EligibleProject(round_id, pid))
+                .get::<_, bool>(&eligible_key)
                 .unwrap_or(false)
             {
                 continue;
             }
+            Self::touch_persistent(&env, &at_key);
+            Self::touch_persistent(&env, &eligible_key);
             let score = Self::compute_qf_score(&env, round_id, pid);
             pids.push_back(pid as i128);
             scores.push_back(score);
@@ -744,15 +792,11 @@ impl MatchingPoolContract {
         round_id: u64,
         project_id: u64,
     ) -> Result<i128, MatchingPoolError> {
-        env.storage()
-            .persistent()
-            .get::<_, RoundData>(&DataKey::Round(round_id))
-            .ok_or(MatchingPoolError::RoundNotFound)?;
-        Ok(env
-            .storage()
-            .persistent()
-            .get(&DataKey::ProjectContributions(round_id, project_id))
-            .unwrap_or(0))
+        Self::read_round(&env, round_id)?;
+        let key = DataKey::ProjectContributions(round_id, project_id);
+        let value = env.storage().persistent().get(&key).unwrap_or(0);
+        Self::touch_persistent(&env, &key);
+        Ok(value)
     }
 
     pub fn get_contributor_count(
@@ -760,28 +804,20 @@ impl MatchingPoolContract {
         round_id: u64,
         project_id: u64,
     ) -> Result<u32, MatchingPoolError> {
-        env.storage()
-            .persistent()
-            .get::<_, RoundData>(&DataKey::Round(round_id))
-            .ok_or(MatchingPoolError::RoundNotFound)?;
-        Ok(env
-            .storage()
-            .persistent()
-            .get(&DataKey::ProjectContributorCount(round_id, project_id))
-            .unwrap_or(0))
+        Self::read_round(&env, round_id)?;
+        let key = DataKey::ProjectContributorCount(round_id, project_id);
+        let value = env.storage().persistent().get(&key).unwrap_or(0);
+        Self::touch_persistent(&env, &key);
+        Ok(value)
     }
 
     /// The round-level contribution cap (0 means uncapped).
     pub fn get_round_cap(env: Env, round_id: u64) -> Result<i128, MatchingPoolError> {
-        env.storage()
-            .persistent()
-            .get::<_, RoundData>(&DataKey::Round(round_id))
-            .ok_or(MatchingPoolError::RoundNotFound)?;
-        Ok(env
-            .storage()
-            .persistent()
-            .get(&DataKey::RoundCap(round_id))
-            .unwrap_or(0))
+        Self::read_round(&env, round_id)?;
+        let key = DataKey::RoundCap(round_id);
+        let value = env.storage().persistent().get(&key).unwrap_or(0);
+        Self::touch_persistent(&env, &key);
+        Ok(value)
     }
 
     /// A contributor's cumulative recorded contributions to a round, summed
@@ -791,45 +827,45 @@ impl MatchingPoolContract {
         round_id: u64,
         contributor: Address,
     ) -> Result<i128, MatchingPoolError> {
-        env.storage()
-            .persistent()
-            .get::<_, RoundData>(&DataKey::Round(round_id))
-            .ok_or(MatchingPoolError::RoundNotFound)?;
-        Ok(env
-            .storage()
-            .persistent()
-            .get(&DataKey::ContributorRoundTotal(round_id, contributor))
-            .unwrap_or(0))
+        Self::read_round(&env, round_id)?;
+        let key = DataKey::ContributorRoundTotal(round_id, contributor);
+        let value = env.storage().persistent().get(&key).unwrap_or(0);
+        Self::touch_persistent(&env, &key);
+        Ok(value)
     }
 
     pub fn get_round_status(env: Env, round_id: u64) -> Result<Symbol, MatchingPoolError> {
-        env.storage()
-            .persistent()
-            .get::<_, RoundData>(&DataKey::Round(round_id))
-            .ok_or(MatchingPoolError::RoundNotFound)?;
-        Ok(env
+        Self::read_round(&env, round_id)?;
+        let key = DataKey::RoundStatus(round_id);
+        let value = env
             .storage()
             .persistent()
-            .get(&DataKey::RoundStatus(round_id))
-            .unwrap_or(Symbol::new(&env, "ACTIVE")))
+            .get(&key)
+            .unwrap_or(Symbol::new(&env, "ACTIVE"));
+        Self::touch_persistent(&env, &key);
+        Ok(value)
     }
 
     pub fn get_finalized_at(env: Env, round_id: u64) -> Result<u64, MatchingPoolError> {
-        env.storage()
+        Self::read_round(&env, round_id)?;
+        let key = DataKey::FinalizedAt(round_id);
+        let value = env
+            .storage()
             .persistent()
-            .get::<_, RoundData>(&DataKey::Round(round_id))
+            .get(&key)
             .ok_or(MatchingPoolError::RoundNotFound)?;
-        env.storage()
-            .persistent()
-            .get(&DataKey::FinalizedAt(round_id))
-            .ok_or(MatchingPoolError::RoundNotFound)
+        Self::touch_persistent(&env, &key);
+        Ok(value)
     }
 
     pub fn get_admin(env: Env) -> Result<Address, MatchingPoolError> {
-        env.storage()
+        let admin = env
+            .storage()
             .instance()
             .get(&DataKey::Admin)
-            .ok_or(MatchingPoolError::NotInitialized)
+            .ok_or(MatchingPoolError::NotInitialized)?;
+        Self::touch_instance(&env);
+        Ok(admin)
     }
 
     // ── Granular pause / unpause ─────────────────────────────────────────────
@@ -881,6 +917,12 @@ impl MatchingPoolContract {
     pub fn pause(env: Env, admin: Address) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &true);
+        events::ContractPauseEvent {
+            admin,
+            paused: true,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
         Ok(())
     }
 
@@ -889,6 +931,12 @@ impl MatchingPoolContract {
     pub fn unpause(env: Env, admin: Address) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &false);
+        events::ContractUnpauseEvent {
+            admin,
+            paused: false,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
         Ok(())
     }
 
@@ -906,6 +954,11 @@ impl MatchingPoolContract {
         Self::require_admin(&env, &current_admin)?;
         Self::require_governance_not_paused(&env)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+        events::AdminChangedEvent {
+            old_admin: current_admin,
+            new_admin,
+        }
+        .publish(&env);
         Ok(())
     }
 
@@ -916,7 +969,13 @@ impl MatchingPoolContract {
     ) -> Result<(), MatchingPoolError> {
         Self::require_admin(&env, &caller)?;
         Self::require_governance_not_paused(&env)?;
-        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        env.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
+        events::UpgradedEvent {
+            admin: caller,
+            new_wasm_hash,
+        }
+        .publish(&env);
         Ok(())
     }
 }

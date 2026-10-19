@@ -7,7 +7,7 @@ import { lightColors, darkColors, ThemeColors } from '../../theme/colors';
 export type ThemeMode = 'system' | 'light' | 'dark';
 
 interface LocalizationContextType {
-  t: (key: string, params?: Record<string, any>) => string;
+  t: (key: string, paramsOrFallback?: Record<string, any> | string) => string;
   i18n: typeof i18n;
   currentLanguage: string;
   changeLanguage: (lng: string) => void;
@@ -54,8 +54,12 @@ export const LocalizationProvider: React.FC<LocalizationProviderProps> = ({ chil
 
   const colors = resolvedMode === 'dark' ? darkColors : lightColors;
 
-  const t = (key: string, params?: Record<string, any>): string => {
-    return i18n.t(key, params);
+  const t = (key: string, paramsOrFallback?: Record<string, any> | string): string => {
+    if (typeof paramsOrFallback === 'string') {
+      return i18n.t(key, { defaultValue: paramsOrFallback });
+    }
+
+    return i18n.t(key, paramsOrFallback);
   };
 
   const changeLanguage = (lng: string) => {

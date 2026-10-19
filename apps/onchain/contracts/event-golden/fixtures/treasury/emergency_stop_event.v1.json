@@ -1,0 +1,20 @@
+{
+  "contract": "treasury",
+  "data_xdr": "AAAAEQAAAAEAAAACAAAADwAAAAtmdWxsX3JlZnVuZAAAAAAKAAAAAAAAAAAAAAAAAA9CQAAAAA8AAAAGcmVhc29uAAAAAAAOAAAADm9yYWNsZSBhbm9tYWx5AAA=",
+  "event": "emergency_stop_event",
+  "fields": {
+    "full_refund": "1000000",
+    "reason": "oracle anomaly"
+  },
+  "topics": [
+    "emergency_stop_event",
+    1,
+    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
+  ],
+  "topics_xdr": [
+    "AAAADwAAABRlbWVyZ2VuY3lfc3RvcF9ldmVudA==",
+    "AAAAAwAAAAE=",
+    "AAAAEgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  ],
+  "version": 1
+}

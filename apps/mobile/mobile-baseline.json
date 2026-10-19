@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "unit": "bytes",
+  "recordedAt": "2026-09-28",
+  "recordedOn": null,
+  "method": "npx expo export --platform android --platform ios --platform web --output-dir dist",
+  "platforms": {
+    "android": 3927172,
+    "ios": 3930385,
+    "web": 2186900
+  },
+  "assets": {
+    "bytes": 8221716,
+    "files": 90
+  },
+  "total": {
+    "bytes": 18266173,
+    "files": 93
+  },
+  "binary": {
+    "android": null,
+    "ios": null
+  }
+}

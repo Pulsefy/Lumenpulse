@@ -1,0 +1,22 @@
+{
+  "contract": "treasury",
+  "data_xdr": "AAAAEQAAAAEAAAAEAAAADwAAAAZzaWduZXIAAAAAABIAAAAAAAAAAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAAAADwAAAAZzdGF0dXMAAAAAAAMAAAABAAAADwAAAAl0aHJlc2hvbGQAAAAAAAADAAAAAwAAAA8AAAAQd2VpZ2h0X2NvbGxlY3RlZAAAAAMAAAAC",
+  "event": "signature_collected_event",
+  "fields": {
+    "signer": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+    "status": 1,
+    "threshold": 3,
+    "weight_collected": 2
+  },
+  "topics": [
+    "signature_collected_event",
+    1,
+    "7"
+  ],
+  "topics_xdr": [
+    "AAAADwAAABlzaWduYXR1cmVfY29sbGVjdGVkX2V2ZW50AAAA",
+    "AAAAAwAAAAE=",
+    "AAAABQAAAAAAAAAH"
+  ],
+  "version": 1
+}

@@ -5,22 +5,22 @@ echo "🔍 Testing Swagger Documentation Implementation..."
 echo ""
 
 # Check if main.ts has Swagger configuration
-echo "✓ Checking main.ts configuration..."
-if grep -q "DocumentBuilder" apps/backend/src/main.ts; then
+echo "✓ Checking OpenAPI document configuration..."
+if grep -q "DocumentBuilder" apps/backend/src/openapi/openapi.document.ts; then
     echo "  ✅ DocumentBuilder found"
 else
     echo "  ❌ DocumentBuilder not found"
     exit 1
 fi
 
-if grep -q "addBearerAuth" apps/backend/src/main.ts; then
+if grep -q "addBearerAuth" apps/backend/src/openapi/openapi.document.ts; then
     echo "  ✅ Bearer auth configured"
 else
     echo "  ❌ Bearer auth not configured"
     exit 1
 fi
 
-if grep -q "addTag" apps/backend/src/main.ts; then
+if grep -q "addTag" apps/backend/src/openapi/openapi.document.ts; then
     echo "  ✅ API tags configured"
 else
     echo "  ❌ API tags not configured"
@@ -98,19 +98,19 @@ fi
 echo ""
 echo "✓ Checking documentation files..."
 
-if [ -f "document/api-documentation-guide.md" ]; then
+if [ -f "docs/api-documentation-guide.md" ]; then
     echo "  ✅ API Documentation Guide exists"
 else
     echo "  ❌ API Documentation Guide missing"
 fi
 
-if [ -f "document/swagger-implementation-guide.md" ]; then
+if [ -f "docs/swagger-implementation-guide.md" ]; then
     echo "  ✅ Swagger Implementation Guide exists"
 else
     echo "  ❌ Swagger Implementation Guide missing"
 fi
 
-if [ -f "document/swagger-documentation-summary.md" ]; then
+if [ -f "docs/swagger-documentation-summary.md" ]; then
     echo "  ✅ Swagger Documentation Summary exists"
 else
     echo "  ❌ Swagger Documentation Summary missing"
@@ -136,9 +136,9 @@ echo "   • Swagger UI: http://localhost:3000/api/docs"
 echo "   • OpenAPI JSON: http://localhost:3000/api/docs-json"
 echo ""
 echo "📖 Documentation files:"
-echo "   • document/api-documentation-guide.md"
-echo "   • document/swagger-implementation-guide.md"
-echo "   • document/swagger-documentation-summary.md"
+echo "   • docs/api-documentation-guide.md"
+echo "   • docs/swagger-implementation-guide.md"
+echo "   • docs/swagger-documentation-summary.md"
 echo ""
 echo "🚀 To start the server:"
 echo "   cd apps/backend && npm run start:dev"

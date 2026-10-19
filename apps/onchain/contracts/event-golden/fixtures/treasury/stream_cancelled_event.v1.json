@@ -1,0 +1,21 @@
+{
+  "contract": "treasury",
+  "data_xdr": "AAAAEQAAAAEAAAADAAAADwAAAAxjYW5jZWxsZWRfYXQAAAAFAAAAAGVUtFAAAAAPAAAACnJlZnVuZGFibGUAAAAAAAoAAAAAAAAAAAAAAAAACSfAAAAADwAAAA50b3RhbF91bmxvY2tlZAAAAAAACgAAAAAAAAAAAAAAAAAGGoA=",
+  "event": "stream_cancelled_event",
+  "fields": {
+    "cancelled_at": "1700050000",
+    "refundable": "600000",
+    "total_unlocked": "400000"
+  },
+  "topics": [
+    "stream_cancelled_event",
+    1,
+    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
+  ],
+  "topics_xdr": [
+    "AAAADwAAABZzdHJlYW1fY2FuY2VsbGVkX2V2ZW50AAA=",
+    "AAAAAwAAAAE=",
+    "AAAAEgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  ],
+  "version": 1
+}

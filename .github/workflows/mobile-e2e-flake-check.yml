@@ -1,0 +1,84 @@
+name: Mobile E2E Flake Check
+
+# Issue #1402: measures the flake rate of the mobile E2E smoke suite over ten
+# consecutive runs. Manual (workflow_dispatch) only, not on every push/PR --
+# repeating the full suite 10x on every change would be a disproportionate
+# CI cost for a metric that only needs periodic re-measurement.
+on:
+  workflow_dispatch:
+
+# Issue #1713. This workflow only runs on demand, but the same rule applies: if
+# a re-measurement is dispatched against a branch that already has one in
+# flight, the stale run is cancelled rather than left to report a number that
+# nobody is waiting for any more.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repeat-suite:
+    runs-on: ubuntu-latest
+    # Issue #1714. Each matrix leg is one full smoke suite, and the worst
+    # observed `mobile-e2e` run took 11.3 min. 30 min leaves headroom over that
+    # tail without letting a genuinely wedged leg hold a runner for hours. See
+    # docs/ci-timeouts.md.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        run_number: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    defaults:
+      run:
+        working-directory: ./apps/mobile
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Start timeout guard
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: start
+
+      - name: Set up Node and install dependencies
+        uses: ./.github/actions/setup-node-app
+        with:
+          working-directory: apps/mobile
+          root-workspace: 'true'
+
+      # Issue #1724: the Chromium download (~20 s) is cached by lockfile; the
+      # install step below still installs the OS packages and verifies the browser.
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/mobile/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E smoke suite (run ${{ matrix.run_number }} of 10)
+        run: npm run e2e
+        env:
+          CI: '1'
+
+      - name: Report timeout guard
+        if: always()
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: finish
+          job-id: repeat-suite
+          budget-minutes: '30'
+          note: One full smoke suite per matrix leg; worst observed mobile-e2e run was 11.3 min.
+
+  report:
+    needs: repeat-suite
+    if: always()
+    runs-on: ubuntu-latest
+    # Issue #1714. Four `echo` lines; 5 min is a ceiling, not an estimate.
+    timeout-minutes: 5
+    steps:
+      - name: Summarize flake rate
+        run: |
+          echo "### Mobile E2E flake check" >> "$GITHUB_STEP_SUMMARY"
+          echo "10 consecutive runs of the smoke suite completed. See the" >> "$GITHUB_STEP_SUMMARY"
+          echo "'repeat-suite' job matrix above for the pass/fail result of each run." >> "$GITHUB_STEP_SUMMARY"

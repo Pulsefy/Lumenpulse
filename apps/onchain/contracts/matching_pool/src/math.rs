@@ -11,15 +11,22 @@ pub fn sqrt_scaled(value: i128) -> i128 {
         return SCALE;
     }
 
-    // Binary search for integer sqrt
+    // Binary search for the integer square root. The midpoint is computed in an
+    // overflow-safe way (`high - (high - low) / 2`) so that values near
+    // `i128::MAX` don't wrap in `(low + high + 1)`. Any midpoint whose square
+    // overflows `i128` is treated as "greater than value".
     let mut low = 0i128;
     let mut high = value;
     while low < high {
-        let mid = (low + high + 1) / 2;
-        if mid.checked_mul(mid).unwrap_or(i128::MAX) <= value {
-            low = mid;
-        } else {
+        let mid = high - (high - low) / 2;
+        let mid_sq_exceeds = match mid.checked_mul(mid) {
+            Some(sq) => sq > value,
+            None => true,
+        };
+        if mid_sq_exceeds {
             high = mid - 1;
+        } else {
+            low = mid;
         }
     }
 

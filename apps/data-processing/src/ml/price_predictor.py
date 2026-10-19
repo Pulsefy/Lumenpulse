@@ -1,10 +1,12 @@
 import logging
 import pandas as pd
 import numpy as np
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, Mapping, Optional
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.base import RegressorMixin
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 
@@ -31,9 +33,11 @@ class PricePredictor:
         self,
         model_name: str = "linear_regression",
         feature_set: str = PRICE_PREDICTOR_FEATURE_SET,
+        random_state: int = 42,
     ):
         self.model_name = model_name
         self.feature_set = feature_set
+        self.random_state = random_state
         self.pipeline = self._build_pipeline()
         self.is_trained = False
         self.metrics: Dict[str, float] = {}
@@ -46,9 +50,20 @@ class PricePredictor:
         """
         Builds the scikit-learn pipeline with scaling and a regressor.
         """
+        regressors: Dict[str, RegressorMixin] = {
+            "linear_regression": LinearRegression(),
+            "random_forest": RandomForestRegressor(
+                n_estimators=100, random_state=self.random_state, n_jobs=1
+            ),
+            "gradient_boosting": GradientBoostingRegressor(
+                random_state=self.random_state
+            ),
+        }
+        if self.model_name not in regressors:
+            raise ValueError(f"Unsupported price predictor model: {self.model_name}")
         return Pipeline([
             ('scaler', StandardScaler()),
-            ('regressor', LinearRegression())
+            ('regressor', regressors[self.model_name])
         ])
 
     def fit(
@@ -144,3 +159,78 @@ class PricePredictor:
         Returns the metrics calculated during the last training session.
         """
         return self.metrics
+
+
+class PriceEnsemble:
+    """Equal-weight ensemble that skips failed members and averages survivors.
+
+    ``predict_with_contributions`` returns each surviving member's weighted
+    prediction contribution so serving can include it in the prediction log.
+    """
+
+    strategy = "equal_weight_mean"
+
+    def __init__(
+        self,
+        members: Mapping[str, Any],
+        member_versions: Optional[Mapping[str, str]] = None,
+    ):
+        if len(members) < 2:
+            raise ValueError("A price ensemble requires at least two members.")
+        if any(not callable(getattr(member, "predict", None)) for member in members.values()):
+            raise ValueError("Every price ensemble member must implement predict().")
+        self.members = dict(members)
+        self.member_versions = dict(member_versions or {})
+
+    def predict_with_contributions(
+        self, features: pd.DataFrame
+    ) -> tuple[np.ndarray, Dict[str, Dict[str, Any]]]:
+        """Return ensemble predictions and per-member contribution records."""
+        if features.empty:
+            return np.array([]), {}
+
+        successful: Dict[str, np.ndarray] = {}
+        records: Dict[str, Dict[str, Any]] = {}
+        for name, member in self.members.items():
+            try:
+                predictions = np.asarray(member.predict(features), dtype=float).reshape(-1)
+                if len(predictions) != len(features):
+                    raise ValueError(
+                        f"returned {len(predictions)} predictions for {len(features)} rows"
+                    )
+                if not np.all(np.isfinite(predictions)):
+                    raise ValueError("returned non-finite predictions")
+                successful[name] = predictions
+            except Exception as exc:
+                logger.warning("Price ensemble member %s failed: %s", name, exc)
+                records[name] = {
+                    "version": self.member_versions.get(name),
+                    "status": "failed",
+                    "error": str(exc),
+                }
+
+        if not successful:
+            raise RuntimeError("All price ensemble members failed to predict.")
+
+        weight = 1.0 / len(successful)
+        contributions = []
+        for name, predictions in successful.items():
+            contribution = predictions * weight
+            contributions.append(contribution)
+            records[name] = {
+                "version": self.member_versions.get(name),
+                "status": "used",
+                "predictions": predictions.tolist(),
+                "contributions": contribution.tolist(),
+                "weight": weight,
+            }
+        return np.sum(contributions, axis=0), records
+
+    def predict(self, features: pd.DataFrame) -> np.ndarray:
+        """Predict using the equal-weight mean of all members that succeed."""
+        predictions, _ = self.predict_with_contributions(features)
+        return predictions
+
+    def get_metrics(self) -> Dict[str, float]:
+        """Return held-out ensemble metrics recorded during training."""
+        return getattr(self, "metrics", {})

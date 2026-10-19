@@ -305,12 +305,16 @@ class TestComputeFunctions:
         mock_computer = MagicMock()
         mock_computer_class.return_value = mock_computer
         
-        mock_computer.get_kpi_series.return_value = [
-            {"date": "2024-01-01", "tvl": 1000.0, "volume": 500.0},
-            {"date": "2024-01-02", "tvl": 1100.0, "volume": 600.0},
-        ]
-        
-        result = get_kpi_history()
+        mock_computer.get_kpi_series.return_value = (
+            [
+                {"date": "2024-01-01", "tvl": 1000.0, "volume": 500.0},
+                {"date": "2024-01-02", "tvl": 1100.0, "volume": 600.0},
+            ],
+            2,
+        )
+
+        result, total = get_kpi_history()
+        assert total == 2
         assert len(result) == 2
         assert result[0]["tvl"] == 1000.0
         assert result[1]["tvl"] == 1100.0

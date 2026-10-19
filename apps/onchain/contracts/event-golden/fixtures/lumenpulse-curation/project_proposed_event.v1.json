@@ -1,0 +1,19 @@
+{
+  "contract": "lumenpulse-curation",
+  "data_xdr": "AAAAEQAAAAEAAAADAAAADwAAAARuYW1lAAAADgAAAApMdW1lbiBHcmlkAAAAAAAPAAAACnByb2plY3RfaWQAAAAAAAUAAAAAAAAAKgAAAA8AAAAIcHJvcG9zZXIAAAASAAAAAAAAAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ==",
+  "event": "project_proposed_event",
+  "fields": {
+    "name": "Lumen Grid",
+    "project_id": "42",
+    "proposer": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"
+  },
+  "topics": [
+    "project_proposed_event",
+    1
+  ],
+  "topics_xdr": [
+    "AAAADwAAABZwcm9qZWN0X3Byb3Bvc2VkX2V2ZW50AAA=",
+    "AAAAAwAAAAE="
+  ],
+  "version": 1
+}

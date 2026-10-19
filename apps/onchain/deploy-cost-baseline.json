@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "measuredAt": "2026-10-15T17:16:29.227Z",
+  "network": "Test SDF Network ; September 2015",
+  "rpc": "https://soroban-testnet.stellar.org",
+  "ledger": 5212166,
+  "protocolVersion": 29,
+  "mode": "execute",
+  "unit": "stroops",
+  "totals": {
+    "baseline": 1752304687,
+    "optimized": 1230984511
+  },
+  "contracts": [
+    {
+      "contract": "contributor_registry",
+      "artifact": "baseline",
+      "wasmBytes": 64163,
+      "wasmHash": "724763ef3b7ccea5e9e5df78c24eb71bd03667b75f15d2d8e2b20fb71db68161",
+      "upload": 298791441,
+      "create": 77045
+    },
+    {
+      "contract": "crowdfund_vault",
+      "artifact": "baseline",
+      "wasmBytes": 112267,
+      "wasmHash": "fa5b102c5a02a3caa0dfd8c6087d55d4ae7829754ef1e7c6c4b3622eb12d4d30",
+      "upload": 537286347,
+      "create": 77089
+    },
+    {
+      "contract": "lumen_token",
+      "artifact": "baseline",
+      "wasmBytes": 18424,
+      "wasmHash": "8f053110eef37d6fc19d5b95ff886680a9d124d50818d0cf445df87a7465bdf5",
+      "upload": 108207725,
+      "create": 76954
+    },
+    {
+      "contract": "matching_pool",
+      "artifact": "baseline",
+      "wasmBytes": 53257,
+      "wasmHash": "c846bd11385f302b3759e84e09e218b2374c361ed514d46081fa2b5d1d8190a5",
+      "upload": 280719981,
+      "create": 77011
+    },
+    {
+      "contract": "pricing_adapter",
+      "artifact": "baseline",
+      "wasmBytes": 10978,
+      "wasmHash": "d4ce7d6bed0a5d90e43f6f4a75326317ef670743b56b0bee8471cea9ca4d8415",
+      "upload": 57349231,
+      "create": 76934
+    },
+    {
+      "contract": "project_registry",
+      "artifact": "baseline",
+      "wasmBytes": 35441,
+      "wasmHash": "375894c126c5c410762f5d35d26a3c827e4dd39a21bc5d003d172cb87193bb5b",
+      "upload": 184397827,
+      "create": 76980
+    },
+    {
+      "contract": "treasury",
+      "artifact": "baseline",
+      "wasmBytes": 55732,
+      "wasmHash": "dc6dfc43022555b0f18a1e367c31d28c5a1c1e0834c457db54bf41ba985d4b20",
+      "upload": 285013113,
+      "create": 77009
+    },
+    {
+      "contract": "contributor_registry",
+      "artifact": "optimized",
+      "wasmBytes": 50946,
+      "wasmHash": "8d8930f51026d8b99a877b49072fbaef6408fa0efd98af46232366a4c5d95222",
+      "upload": 201520956,
+      "create": 77035
+    },
+    {
+      "contract": "crowdfund_vault",
+      "artifact": "optimized",
+      "wasmBytes": 91301,
+      "wasmHash": "cdd27df4c1f3f6b85ffb97dcf4232ced5e7acec6c9d53ee98629796f1ccee438",
+      "upload": 389920457,
+      "create": 77075
+    },
+    {
+      "contract": "lumen_token",
+      "artifact": "optimized",
+      "wasmBytes": 14854,
+      "wasmHash": "3bb56e09fdb23823a3f3751bff3553aa8403bbff913d6d7c5902140040f48b51",
+      "upload": 77868019,
+      "create": 76949
+    },
+    {
+      "contract": "matching_pool",
+      "artifact": "optimized",
+      "wasmBytes": 40694,
+      "wasmHash": "48a8ae9372a4dca8339e827845a0814605f2db3953762a1e4c6056713a97d721",
+      "upload": 191513495,
+      "create": 77002
+    },
+    {
+      "contract": "pricing_adapter",
+      "artifact": "optimized",
+      "wasmBytes": 10571,
+      "wasmHash": "216c1f8d7173864193261a8d0c654478e89992c5ec46196b9ab3228e0acae78d",
+      "upload": 54533708,
+      "create": 76934
+    },
+    {
+      "contract": "project_registry",
+      "artifact": "optimized",
+      "wasmBytes": 25784,
+      "wasmHash": "ae534758dcd00c6b1574c97c424a8529ee63c5a3a7c9039d0a9c54b987e6eb9f",
+      "upload": 114912863,
+      "create": 76974
+    },
+    {
+      "contract": "treasury",
+      "artifact": "optimized",
+      "wasmBytes": 44086,
+      "wasmHash": "91fdc40410c81e34be8ef54f95369e0070dc2b11b032219ed52b460d6185e3a4",
+      "upload": 200176044,
+      "create": 77000
+    }
+  ]
+}

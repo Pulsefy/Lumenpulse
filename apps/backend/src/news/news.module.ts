@@ -1,3 +1,4 @@
+import { DataProcessingModule } from '../data-processing/data-processing.module';
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -13,6 +14,7 @@ import { SchedulerModule } from '../scheduler/scheduler.module';
 
 @Module({
   imports: [
+    DataProcessingModule,
     HttpModule.register({
       timeout: 10000,
       maxRedirects: 3,

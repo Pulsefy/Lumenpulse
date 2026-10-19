@@ -57,6 +57,12 @@ class AnomalyResult:
             result["contributing_signals"] = self.contributing_signals
         if self.confidence_level is not None:
             result["confidence_level"] = self.confidence_level
+        if self.is_anomaly:
+            # severity_score is a raw score; clients must display
+            # calibrated_confidence instead (see src/ml/calibration.py).
+            from src.ml.calibration import calibrated_confidence
+
+            result.update(calibrated_confidence("anomaly", self.severity_score))
         return result
 
 

@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
+import { serverConfig } from '@/lib/config';
 
 export async function POST(
   _request: Request,
   { params }: { params: { id: string } },
 ) {
-  const backendUrl = process.env.BACKEND_API_URL ?? 'http://localhost:3001';
+  const backendUrl = serverConfig.backendApiUrl;
 
   try {
     const response = await fetch(`${backendUrl}/notifications/${params.id}/read`, {

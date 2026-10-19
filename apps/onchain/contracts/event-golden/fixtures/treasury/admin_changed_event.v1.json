@@ -1,0 +1,19 @@
+{
+  "contract": "treasury",
+  "data_xdr": "AAAAEQAAAAEAAAABAAAADwAAAAluZXdfYWRtaW4AAAAAAAASAAAAAAAAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg==",
+  "event": "admin_changed_event",
+  "fields": {
+    "new_admin": "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA"
+  },
+  "topics": [
+    "admin_changed_event",
+    1,
+    "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"
+  ],
+  "topics_xdr": [
+    "AAAADwAAABNhZG1pbl9jaGFuZ2VkX2V2ZW50AA==",
+    "AAAAAwAAAAE=",
+    "AAAAEgAAAAAAAAAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+  ],
+  "version": 1
+}

@@ -379,6 +379,35 @@ class MetadataDriftDetector:
         report.completed_at = datetime.now(timezone.utc)
         return report
 
+    def _notify_backend(self, report: DriftReport) -> None:
+        """Deliver drift findings as backend notifications (#1447)."""
+        try:
+            from src.notifications.drift_alert_dispatcher import dispatch_drift_alert
+
+            critical = any(f.severity == "critical" for f in report.findings)
+            dispatch_drift_alert(
+                alert_type="metadata_drift",
+                title=(
+                    f"Metadata drift detected across {report.projects_with_drift} "
+                    f"project(s)"
+                ),
+                message=(
+                    f"Backend metadata drifted from chain-derived state: "
+                    f"{len(report.findings)} finding(s) in run {report.run_id}"
+                ),
+                severity="critical" if critical else "warning",
+                payload={
+                    "run_id": report.run_id,
+                    "projects_with_drift": report.projects_with_drift,
+                    "findings": report.to_dict()["findings"],
+                },
+            )
+        except Exception:
+            # Notification failures must never break the drift check itself.
+            logger.exception(
+                "Failed to dispatch metadata drift alert to backend notifications"
+            )
+
     def run_and_persist(self, project_id: Optional[int] = None, limit: int = 500) -> DriftReport:
         """Run detection and persist any findings for maintainer review."""
         report = self.run_for_project(project_id) if project_id is not None else self.run_all(limit=limit)
@@ -408,6 +437,10 @@ class MetadataDriftDetector:
                 len(report.findings),
                 saved,
             )
+            # Route the drift findings into the backend notification system
+            # (#1447). Suppression/dedup applies per (project, scope, field);
+            # delivery failures are retried and spooled, never dropped.
+            self._notify_backend(report)
         else:
             logger.info(
                 "Metadata drift check complete: run_id=%s projects_checked=%d, no drift detected",

@@ -354,7 +354,7 @@ class TestConfigLoading:
         from src.alert_engine.config import _default_rules
 
         rules = _default_rules()
-        assert len(rules) == 6
+        assert len(rules) == 8
         names = [r.name for r in rules]
         assert "dedup_dataset_sla_breach" in names
         assert "dedup_indexer_lag" in names
@@ -362,6 +362,9 @@ class TestConfigLoading:
         assert "rate_limit_source_failures" in names
         assert "suppress_healthy_alerts" in names
         assert "dedup_contract_lag" in names
+        # Drift-alert dedup rules (#1447)
+        assert "dedup_feature_drift" in names
+        assert "dedup_metadata_drift" in names
 
     def test_load_rules_from_env(self):
         from src.alert_engine.config import load_rules_from_env

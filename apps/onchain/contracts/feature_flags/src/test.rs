@@ -1,10 +1,16 @@
 use crate::errors::FlagError;
+use crate::storage::LEDGER_THRESHOLD;
 use crate::{FeatureFlagsContract, FeatureFlagsContractClient};
-use soroban_sdk::{symbol_short, testutils::Address as _, Address, Env};
+use soroban_sdk::{
+    symbol_short,
+    testutils::{Address as _, Events, Ledger},
+    Address, Env,
+};
+use test_utils::test_env;
 
 fn setup(env: &Env) -> (FeatureFlagsContractClient<'_>, Address) {
-    let admin = Address::generate(env);
-    let id = env.register(FeatureFlagsContract, ());
+    let admin = test_utils::account(env);
+    let id = test_utils::register_contract(env, FeatureFlagsContract);
     let client = FeatureFlagsContractClient::new(env, &id);
     client.initialize(&admin);
     (client, admin)
@@ -12,16 +18,14 @@ fn setup(env: &Env) -> (FeatureFlagsContractClient<'_>, Address) {
 
 #[test]
 fn test_initialize() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin) = setup(&env);
     assert_eq!(client.get_admin(), admin);
 }
 
 #[test]
 fn test_double_init_fails() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin) = setup(&env);
     assert_eq!(
         client.try_initialize(&admin),
@@ -31,8 +35,7 @@ fn test_double_init_fails() {
 
 #[test]
 fn test_unset_flag_defaults_to_disabled() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, _) = setup(&env);
 
     assert!(!client.is_enabled(&symbol_short!("unknown")));
@@ -40,8 +43,7 @@ fn test_unset_flag_defaults_to_disabled() {
 
 #[test]
 fn test_set_and_check_flag() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin) = setup(&env);
 
     client.set_flag(&admin, &symbol_short!("new_vault"), &true);
@@ -57,8 +59,7 @@ fn test_set_and_check_flag() {
 
 #[test]
 fn test_disable_flag() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin) = setup(&env);
 
     client.set_flag(&admin, &symbol_short!("new_vault"), &true);
@@ -70,8 +71,7 @@ fn test_disable_flag() {
 
 #[test]
 fn test_non_admin_set_flag_fails() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, _) = setup(&env);
 
     let rando = Address::generate(&env);
@@ -83,8 +83,7 @@ fn test_non_admin_set_flag_fails() {
 
 #[test]
 fn test_pause_blocks_set_flag() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin) = setup(&env);
 
     client.pause(&admin);
@@ -97,8 +96,7 @@ fn test_pause_blocks_set_flag() {
 
 #[test]
 fn test_unpause_restores_writes() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin) = setup(&env);
 
     client.pause(&admin);
@@ -110,8 +108,7 @@ fn test_unpause_restores_writes() {
 
 #[test]
 fn test_set_admin() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin) = setup(&env);
 
     let new_admin = Address::generate(&env);
@@ -130,8 +127,7 @@ fn test_set_admin() {
 
 #[test]
 fn test_list_flags() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, admin) = setup(&env);
 
     let flags = client.list_flags();
@@ -147,9 +143,58 @@ fn test_list_flags() {
 
 #[test]
 fn test_get_flag_unknown_returns_none() {
-    let env = Env::default();
-    env.mock_all_auths();
+    let env = test_env();
     let (client, _) = setup(&env);
 
     assert!(client.get_flag(&symbol_short!("ghost")).is_none());
+}
+
+#[test]
+fn test_ttl_extended_after_read_write() {
+    let env = test_env();
+    let (client, admin) = setup(&env);
+
+    client.set_flag(&admin, &symbol_short!("flag_a"), &true);
+
+    // Advance past LEDGER_THRESHOLD once: a read should re-bump both the
+    // instance (Admin/Paused/FlagList) and the per-flag persistent key.
+    env.ledger().set_sequence_number(LEDGER_THRESHOLD + 1);
+    assert!(client.is_enabled(&symbol_short!("flag_a")));
+    assert_eq!(client.get_admin(), admin);
+
+    // Advance again — this only survives if the prior read actually
+    // extended the TTL rather than leaving it to expire.
+    env.ledger().set_sequence_number(2 * LEDGER_THRESHOLD + 2);
+    assert!(client.is_enabled(&symbol_short!("flag_a")));
+    assert_eq!(client.list_flags().len(), 1);
+
+    // A write after a long gap must also succeed.
+    client.set_flag(&admin, &symbol_short!("flag_b"), &true);
+    env.ledger().set_sequence_number(3 * LEDGER_THRESHOLD + 3);
+    assert!(client.is_enabled(&symbol_short!("flag_b")));
+    assert_eq!(client.get_admin(), admin);
+}
+
+// ── Event emission coverage (issue #1231) ──────────────────────────────────
+
+#[test]
+fn test_pause_emits_event() {
+    let env = test_env();
+    let (client, admin) = setup(&env);
+
+    client.pause(&admin);
+    // `env.events().all()` reflects only the invocation tree of the most
+    // recent top-level client call, not an accumulated history.
+    assert!(!env.events().all().is_empty());
+}
+
+#[test]
+fn test_unpause_emits_event() {
+    let env = test_env();
+    let (client, admin) = setup(&env);
+
+    client.unpause(&admin);
+    // `env.events().all()` reflects only the invocation tree of the most
+    // recent top-level client call, not an accumulated history.
+    assert!(!env.events().all().is_empty());
 }

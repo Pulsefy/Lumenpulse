@@ -32,13 +32,14 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles, UserRole } from '../auth/decorators/auth.decorators';
+import { JWT_SECURITY_SCHEME } from '../openapi/openapi.constants';
 
 interface AuthenticatedRequest {
   user: { userId?: string; sub?: string };
 }
 
 @ApiTags('Read Model Rebuild')
-@ApiBearerAuth()
+@ApiBearerAuth(JWT_SECURITY_SCHEME)
 @Controller('api/read-model')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReadModelRebuildController {

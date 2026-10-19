@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "description": "Human sign-off register for the contract suite mainnet readiness checklist. The automated half of the checklist is derived from repository state by apps/onchain/scripts/mainnet-readiness.mjs; this file records the half that only a person can sign. Edit status to \"signed\" and add signed_by/signed_at once the owner has accepted the item, then regenerate docs/MAINNET_READINESS_CHECKLIST.md.",
+  "owners": {
+    "contracts": "Contracts maintainer",
+    "security": "Security lead",
+    "release": "Release engineer",
+    "protocol": "Protocol owner"
+  },
+  "items": [
+    {
+      "id": "signoff-external-audit",
+      "title": "Independent security review of the deployed contract set completed and findings triaged",
+      "owner": "Security lead",
+      "status": "pending",
+      "tracking": [1625],
+      "note": "No dedicated review issue is open; procurement and review are recorded against this checklist."
+    },
+    {
+      "id": "signoff-upgrade-rehearsal",
+      "title": "Upgrade rehearsal evidence reviewed and accepted against a deployed timelock-controlled contract",
+      "owner": "Contracts maintainer",
+      "status": "pending",
+      "tracking": [1613, 1441],
+      "note": "UPGRADE-REHEARSAL-001 records that no timelock-controllable contract is currently deployed to rehearse against."
+    },
+    {
+      "id": "signoff-pause-drill",
+      "title": "Emergency pause drill evidence reviewed for every pause scope",
+      "owner": "Security lead",
+      "status": "pending",
+      "tracking": [1614],
+      "note": "docs/EMERGENCY_PAUSE_DRILL.md defines the drill; it has not been exercised against a deployed contract."
+    },
+    {
+      "id": "signoff-key-custody",
+      "title": "Admin key custody, signer set and rotation procedure approved",
+      "owner": "Security lead",
+      "status": "pending",
+      "tracking": [1626, 1232],
+      "note": "docs/threat-model.md §6 defines the custody posture; rotation has not been exercised against a live deployment."
+    },
+    {
+      "id": "signoff-authorization",
+      "title": "Authorization inventory signed off for every privileged entry point",
+      "owner": "Security lead",
+      "status": "pending",
+      "tracking": [1615],
+      "note": "No contract-side authorization inventory exists yet (docs/AUTHORIZATION_MATRIX.md covers backend controllers only)."
+    },
+    {
+      "id": "signoff-storage-policy",
+      "title": "Storage archival and restore policy approved, including which entry classes may be archived",
+      "owner": "Contracts maintainer",
+      "status": "pending",
+      "tracking": [1617, 1226],
+      "note": "TTL bump policy exists in apps/onchain/CONTRIBUTING.md, but no restore path is defined for archived entries."
+    },
+    {
+      "id": "signoff-contracts-gonogo",
+      "title": "Contracts-area go/no-go confirmed against the mainnet launch runbook",
+      "owner": "Release engineer",
+      "status": "pending",
+      "tracking": [1651],
+      "note": "The runbook must name the contracts criterion, its owner and how it is verified."
+    },
+    {
+      "id": "signoff-funding",
+      "title": "Deployer account funding approved at or above the simulated mainnet total plus initialization headroom",
+      "owner": "Protocol owner",
+      "status": "pending",
+      "tracking": [1624, 1651],
+      "note": "Estimate lives in apps/onchain/deploy-cost-mainnet-estimate.json and must be re-run immediately before deployment."
+    }
+  ]
+}

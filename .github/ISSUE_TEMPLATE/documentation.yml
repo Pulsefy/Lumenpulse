@@ -1,0 +1,101 @@
+name: Documentation issue
+description: A document is wrong, missing, out of date, or impossible to follow.
+title: "[Docs] "
+labels:
+  - documentation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Documentation issues are closed by **a document existing at a stated path**, not
+        by a discussion. Naming the exact path you expect to exist is the single most
+        useful thing you can put in this form.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched the existing issues and `docs/` for this.
+        - label: This is about the content or accuracy of documentation, not about a bug in the code it describes.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of documentation problem
+      options:
+        - Incorrect — the document says something untrue
+        - Out of date — it was true once
+        - Missing — the document does not exist and should
+        - Incomplete — it exists but stops short of what it needs to cover
+        - Unclear — accurate but not followable
+        - Broken link or reference
+    validations:
+      required: true
+
+  - type: input
+    id: path
+    attributes:
+      label: Document path
+      description: >-
+        The repository path where the corrected or new document should live. Use the
+        full path from the repository root, e.g. `docs/LOCAL_SETUP.md`. If the document
+        does not exist yet, give the path you expect it at.
+      placeholder: docs/LOCAL_SETUP.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: What it says now
+      description: >-
+        Quote the passage that is wrong, out of date or missing. Include the section
+        heading so it can be found.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: should
+    attributes:
+      label: What it should say
+      description: >-
+        The corrected text, or what the new section needs to cover. If you know the
+        answer, writing it here saves a round trip entirely.
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: How you know it is wrong
+      description: >-
+        The command you ran, the error you got, or the version change that made it
+        untrue. This is what distinguishes a real documentation bug from a
+        misunderstanding.
+      render: shell
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Who is this blocking
+      options:
+        - A new contributor setting up locally
+        - A contributor working in this area day to day
+        - A reviewer checking correctness
+        - An operator or deployer
+        - An end user of the product
+        - Nobody in particular — tidying
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contributing
+    attributes:
+      label: Contribution terms
+      options:
+        - label: >-
+            I have read [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md). If this is a
+            small, self-contained correction, I am happy to send the pull request.

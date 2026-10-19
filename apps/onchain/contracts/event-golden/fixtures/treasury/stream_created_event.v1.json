@@ -1,0 +1,21 @@
+{
+  "contract": "treasury",
+  "data_xdr": "AAAAEQAAAAEAAAADAAAADwAAAAZhbW91bnQAAAAAAAoAAAAAAAAAAAAAAAAAD0JAAAAADwAAAAhkdXJhdGlvbgAAAAUAAAAAAAFRgAAAAA8AAAAKc3RhcnRfdGltZQAAAAAABQAAAABlU/EA",
+  "event": "stream_created_event",
+  "fields": {
+    "amount": "1000000",
+    "duration": "86400",
+    "start_time": "1700000000"
+  },
+  "topics": [
+    "stream_created_event",
+    1,
+    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
+  ],
+  "topics_xdr": [
+    "AAAADwAAABRzdHJlYW1fY3JlYXRlZF9ldmVudA==",
+    "AAAAAwAAAAE=",
+    "AAAAEgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  ],
+  "version": 1
+}

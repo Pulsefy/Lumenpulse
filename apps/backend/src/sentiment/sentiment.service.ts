@@ -1,7 +1,9 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
+import {
+  DataProcessingClient,
+  DataProcessingUnavailableError,
+} from '../data-processing/data-processing.client';
 import { firstValueFrom } from 'rxjs';
-import { ConfigService } from '@nestjs/config';
 import { AxiosError } from 'axios';
 
 export interface SentimentRequest {
@@ -64,19 +66,8 @@ function hasErrorCode(error: unknown): error is { code?: string } {
 @Injectable()
 export class SentimentService {
   private readonly logger = new Logger(SentimentService.name);
-  private readonly pythonApiUrl: string;
 
-  constructor(
-    private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
-  ) {
-    // Get Python API URL from environment or use default
-    this.pythonApiUrl = this.configService.get<string>(
-      'PYTHON_API_URL',
-      'http://localhost:8000',
-    );
-    this.logger.log(`Python API URL: ${this.pythonApiUrl}`);
-  }
+  constructor(private readonly httpService: DataProcessingClient) {}
 
   async analyzeSentiment(text: string): Promise<SentimentResponse> {
     try {
@@ -91,14 +82,12 @@ export class SentimentService {
       );
 
       const response = await firstValueFrom(
-        this.httpService.post<SentimentResponse>(
-          `${this.pythonApiUrl}/analyze`,
-          request,
-          {
-            timeout: 10000, // 10 second timeout
-            headers: { 'Content-Type': 'application/json' },
+        this.httpService.post<SentimentResponse>('/analyze', request, {
+          timeout: 10000, // 10 second timeout
+          headers: {
+            'Content-Type': 'application/json',
           },
-        ),
+        }),
       );
 
       this.logger.debug(`Received sentiment score: ${response.data.sentiment}`);
@@ -166,16 +155,17 @@ export class SentimentService {
       }
     }
   }
-
   async checkHealth(): Promise<HealthResponse> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get<HealthResponse>(`${this.pythonApiUrl}/health`, {
+        this.httpService.get<HealthResponse>('/health', {
           timeout: 5000,
+          headers: {},
         }),
       );
       return response.data;
     } catch (error: unknown) {
+      if (error instanceof DataProcessingUnavailableError) throw error;
       if (isAxiosError(error) || error instanceof Error) {
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';

@@ -12,6 +12,11 @@ import { StrKey } from '@stellar/stellar-sdk';
 import { ConfigService } from '../../config/config.service';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { config } from '../../lib/config';
+import { BootstrapRunRegistryService } from '../../bootstrap-runs/bootstrap-run-registry.service';
+import {
+  BootstrapResourceType,
+  BootstrapRunKind,
+} from '../../bootstrap-runs/entities/bootstrap-run.entity';
 import { TestnetBootstrapResponseDto } from '../dto/testnet-bootstrap.dto';
 
 /**
@@ -46,18 +51,28 @@ function asOptionalString(value: unknown): string | undefined {
  * - Feature flag: FRIENDBOT_BOOTSTRAP_ENABLED must be true
  * - Hardcoded Friendbot URL (never configurable)
  * - Auth/rate-limit enforced at the controller layer
+ *
+ * Every successful funding is recorded as a bootstrap run so the environment
+ * can be traced back to a clean baseline. See BootstrapTeardownService for the
+ * teardown path and the limits of what it can undo on-chain.
  */
 @Injectable()
 export class TestnetBootstrapService {
   private readonly logger = new Logger(TestnetBootstrapService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly runRegistry: BootstrapRunRegistryService,
+  ) {}
 
   /**
    * Fund a testnet account via Friendbot.
+   *
+   * @param createdBy Admin user id to attribute the bootstrap run to.
    */
   async fundTestnetAccount(
     publicKey: string,
+    createdBy: string | null = null,
   ): Promise<TestnetBootstrapResponseDto> {
     if (!config.featureFlags.friendbotBootstrap) {
       throw new ForbiddenException({
@@ -111,8 +126,21 @@ export class TestnetBootstrapService {
         asOptionalString(data.amount) ??
         '10000';
 
+      const runId = await this.runRegistry.recordSafely({
+        kind: BootstrapRunKind.TESTNET_ACCOUNT,
+        createdBy,
+        resources: [
+          {
+            type: BootstrapResourceType.TESTNET_ACCOUNT,
+            identifier: publicKey,
+            label: `Friendbot-funded testnet account (${fundingAmount} XLM)`,
+          },
+        ],
+      });
+
       this.logger.log(
-        `Successfully funded testnet account ${publicKey}, tx: ${txHash ?? 'unknown'}`,
+        `Successfully funded testnet account ${publicKey}, tx: ${txHash ?? 'unknown'}, ` +
+          `runId: ${runId ?? 'untracked'}`,
       );
 
       return {
@@ -121,6 +149,7 @@ export class TestnetBootstrapService {
         publicKey,
         transactionHash: txHash,
         fundingAmount,
+        runId: runId ?? undefined,
       };
     } catch (error: unknown) {
       this.handleFriendBotError(error, publicKey);

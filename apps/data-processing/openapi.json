@@ -458,7 +458,7 @@
           "kpi"
         ],
         "summary": "Get Kpi Series",
-        "description": "Get KPI time series data.\n\nArgs:\n    start_date: Start date (inclusive)\n    end_date: End date (inclusive)\n    period: Time period granularity\n\nReturns:\n    List of KPI snapshots over time.",
+        "description": "Get KPI time series data with pagination and a hard max page size (#1458).\n\nResponse headers: X-Total-Count, X-Limit, X-Offset, X-Has-More, X-Max-Page-Size.\nOrdering is stable: snapshot_date ASC, id ASC.",
         "operationId": "get_kpi_series_api_kpi_series_get",
         "parameters": [
           {
@@ -508,6 +508,33 @@
               "title": "Period"
             },
             "description": "Period granularity (daily, hourly)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "Page size (max 500; uncapped responses are rejected)",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Page size (max 500; uncapped responses are rejected)"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of rows to skip (stable ascending date order)",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Number of rows to skip (stable ascending date order)"
           }
         ],
         "responses": {
@@ -1300,6 +1327,314 @@
         }
       }
     },
+    "/api/sentiment-labels": {
+      "post": {
+        "tags": [
+          "Sentiment Labels"
+        ],
+        "summary": "Submit Sentiment Label",
+        "description": "Submit a label or correct the existing label for identical text.",
+        "operationId": "submit_sentiment_label_api_sentiment_labels_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SentimentLabelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentimentLabelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Sentiment Labels"
+        ],
+        "summary": "List Sentiment Labels",
+        "operationId": "list_sentiment_labels_api_sentiment_labels_get",
+        "parameters": [
+          {
+            "name": "held_out",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Held Out"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1000,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SentimentLabelResponse"
+                  },
+                  "title": "Response List Sentiment Labels Api Sentiment Labels Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sentiment-labels/{label_id}": {
+      "put": {
+        "tags": [
+          "Sentiment Labels"
+        ],
+        "summary": "Correct Sentiment Label",
+        "description": "Correct a label by updating the canonical text record.",
+        "operationId": "correct_sentiment_label_api_sentiment_labels__label_id__put",
+        "parameters": [
+          {
+            "name": "label_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Label Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SentimentLabelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentimentLabelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lineage": {
+      "get": {
+        "tags": [
+          "Lineage"
+        ],
+        "summary": "List every registered feature and KPI dataset",
+        "description": "Return every ``id`` registered in the lineage manifest, so callers know\nwhat's valid to pass to ``GET /api/lineage/{feature_id}``.",
+        "operationId": "list_lineage_entries_api_lineage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineageListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lineage/{feature_id}": {
+      "get": {
+        "tags": [
+          "Lineage"
+        ],
+        "summary": "Get the upstream/downstream lineage graph for a feature or KPI",
+        "description": "Return the full upstream and downstream lineage for ``feature_id``,\nread live from ``feature_lineage.yaml``.\n\n* **upstream** \u2014 every source, feature, and KPI (transitively) feeding\n  this node, terminating in raw ingestion files where the manifest\n  doesn't track a further manifest entry.\n* **downstream** \u2014 every feature, KPI, and consuming API endpoint\n  (transitively) fed by this node.\n\nEach node carries its source system, transformation (formula or\ndescription), and owning module/team so a KPI can be traced back to\n\"what produced this and who owns it\" without opening the YAML.",
+        "operationId": "get_feature_lineage_api_lineage__feature_id__get",
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineageGraphResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Get Job Status",
+        "description": "Report the status of a job submitted to the async analytics job queue.\n\nRequires X-API-Key header.",
+        "operationId": "get_job_status_api_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pipeline/topology": {
+      "get": {
+        "tags": [
+          "Pipeline"
+        ],
+        "summary": "Get Pipeline Topology",
+        "description": "Return the pipeline topology: each scheduled stage, its schedule and dependencies, and its latest run (last run, duration, outcome).",
+        "operationId": "get_pipeline_topology_api_pipeline_topology_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineTopologyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pipeline/datasets": {
+      "get": {
+        "tags": [
+          "Pipeline"
+        ],
+        "summary": "Get Pipeline Datasets",
+        "description": "Return the validated dataset inventory and its owners and consumers.",
+        "operationId": "get_pipeline_datasets_api_pipeline_datasets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetRegistryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/metrics": {
       "get": {
         "summary": "Metrics",
@@ -1452,6 +1787,84 @@
         }
       }
     },
+    "/search/similar": {
+      "get": {
+        "summary": "Search Similar",
+        "description": "Rank ingested news articles by semantic similarity to a query (#1455).",
+        "operationId": "search_similar_search_similar_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "description": "Natural-language query embedded with the pinned model",
+              "title": "Q"
+            },
+            "description": "Natural-language query embedded with the pinned model"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "model_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Scope search to a stored pinned model version (defaults to the latest version present in the store)",
+              "title": "Model Version"
+            },
+            "description": "Scope search to a stored pinned model version (defaults to the latest version present in the store)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SemanticSearchResult"
+                  },
+                  "title": "Response Search Similar Search Similar Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/contributors/{contributor}/timeline": {
       "get": {
         "summary": "Get Contributor Activity Timeline",
@@ -1534,10 +1947,49 @@
         }
       }
     },
+    "/price/predict": {
+      "post": {
+        "summary": "Predict Price",
+        "description": "Serve the promoted price model and log every ensemble member's contribution.",
+        "operationId": "predict_price_price_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PricePredictionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricePredictionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/analyze": {
       "post": {
         "summary": "Analyze Text",
-        "description": "Analyze the sentiment of provided text.\n\nThis endpoint connects to your existing SentimentAnalyzer class\nand returns the compound_score as the sentiment value.\n\nArgs:\n    request: Contains the text to analyze and optional asset filter\n\nReturns:\n    sentiment: float between -1 and 1\n    asset_codes: List of asset codes found in text\n    sentiment_label: positive/negative/neutral",
+        "description": "Analyze the sentiment of provided text.",
         "operationId": "analyze_text_analyze_post",
         "requestBody": {
           "required": true,
@@ -1616,7 +2068,7 @@
     "/analyze-batch": {
       "post": {
         "summary": "Analyze Batch",
-        "description": "Batch analyze multiple texts with optional asset filter",
+        "description": "Batch analyze multiple texts with optional asset filter.\n\nBackpressure controls:\n- ``MAX_BATCH_SIZE`` (env ``BATCH_MAX_SIZE``, default 200): oversized\n  requests are rejected with 413.\n- ``MAX_CONCURRENT_BATCHES`` (env ``BATCH_MAX_CONCURRENT``, default 4):\n  concurrent batch work is bounded by an ``asyncio.Semaphore``.\n  Requests beyond the bound receive 429 with ``Retry-After``.\n- Per-item error isolation: individual item failures are returned as\n  error entries instead of failing the whole batch.\n- Synchronous sentiment analysis is offloaded to a\n  ``ThreadPoolExecutor`` so the event loop stays responsive for\n  ``/health`` and ``/metrics``.",
         "operationId": "analyze_batch_analyze_batch_post",
         "parameters": [
           {
@@ -1700,7 +2152,7 @@
     "/retrain": {
       "post": {
         "summary": "Trigger Retraining",
-        "description": "Trigger an immediate model retraining run.\n\nRuns synchronously in a thread pool so the HTTP response is returned\nonly after retraining completes (or fails). For long-running production\nretrains, consider making this async with a task queue.\n\nRequires X-API-Key header.",
+        "description": "Submit a model retraining run to the async job queue and return\nimmediately with a job identifier. Poll GET /api/jobs/{job_id} for the\noutcome \u2014 retraining only ever runs one at a time, so a submission made\nwhile one is already in flight is collapsed onto that job.\n\nRequires X-API-Key header.",
         "operationId": "trigger_retraining_retrain_post",
         "requestBody": {
           "content": {
@@ -1713,12 +2165,12 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RetrainResponse"
+                  "$ref": "#/components/schemas/JobSubmitResponse"
                 }
               }
             }
@@ -1748,6 +2200,27 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ModelStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/cost-report": {
+      "get": {
+        "summary": "Model Cost Report",
+        "description": "Serving compute cost report (#1643).\n\nReturns cost attributed per model version and per endpoint, cost per\nthousand inferences for each model, the cost delta of a newly promoted\nmodel against its predecessor, and the three most expensive serving\npaths. The same data is exported as Prometheus metrics on ``/metrics``\nalongside the stage-level profiling from #1454.\n\nRequires X-API-Key header.",
+        "operationId": "model_cost_report_model_cost_report_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Model Cost Report Model Cost Report Get"
                 }
               }
             }
@@ -2098,6 +2571,91 @@
         }
       }
     },
+    "/model/prediction-logs": {
+      "get": {
+        "summary": "Get Prediction Logs",
+        "description": "Query prediction logs by model version to isolate suspect outputs.\nRequires X-API-Key header.",
+        "operationId": "get_prediction_logs_model_prediction_logs_get",
+        "parameters": [
+          {
+            "name": "model_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Model version to filter by",
+              "title": "Model Version"
+            },
+            "description": "Model version to filter by"
+          },
+          {
+            "name": "model_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional model type",
+              "title": "Model Type"
+            },
+            "description": "Optional model type"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Prediction Logs Model Prediction Logs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/analytics/forecast": {
       "get": {
         "summary": "Get Forecast",
@@ -2120,7 +2678,7 @@
     "/correlation/analyze": {
       "post": {
         "summary": "Analyze Correlation",
-        "description": "Analyze correlation between sentiment and price/volume data.\n\nReturns correlation scores (-1 to 1) and scatter plot data points.\nRequires X-API-Key header.",
+        "description": "Submit a correlation analysis between sentiment and price/volume data to\nthe async job queue and return immediately with a job identifier.\n\nPoll GET /api/jobs/{job_id} for the result: price_correlation,\nvolume_correlation, and summary (correlation scores -1 to 1 and scatter\nplot data points). Requires X-API-Key header.\n\nInput series are capped at MAX_CORRELATION_POINTS (#1458).",
         "operationId": "analyze_correlation_correlation_analyze_post",
         "requestBody": {
           "content": {
@@ -2133,12 +2691,12 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CorrelationResponse"
+                  "$ref": "#/components/schemas/JobSubmitResponse"
                 }
               }
             }
@@ -2159,7 +2717,7 @@
     "/correlation/lag-analysis": {
       "post": {
         "summary": "Analyze Lag Correlation",
-        "description": "Analyze correlation across multiple time lags to find optimal lead time.\n\nReturns the best lag hours and correlation strength for predicting market changes.\nRequires X-API-Key header.",
+        "description": "Submit a lagged correlation analysis to the async job queue and return\nimmediately with a job identifier.\n\nPoll GET /api/jobs/{job_id} for the result: best_lag_hours,\nbest_correlation, lag_analysis, and recommendation. Requires X-API-Key\nheader.\n\nInput series are capped at MAX_CORRELATION_POINTS (#1458).",
         "operationId": "analyze_lag_correlation_correlation_lag_analysis_post",
         "requestBody": {
           "content": {
@@ -2172,12 +2730,12 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LagAnalysisResponse"
+                  "$ref": "#/components/schemas/JobSubmitResponse"
                 }
               }
             }
@@ -2198,7 +2756,7 @@
     "/analytics/kpis/daily-snapshots": {
       "get": {
         "summary": "Get Daily Kpi Snapshots",
-        "description": "Retrieve historical daily on-chain KPI snapshots.\nRequires X-API-Key header.",
+        "description": "Retrieve historical daily on-chain KPI snapshots with pagination (#1458).\n\nStable ordering: snapshot_date DESC, id DESC.\nResponse headers: X-Total-Count, X-Limit, X-Offset, X-Has-More, X-Max-Page-Size.\nFor genuinely large exports use GET /analytics/kpis/daily-snapshots/stream.\nRequires X-API-Key header.",
         "operationId": "get_daily_kpi_snapshots_analytics_kpis_daily_snapshots_get",
         "parameters": [
           {
@@ -2257,9 +2815,24 @@
               "type": "integer",
               "maximum": 500,
               "minimum": 1,
+              "description": "Page size (max 500; uncapped responses are rejected)",
               "default": 100,
               "title": "Limit"
-            }
+            },
+            "description": "Page size (max 500; uncapped responses are rejected)"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of rows to skip (stable snapshot_date DESC, id DESC order)",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Number of rows to skip (stable snapshot_date DESC, id DESC order)"
           }
         ],
         "responses": {
@@ -2290,10 +2863,101 @@
         }
       }
     },
+    "/analytics/kpis/daily-snapshots/stream": {
+      "get": {
+        "summary": "Stream Daily Kpi Snapshots",
+        "description": "Stream daily on-chain KPI snapshots as NDJSON for large exports (#1458).\n\nWalks pages server-side with stable ordering so callers never need an\nuncapped in-memory response. Requires X-API-Key header.",
+        "operationId": "stream_daily_kpi_snapshots_analytics_kpis_daily_snapshots_stream_get",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start date (YYYY-MM-DD)",
+              "title": "Start Date"
+            },
+            "description": "Start date (YYYY-MM-DD)"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End date (YYYY-MM-DD)",
+              "title": "End Date"
+            },
+            "description": "End date (YYYY-MM-DD)"
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Period type (default: daily)",
+              "default": "daily",
+              "title": "Period"
+            },
+            "description": "Period type (default: daily)"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "Internal page size used while streaming",
+              "default": 100,
+              "title": "Page Size"
+            },
+            "description": "Internal page size used while streaming"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/analytics/kpis/daily-snapshots/run": {
       "post": {
         "summary": "Trigger Daily Kpi Snapshot",
-        "description": "Trigger manual generation of a daily on-chain KPI snapshot.\nSkips duplicate snapshot creation if a snapshot for target_date and period already exists.\nRequires X-API-Key header.",
+        "description": "Submit generation of a daily on-chain KPI snapshot to the async job\nqueue and return immediately with a job identifier. Poll\nGET /api/jobs/{job_id} for the result. Concurrent submissions for the\nsame target_date/period are collapsed onto one job; the generator itself\nstill skips duplicate snapshot creation if one already exists.\n\nRequires X-API-Key header.",
         "operationId": "trigger_daily_kpi_snapshot_analytics_kpis_daily_snapshots_run_post",
         "parameters": [
           {
@@ -2328,12 +2992,12 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DailyKPISnapshotRunResponse"
+                  "$ref": "#/components/schemas/JobSubmitResponse"
                 }
               }
             }
@@ -2402,6 +3066,11 @@
               }
             ],
             "title": "Asset"
+          },
+          "explain": {
+            "type": "boolean",
+            "title": "Explain",
+            "default": false
           }
         },
         "type": "object",
@@ -2413,7 +3082,14 @@
       "AnalyzeResponse": {
         "properties": {
           "sentiment": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Sentiment"
           },
           "asset_codes": {
@@ -2438,6 +3114,69 @@
                 "type": "null"
               }
             ]
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SentimentExplanationResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scored": {
+            "type": "boolean",
+            "title": "Scored",
+            "default": true
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence",
+            "default": 1.0
+          },
+          "calibrated_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibrated Confidence"
+          },
+          "calibration": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibration"
+          },
+          "confidence_guidance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Confidence Guidance",
+            "default": {
+              "display": "calibrated_confidence",
+              "ignore": [
+                "confidence",
+                "confidence_24h",
+                "confidence_48h",
+                "severity_score"
+              ],
+              "note": "Raw model scores are not probabilities. Show calibrated_confidence (the empirically observed probability the prediction is correct) and ignore the raw fields; they are kept only for backward compatibility."
+            }
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "scored"
           }
         },
         "type": "object",
@@ -2909,44 +3648,6 @@
         ],
         "title": "CorrelationRequest"
       },
-      "CorrelationResponse": {
-        "properties": {
-          "price_correlation": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Correlation"
-          },
-          "volume_correlation": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Volume Correlation"
-          },
-          "summary": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Summary"
-          }
-        },
-        "type": "object",
-        "required": [
-          "summary"
-        ],
-        "title": "CorrelationResponse"
-      },
       "CursorListResponse": {
         "properties": {
           "count": {
@@ -3179,58 +3880,95 @@
         ],
         "title": "DailyKPISnapshotResponse"
       },
-      "DailyKPISnapshotRunResponse": {
+      "DatasetRegistryEntry": {
         "properties": {
-          "status": {
+          "id": {
             "type": "string",
-            "title": "Status"
+            "title": "Id"
           },
-          "message": {
+          "display_name": {
             "type": "string",
-            "title": "Message"
+            "title": "Display Name"
           },
-          "date": {
+          "description": {
             "type": "string",
-            "title": "Date"
+            "title": "Description"
           },
-          "period": {
+          "owner": {
             "type": "string",
-            "title": "Period"
+            "title": "Owner"
           },
-          "tvl": {
-            "type": "number",
-            "title": "Tvl"
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Schema"
           },
-          "volume": {
-            "type": "number",
-            "title": "Volume"
+          "update_cadence": {
+            "type": "string",
+            "title": "Update Cadence"
           },
-          "active_rounds": {
-            "type": "integer",
-            "title": "Active Rounds"
+          "retention": {
+            "type": "string",
+            "title": "Retention"
           },
-          "contribution_count": {
-            "type": "integer",
-            "title": "Contribution Count"
+          "model_consumers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Model Consumers"
           },
-          "unique_contributors": {
-            "type": "integer",
-            "title": "Unique Contributors"
+          "pipeline_stages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pipeline Stages"
           }
         },
         "type": "object",
         "required": [
-          "status",
-          "message",
-          "date",
-          "period",
-          "tvl",
-          "volume",
-          "active_rounds",
-          "contribution_count",
-          "unique_contributors"
+          "id",
+          "display_name",
+          "description",
+          "owner",
+          "schema",
+          "update_cadence",
+          "retention",
+          "model_consumers",
+          "pipeline_stages"
         ],
-        "title": "DailyKPISnapshotRunResponse"
+        "title": "DatasetRegistryEntry",
+        "description": "Registry metadata for one data-processing dataset."
+      },
+      "DatasetRegistryResponse": {
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "title": "Generated At"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetRegistryEntry"
+            },
+            "type": "array",
+            "title": "Datasets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "generated_at",
+          "count",
+          "datasets"
+        ],
+        "title": "DatasetRegistryResponse",
+        "description": "All registered datasets and their operational metadata."
       },
       "ForecastResponse": {
         "properties": {
@@ -3273,6 +4011,60 @@
           "generated_at": {
             "type": "string",
             "title": "Generated At"
+          },
+          "confidence_indication": {
+            "type": "string",
+            "title": "Confidence Indication",
+            "default": "low"
+          },
+          "calibrated_confidence_24h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibrated Confidence 24H"
+          },
+          "calibrated_confidence_48h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibrated Confidence 48H"
+          },
+          "calibration": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibration"
+          },
+          "confidence_guidance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Confidence Guidance",
+            "default": {
+              "display": "calibrated_confidence",
+              "ignore": [
+                "confidence",
+                "confidence_24h",
+                "confidence_48h",
+                "severity_score"
+              ],
+              "note": "Raw model scores are not probabilities. Show calibrated_confidence (the empirically observed probability the prediction is correct) and ignore the raw fields; they are kept only for backward compatibility."
+            }
           }
         },
         "type": "object",
@@ -3635,6 +4427,126 @@
         "title": "IngestionResponse",
         "description": "Response model for ingestion results."
       },
+      "JobStatusResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "job_type": {
+            "type": "string",
+            "title": "Job Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "job_type",
+          "status"
+        ],
+        "title": "JobStatusResponse"
+      },
+      "JobSubmitResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "job_type": {
+            "type": "string",
+            "title": "Job Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "job_type",
+          "status",
+          "created"
+        ],
+        "title": "JobSubmitResponse",
+        "description": "Returned immediately by long-running analytics endpoints (#1248)."
+      },
       "KPIResponse": {
         "properties": {
           "tvl": {
@@ -3790,37 +4702,270 @@
         ],
         "title": "LagAnalysisRequest"
       },
-      "LagAnalysisResponse": {
+      "LineageEdgeResponse": {
         "properties": {
-          "best_lag_hours": {
-            "type": "integer",
-            "title": "Best Lag Hours"
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Manifest entry id, or the raw external ref"
           },
-          "best_correlation": {
-            "type": "number",
-            "title": "Best Correlation"
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "'ml_feature_set' | 'kpi_dataset' | 'external_source' (a raw file/module/API reference that isn't itself a manifest entry)"
           },
-          "lag_analysis": {
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "source_system": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "type": "string"
             },
             "type": "array",
-            "title": "Lag Analysis"
+            "title": "Source System",
+            "description": "Where this node's data originates \u2014 source table(s) or source file, or the raw reference itself for external sources."
           },
-          "recommendation": {
-            "type": "string",
-            "title": "Recommendation"
+          "transformation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transformation",
+            "description": "Formula, or description, describing how this node is produced."
+          },
+          "owning_module": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owning Module",
+            "description": "Manifest 'module' value."
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner",
+            "description": "Owning team/individual (email or @handle)."
+          },
+          "distance": {
+            "type": "integer",
+            "title": "Distance",
+            "description": "Hop count from the queried feature/dataset."
           }
         },
         "type": "object",
         "required": [
-          "best_lag_hours",
-          "best_correlation",
-          "lag_analysis",
-          "recommendation"
+          "id",
+          "kind",
+          "display_name",
+          "distance"
         ],
-        "title": "LagAnalysisResponse"
+        "title": "LineageEdgeResponse"
+      },
+      "LineageEntrySummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "display_name"
+        ],
+        "title": "LineageEntrySummary"
+      },
+      "LineageGraphResponse": {
+        "properties": {
+          "feature_id": {
+            "type": "string",
+            "title": "Feature Id"
+          },
+          "node": {
+            "$ref": "#/components/schemas/LineageNodeResponse"
+          },
+          "upstream": {
+            "items": {
+              "$ref": "#/components/schemas/LineageEdgeResponse"
+            },
+            "type": "array",
+            "title": "Upstream",
+            "description": "Everything that feeds this node, transitively."
+          },
+          "downstream": {
+            "items": {
+              "$ref": "#/components/schemas/LineageEdgeResponse"
+            },
+            "type": "array",
+            "title": "Downstream",
+            "description": "Everything this node feeds, transitively."
+          },
+          "manifest_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature_id",
+          "node"
+        ],
+        "title": "LineageGraphResponse"
+      },
+      "LineageListResponse": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/LineageEntrySummary"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "entries"
+        ],
+        "title": "LineageListResponse"
+      },
+      "LineageNodeResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Manifest entry id, or the raw external ref"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "'ml_feature_set' | 'kpi_dataset' | 'external_source' (a raw file/module/API reference that isn't itself a manifest entry)"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "source_system": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source System",
+            "description": "Where this node's data originates \u2014 source table(s) or source file, or the raw reference itself for external sources."
+          },
+          "transformation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transformation",
+            "description": "Formula, or description, describing how this node is produced."
+          },
+          "owning_module": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owning Module",
+            "description": "Manifest 'module' value."
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner",
+            "description": "Owning team/individual (email or @handle)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "display_name"
+        ],
+        "title": "LineageNodeResponse"
       },
       "MetricDataPoint": {
         "properties": {
@@ -4122,6 +5267,85 @@
         "title": "OperationResponse",
         "description": "Response model for account operation."
       },
+      "PipelineTopologyResponse": {
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "title": "Generated At"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageStatus"
+            },
+            "type": "array",
+            "title": "Stages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "generated_at",
+          "stages"
+        ],
+        "title": "PipelineTopologyResponse",
+        "description": "The full pipeline topology response."
+      },
+      "PricePredictionRequest": {
+        "properties": {
+          "features": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Features"
+          },
+          "schema_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "features"
+        ],
+        "title": "PricePredictionRequest"
+      },
+      "PricePredictionResponse": {
+        "properties": {
+          "predictions": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Predictions"
+          },
+          "member_contributions": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Member Contributions"
+          },
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "predictions",
+          "member_contributions",
+          "model_version"
+        ],
+        "title": "PricePredictionResponse"
+      },
       "RebuildRequest": {
         "properties": {
           "dataset": {
@@ -4318,75 +5542,6 @@
         "type": "object",
         "title": "RetrainRequest"
       },
-      "RetrainResponse": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
-          },
-          "finished_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Finished At"
-          },
-          "duration_seconds": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Duration Seconds"
-          },
-          "models": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Models",
-            "default": {}
-          },
-          "registry": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Registry",
-            "default": {}
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "title": "RetrainResponse"
-      },
       "ReviewQueueItemResponse": {
         "properties": {
           "id": {
@@ -4490,6 +5645,11 @@
               }
             ],
             "title": "Target Version"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": "Operator-requested rollback"
           }
         },
         "type": "object",
@@ -4537,6 +5697,136 @@
         ],
         "title": "RollbackResponse"
       },
+      "SemanticSearchResult": {
+        "properties": {
+          "article_id": {
+            "type": "string",
+            "title": "Article Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Categories",
+            "default": []
+          },
+          "primary_asset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Asset"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "similarity_score": {
+            "type": "number",
+            "title": "Similarity Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "article_id",
+          "title",
+          "similarity_score"
+        ],
+        "title": "SemanticSearchResult",
+        "description": "One ranked result from the semantic news search (#1455)."
+      },
+      "SentimentExplanationResponse": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/TokenContributionResponse"
+            },
+            "type": "array",
+            "title": "Contributions",
+            "default": []
+          },
+          "unattributed": {
+            "type": "number",
+            "title": "Unattributed",
+            "default": 0.0
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "score"
+        ],
+        "title": "SentimentExplanationResponse",
+        "description": "Per-token decomposition of a sentiment score (#1456)."
+      },
       "SentimentIndicatorResponse": {
         "properties": {
           "score": {
@@ -4570,6 +5860,86 @@
         ],
         "title": "SentimentIndicatorResponse",
         "description": "Visual indicator fields attached to every sentiment-bearing response."
+      },
+      "SentimentLabelRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Text"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "labeller": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Labeller"
+          },
+          "is_held_out": {
+            "type": "boolean",
+            "title": "Is Held Out",
+            "default": false
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "label",
+          "labeller"
+        ],
+        "title": "SentimentLabelRequest"
+      },
+      "SentimentLabelResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "labeller": {
+            "type": "string",
+            "title": "Labeller"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "is_held_out": {
+            "type": "boolean",
+            "title": "Is Held Out"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "label",
+          "labeller",
+          "timestamp",
+          "is_held_out"
+        ],
+        "title": "SentimentLabelResponse"
       },
       "ShadowPromoteRequest": {
         "properties": {
@@ -4691,6 +6061,121 @@
           "message"
         ],
         "title": "ShadowUnregisterResponse"
+      },
+      "StageStatus": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "schedule": {
+            "type": "string",
+            "title": "Schedule"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "schedule",
+          "depends_on",
+          "status"
+        ],
+        "title": "StageStatus",
+        "description": "One pipeline stage plus the outcome of its most recent run."
+      },
+      "TokenContributionResponse": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "contribution": {
+            "type": "number",
+            "title": "Contribution"
+          },
+          "feature": {
+            "type": "string",
+            "title": "Feature"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "contribution",
+          "feature",
+          "kind"
+        ],
+        "title": "TokenContributionResponse",
+        "description": "A single token's contribution to the analyzed sentiment score (#1456)."
       },
       "UpdateReviewStatusRequest": {
         "properties": {

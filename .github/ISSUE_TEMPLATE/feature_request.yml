@@ -1,0 +1,114 @@
+name: Feature request
+description: Propose new behaviour or a change to existing behaviour.
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem before the solution. A request grounded in a concrete
+        situation gets a decision far faster than one grounded in an idea.
+
+        Maintainers write the **acceptance criteria** — you do not need to supply them.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: I have searched the existing issues — including the `Stellar Wave` label — for this.
+        - label: This is a proposal, not a question about how to use Lumenpulse.
+        - label: I am proposing behaviour, not a refactor with no user-visible effect.
+
+  - type: dropdown
+    id: app
+    attributes:
+      label: Which app
+      options:
+        - Backend API (apps/backend)
+        - Webapp (apps/webapp)
+        - Mobile app (apps/mobile)
+        - Data processing / ML pipeline (apps/data-processing)
+        - Smart contracts / onchain (apps/onchain)
+        - Local development environment (docker-compose)
+        - CI / infrastructure
+        - Cross-cutting, more than one app
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        The concrete situation where the current behaviour is wrong or missing. Who hits
+        it, how often, and what it costs them. "There is no way to X" is the answer here;
+        "add a Y button" is not.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: >-
+        What should happen instead. Describe the interface or the flow, not the
+        implementation — there is usually more than one good way to build it, and
+        choosing is the maintainer's job.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: >-
+        Including "do nothing". If the workaround you found is tolerable, say so —
+        that is useful information, not a weak proposal.
+
+  - type: textarea
+    id: api-impact
+    attributes:
+      label: API or contract impact
+      description: >-
+        Does this change an HTTP endpoint, the OpenAPI spec, an onchain contract, or
+        the storage layout of an existing contract? Changes to the last two need a
+        migration plan and cannot be merged as a routine change.
+      options:
+        - No external contract changes
+        - Adds or changes HTTP endpoints
+        - Changes onchain contract behaviour
+        - Changes onchain storage layout
+        - Unsure
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: >-
+        Roughly how big is this? The project triages by size (see the `Stellar Wave`
+        label on existing issues), and an honest "this is three weeks" is more useful
+        than an optimistic "this is a small fix".
+      options:
+        - Small — under a day, no design decisions
+        - Medium — a few days, contained to one app
+        - Large — more than a week, or spans several apps
+        - Unsure
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related issues, PRs or documentation
+      description: Existing work on this idea, or the document that says the current behaviour is intentional.
+
+  - type: checkboxes
+    id: contributing
+    attributes:
+      label: Contribution terms
+      options:
+        - label: >-
+            I have read [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md), and I am
+            willing to implement this if it is accepted.

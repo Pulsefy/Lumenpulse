@@ -22,8 +22,8 @@ This guide helps you get started with the newly implemented webhook signature ve
 ### Step 1: Run Database Migration
 
 ```bash
-# PostgreSQL
-psql -U your_user -d your_database -f apps/backend/src/migrations/add-notification-preferences-and-delivery-logs.sql
+# PostgreSQL (from apps/backend)
+npm run migration:run
 ```
 
 ### Step 2: Configure Environment

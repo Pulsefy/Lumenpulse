@@ -5,7 +5,10 @@
     "main": "deploy.ts",
     "scripts": {
         "deploy": "ts-node deploy.ts",
-        "smoke": "ts-node smoke.ts"
+        "smoke": "ts-node smoke.ts",
+        "validate:upgrade-rehearsal": "node validate-upgrade-rehearsal.js",
+        "deploy:cost": "ts-node measure-deploy-cost.ts",
+        "wasm:optimize": "node optimize-wasm.mjs"
     },
     "dependencies": {
         "@stellar/stellar-sdk": "^14.4.3",
@@ -13,6 +16,7 @@
     },
     "devDependencies": {
         "@types/node": "^25.0.10",
+        "binaryen": "132.0.0",
         "ts-node": "^10.9.2",
         "typescript": "^5.9.3"
     }

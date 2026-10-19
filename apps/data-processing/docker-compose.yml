@@ -1,0 +1,167 @@
+# docker-compose.yml — Lumenpulse data-processing (issue #1628)
+#
+# Three deployment profiles:
+#
+#   split (default)   — inference + batch as separate containers, sharing a
+#                       named volume for the model registry.
+#   combined          — single container running both services in one process;
+#                       useful for local development / resource-constrained envs.
+#   inference-only    — run only the inference API (batch disabled).
+#   batch-only        — run only the batch scheduler (inference disabled).
+#
+# Usage:
+#   docker-compose up                          # split (default)
+#   docker-compose --profile combined up      # combined single-process
+#   docker-compose --profile inference-only up
+#   docker-compose --profile batch-only up
+#
+# For local development without Docker, set SERVICE_MODE in your .env:
+#   SERVICE_MODE=combined python src/main.py serve
+
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# Shared configuration anchors
+# ---------------------------------------------------------------------------
+x-common-env: &common-env
+  DATABASE_URL: "${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/lumenpulse}"
+  DB_HOST: "${DB_HOST:-postgres}"
+  DB_PORT: "${DB_PORT:-5432}"
+  DB_NAME: "${DB_NAME:-lumenpulse}"
+  DB_USER: "${DB_USER:-postgres}"
+  DB_PASSWORD: "${DB_PASSWORD:-postgres}"
+  REDIS_HOST: "${REDIS_HOST:-redis}"
+  REDIS_PORT: "${REDIS_PORT:-6379}"
+  REDIS_DB: "${REDIS_DB:-0}"
+  API_KEY: "${API_KEY:-change-me-in-production}"
+  LOG_LEVEL: "${LOG_LEVEL:-info}"
+  NETWORK: "${NETWORK:-mainnet}"
+  # Model registry path — both services mount the same volume here.
+  MODEL_REGISTRY_PATH: /app/models
+
+x-common-volumes: &common-volumes
+  - model-registry:/app/models
+  - training-data:/app/data
+  - logs:/app/logs
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
+services:
+
+  # ── Split deployment: inference service ─────────────────────────────────
+  inference:
+    build:
+      context: .
+      dockerfile: Dockerfile.inference
+    image: lumenpulse-inference:latest
+    profiles: ["split", "inference-only"]
+    ports:
+      - "${SERVICE_PORT:-8000}:8000"
+    environment:
+      <<: *common-env
+      SERVICE_MODE: inference
+      SERVICE_PORT: "8000"
+      SERVICE_HOST: "0.0.0.0"
+      SERVICE_WORKERS: "${SERVICE_WORKERS:-1}"
+    volumes: *common-volumes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+
+  # ── Split deployment: batch/scheduler service ────────────────────────────
+  batch:
+    build:
+      context: .
+      dockerfile: Dockerfile.batch
+    image: lumenpulse-batch:latest
+    profiles: ["split", "batch-only"]
+    ports:
+      - "${METRICS_PORT:-9091}:9091"   # Prometheus metrics only
+    environment:
+      <<: *common-env
+      SERVICE_MODE: batch
+    volumes: *common-volumes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Combined deployment: single container (local dev / low-resource) ─────
+  combined:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lumenpulse-data-processing:latest
+    profiles: ["combined"]
+    ports:
+      - "${SERVICE_PORT:-8000}:8000"
+      - "${METRICS_PORT:-9091}:9091"
+    environment:
+      <<: *common-env
+      SERVICE_MODE: combined
+      SERVICE_PORT: "8000"
+      SERVICE_HOST: "0.0.0.0"
+    volumes: *common-volumes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Infrastructure ────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: "${DB_NAME:-lumenpulse}"
+      POSTGRES_USER: "${DB_USER:-postgres}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-postgres}"
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+# ---------------------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------------------
+volumes:
+  # Shared model registry — written by batch (after retraining), read by inference.
+  model-registry:
+  # Training data snapshots — batch only, inference does not need read access.
+  training-data:
+  # Application logs — both services write here.
+  logs:
+  # Infrastructure
+  postgres-data:
+  redis-data:

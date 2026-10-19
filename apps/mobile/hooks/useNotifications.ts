@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from '@/lib/api';
+import { apiClient } from '@/lib/api';
 
 export interface Notification {
   id: string;
@@ -15,8 +15,10 @@ export const useNotifications = () => {
 
   const fetchNotifications = async () => {
     try {
-      const res = await axios.get('/notifications');
-      setData(res.data);
+      const res = await apiClient.get<Notification[]>('/notifications');
+      if (res.success) {
+        setData(res.data ?? []);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -26,7 +28,7 @@ export const useNotifications = () => {
 
   const markAsRead = async (id: string) => {
     try {
-      await axios.patch(`/notifications/${id}/read`);
+      await apiClient.patch(`/notifications/${id}/read`);
       setData((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
     } catch (err) {
       console.error(err);

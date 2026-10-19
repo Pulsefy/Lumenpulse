@@ -14,6 +14,7 @@ reentrancy-guard = { path = "../reentrancy-guard" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+test_utils = { path = "../test_utils" }
 proptest = "1"
 
 [features]

@@ -1,0 +1,22 @@
+{
+  "contract": "treasury",
+  "data_xdr": "AAAAEQAAAAEAAAACAAAADwAAAAZhY3Rpb24AAAAAABAAAAABAAAAAQAAAA8AAAARUm90YXRlQmVuZWZpY2lhcnkAAAAAAAAPAAAACGV4ZWN1dG9yAAAAEgAAAAAAAAAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+  "event": "proposal_executed_event",
+  "fields": {
+    "action": [
+      "RotateBeneficiary"
+    ],
+    "executor": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"
+  },
+  "topics": [
+    "proposal_executed_event",
+    1,
+    "7"
+  ],
+  "topics_xdr": [
+    "AAAADwAAABdwcm9wb3NhbF9leGVjdXRlZF9ldmVudAA=",
+    "AAAAAwAAAAE=",
+    "AAAABQAAAAAAAAAH"
+  ],
+  "version": 1
+}

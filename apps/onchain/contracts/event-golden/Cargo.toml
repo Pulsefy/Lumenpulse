@@ -1,0 +1,18 @@
+[package]
+name = "event-golden"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# This crate is intentionally excluded from the `apps/onchain` workspace
+# (see the workspace `exclude` list). It is a *test-only* support library:
+# it uses `std::fs`/`std::env` and pulls in `serde`/`base64`, none of which
+# belong in the wasm builds of the deployed contracts. The contract crates
+# add it as a `[dev-dependency]`, so it is only ever compiled on the host
+# when their own `cargo test` suites run.
+
+[dependencies]
+soroban-sdk = { version = "23", features = ["alloc"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"

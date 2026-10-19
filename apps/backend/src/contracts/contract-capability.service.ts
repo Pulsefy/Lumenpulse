@@ -267,11 +267,25 @@ export class ContractCapabilityService {
 
   constructor(private readonly configService: ConfigService) {}
 
+  private cachedCatalog: ContractCapabilityCatalogResponseDto | null = null;
+
+  /**
+   * Invalidates the cached catalog, forcing a rebuild on the next request.
+   */
+  invalidateCache(): void {
+    this.cachedCatalog = null;
+    this.logger.log('Contract capability catalog cache invalidated');
+  }
+
   /**
    * Get the contract capability catalog
    * @throws Error if catalog cannot be loaded
    */
   getCapabilityCatalog(): ContractCapabilityCatalogResponseDto {
+    if (this.cachedCatalog) {
+      return this.cachedCatalog;
+    }
+
     try {
       const environment = this.getEnvironment();
       const catalogVersion = '1.0.0';
@@ -293,13 +307,16 @@ export class ContractCapabilityService {
         generatedAt,
       );
 
-      return {
+      const catalog = {
         environment,
         apiVersion,
         catalogVersion,
         generatedAt,
         contracts,
       };
+
+      this.cachedCatalog = catalog;
+      return catalog;
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error occurred';

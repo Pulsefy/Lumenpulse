@@ -20,6 +20,18 @@ API_FAILURES_TOTAL = Counter(
     ["method", "endpoint"]
 )
 
+INFERENCE_REQUESTS_TOTAL = Counter(
+    "lumenpulse_inference_requests_total",
+    "Total number of text inputs evaluated for inference, by endpoint",
+    ["endpoint"],
+)
+
+INFERENCE_OOD_TOTAL = Counter(
+    "lumenpulse_inference_ood_total",
+    "Total number of text inputs rejected as out of distribution, by endpoint",
+    ["endpoint"],
+)
+
 ANOMALIES_DETECTED_TOTAL = Counter(
     "anomalies_detected", 
     "Total number of anomalies detected",
@@ -132,6 +144,13 @@ FEATURE_SCHEMA_MISMATCH_TOTAL = Counter(
     "Total number of times serving detected a feature schema version mismatch "
     "against the version a model was trained on",
     ["feature_set"],
+)
+
+# ── Backend notification delivery of drift alerts (#1447) ───────────────
+DRIFT_ALERTS_DELIVERED_TOTAL = Counter(
+    "lumenpulse_drift_alerts_delivered_total",
+    "Total number of drift alerts accepted by the backend notification service",
+    ["alert_type", "outcome"],  # outcome: delivered | spooled | suppressed
 )
 
 

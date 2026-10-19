@@ -9,14 +9,14 @@ Directory layout:
     sentiment/
       v1.0.pkl
       v1.1.pkl
-      current -> v1.1.pkl   (symlink, updated atomically)
+    current.json          ({"version": "v1.1"}, updated atomically)
       shadow/               (shadow-mode directory)
         v1.2.pkl
-        shadow_current -> v1.2.pkl
+        shadow_current -> v1.2.pkl (shadow-mode symlink)
         comparison_log.jsonl
     price_predictor/
       v1.0.pkl
-      current -> v1.0.pkl
+    current.json          ({"version": "v1.0"})
 
 Shadow-mode deployment (Issue #1256):
   A candidate version can run alongside the live model. Both predictions
@@ -29,6 +29,7 @@ import json
 import os
 import pickle
 import shutil
+import tempfile
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -71,7 +72,16 @@ def _model_dir(model_type: str) -> Path:
     return d
 
 
-def _symlink_path(model_type: str) -> Path:
+def _current_pointer_path(model_type: str) -> Path:
+    return _model_dir(model_type) / "current.json"
+
+
+def _previous_pointer_path(model_type: str) -> Path:
+    """Pointer to the version that was live before the current one (#1457)."""
+    return _model_dir(model_type) / "previous.json"
+
+
+def _legacy_symlink_path(model_type: str) -> Path:
     return _model_dir(model_type) / "current"
 
 
@@ -98,9 +108,75 @@ def _comparison_log_path(model_type: str) -> Path:
     return _shadow_dir(model_type) / "comparison_log.jsonl"
 
 
+def _promotion_log_path(model_type: str) -> Path:
+    return _model_dir(model_type) / "promotion_log.jsonl"
+
+
 def _metadata_path(model_type: str, version: str) -> Path:
     """Sidecar JSON holding non-pickled metadata for a saved model version."""
     return _model_dir(model_type) / f"{version}.meta.json"
+
+
+def _read_current_version(model_type: str) -> Optional[str]:
+    """Read the live pointer, migrating a legacy ``current`` symlink."""
+    pointer = _current_pointer_path(model_type)
+    if pointer.exists():
+        try:
+            data = json.loads(pointer.read_text(encoding="utf-8"))
+            version = data.get("version")
+            if isinstance(version, str) and version:
+                return version
+        except (OSError, json.JSONDecodeError):
+            logger.warning("Invalid model registry pointer: %s", pointer)
+        return None
+
+    with _lock:
+        if pointer.exists():
+            return _read_current_version(model_type)
+        legacy = _legacy_symlink_path(model_type)
+        if not legacy.is_symlink():
+            return None
+        try:
+            version = legacy.resolve(strict=True).stem
+        except OSError:
+            return None
+
+        _write_current_version(model_type, version)
+        legacy.unlink()
+        logger.info(
+            "Migrated legacy model symlink: type=%s version=%s", model_type, version
+        )
+        return version
+
+
+def _write_current_version(model_type: str, version: str) -> None:
+    """Atomically persist the live model version in a JSON pointer."""
+    _write_pointer(_current_pointer_path(model_type), version)
+
+
+def _write_pointer(pointer: Path, version: str) -> None:
+    """Atomically write ``{"version": ...}`` to ``pointer`` via rename."""
+    temporary_name = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=pointer.parent,
+            prefix=f".{pointer.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as fh:
+            temporary_name = fh.name
+            json.dump({"version": version}, fh, separators=(",", ":"))
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(temporary_name, pointer)
+    finally:
+        if temporary_name:
+            try:
+                os.unlink(temporary_name)
+            except FileNotFoundError:
+                pass
 
 
 def _next_version(model_type: str) -> str:
@@ -176,14 +252,13 @@ def load_metadata(
     Returns ``None`` when no metadata was recorded (e.g. a legacy model saved
     before metadata support, or the sentiment model which records none).
 
-    ``version="current"`` resolves the promoted symlink first so callers can
+    ``version="current"`` resolves the promoted pointer first so callers can
     ask for "whatever is live right now".
     """
     if version == "current":
-        sym = _symlink_path(model_type)
-        if not sym.exists():
+        version = _read_current_version(model_type)
+        if version is None:
             return None
-        version = sym.resolve().stem  # filename without .pkl
 
     meta_path = _metadata_path(model_type, version)
     if not meta_path.exists():
@@ -199,18 +274,18 @@ def load_model(model_type: str, version: str = "current") -> Any:
 
     Args:
         model_type: e.g. "sentiment" or "price_predictor"
-        version:    Specific version string or "current" (follows symlink).
+        version:    Specific version string or "current" (follows the pointer).
 
     Returns:
         The unpickled model object.
     """
     if version == "current":
-        sym = _symlink_path(model_type)
-        if not sym.exists():
+        version = _read_current_version(model_type)
+        if version is None:
             raise FileNotFoundError(
                 f"No current model for '{model_type}'. Run retraining first."
             )
-        path = sym.resolve()
+        path = _version_path(model_type, version)
     else:
         path = _version_path(model_type, version)
 
@@ -224,17 +299,73 @@ def load_model(model_type: str, version: str = "current") -> Any:
     return obj
 
 
-def promote_model(model_type: str, version: str) -> None:
+def _score_model(model: Any, evaluation_set: Any, metric: str) -> float:
+    """Score a model on ``(features, target)`` or a frame with ``target``."""
+    if isinstance(evaluation_set, tuple):
+        features, target = evaluation_set
+    else:
+        if "target" not in evaluation_set.columns:
+            raise ValueError("Evaluation set must contain a 'target' column")
+        features = evaluation_set.drop(columns=["target"])
+        target = evaluation_set["target"]
+
+    predictions = model.predict(features)
+    actual = list(target)
+    predicted = list(predictions)
+    if not actual:
+        raise ValueError("Evaluation set is empty")
+    if len(actual) != len(predicted):
+        raise ValueError("Model predictions do not match evaluation targets")
+
+    if metric == "mse":
+        return sum((float(y) - float(pred)) ** 2 for y, pred in zip(actual, predicted)) / len(actual)
+    if metric == "accuracy":
+        return sum(y == pred for y, pred in zip(actual, predicted)) / len(actual)
+    if metric != "r2":
+        raise ValueError(f"Unsupported promotion metric: {metric}")
+
+    mean_target = sum(float(value) for value in actual) / len(actual)
+    total = sum((float(value) - mean_target) ** 2 for value in actual)
+    residual = sum((float(value) - float(pred)) ** 2 for value, pred in zip(actual, predicted))
+    return 0.0 if total == 0 else 1.0 - residual / total
+
+
+def _record_promotion_event(model_type: str, event: dict[str, Any]) -> None:
+    event = {"timestamp": datetime.now(timezone.utc).isoformat(), **event}
+    with open(_promotion_log_path(model_type), "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(event, default=str) + "\n")
+
+
+def promote_model(
+    model_type: str,
+    version: str,
+    evaluation_set: Any = None,
+    metric: str = "r2",
+    threshold: Optional[float] = None,
+    min_delta: Optional[float] = None,
+    force: bool = False,
+) -> bool:
     """
     Atomically promote a saved version to 'current' (zero-downtime swap).
 
-    The on-disk symlink is updated atomically via a rename, and the
+    The on-disk JSON pointer is updated atomically via a rename, and the
     in-memory hot model is swapped under the RLock so in-flight requests
     finish with the old model while new requests immediately use the new one.
 
     Args:
         model_type: e.g. "sentiment" or "price_predictor"
         version:    The version to promote (must already be saved).
+        evaluation_set: Held-out ``(features, target)`` or a DataFrame with a
+            ``target`` column. When supplied, both candidate and incumbent are
+            scored before promotion.
+        metric:      Metric to score (``r2``, ``mse``, or ``accuracy``).
+        threshold:   Minimum candidate score. Defaults to ``PROMOTION_THRESHOLD``.
+        min_delta:   Required candidate improvement over incumbent. Defaults to
+            ``PROMOTION_MIN_DELTA``.
+        force:       Bypass evaluation gates and record an operator override.
+
+    Returns:
+        ``True`` when promoted, ``False`` when refused by an evaluation gate.
     """
     target = _version_path(model_type, version)
     if not target.exists():
@@ -242,14 +373,87 @@ def promote_model(model_type: str, version: str) -> None:
             f"Cannot promote {model_type}@{version}: file not found at {target}"
         )
 
-    sym = _symlink_path(model_type)
-    tmp_sym = sym.with_suffix(".tmp")
+    if evaluation_set is not None:
+        candidate_metrics = None
+        incumbent_metrics = None
+        evaluation_error = None
+        try:
+            candidate = load_model(model_type, version)
+            candidate_score = _score_model(candidate, evaluation_set, metric)
+            candidate_metrics = {metric: candidate_score}
+            current_version = get_current_version(model_type)
+            if current_version and current_version != version:
+                incumbent_score = _score_model(
+                    get_live_model(model_type), evaluation_set, metric
+                )
+                incumbent_metrics = {metric: incumbent_score}
+        except Exception as exc:
+            if not force:
+                raise
+            evaluation_error = str(exc)
+            logger.warning(
+                "Forced promotion continuing after evaluation error: "
+                "type=%s version=%s error=%s",
+                model_type,
+                version,
+                exc,
+            )
 
-    # Atomic symlink swap (POSIX rename is atomic)
-    if tmp_sym.exists() or tmp_sym.is_symlink():
-        tmp_sym.unlink()
-    tmp_sym.symlink_to(target.name)
-    tmp_sym.rename(sym)
+        configured_threshold = (
+            float(os.getenv("PROMOTION_THRESHOLD", "-inf"))
+            if threshold is None else threshold
+        )
+        configured_delta = (
+            float(os.getenv("PROMOTION_MIN_DELTA", "0.0"))
+            if min_delta is None else min_delta
+        )
+        higher_is_better = metric != "mse"
+        reasons = []
+        if not force and (
+            (higher_is_better and candidate_score < configured_threshold)
+            or (not higher_is_better and candidate_score > configured_threshold)
+        ):
+            reasons.append("threshold_failed")
+        if not force and incumbent_metrics:
+            incumbent_score = incumbent_metrics[metric]
+            regressed = (
+                candidate_score < incumbent_score + configured_delta
+                if higher_is_better
+                else candidate_score > incumbent_score - configured_delta
+            )
+            if regressed:
+                reasons.append("regressed_against_incumbent")
+        event = {
+            "model_type": model_type,
+            "version": version,
+            "metric": metric,
+            "candidate_metrics": candidate_metrics,
+            "incumbent_metrics": incumbent_metrics,
+        }
+        if evaluation_error:
+            event["evaluation_error"] = evaluation_error
+        if reasons and not force:
+            _record_promotion_event(
+                model_type, {**event, "status": "refused", "reasons": reasons}
+            )
+            logger.warning(
+                "Model promotion refused: type=%s version=%s reasons=%s metrics=%s",
+                model_type, version, reasons, event,
+            )
+            return False
+        if force:
+            _record_promotion_event(model_type, {**event, "status": "forced"})
+            logger.warning(
+                "Forced model promotion: type=%s version=%s metrics=%s",
+                model_type, version, event,
+            )
+
+    with _lock:
+        previous_version = _read_current_version(model_type)
+        if previous_version and previous_version != version:
+            # Kept so retention GC (#1457) never removes the rollback target.
+            _write_pointer(_previous_pointer_path(model_type), previous_version)
+        _write_current_version(model_type, version)
 
     # Hot-swap in memory
     new_model = load_model(model_type, version)
@@ -265,6 +469,91 @@ def promote_model(model_type: str, version: str) -> None:
     # Cached inference results from the previous model version must not be
     # served after promotion, so evict every entry for this model type.
     _invalidate_cached_inference(model_type)
+
+    # Attribute serving compute cost across the promotion boundary (#1643):
+    # the cost-per-thousand-inferences delta of the new version against its
+    # predecessor is exported as a metric and included in the cost report.
+    # Never let cost bookkeeping block an otherwise successful promotion.
+    try:
+        from src.ml.serving_cost import record_promotion
+
+        record_promotion(model_type, previous_version, version)
+    except Exception as exc:  # pragma: no cover - attribution is best-effort
+        logger.warning(
+            "Serving cost attribution skipped after promotion: type=%s error=%s",
+            model_type,
+            exc,
+        )
+    return True
+
+
+def rollback_model(
+    model_type: str,
+    target_version: Optional[str] = None,
+    *,
+    actor: str,
+    reason: str,
+) -> str:
+    """Move the live pointer to a verified saved model version."""
+    if not actor.strip():
+        raise ValueError("Rollback actor must not be empty")
+    if not reason.strip():
+        raise ValueError("Rollback reason must not be empty")
+
+    with _lock:
+        from_version = _read_current_version(model_type)
+        available = list_versions(model_type)
+        if from_version is None:
+            raise ValueError(f"No current model for '{model_type}'. Cannot rollback.")
+        if len(available) < 2:
+            raise ValueError(
+                f"Only one version available for '{model_type}'. Cannot rollback."
+            )
+
+        if target_version is None:
+            prior_versions = [version for version in available if version < from_version]
+            if not prior_versions:
+                raise ValueError(
+                    f"No earlier version available for '{model_type}'. "
+                    "Specify a target version to rollback."
+                )
+            target_version = prior_versions[-1]
+        if target_version == from_version:
+            raise ValueError(
+                f"Target version '{target_version}' is already the current live version."
+            )
+        if target_version not in available:
+            raise ValueError(
+                f"Target version '{target_version}' not found for '{model_type}'. "
+                f"Available: {available}"
+            )
+
+        # Deserialize before moving the atomic pointer.
+        target_model = load_model(model_type, target_version)
+        _write_current_version(model_type, target_version)
+        _live_models[model_type] = target_model
+        _live_versions[model_type] = target_version
+
+    _record_promotion_event(
+        model_type,
+        {
+            "status": "rolled_back",
+            "model_type": model_type,
+            "actor": actor,
+            "reason": reason,
+            "from_version": from_version,
+            "to_version": target_version,
+        },
+    )
+    _invalidate_cached_inference(model_type)
+    logger.info(
+        "Model rolled back: type=%s from=%s to=%s actor=%s",
+        model_type,
+        from_version,
+        target_version,
+        actor,
+    )
+    return target_version
 
 
 def _invalidate_cached_inference(model_type: str) -> None:
@@ -308,9 +597,9 @@ def get_live_model(model_type: str) -> Any:
     model = load_model(model_type, "current")
     with _lock:
         _live_models[model_type] = model
-        sym = _symlink_path(model_type)
-        if sym.exists():
-            _live_versions[model_type] = sym.resolve().stem  # filename without .pkl
+        current_version = _read_current_version(model_type)
+        if current_version is not None:
+            _live_versions[model_type] = current_version
     return model
 
 
@@ -329,10 +618,7 @@ def get_current_version(model_type: str) -> Optional[str]:
         if model_type in _live_versions:
             return _live_versions[model_type]
 
-    sym = _symlink_path(model_type)
-    if sym.exists():
-        return sym.resolve().stem
-    return None
+    return _read_current_version(model_type)
 
 
 def get_registry_status() -> dict[str, Any]:
@@ -776,7 +1062,13 @@ def save_model_with_card(
     Returns:
         The version string that was saved.
     """
-    from model_card import ModelCard, TrainingDataInfo, HyperparametersInfo, EvaluationMetrics, FeatureSchema
+    from src.ml.model_card import (
+        ModelCard,
+        TrainingDataInfo,
+        HyperparametersInfo,
+        EvaluationMetrics,
+        FeatureSchema,
+    )
 
     # Parse card data
     training = TrainingDataInfo(**card_data.get("training_data", {}))
@@ -825,10 +1117,9 @@ def load_model_card(model_type: str, version: str = "current") -> Optional[dict]
         Model card as dict, or None if not found.
     """
     if version == "current":
-        sym = _symlink_path(model_type)
-        if not sym.exists():
+        version = get_current_version(model_type)
+        if version is None:
             return None
-        version = sym.resolve().stem
 
     card_path = _model_dir(model_type) / f"{version}.card.json"
     if not card_path.exists():

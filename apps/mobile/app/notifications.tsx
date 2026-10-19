@@ -6,6 +6,7 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalization } from '../src/context';
+import { resolveNotificationTarget } from '../lib/deep-links';
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
@@ -28,15 +29,11 @@ export default function NotificationsScreen() {
             markAsRead(item.id);
           }
           if (item.data) {
-            if (typeof item.data.screen === 'string') {
-              router.push(item.data.screen as any);
-            } else if (item.data.type === 'alert' && item.data.alertId) {
-              router.push(`/alerts/${item.data.alertId}` as any);
-            } else if (item.data.type === 'transaction' && item.data.transactionId) {
-              router.push(`/transactions/${item.data.transactionId}` as any);
-            } else if (item.data.url) {
-              router.push(item.data.url as any);
-            }
+            // Issue #1410: resolution is centralized in lib/deep-links.ts so
+            // every payload type lands on a real screen (or +not-found).
+            // This screen is ProtectedRoute-wrapped, so the user is
+            // authenticated here and can navigate straight to the target.
+            router.push(resolveNotificationTarget(item.data) as any);
           }
         }}
         accessibilityLabel={`${item.title}. ${

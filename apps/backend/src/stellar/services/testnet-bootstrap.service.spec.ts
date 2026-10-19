@@ -19,6 +19,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import axios, { AxiosError } from 'axios';
 import { ConfigService } from '../../config/config.service';
 import { ErrorCode } from '../../common/enums/error-code.enum';
+import { BootstrapRunRegistryService } from '../../bootstrap-runs/bootstrap-run-registry.service';
 import { TestnetBootstrapService } from './testnet-bootstrap.service';
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -26,6 +27,7 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 describe('TestnetBootstrapService', () => {
   let service: TestnetBootstrapService;
   let configService: ConfigService;
+  let runRegistry: { recordSafely: jest.Mock };
 
   const VALID_TESTNET_KEY =
     'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
@@ -33,6 +35,10 @@ describe('TestnetBootstrapService', () => {
 
   beforeEach(async () => {
     mockConfig.featureFlags.friendbotBootstrap = true;
+
+    runRegistry = {
+      recordSafely: jest.fn().mockResolvedValue('run-1'),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -42,6 +48,10 @@ describe('TestnetBootstrapService', () => {
           useValue: {
             getStellarConfig: jest.fn(),
           },
+        },
+        {
+          provide: BootstrapRunRegistryService,
+          useValue: runRegistry,
         },
       ],
     }).compile();
@@ -139,6 +149,48 @@ describe('TestnetBootstrapService', () => {
           params: { addr: VALID_TESTNET_KEY },
         }),
       );
+    });
+
+    it('records the funded account as a teardown-trackable bootstrap run', async () => {
+      (configService.getStellarConfig as jest.Mock).mockReturnValue({
+        network: 'testnet',
+      });
+      mockedAxios.get.mockResolvedValueOnce({
+        data: { transaction_hash: 'mock_tx_hash', amount_lumens: '10000' },
+      });
+
+      const result = await service.fundTestnetAccount(
+        VALID_TESTNET_KEY,
+        'admin-1',
+      );
+
+      expect(result.runId).toBe('run-1');
+      expect(runRegistry.recordSafely).toHaveBeenCalledWith({
+        kind: 'testnet_account',
+        createdBy: 'admin-1',
+        resources: [
+          {
+            type: 'testnet_account',
+            identifier: VALID_TESTNET_KEY,
+            label: 'Friendbot-funded testnet account (10000 XLM)',
+          },
+        ],
+      });
+    });
+
+    it('still reports success when the run registry write fails', async () => {
+      (configService.getStellarConfig as jest.Mock).mockReturnValue({
+        network: 'testnet',
+      });
+      mockedAxios.get.mockResolvedValueOnce({
+        data: { transaction_hash: 'mock_tx_hash', amount_lumens: '10000' },
+      });
+      runRegistry.recordSafely.mockResolvedValueOnce(null);
+
+      const result = await service.fundTestnetAccount(VALID_TESTNET_KEY);
+
+      expect(result.success).toBe(true);
+      expect(result.runId).toBeUndefined();
     });
 
     it('maps Friendbot 429 to STEL_FRIENDBOT_ALREADY_FUNDED', async () => {

@@ -23,11 +23,20 @@ import {
   LeaderboardQueryDto,
   LeaderboardResponseDto,
   LeaderboardEntryDto,
+  RoundListQueryDto,
+  RoundListResponseDto,
 } from './dto/grants.dto';
 import {
   CONTRIBUTION_QUEUE,
   DETECTION_JOB,
 } from '../suspicious-contribution/types';
+import { RequestContextService } from '../common/services/request-context.service';
+import { resolvePagination } from '../common/pagination/pagination-response.dto';
+import {
+  assertGrantRoundState,
+  GrantRoundState,
+  transitionGrantRound,
+} from './round-lifecycle';
 
 /**
  * In-memory store for round and contribution data.
@@ -41,8 +50,7 @@ interface RoundRecord {
   startTime: number;
   endTime: number;
   totalPool: bigint;
-  isFinalized: boolean;
-  isDistributed: boolean;
+  state: GrantRoundState;
   // projectId -> contributor -> amount
   contributions: Map<number, Map<string, bigint>>;
   eligibleProjects: Set<number>;
@@ -102,8 +110,7 @@ export class GrantsService {
       startTime: now - 3 * 24 * 3600, // 3 days ago
       endTime: now + 7 * 24 * 3600, // 7 days from now
       totalPool: 5000000000000n, // 500,000 XLM (7 decimals)
-      isFinalized: false,
-      isDistributed: false,
+      state: GrantRoundState.OPEN,
       contributions: new Map([
         [
           1,
@@ -154,8 +161,7 @@ export class GrantsService {
       startTime: now - 20 * 24 * 3600, // 20 days ago
       endTime: now - 10 * 24 * 3600, // 10 days ago
       totalPool: 10000000000000n, // 1,000,000 XLM
-      isFinalized: true,
-      isDistributed: true,
+      state: GrantRoundState.DISBURSED,
       contributions: new Map([
         [
           2,
@@ -202,12 +208,12 @@ export class GrantsService {
       startTime: dto.startTime,
       endTime: dto.endTime,
       totalPool: 0n,
-      isFinalized: false,
-      isDistributed: false,
+      state: GrantRoundState.DRAFT,
       contributions: new Map(),
       eligibleProjects: new Set(),
     };
     this.rounds.set(id, record);
+    this.advanceScheduledState(record);
     this.logger.log(`Round ${id} created: ${dto.name}`);
     return this.toRoundDto(record);
   }
@@ -216,15 +222,26 @@ export class GrantsService {
     return this.toRoundDto(this.getRecord(roundId));
   }
 
-  listRounds(): RoundDto[] {
-    return [...this.rounds.values()].map((r) => this.toRoundDto(r));
+  listRounds(query?: RoundListQueryDto): RoundListResponseDto {
+    const pagination = resolvePagination(query?.page, query?.pageSize);
+    const allRounds = [...this.rounds.values()].map((r) => {
+      this.advanceScheduledState(r);
+      return this.toRoundDto(r);
+    });
+    // Stable sort by id ascending so pages don't shift under concurrent inserts
+    allRounds.sort((a, b) => a.id - b.id);
+    const { pageSize, offset } = pagination;
+    const items = allRounds.slice(offset, offset + pageSize);
+    return new RoundListResponseDto(items, pagination, allRounds.length);
   }
 
   fundPool(dto: FundPoolDto): { roundId: number; newBalance: string } {
     const record = this.getRecord(dto.roundId);
-    if (record.isFinalized) {
-      throw new BadRequestException('Round is already finalized');
-    }
+    assertGrantRoundState(record.state, [
+      GrantRoundState.DRAFT,
+      GrantRoundState.OPEN,
+      GrantRoundState.MATCHING,
+    ]);
     const amount = BigInt(dto.amount);
     if (amount <= 0n) throw new BadRequestException('Amount must be positive');
 
@@ -239,9 +256,11 @@ export class GrantsService {
 
   approveProject(dto: ApproveProjectDto): void {
     const record = this.getRecord(dto.roundId);
-    if (record.isFinalized) {
-      throw new BadRequestException('Round is already finalized');
-    }
+    assertGrantRoundState(record.state, [
+      GrantRoundState.DRAFT,
+      GrantRoundState.OPEN,
+      GrantRoundState.MATCHING,
+    ]);
     if (record.eligibleProjects.has(dto.projectId)) {
       throw new BadRequestException('Project already eligible');
     }
@@ -256,9 +275,11 @@ export class GrantsService {
 
   removeProject(roundId: number, projectId: number): void {
     const record = this.getRecord(roundId);
-    if (record.isFinalized) {
-      throw new BadRequestException('Round is already finalized');
-    }
+    assertGrantRoundState(record.state, [
+      GrantRoundState.DRAFT,
+      GrantRoundState.OPEN,
+      GrantRoundState.MATCHING,
+    ]);
     if (!record.eligibleProjects.has(projectId)) {
       throw new NotFoundException('Project not eligible in this round');
     }
@@ -269,9 +290,7 @@ export class GrantsService {
 
   recordContribution(dto: RecordContributionDto): void {
     const record = this.getRecord(dto.roundId);
-    if (record.isFinalized) {
-      throw new BadRequestException('Round is already finalized');
-    }
+    assertGrantRoundState(record.state, [GrantRoundState.OPEN]);
 
     const now = Math.floor(Date.now() / 1000);
     if (now < record.startTime || now > record.endTime) {
@@ -311,6 +330,7 @@ export class GrantsService {
           amount: dto.amount,
           roundTotalContributions: roundTotal.toString(),
           contributorTotalInRound: contributorTotal.toString(),
+          correlationId: RequestContextService.getCorrelationId(),
         },
         { attempts: 2, backoff: { type: 'exponential', delay: 2000 } },
       )
@@ -323,14 +343,7 @@ export class GrantsService {
 
   finalizeRound(roundId: number): RoundDto {
     const record = this.getRecord(roundId);
-    if (record.isFinalized) {
-      throw new BadRequestException('Round already finalized');
-    }
-    const now = Math.floor(Date.now() / 1000);
-    if (now <= record.endTime) {
-      throw new BadRequestException('Round has not ended yet');
-    }
-    record.isFinalized = true;
+    record.state = transitionGrantRound(record.state, GrantRoundState.CLOSED);
     this.logger.log(`Round ${roundId} finalized`);
     return this.toRoundDto(record);
   }
@@ -627,16 +640,7 @@ export class GrantsService {
     allocations: { projectId: number; owner: string; amount: string }[];
   } {
     const record = this.getRecord(dto.roundId);
-    if (!record.isFinalized) {
-      throw new BadRequestException(
-        'Round must be finalized before distribution',
-      );
-    }
-    if (record.isDistributed) {
-      throw new BadRequestException(
-        'Matching funds already distributed for this round',
-      );
-    }
+    assertGrantRoundState(record.state, [GrantRoundState.CLOSED]);
 
     const eligibleList = [...record.eligibleProjects];
     if (eligibleList.length === 0) {
@@ -678,7 +682,10 @@ export class GrantsService {
       allocations.push({ projectId: pid, owner, amount: alloc.toString() });
     });
 
-    record.isDistributed = true;
+    record.state = transitionGrantRound(
+      record.state,
+      GrantRoundState.DISBURSED,
+    );
     record.totalPool = 0n;
 
     const totalDistributed = allocations
@@ -697,17 +704,24 @@ export class GrantsService {
   private getRecord(roundId: number): RoundRecord {
     const record = this.rounds.get(roundId);
     if (!record) throw new NotFoundException(`Round ${roundId} not found`);
+    this.advanceScheduledState(record);
     return record;
   }
 
-  private toRoundDto(r: RoundRecord): RoundDto {
+  private advanceScheduledState(record: RoundRecord): void {
     const now = Math.floor(Date.now() / 1000);
-    let status = 'ACTIVE';
-    if (r.isDistributed) status = 'DISTRIBUTED';
-    else if (r.isFinalized) status = 'FINALIZED';
-    else if (now > r.endTime) status = 'ENDED';
-    else if (now < r.startTime) status = 'PENDING';
+    if (record.state === GrantRoundState.DRAFT && now >= record.startTime) {
+      record.state = transitionGrantRound(record.state, GrantRoundState.OPEN);
+    }
+    if (record.state === GrantRoundState.OPEN && now > record.endTime) {
+      record.state = transitionGrantRound(
+        record.state,
+        GrantRoundState.MATCHING,
+      );
+    }
+  }
 
+  private toRoundDto(r: RoundRecord): RoundDto {
     return {
       id: r.id,
       name: r.name,
@@ -715,9 +729,11 @@ export class GrantsService {
       startTime: r.startTime,
       endTime: r.endTime,
       totalPool: r.totalPool.toString(),
-      isFinalized: r.isFinalized,
-      isDistributed: r.isDistributed,
-      status,
+      isFinalized:
+        r.state === GrantRoundState.CLOSED ||
+        r.state === GrantRoundState.DISBURSED,
+      isDistributed: r.state === GrantRoundState.DISBURSED,
+      status: r.state,
     };
   }
 }

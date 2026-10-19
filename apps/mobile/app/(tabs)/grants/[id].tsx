@@ -85,7 +85,7 @@ function ProjectRow({
     <View
       style={[styles.projectCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
       accessible
-      accessibilityRole="listitem"
+      accessibilityRole="button"
       accessibilityLabel={`${t('grants.project')} ${item.projectId}, ${item.contributorCount} ${t('grants.contributors')}, ${formatTokenAmount(item.totalContributions)} XLM contributed`}
     >
       <View style={styles.projectHeader}>
