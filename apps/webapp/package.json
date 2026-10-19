@@ -49,7 +49,7 @@
     "@react-three/fiber": "^8.15.19",
     "@stellar/freighter-api": "^6.0.1",
     "@stellar/stellar-sdk": "^14.6.1",
-    "@types/node": "20.6.2",
+    "@types/node": "26.6.5",
     "@types/react": "18.2.22",
     "@types/react-dom": "18.2.7",
     "@types/three": "^0.162.0",
