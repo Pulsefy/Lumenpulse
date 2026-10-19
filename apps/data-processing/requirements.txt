@@ -34,7 +34,7 @@ psycopg2-binary>=2.9.9
 # For development/testing
 pytest>=7.0.0
 pytest-mock>=3.10.0
-pytest-asyncio>=0.23.0
+pytest-asyncio>=1.4.0
 
 # Code quality tools
 black==24.1.1
