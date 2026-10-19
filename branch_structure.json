@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-1581-mobile-instrument-product-analytics-events",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-1581-mobile-instrument-product-analytics-events": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-1581-mobile-instrument-product-analytics-events",
+    "origin"
+  ]
+}
