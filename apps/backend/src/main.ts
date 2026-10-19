@@ -8,7 +8,10 @@ import { config } from './lib/config';
 import { createOpenApiDocument } from './openapi/openapi.document';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+    bodyParser: false,
+  });
   setupApp(app);
 
   // Enable graceful shutdown hooks

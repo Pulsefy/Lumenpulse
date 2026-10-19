@@ -9,6 +9,7 @@ import {
 import { Request, Response } from 'express';
 import {
   CORRELATION_ID_HEADER,
+  MAX_UPLOAD_FILE_SIZE_BYTES,
   REQUEST_ID_HEADER,
 } from '../common/constants/request.constants';
 import { ErrorCode } from '../common/enums/error-code.enum';
@@ -85,6 +86,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const isProduction = resolveNodeEnv() === 'production';
     const correlationId = requestId;
 
+    if (this.isUploadFileSizeError(exception)) {
+      return {
+        code: ErrorCode.SYS_PAYLOAD_TOO_LARGE,
+        message: `Uploaded file exceeds the ${MAX_UPLOAD_FILE_SIZE_BYTES}-byte limit`,
+        requestId,
+        correlationId,
+      };
+    }
+
     if (exception instanceof HttpException) {
       const exceptionResponse = exception.getResponse();
       const responseBody =
@@ -147,6 +157,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   }
 
   private getStatus(exception: unknown): number {
+    if (this.isUploadFileSizeError(exception)) {
+      return HttpStatus.PAYLOAD_TOO_LARGE;
+    }
+
     if (exception instanceof HttpException) {
       return exception.getStatus();
     }
@@ -160,6 +174,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     return HttpStatus.INTERNAL_SERVER_ERROR;
+  }
+
+  private isUploadFileSizeError(exception: unknown): boolean {
+    return (
+      typeof exception === 'object' &&
+      exception !== null &&
+      'code' in exception &&
+      exception.code === 'LIMIT_FILE_SIZE'
+    );
   }
 
   private resolveHttpMessage(
