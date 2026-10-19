@@ -9,13 +9,15 @@ import {
   DataProcessingClient,
   DataProcessingUnavailableError,
 } from './data-processing.client';
+import { SyntheticDataGenerator } from './synthetic-data.generator';
 
 describe('DataProcessingClient', () => {
   let http: { request: jest.Mock };
   let registry: Registry;
   let client: DataProcessingClient;
   const networkError = new AxiosError('connection failed', 'ECONNREFUSED');
-  const response = { data: { sentiment: 0.5 } };
+  const generator = new SyntheticDataGenerator(42);
+  const response = { data: generator.sentimentSample() };
 
   function create(overrides: Record<string, string | number> = {}) {
     registry = new Registry();
@@ -42,8 +44,9 @@ describe('DataProcessingClient', () => {
   afterEach(() => jest.useRealTimers());
 
   it('owns base URL, API key, timeout, redirect safety, and context headers', async () => {
+    const payload = generator.analyzeRequest();
     await RequestContextService.run({ correlationId: 'corr-123' }, () =>
-      firstValueFrom(client.post('/analyze', { text: 'hello' })),
+      firstValueFrom(client.post('/analyze', payload)),
     );
     expect(http.request).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -90,7 +93,9 @@ describe('DataProcessingClient', () => {
 
   it('recovers on a successful retry', async () => {
     http.request.mockReturnValueOnce(throwError(() => networkError));
-    const pending = firstValueFrom(client.post('/analyze', { text: 'hello' }));
+    const pending = firstValueFrom(
+      client.post('/analyze', generator.analyzeRequest()),
+    );
     await jest.advanceTimersByTimeAsync(100);
     await expect(pending).resolves.toEqual(response);
     expect(http.request).toHaveBeenCalledTimes(2);
@@ -169,9 +174,9 @@ describe('DataProcessingClient', () => {
       message: 'invalid',
     };
     http.request.mockReturnValueOnce(throwError(() => error));
-    await expect(firstValueFrom(client.post('/analyze', {}))).rejects.toBe(
-      error,
-    );
+    await expect(
+      firstValueFrom(client.post('/analyze', generator.malformedRequest())),
+    ).rejects.toBe(error);
     await expect(firstValueFrom(client.get('/health'))).resolves.toEqual(
       response,
     );
