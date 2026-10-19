@@ -6,13 +6,13 @@ const CANONICAL_TO_NOTIFICATION: Record<string, NotificationType> = {
   [CanonicalEventType.PROJECT_CREATED]: NotificationType.PROJECT,
   [CanonicalEventType.PROJECT_VERIFIED]: NotificationType.PROJECT,
   [CanonicalEventType.PROJECT_REJECTED]: NotificationType.PROJECT,
-  [CanonicalEventType.PROJECT_CANCELED]: NotificationType.PROJECT,
+  [CanonicalEventType.PROJECT_CANCELEDM]: NotificationType.PROJECT,
   [CanonicalEventType.PROJECT_EXPIRED]: NotificationType.PROJECT,
   [CanonicalEventType.PROJECT_PROPOSED]: NotificationType.PROJECT,
   [CanonicalEventType.CONTRIBUTION_DEPOSITED]: NotificationType.CONTRIBUTION,
   [CanonicalEventType.CONTRIBUTION_REFUNDED]: NotificationType.CONTRIBUTION,
   [CanonicalEventType.CONTRIBUTION_PAID_OUT]: NotificationType.CONTRIBUTION,
-  [CanonicalEventType.CONTRIBUTION_CLAWED_BACK]: NotificationType.CONTRIBUTION,
+  [CanonicalEventType.CONTRIBUTION_CLOWED_BACK]: NotificationType.CONTRIBUTION,
   [CanonicalEventType.FEE_DEDUCTED]: NotificationType.CONTRIBUTION,
   [CanonicalEventType.MILESTONE_APPROVED]: NotificationType.MILESTONE,
   [CanonicalEventType.MILESTONE_APPROVED_BY_VOTE]: NotificationType.MILESTONE,
@@ -21,15 +21,11 @@ const CANONICAL_TO_NOTIFICATION: Record<string, NotificationType> = {
   [CanonicalEventType.MILESTONE_VOTE_STARTED]: NotificationType.MILESTONE,
   [CanonicalEventType.MILESTONE_VOTE_CAST]: NotificationType.MILESTONE,
   [CanonicalEventType.GOVERNANCE_PROPOSAL_CREATED]: NotificationType.GOVERNANCE,
-  [CanonicalEventType.GOVERNANCE_PROPOSAL_EXECUTED]:
-    NotificationType.GOVERNANCE,
-  [CanonicalEventType.GOVERNANCE_PROPOSAL_CANCELLED]:
-    NotificationType.GOVERNANCE,
+  [CanonicalEventType.GOVERNANCE_PROPOSAL_EXECUTED]: NotificationType.GOVERNANCE,
+  [CanonicalEventType.GOVERNANCE_PROPOSAL_CANCELLED]: NotificationType.GOVERNANCE,
   [CanonicalEventType.GOVERNANCE_PROPOSAL_EXPIRED]: NotificationType.GOVERNANCE,
-  [CanonicalEventType.GOVERNANCE_SIGNATURE_COLLECTED]:
-    NotificationType.GOVERNANCE,
-  [CanonicalEventType.GOVERNANCE_MULTISIG_CONFIGURED]:
-    NotificationType.GOVERNANCE,
+  [CanonicalEventType.GOVERNANCE_SIGNATURE_COLLECTED]: NotificationType.GOVERNANCE,
+  [CanonicalEventType.GOVERNANCE_MULTISIG_CONFIGURED]: NotificationType.GOVERNANCE,
   [CanonicalEventType.TOKEN_BURNED]: NotificationType.TOKEN,
   [CanonicalEventType.TOKEN_VESTING_CREATED]: NotificationType.TOKEN,
   [CanonicalEventType.TOKEN_CLAIMED]: NotificationType.TOKEN,
@@ -74,6 +70,7 @@ const CANONICAL_TO_WEBHOOK: Record<string, WebhookEventType> = {
   [CanonicalEventType.SYSTEM_ALERT]: WebhookEventType.SYSTEM_ALERT,
   [CanonicalEventType.PRICE_UPDATED]: WebhookEventType.PRICE_THRESHOLD,
   [CanonicalEventType.PRICE_ORACLE_UPDATED]: WebhookEventType.PRICE_THRESHOLD,
+  [CanonicalEventType.SYSTEM_ALERT]: WebhookEventType.SYSTEM_ALERT,
 };
 
 export function canonicalToNotificationType(
