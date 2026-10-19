@@ -4,8 +4,17 @@ Thanks for contributing. This guide defines the standards expected before review
 
 ## Scope
 
-Use this document for repo-wide workflow and standards. For area-specific commands and architecture notes:
+Use this document for repo-wide workflow and standards.
 
+**[Documentation Index](docs/README.md)** is the entry point for everything in
+`docs/`, grouped by audience — contributor, operator, architecture and reference.
+Each entry says in one line what that document answers, so you can find the right
+one without reading filenames. Start there if you are not sure which guide you
+need.
+
+For area-specific commands and architecture notes:
+
+- [Webapp Guide](docs/webapp-contributing.md)
 - [Mobile Guide](docs/mobile-contributing.md)
 - [Backend Guide](docs/backend-contributing.md)
 - [Contracts Guide](docs/contracts-contributing.md)

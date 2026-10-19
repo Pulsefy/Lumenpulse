@@ -143,7 +143,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 }
 
 // Environment Banner Component
-function EnvironmentBanner({ config }: { config: { network: string; contracts?: Record<string, string> } | null }) {
+function EnvironmentBanner({ config }: { config: { network: string; contracts?: object } | null }) {
   const isTestnet = config?.network === 'testnet';
   const isMainnet = config?.network === 'mainnet';
 

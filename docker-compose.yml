@@ -203,6 +203,8 @@ services:
       STELLAR_HORIZON_URL: ${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
       STELLAR_SOROBAN_RPC_URL: ${STELLAR_SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
       BOOTSTRAP_DEMO_DATA_ENABLED: ${BOOTSTRAP_DEMO_DATA_ENABLED:-false}
+      # Prometheus scrapes /metrics from the compose network (docker-compose.monitoring.yml).
+      METRICS_ALLOWED_IPS: ${METRICS_ALLOWED_IPS:-127.0.0.1,172.16.0.0/12,192.168.0.0/16,10.0.0.0/8}
     depends_on:
       postgres:
         condition: service_healthy

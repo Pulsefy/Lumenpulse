@@ -36,10 +36,24 @@ npm run start:dev
 
 - `npm run lint` passes.
 - `npm run test` passes (and `npm run test:e2e` when endpoints change).
+- `npm run audit:ci` passes without un-allowlisted or expired high/critical findings.
 - API-facing changes include DTO/docs updates.
 - Relevant docs are updated.
 - Security-facing API changes keep the standardized error contract aligned with `{ code, message, details, requestId }`.
 - Public endpoint changes document any rate-limit env vars and include throttling or validation coverage when behavior changes.
+
+## Dependency Vulnerability Scanning
+
+Backend dependencies are scanned on every pull request via `npm run audit:ci`.
+
+- **Policy**: High and critical findings fail the build. Moderate, low, and info findings emit warnings.
+- **Allowlist**: Unavoidable findings (e.g. pinned SDKs or upstream framework blockers) are managed in `audit-allowlist.json`.
+- **Requirements for Allowlist Entries**:
+  - `id`: Advisory identifier (GHSA / CVE ID).
+  - `package`: Vulnerable package name.
+  - `reason`: Explicit technical explanation of why the vulnerability cannot currently be upgraded without breaking changes or framework upgrades.
+  - `expiresAt`: ISO date (`YYYY-MM-DD`). Once expired, CI fails immediately until triaged and updated.
+  - Periodic review cleans up obsolete entries flagged by the scanner.
 
 ## Schema Snapshotting
 

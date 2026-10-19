@@ -39,3 +39,6 @@ issue.md
 
 # python env
 myenv/
+# monitoring
+monitoring/secrets/*
+!monitoring/secrets/README.md

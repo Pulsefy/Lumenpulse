@@ -3,14 +3,21 @@ name: Data Processing CI
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
     paths:
-      - "apps/data-processing/**"
+      - 'apps/data-processing/**'
+      - 'docker-compose.yml'
+      - '.python-version'
+      - '.github/actions/**'
+      - '.github/workflows/data-processing.yml'
   pull_request:
-    branches: ["main"]
+    branches: [ "main" ]
     paths:
-      - "apps/data-processing/**"
-      - "apps/data-processing/.ci-trigger"
+      - 'apps/data-processing/**'
+      - 'docker-compose.yml'
+      - '.python-version'
+      - '.github/actions/**'
+      - '.github/workflows/data-processing.yml'
 
 # Issue #1713. See backend.yml for the rationale.
 concurrency:
@@ -31,22 +38,18 @@ jobs:
         working-directory: ./apps/data-processing
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
           phase: start
-          job-id: data-processing-checks
-          budget-minutes: '15'
-          note: Hash-pinned pip install (torch CPU wheel) + flake8 + pytest.
 
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-app
         with:
-          python-version: "3.9"
-          cache: "pip"
+          working-directory: apps/data-processing
 
       - name: Install dependencies
         run: |

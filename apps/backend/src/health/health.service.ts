@@ -18,7 +18,15 @@ export interface DependencyStatus {
   message?: string;
 }
 
+export interface ReleaseInfo {
+  /** Release tag baked into the image (`APP_VERSION`), or `dev` outside a release build. */
+  version: string;
+  /** Commit the image was built from (`GIT_SHA`). */
+  gitSha: string;
+}
+
 export interface LumenpulseHealthReport extends HealthCheckResult {
+  release?: ReleaseInfo;
   summary: 'healthy' | 'degraded' | 'down';
   dependencies: Record<string, DependencyStatus>;
   latencyBudget: LatencyBudgetReport;
@@ -118,6 +126,10 @@ export class HealthService {
       latencyBudget.overallState === 'degraded';
     return {
       status: hardDown ? 'error' : 'ok',
+      release: {
+        version: process.env.APP_VERSION || 'dev',
+        gitSha: process.env.GIT_SHA || 'unknown',
+      },
       summary: hardDown ? 'down' : degraded ? 'degraded' : 'healthy',
       dependencies,
       latencyBudget,
