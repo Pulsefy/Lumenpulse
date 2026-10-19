@@ -42,12 +42,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
           phase: start
 
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       - name: Set up Node and install dependencies
         uses: ./.github/actions/setup-node-app
         with:
@@ -84,11 +87,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
           phase: start
+          job-id: mobile-size
+          budget-minutes: '15'
+          note: Two `expo export` runs (branch + base) and a four-way budget comparison.
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
 
       - name: Set up Node and install dependencies
         uses: ./.github/actions/setup-node-app
@@ -194,11 +204,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
           phase: start
+          job-id: mobile-startup
+          budget-minutes: '15'
+          note: Playwright browser download + Expo web boot + three timed loads on a throttled profile.
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
 
       - name: Set up Node and install dependencies
         uses: ./.github/actions/setup-node-app
@@ -274,11 +291,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
           phase: start
+          job-id: mobile-e2e
+          budget-minutes: '25'
+          note: Playwright browser install + `expo start --web` boot + the full smoke suite. Observed p50 1.4 min, worst 11.3 min.
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
 
       - name: Set up Node and install dependencies
         uses: ./.github/actions/setup-node-app

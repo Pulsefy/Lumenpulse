@@ -57,6 +57,10 @@ jobs:
       uses: ./.github/actions/job-timeout-guard
       with:
         phase: start
+        job-id: backend-checks
+        budget-minutes: '10'
+        note: npm ci + lint + type-check + jest + nest build + SBOM. Observed p90 1.8 min; cold-cache variance dominates.
+        note: npm ci + audit + lint + type-check + jest + nest build + SBOM. Observed p90 1.8 min; cold-cache variance dominates.
 
     - name: Set up Node and install dependencies
       uses: ./.github/actions/setup-node-app

@@ -44,6 +44,7 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
         fetch-depth: 0
 
@@ -51,6 +52,9 @@ jobs:
       uses: ./.github/actions/job-timeout-guard
       with:
         phase: start
+        job-id: onchain-checks
+        budget-minutes: '30'
+        note: Two full wasm32 release builds on a PR, clippy, contract tests, wasm optimisation.
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master

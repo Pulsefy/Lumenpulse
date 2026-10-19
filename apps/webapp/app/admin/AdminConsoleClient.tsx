@@ -74,6 +74,32 @@ interface SystemStatus {
   horizonStatus: 'online' | 'offline' | 'degraded';
 }
 
+interface FeatureFlagEntry {
+  id?: string;
+  key: string;
+  enabled: boolean;
+  conditions?: Record<string, unknown> | null;
+  targetPercentage?: number | null;
+  percentage?: number | null;
+  sensitive?: boolean;
+  isSensitive?: boolean;
+  changedBy?: string | null;
+  updatedAt?: string;
+  createdAt?: string;
+}
+
+interface FeatureFlagHistoryEntry {
+  id: string;
+  flagKey: string;
+  action: string;
+  previousEnabled: boolean | null;
+  newEnabled: boolean | null;
+  targetPercentage?: number | null;
+  sensitive?: boolean | null;
+  actor?: string | null;
+  changedAt: string;
+}
+
 interface SchedulerQueueMetric {
   name: string;
   depth: number;
@@ -405,6 +431,129 @@ function StatusBadge({ status }: { status: 'healthy' | 'degraded' | 'unhealthy' 
   );
 }
 
+function FeatureFlagRow({
+  flag,
+  history,
+  onSave,
+}: {
+  flag: FeatureFlagEntry;
+  history: FeatureFlagHistoryEntry[];
+  onSave: (flag: FeatureFlagEntry, confirmed: boolean) => Promise<void>;
+}) {
+  const [enabled, setEnabled] = useState(flag.enabled);
+  const [targetPercentage, setTargetPercentage] = useState<number>(flag.targetPercentage ?? flag.percentage ?? 0);
+  const [confirmed, setConfirmed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isSensitive = Boolean(flag.sensitive || flag.isSensitive);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({ ...flag, enabled, targetPercentage }, isSensitive ? confirmed : true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update flag');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold text-sm break-all">{flag.key}</h3>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full ${enabled ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-300'}`}>
+              {enabled ? 'ON' : 'OFF'}
+            </span>
+            {isSensitive && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
+                SENSITIVE
+              </span>
+            )}
+          </div>
+          <div className="mt-1 text-xs text-foreground/40">
+            Last change: {flag.updatedAt ? new Date(flag.updatedAt).toLocaleString() : 'Never'}
+            {flag.changedBy ? ` • ${flag.changedBy}` : ''}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-foreground/70">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(event) => setEnabled(event.target.checked)}
+              className="h-4 w-4 rounded border-white/20 bg-background"
+            />
+            Enabled
+          </label>
+          <div className="w-44">
+            <div className="flex items-center justify-between text-[10px] uppercase text-foreground/40 mb-1">
+              <span>Target</span>
+              <span>{targetPercentage}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={targetPercentage}
+              onChange={(event) => setTargetPercentage(Number(event.target.value))}
+              className="w-full accent-primary"
+            />
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving || (isSensitive && !confirmed)}
+            className="px-3 py-2 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      {isSensitive && (
+        <label className="mt-3 flex items-center gap-2 text-xs text-amber-300">
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={(event) => setConfirmed(event.target.checked)}
+            className="h-4 w-4 rounded border-amber-500/30 bg-background"
+          />
+          I confirm this sensitive flag change.
+        </label>
+      )}
+
+      {history.length > 0 && (
+        <div className="mt-3 rounded-lg border border-white/5 bg-black/10 p-3">
+          <div className="text-[10px] uppercase tracking-wide text-foreground/40 mb-2">Change history</div>
+          <div className="space-y-2">
+            {history.slice(0, 3).map((entry) => (
+              <div key={entry.id} className="flex items-start justify-between gap-3 text-xs text-foreground/60">
+                <div>
+                  <span className="font-medium text-foreground/70">{entry.action}</span>
+                  {entry.actor ? ` • ${entry.actor}` : ''}
+                  {entry.targetPercentage !== null && entry.targetPercentage !== undefined ? ` • ${entry.targetPercentage}%` : ''}
+                </div>
+                <span>{new Date(entry.changedAt).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-3 rounded-md border border-red-500/20 bg-red-500/5 p-2 text-xs text-red-300">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatDurationMs(durationMs: number | null): string {
   if (durationMs === null || Number.isNaN(durationMs)) return '—';
   if (durationMs < 1000) return `${durationMs} ms`;
@@ -542,6 +691,8 @@ export default function AdminConsoleClient() {
 
   const [contracts, setContracts] = useState<ContractMetadata[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlagEntry[]>([]);
+  const [featureFlagHistory, setFeatureFlagHistory] = useState<Record<string, FeatureFlagHistoryEntry[]>>({});
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [schedulerHealth, setSchedulerHealth] = useState<SchedulerHealthPayload | null>(null);
   const [schedulerError, setSchedulerError] = useState<string | null>(null);
@@ -549,8 +700,10 @@ export default function AdminConsoleClient() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isTestnet = config?.network === 'testnet';
+  const token = getAuthToken();
   const currentUserRole = getCurrentUserRole();
+  const isAdmin = currentUserRole === 'admin';
+  const isTestnet = config?.network === 'testnet';
   const isMainnet = config?.network === 'mainnet';
   const hasValidConfig = configStatus === 'ready' && config;
 
@@ -581,6 +734,38 @@ export default function AdminConsoleClient() {
         }
       }
       setContracts(contractList);
+
+      // Load feature flags for the admin console
+      try {
+        const featureFlagResponse = await fetch(`${API_BASE}/feature-flags`, {
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (featureFlagResponse.ok) {
+          const featureFlagData = await featureFlagResponse.json();
+          const normalized = Array.isArray(featureFlagData) ? featureFlagData : [];
+          setFeatureFlags(normalized);
+
+          const historyEntries = await Promise.all(
+            normalized.map(async (flag) => {
+              const historyResponse = await fetch(`${API_BASE}/feature-flags/${encodeURIComponent(flag.key)}/history`, {
+                headers: {
+                  Accept: 'application/json',
+                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+              });
+              if (!historyResponse.ok) return [flag.key, []] as const;
+              const historyData = await historyResponse.json();
+              return [flag.key, Array.isArray(historyData) ? historyData : []] as const;
+            }),
+          );
+          setFeatureFlagHistory(Object.fromEntries(historyEntries));
+        }
+      } catch {
+        setFeatureFlags([]);
+      }
 
       // Load system status
       try {
@@ -665,7 +850,7 @@ export default function AdminConsoleClient() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [hasValidConfig, isAuthenticated, config]);
+  }, [hasValidConfig, isAuthenticated, config, token]);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -695,13 +880,13 @@ export default function AdminConsoleClient() {
   }
 
   // Unauthorized state
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !isAdmin) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <Shield className="w-12 h-12 text-foreground/20 mx-auto mb-4" />
           <h2 className="text-xl font-semibold">Access Denied</h2>
-          <p className="text-foreground/50 text-sm mt-2">You do not have permission to access this page.</p>
+          <p className="text-foreground/50 text-sm mt-2">This console is restricted to administrators only.</p>
           <Link href="/" className="mt-4 inline-block text-primary hover:underline text-sm">
             Return to home
           </Link>
@@ -869,6 +1054,57 @@ export default function AdminConsoleClient() {
             )}
           </div>
 
+          {/* Feature Flag Console */}
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Settings className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-semibold">Feature Flag Console</h2>
+              <span className="text-xs text-foreground/40">({featureFlags.length} flags)</span>
+            </div>
+
+            {featureFlags.length === 0 ? (
+              <div className="p-8 text-center border border-white/5 rounded-2xl bg-white/[0.02]">
+                <Settings className="w-8 h-8 text-foreground/20 mx-auto mb-3" />
+                <p className="text-foreground/40 text-sm">No feature flags are configured.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {featureFlags.map((flag) => (
+                  <FeatureFlagRow
+                    key={flag.key}
+                    flag={flag}
+                    history={featureFlagHistory[flag.key] || []}
+                    onSave={async (updatedFlag, confirmed) => {
+                      const payload = {
+                        key: updatedFlag.key,
+                        enabled: updatedFlag.enabled,
+                        targetPercentage: updatedFlag.targetPercentage ?? updatedFlag.percentage ?? 0,
+                        sensitive: Boolean(updatedFlag.sensitive || updatedFlag.isSensitive),
+                        confirmed,
+                        changedBy: 'admin',
+                      };
+
+                      const response = await fetch(`${API_BASE}/feature-flags`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                        },
+                        body: JSON.stringify(payload),
+                      });
+
+                      if (!response.ok) {
+                        const body = await response.json().catch(() => ({}));
+                        throw new Error(body?.message || 'Failed to update flag');
+                      }
+
+                      await loadData();
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
           <SchedulerHealthPanel health={schedulerHealth} error={schedulerError} />
 
           {/* Audit Logs Section */}

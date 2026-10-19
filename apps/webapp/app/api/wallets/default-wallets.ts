@@ -1,5 +1,7 @@
 import type { Wallet } from '@/contexts/WalletContext';
 
+// Kept out of route.ts: Next.js only allows HTTP handlers and route-segment
+// config to be exported from a route file.
 export const DEFAULT_WALLETS: Wallet[] = [
   {
     id: 'wallet-1',

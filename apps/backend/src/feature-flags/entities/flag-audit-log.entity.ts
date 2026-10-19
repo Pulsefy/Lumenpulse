@@ -34,6 +34,14 @@ export class FlagAuditLog {
   @Column({ type: 'boolean', nullable: true })
   newEnabled: boolean | null;
 
+  /** Rollout percentage effective immediately after this mutation. */
+  @Column({ type: 'integer', nullable: true })
+  targetPercentage: number | null;
+
+  /** Whether the flag was marked sensitive at the time of the mutation. */
+  @Column({ type: 'boolean', nullable: true, default: false })
+  sensitive: boolean | null;
+
   /**
    * Targeting configuration before this mutation (null if the flag did not
    * exist). Lets an auditor see who was in the allow/deny lists and what

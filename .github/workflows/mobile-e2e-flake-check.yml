@@ -33,12 +33,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
           phase: start
 
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       - name: Set up Node and install dependencies
         uses: ./.github/actions/setup-node-app
         with:
@@ -77,6 +80,20 @@ jobs:
     # Issue #1714. Four `echo` lines; 5 min is a ceiling, not an estimate.
     timeout-minutes: 5
     steps:
+      # Needed only so the local timeout-guard action exists on disk.
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          sparse-checkout: .github/actions
+
+      - name: Start timeout guard
+        uses: ./.github/actions/job-timeout-guard
+        with:
+          phase: start
+          job-id: report
+          budget-minutes: '5'
+          note: Four `echo` lines into the job summary; runs after the 10 matrix legs finish.
+
       - name: Summarize flake rate
         run: |
           echo "### Mobile E2E flake check" >> "$GITHUB_STEP_SUMMARY"

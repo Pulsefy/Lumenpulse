@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { FeatureFlagsController } from './feature-flags.controller';
 import { FeatureFlagsService } from './feature-flags.service';
 import { FlagAuditLog } from './entities/flag-audit-log.entity';
+import { UserRole } from '../users/entities/user.entity';
 
 describe('FeatureFlagsController', () => {
   let controller: FeatureFlagsController;
@@ -60,6 +61,12 @@ describe('FeatureFlagsController', () => {
       const result = await controller.list();
       expect(result).toEqual([]);
       expect(service.listFlags).toHaveBeenCalled();
+    });
+
+    it('requires admin authorization metadata', () => {
+      const roles = Reflect.getMetadata('roles', FeatureFlagsController.prototype.list);
+      expect(roles).toContain(UserRole.ADMIN);
+      expect(Reflect.getMetadata('guards', FeatureFlagsController.prototype.list)).toBeDefined();
     });
   });
 

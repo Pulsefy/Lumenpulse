@@ -7,6 +7,7 @@ import {
   Delete,
   Query,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -32,6 +33,9 @@ export class FeatureFlagsController {
   constructor(private readonly flags: FeatureFlagsService) {}
 
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'List all feature flags',
     description:
@@ -84,6 +88,9 @@ export class FeatureFlagsController {
    * enabled state, and the timestamp.
    */
   @Get(':key/history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get flag change history (admin)',
     description:
@@ -133,6 +140,9 @@ export class FeatureFlagsController {
   }
 
   @Get(':key')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get details of a feature flag',
     description: 'Retrieves configuration details of a single feature flag.',
@@ -165,26 +175,46 @@ export class FeatureFlagsController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
-  upsert(@Body() body: UpsertFeatureFlagDto) {
-    // Only forward targeting when at least one field was supplied, so an
-    // on/off-only update cannot silently clear a live rollout.
+  upsert(
+    @Body() body: UpsertFeatureFlagDto,
+    @Req() req?: { user?: { email?: string } },
+  ) {
+    const resolvedActor = body.changedBy ?? req?.user?.email;
+
     const targeting =
       body.rolloutPercentage !== undefined ||
+      body.targetPercentage !== undefined ||
+      body.percentage !== undefined ||
       body.allowList !== undefined ||
       body.denyList !== undefined
         ? {
-            rolloutPercentage: body.rolloutPercentage,
+            rolloutPercentage:
+              body.rolloutPercentage ?? body.targetPercentage ?? body.percentage,
             allowList: body.allowList,
             denyList: body.denyList,
           }
         : undefined;
 
+    const options: Record<string, unknown> = {};
+    if (body.sensitive !== undefined || body.isSensitive !== undefined) {
+      options.sensitive = body.sensitive ?? body.isSensitive ?? false;
+    }
+    if (body.confirmed !== undefined) {
+      options.confirmed = body.confirmed;
+    }
+    if (body.targetPercentage !== undefined || body.percentage !== undefined) {
+      options.targetPercentage =
+        body.targetPercentage ?? body.percentage ?? undefined;
+    }
+
+    const payload = { ...(targeting ?? {}), ...options };
+
     return this.flags.upsert(
       body.key,
       body.enabled,
       body.conditions ?? undefined,
-      body.changedBy,
-      targeting,
+      resolvedActor,
+      Object.keys(payload).length > 0 ? payload : undefined,
     );
   }
 
