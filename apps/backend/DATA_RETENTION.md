@@ -1,4 +1,4 @@
-# Data retention and deletion for user records
+# Data retention, soft deletion and erasure for core records
 
 This document is the inventory the erasure flow is driven from. It answers two
 questions for every backend store that can hold user-identifiable data:
@@ -10,6 +10,11 @@ The machine-readable copy of the same inventory lives in
 [`src/data-retention/user-data-inventory.ts`](./src/data-retention/user-data-inventory.ts);
 `UserDataDeletionService` iterates it, so a new user-keyed table is only covered
 once it is added there. `DATA_RETENTION.md` and the code must move together.
+
+Soft deletion of the core entities (`projects`, `grants`,
+`verification_requests`) follows the same policy as the user tombstone
+described below: a row is flagged, hidden from normal queries, and only
+physically removed once the retention window has elapsed.
 
 ## Inventory
 
@@ -72,6 +77,10 @@ Keeping a foreign key that points at the anonymised tombstone user is not
 identifying: the tombstone has no email, name, wallet, avatar or 2FA secret, so
 the reference is pseudonymous at worst.
 
+The same reasoning applies to soft-deleted core entities: their `deletedAt`,
+`deletedBy` and `deletionReason` columns are kept so the deletion itself is
+auditable, while the row's own personal data is redacted by the erasure flow.
+
 ## The erasure flow
 
 `UserDataDeletionService.deleteUserData(userId)`:
@@ -106,6 +115,79 @@ node dist/scripts/delete-user-data.js <user-id>
 The service is exported from `DataRetentionModule`, so an admin endpoint can be
 layered on later without changing the erasure logic.
 
+## Soft delete and restore for core entities
+
+`projects`, `grants` and `verification_requests` are never hard-deleted by an
+admin action. Instead each row carries:
+
+| Column           | Type        | Meaning                                          |
+| ---------------- | ----------- | ------------------------------------------------ |
+| `deletedAt`      | `timestamptz` | When the row was soft-deleted; `NULL` if live.  |
+| `deletedBy`      | `uuid`      | The admin actor that performed the deletion.     |
+| `deletionReason` | `text`      | Free-text reason captured at deletion time.      |
+
+The actor and timestamp are written in the same transaction as the flag, so a
+soft delete is never recorded without knowing who did it and when.
+
+Soft-deleted rows are excluded from every normal query path, listed and
+restored by admins within the retention window, and permanently purged on a
+documented schedule. The sections below describe each of those guarantees.
+
+### Excluding soft-deleted rows
+
+Every normal query path filters on `deletedAt IS NULL`. This is enforced in the
+repository layer (a shared `notDeleted` scope) rather than per call site, so a
+new query cannot accidentally surface a tombstoned row. Public and admin list
+endpoints, joins and counts all go through the same scope.
+
+The `notDeleted` scope is the single filter used by repositories, so a
+soft-deleted row cannot leak through a join, a count, or an admin list that
+forgets to opt in.
+
+### Listing and restoring
+
+Admins can list soft-deleted rows within the retention window through the
+`RecentlyDeletedService`, which returns rows where `deletedAt` is set and
+`deletedAt > now() - retention`. Restoring a row clears `deletedAt`,
+`deletedBy` and `deletionReason` in one transaction and records a
+`<entity>.restored` entry in `audit_logs` with the acting admin.
+
+Restore is transactional: the flags are cleared and the audit entry is written
+together, so a restored row is never visible without a matching audit record.
+
+### Retention window and purge schedule
+
+Soft-deleted core entities are retained for **30 days** after `deletedAt`.
+After that they are eligible for permanent purge, which runs on a documented
+schedule:
+
+- the `PurgeSoftDeletedRecordsJob` runs **daily at 03:00 UTC** via the
+  scheduler;
+- it hard-deletes rows whose `deletedAt` is older than the retention window,
+  in batches, and writes a `<entity>.purged` audit record per batch with the
+  row count (no row contents);
+- the job is idempotent and safe to re-run; a missed run simply purges on the
+  next tick.
+
+The 30-day window is a constant in
+`src/data-retention/soft-delete.constants.ts`; changing it changes both the
+restore listing and the purge cutoff, so the two cannot drift apart.
+
+The purge job is the only path that hard-deletes these rows; admin actions
+never bypass it, so the retention window is always honoured.
+
+### Consistency with the user-deletion policy
+
+This mirrors the Wave 9 user tombstone: the row is flagged rather than removed,
+`deletedAt` is the single source of truth for "is this live", and the actor is
+recorded. Where a soft-deleted core entity is keyed by a user, the erasure flow
+still anonymises it as described above; the soft-delete columns survive so the
+deletion remains auditable.
+
+The same `deletedAt`-as-source-of-truth rule, the same actor recording, and the
+same "flag, don't remove" approach apply to both the user tombstone and the
+core entities, so the two policies cannot diverge.
+
 ## Tests
 
 - `src/data-retention/user-data-inventory.spec.ts` — the inventory is unique,
@@ -114,6 +196,9 @@ layered on later without changing the erasure logic.
   runs the flow against a migrated Postgres database and asserts that no
   identifiable data survives, the audit trail is de-identified, the deletion is
   itself audited, the old token stops working and a second run is a no-op.
+- `src/data-retention/soft-delete.spec.ts` — soft delete records actor and
+  timestamp, normal queries exclude tombstoned rows, restore clears the flags,
+  and the purge job only removes rows past the retention window.
 
 ## Known limitations
 
@@ -127,3 +212,7 @@ layered on later without changing the erasure logic.
 - `audit_log_archive` rows whose payload does not carry a `userId` (for
   example admin-blockchain records archived by a different policy) are not
   matched by the archive handler.
+- Restore is only offered within the 30-day window; after a purge the row is
+  gone and recovery requires a database restore. The purge audit record keeps
+  the count and cutoff so an operator can tell what was removed and when.
+  Bulk admin operations (#1429) must route through the same soft-delete path.

@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-1601-backend-add-soft-delete-and-restore-for-core",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-1601-backend-add-soft-delete-and-restore-for-core": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-1601-backend-add-soft-delete-and-restore-for-core",
+    "origin"
+  ]
+}
