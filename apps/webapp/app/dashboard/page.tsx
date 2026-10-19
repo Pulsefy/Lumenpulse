@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Star, Rocket } from "lucide-react";
+import { Star, Rocket, Bookmark } from "lucide-react";
 import StellarBalancesPanel from "@/components/stellar-balances-panel";
 import AssetDetail from "@/components/asset-detail";
 import WatchlistPanel from "@/components/watchlist-panel";
 import ContributionInsightsWidget from "@/components/contribution-insights-widget";
 import PortfolioOverviewCard from "@/components/portfolio-overview-card";
 import MarketInsightsCard from "@/components/market-insights-card";
+import { SavedSearchesPanel } from "@/components/saved-searches-panel";
 import AnalyticsChartsSection from "@/components/analytics-charts-section";
 
 import { useStellarAccount } from "@/hooks/useStellarAccount";
@@ -85,6 +86,14 @@ export default function DashboardPage() {
                 >
                   <Star size={16} className="fill-yellow-400" />
                   My Watchlist
+                </button>
+                {/* Saved Searches Button */}
+                <button
+                  onClick={() => router.push("/dashboard/saved-searches")}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors text-sm font-medium"
+                >
+                  <Bookmark size={16} />
+                  Saved Searches
                 </button>
               </div>
             </div>
@@ -291,6 +300,17 @@ export default function DashboardPage() {
 
               {/* Contribution Insights Widget */}
               <ContributionInsightsWidget publicKey={publicKey} />
+
+              {/* Saved Searches */}
+              <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl border border-white/10 shadow-xl">
+                <SavedSearchesPanel
+                  onRunSearch={({ query, filters }) => {
+                    void router.push(
+                      `/dashboard/saved-searches?q=${encodeURIComponent(query)}`,
+                    );
+                  }}
+                />
+              </div>
 
               {/* Market Insights — backed by performance snapshot API */}
               <div className="bg-gray-900/50 backdrop-blur-sm p-6 rounded-xl border border-white/10 shadow-xl relative overflow-hidden group">

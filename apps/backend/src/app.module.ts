@@ -82,6 +82,7 @@ import { SnapshotsModule } from './snapshot/snapshot.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { PriceAlertModule } from './price-alert/price-alert.module';
+import { SavedSearchesModule } from './saved-searches/saved-searches.module';
 import { ProfilingModule } from './common/profiling/profiling.module';
 import { QueryCountMiddleware } from './common/profiling/query-count.middleware';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -226,6 +227,8 @@ import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module
     // Price alerts
     PriceAlertModule,
 
+    // Saved searches
+    SavedSearchesModule,
     // Idempotency for write endpoints
     IdempotencyModule,
 
