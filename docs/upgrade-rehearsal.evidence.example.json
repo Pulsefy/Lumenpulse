@@ -1,59 +1,144 @@
 {
+  "schema_version": 1,
   "network": "testnet",
   "commit": "<git commit>",
+  "run_id": "<rehearsal run UUID>",
   "contract_name": "upgradable_contract",
   "contract_id": "<C...>",
+  "admin_address": "<G...>",
   "original_wasm_hash": "<64-hex hash>",
   "upgraded_wasm_hash": "<64-hex hash>",
   "rollback_wasm_hash": "<64-hex hash>",
   "timelock_delay_seconds": 86400,
+  "started_at": "<ISO-8601 UTC timestamp>",
+  "completed_at": "<ISO-8601 UTC timestamp>",
+  "timelock": {
+    "upgrade": {
+      "operation_id": 0,
+      "target_wasm_hash": "<64-hex hash>",
+      "queue_tx": "<transaction hash>",
+      "queued_at": "<ISO-8601 UTC timestamp>",
+      "execute_after": "<ISO-8601 UTC timestamp>",
+      "expires_at": "<ISO-8601 UTC timestamp>",
+      "early_rejection_at": "<ISO-8601 UTC timestamp>",
+      "ready_at": "<ISO-8601 UTC timestamp>",
+      "execute_tx": "<transaction hash>",
+      "executed_at": "<ISO-8601 UTC timestamp>"
+    },
+    "rollback": {
+      "operation_id": 0,
+      "target_wasm_hash": "<64-hex hash>",
+      "queue_tx": "<transaction hash>",
+      "queued_at": "<ISO-8601 UTC timestamp>",
+      "execute_after": "<ISO-8601 UTC timestamp>",
+      "expires_at": "<ISO-8601 UTC timestamp>",
+      "early_rejection_at": "<ISO-8601 UTC timestamp>",
+      "ready_at": "<ISO-8601 UTC timestamp>",
+      "execute_tx": "<transaction hash>",
+      "executed_at": "<ISO-8601 UTC timestamp>"
+    }
+  },
   "steps": [
     {
       "name": "baseline",
-      "output": "<captured command output>"
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<commit, contract ID, deployment notes and read-only baseline state>"
     },
     {
       "name": "queued",
-      "output": "<transaction hash, operation ID, execute_after, expires_at>"
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<upgraded WASM upload, queue_operation tx hash, operation ID, created_at, execute_after, expires_at>"
     },
     {
       "name": "early_execution_rejected",
-      "output": "<OperationNotReady output>"
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<Pending status and the OperationNotReady rejection (Error(Contract, #6))>"
     },
     {
       "name": "ready",
-      "output": "<Ready status output>"
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<Ready status output and ledger time>"
     },
     {
       "name": "executed",
-      "output": "<execution transaction and events>"
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<execution transaction and Upgraded/OperationExecuted events>"
     },
     {
       "name": "post_upgrade_verification",
-      "output": "<read-only state verification>"
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<on-chain WASM hash and read-only state verification>"
     },
     {
       "name": "manifest_updated",
-      "output": "<manifest validation output>"
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<rehearsal manifest written with the upgraded WASM hash>"
     },
     {
       "name": "backend_verification",
-      "output": "<drift, active-manifest, and smoke output>"
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<active-manifest endpoint output, or the reason it was skipped>"
     },
     {
       "name": "rollback_queued",
-      "output": "<rollback queue output>"
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<rollback queue_operation output>"
+    },
+    {
+      "name": "rollback_early_execution_rejected",
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<rollback OperationNotReady output>"
+    },
+    {
+      "name": "rollback_ready",
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<rollback Ready status output>"
     },
     {
       "name": "rollback_executed",
-      "output": "<rollback execution output>"
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<rollback execution transaction and events>"
     },
     {
       "name": "post_rollback_verification",
-      "output": "<read-only rollback verification>"
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<on-chain WASM hash and read-only rollback verification>"
+    },
+    {
+      "name": "manifest_restored",
+      "status": "passed",
+      "started_at": "<ISO-8601 UTC timestamp>",
+      "completed_at": "<ISO-8601 UTC timestamp>",
+      "output": "<rehearsal manifest restored to the original WASM hash>"
     }
   ],
   "follow_up_issues": [
-    "UPGRADE-REHEARSAL-001"
+    "UPGRADE-REHEARSAL-002"
   ]
 }
