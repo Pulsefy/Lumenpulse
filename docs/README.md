@@ -140,7 +140,8 @@ Non-markdown files in `docs/`:
 - [`ci-baseline.json`](ci-baseline.json) — recorded CI run times, input to the
   [CI Run Time](ci-run-time.md) tuning.
 - [`upgrade-rehearsal.evidence.example.json`](upgrade-rehearsal.evidence.example.json)
-  — example evidence file for the [Contract Upgrade Rehearsal](CONTRACT_UPGRADE_REHEARSAL.md).
+  — evidence schema for the [Contract Upgrade Rehearsal](CONTRACT_UPGRADE_REHEARSAL.md);
+  `scripts/validate-upgrade-rehearsal.mjs` checks real evidence against it.
 
 ## Naming convention
 

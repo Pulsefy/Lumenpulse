@@ -6,7 +6,8 @@
     "scripts": {
         "deploy": "ts-node deploy.ts",
         "smoke": "ts-node smoke.ts",
-        "validate:upgrade-rehearsal": "node validate-upgrade-rehearsal.js",
+        "rehearse:upgrade": "node upgrade-rehearsal.mjs",
+        "validate:upgrade-rehearsal": "node validate-upgrade-rehearsal.mjs",
         "deploy:cost": "ts-node measure-deploy-cost.ts",
         "wasm:optimize": "node optimize-wasm.mjs"
     },

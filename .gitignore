@@ -49,3 +49,6 @@ out.txt
 output.txt
 remaining-diff.txt
 pr_*.md
+
+# Upgrade rehearsal working state (scripts/upgrade-rehearsal.mjs); commit only the evidence you mean to keep
+.upgrade-rehearsal/
