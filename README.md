@@ -1,5 +1,5 @@
 # LumenPulse
-
+///WIP
 LumenPulse is a cutting-edge, decentralized crypto news aggregator and portfolio management platform built on the Stellar blockchain ecosystem. Leveraging Stellar's sub-second settlements, low fees, and Soroban smart contracts, LumenPulse curates real-time news from trusted sources, enables seamless portfolio tracking, and rewards community contributions with on-chain incentives—empowering users with transparent, borderless access to crypto insights.
 
 Designed for crypto enthusiasts, traders, and developers worldwide, LumenPulse simplifies staying informed and managing assets in volatile markets. Whether you're a novice investor monitoring trends or a DeFi power user analyzing on-chain data, the platform's intuitive UI, robust API, and blockchain integration foster informed decisions and community-driven content, all while promoting financial inclusion through Stellar's efficient infrastructure.
