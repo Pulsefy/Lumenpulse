@@ -22292,6 +22292,176 @@
         ]
       }
     },
+    "/v1/health/models": {
+      "get": {
+        "description": "Reports the trustworthiness of every registered model (live version, drift state, calibration age and data freshness). Each model is classified trustworthy | degraded | unavailable so consumers can decide whether to surface a prediction. Transitions into a degraded state are alerted through the backend notification path by the data-processing service (#1647).",
+        "operationId": "HealthController_getModelHealth[0]",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Per-model SLO health report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelHealthResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Returns when the data-processing service is unreachable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Returns per-model SLO health from the data-processing service",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/models": {
+      "get": {
+        "description": "Reports the trustworthiness of every registered model (live version, drift state, calibration age and data freshness). Each model is classified trustworthy | degraded | unavailable so consumers can decide whether to surface a prediction. Transitions into a degraded state are alerted through the backend notification path by the data-processing service (#1647).",
+        "operationId": "HealthController_getModelHealth[1]",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Per-model SLO health report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelHealthResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Returns when the data-processing service is unreachable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Returns per-model SLO health from the data-processing service",
+        "tags": [
+          "health"
+        ]
+      }
+    },
     "/v1/verification/config": {
       "get": {
         "description": "Retrieve current quorum settings and voting weight calculation mode.",
@@ -48531,6 +48701,104 @@
         "required": [
           "accessToken",
           "session"
+        ]
+      },
+      "ModelHealthSignalDto": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "enum": [
+              "trustworthy",
+              "degraded",
+              "unavailable"
+            ],
+            "type": "string",
+            "example": "trustworthy"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Human-readable explanation of the signal state"
+          },
+          "value": {
+            "type": "object",
+            "description": "Structured context for the signal (feature names, age in seconds, ...)"
+          }
+        },
+        "required": [
+          "state",
+          "detail"
+        ]
+      },
+      "ModelHealthSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "model_type": {
+            "type": "string",
+            "description": "Model type identifier, e.g. sentiment or price_predictor"
+          },
+          "live_version": {
+            "type": "string",
+            "nullable": true,
+            "description": "Currently promoted model version from the registry, or null when none is live",
+            "example": "v1.1"
+          },
+          "drift": {
+            "$ref": "#/components/schemas/ModelHealthSignalDto"
+          },
+          "calibration_age": {
+            "$ref": "#/components/schemas/ModelHealthSignalDto"
+          },
+          "data_freshness": {
+            "$ref": "#/components/schemas/ModelHealthSignalDto"
+          },
+          "overall": {
+            "enum": [
+              "trustworthy",
+              "degraded",
+              "unavailable"
+            ],
+            "type": "string",
+            "example": "trustworthy"
+          },
+          "checked_at": {
+            "type": "string",
+            "description": "ISO-8601 UTC time this model was assessed"
+          },
+          "transitioned_to_degraded": {
+            "type": "boolean",
+            "description": "True when this assessment moved the model into a non-trustworthy state since the last assessment",
+            "example": false
+          }
+        },
+        "required": [
+          "model_type",
+          "drift",
+          "calibration_age",
+          "data_freshness",
+          "overall",
+          "checked_at",
+          "transitioned_to_degraded"
+        ]
+      },
+      "ModelHealthResponseDto": {
+        "type": "object",
+        "properties": {
+          "checked_at": {
+            "type": "string",
+            "description": "ISO-8601 UTC time this report was generated"
+          },
+          "models": {
+            "additionalProperties": true,
+            "description": "Per-model SLO health snapshots keyed by model type",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelHealthSnapshotDto"
+            }
+          }
+        },
+        "required": [
+          "checked_at",
+          "models"
         ]
       },
       "RegistryConfigDto": {
