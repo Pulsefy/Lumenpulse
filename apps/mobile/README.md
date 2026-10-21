@@ -10,8 +10,8 @@ Lumenpulse Mobile is the cross-platform mobile client for the Lumenpulse ecosyst
 
 ## Prerequisites
 
-- **Node.js**: 18.x or later
-- **pnpm**: `npm install -g pnpm`
+- **Node.js**: use the version in the repository's `.nvmrc`.
+- **npm**: included with Node.js; mobile CI uses `package-lock.json` and `npm ci`.
 - **Expo Go**: Download on iOS/Android for physical device testing.
 
 ## Getting Started
@@ -19,7 +19,10 @@ Lumenpulse Mobile is the cross-platform mobile client for the Lumenpulse ecosyst
 1. **Install Dependencies**:
 
    ```bash
-   pnpm install
+   # From the repository root (Metro also needs the root tooling):
+   npm install --no-audit --no-fund
+   cd apps/mobile
+   npm ci
    ```
 
 2. **Setup Environment**:
@@ -31,7 +34,7 @@ Lumenpulse Mobile is the cross-platform mobile client for the Lumenpulse ecosyst
 3. **Start the Development Server**:
 
    ```bash
-   pnpm start
+   npm run start
    ```
 
 4. **Run on Platforms**:
@@ -42,12 +45,16 @@ Lumenpulse Mobile is the cross-platform mobile client for the Lumenpulse ecosyst
 
 ## Scripts
 
-- `pnpm start`: Start Expo dev server.
-- `pnpm android`: Open on Android.
-- `pnpm ios`: Open on iOS.
-- `pnpm web`: Open as a progressive web app.
-- `pnpm lint`: Run ESLint.
-- `pnpm tsc`: Run TypeScript compiler check.
+- `npm run start`: Start Expo dev server.
+- `npm run android`: Open on Android.
+- `npm run ios`: Open on iOS.
+- `npm run web`: Open as a progressive web app.
+- `npm run lint`: Run ESLint.
+- `npm run tsc`: Run TypeScript compiler check.
+
+The workspace's root `pnpm-lock.yaml` is maintained for pnpm users; there is no
+separate mobile pnpm lockfile. See the [dependency audit](docs/dependency-audit-2026-10-19.md)
+for dependency decisions, remaining advisories and reproducible size measurements.
 
 ## Wallet Adapters
 

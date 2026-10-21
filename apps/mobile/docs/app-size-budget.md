@@ -123,6 +123,10 @@ come from a native build.
 
 ## Dependency review
 
+The [2026-10-19 dependency audit](dependency-audit-2026-10-19.md) updates the
+inventory below, pins direct versions and records fresh before/after measurements.
+The baseline measurements in this document remain historical budget references.
+
 Five largest production dependencies of `apps/mobile`, by installed size
 (`du -sk node_modules/<pkg>` after `npm ci`) as of the baseline commit:
 
@@ -143,9 +147,14 @@ same reason - they are platform peers pulled in by configuration rather than by
 | `react-native-web`                                    | The web target selected by `app.json`; aliased in by `babel-preset-expo`, so nothing imports it by name. |
 | `react-native-screens`                                | Native screen primitives used by `expo-router`; a peer, satisfied by presence.                           |
 | `react-native-safe-area-context`                      | Peer of `react-native-screens` and the navigation stack.                                                 |
-| `react-native-worklets`, `react-native-worklets-core` | Peer dependencies of `react-native-reanimated` under the new architecture (`newArchEnabled: true`).      |
+| `react-native-worklets`                               | Peer dependency of `react-native-reanimated` under the new architecture (`newArchEnabled: true`).       |
 | `expo-dev-client`                                     | Dev builds only; not imported by application code but needed for `expo run:*`.                           |
-| `lumenpulse` (`file:../..`)                           | The monorepo root; Metro resolves the workspace through it (see the comment in `mobile.yml`).            |
+
+`react-native-worklets-core` is a separate runtime, not a Reanimated peer, and
+had no consumer in this app. It was removed in the dependency audit, along with
+the unused `lumenpulse` root-package link. Metro still detects the pnpm workspace
+and needs the root `node_modules` directory; removing the link does not remove
+that setup step.
 
 ### Removed as unused
 
