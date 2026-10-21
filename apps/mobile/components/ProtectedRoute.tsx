@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -9,12 +10,13 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
+  const { colors } = useTheme();
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#7a85ff" />
-        <Text style={styles.loadingText}>Checking authentication...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accentSecondary} />
+        <Text style={[styles.loadingText, { color: colors.text }]}>Checking authentication...</Text>
       </View>
     );
   }
@@ -33,11 +35,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a0a0a',
   },
   loadingText: {
     marginTop: 16,
-    color: '#ffffff',
     fontSize: 16,
   },
 });

@@ -69,6 +69,13 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     try {
       setError(null);
       const uid = userId;
+      // Show what is already on device (e.g. from a background refresh)
+      // straight away, then reconcile with the server.
+      const local = await getLocalWatchlist(uid);
+      if (local.length > 0) {
+        setItems(local);
+        setIsLoading(false);
+      }
       const result = await syncAndGetWatchlist(uid);
       setItems(result.items);
 

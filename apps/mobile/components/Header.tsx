@@ -1,10 +1,12 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useTheme } from '../contexts/ThemeContext';
 
 export const HeaderBell = () => {
   const router = useRouter();
   const { data } = useNotifications();
+  const { colors } = useTheme();
 
   const unreadCount = data.filter((n) => !n.read).length;
 
@@ -19,12 +21,12 @@ export const HeaderBell = () => {
               position: 'absolute',
               top: -5,
               right: -5,
-              backgroundColor: 'red',
+              backgroundColor: colors.danger,
               borderRadius: 10,
               paddingHorizontal: 6,
             }}
           >
-            <Text style={{ color: '#fff', fontSize: 10 }}>{unreadCount}</Text>
+            <Text style={{ color: colors.onStatus, fontSize: 10 }}>{unreadCount}</Text>
           </View>
         )}
       </View>

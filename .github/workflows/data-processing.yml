@@ -3,14 +3,21 @@ name: Data Processing CI
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
     paths:
-      - "apps/data-processing/**"
+      - 'apps/data-processing/**'
+      - 'docker-compose.yml'
+      - '.python-version'
+      - '.github/actions/**'
+      - '.github/workflows/data-processing.yml'
   pull_request:
-    branches: ["main"]
+    branches: [ "main" ]
     paths:
-      - "apps/data-processing/**"
-      - "apps/data-processing/.ci-trigger"
+      - 'apps/data-processing/**'
+      - 'docker-compose.yml'
+      - '.python-version'
+      - '.github/actions/**'
+      - '.github/workflows/data-processing.yml'
 
 # Issue #1713. See backend.yml for the rationale.
 concurrency:
@@ -19,7 +26,7 @@ concurrency:
 
 jobs:
   data-processing-checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Issue #1714. This job installs the hash-pinned `requirements.lock`, which
     # pulls the torch CPU wheel. That download dominates the runtime on a cache
     # miss, so the budget is set from the observed p90 of 3.2 min with room for
@@ -45,8 +52,7 @@ jobs:
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
-          cache: "pip"
+          working-directory: apps/data-processing
 
       - name: Install dependencies
         run: |

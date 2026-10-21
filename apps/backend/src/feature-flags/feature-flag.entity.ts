@@ -38,6 +38,15 @@ export class FeatureFlag {
   @Column({ type: 'jsonb', nullable: true, default: null })
   denyList: string[] | null;
 
+  /**
+   * Marks a flag whose change has outsized blast radius (payments, auth,
+   * contract calls). Every write to a sensitive flag — including clearing this
+   * marker — must carry an explicit confirmation, so a stray click in the
+   * admin console cannot flip it.
+   */
+  @Column({ type: 'boolean', default: false })
+  sensitive: boolean;
+
   @Column({ type: 'jsonb', nullable: true })
   conditions: Record<string, unknown> | null;
 

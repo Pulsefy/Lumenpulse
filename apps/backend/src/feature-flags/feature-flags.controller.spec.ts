@@ -201,6 +201,41 @@ describe('FeatureFlagsController', () => {
         { role: 'admin' },
         'user@test.com',
         undefined,
+        { sensitive: undefined, confirm: undefined },
+      );
+    });
+
+    it('records the authenticated user as actor over a body-supplied changedBy', async () => {
+      await controller.upsert(
+        { key: 'new.flag', enabled: true, changedBy: 'spoofed@test.com' },
+        { id: 'u-1', email: 'admin@test.com' } as never,
+      );
+
+      expect(service.upsert).toHaveBeenCalledWith(
+        'new.flag',
+        true,
+        undefined,
+        'admin@test.com',
+        undefined,
+        { sensitive: undefined, confirm: undefined },
+      );
+    });
+
+    it('forwards the sensitivity marker and confirmation', async () => {
+      await controller.upsert({
+        key: 'payments.flag',
+        enabled: false,
+        sensitive: true,
+        confirm: true,
+      });
+
+      expect(service.upsert).toHaveBeenCalledWith(
+        'payments.flag',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        { sensitive: true, confirm: true },
       );
     });
 
@@ -222,6 +257,7 @@ describe('FeatureFlagsController', () => {
           allowList: undefined,
           denyList: undefined,
         },
+        { sensitive: undefined, confirm: undefined },
       );
     });
 
@@ -243,6 +279,7 @@ describe('FeatureFlagsController', () => {
           allowList: ['qa'],
           denyList: ['banned'],
         },
+        { sensitive: undefined, confirm: undefined },
       );
     });
 
@@ -256,14 +293,29 @@ describe('FeatureFlagsController', () => {
         undefined,
         undefined,
         undefined,
+        { sensitive: undefined, confirm: undefined },
       );
     });
   });
 
   describe('remove', () => {
-    it('calls service.remove with key', async () => {
+    it('calls service.remove with key and no confirmation by default', async () => {
       await controller.remove('delete.flag');
-      expect(service.remove).toHaveBeenCalledWith('delete.flag');
+      expect(service.remove).toHaveBeenCalledWith('delete.flag', null, {
+        confirm: false,
+      });
+    });
+
+    it('forwards confirm=true and the authenticated actor', async () => {
+      await controller.remove('delete.flag', 'true', {
+        id: 'u-1',
+        email: 'admin@test.com',
+      } as never);
+      expect(service.remove).toHaveBeenCalledWith(
+        'delete.flag',
+        'admin@test.com',
+        { confirm: true },
+      );
     });
   });
 });

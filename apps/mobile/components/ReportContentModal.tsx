@@ -140,7 +140,11 @@ export default function ReportContentModal({
       accessibilityViewIsModal={true}
     >
       <TouchableWithoutFeedback onPress={handleDismiss}>
-        <View style={styles.overlay} accessible accessibilityLabel={t('report_modal.title')}>
+        <View
+          style={[styles.overlay, { backgroundColor: colors.overlay }]}
+          accessible
+          accessibilityLabel={t('report_modal.title')}
+        >
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.keyboardView}
@@ -167,7 +171,7 @@ export default function ReportContentModal({
                       accessibilityRole="button"
                       accessibilityLabel={t('common.done')}
                     >
-                      <Text style={styles.primaryButtonText}>{t('common.done')}</Text>
+                      <Text style={[styles.primaryButtonText, { color: colors.onAccent }]}>{t('common.done')}</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -306,13 +310,20 @@ export default function ReportContentModal({
                     >
                       {status === 'submitting' ? (
                         <View style={styles.loadingRow}>
-                          <ActivityIndicator color="#ffffff" size="small" />
-                          <Text style={[styles.primaryButtonText, { marginLeft: 8 }]}>
+                          <ActivityIndicator color={colors.textSecondary} size="small" />
+                          <Text style={[styles.primaryButtonText, { color: colors.textSecondary, marginLeft: 8 }]}>
                             {t('report_modal.submitting')}
                           </Text>
                         </View>
                       ) : (
-                        <Text style={styles.primaryButtonText}>{t('report_modal.submit')}</Text>
+                        <Text
+                          style={[
+                            styles.primaryButtonText,
+                            { color: isSubmitDisabled ? colors.textSecondary : colors.onStatus },
+                          ]}
+                        >
+                          {t('report_modal.submit')}
+                        </Text>
                       )}
                     </TouchableOpacity>
                   </>
@@ -329,7 +340,6 @@ export default function ReportContentModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
   keyboardView: {
@@ -410,7 +420,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   primaryButtonText: {
-    color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
   },

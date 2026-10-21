@@ -920,3 +920,48 @@ class FeatureDriftRetrainingCooldown(Base):
     drift_signature = Column(String(64), primary_key=True)
     drift_event_id = Column(String(36), nullable=False)
     triggered_at = Column(DateTime(timezone=True), nullable=False, index=True)
+
+
+class AuditExportRun(Base):
+    """
+    Records every invocation of the prediction audit-trail export endpoint
+    (Issue #1639, acceptance criterion 4: "export runs are themselves audited").
+
+    Columns
+    -------
+    query_type     : 'prediction_id' | 'subject' | 'time_range'
+    query_params   : sanitised copy of the query parameters (no raw PII)
+    request_id     : correlation ID from the HTTP request header
+    client_ip      : source IP of the requesting client
+    row_count      : number of audit records returned
+    status         : 'ok' | 'error'
+    error_detail   : populated only when status='error'
+    created_at     : UTC timestamp of the export run
+    """
+
+    __tablename__ = "audit_export_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    query_type = Column(String(50), nullable=False, index=True)
+    query_params = Column(JSON, nullable=False)
+    request_id = Column(String(255), nullable=True, index=True)
+    client_ip = Column(String(64), nullable=True)
+    row_count = Column(Integer, nullable=False, default=0)
+    status = Column(String(20), nullable=False, default="ok")
+    error_detail = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    __table_args__ = (
+        Index("idx_audit_export_runs_query_type", "query_type"),
+        Index("idx_audit_export_runs_created_at", "created_at"),
+        Index("idx_audit_export_runs_request_id", "request_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<AuditExportRun(id={self.id}, query_type='{self.query_type}', "
+            f"status='{self.status}', rows={self.row_count})>"
+        )

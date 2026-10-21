@@ -9,7 +9,6 @@ import { memoryStorage } from 'multer';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { TestExceptionController } from './test-exception.controller';
 
 import { SentimentModule } from './sentiment/sentiment.module';
 import { MetricsModule } from './metrics/metrics.module';
@@ -32,6 +31,7 @@ import databaseConfig from './database/database.config';
 import stellarConfig from './stellar/config/stellar.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { VersionFallbackMiddleware } from './common/middleware/version-fallback.middleware';
 import { RequestContextModule } from './common/services/request-context.module';
 import { StructuredLoggerService } from './common/services/structured-logger.service';
 import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
@@ -41,7 +41,6 @@ import {
   createThrottlerOptions,
   getRateLimitSettings,
 } from './common/rate-limit/rate-limit.config';
-import { TestController } from './test/test.controller';
 import { UploadModule } from './upload/upload.module';
 import { AuthModule } from './auth/auth.module';
 import { SupportModeModule } from './support-mode/support-mode.module';
@@ -50,6 +49,7 @@ import { GrantsModule } from './grants/grants.module';
 import { HealthModule } from './health/health.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { OutboxModule } from './outbox/outbox.module';
+import { OutboxIndexConsistencyModule } from './outbox-index-consistency/outbox-index-consistency.module';
 import { VerificationModule } from './verification/verification.module';
 import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
@@ -87,6 +87,9 @@ import { QueryCountMiddleware } from './common/profiling/query-count.middleware'
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SavedSearchesModule } from './saved-searches/saved-searches.module';
 import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module';
+import { config } from './lib/config';
+
+const isMainnet = config.stellar.network === 'mainnet';
 
 @Module({
   imports: [
@@ -160,6 +163,7 @@ import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module
     VerificationRequestsModule,
     WatchlistModule,
     OutboxModule,
+    OutboxIndexConsistencyModule,
     ExportModule,
     SignalsModule,
     AnalyticsModule,
@@ -202,8 +206,8 @@ import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module
     // Bot auth
     BotAuthModule,
 
-    // Demo bootstrap
-    DemoBootstrapModule,
+    // Demo bootstrap (testnet only)
+    ...(!isMainnet ? [DemoBootstrapModule] : []),
 
     // Contributor feed
     ContributorFeedModule,
@@ -239,7 +243,7 @@ import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module
     SavedSearchesModule,
     ServiceApiKeysModule,
   ],
-  controllers: [AppController, TestController, TestExceptionController],
+  controllers: [AppController],
   providers: [
     AppService,
     StructuredLoggerService,
@@ -263,8 +267,10 @@ import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    // Apply request ID and logging middleware to all routes
-    consumer.apply(RequestIdMiddleware, LoggerMiddleware).forRoutes('*');
+    // Apply version fallback, request ID and logging middleware to all routes
+    consumer
+      .apply(VersionFallbackMiddleware, RequestIdMiddleware, LoggerMiddleware)
+      .forRoutes('*');
 
     // Apply query-count profiling middleware when QUERY_PROFILING=true.
     // Off by default — zero overhead in production.

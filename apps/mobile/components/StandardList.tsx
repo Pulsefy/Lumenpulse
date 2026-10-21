@@ -23,6 +23,7 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -75,13 +76,15 @@ export default function StandardList<T>({
   estimatedItemSize = 80,
   contentContainerStyle,
 }: Props<T>) {
+  const { colors } = useTheme();
+
   // 🔴 Error state
   if (error) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error}</Text>
+        <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
         {onRetry && (
-          <Text style={styles.retryText} onPress={onRetry}>
+          <Text style={[styles.retryText, { color: colors.accentSecondary }]} onPress={onRetry}>
             Retry
           </Text>
         )}
@@ -100,7 +103,7 @@ export default function StandardList<T>({
             key={i}
             style={[
               styles.skeletonItem,
-              { height: skeletonHeight },
+              { height: skeletonHeight, backgroundColor: colors.surfaceMuted },
             ]}
           />
         ))}
@@ -132,7 +135,7 @@ export default function StandardList<T>({
       ListEmptyComponent={
         ListEmptyComponent ?? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No data available</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No data available</Text>
           </View>
         )
       }
@@ -162,26 +165,20 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   errorText: {
-    color: 'red',
     marginBottom: 8,
   },
-  retryText: {
-    color: '#7a85ff',
-  },
+  retryText: {},
   skeletonContainer: {
     padding: 16,
   },
   skeletonItem: {
-    backgroundColor: '#222',
     marginBottom: 10,
     borderRadius: 8,
   },
   emptyContainer: {
     padding: 16,
   },
-  emptyText: {
-    color: '#888',
-  },
+  emptyText: {},
   footerLoader: {
     margin: 20,
   },

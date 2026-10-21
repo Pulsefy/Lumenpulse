@@ -458,7 +458,7 @@ export default function SearchScreen() {
         animationType="fade"
         onRequestClose={() => setSearchModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]}>
           <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]} accessibilityRole="header">
               {t(editingSearch ? 'search.rename_search_title' : 'search.save_search_title')}
@@ -575,7 +575,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
   modalCard: { borderRadius: 14, padding: 20 },
   modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 16 },

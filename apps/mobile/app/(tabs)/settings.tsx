@@ -24,6 +24,7 @@ import {
   isBiometricLockSupported,
   setBiometricLockEnabled,
 } from '../../lib/biometric-lock';
+import { useReviewerAccess } from '../../lib/use-reviewer-access';
 
 const THEME_OPTIONS: { label: string; value: 'system' | 'light' | 'dark'; icon: string }[] = [
   { label: 'System', value: 'system', icon: 'phone-portrait-outline' },
@@ -33,10 +34,11 @@ const THEME_OPTIONS: { label: string; value: 'system' | 'light' | 'dark'; icon: 
 
 export default function SettingsScreen() {
   const { logout, isAuthenticated } = useAuth();
-  const { colors, setThemeMode, resolvedMode } = useLocalization();
+  const { colors, setThemeMode, themeMode } = useLocalization();
   const { t } = useLocalization();
   const { environment, environmentConfig, setEnvironment, isMainnetConfigured } = useEnvironment();
   const router = useRouter();
+  const { isReviewer } = useReviewerAccess();
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(true);
   const [biometricSaving, setBiometricSaving] = useState(false);
@@ -298,6 +300,40 @@ export default function SettingsScreen() {
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
+          {isReviewer ? (
+            <>
+              <TouchableOpacity
+                testID="settings-moderation-nav"
+                style={styles.navRow}
+                activeOpacity={0.75}
+                onPress={() => router.push('/moderation')}
+                accessibilityRole="link"
+                accessibilityLabel={t('moderation.settings_title')}
+                accessibilityHint={t('moderation.settings_description')}
+              >
+                <View style={styles.navRowCopy}>
+                  <View style={[styles.navIconShell, { backgroundColor: colors.card }]}>
+                    <Ionicons name="shield-checkmark-outline" size={18} color={colors.accent} />
+                  </View>
+                  <View style={styles.navTextWrap}>
+                    <Text style={[styles.navTitle, { color: colors.text }]} accessible>
+                      {t('moderation.settings_title')}
+                    </Text>
+                    <Text
+                      style={[styles.navDescription, { color: colors.textSecondary }]}
+                      accessible
+                    >
+                      {t('moderation.settings_description')}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            </>
+          ) : null}
+
           <TouchableOpacity
             testID="settings-data-exports-nav"
             style={styles.navRow}
@@ -353,7 +389,7 @@ export default function SettingsScreen() {
                 value={biometricEnabled}
                 onValueChange={handleBiometricToggle}
                 trackColor={{ false: colors.cardBorder, true: colors.accent }}
-                thumbColor="#ffffff"
+                thumbColor={colors.switchThumb}
                 accessibilityLabel={t('settings.biometric_lock.enable')}
                 accessibilityRole="switch"
               />
@@ -401,10 +437,10 @@ export default function SettingsScreen() {
                   <Ionicons
                     name={option === 'testnet' ? 'flask-outline' : 'planet-outline'}
                     size={18}
-                    color={isActive ? '#ffffff' : colors.textSecondary}
+                    color={isActive ? colors.onAccent : colors.textSecondary}
                   />
                   <Text
-                    style={[styles.environmentLabel, { color: isActive ? '#ffffff' : colors.text }]}
+                    style={[styles.environmentLabel, { color: isActive ? colors.onAccent : colors.text }]}
                     accessible
                   >
                     {option === 'testnet'
@@ -455,7 +491,7 @@ export default function SettingsScreen() {
 
           <View style={styles.themeRow}>
             {THEME_OPTIONS.map((opt) => {
-              const isActive = resolvedMode === opt.value;
+              const isActive = themeMode === opt.value;
               return (
                 <TouchableOpacity
                   key={opt.value}
@@ -475,10 +511,10 @@ export default function SettingsScreen() {
                   <Ionicons
                     name={opt.icon as any}
                     size={20}
-                    color={isActive ? '#ffffff' : colors.textSecondary}
+                    color={isActive ? colors.onAccent : colors.textSecondary}
                   />
                   <Text
-                    style={[styles.themeLabel, { color: isActive ? '#ffffff' : colors.text }]}
+                    style={[styles.themeLabel, { color: isActive ? colors.onAccent : colors.text }]}
                     accessible
                   >
                     {opt.label}
@@ -611,8 +647,8 @@ export default function SettingsScreen() {
             accessibilityLabel={t('settings.logout')}
             accessibilityHint="Sign out of your account"
           >
-            <Ionicons name="log-out-outline" size={20} color="#ffffff" style={{ marginRight: 8 }} />
-            <Text style={styles.logoutButtonText} accessible>
+            <Ionicons name="log-out-outline" size={20} color={colors.onStatus} style={{ marginRight: 8 }} />
+            <Text style={[styles.logoutButtonText, { color: colors.onStatus }]} accessible>
               {t('settings.logout')}
             </Text>
           </TouchableOpacity>
@@ -774,7 +810,6 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   logoutButtonText: {
-    color: '#ffffff',
     fontSize: 18,
     fontWeight: '600',
   },

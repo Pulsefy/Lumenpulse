@@ -65,8 +65,8 @@ export default function HomeScreen() {
             >
               <Ionicons name="notifications-outline" size={28} color={colors.accent} />
               {unreadCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                <View style={[styles.badge, { backgroundColor: colors.danger }]}>
+                  <Text style={[styles.badgeText, { color: colors.onStatus }]}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -85,29 +85,29 @@ export default function HomeScreen() {
             </View>
 
             <View style={[styles.glassCard, styles.statusCard]}>
-              <Text style={styles.statusLabel} accessible>
+              <Text style={[styles.statusLabel, { color: colors.accent }]} accessible>
                 {t('home.api_status')}
               </Text>
               {isLoading ? (
                 <ActivityIndicator
-                  color="#7a85ff"
+                  color={colors.accentSecondary}
                   style={styles.loader}
                   accessibilityLabel={t('common.loading')}
                 />
               ) : (
-                <Text style={styles.statusText} accessible>
+                <Text style={[styles.statusText, { color: colors.text }]} accessible>
                   {healthStatus}
                 </Text>
               )}
               <TouchableOpacity
-                style={styles.retryButton}
+                style={[styles.retryButton, { backgroundColor: colors.accentMuted, borderColor: colors.cardBorder }]}
                 onPress={testApiConnection}
                 disabled={isLoading}
                 accessibilityRole="button"
                 accessibilityLabel={t('common.retry')}
                 accessibilityHint={t('home.test_connection')}
               >
-                <Text style={styles.retryButtonText} accessible>
+                <Text style={[styles.retryButtonText, { color: colors.accentSecondary }]} accessible>
                   {t('home.test_connection')}
                 </Text>
               </TouchableOpacity>
@@ -123,7 +123,7 @@ export default function HomeScreen() {
             accessibilityLabel={t('home.get_started')}
             accessibilityHint="Navigate to main features"
           >
-            <Text style={styles.buttonText} accessible>
+            <Text style={[styles.buttonText, { color: colors.onAccent }]} accessible>
               {t('home.get_started')}
             </Text>
           </TouchableOpacity>
@@ -149,7 +149,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     right: 0,
-    backgroundColor: '#ff4757',
     borderRadius: 9,
     minWidth: 18,
     height: 18,
@@ -158,7 +157,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 1,
   },
-  badgeText: { color: '#ffffff', fontSize: 10, fontWeight: '700', lineHeight: 13 },
+  badgeText: { fontSize: 10, fontWeight: '700', lineHeight: 13 },
   comingSoon: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   glassCard: { padding: 24, borderRadius: 24, borderWidth: 1, width: '100%' },
   cardText: { fontSize: 16, textAlign: 'center', lineHeight: 24, opacity: 0.8 },
@@ -172,19 +171,17 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  buttonText: { color: '#ffffff', fontSize: 18, fontWeight: '600' },
+  buttonText: { fontSize: 18, fontWeight: '600' },
   statusCard: { marginTop: 16 },
-  statusLabel: { color: '#db74cf', fontSize: 14, fontWeight: '600', marginBottom: 8 },
-  statusText: { color: '#ffffff', fontSize: 12, opacity: 0.8, marginBottom: 12 },
+  statusLabel: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
+  statusText: { fontSize: 12, opacity: 0.8, marginBottom: 12 },
   loader: { marginVertical: 12 },
   retryButton: {
-    backgroundColor: 'rgba(122, 133, 255, 0.2)',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(122, 133, 255, 0.3)',
     alignSelf: 'center',
   },
-  retryButtonText: { color: '#7a85ff', fontSize: 12, fontWeight: '600' },
+  retryButtonText: { fontSize: 12, fontWeight: '600' },
 });

@@ -1,0 +1,36 @@
+rule_files:
+  - ../../prometheus-rules.yml
+
+evaluation_interval: 30s
+
+tests:
+  - name: InstanceDown fires after a minute of failed scrapes
+    interval: 15s
+    input_series:
+      - series: 'up{job="lumenpulse-backend", instance="backend:3000"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: InstanceDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: InstanceDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: backend
+              job: lumenpulse-backend
+              instance: backend:3000
+            exp_annotations:
+              summary: 'Instance is down'
+              description: 'backend:3000 has been down for more than 1 minute'
+
+  - name: InstanceDown stays quiet while the backend is up
+    interval: 15s
+    input_series:
+      - series: 'up{job="lumenpulse-backend", instance="backend:3000"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: InstanceDown
+        exp_alerts: []

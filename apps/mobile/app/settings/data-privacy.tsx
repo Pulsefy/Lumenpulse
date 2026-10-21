@@ -29,6 +29,10 @@ import {
   setAnalyticsEnabled,
   setCrashReportingEnabled,
 } from '../../lib/privacy-preferences';
+import {
+  isBackgroundRefreshEnabled,
+  setBackgroundRefreshEnabled,
+} from '../../lib/background-refresh';
 
 const CATEGORY_ICONS: Record<LocalDataCategoryId, string> = {
   cached_content: 'cloud-download-outline',
@@ -41,13 +45,13 @@ const CATEGORY_ICONS: Record<LocalDataCategoryId, string> = {
 };
 
 /**
- * Settings › Data & Privacy.
+ * Settings â€º Data & Privacy.
  *
  * Lists every category of locally stored data with its current size, clears
  * each one behind a confirmation, and hosts the analytics and crash-reporting
  * opt-out toggles.
  *
- * Clearing never signs the user out and never discards queued offline writes —
+ * Clearing never signs the user out and never discards queued offline writes â€”
  * see lib/local-data.ts for the protected-key rules that guarantee it. When
  * mutations are queued the screen says so explicitly before the user confirms.
  */
@@ -60,7 +64,10 @@ export default function DataPrivacyScreen() {
   const [preferences, setPreferences] = useState<PrivacyPreferences>(DEFAULT_PRIVACY_PREFERENCES);
   const [loading, setLoading] = useState(true);
   const [busyCategory, setBusyCategory] = useState<LocalDataCategoryId | 'all' | null>(null);
-  const [savingPreference, setSavingPreference] = useState<'analytics' | 'crash' | null>(null);
+  const [savingPreference, setSavingPreference] = useState<
+    'analytics' | 'crash' | 'background' | null
+  >(null);
+  const [backgroundRefresh, setBackgroundRefresh] = useState(true);
 
   const loadInventory = useCallback(async () => {
     const next = await getLocalDataInventory();
@@ -70,8 +77,13 @@ export default function DataPrivacyScreen() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [, storedPreferences] = await Promise.all([loadInventory(), getPrivacyPreferences()]);
+        const [, storedPreferences, backgroundEnabled] = await Promise.all([
+          loadInventory(),
+          getPrivacyPreferences(),
+          isBackgroundRefreshEnabled(),
+        ]);
         setPreferences(storedPreferences);
+        setBackgroundRefresh(backgroundEnabled);
       } finally {
         setLoading(false);
       }
@@ -177,6 +189,19 @@ export default function DataPrivacyScreen() {
     }
   };
 
+  const handleBackgroundRefreshToggle = async (nextValue: boolean) => {
+    if (savingPreference) return;
+    setSavingPreference('background');
+    try {
+      await setBackgroundRefreshEnabled(nextValue);
+      setBackgroundRefresh(nextValue);
+    } catch {
+      Alert.alert(t('errors.error'), t('settings.data_privacy.preference_save_failed'));
+    } finally {
+      setSavingPreference(null);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
@@ -202,7 +227,7 @@ export default function DataPrivacyScreen() {
           {t('settings.data_privacy.description')}
         </Text>
 
-        {/* ── Stored data ──────────────────────────────────────────────── */}
+        {/* â”€â”€ Stored data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <Text
           style={[styles.sectionTitle, { color: colors.text }]}
           accessible
@@ -252,7 +277,7 @@ export default function DataPrivacyScreen() {
                     <Text style={[styles.categorySize, { color: colors.accent }]} accessible>
                       {formatBytes(category.bytes)}
                       {category.entryCount > 0
-                        ? ` · ${t('settings.data_privacy.item_count', {
+                        ? ` Â· ${t('settings.data_privacy.item_count', {
                             count: category.entryCount,
                           })}`
                         : ''}
@@ -338,16 +363,16 @@ export default function DataPrivacyScreen() {
               accessibilityHint={t('settings.data_privacy.clear_all_hint')}
             >
               {busyCategory === 'all' ? (
-                <ActivityIndicator color="#ffffff" />
+                <ActivityIndicator color={colors.onStatus} />
               ) : (
                 <>
                   <Ionicons
                     name="trash-outline"
                     size={18}
-                    color="#ffffff"
+                    color={colors.onStatus}
                     style={{ marginRight: 8 }}
                   />
-                  <Text style={styles.clearAllButtonText} accessible>
+                  <Text style={[styles.clearAllButtonText, { color: colors.onStatus }]} accessible>
                     {t('settings.data_privacy.clear_all_title')}
                   </Text>
                 </>
@@ -360,7 +385,7 @@ export default function DataPrivacyScreen() {
           </>
         )}
 
-        {/* ── Privacy controls ─────────────────────────────────────────── */}
+        {/* â”€â”€ Privacy controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <Text
           style={[styles.sectionTitle, { color: colors.text }]}
           accessible
@@ -392,7 +417,7 @@ export default function DataPrivacyScreen() {
                 value={preferences.analyticsEnabled}
                 onValueChange={handleAnalyticsToggle}
                 trackColor={{ false: colors.cardBorder, true: colors.accent }}
-                thumbColor="#ffffff"
+                thumbColor={colors.switchThumb}
                 accessibilityRole="switch"
                 accessibilityLabel={t('settings.data_privacy.analytics.title')}
               />
@@ -418,9 +443,35 @@ export default function DataPrivacyScreen() {
                 value={preferences.crashReportingEnabled}
                 onValueChange={handleCrashReportingToggle}
                 trackColor={{ false: colors.cardBorder, true: colors.accent }}
-                thumbColor="#ffffff"
+                thumbColor={colors.switchThumb}
                 accessibilityRole="switch"
                 accessibilityLabel={t('settings.data_privacy.crash_reporting.title')}
+              />
+            )}
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <View style={styles.preferenceRow}>
+            <View style={styles.preferenceCopy}>
+              <Text style={[styles.categoryTitle, { color: colors.text }]} accessible>
+                {t('settings.data_privacy.background_refresh.title')}
+              </Text>
+              <Text style={[styles.categoryMeta, { color: colors.textSecondary }]} accessible>
+                {t('settings.data_privacy.background_refresh.description')}
+              </Text>
+            </View>
+
+            {savingPreference === 'background' ? (
+              <ActivityIndicator color={colors.accent} />
+            ) : (
+              <Switch
+                value={backgroundRefresh}
+                onValueChange={handleBackgroundRefreshToggle}
+                trackColor={{ false: colors.cardBorder, true: colors.accent }}
+                thumbColor={colors.switchThumb}
+                accessibilityRole="switch"
+                accessibilityLabel={t('settings.data_privacy.background_refresh.title')}
               />
             )}
           </View>
@@ -430,7 +481,7 @@ export default function DataPrivacyScreen() {
           {t('settings.data_privacy.preferences_survive_clear')}
         </Text>
 
-        {/* ── Data Portability ─────────────────────────────────────────── */}
+        {/* â”€â”€ Data Portability â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <Text
           style={[styles.sectionTitle, { color: colors.text, marginTop: 24 }]}
           accessible
@@ -553,7 +604,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 8,
   },
-  clearAllButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '600' },
+  clearAllButtonText: { fontSize: 16, fontWeight: '600' },
   footnote: { fontSize: 12, lineHeight: 17, marginTop: 10 },
   preferenceCard: { borderRadius: 12, borderWidth: 1, padding: 14 },
   preferenceRow: {

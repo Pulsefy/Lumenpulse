@@ -100,7 +100,7 @@ const RegisterScreen = () => {
                 {t('auth.register.email_label')}
               </Text>
               <TextInput
-                style={[styles.input, { backgroundColor: colors.surface, color: colors.text }]}
+                style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.cardBorder }]}
                 value={email}
                 onChangeText={setEmail}
                 placeholder={t('auth.register.email_placeholder')}
@@ -120,7 +120,7 @@ const RegisterScreen = () => {
                 {t('auth.register.password_label')}
               </Text>
               <TextInput
-                style={[styles.input, { backgroundColor: colors.surface, color: colors.text }]}
+                style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.cardBorder }]}
                 value={password}
                 onChangeText={setPassword}
                 placeholder={t('auth.register.password_placeholder')}
@@ -139,7 +139,7 @@ const RegisterScreen = () => {
                 {t('auth.register.confirm_password_label')}
               </Text>
               <TextInput
-                style={[styles.input, { backgroundColor: colors.surface, color: colors.text }]}
+                style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.cardBorder }]}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder={t('auth.register.confirm_password_placeholder')}
@@ -154,7 +154,11 @@ const RegisterScreen = () => {
             </View>
 
             <TouchableOpacity
-              style={[styles.button, loading && styles.disabledButton]}
+              style={[
+                styles.button,
+                { backgroundColor: colors.accentSecondary, shadowColor: colors.accentSecondary },
+                loading && styles.disabledButton,
+              ]}
               onPress={handleRegister}
               disabled={loading}
               accessibilityRole="button"
@@ -164,12 +168,12 @@ const RegisterScreen = () => {
             >
               {loading ? (
                 <ActivityIndicator
-                  color="#ffffff"
+                  color={colors.onAccent}
                   accessible
                   accessibilityLabel={t('common.loading')}
                 />
               ) : (
-                <Text style={styles.buttonText} accessible>
+                <Text style={[styles.buttonText, { color: colors.onAccent }]} accessible>
                   {t('auth.register.create_account_button')}
                 </Text>
               )}
@@ -181,7 +185,7 @@ const RegisterScreen = () => {
               accessibilityRole="link"
               accessibilityLabel={t('auth.register.login_link')}
             >
-              <Text style={styles.linkText} accessible>
+              <Text style={[styles.linkText, { color: colors.text }]} accessible>
                 {t('auth.register.login_link')}
               </Text>
             </TouchableOpacity>
@@ -195,7 +199,6 @@ const RegisterScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
   },
   scrollContainer: {
     flexGrow: 1,
@@ -210,13 +213,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#ffffff',
     textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#db74cf',
     textAlign: 'center',
     marginBottom: 40,
     fontWeight: '500',
@@ -228,38 +229,31 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
   },
   input: {
     height: 56,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 16,
     paddingHorizontal: 16,
-    color: '#ffffff',
     fontSize: 16,
     borderWidth: 1,
-    borderColor: 'rgba(219, 116, 207, 0.2)',
   },
   button: {
     height: 56,
-    backgroundColor: '#7a85ff',
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#7a85ff',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
   },
   disabledButton: {
-    backgroundColor: '#5a65cc',
+    opacity: 0.7,
   },
   buttonText: {
-    color: '#ffffff',
     fontSize: 18,
     fontWeight: '600',
   },
@@ -268,12 +262,10 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   linkText: {
-    color: '#ffffff',
     fontSize: 16,
     opacity: 0.8,
   },
   linkHighlight: {
-    color: '#db74cf',
     fontWeight: '600',
   },
 });

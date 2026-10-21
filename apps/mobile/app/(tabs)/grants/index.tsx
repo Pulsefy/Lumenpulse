@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useLocalization } from '../../../src/context';
+import { dataViz } from '../../../theme/tokens';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import { grantsApi, GrantRound, roundStatusLabel } from '../../../lib/grants';
 import { CachedApi } from '../../../lib/cached-api';
@@ -29,10 +30,10 @@ function StatusBadge({
 }) {
   const colorMap: Record<string, string> = {
     ACTIVE: colors.accent,
-    PENDING: '#f59e0b',
+    PENDING: colors.warning,
     ENDED: colors.textSecondary,
-    FINALIZED: '#8b5cf6',
-    DISTRIBUTED: '#10b981',
+    FINALIZED: dataViz.status.finalized,
+    DISTRIBUTED: colors.success,
   };
   const bg = colorMap[status] ?? colors.textSecondary;
   return (
@@ -59,7 +60,10 @@ function RoundCard({
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}
+      style={[
+        styles.card,
+        { backgroundColor: colors.surface, borderColor: colors.cardBorder, shadowColor: colors.shadow },
+      ]}
       onPress={onPress}
       activeOpacity={0.75}
       accessibilityRole="link"
@@ -193,7 +197,7 @@ function GrantsListContent() {
           accessibilityLabel={t('common.retry')}
           accessibilityHint="Retry loading grant rounds"
         >
-          <Text style={styles.retryBtnText} accessible>
+          <Text style={[styles.retryBtnText, { color: colors.onAccent }]} accessible>
             {t('common.retry')}
           </Text>
         </TouchableOpacity>
@@ -287,7 +291,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 18,
     marginBottom: 14,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -310,5 +313,5 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
   emptySubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   retryBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
-  retryBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  retryBtnText: { fontSize: 15, fontWeight: '600' },
 });

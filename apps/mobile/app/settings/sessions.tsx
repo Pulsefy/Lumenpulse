@@ -119,7 +119,7 @@ export default function SessionsScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={t('settings.sessions.revoke')}
                 >
-                  <Ionicons name="log-out-outline" size={22} color="#e5484d" />
+                  <Ionicons name="log-out-outline" size={22} color={colors.danger} />
                 </TouchableOpacity>
               </View>
             ))

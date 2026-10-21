@@ -110,9 +110,9 @@ export default function BiometricLockGuard({ children }: BiometricLockGuardProps
             accessibilityHint="Authenticate to access the app"
           >
             {isRetrying ? (
-              <ActivityIndicator color="#ffffff" accessibilityLabel="Authenticating" />
+              <ActivityIndicator color={colors.onAccent} accessibilityLabel="Authenticating" />
             ) : (
-              <Text style={styles.unlockButtonText} accessible>
+              <Text style={[styles.unlockButtonText, { color: colors.onAccent }]} accessible>
                 Try Again
               </Text>
             )}
@@ -165,7 +165,6 @@ const styles = StyleSheet.create({
     minWidth: 140,
   },
   unlockButtonText: {
-    color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
   },

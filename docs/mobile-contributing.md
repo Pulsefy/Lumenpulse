@@ -28,6 +28,7 @@ npm run format
 - Use TypeScript with explicit types for API and state data.
 - Keep components functional and hook-based.
 - Avoid inline styles when reusable `StyleSheet` styles are appropriate.
+- Take colours, spacing, radius and type sizes from `theme/tokens.ts` (see [Mobile theme tokens](mobile-theme-tokens.md)). Hex/`rgba()` literals in app code fail `lib/__tests__/theme-literals.test.ts`.
 - Include UI proof (screenshots or screen recording) in PRs for visual changes.
 
 ## Releases

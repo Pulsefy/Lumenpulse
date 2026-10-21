@@ -79,6 +79,13 @@ export const CATALOGUE_ENTRIES: readonly CatalogueEntry[] = [
     variants: ['populated'],
     description: 'Guard that locks the app behind biometrics when the lock is enabled in Settings.',
   },
+  {
+    name: 'ReviewerGate',
+    file: 'ReviewerGate.tsx',
+    variants: ['populated'],
+    description:
+      'Guard that renders its children for reviewer/admin accounts and redirects everyone else home.',
+  },
 ];
 
 /**

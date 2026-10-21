@@ -824,7 +824,6 @@ impl CrowdfundVaultContract {
         }
 
         let contract_address = env.current_contract_address();
-        let user_balance = token::balance(env, &project.token_address, user);
 
         let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
         let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
@@ -897,15 +896,16 @@ impl CrowdfundVaultContract {
             .instance()
             .set(&DataKey::ProtocolStats, &stats);
 
-        if user_balance >= amount {
-            token::transfer(
-                env,
-                &project.token_address,
-                user,
-                &contract_address,
-                &amount,
-            );
-        }
+        // Always pull the tokens: crediting the contribution without a
+        // transfer would record funds the vault never received. A failed
+        // transfer traps and reverts every write above.
+        token::transfer(
+            env,
+            &project.token_address,
+            user,
+            &contract_address,
+            &amount,
+        );
 
         events::DepositEvent {
             user: user.clone(),
@@ -988,9 +988,12 @@ impl CrowdfundVaultContract {
             data,
         };
 
+        // Best-effort delivery: a failing subscriber must never revert the
+        // value transfer that triggered the notification. The failed
+        // subscriber's own writes are rolled back by the host.
         for subscriber in subscribers {
             let client = NotificationReceiverClient::new(env, &subscriber);
-            client.on_notify(&notification);
+            let _ = client.try_on_notify(&notification);
         }
     }
 
@@ -1518,13 +1521,30 @@ impl CrowdfundVaultContract {
                 .persistent()
                 .set(&DataKey::Project(project_id), &project);
 
-            // Transfer to treasury contract
+            let mut stats: ProtocolStats = env
+                .storage()
+                .instance()
+                .get(&DataKey::ProtocolStats)
+                .unwrap_or(ProtocolStats {
+                    tvl: 0,
+                    cumulative_volume: 0,
+                });
+            stats.tvl -= amount;
+            env.storage()
+                .instance()
+                .set(&DataKey::ProtocolStats, &stats);
+
+            // `treasury.allocate_budget` funds the stream by pulling `amount`
+            // from `admin`, so release the project funds to `admin` rather
+            // than straight to the treasury; sending them to the treasury as
+            // well would fund the stream twice. Both legs run in this one
+            // invocation, so a failure in either reverts the whole allocation.
             let contract_address = env.current_contract_address();
             token::transfer(
                 &env,
                 &project.token_address,
                 &contract_address,
-                &treasury_contract,
+                &admin,
                 &amount,
             );
 

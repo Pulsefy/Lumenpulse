@@ -80,6 +80,6 @@ These summaries document what was built; the ADRs explain why the design was cho
 - [apps/backend/IMPLEMENTATION_SUMMARY_DEAD_LETTER_QUEUE.md](../../apps/backend/IMPLEMENTATION_SUMMARY_DEAD_LETTER_QUEUE.md)
 - [apps/backend/FEATURE_CONTRACT_ROTATION.md](../../apps/backend/FEATURE_CONTRACT_ROTATION.md)
 - [apps/onchain/IMPLEMENTATION_SUMMARY.md](../../apps/onchain/IMPLEMENTATION_SUMMARY.md)
-- [CI_FIX_SUMMARY.md](../../CI_FIX_SUMMARY.md)
+- [CI_FIX_SUMMARY.md](../CI_FIX_SUMMARY.md)
 
 When a PR changes architectural assumptions or introduces a new operational mechanism, update the relevant ADR and add a cross-reference to the implementation summary that accompanies the change.

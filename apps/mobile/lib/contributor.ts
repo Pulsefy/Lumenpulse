@@ -1,4 +1,5 @@
 import { apiClient, ApiResponse } from './api-client';
+import { dataViz } from '../theme/tokens';
 
 export type ContributorTier = 'Novice' | 'Builder' | 'Architect' | 'Core';
 
@@ -365,30 +366,30 @@ export function buildRegistryState(
 export function getTierColor(tier?: string): string {
   switch (tier?.toLowerCase()) {
     case 'core':
-      return '#8b5cf6';
+      return dataViz.tier.core;
     case 'architect':
-      return '#3b82f6';
+      return dataViz.tier.architect;
     case 'builder':
-      return '#10b981';
+      return dataViz.tier.builder;
     case 'novice':
     default:
-      return '#f59e0b';
+      return dataViz.tier.novice;
   }
 }
 
 export function getVerificationStatusColor(status?: VerificationStateStatus | string): string {
   switch (status) {
     case 'VERIFIED':
-      return '#10b981';
+      return dataViz.status.verified;
     case 'PENDING':
-      return '#f59e0b';
+      return dataViz.status.pending;
     case 'REJECTED':
-      return '#ef4444';
+      return dataViz.status.rejected;
     case 'ARCHIVED':
-      return '#64748b';
+      return dataViz.status.archived;
     case 'UNREGISTERED':
     default:
-      return '#94a3b8';
+      return dataViz.status.unregistered;
   }
 }
 

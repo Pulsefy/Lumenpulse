@@ -261,8 +261,10 @@ export default function ContributorProfileScreen() {
                 onPress={loadData}
                 activeOpacity={0.8}
               >
-                <Ionicons name="refresh" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.primaryButtonText}>{t('common.retry')}</Text>
+                <Ionicons name="refresh" size={18} color={colors.onAccent} style={{ marginRight: 6 }} />
+                <Text style={[styles.primaryButtonText, { color: colors.onAccent }]}>
+                  {t('common.retry')}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -291,10 +293,10 @@ export default function ContributorProfileScreen() {
                   <Ionicons
                     name="wallet-outline"
                     size={18}
-                    color="#ffffff"
+                    color={colors.onAccent}
                     style={{ marginRight: 8 }}
                   />
-                  <Text style={styles.primaryButtonText}>
+                  <Text style={[styles.primaryButtonText, { color: colors.onAccent }]}>
                     {t('contributor_profile.connect_wallet')}
                   </Text>
                 </TouchableOpacity>
@@ -521,16 +523,16 @@ export default function ContributorProfileScreen() {
                       accessibilityLabel={t('contributor_profile.register_identity')}
                     >
                       {isRegistering ? (
-                        <ActivityIndicator size="small" color="#ffffff" />
+                        <ActivityIndicator size="small" color={colors.onAccent} />
                       ) : (
                         <Ionicons
                           name="person-add"
                           size={16}
-                          color="#ffffff"
+                          color={colors.onAccent}
                           style={{ marginRight: 6 }}
                         />
                       )}
-                      <Text style={styles.primaryButtonText}>
+                      <Text style={[styles.primaryButtonText, { color: colors.onAccent }]}>
                         {t('contributor_profile.register_identity')}
                       </Text>
                     </TouchableOpacity>
@@ -839,10 +841,10 @@ export default function ContributorProfileScreen() {
                           <Ionicons
                             name="refresh-outline"
                             size={14}
-                            color="#ffffff"
+                            color={colors.onStatus}
                             style={{ marginRight: 6 }}
                           />
-                          <Text style={styles.primaryButtonText}>
+                          <Text style={[styles.primaryButtonText, { color: colors.onStatus }]}>
                             {t('wallet.reconnect.button')}
                           </Text>
                         </TouchableOpacity>
@@ -872,8 +874,8 @@ export default function ContributorProfileScreen() {
                     onPress={connectWallet}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="wallet" size={16} color="#ffffff" style={{ marginRight: 6 }} />
-                    <Text style={styles.primaryButtonText}>
+                    <Ionicons name="wallet" size={16} color={colors.onAccent} style={{ marginRight: 6 }} />
+                    <Text style={[styles.primaryButtonText, { color: colors.onAccent }]}>
                       {t('contributor_profile.connect_wallet')}
                     </Text>
                   </TouchableOpacity>
@@ -1354,7 +1356,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   primaryButtonText: {
-    color: '#ffffff',
     fontSize: 15,
     fontWeight: '700',
   },

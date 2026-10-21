@@ -43,7 +43,7 @@ export default function SavedNewsScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('news.saved')}
         >
-          <Ionicons name="bookmark" size={20} color="#db74cf" />
+          <Ionicons name="bookmark" size={20} color={colors.accent} />
         </TouchableOpacity>
       </View>
       <Text style={[styles.meta, { color: colors.text }]} accessible>

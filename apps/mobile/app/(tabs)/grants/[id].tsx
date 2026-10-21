@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useLocalization } from '../../../src/context';
+import { dataViz } from '../../../theme/tokens';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import {
   grantsApi,
@@ -53,7 +54,7 @@ function QfBar({
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
   return (
-    <View style={styles.qfTrack}>
+    <View style={[styles.qfTrack, { backgroundColor: colors.border }]}>
       <View
         style={[styles.qfFill, { width: `${share}%`, backgroundColor: colors.accent }]}
         accessibilityRole="progressbar"
@@ -78,8 +79,7 @@ function ProjectRow({
   t: (key: string) => string;
 }) {
   const share = matchShare(item.estimatedMatch, poolBalance);
-  const rankColors = ['#f59e0b', '#9ca3af', '#b45309'];
-  const rankColor = rankColors[rank] ?? colors.textSecondary;
+  const rankColor = dataViz.rank[rank] ?? colors.textSecondary;
 
   return (
     <View
@@ -206,7 +206,7 @@ function GrantRoundDetailContent() {
           accessibilityRole="button"
           accessibilityLabel={t('common.retry')}
         >
-          <Text style={styles.retryBtnText} accessible>
+          <Text style={[styles.retryBtnText, { color: colors.onAccent }]} accessible>
             {t('common.retry')}
           </Text>
         </TouchableOpacity>
@@ -317,7 +317,7 @@ function GrantRoundDetailContent() {
                         item.state === 'completed'
                           ? colors.accent
                           : item.state === 'in-progress'
-                            ? '#f59e0b'
+                            ? colors.warning
                             : colors.textSecondary,
                     },
                   ]}
@@ -506,7 +506,6 @@ const styles = StyleSheet.create({
   qfTrack: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
     marginBottom: 12,
   },
@@ -517,5 +516,5 @@ const styles = StyleSheet.create({
   statLbl: { fontSize: 11, marginTop: 2 },
   errorText: { fontSize: 17, fontWeight: '600', textAlign: 'center', marginBottom: 16 },
   retryBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
-  retryBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  retryBtnText: { fontSize: 15, fontWeight: '600' },
 });

@@ -271,7 +271,11 @@ export default function ContributionModal({
       accessibilityViewIsModal={true}
     >
       <TouchableWithoutFeedback onPress={handleDismiss}>
-        <View style={styles.overlay} accessible accessibilityLabel={t('contribution_modal.title')}>
+        <View
+          style={[styles.overlay, { backgroundColor: colors.overlay }]}
+          accessible
+          accessibilityLabel={t('contribution_modal.title')}
+        >
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.keyboardView}
@@ -404,17 +408,26 @@ export default function ContributionModal({
                   {isSubmitting ? (
                     <View style={styles.loadingRow}>
                       <ActivityIndicator
-                        color="#ffffff"
+                        color={colors.textSecondary}
                         size="small"
                         accessible
                         accessibilityLabel={t('common.loading')}
                       />
-                      <Text style={[styles.primaryButtonText, { marginLeft: 8 }]} accessible>
+                      <Text
+                        style={[styles.primaryButtonText, { color: colors.textSecondary, marginLeft: 8 }]}
+                        accessible
+                      >
                         {t('contribution_modal.submitting')}
                       </Text>
                     </View>
                   ) : (
-                    <Text style={styles.primaryButtonText} accessible>
+                    <Text
+                      style={[
+                        styles.primaryButtonText,
+                        { color: isSubmitDisabled ? colors.textSecondary : colors.onAccent },
+                      ]}
+                      accessible
+                    >
                       {t('contribution_modal.submit')}
                     </Text>
                   )}
@@ -431,7 +444,6 @@ export default function ContributionModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
   keyboardView: {
@@ -523,7 +535,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryButtonText: {
-    color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
   },

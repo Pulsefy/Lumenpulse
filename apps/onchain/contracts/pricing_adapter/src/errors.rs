@@ -11,4 +11,10 @@ pub enum PricingAdapterError {
     InvalidPrice = 5,
     StalePrice = 6,
     PriceInvalidated = 7,
+    /// Two or more price sources are configured and none of them has a
+    /// fresh, non-invalidated price for the asset. No default is returned.
+    PriceSourcesExhausted = 8,
+    /// `set_price_sources` got an empty list, a repeated source id or more
+    /// than `MAX_PRICE_SOURCES` entries.
+    InvalidPriceSources = 9,
 }

@@ -61,7 +61,33 @@ pub fn get_price(env: Env, asset: Address) -> Result<i128, PricingAdapterError>;
 
 // Retrieve the base decimals configured for a target token
 pub fn get_asset_decimals(env: Env, asset: Address) -> u32;
+
+// Fetch the selected price with the id of its source and its age in seconds
+pub fn get_price_quote(env: Env, asset: Address) -> Result<PriceQuote, PricingAdapterError>;
 ```
+
+## Price sources and fallback
+
+The adapter reads from an ordered list of price sources rather than a single feed, so a stale or invalidated price no longer halts every consumer while a backup source is healthy.
+
+- Source `0` (`PRIMARY_SOURCE`) is the original feed. `set_price`, `invalidate_price`, `get_price_state` and `get_price_timestamp` keep working on it exactly as before.
+- Any other `u32` id is an additional source with its own price, timestamp and invalidation flag per asset. An admin writes it with `set_source_price(admin, source, asset, price, asset_decimals)` (scaled by $10^7$ like `set_price`) and flags it with `invalidate_source_price(admin, source, asset)`. A source can be given prices before it is added to the list.
+- `set_price_sources(admin, sources)` sets the order (admin only, 1 to `MAX_PRICE_SOURCES` = 5 distinct ids, any order) and `get_price_sources()` returns it. A contract that never had a list set reads `[0]`, so existing deployments keep their behavior without any migration.
+
+**Selection rule.** `get_price`, `get_price_quote` and `normalize_amount` walk the list in order and answer from the first source whose price for the asset exists, is not invalidated and is no older than the staleness window. The window set with `set_staleness_window` applies to every source.
+
+**Result.** `get_price_quote(asset)` returns `PriceQuote { price, source, age_seconds }`: the price, the id of the source that produced it and how old that price is at read time. `get_price` keeps returning the bare `i128`.
+
+**When every source fails.** No default price is ever returned:
+
+| Situation | Error |
+| :--- | :--- |
+| Two or more sources, none fresh and valid | `PriceSourcesExhausted` (8) |
+| No source has a price for the asset | `PriceNotFound` (4) |
+| Single source (the default list) | that source's own error: `PriceNotFound`, `PriceInvalidated` or `StalePrice`, as before |
+| Invalid list passed to `set_price_sources` | `InvalidPriceSources` (9) |
+
+**Events.** Answering from any source but the first publishes `price_source_fallback_event` (topics: version, asset; data: `source`, `skipped`, `age_seconds`), so operators can see when the primary was skipped. Admin changes publish `price_sources_updated_event`, `source_price_updated_event` and `source_price_invalidated_event`. These four events follow the event-versioning convention, with the schema version as the first topic.
 
 ---
 

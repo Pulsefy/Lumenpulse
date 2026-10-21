@@ -42,7 +42,8 @@
           "recordAudioAndroid": false
         }
       ],
-      "expo-local-authentication"
+      "expo-local-authentication",
+      "expo-background-task"
     ],
     "scheme": "mobile",
     "extra": {

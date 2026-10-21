@@ -158,7 +158,7 @@ const LoginScreen = () => {
               style={[
                 styles.button,
                 { backgroundColor: colors.accent, shadowColor: colors.accent },
-                loading && styles.disabledButton,
+                loading && { backgroundColor: colors.accentSecondary },
               ]}
               onPress={handleLogin}
               disabled={loading}
@@ -170,12 +170,12 @@ const LoginScreen = () => {
             >
               {loading ? (
                 <ActivityIndicator
-                  color="#ffffff"
+                  color={colors.onAccent}
                   accessible
                   accessibilityLabel={t('common.loading')}
                 />
               ) : (
-                <Text style={styles.buttonText} accessible>
+                <Text style={[styles.buttonText, { color: colors.onAccent }]} accessible>
                   {t('auth.login.sign_in_button')}
                 </Text>
               )}
@@ -218,7 +218,6 @@ const LoginScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
   },
   scrollContainer: {
     flexGrow: 1,
@@ -233,13 +232,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#ffffff',
     textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#db74cf',
     textAlign: 'center',
     marginBottom: 40,
     fontWeight: '500',
@@ -251,38 +248,28 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
   },
   input: {
     height: 56,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 16,
     paddingHorizontal: 16,
-    color: '#ffffff',
     fontSize: 16,
     borderWidth: 1,
-    borderColor: 'rgba(219, 116, 207, 0.2)',
   },
   button: {
     height: 56,
-    backgroundColor: '#7a85ff',
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#7a85ff',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
   },
-  disabledButton: {
-    backgroundColor: '#5a65cc',
-  },
   buttonText: {
-    color: '#ffffff',
     fontSize: 18,
     fontWeight: '600',
   },
@@ -291,12 +278,10 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   linkText: {
-    color: '#ffffff',
     fontSize: 16,
     opacity: 0.8,
   },
   linkHighlight: {
-    color: '#db74cf',
     fontWeight: '600',
   },
 });

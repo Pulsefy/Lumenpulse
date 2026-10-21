@@ -2,6 +2,7 @@ import { Providers } from "./providers";
 import { StarsAnimation } from "@/components/stars-animation";
 import { PWAInstaller } from "@/components/pwa-installer";
 import { Navbar } from "@/components/navbar";
+import { EnvironmentBanner } from "@/components/environment-banner";
 import { getThemeInitScriptHTML } from "@/lib/theme-init-script";
 import "./globals.css";
 
@@ -164,6 +165,7 @@ export default function RootLayout({
         className={`${inter.variable} ${orbitron.variable} ${spaceMono.variable} ${chakraPetch.variable} ${poppins.variable} font-inter bg-background text-foreground`}
       >
         <Providers>
+          <EnvironmentBanner />
           <StarsAnimation />
           <Navbar />
           {children}

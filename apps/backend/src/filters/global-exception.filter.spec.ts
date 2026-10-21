@@ -76,6 +76,47 @@ describe('GlobalExceptionFilter', () => {
     });
   });
 
+  it('normalizes an HttpException thrown by a controller handler', () => {
+    filter.catch(
+      new HttpException('Test HTTP exception message', HttpStatus.BAD_REQUEST),
+      mockArgumentsHost,
+    );
+
+    expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      code: ErrorCode.SYS_BAD_REQUEST,
+      message: 'Test HTTP exception message',
+      details: undefined,
+      requestId: 'req-123',
+      correlationId: 'req-123',
+    });
+  });
+
+  it('normalizes a generic Error thrown by a controller handler', () => {
+    const originalNodeEnv = process.env['NODE_ENV'];
+    process.env['NODE_ENV'] = 'development';
+
+    try {
+      filter.catch(new Error('Test general error message'), mockArgumentsHost);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        code: ErrorCode.SYS_INTERNAL_ERROR,
+        message: 'Test general error message',
+        requestId: 'req-123',
+        correlationId: 'req-123',
+      });
+    } finally {
+      if (originalNodeEnv === undefined) {
+        delete process.env['NODE_ENV'];
+      } else {
+        process.env['NODE_ENV'] = originalNodeEnv;
+      }
+    }
+  });
+
   it('maps unauthorized exceptions to AUTH_001', () => {
     const exception = new UnauthorizedException();
 

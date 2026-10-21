@@ -73,6 +73,16 @@ CMD ["npm", "run", "migration:run"]
 ###############################################################################
 FROM node:20-bookworm-slim AS runtime
 
+# Release identity (issue #1725). `docker build --build-arg APP_VERSION=v1.2.3
+# --build-arg GIT_SHA=<sha>` stamps the image; the running container reports it
+# (backend: GET /health -> release) and `docker inspect` shows the same labels.
+ARG APP_VERSION=dev
+ARG GIT_SHA=unknown
+ENV APP_VERSION=$APP_VERSION \
+    GIT_SHA=$GIT_SHA
+LABEL org.opencontainers.image.version="$APP_VERSION" \
+      org.opencontainers.image.revision="$GIT_SHA"
+
 LABEL org.opencontainers.image.title="lumenpulse-backend" \
       org.opencontainers.image.description="Lumenpulse NestJS API (production, non-root)" \
       org.opencontainers.image.source="https://github.com/Pulsefy/Lumenpulse"

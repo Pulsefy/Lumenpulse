@@ -107,9 +107,9 @@ export default function ExportsScreen() {
         return {
           label: t('settings.exports.status_pending', 'Pending'),
           icon: 'time-outline' as const,
-          textColor: '#eab308',
-          bgColor: 'rgba(234, 179, 8, 0.15)',
-          borderColor: 'rgba(234, 179, 8, 0.3)',
+          textColor: colors.warning,
+          bgColor: colors.warningMuted,
+          borderColor: colors.warning + '40',
         };
       case 'expired':
         return {
@@ -157,12 +157,12 @@ export default function ExportsScreen() {
               </Text>
               {pending && (
                 <View
-                  style={[styles.pendingPill, { backgroundColor: 'rgba(234, 179, 8, 0.15)' }]}
+                  style={[styles.pendingPill, { backgroundColor: colors.warningMuted }]}
                   accessible
                   accessibilityLabel="Pending export in progress"
                 >
-                  <Ionicons name="time-outline" size={12} color="#eab308" />
-                  <Text style={[styles.pendingPillText, { color: '#eab308' }]}>
+                  <Ionicons name="time-outline" size={12} color={colors.warning} />
+                  <Text style={[styles.pendingPillText, { color: colors.warning }]}>
                     {t('settings.exports.status_pending', 'Pending')}
                   </Text>
                 </View>
@@ -196,19 +196,19 @@ export default function ExportsScreen() {
           accessibilityState={{ disabled: pending || isBusy }}
         >
           {isBusy ? (
-            <ActivityIndicator size="small" color="#ffffff" />
+            <ActivityIndicator size="small" color={colors.onAccent} />
           ) : (
             <>
               <Ionicons
                 name={pending ? 'hourglass-outline' : 'cloud-download-outline'}
                 size={16}
-                color={pending ? colors.textSecondary : '#ffffff'}
+                color={pending ? colors.textSecondary : colors.onAccent}
                 style={{ marginRight: 6 }}
               />
               <Text
                 style={[
                   styles.requestButtonText,
-                  { color: pending ? colors.textSecondary : '#ffffff' },
+                  { color: pending ? colors.textSecondary : colors.onAccent },
                 ]}
               >
                 {pending

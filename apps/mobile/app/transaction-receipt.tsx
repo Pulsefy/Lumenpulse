@@ -226,7 +226,7 @@ export default function TransactionReceiptScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('transaction_receipt.done')}
         >
-          <Text style={styles.doneButtonText}>{t('transaction_receipt.done')}</Text>
+          <Text style={[styles.doneButtonText, { color: colors.onAccent }]}>{t('transaction_receipt.done')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -355,7 +355,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   doneButtonText: {
-    color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
   },

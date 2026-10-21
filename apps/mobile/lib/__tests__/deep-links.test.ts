@@ -51,6 +51,9 @@ const NON_TAPPABLE_ROUTES = [
   '/settings/status',
   // Development-only component catalogue; redirects home in release builds.
   '/dev/catalogue',
+  // Reviewer-only surfaces, reached from Settings rather than a notification.
+  '/moderation',
+  '/moderation/:id',
 ];
 
 /** Sample params per dynamic route, used to build resolvable URLs. */

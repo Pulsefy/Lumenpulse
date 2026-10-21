@@ -363,7 +363,7 @@ export default function PriceAlertSettingsScreen() {
               accessibilityState={{ disabled: saving }}
               accessibilityLabel={editingId ? 'Save price alert' : 'Create price alert'}
             >
-              <Text style={styles.primaryButtonText}>
+              <Text style={[styles.primaryButtonText, { color: colors.onAccent }]}>
                 {saving ? 'Saving…' : editingId ? 'Save alert' : 'Create alert'}
               </Text>
             </TouchableOpacity>
@@ -586,7 +586,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 14, fontWeight: '600' },
   formActions: { flexDirection: 'row', gap: 8, marginTop: 6 },
   primaryButton: { height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  primaryButtonText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  primaryButtonText: { fontSize: 15, fontWeight: '700' },
   secondaryButton: {
     height: 40,
     borderRadius: 10,

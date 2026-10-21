@@ -1,4 +1,5 @@
 import { apiClient, ApiResponse } from './api-client';
+import { dataViz } from '../theme/tokens';
 
 export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'ARCHIVED';
 export type WeightMode = 'REPUTATION' | 'TOKEN_BALANCE' | 'FLAT';
@@ -65,13 +66,13 @@ export const verificationApi = {
 export function statusColor(status: VerificationStatus): string {
   switch (status) {
     case 'VERIFIED':
-      return '#10b981';
+      return dataViz.status.verified;
     case 'REJECTED':
-      return '#ef4444';
+      return dataViz.status.rejected;
     case 'ARCHIVED':
-      return '#64748b';
+      return dataViz.status.archived;
     default:
-      return '#f59e0b';
+      return dataViz.status.pending;
   }
 }
 

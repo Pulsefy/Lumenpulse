@@ -155,7 +155,7 @@ export function PortfolioAnalyticsChart({
                 },
               ]}
             >
-              <Text style={[styles.rangeLabel, { color: selected ? '#ffffff' : colors.text }]}>
+              <Text style={[styles.rangeLabel, { color: selected ? colors.onAccent : colors.text }]}>
                 {option.label}
               </Text>
             </TouchableOpacity>

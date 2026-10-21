@@ -9,14 +9,27 @@ on:
       - 'apps/webapp/generated/**'
       - 'apps/webapp/scripts/generate-api-types.mjs'
       - 'scripts/audit-dependencies.mjs'
+      - 'docker-compose.yml'
+      - 'package*.json'
+      - 'pnpm-*.yaml'
+      - 'turbo.json'
+      - '.nvmrc'
+      - '.github/actions/**'
+      - '.github/workflows/backend.yml'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'apps/backend/**'
-      - 'apps/backend/.ci-trigger'
       - 'apps/webapp/generated/**'
       - 'apps/webapp/scripts/generate-api-types.mjs'
       - 'scripts/audit-dependencies.mjs'
+      - 'docker-compose.yml'
+      - 'package*.json'
+      - 'pnpm-*.yaml'
+      - 'turbo.json'
+      - '.nvmrc'
+      - '.github/actions/**'
+      - '.github/workflows/backend.yml'
 
 # Issue #1713. One group per workflow+ref, so a second push to the same PR
 # cancels the now-obsolete run instead of paying for both. `main` is excluded
@@ -36,7 +49,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
         fetch-depth: 0
 
@@ -44,19 +57,11 @@ jobs:
       uses: ./.github/actions/job-timeout-guard
       with:
         phase: start
-        job-id: backend-checks
-        budget-minutes: '10'
-        note: npm ci + audit + lint + type-check + jest + nest build + SBOM. Observed p90 1.8 min; cold-cache variance dominates.
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
+    - name: Set up Node and install dependencies
+      uses: ./.github/actions/setup-node-app
       with:
-        node-version: '20.x'
-        cache: 'npm'
-        cache-dependency-path: './apps/backend/package-lock.json'
-
-    - name: Install dependencies
-      run: npm ci
+        working-directory: apps/backend
 
     - name: Scan dependencies for vulnerabilities
       run: npm run audit:ci
@@ -87,13 +92,13 @@ jobs:
       run: node scripts/generate-api-types.mjs --check
 
     - name: Generate Software Bill of Materials (SBOM)
-      uses: anchore/sbom-action@v0
+      uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
       with:
         format: cyclonedx-json
         output-file: sbom.cdx.json
 
     - name: Upload SBOM Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: software-bill-of-materials
         path: sbom.cdx.json
@@ -132,7 +137,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
         fetch-depth: 0
 
@@ -140,19 +145,11 @@ jobs:
       uses: ./.github/actions/job-timeout-guard
       with:
         phase: start
-        job-id: migration-safety
-        budget-minutes: '10'
-        note: Postgres service + npm ci + static migration check + full up/drift/down verification.
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
+    - name: Set up Node and install dependencies
+      uses: ./.github/actions/setup-node-app
       with:
-        node-version: '20.x'
-        cache: 'npm'
-        cache-dependency-path: './apps/backend/package-lock.json'
-
-    - name: Install dependencies
-      run: npm ci
+        working-directory: apps/backend
 
     - name: Enable uuid-ossp extension
       run: >
@@ -224,25 +221,17 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
     - name: Start timeout guard
       uses: ./.github/actions/job-timeout-guard
       with:
         phase: start
-        job-id: db-e2e
-        budget-minutes: '20'
-        note: Provisions Postgres+Redis, migrates a clean database, runs the serial DB-backed e2e suite.
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
+    - name: Set up Node and install dependencies
+      uses: ./.github/actions/setup-node-app
       with:
-        node-version: '20.x'
-        cache: 'npm'
-        cache-dependency-path: './apps/backend/package-lock.json'
-
-    - name: Install dependencies
-      run: npm ci
+        working-directory: apps/backend
 
     # Each run creates a disposable database, runs all migrations, and drops it
     # in Jest's global teardown (also on failure). Runtime is printed and added

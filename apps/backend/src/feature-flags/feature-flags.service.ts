@@ -1,4 +1,10 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { FeatureFlag } from './feature-flag.entity';
@@ -33,6 +39,42 @@ interface CacheEntry {
 export interface FlagEvaluationContext {
   principalId?: string | null;
   request?: unknown;
+}
+
+/** Error code returned when a sensitive flag is written without confirmation. */
+export const SENSITIVE_FLAG_CONFIRMATION_REQUIRED =
+  'SENSITIVE_FLAG_CONFIRMATION_REQUIRED';
+
+/** Options for writes that touch the sensitivity safeguard. */
+export interface FlagWriteOptions {
+  /** New sensitivity marker; undefined leaves the current marker unchanged. */
+  sensitive?: boolean;
+  /** Explicit confirmation, required whenever the stored flag is sensitive. */
+  confirm?: boolean;
+}
+
+/**
+ * Rejects a write to a sensitive flag that lacks explicit confirmation.
+ *
+ * Enforced here rather than only in the console so every caller — UI, script
+ * or direct API call — goes through the same safeguard. 428 (Precondition
+ * Required) tells the client the request is valid but must be retried with
+ * `confirm: true`.
+ */
+function assertConfirmed(
+  flag: FeatureFlag | null,
+  options: FlagWriteOptions | undefined,
+): void {
+  if (flag?.sensitive === true && options?.confirm !== true) {
+    throw new HttpException(
+      {
+        statusCode: HttpStatus.PRECONDITION_REQUIRED,
+        code: SENSITIVE_FLAG_CONFIRMATION_REQUIRED,
+        message: `Flag "${flag.key}" is marked sensitive; resend with confirm: true to apply this change.`,
+      },
+      HttpStatus.PRECONDITION_REQUIRED,
+    );
+  }
 }
 
 /** Full outcome of evaluating one flag for one principal. */
@@ -121,7 +163,7 @@ export class FeatureFlagsService implements OnModuleInit {
   }
 
   async listFlags(): Promise<FeatureFlag[]> {
-    return this.repo.find();
+    return this.repo.find({ order: { key: 'ASC' } });
   }
 
   /**
@@ -214,6 +256,8 @@ export class FeatureFlagsService implements OnModuleInit {
    * - Persists an immutable audit-log row with actor, previous, and new state.
    * - `targeting` is optional; omitting it leaves any existing rollout and
    *   lists untouched, so an on/off-only caller cannot wipe a live rollout.
+   * - If the stored flag is sensitive, `options.confirm` must be true or the
+   *   write is rejected with 428 before anything is persisted.
    */
   async upsert(
     key: string,
@@ -221,11 +265,13 @@ export class FeatureFlagsService implements OnModuleInit {
     conditions?: Record<string, unknown>,
     changedBy?: string,
     targeting?: FlagTargetingInput,
+    options?: FlagWriteOptions,
   ) {
     // Snapshot the previous state as primitives BEFORE we fetch the mutable
     // entity.  If we kept a reference to the entity object, mutating
     // f.enabled below would silently change the snapshot too (aliasing).
     const prevFlag = await this.getFlag(key);
+    assertConfirmed(prevFlag, options);
     const previousEnabled: boolean | null = prevFlag?.enabled ?? null;
     const previousTargeting = prevFlag
       ? snapshotTargeting(readTargeting(prevFlag))
@@ -235,10 +281,14 @@ export class FeatureFlagsService implements OnModuleInit {
       targeting === undefined ? null : sanitizeTargetingInput(targeting);
 
     let f = await this.repo.findOne({ where: { key } });
+    // The cached flag may be up to CACHE_TTL_MS stale; re-check against the
+    // row actually being written so the safeguard cannot be raced past.
+    assertConfirmed(f ?? null, options);
     if (!f) {
       f = this.repo.create({
         key,
         enabled,
+        sensitive: options?.sensitive ?? false,
         conditions: conditions ?? null,
         changedBy: changedBy ?? null,
         // A brand-new flag has no rollout to preserve, so default to none.
@@ -248,6 +298,9 @@ export class FeatureFlagsService implements OnModuleInit {
       });
     } else {
       f.enabled = enabled;
+      if (options?.sensitive !== undefined) {
+        f.sensitive = options.sensitive;
+      }
       f.conditions = conditions ?? null;
       f.changedBy = changedBy ?? null;
       if (next) {
@@ -292,10 +345,16 @@ export class FeatureFlagsService implements OnModuleInit {
   /**
    * Delete a feature flag and immediately evict it from the cache.
    * Records a 'remove' audit-log entry, including the targeting that was
-   * discarded so a deleted canary stays reviewable.
+   * discarded so a deleted canary stays reviewable. Deleting a sensitive flag
+   * requires `options.confirm`, exactly like changing one.
    */
-  async remove(key: string): Promise<void> {
+  async remove(
+    key: string,
+    actor?: string | null,
+    options?: Pick<FlagWriteOptions, 'confirm'>,
+  ): Promise<void> {
     const prev = await this.getFlag(key);
+    assertConfirmed(prev, options);
     const previousTargeting = prev
       ? snapshotTargeting(readTargeting(prev))
       : null;
@@ -310,7 +369,7 @@ export class FeatureFlagsService implements OnModuleInit {
       newEnabled: null,
       previousTargeting,
       newTargeting: null,
-      actor: null,
+      actor: actor ?? null,
     });
     await this.auditRepo.save(auditEntry);
   }

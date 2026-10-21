@@ -357,6 +357,22 @@ News APIs and social platforms push untrusted free text (articles, posts, predic
 
 ---
 
+### B-CI — Third-party GitHub Actions → CI runners
+
+CI jobs run with access to repository secrets and can write to the repository. Every
+`uses:` reference is therefore a point where code we do not control executes inside that
+boundary.
+
+| Threat | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| An action owner (or an attacker who compromises them) repoints a tag such as `actions/checkout@v4` at malicious code | Low | High — secret exfiltration, tampered build artefacts, tampered WASM | Every third-party and first-party action is pinned to a full 40-character commit SHA with the version in a trailing comment. A SHA cannot be repointed. `scripts/check-action-pins.mjs` runs in the `Workflow Lint` workflow and fails the build on any unpinned reference. |
+| A pinned action silently falls behind security fixes | Medium | Medium | Dependabot's `github-actions` ecosystem (`.github/dependabot.yml`) opens a weekly PR that bumps the SHA and the version comment together; the PR runs the full CI before merge. |
+| A reviewer approves a bump without reading what changed | Medium | High | Bump PRs must be reviewed like code: read the upstream release notes and diff between the two SHAs. `dtolnay/rust-toolchain` is deliberately excluded from automatic bumps because it selects the compiler that produces the hash-pinned WASM. |
+| A new workflow adds an unpinned action | Medium | High | The pin check is part of CI, so the introducing PR cannot merge green. |
+
+Local composite actions (`./.github/actions/...`) are exempt because they are reviewed in the
+same pull request that changes them.
+
 ## 6. Key Handling — End to End
 
 ### 6.1 User Wallet Credentials

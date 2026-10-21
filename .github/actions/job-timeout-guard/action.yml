@@ -15,11 +15,11 @@ inputs:
       makes the action a no-op.
     required: true
   job-id:
-    description: Stable identifier for the guarded job, used in the summary table and annotations.
-    required: true
+    description: Stable identifier for the guarded job. Required for `finish`; ignored by `start`.
+    default: ''
   budget-minutes:
-    description: Must match the job's `timeout-minutes`. Do not duplicate the value loosely.
-    required: true
+    description: Must match the job's `timeout-minutes`. Required for `finish`; ignored by `start`.
+    default: '0'
   soft-threshold:
     description: >-
       Fraction of the budget after which the job is considered to be running
@@ -37,11 +37,13 @@ outputs:
 runs:
   using: composite
   steps:
+    # The start time travels through the job environment, not step outputs: the
+    # start and finish phases are two separate invocations of this action, and
+    # a step output does not cross that boundary.
     - name: Open the clock
-      id: start
       if: inputs.phase == 'start'
       shell: bash
-      run: echo "started=$(date +%s)" >> "$GITHUB_OUTPUT"
+      run: echo "TIMEOUT_GUARD_STARTED=$(date +%s)" >> "$GITHUB_ENV"
 
     - name: Report the observed runtime
       id: report
@@ -52,7 +54,7 @@ runs:
         BUDGET_MINUTES: ${{ inputs.budget-minutes }}
         SOFT_THRESHOLD: ${{ inputs.soft-threshold }}
         NOTE: ${{ inputs.note }}
-        STARTED_AT: ${{ steps.start.outputs.started }}
+        STARTED_AT: ${{ env.TIMEOUT_GUARD_STARTED }}
       run: |
         set -euo pipefail
 

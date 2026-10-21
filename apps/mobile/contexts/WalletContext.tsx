@@ -114,7 +114,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [lastSigningError, setLastSigningError] = useState<WalletError | null>(null);
   const [activeAdapterId, setActiveAdapterId] = useState<string | null>(null);
   const [availableWallets, setAvailableWallets] = useState<WalletOption[]>([]);
-  const { t } = useLocalization();
+  const { t, colors } = useLocalization();
   const { environment, isInitialized: isEnvironmentReady } = useEnvironment();
   // Tracks whether a restore attempt has completed at least once so we
   // don't re-clear a freshly connected session when the environment
@@ -537,8 +537,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     >
       <View style={styles.providerContainer}>
         {config.isDevelopment && activeAdapterId === 'mock' && (
-          <View style={styles.mockWalletBanner} accessible accessibilityRole="alert">
-            <Text style={styles.mockWalletBannerText}>
+          <View
+            style={[styles.mockWalletBanner, { backgroundColor: colors.danger }]}
+            accessible
+            accessibilityRole="alert"
+          >
+            <Text style={[styles.mockWalletBannerText, { color: colors.onStatus }]}>
               DEVELOPMENT ONLY: MOCK WALLET ACTIVE. TRANSACTIONS ARE NOT SIGNED.
             </Text>
           </View>
@@ -554,12 +558,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mockWalletBanner: {
-    backgroundColor: '#B91C1C',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   mockWalletBannerText: {
-    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
     textAlign: 'center',
