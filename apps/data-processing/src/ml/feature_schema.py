@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Versioned feature-set schemas (#1239).
 
@@ -31,8 +30,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence
+from typing import Any
 
 from src.utils.logger import setup_logger
 
@@ -68,6 +68,8 @@ class FeatureSpec:
     name: str
     dtype: str
     description: str = ""
+    transform: str | None = None
+    transform_params: dict[str, Any] | None = None
 
     def key(self) -> str:
         return f"{self.name}:{self.dtype}"
@@ -82,8 +84,20 @@ class FeatureSchema:
     features: Sequence[FeatureSpec]
 
     @property
-    def feature_names(self) -> List[str]:
+    def feature_names(self) -> list[str]:
         return [f.name for f in self.features]
+
+    @property
+    def transforms(self) -> dict[str, str | None]:
+        """Map of feature name to the transform that produced it."""
+        return {f.name: f.transform for f in self.features}
+
+    def get_transform(self, feature_name: str) -> str | None:
+        """Return the transform name for a feature, or None if raw/unspecified."""
+        for f in self.features:
+            if f.name == feature_name:
+                return f.transform
+        return None
 
     @property
     def fingerprint(self) -> str:
@@ -98,15 +112,22 @@ class FeatureSchema:
         digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
         return digest[:12]
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "feature_set": self.feature_set,
             "version": self.version,
             "fingerprint": self.fingerprint,
             "features": [
-                {"name": f.name, "dtype": f.dtype, "description": f.description}
+                {
+                    "name": f.name,
+                    "dtype": f.dtype,
+                    "description": f.description,
+                    "transform": f.transform,
+                    "transform_params": f.transform_params,
+                }
                 for f in self.features
             ],
+            "transforms": {f.name: f.transform for f in self.features if f.transform},
         }
 
 
@@ -124,13 +145,29 @@ _PRICE_PREDICTOR_SCHEMA = FeatureSchema(
     feature_set=PRICE_PREDICTOR_FEATURE_SET,
     version="1.0",
     features=(
-        FeatureSpec("sentiment_score", "float64", "Compound sentiment score [-1, 1]"),
-        FeatureSpec("volume", "float64", "XLM-equivalent on-chain volume [0, +inf)"),
-        FeatureSpec("volatility", "float64", "Rolling log-return volatility [0, +inf)"),
+        FeatureSpec(
+            "sentiment_score",
+            "float64",
+            "Compound sentiment score [-1, 1]",
+            transform="identity",
+        ),
+        FeatureSpec(
+            "volume",
+            "float64",
+            "XLM-equivalent on-chain volume [0, +inf)",
+            transform="identity",
+        ),
+        FeatureSpec(
+            "volatility",
+            "float64",
+            "Rolling log-return volatility [0, +inf)",
+            transform="rolling_volatility",
+            transform_params={"window": 24, "return_type": "log"},
+        ),
     ),
 )
 
-_SCHEMAS: Dict[str, FeatureSchema] = {
+_SCHEMAS: dict[str, FeatureSchema] = {
     _PRICE_PREDICTOR_SCHEMA.feature_set: _PRICE_PREDICTOR_SCHEMA,
 }
 
@@ -163,8 +200,8 @@ def get_enforcement_mode() -> str:
 
 
 def check_serving_schema(
-    training_version: Optional[str],
-    serving_version: Optional[str],
+    training_version: str | None,
+    serving_version: str | None,
     feature_set: str = PRICE_PREDICTOR_FEATURE_SET,
 ) -> bool:
     """
@@ -221,7 +258,7 @@ def check_serving_schema(
 def validate_frame_columns(
     columns: Sequence[str],
     feature_set: str = PRICE_PREDICTOR_FEATURE_SET,
-) -> List[str]:
+) -> list[str]:
     """
     Return the list of schema feature names missing from ``columns``.
 
@@ -235,7 +272,7 @@ def validate_frame_columns(
 
 def schema_metadata(
     feature_set: str = PRICE_PREDICTOR_FEATURE_SET,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Compact (version, fingerprint) pair recorded alongside a trained model."""
     schema = current_feature_schema(feature_set)
     return {
