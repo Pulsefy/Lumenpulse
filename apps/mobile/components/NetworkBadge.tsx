@@ -18,6 +18,7 @@ export default function NetworkBadge() {
         {
           backgroundColor: isMainnet ? colors.danger : colors.success,
           borderColor: colors.background,
+          shadowColor: colors.shadow,
           top: insets.top + 8,
         },
       ]}
@@ -25,7 +26,7 @@ export default function NetworkBadge() {
       accessibilityRole="text"
       accessibilityLabel={`Active network: ${environmentConfig.label}`}
     >
-      <Text style={styles.badgeText}>{environmentConfig.label}</Text>
+      <Text style={[styles.badgeText, { color: colors.onStatus }]}>{environmentConfig.label}</Text>
     </View>
   );
 }
@@ -39,14 +40,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.18,
     shadowRadius: 4,
     elevation: 4,
   },
   badgeText: {
-    color: '#ffffff',
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',

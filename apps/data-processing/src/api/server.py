@@ -172,6 +172,8 @@ from src.api.lineage_routes import router as lineage_router
 from src.api.job_routes import router as job_router
 from src.api.pipeline_topology_routes import router as pipeline_topology_router
 
+from src.api.audit_trail_routes import router as audit_trail_router
+
 app.include_router(ingestion_quality_router)
 app.include_router(review_queue_router)
 app.include_router(ledger_cursor_router)
@@ -182,6 +184,7 @@ app.include_router(sentiment_label_router)
 app.include_router(lineage_router)  # Feature/KPI lineage graph (#1254)
 app.include_router(job_router)  # Async analytics job status (#1248)
 app.include_router(pipeline_topology_router)  # Pipeline topology (#1451)
+app.include_router(audit_trail_router)  # Prediction audit trail export (#1639)
 
 
 try:
@@ -189,6 +192,10 @@ try:
 except Exception as exc:
     postgres_service = None
     logger.warning("PostgreSQL service unavailable for /news endpoint: %s", exc)
+
+# Expose postgres_service on app.state so sub-routers (e.g. audit_trail_routes)
+# can resolve it from the request without importing the module-level global.
+app.state.postgres_service = postgres_service
 
 
 # Lazy pinned embedding pipeline for /search/similar (#1455). The model is

@@ -10,6 +10,7 @@ import {
   type ComponentType,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -20,6 +21,8 @@ import {
   Tags,
   Link2,
   X,
+  Bookmark,
+  Check,
 } from "lucide-react";
 import {
   runGlobalSearch,
@@ -27,6 +30,15 @@ import {
   type GlobalSearchResultItem,
   type SearchCategory,
 } from "@/lib/search-api";
+import {
+  GLOBAL_SEARCH_DOMAIN,
+  RUN_SAVED_SEARCH_EVENT,
+  SavedSearchApiService,
+  filtersFromGlobalQuery,
+  globalQueryFromFilters,
+  validateSavedSearchName,
+  type RunSavedSearchDetail,
+} from "@/lib/saved-search-service";
 import { cn } from "@/lib/utils";
 
 const DEBOUNCE_MS = 280;
@@ -43,6 +55,12 @@ const CATEGORY_ICON: Record<
 
 type SearchStatus = "idle" | "loading" | "ready" | "empty" | "error";
 
+type SaveState =
+  | { kind: "closed" }
+  | { kind: "editing"; name: string; error?: string }
+  | { kind: "saving"; name: string }
+  | { kind: "saved"; name: string };
+
 export function GlobalSearch({ className }: { className?: string }) {
   const router = useRouter();
   const listboxId = useId();
@@ -56,6 +74,7 @@ export function GlobalSearch({ className }: { className?: string }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [groups, setGroups] = useState<GlobalSearchGroup[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [save, setSave] = useState<SaveState>({ kind: "closed" });
 
   const flatItems = useMemo(() => {
     const items: GlobalSearchResultItem[] = [];
@@ -120,6 +139,7 @@ export function GlobalSearch({ className }: { className?: string }) {
   const scheduleSearch = useCallback(
     (value: string) => {
       setQuery(value);
+      setSave({ kind: "closed" });
       setOpen(true);
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (!value.trim()) {
@@ -139,6 +159,46 @@ export function GlobalSearch({ className }: { className?: string }) {
   );
 
   useEffect(() => () => cancelInFlight(), [cancelInFlight]);
+
+  // Re-running a saved search restores its stored query and runs it at once.
+  useEffect(() => {
+    const onRun = (event: Event) => {
+      const { filters } = (event as CustomEvent<RunSavedSearchDetail>).detail;
+      const restored = globalQueryFromFilters(filters);
+      setQuery(restored);
+      setSave({ kind: "closed" });
+      setOpen(true);
+      inputRef.current?.focus();
+      void executeSearch(restored);
+    };
+    window.addEventListener(RUN_SAVED_SEARCH_EVENT, onRun);
+    return () => window.removeEventListener(RUN_SAVED_SEARCH_EVENT, onRun);
+  }, [executeSearch]);
+
+  const submitSave = useCallback(async () => {
+    if (save.kind !== "editing") return;
+    const error = validateSavedSearchName(save.name);
+    if (error) {
+      setSave({ ...save, error });
+      return;
+    }
+    const name = save.name.trim();
+    setSave({ kind: "saving", name });
+    try {
+      await SavedSearchApiService.create({
+        name,
+        domain: GLOBAL_SEARCH_DOMAIN,
+        filters: filtersFromGlobalQuery(query),
+      });
+      setSave({ kind: "saved", name });
+    } catch (err) {
+      setSave({
+        kind: "editing",
+        name,
+        error: err instanceof Error ? err.message : "Could not save search.",
+      });
+    }
+  }, [save, query]);
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -344,8 +404,77 @@ export function GlobalSearch({ className }: { className?: string }) {
                 );
               })}
 
-            <p className="mt-1 border-t border-white/10 px-2 pt-2 text-[10px] text-white/35">
-              ⌘K / Ctrl+K to focus · Esc to close
+            {(status === "ready" || status === "empty") && query.trim() && (
+              <div className="mt-1 border-t border-white/10 px-2 pt-2">
+                {save.kind === "closed" && (
+                  <button
+                    type="button"
+                    onClick={() => setSave({ kind: "editing", name: query.trim() })}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-primary hover:bg-primary/10"
+                  >
+                    <Bookmark className="h-3.5 w-3.5" />
+                    Save this search
+                  </button>
+                )}
+                {(save.kind === "editing" || save.kind === "saving") && (
+                  <form
+                    className="flex flex-col gap-1"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void submitSave();
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        aria-label="Saved search name"
+                        value={save.name}
+                        maxLength={120}
+                        disabled={save.kind === "saving"}
+                        autoFocus
+                        onChange={(e) => setSave({ kind: "editing", name: e.target.value })}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        className="min-w-0 flex-1 rounded-lg border border-primary/25 bg-white/5 px-2 py-1 text-xs text-white outline-none focus:border-primary/60"
+                      />
+                      <button
+                        type="submit"
+                        disabled={save.kind === "saving"}
+                        className="rounded-lg bg-primary/20 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/30 disabled:opacity-50"
+                      >
+                        {save.kind === "saving" ? "Saving…" : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSave({ kind: "closed" })}
+                        className="rounded-lg px-2 py-1 text-xs text-white/50 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {save.kind === "editing" && save.error && (
+                      <p role="alert" className="text-xs text-rose-300">
+                        {save.error}
+                      </p>
+                    )}
+                  </form>
+                )}
+                {save.kind === "saved" && (
+                  <p className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-emerald-300">
+                    <Check className="h-3.5 w-3.5" />
+                    Saved as “{save.name}”
+                  </p>
+                )}
+              </div>
+            )}
+
+            <p className="mt-1 flex items-center justify-between border-t border-white/10 px-2 pt-2 text-[10px] text-white/35">
+              <span>⌘K / Ctrl+K to focus · Esc to close</span>
+              <Link
+                href="/saved-searches"
+                onClick={() => setOpen(false)}
+                className="text-primary/80 hover:text-primary"
+              >
+                Saved searches
+              </Link>
             </p>
           </div>
         </>

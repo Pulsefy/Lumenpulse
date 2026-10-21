@@ -71,6 +71,10 @@ import { z } from 'zod';
  * - PORTFOLIO_SNAPSHOT_RETRY_DELAY_MS
  * - PORTFOLIO_SNAPSHOT_QUEUE_METRICS
  * - OUTBOX_MAX_ATTEMPTS
+ * - OUTBOX_INDEX_CHECK_WINDOW_MINUTES
+ * - OUTBOX_INDEX_CHECK_SETTLE_MINUTES
+ * - OUTBOX_INDEX_CHECK_MAX_ROWS
+ * - OUTBOX_INDEX_CHECK_REQUIRED_TYPES
  * - RATE_LIMIT_TRACK_BY_IP
  * - RATE_LIMIT_TRACK_BY_API_KEY
  * - RATE_LIMIT_API_KEY_HEADER
@@ -594,6 +598,26 @@ const envSchema = z
     // Outbox relay — dispatch attempts before an event is dead-lettered.
     OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(5),
 
+    // Outbox ↔ soroban event index consistency check
+    // (see apps/backend/src/outbox-index-consistency).
+    OUTBOX_INDEX_CHECK_WINDOW_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(120),
+    OUTBOX_INDEX_CHECK_SETTLE_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .default(15),
+    OUTBOX_INDEX_CHECK_MAX_ROWS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(50_000)
+      .default(5_000),
+    OUTBOX_INDEX_CHECK_REQUIRED_TYPES: z.string().trim().optional(),
+
     // Idempotency keys (see apps/backend/src/idempotency)
     IDEMPOTENCY_RETENTION_MS: z.coerce
       .number()
@@ -639,7 +663,88 @@ const envSchema = z
         path: ['PYTHON_API_URL'],
       });
     }
+
+    // Network-specific configuration separation (Issue #1587)
+    if (values.STELLAR_NETWORK === 'mainnet') {
+      if (values.BOOTSTRAP_DEMO_DATA_ENABLED) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'BOOTSTRAP_DEMO_DATA_ENABLED is a testnet-only facility and must not be enabled under mainnet configuration.',
+          path: ['BOOTSTRAP_DEMO_DATA_ENABLED'],
+        });
+      }
+      if (values.FRIENDBOT_BOOTSTRAP_ENABLED) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'FRIENDBOT_BOOTSTRAP_ENABLED is a testnet-only facility and must not be enabled under mainnet configuration.',
+          path: ['FRIENDBOT_BOOTSTRAP_ENABLED'],
+        });
+      }
+      if (values.USE_MOCK_TRANSACTIONS) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'USE_MOCK_TRANSACTIONS is prohibited under mainnet configuration.',
+          path: ['USE_MOCK_TRANSACTIONS'],
+        });
+      }
+      if (
+        values.STELLAR_HORIZON_URL &&
+        /testnet|friendbot/i.test(values.STELLAR_HORIZON_URL)
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'STELLAR_HORIZON_URL must not point to testnet or friendbot under mainnet configuration.',
+          path: ['STELLAR_HORIZON_URL'],
+        });
+      }
+      if (
+        values.STELLAR_SOROBAN_RPC_URL &&
+        /testnet/i.test(values.STELLAR_SOROBAN_RPC_URL)
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'STELLAR_SOROBAN_RPC_URL must not point to testnet under mainnet configuration.',
+          path: ['STELLAR_SOROBAN_RPC_URL'],
+        });
+      }
+    } else if (values.STELLAR_NETWORK === 'testnet') {
+      if (
+        values.STELLAR_HORIZON_URL &&
+        (values.STELLAR_HORIZON_URL === 'https://horizon.stellar.org' ||
+          values.STELLAR_HORIZON_URL === 'https://horizon.stellar.org/')
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'STELLAR_HORIZON_URL must not point to public mainnet under testnet configuration.',
+          path: ['STELLAR_HORIZON_URL'],
+        });
+      }
+      if (
+        values.STELLAR_SOROBAN_RPC_URL &&
+        (values.STELLAR_SOROBAN_RPC_URL === 'https://soroban.stellar.org' ||
+          values.STELLAR_SOROBAN_RPC_URL === 'https://soroban.stellar.org/')
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'STELLAR_SOROBAN_RPC_URL must not point to public mainnet under testnet configuration.',
+          path: ['STELLAR_SOROBAN_RPC_URL'],
+        });
+      }
+    }
   });
+
+export { envSchema };
+
+export function validateConfiguration(raw: Record<string, unknown>) {
+  return envSchema.safeParse(raw);
+}
 
 const rawEnvironment = {
   ...process.env,
@@ -647,6 +752,9 @@ const rawEnvironment = {
   ENVIRONMENT: process.env.ENVIRONMENT || runtime.environment,
   DB_DATABASE:
     process.env.DB_DATABASE || process.env.DB_NAME || process.env.DB_DATABASE,
+  USE_MOCK_TRANSACTIONS:
+    process.env.USE_MOCK_TRANSACTIONS ??
+    (process.env.STELLAR_NETWORK === 'mainnet' ? 'false' : undefined),
 };
 
 const parseResult = envSchema.safeParse(rawEnvironment);
@@ -1131,6 +1239,22 @@ const optionalSummary = [
     String(parsedEnv.PORTFOLIO_SNAPSHOT_QUEUE_METRICS),
   ],
   ['OUTBOX_MAX_ATTEMPTS', String(parsedEnv.OUTBOX_MAX_ATTEMPTS)],
+  [
+    'OUTBOX_INDEX_CHECK_WINDOW_MINUTES',
+    String(parsedEnv.OUTBOX_INDEX_CHECK_WINDOW_MINUTES),
+  ],
+  [
+    'OUTBOX_INDEX_CHECK_SETTLE_MINUTES',
+    String(parsedEnv.OUTBOX_INDEX_CHECK_SETTLE_MINUTES),
+  ],
+  [
+    'OUTBOX_INDEX_CHECK_MAX_ROWS',
+    String(parsedEnv.OUTBOX_INDEX_CHECK_MAX_ROWS),
+  ],
+  [
+    'OUTBOX_INDEX_CHECK_REQUIRED_TYPES',
+    parsedEnv.OUTBOX_INDEX_CHECK_REQUIRED_TYPES || '(none)',
+  ],
   ['IDEMPOTENCY_RETENTION_MS', String(parsedEnv.IDEMPOTENCY_RETENTION_MS)],
   ['IDEMPOTENCY_LEASE_MS', String(parsedEnv.IDEMPOTENCY_LEASE_MS)],
   [
@@ -1322,6 +1446,21 @@ export const config = Object.freeze({
      * queue and stops blocking the relay. Default 5.
      */
     maxAttempts: parsedEnv.OUTBOX_MAX_ATTEMPTS,
+  }),
+  outboxIndexCheck: Object.freeze({
+    /** Length of the createdAt / processedAt window compared per run. */
+    windowMinutes: parsedEnv.OUTBOX_INDEX_CHECK_WINDOW_MINUTES,
+    /** Recent records are left alone so in-flight work is not flagged. */
+    settleMinutes: parsedEnv.OUTBOX_INDEX_CHECK_SETTLE_MINUTES,
+    /** Per-query row cap that bounds the cost of one run. */
+    maxRows: parsedEnv.OUTBOX_INDEX_CHECK_MAX_ROWS,
+    /**
+     * Soroban canonical event types that must always have an outbox event.
+     * Empty disables the indexed-but-never-published direction.
+     */
+    requiredTypes: Object.freeze(
+      splitCsv(parsedEnv.OUTBOX_INDEX_CHECK_REQUIRED_TYPES),
+    ),
   }),
   idempotency: Object.freeze({
     /**

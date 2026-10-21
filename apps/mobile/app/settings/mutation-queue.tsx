@@ -141,7 +141,7 @@ export default function MutationQueueScreen() {
           accessibilityRole="button"
           accessibilityLabel={`Keep my change for ${mutation.type}`}
         >
-          <Text style={styles.actionButtonText}>Keep mine</Text>
+          <Text style={[styles.actionButtonText, { color: colors.onAccent }]}>Keep mine</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, styles.secondaryButton, { borderColor: colors.border }]}
@@ -175,8 +175,8 @@ export default function MutationQueueScreen() {
           accessibilityRole="button"
           accessibilityLabel={`Retry ${mutation.type}`}
         >
-          <Ionicons name="refresh" size={16} color="#ffffff" />
-          <Text style={styles.actionButtonText}>Retry</Text>
+          <Ionicons name="refresh" size={16} color={colors.onAccent} />
+          <Text style={[styles.actionButtonText, { color: colors.onAccent }]}>Retry</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, styles.secondaryButton, { borderColor: colors.border }]}
@@ -384,7 +384,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   actionButtonText: {
-    color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
   },

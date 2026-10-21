@@ -18,6 +18,7 @@ import { LinkedStellarAccount, usersApi } from '../../lib/api';
 import { storage } from '../../lib/storage';
 import { requireStepUpAuthentication } from '../../lib/biometric-lock';
 import { useTheme } from '../../contexts/ThemeContext';
+import { palette } from '../../theme/tokens';
 import { useLocalization } from '../../src/context';
 import { useWallet } from '../../contexts/WalletContext';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
@@ -300,11 +301,11 @@ export default function ManageAccountsScreen() {
             accessibilityHint={t('settings.manage_accounts.scan_qr_hint')}
           >
             {submitting ? (
-              <ActivityIndicator color="#ffffff" accessibilityLabel={t('common.loading')} />
+              <ActivityIndicator color={colors.onAccent} accessibilityLabel={t('common.loading')} />
             ) : (
               <>
-                <Ionicons name="scan-outline" size={18} color="#ffffff" />
-                <Text style={styles.primaryButtonText} accessible>
+                <Ionicons name="scan-outline" size={18} color={colors.onAccent} />
+                <Text style={[styles.primaryButtonText, { color: colors.onAccent }]} accessible>
                   {t('settings.manage_accounts.scan_qr_label')}
                 </Text>
               </>
@@ -382,8 +383,8 @@ export default function ManageAccountsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={t('wallet.reconnect.button')}
               >
-                <Ionicons name="refresh-outline" size={18} color="#ffffff" />
-                <Text style={styles.primaryButtonText}>{t('wallet.reconnect.button')}</Text>
+                <Ionicons name="refresh-outline" size={18} color={colors.onStatus} />
+                <Text style={[styles.primaryButtonText, { color: colors.onStatus }]}>{t('wallet.reconnect.button')}</Text>
               </TouchableOpacity>
             </View>
           ) : status === 'restore_failed' ? (
@@ -398,8 +399,10 @@ export default function ManageAccountsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={t('wallet.restore_failed.button')}
               >
-                <Ionicons name="wallet-outline" size={18} color="#ffffff" />
-                <Text style={styles.primaryButtonText}>{t('wallet.restore_failed.button')}</Text>
+                <Ionicons name="wallet-outline" size={18} color={colors.onStatus} />
+                <Text style={[styles.primaryButtonText, { color: colors.onStatus }]}>
+                  {t('wallet.restore_failed.button')}
+</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -410,11 +413,13 @@ export default function ManageAccountsScreen() {
               disabled={status === 'connecting'}
             >
               {status === 'connecting' ? (
-                <ActivityIndicator color="#ffffff" />
+                <ActivityIndicator color={colors.onStatus} />
               ) : (
                 <>
-                  <Ionicons name="wallet-outline" size={18} color="#ffffff" />
-                  <Text style={styles.primaryButtonText}>Connect Wallet</Text>
+                  <Ionicons name="wallet-outline" size={18} color={colors.onStatus} />
+                  <Text style={[styles.primaryButtonText, { color: colors.onStatus }]}>
+                    Connect Wallet
+                  </Text>
                 </>
               )}
             </TouchableOpacity>
@@ -519,7 +524,7 @@ export default function ManageAccountsScreen() {
           onRequestClose={() => setScannerOpen(false)}
           accessibilityViewIsModal={true}
         >
-          <SafeAreaView style={[styles.scannerContainer, { backgroundColor: '#000000' }]}>
+          <SafeAreaView style={[styles.scannerContainer, { backgroundColor: palette.black }]}>
             <View style={styles.scannerHeader}>
               <TouchableOpacity
                 style={styles.scannerClose}
@@ -528,9 +533,11 @@ export default function ManageAccountsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={t('common.close')}
               >
-                <Ionicons name="close" size={24} color="#ffffff" />
+                <Ionicons name="close" size={24} color={palette.white} />
               </TouchableOpacity>
-              <Text style={styles.scannerTitle} accessible accessibilityRole="header">
+              <Text
+                style={[styles.scannerTitle, { color: palette.white }]}
+                accessible accessibilityRole="header">
                 {t('settings.manage_accounts.scan_qr_label')}
               </Text>
               <View style={styles.scannerClose} />
@@ -542,7 +549,7 @@ export default function ManageAccountsScreen() {
                 accessible
                 accessibilityLabel="Camera permission required"
               >
-                <Text style={styles.permissionFallbackText} accessible>
+                <Text style={[styles.permissionFallbackText, { color: palette.white }]} accessible>
                   {t('settings.manage_accounts.camera_permission_message')}
                 </Text>
               </View>
@@ -554,8 +561,8 @@ export default function ManageAccountsScreen() {
               />
             )}
 
-            <View style={styles.scannerFooter}>
-              <Text style={styles.scannerHint} accessible>
+            <View style={[styles.scannerFooter, { backgroundColor: colors.overlay }]}>
+              <Text style={[styles.scannerHint, { color: palette.white }]} accessible>
                 {t('settings.manage_accounts.scanner_hint')}
               </Text>
             </View>
@@ -637,7 +644,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   primaryButtonText: {
-    color: '#ffffff',
     fontSize: 15,
     fontWeight: '700',
   },
@@ -723,7 +729,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scannerTitle: {
-    color: '#ffffff',
     fontSize: 18,
     fontWeight: '700',
   },
@@ -732,12 +737,10 @@ const styles = StyleSheet.create({
     bottom: 32,
     left: 24,
     right: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
     borderRadius: 16,
     padding: 16,
   },
   scannerHint: {
-    color: '#ffffff',
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
@@ -749,7 +752,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   permissionFallbackText: {
-    color: '#ffffff',
     textAlign: 'center',
     fontSize: 15,
     lineHeight: 22,

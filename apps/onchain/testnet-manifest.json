@@ -13,7 +13,7 @@
     },
     "crowdfund_vault": {
       "id": "CBBQW7T65XBDPIPXEIIPJVJEEIBSPC566HMEU2LTBAULLKCNUFRFBKRO",
-      "wasm_hash": "556694e01aab127cc3ac97e83181f146587f7b29041419ed2c4c3440d946c2b6"
+      "wasm_hash": "92f88f198f8a42cccc06cd4d5a11ea3f9947423b64d75bcf68e2bb6fb66e8609"
     },
     "matching_pool": {
       "id": "CBQJ2E2MPYRCQDHZZYJXHRKUTCTIJFO55AVGHB2WDZSLS2OOENUDC6HH",
@@ -35,7 +35,7 @@
     },
     "pricing_adapter": {
       "id": "CCW2EF3M5GXWM2ZTOAUPKC3CY7W42T3QJEK72WO7VEOR5ONBUTCUWDVM",
-      "wasm_hash": "5520afef74693a866f967b338e3f32bae58927967235e4f81c362b4a515f2207"
+      "wasm_hash": "52f5f0528ac0c4a5a53cf48a9fa1a32046b338bfc1d3f1ed77ff9869d3fd4549"
     },
     "feature_flags": {
       "reason": "Not deployed on testnet: feature flags remain off-chain during the initial release and are not intended to be publicly deployed yet."

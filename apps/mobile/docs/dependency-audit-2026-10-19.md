@@ -2,6 +2,9 @@
 
 Issue: [#1584](https://github.com/Pulsefy/Lumenpulse/issues/1584).
 Baseline: `7a19553fc4f5ebf1d4658000e1514416432f8c34`.
+The original before/after measurements compare that baseline with `55cb9bb`.
+The 2026-10-21 integration section below records validation after syncing newer
+upstream features; those original measurements are not a current-base comparison.
 Measurements use Windows x64, Node 24.14.0 and npm 11.9.0, with the same
 environment for both revisions. CI continues to use the root `.nvmrc`.
 
@@ -19,7 +22,8 @@ environment for both revisions. CI continues to use the root `.nvmrc`.
 - Remove **lumenpulse: file:../..**. No application import uses this private
   root manifest, which exposes no mobile library. The pnpm workspace still
   determines Metro's monorepo root, so root tooling is still installed.
-- Pin all **26 runtime and 12 development dependencies** to exact versions.
+- Pin all **29 runtime and 12 development dependencies** to exact versions
+  (26 runtime dependencies before the 2026-10-21 upstream integration).
   Preserve the resolved Expo 54 / React Native 0.81 versions. Align the direct
   Babel preset to Expo's existing `54.0.12`, removing its duplicate `54.0.10` copy.
 - Refresh compatible transitive dependencies. Add narrow overrides for
@@ -117,7 +121,7 @@ claimed: a usable Android SDK and Xcode/signing setup were unavailable here.
 Native binary accounting remains a release-build follow-up using the existing
 `size:record-binary` workflow.
 
-## Validation and reproduction
+## Original validation and reproduction (2026-10-19)
 
 - Clean `npm ci` succeeds; `npm ls --all` reports no dependency problems.
 - All 38 remaining direct version specifiers are exact and match the root pnpm importer.
@@ -156,6 +160,34 @@ npm run e2e
 Audit JSON exits nonzero while the exceptions above remain. Keep measurement
 outputs outside `dist`; compare fresh exports made with the same toolchain.
 
+## Main-branch integration — 2026-10-21
+
+Synced upstream `a1bad760`, including its background refresh implementation.
+Keep `expo-background-task 1.0.10`, `expo-battery 10.0.8` and
+`expo-task-manager 14.0.9`: all three are imported by
+`lib/background-refresh.ts`, and the background-task plugin is configured in
+`app.json`. These are required upstream dependencies, not candidates for removal.
+Both lockfiles retain the dependency removals and compatible security updates
+described above. The workspace lockfile was synchronized with pnpm 10.26.1,
+matching the package manager version now declared by upstream.
+
+- Clean `npm ci` and `npm ls --all` pass without dependency problems.
+- All **41** direct dependencies have exact versions matching the npm lockfile
+  and the root pnpm importer; pnpm's frozen-lockfile validation passes.
+- Type checking and the **46 suites / 560 tests** with coverage pass, including
+  the upstream background-refresh, theme and moderation tests.
+- ESLint passes for the source, regression test and measurement script changed
+  by this PR; the full source-lint limitation recorded above remains separate.
+- A fresh registry audit still reports **0 critical, 42 high and 20 moderate**
+  affected-package records. The existing compatibility exceptions still apply;
+  the current response is attached as
+  [audit-after-2026-10-21.json](audit-after-2026-10-21.json).
+
+The size table above remains the original same-toolchain comparison. Upstream
+features add code and dependencies, so it must not be treated as a measurement
+against the newly synchronized base. The Mobile CI size job exports both the PR
+and its current base and publishes that comparison in its run summary/artifact.
+
 ## Direct dependency inventory
 
 Versions below are the pinned versions in this PR. References exclude generated
@@ -167,6 +199,8 @@ coverage/export files; configuration and peer integrations are reviewed separate
 | `@react-native-async-storage/async-storage` | 2.2.0          | `contexts/EnvironmentContext.tsx`, `contexts/ThemeContext.tsx`              |
 | `@react-native-community/netinfo`           | 11.4.1         | `contexts/WatchlistContext.tsx`, `lib/__tests__/api-client.mocks.test.ts`   |
 | `expo`                                      | 54.0.37        | `metro.config.js`                                                           |
+| `expo-background-task`                      | 1.0.10         | `lib/background-refresh.ts`, `app.json` plugin                              |
+| `expo-battery`                              | 10.0.8         | `lib/background-refresh.ts`                                                |
 | `expo-camera`                               | 17.0.10        | `app/settings/manage-accounts.tsx`                                          |
 | `expo-constants`                            | 18.0.14        | `lib/config.ts`                                                             |
 | `expo-dev-client`                           | 6.0.21         | Native development client, including biometrics outside Expo Go             |
@@ -179,6 +213,7 @@ coverage/export files; configuration and peer integrations are reviewed separate
 | `expo-router`                               | 6.0.24         | `app/(tabs)/_layout.tsx`, `app/(tabs)/discover.tsx`                         |
 | `expo-secure-store`                         | 15.0.8         | `lib/__tests__/coverage-floor.test.ts`, `lib/__tests__/storage.test.ts`     |
 | `expo-status-bar`                           | 3.0.9          | `app/(tabs)/index.tsx`                                                      |
+| `expo-task-manager`                         | 14.0.9         | `lib/background-refresh.ts`                                                |
 | `i18next`                                   | 25.10.10       | `src/i18n/index.ts`                                                         |
 | `react`                                     | 19.1.0         | `app/(tabs)/discover.tsx`, `app/(tabs)/grants/[id].tsx`                     |
 | `react-dom`                                 | 19.1.0         | Web renderer required by react-native-web                                   |

@@ -22,6 +22,7 @@ from sqlalchemy import (
     func,
     delete,
     update as sa_update,
+    Text as sa_Text,
 )
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError, OperationalError, IntegrityError
@@ -49,6 +50,7 @@ from .models import (
     SentimentLabel,
     AnalyticsJob,
     FeatureDriftRetrainingCooldown,
+    AuditExportRun,
 )
 from .cohort_models import (
     GrantRound,
@@ -3648,4 +3650,215 @@ class PostgresService:
                 return result.rowcount or 0
         except SQLAlchemyError as e:
             logger.error(f"Failed to reconcile orphaned analytics jobs: {e}")
-            return 0
+
+    # ------------------------------------------------------------------
+    # Prediction audit trail (Issue #1639)
+    # ------------------------------------------------------------------
+
+    def get_prediction_by_id(
+        self,
+        request_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a single prediction log row by its ``request_id``.
+
+        Returns ``None`` when no matching row exists.
+        """
+        try:
+            with self.get_session() as session:
+                row = session.execute(
+                    select(PredictionLog)
+                    .where(PredictionLog.request_id == request_id)
+                    .order_by(desc(PredictionLog.created_at))
+                    .limit(1)
+                ).scalar_one_or_none()
+                if row is None:
+                    return None
+                return {
+                    "request_id": row.request_id,
+                    "model_type": row.model_type,
+                    "model_version": row.model_version,
+                    "input_hash": row.input_hash,
+                    "output": row.output,
+                    "latency_ms": row.latency_ms,
+                    "raw_input": row.raw_input,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                }
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to retrieve prediction by id {request_id!r}: {e}")
+            return None
+
+    def query_prediction_logs_by_subject(
+        self,
+        subject: str,
+        model_type: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """
+        Return prediction logs whose ``output`` JSON contains the given
+        *subject* string (e.g. an asset code such as ``"XLM"`` or a
+        contributor identifier).
+
+        The match is a case-insensitive substring search on the JSON
+        serialisation of the ``output`` column, which is portable across
+        both PostgreSQL and SQLite (used in tests).
+
+        Args:
+            subject:    Asset code, contributor ID, or other subject label.
+            model_type: Optional filter on model type.
+            limit:      Maximum rows to return (capped at 1 000).
+            offset:     Pagination offset.
+        """
+        from src.utils.pagination import clamp_limit, clamp_offset
+
+        limit = clamp_limit(limit)
+        offset = clamp_offset(offset)
+        try:
+            with self.get_session() as session:
+                stmt = (
+                    select(PredictionLog)
+                    .where(
+                        func.lower(func.cast(PredictionLog.output, sa_Text)).contains(
+                            subject.lower()
+                        )
+                    )
+                    .order_by(desc(PredictionLog.created_at))
+                    .limit(limit)
+                    .offset(offset)
+                )
+                if model_type:
+                    stmt = stmt.where(PredictionLog.model_type == model_type)
+                rows = session.execute(stmt).scalars().all()
+                return [
+                    {
+                        "request_id": r.request_id,
+                        "model_type": r.model_type,
+                        "model_version": r.model_version,
+                        "input_hash": r.input_hash,
+                        "output": r.output,
+                        "latency_ms": r.latency_ms,
+                        "raw_input": r.raw_input,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
+                    for r in rows
+                ]
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to query prediction logs by subject {subject!r}: {e}")
+            return []
+
+    def query_prediction_logs_by_time_range(
+        self,
+        start: str,
+        end: str,
+        model_type: Optional[str] = None,
+        model_version: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        Return prediction logs whose ``created_at`` falls within
+        [*start*, *end*] (ISO-8601 strings, inclusive).
+
+        Args:
+            start:         ISO-8601 datetime string (e.g. ``"2026-03-01T00:00:00Z"``).
+            end:           ISO-8601 datetime string.
+            model_type:    Optional filter on model type.
+            model_version: Optional filter on model version.
+            limit:         Maximum rows per page (capped at 1 000).
+            offset:        Pagination offset.
+
+        Returns:
+            ``(rows, total_matching)``
+        """
+        from src.utils.pagination import clamp_limit, clamp_offset
+        from datetime import datetime as _dt
+
+        limit = clamp_limit(limit)
+        offset = clamp_offset(offset)
+        try:
+            start_dt = _dt.fromisoformat(start.replace("Z", "+00:00"))
+            end_dt = _dt.fromisoformat(end.replace("Z", "+00:00"))
+        except ValueError as exc:
+            logger.error(f"Invalid time range for audit query: {exc}")
+            return [], 0
+
+        try:
+            with self.get_session() as session:
+                filters = [
+                    PredictionLog.created_at >= start_dt,
+                    PredictionLog.created_at <= end_dt,
+                ]
+                if model_type:
+                    filters.append(PredictionLog.model_type == model_type)
+                if model_version:
+                    filters.append(PredictionLog.model_version == model_version)
+
+                total = session.execute(
+                    select(func.count())
+                    .select_from(PredictionLog)
+                    .where(and_(*filters))
+                ).scalar_one()
+
+                rows = session.execute(
+                    select(PredictionLog)
+                    .where(and_(*filters))
+                    .order_by(desc(PredictionLog.created_at))
+                    .limit(limit)
+                    .offset(offset)
+                ).scalars().all()
+
+                return (
+                    [
+                        {
+                            "request_id": r.request_id,
+                            "model_type": r.model_type,
+                            "model_version": r.model_version,
+                            "input_hash": r.input_hash,
+                            "output": r.output,
+                            "latency_ms": r.latency_ms,
+                            "raw_input": r.raw_input,
+                            "created_at": r.created_at.isoformat() if r.created_at else None,
+                        }
+                        for r in rows
+                    ],
+                    int(total or 0),
+                )
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to query prediction logs by time range: {e}")
+            return [], 0
+
+    def log_audit_export_run(
+        self,
+        query_type: str,
+        query_params: Dict[str, Any],
+        row_count: int,
+        request_id: Optional[str] = None,
+        client_ip: Optional[str] = None,
+        status: str = "ok",
+        error_detail: Optional[str] = None,
+    ) -> bool:
+        """
+        Persist a record of an audit-trail export run so that the act of
+        exporting is itself auditable (Issue #1639, acceptance criterion 4).
+
+        Failure to record must not surface to the caller.
+        """
+        try:
+            AuditExportRun.__table__.create(bind=self.engine, checkfirst=True)
+            with self.get_session() as session:
+                run = AuditExportRun(
+                    query_type=query_type,
+                    query_params=query_params,
+                    request_id=request_id,
+                    client_ip=client_ip,
+                    row_count=row_count,
+                    status=status,
+                    error_detail=error_detail,
+                )
+                session.add(run)
+                session.commit()
+                return True
+        except Exception as exc:
+            logger.error(f"Failed to log audit export run (non-fatal): {exc}")
+            return False

@@ -107,7 +107,7 @@ export default function NewsScreen() {
   if (loading && !articles?.length) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color="#db74cf" accessible accessibilityLabel={t('common.loading')} />
+        <ActivityIndicator size="large" color={colors.accent} accessible accessibilityLabel={t('common.loading')} />
       </SafeAreaView>
     );
   }
@@ -115,11 +115,11 @@ export default function NewsScreen() {
   if (error && !articles?.length) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={styles.errorText} accessible accessibilityRole="alert">
+        <Text style={[styles.errorText, { color: colors.danger }]} accessible accessibilityRole="alert">
           {error.message}
         </Text>
-        <TouchableOpacity onPress={handleRefresh} style={styles.retryButton} accessibilityRole="button" accessibilityLabel={t('common.retry')}>
-          <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
+        <TouchableOpacity onPress={handleRefresh} style={[styles.retryButton, { backgroundColor: colors.accent }]} accessibilityRole="button" accessibilityLabel={t('common.retry')}>
+          <Text style={[styles.retryButtonText, { color: colors.onAccent }]}>{t('common.retry')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -199,9 +199,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 15, fontWeight: '600', lineHeight: 20 },
   meta: { opacity: 0.6, fontSize: 12 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  errorText: { color: '#ff6b6b', marginBottom: 12 },
-  retryButton: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: '#db74cf', borderRadius: 8 },
-  retryButtonText: { color: '#ffffff', fontWeight: '600' },
+  errorText: { marginBottom: 12 },
+  retryButton: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
+  retryButtonText: { fontWeight: '600' },
   staleIndicator: {
     flexDirection: 'row',
     alignItems: 'center',

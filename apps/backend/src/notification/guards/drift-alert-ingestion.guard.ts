@@ -76,11 +76,9 @@ export class DriftAlertIngestionGuard implements CanActivate {
     }
 
     const signature = request.headers[DRIFT_ALERT_SIGNATURE_HEADER] as
-      | string
-      | undefined;
+      string | undefined;
     const timestampHeader = request.headers[DRIFT_ALERT_TIMESTAMP_HEADER] as
-      | string
-      | undefined;
+      string | undefined;
 
     if (!signature) {
       this.logger.warn({ requestId }, 'Missing drift alert signature header');

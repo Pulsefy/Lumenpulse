@@ -15,6 +15,7 @@ import React, { useCallback } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Image as ExpoImage, ImageContentFit } from 'expo-image';
 import { imageCache } from '../lib/image-cache';
+import { useTheme } from '../contexts/ThemeContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -29,7 +30,7 @@ export interface CachedImageProps {
   borderRadius?: number;
   /** Resizing strategy passed to expo-image. Defaults to 'cover'. */
   contentFit?: ImageContentFit;
-  /** Background colour shown while the image is loading. Defaults to #1a1a2e. */
+  /** Background colour shown while the image is loading. Defaults to the theme's surfaceMuted. */
   placeholderColor?: string;
   /** Accessible label for the image. */
   accessibilityLabel?: string;
@@ -43,9 +44,11 @@ export default function CachedImage({
   height,
   borderRadius = 0,
   contentFit = 'cover',
-  placeholderColor = '#1a1a2e',
+  placeholderColor: placeholderColorProp,
   accessibilityLabel,
 }: CachedImageProps) {
+  const { colors } = useTheme();
+  const placeholderColor = placeholderColorProp ?? colors.surfaceMuted;
   const handleLoad = useCallback(() => {
     if (uri) {
       // Record access asynchronously — fire-and-forget.

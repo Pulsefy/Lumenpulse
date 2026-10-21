@@ -56,7 +56,10 @@ export async function scanApplication(
     NoopGraphInspector,
     { logger: false },
   );
-  app.enableVersioning({ type: VersioningType.URI });
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
   // Run the same setup as main.ts so guards it registers with
   // app.useGlobalGuards() are visible to the security lint.
   setup?.(app);

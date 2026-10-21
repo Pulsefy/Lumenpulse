@@ -39,34 +39,28 @@ describe('OutboundWebhookService', () => {
 
   beforeEach(async () => {
     subRepo = {
-      create: jest.fn(
-        (dto: MockEntity): MockEntity => ({
-          id: 'sub-1',
-          ...dto,
-        }),
-      ),
-      save: jest.fn(
-        (entity: MockEntity): Promise<MockEntity> =>
-          Promise.resolve({ ...entity, id: entity.id || 'sub-1' }),
+      create: jest.fn((dto: MockEntity): MockEntity => ({
+        id: 'sub-1',
+        ...dto,
+      })),
+      save: jest.fn((entity: MockEntity): Promise<MockEntity> =>
+        Promise.resolve({ ...entity, id: entity.id || 'sub-1' }),
       ),
       findOne: jest.fn(),
       find: jest.fn(),
-      remove: jest.fn(
-        (entity: MockEntity): Promise<MockEntity> => Promise.resolve(entity),
+      remove: jest.fn((entity: MockEntity): Promise<MockEntity> =>
+        Promise.resolve(entity),
       ),
       createQueryBuilder: jest.fn(),
     };
 
     deliveryRepo = {
-      create: jest.fn(
-        (dto: MockEntity): MockEntity => ({
-          id: 'del-1',
-          ...dto,
-        }),
-      ),
-      save: jest.fn(
-        (entity: MockEntity): Promise<MockEntity> =>
-          Promise.resolve({ ...entity, id: entity.id || 'del-1' }),
+      create: jest.fn((dto: MockEntity): MockEntity => ({
+        id: 'del-1',
+        ...dto,
+      })),
+      save: jest.fn((entity: MockEntity): Promise<MockEntity> =>
+        Promise.resolve({ ...entity, id: entity.id || 'del-1' }),
       ),
       findOne: jest.fn(),
       find: jest.fn(),
@@ -74,15 +68,12 @@ describe('OutboundWebhookService', () => {
     };
 
     deadLetterRepo = {
-      create: jest.fn(
-        (dto: MockEntity): MockEntity => ({
-          id: 'dlq-1',
-          ...dto,
-        }),
-      ),
-      save: jest.fn(
-        (entity: MockEntity): Promise<MockEntity> =>
-          Promise.resolve({ ...entity, id: entity.id || 'dlq-1' }),
+      create: jest.fn((dto: MockEntity): MockEntity => ({
+        id: 'dlq-1',
+        ...dto,
+      })),
+      save: jest.fn((entity: MockEntity): Promise<MockEntity> =>
+        Promise.resolve({ ...entity, id: entity.id || 'dlq-1' }),
       ),
       findOne: jest.fn(),
       find: jest.fn(),

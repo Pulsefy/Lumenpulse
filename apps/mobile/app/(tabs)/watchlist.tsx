@@ -12,11 +12,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
+import { dataViz } from '../../theme/tokens';
 import { useWatchlist } from '../../contexts/WatchlistContext';
 import { WatchlistItem } from '../../lib/watchlist';
 
 function assetColor(symbol: string): string {
-  const palette = ['#db74cf', '#7a85ff', '#4ecdc4', '#f7b731', '#ff6b6b', '#a29bfe', '#fd79a8', '#00b894'];
+  const palette = dataViz.series;
   let hash = 0;
   for (let i = 0; i < symbol.length; i++) hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
   return palette[Math.abs(hash) % palette.length];

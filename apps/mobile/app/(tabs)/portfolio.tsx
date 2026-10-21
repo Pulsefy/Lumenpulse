@@ -14,6 +14,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
+import { dataViz } from '../../theme/tokens';
 import {
   portfolioApi,
   usersApi,
@@ -71,7 +72,7 @@ function getTransactionIcon(type: TransactionType): string {
 }
 
 function assetColor(code: string): string {
-  const palette = ['#db74cf', '#7a85ff', '#4ecdc4', '#f7b731', '#ff6b6b'];
+  const palette = dataViz.series.slice(0, 5);
   let hash = 0;
   for (let i = 0; i < code.length; i++) hash = code.charCodeAt(i) + ((hash << 5) - hash);
   return palette[Math.abs(hash) % palette.length];
@@ -193,19 +194,19 @@ function AccountSwitcher({
               <Ionicons
                 name={active ? 'radio-button-on' : 'radio-button-off'}
                 size={16}
-                color={active ? '#ffffff' : colors.textSecondary}
+                color={active ? colors.onAccent : colors.textSecondary}
                 importantForAccessibility="no"
               />
               <View style={styles.accountChipCopy}>
                 <Text
-                  style={[styles.accountChipLabel, { color: active ? '#ffffff' : colors.text }]}
+                  style={[styles.accountChipLabel, { color: active ? colors.onAccent : colors.text }]}
                 >
                   {label}
                 </Text>
                 <Text
                   style={[
                     styles.accountChipKey,
-                    { color: active ? '#ffffffcc' : colors.textSecondary },
+                    { color: active ? `${colors.onAccent}cc` : colors.textSecondary },
                   ]}
                 >
                   {truncateKey(item.publicKey)}
@@ -279,6 +280,12 @@ export default function PortfolioScreen() {
       const cachedAccounts = await storage.getLinkedAccountsMetadata();
       if (cachedAccounts.length > 0) {
         setAccounts(cachedAccounts);
+        // Select the stored account before the network round-trip so the
+        // cached summary (kept warm by background refresh) renders at once.
+        const storedPublicKey = await storage.getActiveWalletPublicKey();
+        if (cachedAccounts.some((account) => account.publicKey === storedPublicKey)) {
+          setActivePublicKey(storedPublicKey);
+        }
       }
 
       const response = await usersApi.getLinkedAccounts();

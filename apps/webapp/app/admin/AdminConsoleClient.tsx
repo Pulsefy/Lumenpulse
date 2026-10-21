@@ -776,6 +776,13 @@ export default function AdminConsoleClient() {
                 <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                 Refresh
               </button>
+              <Link
+                href="/admin/feature-flags"
+                className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-medium transition-colors"
+              >
+                <Settings className="w-4 h-4" />
+                Feature Flags
+              </Link>
               {publicKey && (
                 <div className="flex items-center gap-2 text-xs text-foreground/40 bg-white/5 px-3 py-1.5 rounded-full">
                   <User className="w-3 h-3" />

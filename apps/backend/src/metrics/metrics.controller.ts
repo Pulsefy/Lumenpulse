@@ -6,6 +6,7 @@ import {
   Query,
   Logger,
   InternalServerErrorException,
+  VERSION_NEUTRAL,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { MetricsService } from './metrics.service';
@@ -18,7 +19,7 @@ import { ErrorCode } from '../common/enums/error-code.enum';
  * Provides Prometheus-compatible metrics endpoint
  */
 @ApiTags('metrics')
-@Controller('metrics')
+@Controller({ path: 'metrics', version: ['1', VERSION_NEUTRAL] })
 @UseGuards(IpAllowlistGuard)
 export class MetricsController {
   private readonly logger = new Logger(MetricsController.name);

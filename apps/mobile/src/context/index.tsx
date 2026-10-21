@@ -1,10 +1,15 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import i18n from '../i18n';
 import { useColorScheme } from 'react-native';
-import { lightColors, darkColors, ThemeColors } from '../../theme/colors';
+import { themes, ThemeColors, ThemeMode } from '../../theme/tokens';
+import {
+  DEFAULT_THEME_MODE,
+  readThemeMode,
+  resolveTheme,
+  saveThemeMode,
+} from '../../lib/theme-preference';
 
-// Theme mode type
-export type ThemeMode = 'system' | 'light' | 'dark';
+export type { ThemeMode, ThemeColors };
 
 interface LocalizationContextType {
   t: (key: string, paramsOrFallback?: Record<string, any> | string) => string;
@@ -46,13 +51,27 @@ interface LocalizationProviderProps {
 }
 
 export const LocalizationProvider: React.FC<LocalizationProviderProps> = ({ children }) => {
-  const [themeMode, setThemeMode] = useState<ThemeMode>('system');
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(DEFAULT_THEME_MODE);
+  // useColorScheme re-renders on OS appearance changes, so 'system' follows live.
   const colorScheme = useColorScheme();
 
-  const resolvedMode =
-    themeMode === 'system' ? (colorScheme === 'dark' ? 'dark' : 'light') : themeMode;
+  const resolvedMode = resolveTheme(themeMode, colorScheme);
+  const colors = themes[resolvedMode];
 
-  const colors = resolvedMode === 'dark' ? darkColors : lightColors;
+  useEffect(() => {
+    let cancelled = false;
+    void readThemeMode().then((saved) => {
+      if (saved && !cancelled) setThemeModeState(saved);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const setThemeMode = useCallback((mode: ThemeMode) => {
+    setThemeModeState(mode);
+    void saveThemeMode(mode);
+  }, []);
 
   const t = (key: string, paramsOrFallback?: Record<string, any> | string): string => {
     if (typeof paramsOrFallback === 'string') {
@@ -65,10 +84,6 @@ export const LocalizationProvider: React.FC<LocalizationProviderProps> = ({ chil
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
   };
-
-  useEffect(() => {
-    // Initialize from storage if needed
-  }, []);
 
   return (
     <LocalizationContext.Provider

@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Repository } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { FeatureFlagsService } from './feature-flags.service';
+import {
+  FeatureFlagsService,
+  SENSITIVE_FLAG_CONFIRMATION_REQUIRED,
+} from './feature-flags.service';
 import { FeatureFlag } from './feature-flag.entity';
 import { FlagAuditLog } from './entities/flag-audit-log.entity';
 import { MetricsService } from '../metrics/metrics.service';
@@ -155,6 +158,7 @@ describe('FeatureFlagsService', () => {
         id: 'existing-id',
         key: 'flag.exists',
         enabled: false,
+        sensitive: false,
         rolloutPercentage: null,
         allowList: null,
         denyList: null,
@@ -276,6 +280,7 @@ describe('FeatureFlagsService', () => {
       id: 'id',
       key: 'risky.migration',
       enabled: false,
+      sensitive: false,
       rolloutPercentage: null,
       allowList: null,
       denyList: null,
@@ -497,6 +502,7 @@ describe('FeatureFlagsService', () => {
         id: 'id',
         key: 'risky.migration',
         enabled: false,
+        sensitive: false,
         rolloutPercentage: 100,
         allowList: [],
         denyList: [],
@@ -628,6 +634,7 @@ describe('FeatureFlagsService', () => {
         id: 'id',
         key: 'flag.audit.targeting',
         enabled: true,
+        sensitive: false,
         rolloutPercentage: 5,
         allowList: ['qa'],
         denyList: [],
@@ -709,6 +716,126 @@ describe('FeatureFlagsService', () => {
 
       const call = (auditRepo.create as jest.Mock).mock.calls.at(-1)?.[0];
       expect(call.previousTargeting.allowList).toEqual(['qa']);
+    });
+  });
+
+  describe('Sensitive flags', () => {
+    const sensitiveFlag = (): FeatureFlag =>
+      ({
+        id: 'id',
+        key: 'payments.enabled',
+        enabled: true,
+        sensitive: true,
+        rolloutPercentage: null,
+        allowList: null,
+        denyList: null,
+        conditions: null,
+        changedBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }) as FeatureFlag;
+
+    it('rejects an unconfirmed change with 428 and persists nothing', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue(sensitiveFlag());
+
+      await expect(
+        service.upsert('payments.enabled', false, undefined, 'admin'),
+      ).rejects.toMatchObject({
+        status: 428,
+        response: { code: SENSITIVE_FLAG_CONFIRMATION_REQUIRED },
+      });
+      expect(repo.save).not.toHaveBeenCalled();
+      expect(auditRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('applies a confirmed change', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue(sensitiveFlag());
+
+      const saved = await service.upsert(
+        'payments.enabled',
+        false,
+        undefined,
+        'admin',
+        undefined,
+        { confirm: true },
+      );
+
+      expect(saved.enabled).toBe(false);
+      expect(saved.sensitive).toBe(true);
+    });
+
+    it('requires confirmation to clear the sensitive marker', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue(sensitiveFlag());
+
+      await expect(
+        service.upsert(
+          'payments.enabled',
+          true,
+          undefined,
+          'admin',
+          undefined,
+          {
+            sensitive: false,
+          },
+        ),
+      ).rejects.toMatchObject({ status: 428 });
+    });
+
+    it('does not require confirmation for non-sensitive flags', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue({
+        ...sensitiveFlag(),
+        sensitive: false,
+      });
+
+      await expect(
+        service.upsert('payments.enabled', false),
+      ).resolves.toMatchObject({ enabled: false });
+    });
+
+    it('creates a new flag already marked sensitive without confirmation', async () => {
+      const saved = await service.upsert(
+        'new.sensitive',
+        false,
+        undefined,
+        'admin',
+        undefined,
+        { sensitive: true },
+      );
+      expect(saved.sensitive).toBe(true);
+    });
+
+    it('leaves the marker unchanged when sensitive is omitted', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue(sensitiveFlag());
+
+      const saved = await service.upsert(
+        'payments.enabled',
+        true,
+        undefined,
+        'admin',
+        { rolloutPercentage: 10 },
+        { confirm: true },
+      );
+      expect(saved.sensitive).toBe(true);
+    });
+
+    it('rejects an unconfirmed delete and records the actor on a confirmed one', async () => {
+      (repo.findOne as jest.Mock).mockResolvedValue(sensitiveFlag());
+
+      await expect(service.remove('payments.enabled')).rejects.toMatchObject({
+        status: 428,
+      });
+      expect(repo.delete).not.toHaveBeenCalled();
+
+      await service.remove('payments.enabled', 'admin@test.com', {
+        confirm: true,
+      });
+      expect(repo.delete).toHaveBeenCalledWith({ key: 'payments.enabled' });
+      expect(auditRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'remove',
+          actor: 'admin@test.com',
+        }),
+      );
     });
   });
 });

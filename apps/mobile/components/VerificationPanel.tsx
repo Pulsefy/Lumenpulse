@@ -16,8 +16,9 @@ interface Props {
 }
 
 function QuorumBar({ progress, color }: { progress: number; color: string }) {
+  const { colors } = useTheme();
   return (
-    <View style={styles.barTrack}>
+    <View style={[styles.barTrack, { backgroundColor: colors.surfaceMuted }]}>
       <View style={[styles.barFill, { width: `${progress}%`, backgroundColor: color }]} />
     </View>
   );
@@ -121,8 +122,8 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
         </View>
         <QuorumBar progress={data.quorumProgress} color={color} />
         <View style={styles.voteRow}>
-          <Text style={[styles.voteCount, { color: '#10b981' }]}>{data.votesFor} for</Text>
-          <Text style={[styles.voteCount, { color: '#ef4444' }]}>{data.votesAgainst} against</Text>
+          <Text style={[styles.voteCount, { color: colors.success }]}>{data.votesFor} for</Text>
+          <Text style={[styles.voteCount, { color: colors.danger }]}>{data.votesAgainst} against</Text>
         </View>
       </View>
 
@@ -133,17 +134,17 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel="Verify project"
-            style={[styles.voteBtn, { backgroundColor: '#10b981' + '22', borderColor: '#10b981' }]}
+            style={[styles.voteBtn, { backgroundColor: colors.successMuted, borderColor: colors.success }]}
             onPress={() => void vote(true)}
             disabled={isVoting}
             activeOpacity={0.75}
           >
             {isVoting ? (
-              <ActivityIndicator size="small" color="#10b981" />
+              <ActivityIndicator size="small" color={colors.success} />
             ) : (
               <>
-                <Ionicons name="thumbs-up-outline" size={16} color="#10b981" />
-                <Text style={[styles.voteBtnText, { color: '#10b981' }]}>Verify</Text>
+                <Ionicons name="thumbs-up-outline" size={16} color={colors.success} />
+                <Text style={[styles.voteBtnText, { color: colors.success }]}>Verify</Text>
               </>
             )}
           </TouchableOpacity>
@@ -151,17 +152,17 @@ export default function VerificationPanel({ projectId, voterPublicKey }: Props) 
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel="Reject project"
-            style={[styles.voteBtn, { backgroundColor: '#ef4444' + '22', borderColor: '#ef4444' }]}
+            style={[styles.voteBtn, { backgroundColor: colors.dangerMuted, borderColor: colors.danger }]}
             onPress={() => void vote(false)}
             disabled={isVoting}
             activeOpacity={0.75}
           >
             {isVoting ? (
-              <ActivityIndicator size="small" color="#ef4444" />
+              <ActivityIndicator size="small" color={colors.danger} />
             ) : (
               <>
-                <Ionicons name="thumbs-down-outline" size={16} color="#ef4444" />
-                <Text style={[styles.voteBtnText, { color: '#ef4444' }]}>Reject</Text>
+                <Ionicons name="thumbs-down-outline" size={16} color={colors.danger} />
+                <Text style={[styles.voteBtnText, { color: colors.danger }]}>Reject</Text>
               </>
             )}
           </TouchableOpacity>
@@ -219,7 +220,6 @@ const styles = StyleSheet.create({
   barTrack: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
   },
   barFill: {

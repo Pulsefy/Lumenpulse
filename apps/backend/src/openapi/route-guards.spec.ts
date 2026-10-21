@@ -460,6 +460,25 @@ describe('security contract of the real application', () => {
     expect(violations).toEqual([]);
   });
 
+  it('does not register test-named controllers in the root module', () => {
+    const controllers = Reflect.getMetadata(
+      'controllers',
+      AppModule,
+    ) as Type<unknown>[];
+
+    expect(
+      controllers.filter((controller) => /^test/i.test(controller.name)),
+    ).toEqual([]);
+  });
+
+  it('does not expose test controller paths in the deployed route document', () => {
+    const testPaths = Object.keys(document.paths).filter((path) =>
+      /^\/(?:v\d+\/)?test(?:-exception)?(?:\/|$)/i.test(path),
+    );
+
+    expect(testPaths).toEqual([]);
+  });
+
   it.each([
     JWT_SECURITY_SCHEME,
     API_KEY_SECURITY_SCHEME,

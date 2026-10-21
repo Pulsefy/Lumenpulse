@@ -320,7 +320,7 @@ export default function VestingClaimScreen() {
               <Text
                 style={[
                   styles.primaryButtonText,
-                  { color: summary?.canClaim ? '#ffffff' : colors.textSecondary },
+                  { color: summary?.canClaim ? colors.onAccent : colors.textSecondary },
                 ]}
               >
                 {claiming ? 'Claiming…' : summary?.canClaim ? `Claim ${amountLabel}` : 'Nothing to claim'}

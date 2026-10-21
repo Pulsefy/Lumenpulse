@@ -18,6 +18,8 @@ version-interface = { path = "../version-interface" }
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 proptest = "1"
+test_utils = { path = "../test_utils" }
+treasury = { path = "../treasury" }
 
 [features]
 testutils = ["soroban-sdk/testutils"]

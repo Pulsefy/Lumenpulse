@@ -61,6 +61,8 @@ export function OfflineIndicator() {
   const status = formatMutationQueueStatus(summary, { isOffline });
   const backgroundColor =
     summary.needsAttention > 0 ? colors.danger : isOffline ? colors.warning : colors.accent;
+  const foreground =
+    summary.needsAttention > 0 || isOffline ? colors.onStatus : colors.onAccent;
 
   return (
     <TouchableOpacity
@@ -75,12 +77,12 @@ export function OfflineIndicator() {
       <Ionicons
         name={summary.needsAttention > 0 ? 'alert-circle-outline' : 'cloud-offline-outline'}
         size={16}
-        color="#ffffff"
+        color={foreground}
       />
-      <Text style={styles.text} numberOfLines={2} accessible={false}>
+      <Text style={[styles.text, { color: foreground }]} numberOfLines={2} accessible={false}>
         {status}
       </Text>
-      <Ionicons name="chevron-forward" size={16} color="#ffffff" />
+      <Ionicons name="chevron-forward" size={16} color={foreground} />
     </TouchableOpacity>
   );
 }
@@ -97,7 +99,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   text: {
-    color: '#ffffff',
     fontSize: 12,
     fontWeight: '500',
     flexShrink: 1,

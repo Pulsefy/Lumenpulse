@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   data-processing-checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Issue #1714. This job installs the hash-pinned `requirements.lock`, which
     # pulls the torch CPU wheel. That download dominates the runtime on a cache
     # miss, so the budget is set from the observed p90 of 3.2 min with room for

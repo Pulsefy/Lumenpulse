@@ -17,6 +17,7 @@ const buildFlag = (overrides: Partial<FeatureFlag> = {}): FeatureFlag => ({
   id: 'flag-id',
   key: 'risky.migration',
   enabled: false,
+  sensitive: false,
   rolloutPercentage: null,
   allowList: null,
   denyList: null,

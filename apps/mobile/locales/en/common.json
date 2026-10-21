@@ -484,6 +484,10 @@
         "title": "Crash reporting",
         "description": "Automatically report crashes and errors. Wallet addresses are always removed before a report is sent."
       },
+      "background_refresh": {
+        "title": "Background refresh",
+        "description": "Update your watchlist and portfolio while the app is closed, so they are current when you open it. Skipped on low battery, Low Power Mode and metered connections."
+      },
       "categories": {
         "cached_content": {
           "title": "Cached content",
@@ -527,6 +531,64 @@
       "revoke_confirm": "Sign this device out?",
       "load_failed": "Could not load sessions.",
       "revoke_failed": "Could not revoke session."
+    }
+  },
+  "moderation": {
+    "title": "Moderation Queue",
+    "subtitle": "Pending reports waiting for a decision",
+    "settings_title": "Moderation Queue",
+    "settings_description": "Review and decide on pending content reports",
+    "pending_count": "{{count}} pending",
+    "empty": "No pending reports. You are all caught up.",
+    "load_error": "Couldn't load the moderation queue.",
+    "retry": "Retry",
+    "report_details": "Report details",
+    "content": "Reported content",
+    "reason": "Reason",
+    "reported_at": "Reported",
+    "description": "Details",
+    "no_description": "No additional details were provided.",
+    "decision_section": "Record a decision",
+    "rationale_label": "Rationale",
+    "rationale_placeholder": "Explain this decision (required)",
+    "rationale_required": "A rationale is required for every decision.",
+    "rationale_too_long": "Rationale must be 2000 characters or fewer.",
+    "approve": "Approve",
+    "reject": "Reject",
+    "escalate": "Escalate",
+    "decision_recorded": "Decision recorded.",
+    "decision_queued": "You are offline. This decision was queued and will sync when you reconnect.",
+    "decision_failed": "Couldn't record that decision. Please try again.",
+    "history_title": "Decision history",
+    "history_empty": "No decisions recorded for this item yet.",
+    "history_queued": "Queued",
+    "history_syncing": "Syncing",
+    "history_failed": "Failed",
+    "history_applied": "Recorded",
+    "actions": {
+      "approve": "Approved",
+      "reject": "Rejected",
+      "escalate": "Escalated"
+    },
+    "reasons": {
+      "spam": "Spam",
+      "inappropriate_content": "Inappropriate content",
+      "fraud": "Fraud",
+      "misleading_info": "Misleading information",
+      "copyright_violation": "Copyright violation",
+      "other": "Other"
+    },
+    "target_types": {
+      "project": "Project",
+      "comment": "Comment",
+      "user": "User",
+      "other": "Other"
+    },
+    "statuses": {
+      "pending": "Pending",
+      "under_review": "Under review",
+      "resolved": "Resolved",
+      "dismissed": "Dismissed"
     }
   },
   "transaction_receipt": {

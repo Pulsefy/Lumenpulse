@@ -60,8 +60,13 @@ function OnChainBadge({
 // ── Progress bar ───────────────────────────────────────────────────────────
 
 function ProgressBar({ progress, accentColor }: { progress: number; accentColor: string }) {
+  const { colors } = useTheme();
   return (
-    <View style={styles.progressTrack} accessible accessibilityLabel={`${progress}% funded`}>
+    <View
+      style={[styles.progressTrack, { backgroundColor: colors.border }]}
+      accessible
+      accessibilityLabel={`${progress}% funded`}
+    >
       <View
         style={[
           styles.progressFill,
@@ -93,7 +98,10 @@ function ProjectCard({
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}
+      style={[
+        styles.card,
+        { backgroundColor: colors.surface, borderColor: colors.cardBorder, shadowColor: colors.shadow },
+      ]}
       onPress={onPress}
       activeOpacity={0.7}
       accessibilityRole="button"
@@ -213,7 +221,7 @@ export default function ProjectsScreen() {
               key={i}
               style={[
                 styles.card,
-                { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+                { backgroundColor: colors.surface, borderColor: colors.cardBorder, shadowColor: colors.shadow },
               ]}
               accessible
               accessibilityLabel="Loading project"
@@ -273,7 +281,7 @@ export default function ProjectsScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('common.retry')}
         >
-          <Text style={styles.ctaButtonText} accessible>
+          <Text style={[styles.ctaButtonText, { color: colors.onAccent }]} accessible>
             {t('common.retry')}
           </Text>
         </TouchableOpacity>
@@ -386,7 +394,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 18,
     marginBottom: 14,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -427,7 +434,6 @@ const styles = StyleSheet.create({
   progressTrack: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
     marginBottom: 12,
   },
@@ -483,7 +489,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   ctaButtonText: {
-    color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
   },

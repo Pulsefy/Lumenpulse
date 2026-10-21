@@ -44,7 +44,7 @@ export default function NotificationsScreen() {
       >
         {!item.read && (
           <View
-            style={styles.unreadDot}
+            style={[styles.unreadDot, { backgroundColor: colors.danger }]}
             accessible
             accessibilityLabel={t('notifications.unread')}
           />
@@ -86,8 +86,8 @@ export default function NotificationsScreen() {
             </Text>
 
             {unreadCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              <View style={[styles.badge, { backgroundColor: colors.danger }]}>
+                <Text style={[styles.badgeText, { color: colors.onStatus }]}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
               </View>
             )}
           </View>
@@ -153,7 +153,6 @@ const styles = StyleSheet.create({
   screenTitle: { fontSize: 22, fontWeight: '700' },
 
   badge: {
-    backgroundColor: '#ff4757',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -163,7 +162,6 @@ const styles = StyleSheet.create({
   },
 
   badgeText: {
-    color: '#ffffff',
     fontSize: 11,
     fontWeight: '700',
     lineHeight: 14,
@@ -190,7 +188,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#ff4757',
   },
 
   itemTitle: {

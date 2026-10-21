@@ -42,3 +42,10 @@ myenv/
 # monitoring
 monitoring/secrets/*
 !monitoring/secrets/README.md
+
+# Accidental local artefacts (added during repo cleanup)
+*.stackdump
+out.txt
+output.txt
+remaining-diff.txt
+pr_*.md

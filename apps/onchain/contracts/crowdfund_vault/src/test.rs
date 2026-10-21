@@ -1313,7 +1313,7 @@ fn test_calculate_match_multiple_contributors() {
     let user3 = Address::generate(&env);
 
     // Mint tokens to users
-    let (_, token_admin_client) = create_token_contract(&env, &admin);
+    let token_admin_client = StellarAssetClient::new(&env, &token_client.address);
     token_admin_client.mint(&user1, &10_000_000);
     token_admin_client.mint(&user2, &10_000_000);
     token_admin_client.mint(&user3, &10_000_000);
@@ -1496,7 +1496,7 @@ fn test_events_emission() {
     // Deposit funds from multiple users to create large match
     let user1 = Address::generate(&env);
     let user2 = Address::generate(&env);
-    let (_, token_admin_client) = create_token_contract(&env, &admin);
+    let token_admin_client = StellarAssetClient::new(&env, &token_client.address);
     token_admin_client.mint(&user1, &10_000_000);
     token_admin_client.mint(&user2, &10_000_000);
 
@@ -2515,7 +2515,7 @@ fn test_analytics_views() {
         &token_client.address,
     );
 
-    let (_, token_admin_client) = create_token_contract(&env, &admin);
+    let token_admin_client = StellarAssetClient::new(&env, &token_client.address);
     token_admin_client.mint(&user2, &200_000);
 
     // Initial checks
@@ -3589,7 +3589,7 @@ fn test_distribute_match_emits_match_distributed_event() {
     );
 
     let user1 = Address::generate(&env);
-    let (_, token_admin_client) = create_token_contract(&env, &admin);
+    let token_admin_client = StellarAssetClient::new(&env, &token_client.address);
     token_admin_client.mint(&user1, &10_000_000);
     client.deposit(
         &user1,

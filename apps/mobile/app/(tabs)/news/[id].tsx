@@ -75,7 +75,7 @@ export default function ArticleDetail() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color="#db74cf" />
+        <ActivityIndicator size="large" color={colors.accent} />
       </SafeAreaView>
     );
   }
@@ -83,9 +83,9 @@ export default function ArticleDetail() {
   if (error) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={styles.error}>{error}</Text>
-        <TouchableOpacity onPress={fetchArticle} style={styles.retryButton}>
-          <Text style={styles.retryText}>Retry</Text>
+        <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>
+        <TouchableOpacity onPress={fetchArticle} style={[styles.retryButton, { backgroundColor: colors.accent }]}>
+          <Text style={[styles.retryText, { color: colors.onAccent }]}>Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -104,7 +104,7 @@ export default function ArticleDetail() {
                 <Ionicons
                   name={isSaved ? 'bookmark' : 'bookmark-outline'}
                   size={24}
-                  color={isSaved ? '#db74cf' : colors.text}
+                  color={isSaved ? colors.accent : colors.text}
                 />
               </TouchableOpacity>
             </View>
@@ -152,17 +152,14 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   error: {
-    color: '#ff6b6b',
     marginBottom: 12,
   },
   retryButton: {
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: '#db74cf',
     borderRadius: 8,
   },
   retryText: {
-    color: '#ffffff',
     fontWeight: '600',
   },
 });

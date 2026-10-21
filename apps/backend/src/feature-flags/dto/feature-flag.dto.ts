@@ -80,7 +80,31 @@ export class UpsertFeatureFlagDto {
   conditions?: Record<string, any>;
 
   @ApiPropertyOptional({
-    description: 'Identifier of the user who changed this flag',
+    description:
+      'Marks the flag as sensitive. Changes to a sensitive flag (including ' +
+      'clearing this marker) are rejected with 428 unless `confirm` is true. ' +
+      'Omit to leave the current marker unchanged.',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  sensitive?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Explicit confirmation for changing a flag marked sensitive. Ignored ' +
+      'for non-sensitive flags.',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  confirm?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Identifier of the user who changed this flag. Only used when the ' +
+      'request has no authenticated user; otherwise the JWT identity is ' +
+      'recorded so the audit trail cannot be spoofed.',
     example: 'admin@lumenpulse.com',
   })
   @IsOptional()
@@ -126,11 +150,30 @@ export class FeatureFlagResponseDto {
   })
   conditions?: Record<string, any>;
 
+  @ApiProperty({
+    description:
+      'Whether changes to this flag require an explicit confirmation',
+    example: false,
+  })
+  sensitive: boolean;
+
   @ApiPropertyOptional({
     description: 'Identifier of the user who last changed this flag',
     example: 'admin@lumenpulse.com',
   })
   changedBy?: string | null;
+
+  @ApiProperty({
+    description: 'When the flag was created',
+    example: '2024-06-01T12:00:00.000Z',
+  })
+  createdAt: Date;
+
+  @ApiProperty({
+    description: 'When the flag was last changed',
+    example: '2024-06-01T12:00:00.000Z',
+  })
+  updatedAt: Date;
 }
 
 export class FlagEvaluationResponseDto {

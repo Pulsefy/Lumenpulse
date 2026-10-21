@@ -69,7 +69,9 @@ export function lintSecurity(
   return forEachOperation(document, (operation) => {
     const problems: string[] = [];
     const operationId = operation.operationId ?? '';
-    const guards = routeGuards.get(operationId);
+    const baseOperationId = operationId.replace(/\[\d+\]$/, '');
+    const guards =
+      routeGuards.get(operationId) ?? routeGuards.get(baseOperationId);
     if (!guards) {
       return [
         'not found in the controller graph, so its guards (and required security) cannot be verified',

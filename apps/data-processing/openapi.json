@@ -1635,6 +1635,252 @@
         }
       }
     },
+    "/model/audit-trail/prediction/{request_id}": {
+      "get": {
+        "tags": [
+          "Audit Trail"
+        ],
+        "summary": "Export audit trail for a single prediction",
+        "description": "Assembles the model version, model card, input hash, and feature values for the prediction identified by *request_id* (the X-Correlation-ID set when the prediction was made). Requires X-API-Key header. Personal data handled per Wave 9 policy \u2014 see privacy section in response.",
+        "operationId": "get_audit_trail_by_prediction_id_model_audit_trail_prediction__request_id__get",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditTrailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/audit-trail/subject": {
+      "get": {
+        "tags": [
+          "Audit Trail"
+        ],
+        "summary": "Export audit trails for predictions mentioning a subject",
+        "description": "Returns assembled audit trails for every prediction whose logged output mentions *subject* (e.g. an asset code ``XLM`` or a contributor identifier). Supports pagination via *limit* / *offset*.",
+        "operationId": "get_audit_trail_by_subject_model_audit_trail_subject_get",
+        "parameters": [
+          {
+            "name": "subject",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Subject identifier to search for in prediction output (e.g. 'XLM', contributor ID).",
+              "title": "Subject"
+            },
+            "description": "Subject identifier to search for in prediction output (e.g. 'XLM', contributor ID)."
+          },
+          {
+            "name": "model_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional model type filter",
+              "title": "Model Type"
+            },
+            "description": "Optional model type filter"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditTrailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/model/audit-trail/time-range": {
+      "get": {
+        "tags": [
+          "Audit Trail"
+        ],
+        "summary": "Export audit trails for predictions in a time window",
+        "description": "Returns assembled audit trails for every prediction logged between *start* and *end* (ISO-8601, inclusive). Combine with *model_type* and *model_version* to narrow the result. Supports pagination.",
+        "operationId": "get_audit_trail_by_time_range_model_audit_trail_time_range_get",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ISO-8601 start datetime, inclusive (e.g. '2026-03-01T00:00:00Z').",
+              "title": "Start"
+            },
+            "description": "ISO-8601 start datetime, inclusive (e.g. '2026-03-01T00:00:00Z')."
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ISO-8601 end datetime, inclusive (e.g. '2026-03-31T23:59:59Z').",
+              "title": "End"
+            },
+            "description": "ISO-8601 end datetime, inclusive (e.g. '2026-03-31T23:59:59Z')."
+          },
+          {
+            "name": "model_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional model type filter",
+              "title": "Model Type"
+            },
+            "description": "Optional model type filter"
+          },
+          {
+            "name": "model_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional model version filter",
+              "title": "Model Version"
+            },
+            "description": "Optional model version filter"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditTrailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/metrics": {
       "get": {
         "summary": "Metrics",
@@ -3238,6 +3484,75 @@
           "analysis_count"
         ],
         "title": "AssetAnalysisResponse"
+      },
+      "AuditTrailRecord": {
+        "properties": {
+          "prediction": {
+            "$ref": "#/components/schemas/PredictionSection"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelSection"
+          },
+          "model_card": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Card"
+          },
+          "privacy": {
+            "$ref": "#/components/schemas/PrivacySection"
+          },
+          "assembled_at": {
+            "type": "string",
+            "title": "Assembled At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prediction",
+          "model",
+          "privacy",
+          "assembled_at"
+        ],
+        "title": "AuditTrailRecord"
+      },
+      "AuditTrailResponse": {
+        "properties": {
+          "query_type": {
+            "type": "string",
+            "title": "Query Type"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/AuditTrailRecord"
+            },
+            "type": "array",
+            "title": "Records"
+          },
+          "export_run_logged": {
+            "type": "boolean",
+            "title": "Export Run Logged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query_type",
+          "total",
+          "records",
+          "export_run_logged"
+        ],
+        "title": "AuditTrailResponse",
+        "description": "Envelope returned by all audit-trail endpoints."
       },
       "ComparisonLogResponse": {
         "properties": {
@@ -4985,6 +5300,50 @@
         ],
         "title": "MetricDataPoint"
       },
+      "ModelSection": {
+        "properties": {
+          "model_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Type"
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version"
+          },
+          "registry_metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_type",
+          "model_version"
+        ],
+        "title": "ModelSection"
+      },
       "ModelStatusResponse": {
         "properties": {
           "last_run": {
@@ -5289,6 +5648,109 @@
         "title": "PipelineTopologyResponse",
         "description": "The full pipeline topology response."
       },
+      "PredictionSection": {
+        "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "model_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Type"
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version"
+          },
+          "input_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Hash"
+          },
+          "output": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "raw_input": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Input",
+            "description": "Scrubbed input text. Only populated when deployment policy permits.",
+            "default": "[REDACTED]"
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "model_type",
+          "model_version",
+          "input_hash",
+          "output",
+          "latency_ms",
+          "created_at"
+        ],
+        "title": "PredictionSection"
+      },
       "PricePredictionRequest": {
         "properties": {
           "features": {
@@ -5345,6 +5807,34 @@
           "model_version"
         ],
         "title": "PricePredictionResponse"
+      },
+      "PrivacySection": {
+        "properties": {
+          "input_hash_algorithm": {
+            "type": "string",
+            "title": "Input Hash Algorithm"
+          },
+          "raw_input_included": {
+            "type": "boolean",
+            "title": "Raw Input Included"
+          },
+          "raw_input_policy": {
+            "type": "string",
+            "title": "Raw Input Policy"
+          },
+          "output_scrubbed_at_log_time": {
+            "type": "boolean",
+            "title": "Output Scrubbed At Log Time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input_hash_algorithm",
+          "raw_input_included",
+          "raw_input_policy",
+          "output_scrubbed_at_log_time"
+        ],
+        "title": "PrivacySection"
       },
       "RebuildRequest": {
         "properties": {

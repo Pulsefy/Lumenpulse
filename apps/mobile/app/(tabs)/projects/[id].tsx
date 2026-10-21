@@ -108,8 +108,9 @@ function OnChainStatusChip({
 }
 
 function ProgressBar({ progress, color }: { progress: number; color: string }) {
+  const { colors } = useTheme();
   return (
-    <View style={styles.progressTrack}>
+    <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
       <View
         style={[
           styles.progressFill,
@@ -373,7 +374,7 @@ export default function ProjectDetailScreen() {
           onPress={() => void fetchProject()}
           activeOpacity={0.8}
         >
-          <Text style={styles.retryButtonText}>Retry</Text>
+          <Text style={[styles.retryButtonText, { color: colors.onAccent }]}>Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -462,8 +463,8 @@ export default function ProjectDetailScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={t('contribution_draft.resume')}
                   >
-                    <Ionicons name="play-forward-outline" size={14} color="#ffffff" />
-                    <Text style={styles.draftResumeButtonText}>
+                    <Ionicons name="play-forward-outline" size={14} color={colors.onAccent} />
+                    <Text style={[styles.draftResumeButtonText, { color: colors.onAccent }]}>
                       {t('contribution_draft.resume')}
                     </Text>
                   </TouchableOpacity>
@@ -535,7 +536,11 @@ export default function ProjectDetailScreen() {
           <View
             style={[
               styles.fundingCard,
-              { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.cardBorder,
+                shadowColor: colors.shadow,
+              },
             ]}
           >
             <View style={styles.fundingHeader}>
@@ -672,13 +677,13 @@ export default function ProjectDetailScreen() {
           ]}
         >
           <TouchableOpacity
-            style={[styles.contributeButton, { backgroundColor: colors.accent }]}
+            style={[styles.contributeButton, { backgroundColor: colors.accent, shadowColor: colors.shadow }]}
             onPress={() => setShowContributeModal(true)}
             activeOpacity={0.8}
             testID="project-contribute-button"
           >
-            <Ionicons name="wallet-outline" size={20} color="#ffffff" style={{ marginRight: 8 }} />
-            <Text style={styles.contributeButtonText}>Contribute</Text>
+            <Ionicons name="wallet-outline" size={20} color={colors.onAccent} style={{ marginRight: 8 }} />
+            <Text style={[styles.contributeButtonText, { color: colors.onAccent }]}>Contribute</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -799,7 +804,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   draftResumeButtonText: {
-    color: '#ffffff',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -835,7 +839,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     padding: 20,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -865,7 +868,6 @@ const styles = StyleSheet.create({
   progressTrack: {
     height: 10,
     borderRadius: 5,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
   },
   progressFill: {
@@ -1022,14 +1024,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 5,
   },
   contributeButtonText: {
-    color: '#ffffff',
     fontSize: 17,
     fontWeight: '700',
   },
@@ -1047,7 +1047,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   retryButtonText: {
-    color: '#ffffff',
     fontSize: 15,
     fontWeight: '600',
   },

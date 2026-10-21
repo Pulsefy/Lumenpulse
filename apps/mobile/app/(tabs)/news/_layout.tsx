@@ -1,13 +1,16 @@
 import { Stack } from 'expo-router';
+import { useTheme } from '../../../contexts/ThemeContext';
 
 export default function NewsLayout() {
+  const { colors } = useTheme();
+
   return (
     <Stack
       screenOptions={{
         headerStyle: {
-          backgroundColor: '#0a0a0a',
+          backgroundColor: colors.surface,
         },
-        headerTintColor: '#ffffff',
+        headerTintColor: colors.text,
       }}
     >
       <Stack.Screen name="index" options={{ title: 'News' }} />

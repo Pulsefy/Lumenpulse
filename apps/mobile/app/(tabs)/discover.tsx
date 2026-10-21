@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLocalization } from '../../src/context';
+import { dataViz } from '../../theme/tokens';
 import { stellarApi, StellarAsset } from '../../lib/api';
 import { CachedApi } from '../../lib/cached-api';
 import { resolveDeepLink } from '../../lib/deep-links';
@@ -113,7 +114,7 @@ function formatPrice(usd: number): string {
 }
 
 function assetColor(code: string): string {
-  const palette = ['#db74cf', '#7a85ff', '#4ecdc4', '#f7b731', '#ff6b6b', '#a29bfe'];
+  const palette = dataViz.series.slice(0, 6);
   let hash = 0;
   for (let i = 0; i < code.length; i++) hash = code.charCodeAt(i) + ((hash << 5) - hash);
   return palette[Math.abs(hash) % palette.length];
@@ -132,7 +133,7 @@ function AssetItem({
 }) {
   const color = assetColor(asset.code);
   const isPositive = asset.change24h >= 0;
-  const changeColor = isPositive ? '#27ae60' : '#e74c3c';
+  const changeColor = isPositive ? colors.success : colors.danger;
   const { isInWatchlist, toggleItem } = useWatchlist();
   const inWatchlist = isInWatchlist(asset.code, WatchlistItemType.ASSET);
 
@@ -166,7 +167,7 @@ function AssetItem({
         <Ionicons
           name={inWatchlist ? 'star' : 'star-outline'}
           size={22}
-          color={inWatchlist ? '#f7b731' : colors.textSecondary}
+          color={inWatchlist ? colors.warning : colors.textSecondary}
         />
       </TouchableOpacity>
 
@@ -418,7 +419,7 @@ export default function AssetDiscoveryScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('common.retry')}
           >
-            <Text style={styles.retryText} accessible>
+            <Text style={[styles.retryText, { color: colors.onAccent }]} accessible>
               {t('common.retry')}
             </Text>
           </TouchableOpacity>
@@ -669,7 +670,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
   },
-  retryText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  retryText: { fontSize: 15, fontWeight: '700' },
   staleIndicator: {
     flexDirection: 'row',
     alignItems: 'center',

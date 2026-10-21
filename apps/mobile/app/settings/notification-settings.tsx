@@ -217,7 +217,7 @@ export default function NotificationSettingsScreen() {
                       false: colors.cardBorder,
                       true: colors.accent,
                     }}
-                    thumbColor="#ffffff"
+                    thumbColor={colors.switchThumb}
                     accessibilityLabel={row.title}
                     accessibilityRole="switch"
                     accessibilityState={{ checked: preferences[row.key] }}
@@ -261,7 +261,7 @@ export default function NotificationSettingsScreen() {
             {registrationStatus === 'registered'
               ? 'This device is registered for push notifications.'
               : registrationStatus === 'registering'
-                ? 'Registering this device…'
+                ? 'Registering this deviceâ€¦'
                 : (registrationError ?? 'Push notifications are not registered on this device.')}
           </Text>
           {registrationStatus === 'error' && (

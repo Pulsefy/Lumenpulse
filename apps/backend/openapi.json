@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/": {
+    "/v1": {
       "get": {
-        "operationId": "AppController_getHello",
+        "operationId": "AppController_getHello[0]",
         "parameters": [],
         "responses": {
           "200": {
@@ -60,39 +60,13 @@
         ]
       }
     },
-    "/test/hello": {
+    "/": {
       "get": {
-        "description": "Returns hello message if \"test.hello\" feature flag is enabled.",
-        "operationId": "TestController_getHello",
+        "operationId": "AppController_getHello[1]",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Success message",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden (Feature flag disabled)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
+            "description": "Returns Hello World",
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -139,1367 +113,13 @@
             }
           }
         },
-        "summary": "Hello World feature flagged endpoint",
+        "summary": "Root endpoint",
         "tags": [
-          "test"
+          "app"
         ]
       }
     },
-    "/test/submit": {
-      "post": {
-        "description": "Echos submitted payload back with a timestamp for testing.",
-        "operationId": "TestController_submitData",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "description": "Client-generated unique key (UUID recommended). Retrying with the same key and body replays the original response instead of repeating the write.",
-            "schema": {
-              "type": "string",
-              "maxLength": 255
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Data submitted successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Data submitted successfully"
-                    },
-                    "timestamp": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "receivedData": {
-                      "type": "object"
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "Data submitted successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Data submitted successfully"
-                    },
-                    "timestamp": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "receivedData": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "A request with the same Idempotency-Key is still in progress, or the resource is in a conflicting state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Idempotency-Key was reused with a different request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Submit diagnostic data",
-        "tags": [
-          "test"
-        ]
-      }
-    },
-    "/test/error": {
-      "get": {
-        "description": "Throws a generic Error to confirm that error log interceptors trigger.",
-        "operationId": "TestController_getError",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Throws standard Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Trigger standard Error for testing logs",
-        "tags": [
-          "test"
-        ]
-      }
-    },
-    "/test/not-found": {
-      "get": {
-        "description": "Throws a generic not found Error to verify filter intercepts.",
-        "operationId": "TestController_getNotFound",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Throws resource not found error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Trigger Not Found Error for testing logs",
-        "tags": [
-          "test"
-        ]
-      }
-    },
-    "/test/redirect": {
-      "get": {
-        "description": "Returns mock redirection data.",
-        "operationId": "TestController_getRedirect",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Redirection payload",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "redirect": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "destination": {
-                      "type": "string",
-                      "example": "/test/hello"
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Mock redirect response metadata",
-        "tags": [
-          "test"
-        ]
-      }
-    },
-    "/test/update/{id}": {
-      "put": {
-        "description": "Echos updated body back with specified id.",
-        "operationId": "TestController_updateData",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Diagnostic item ID",
-            "schema": {
-              "example": "diag_123",
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "description": "Client-generated unique key (UUID recommended). Retrying with the same key and body replays the original response instead of repeating the write.",
-            "schema": {
-              "type": "string",
-              "maxLength": 255
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Data updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Data updated successfully"
-                    },
-                    "id": {
-                      "type": "string",
-                      "example": "diag_123"
-                    },
-                    "updatedData": {
-                      "type": "object"
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Malformed request or validation failure",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "A request with the same Idempotency-Key is still in progress, or the resource is in a conflicting state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Idempotency-Key was reused with a different request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Update diagnostic data",
-        "tags": [
-          "test"
-        ]
-      }
-    },
-    "/test/delete/{id}": {
-      "delete": {
-        "description": "Confirms deletion of item ID.",
-        "operationId": "TestController_deleteData",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Diagnostic item ID to delete",
-            "schema": {
-              "example": "diag_123",
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "description": "Client-generated unique key (UUID recommended). Retrying with the same key and body replays the original response instead of repeating the write.",
-            "schema": {
-              "type": "string",
-              "maxLength": 255
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Data deleted successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Data deleted successfully"
-                    },
-                    "id": {
-                      "type": "string",
-                      "example": "diag_123"
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Malformed request or validation failure",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "A request with the same Idempotency-Key is still in progress, or the resource is in a conflicting state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Idempotency-Key was reused with a different request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Delete diagnostic data",
-        "tags": [
-          "test"
-        ]
-      }
-    },
-    "/test-exception/http-exception": {
-      "get": {
-        "description": "Throws a BAD_REQUEST HttpException to test exception filters.",
-        "operationId": "TestExceptionController_getHttpException",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Throws a Bad Request exception",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Trigger standard HTTP HttpException",
-        "tags": [
-          "test-exception"
-        ]
-      }
-    },
-    "/test-exception/general-error": {
-      "get": {
-        "description": "Throws a generic Error to test internal server error mappings.",
-        "operationId": "TestExceptionController_getGeneralError",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Throws generic Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Trigger standard Javascript Error",
-        "tags": [
-          "test-exception"
-        ]
-      }
-    },
-    "/test-exception/internal-server-error": {
-      "get": {
-        "description": "Throws an Error with unknown details to verify fallback logs.",
-        "operationId": "TestExceptionController_getInternalServerError",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Throws unknown error type",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Trigger unknown error type",
-        "tags": [
-          "test-exception"
-        ]
-      }
-    },
-    "/test-exception/sentiment/analyze": {
-      "post": {
-        "description": "Submits text to the Python data service to calculate polarity scores.",
-        "operationId": "TestExceptionController_analyzeSentiment",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "description": "Client-generated unique key (UUID recommended). Retrying with the same key and body replays the original response instead of repeating the write.",
-            "schema": {
-              "type": "string",
-              "maxLength": 255
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AnalyzeDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Sentiment calculated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SentimentResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Malformed request or validation failure",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "A request with the same Idempotency-Key is still in progress, or the resource is in a conflicting state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Idempotency-Key was reused with a different request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Sentiment service unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Analyze text sentiment polarity",
-        "tags": [
-          "test-exception"
-        ]
-      }
-    },
-    "/test-exception/sentiment/health": {
-      "get": {
-        "description": "Pings the underlying Python analysis service health endpoint.",
-        "operationId": "TestExceptionController_checkSentimentHealth",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Sentiment service health retrieved successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Sentiment service unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Check sentiment service health status",
-        "tags": [
-          "test-exception"
-        ]
-      }
-    },
-    "/test-exception/sentiment/test": {
-      "post": {
-        "description": "Runs multiple hardcoded test phrases to verify sentiment classifications.",
-        "operationId": "TestExceptionController_testSentiment",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "description": "Client-generated unique key (UUID recommended). Retrying with the same key and body replays the original response instead of repeating the write.",
-            "schema": {
-              "type": "string",
-              "maxLength": 255
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Test suite ran successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SentimentTestResultDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SentimentTestResultDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "A request with the same Idempotency-Key is still in progress, or the resource is in a conflicting state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Idempotency-Key was reused with a different request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Run sentiment test suite",
-        "tags": [
-          "test-exception"
-        ]
-      }
-    },
-    "/test-exception/all-tests": {
-      "get": {
-        "description": "Bundles diagnostics for both exceptions filters and sentiment APIs.",
-        "operationId": "TestExceptionController_runAllTests",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "All tests finished successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AllTestsResultDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Run exception filters and sentiment tests together",
-        "tags": [
-          "test-exception"
-        ]
-      }
-    },
-    "/cache/warm": {
+    "/v1/cache/warm": {
       "post": {
         "description": "Preloads all registered hot-cache routes immediately. Skips if Redis is unhealthy. Restricted to ADMIN role.",
         "operationId": "WarmCacheController_forceRefresh",
@@ -1675,7 +295,7 @@
         ]
       }
     },
-    "/cache/warm/status": {
+    "/v1/cache/warm/status": {
       "get": {
         "description": "Returns the result of the most recently completed preload cycle, or null if no cycle has run yet.",
         "operationId": "WarmCacheController_getStatus",
@@ -1776,7 +396,7 @@
         ]
       }
     },
-    "/grants/rounds": {
+    "/v1/grants/rounds": {
       "get": {
         "description": "Retrieves all grant rounds and their lifecycle state.",
         "operationId": "GrantsController_listRounds",
@@ -2068,7 +688,7 @@
         ]
       }
     },
-    "/grants/rounds/{id}": {
+    "/v1/grants/rounds/{id}": {
       "get": {
         "description": "Retrieves round details including token address and current pool balance.",
         "operationId": "GrantsController_getRound",
@@ -2180,7 +800,7 @@
         ]
       }
     },
-    "/grants/rounds/{id}/summary": {
+    "/v1/grants/rounds/{id}/summary": {
       "get": {
         "description": "Retrieves a calculated summary of participation metrics and QF matching allocations.",
         "operationId": "GrantsController_getRoundSummary",
@@ -2292,7 +912,7 @@
         ]
       }
     },
-    "/grants/rounds/{id}/export": {
+    "/v1/grants/rounds/{id}/export": {
       "get": {
         "description": "Retrieves a full export model of the round with all individual contributions listed.",
         "operationId": "GrantsController_getRoundExport",
@@ -2404,7 +1024,7 @@
         ]
       }
     },
-    "/grants/rounds/{id}/finalize": {
+    "/v1/grants/rounds/{id}/finalize": {
       "post": {
         "description": "Closes a round after matching is complete. Requires admin role.",
         "operationId": "GrantsController_finalizeRound",
@@ -2431,24 +1051,6 @@
         "responses": {
           "200": {
             "description": "Round finalized successfully",
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RoundDto"
-                }
-              }
-            },
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation id for this request",
@@ -2614,7 +1216,7 @@
         ]
       }
     },
-    "/grants/rounds/fund": {
+    "/v1/grants/rounds/fund": {
       "post": {
         "description": "Records funding into the matching pool for a specific round. Requires admin role.",
         "operationId": "GrantsController_fundPool",
@@ -2857,7 +1459,7 @@
         ]
       }
     },
-    "/grants/rounds/projects/approve": {
+    "/v1/grants/rounds/projects/approve": {
       "post": {
         "description": "Approves project eligibility to receive match funding in the round. Requires admin or reviewer role.",
         "operationId": "GrantsController_approveProject",
@@ -3092,7 +1694,7 @@
         ]
       }
     },
-    "/grants/rounds/{roundId}/projects/{projectId}": {
+    "/v1/grants/rounds/{roundId}/projects/{projectId}": {
       "delete": {
         "description": "Removes project eligibility from a round. Requires admin role.",
         "operationId": "GrantsController_removeProject",
@@ -3292,7 +1894,7 @@
         ]
       }
     },
-    "/grants/contributions": {
+    "/v1/grants/contributions": {
       "post": {
         "description": "Records an on-chain contribution towards a project in a round.",
         "operationId": "GrantsController_recordContribution",
@@ -3468,7 +2070,7 @@
         ]
       }
     },
-    "/grants/rounds/distribute": {
+    "/v1/grants/rounds/distribute": {
       "post": {
         "description": "Distributes pool allocations to approved project owners. Requires admin role.",
         "operationId": "GrantsController_distribute",
@@ -3749,7 +2351,7 @@
         ]
       }
     },
-    "/grants/leaderboard": {
+    "/v1/grants/leaderboard": {
       "get": {
         "description": "Returns ranked projects for a round with contribution and match figures. Supports top-N (e.g. ?roundId=1&topN=5) or paginated responses (e.g. ?roundId=1&page=2&limit=10). Projects are ranked by QF score descending.",
         "operationId": "GrantsController_getLeaderboard",
@@ -3900,7 +2502,7 @@
         ]
       }
     },
-    "/admin/audit/blockchain": {
+    "/v1/admin/audit/blockchain": {
       "get": {
         "operationId": "AdminAuditController_getLogs",
         "parameters": [
@@ -4070,7 +2672,7 @@
         ]
       }
     },
-    "/moderation/report": {
+    "/v1/moderation/report": {
       "post": {
         "operationId": "ModerationController_createReport",
         "parameters": [
@@ -4252,13 +2854,13 @@
         ]
       }
     },
-    "/moderation/my-reports": {
+    "/v1/moderation/my-reports": {
       "get": {
         "operationId": "ModerationController_getMyReports",
         "parameters": [
           {
             "name": "page",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -4266,7 +2868,7 @@
           },
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -4387,7 +2989,7 @@
         ]
       }
     },
-    "/moderation/queue": {
+    "/v1/moderation/queue": {
       "get": {
         "operationId": "ModerationController_getModerationQueue",
         "parameters": [
@@ -4564,7 +3166,7 @@
         ]
       }
     },
-    "/moderation/queue/stats": {
+    "/v1/moderation/queue/stats": {
       "get": {
         "operationId": "ModerationController_getModerationStats",
         "parameters": [],
@@ -4664,7 +3266,7 @@
         ]
       }
     },
-    "/moderation/queue/{id}": {
+    "/v1/moderation/queue/{id}": {
       "get": {
         "operationId": "ModerationController_getReport",
         "parameters": [
@@ -5008,7 +3610,7 @@
         ]
       }
     },
-    "/moderation/queue/{id}/assign": {
+    "/v1/moderation/queue/{id}/assign": {
       "patch": {
         "operationId": "ModerationController_assignReviewer",
         "parameters": [
@@ -5209,7 +3811,7 @@
         ]
       }
     },
-    "/review-history/comments": {
+    "/v1/review-history/comments": {
       "post": {
         "operationId": "ReviewHistoryController_createComment",
         "parameters": [
@@ -5384,7 +3986,7 @@
         ]
       }
     },
-    "/review-history/decisions": {
+    "/v1/review-history/decisions": {
       "post": {
         "operationId": "ReviewHistoryController_createDecision",
         "parameters": [
@@ -5559,7 +4161,7 @@
         ]
       }
     },
-    "/review-history": {
+    "/v1/review-history": {
       "get": {
         "operationId": "ReviewHistoryController_getReviewHistory",
         "parameters": [
@@ -5731,7 +4333,7 @@
         ]
       }
     },
-    "/review-history/target/{targetType}/{targetId}": {
+    "/v1/review-history/target/{targetType}/{targetId}": {
       "get": {
         "operationId": "ReviewHistoryController_getTargetReviewHistory",
         "parameters": [
@@ -5884,7 +4486,7 @@
         ]
       }
     },
-    "/review-history/comments/{id}": {
+    "/v1/review-history/comments/{id}": {
       "get": {
         "operationId": "ReviewHistoryController_getComment",
         "parameters": [
@@ -6029,7 +4631,7 @@
         ]
       }
     },
-    "/review-history/decisions/{id}": {
+    "/v1/review-history/decisions/{id}": {
       "get": {
         "operationId": "ReviewHistoryController_getDecision",
         "parameters": [
@@ -6174,7 +4776,7 @@
         ]
       }
     },
-    "/admin/audit-logs": {
+    "/v1/admin/audit-logs": {
       "get": {
         "description": "Retrieves a paginated list of audit logs. Requires admin privileges.",
         "operationId": "AuditController_getAuditLogs",
@@ -6354,7 +4956,7 @@
         ]
       }
     },
-    "/admin/audit-logs/export": {
+    "/v1/admin/audit-logs/export": {
       "get": {
         "description": "Produces a scoped extract of user-activity, audit-operation and admin blockchain-action records for an auditor, filtered by an inclusive date range and optionally by actor and record type. Returns JSON, or CSV with format=csv. Every export is itself recorded in the audit trail as an \"audit.export\" action.",
         "operationId": "AuditController_exportAuditLogs",
@@ -6543,7 +5145,7 @@
         ]
       }
     },
-    "/users": {
+    "/v1/users": {
       "get": {
         "operationId": "UsersController_findAll",
         "parameters": [],
@@ -6653,7 +5255,7 @@
         ]
       }
     },
-    "/users/{id}": {
+    "/v1/users/{id}": {
       "get": {
         "operationId": "UsersController_findById",
         "parameters": [
@@ -6805,7 +5407,7 @@
         ]
       }
     },
-    "/users/me": {
+    "/v1/users/me": {
       "get": {
         "operationId": "UsersController_getProfile",
         "parameters": [],
@@ -7092,7 +5694,7 @@
         ]
       }
     },
-    "/users/me/accounts": {
+    "/v1/users/me/accounts": {
       "post": {
         "operationId": "UsersController_addStellarAccount",
         "parameters": [
@@ -7382,7 +5984,7 @@
         ]
       }
     },
-    "/users/me/accounts/{id}": {
+    "/v1/users/me/accounts/{id}": {
       "get": {
         "operationId": "UsersController_getMyStellarAccount",
         "parameters": [
@@ -7723,7 +6325,7 @@
         ]
       }
     },
-    "/users/me/accounts/{id}/label": {
+    "/v1/users/me/accounts/{id}/label": {
       "patch": {
         "operationId": "UsersController_updateMyStellarAccountLabel",
         "parameters": [
@@ -7931,7 +6533,7 @@
         ]
       }
     },
-    "/users/me/avatar": {
+    "/v1/users/me/avatar": {
       "patch": {
         "operationId": "UsersController_uploadAvatar",
         "parameters": [
@@ -8111,7 +6713,7 @@
         ]
       }
     },
-    "/users/me/accounts/{id}/primary": {
+    "/v1/users/me/accounts/{id}/primary": {
       "post": {
         "operationId": "UsersController_setMyPrimaryAccount",
         "parameters": [
@@ -8302,7 +6904,7 @@
         ]
       }
     },
-    "/auth/login": {
+    "/v1/auth/login": {
       "post": {
         "operationId": "AuthController_login",
         "parameters": [
@@ -8329,7 +6931,7 @@
         },
         "responses": {
           "200": {
-            "description": "Login successful",
+            "description": "2FA required\n\nLogin successful",
             "content": {
               "application/json": {
                 "schema": {
@@ -8470,7 +7072,7 @@
         ]
       }
     },
-    "/auth/register": {
+    "/v1/auth/register": {
       "post": {
         "operationId": "AuthController_register",
         "parameters": [
@@ -8622,7 +7224,7 @@
         ]
       }
     },
-    "/auth/forgot-password": {
+    "/v1/auth/forgot-password": {
       "post": {
         "operationId": "AuthController_forgotPassword",
         "parameters": [
@@ -8767,7 +7369,7 @@
         ]
       }
     },
-    "/auth/reset-password": {
+    "/v1/auth/reset-password": {
       "post": {
         "operationId": "AuthController_resetPassword",
         "parameters": [
@@ -8912,7 +7514,7 @@
         ]
       }
     },
-    "/auth/refresh": {
+    "/v1/auth/refresh": {
       "post": {
         "operationId": "AuthController_refreshToken",
         "parameters": [
@@ -9078,7 +7680,7 @@
         ]
       }
     },
-    "/auth/logout": {
+    "/v1/auth/logout": {
       "post": {
         "operationId": "AuthController_logout",
         "parameters": [
@@ -9223,7 +7825,7 @@
         ]
       }
     },
-    "/auth/logout-all": {
+    "/v1/auth/logout-all": {
       "post": {
         "operationId": "AuthController_logoutAll",
         "parameters": [
@@ -9370,7 +7972,7 @@
         ]
       }
     },
-    "/auth/profile": {
+    "/v1/auth/profile": {
       "get": {
         "operationId": "AuthController_getProfile",
         "parameters": [],
@@ -9477,7 +8079,7 @@
         ]
       }
     },
-    "/auth/challenge": {
+    "/v1/auth/challenge": {
       "get": {
         "operationId": "AuthController_getChallenge",
         "parameters": [
@@ -9487,7 +8089,7 @@
             "in": "query",
             "description": "Stellar public key (starts with G)",
             "schema": {
-              "pattern": "/^G[A-Z0-9]{55}$/",
+              "pattern": "^G[A-Z0-9]{55}$",
               "example": "GCZJM35NKGVK47BB4SPBDV25477PZYIYPVVG453LPYFNXLS3FGHDXOCM",
               "type": "string"
             }
@@ -9583,7 +8185,7 @@
         ]
       }
     },
-    "/auth/verify": {
+    "/v1/auth/verify": {
       "post": {
         "operationId": "AuthController_verifyChallenge",
         "parameters": [
@@ -9783,7 +8385,7 @@
         ]
       }
     },
-    "/auth/sessions": {
+    "/v1/auth/sessions": {
       "get": {
         "operationId": "AuthController_getActiveSessions",
         "parameters": [],
@@ -9890,7 +8492,7 @@
         ]
       }
     },
-    "/auth/sessions/{id}/revoke": {
+    "/v1/auth/sessions/{id}/revoke": {
       "post": {
         "operationId": "AuthController_revokeSession",
         "parameters": [
@@ -10088,7 +8690,7 @@
         ]
       }
     },
-    "/auth/2fa/generate": {
+    "/v1/auth/2fa/generate": {
       "post": {
         "operationId": "AuthController_generateTwoFactorSecret",
         "parameters": [
@@ -10267,7 +8869,7 @@
         ]
       }
     },
-    "/auth/2fa/enable": {
+    "/v1/auth/2fa/enable": {
       "post": {
         "operationId": "AuthController_enableTwoFactor",
         "parameters": [
@@ -10453,7 +9055,7 @@
         ]
       }
     },
-    "/auth/2fa/verify": {
+    "/v1/auth/2fa/verify": {
       "post": {
         "operationId": "AuthController_verifyTwoFactor",
         "parameters": [
@@ -10619,7 +9221,7 @@
         ]
       }
     },
-    "/auth/2fa/disable": {
+    "/v1/auth/2fa/disable": {
       "post": {
         "operationId": "AuthController_disableTwoFactor",
         "parameters": [
@@ -10805,7 +9407,7 @@
         ]
       }
     },
-    "/admin/users/{id}/sessions/revoke-all": {
+    "/v1/admin/users/{id}/sessions/revoke-all": {
       "post": {
         "operationId": "AdminSessionsController_revokeAll",
         "parameters": [
@@ -11003,7 +9605,7 @@
         ]
       }
     },
-    "/message-templates": {
+    "/v1/message-templates": {
       "get": {
         "operationId": "MessageTemplateController_list",
         "parameters": [],
@@ -11113,7 +9715,7 @@
         ]
       }
     },
-    "/message-templates/{key}/history": {
+    "/v1/message-templates/{key}/history": {
       "get": {
         "operationId": "MessageTemplateController_history",
         "parameters": [
@@ -11268,7 +9870,7 @@
         ]
       }
     },
-    "/message-templates/{key}/preview": {
+    "/v1/message-templates/{key}/preview": {
       "post": {
         "operationId": "MessageTemplateController_preview",
         "parameters": [
@@ -11476,7 +10078,7 @@
         ]
       }
     },
-    "/message-templates/{key}": {
+    "/v1/message-templates/{key}": {
       "put": {
         "operationId": "MessageTemplateController_update",
         "parameters": [
@@ -11684,7 +10286,7 @@
         ]
       }
     },
-    "/health/schedulers": {
+    "/v1/health/schedulers": {
       "get": {
         "description": "Each registered scheduled job reports its last start, last success, last failure, and duration. Jobs that have not succeeded within their expected interval are marked stale and cause HTTP 503.",
         "operationId": "SchedulerHealthController_getSchedulerHealth",
@@ -11803,14 +10405,14 @@
         ]
       }
     },
-    "/metrics": {
+    "/v1/metrics": {
       "get": {
         "description": "Returns metrics in Prometheus text format for scraping by monitoring tools like Prometheus",
-        "operationId": "MetricsController_getMetrics",
+        "operationId": "MetricsController_getMetrics[0]",
         "parameters": [
           {
             "name": "format",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -11908,10 +10510,115 @@
         ]
       }
     },
-    "/metrics/json": {
+    "/metrics": {
+      "get": {
+        "description": "Returns metrics in Prometheus text format for scraping by monitoring tools like Prometheus",
+        "operationId": "MetricsController_getMetrics[1]",
+        "parameters": [
+          {
+            "name": "format",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Metrics in Prometheus format (text/plain; version=0.0.4)",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - IP not in allowlist and no valid JWT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get application metrics in Prometheus format",
+        "tags": [
+          "metrics"
+        ]
+      }
+    },
+    "/v1/metrics/json": {
       "get": {
         "description": "Returns metrics as JSON for custom integrations",
-        "operationId": "MetricsController_getMetricsJson",
+        "operationId": "MetricsController_getMetricsJson[0]",
         "parameters": [],
         "responses": {
           "200": {
@@ -11986,10 +10693,88 @@
         ]
       }
     },
-    "/metrics/health": {
+    "/metrics/json": {
+      "get": {
+        "description": "Returns metrics as JSON for custom integrations",
+        "operationId": "MetricsController_getMetricsJson[1]",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Metrics in JSON format",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - IP not in allowlist and no valid JWT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get application metrics in JSON format",
+        "tags": [
+          "metrics"
+        ]
+      }
+    },
+    "/v1/metrics/health": {
       "get": {
         "description": "Returns the health status of the application",
-        "operationId": "MetricsController_getHealth",
+        "operationId": "MetricsController_getHealth[0]",
         "parameters": [],
         "responses": {
           "200": {
@@ -12046,7 +10831,67 @@
         ]
       }
     },
-    "/portfolio/summary": {
+    "/metrics/health": {
+      "get": {
+        "description": "Returns the health status of the application",
+        "operationId": "MetricsController_getHealth[1]",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get health status",
+        "tags": [
+          "metrics"
+        ]
+      }
+    },
+    "/v1/portfolio/summary": {
       "get": {
         "description": "Returns the latest portfolio snapshot with total value in specified currency and individual asset balances",
         "operationId": "PortfolioController_getPortfolioSummary",
@@ -12189,7 +11034,7 @@
         ]
       }
     },
-    "/portfolio/accounts/{publicKey}/summary": {
+    "/v1/portfolio/accounts/{publicKey}/summary": {
       "get": {
         "description": "Returns live balances and valuation for one Stellar account linked to the authenticated user",
         "operationId": "PortfolioController_getPortfolioSummaryForAccount",
@@ -12343,7 +11188,7 @@
         ]
       }
     },
-    "/portfolio/history": {
+    "/v1/portfolio/history": {
       "get": {
         "description": "Returns portfolio snapshots for the authenticated user with pagination",
         "operationId": "PortfolioController_getPortfolioHistory",
@@ -12494,7 +11339,7 @@
         ]
       }
     },
-    "/portfolio/snapshot": {
+    "/v1/portfolio/snapshot": {
       "post": {
         "description": "Manually trigger snapshot creation for the authenticated user",
         "operationId": "PortfolioController_createSnapshot",
@@ -12671,7 +11516,7 @@
         ]
       }
     },
-    "/portfolio/snapshots/trigger": {
+    "/v1/portfolio/snapshots/trigger": {
       "post": {
         "description": "Manually trigger snapshot creation for all users. In production, this should be protected with admin guard",
         "operationId": "PortfolioController_triggerSnapshotCreation",
@@ -12826,7 +11671,7 @@
         ]
       }
     },
-    "/portfolio/snapshots/status": {
+    "/v1/portfolio/snapshots/status": {
       "get": {
         "description": "Returns progress information for a queued snapshot batch job.",
         "operationId": "PortfolioController_getSnapshotBatchStatus",
@@ -12962,7 +11807,7 @@
         ]
       }
     },
-    "/portfolio/performance": {
+    "/v1/portfolio/performance": {
       "get": {
         "description": "Returns portfolio performance metrics (24h, 7d, 30d) for the authenticated user",
         "operationId": "PortfolioController_getPortfolioPerformance",
@@ -13070,7 +11915,7 @@
         ]
       }
     },
-    "/portfolio/allocation": {
+    "/v1/portfolio/allocation": {
       "get": {
         "description": "Returns the asset allocation breakdown across all linked accounts for the authenticated user",
         "operationId": "PortfolioController_getAssetAllocation",
@@ -13171,7 +12016,7 @@
         ]
       }
     },
-    "/portfolio/anomalies": {
+    "/v1/portfolio/anomalies": {
       "post": {
         "operationId": "PortfolioAnomalyController_createAnomaly",
         "parameters": [
@@ -13486,7 +12331,7 @@
         ]
       }
     },
-    "/portfolio/anomalies/{id}/review": {
+    "/v1/portfolio/anomalies/{id}/review": {
       "post": {
         "operationId": "PortfolioAnomalyController_reviewAnomaly",
         "parameters": [
@@ -13522,24 +12367,6 @@
         "responses": {
           "200": {
             "description": "Anomaly reviewed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PortfolioAnomalyResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -13712,7 +12539,7 @@
         ]
       }
     },
-    "/stellar/accounts/{publicKey}/balances": {
+    "/v1/stellar/accounts/{publicKey}/balances": {
       "get": {
         "description": "Fetches real-time token balances for a given Stellar public key from the Horizon API (Testnet)",
         "operationId": "StellarController_getAccountBalances",
@@ -13826,7 +12653,7 @@
         ]
       }
     },
-    "/stellar/accounts/{publicKey}/transactions": {
+    "/v1/stellar/accounts/{publicKey}/transactions": {
       "get": {
         "description": "Fetches recent transaction history for a given Stellar public key",
         "operationId": "StellarController_getAccountTransactions",
@@ -13843,7 +12670,7 @@
           },
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "number"
@@ -13941,7 +12768,7 @@
         ]
       }
     },
-    "/stellar/health": {
+    "/v1/stellar/health": {
       "get": {
         "description": "Verifies if the Stellar Horizon API is available and responsive",
         "operationId": "StellarController_checkHealth",
@@ -14038,7 +12865,7 @@
         ]
       }
     },
-    "/stellar/transactions": {
+    "/v1/stellar/transactions": {
       "get": {
         "description": "Fetches and formats paginated transaction history for a given Stellar public key from Horizon. Includes human-readable descriptions for each operation type.",
         "operationId": "StellarController_getTransactions",
@@ -14220,7 +13047,7 @@
         ]
       }
     },
-    "/stellar/assets": {
+    "/v1/stellar/assets": {
       "get": {
         "description": "Search for Stellar assets by code, issuer, or partial match with pagination support",
         "operationId": "StellarController_discoverAssets",
@@ -14377,7 +13204,7 @@
         ]
       }
     },
-    "/stellar/admin/validate-contract-ids": {
+    "/v1/stellar/admin/validate-contract-ids": {
       "post": {
         "description": "Pre-flight validation of contract IDs. Checks that contracts are reachable and callable without making any changes. Useful for verifying new IDs before rotation.",
         "operationId": "StellarController_validateContractIds",
@@ -14560,7 +13387,7 @@
         ]
       }
     },
-    "/stellar/admin/rotate-contract-ids": {
+    "/v1/stellar/admin/rotate-contract-ids": {
       "post": {
         "description": "Updates contract IDs for testnet after validating they are reachable and callable. All updates are atomic - validation of all contracts must pass before any changes are made. Creates an audit log entry recording who, when, and what was changed.",
         "operationId": "StellarController_rotateContractIds",
@@ -14743,7 +13570,7 @@
         ]
       }
     },
-    "/admin/matching-pool/rounds": {
+    "/v1/admin/matching-pool/rounds": {
       "post": {
         "operationId": "MatchingPoolAdminController_createRound",
         "parameters": [
@@ -14925,7 +13752,7 @@
         ]
       }
     },
-    "/admin/matching-pool/rounds/{roundId}/approve-project": {
+    "/v1/admin/matching-pool/rounds/{roundId}/approve-project": {
       "post": {
         "operationId": "MatchingPoolAdminController_approveProject",
         "parameters": [
@@ -15133,7 +13960,7 @@
         ]
       }
     },
-    "/dev/testnet-bootstrap/fund": {
+    "/v1/dev/testnet-bootstrap/fund": {
       "post": {
         "description": "Bootstrap a fresh testnet Stellar public key with Friendbot funding. Only available when STELLAR_NETWORK=testnet and FRIENDBOT_BOOTSTRAP_ENABLED=true. Requires an admin JWT and is rate-limited per caller.",
         "operationId": "TestnetBootstrapController_fundAccount",
@@ -15335,7 +14162,7 @@
         ]
       }
     },
-    "/transactions/history": {
+    "/v1/transactions/history": {
       "get": {
         "description": "Retrieves paginated transaction history for the currently authenticated user's primary Stellar account. Results are cached for 60 seconds. Supports pagination via limit and cursor parameters.",
         "operationId": "TransactionController_getTransactionHistory",
@@ -15500,7 +14327,7 @@
         ]
       }
     },
-    "/transactions/account/{publicKey}": {
+    "/v1/transactions/account/{publicKey}": {
       "get": {
         "description": "Retrieves paginated transaction history for any Stellar public key (no authentication required). This endpoint is public and can be used to query transaction history for any account on the Stellar network. Results are cached for 60 seconds.",
         "operationId": "TransactionController_getTransactionHistoryForAccount",
@@ -15675,7 +14502,7 @@
         ]
       }
     },
-    "/transactions/status/callback": {
+    "/v1/transactions/status/callback": {
       "post": {
         "operationId": "TransactionStatusController_registerCallback",
         "parameters": [
@@ -15876,7 +14703,7 @@
         ]
       }
     },
-    "/webhooks/data-processing": {
+    "/v1/webhooks/data-processing": {
       "post": {
         "description": "Accepts signed webhook payloads from the Python data-processing service. Verifies the HMAC-SHA256 signature in the X-Webhook-Signature header and converts the payload into an in-app Notification.",
         "operationId": "WebhookController_handleDataProcessing",
@@ -16086,7 +14913,7 @@
         ]
       }
     },
-    "/webhooks/admin/providers": {
+    "/v1/webhooks/admin/providers": {
       "get": {
         "description": "Returns information about all configured webhook providers",
         "operationId": "WebhookAdminController_getAllProviders",
@@ -16296,7 +15123,7 @@
         ]
       }
     },
-    "/webhooks/admin/providers/{name}": {
+    "/v1/webhooks/admin/providers/{name}": {
       "get": {
         "description": "Returns configuration details for a specific provider",
         "operationId": "WebhookAdminController_getProvider",
@@ -16726,7 +15553,7 @@
         ]
       }
     },
-    "/webhooks/subscriptions": {
+    "/v1/webhooks/subscriptions": {
       "post": {
         "description": "Partners can register endpoints and subscribe to event types (e.g. pool.round_finalized, milestone.approved). A unique per-subscriber signing secret is generated and returned in the response.",
         "operationId": "WebhookSubscriptionController_createSubscription",
@@ -17093,7 +15920,7 @@
         ]
       }
     },
-    "/webhooks/subscriptions/{id}": {
+    "/v1/webhooks/subscriptions/{id}": {
       "get": {
         "description": "Returns configuration and secret metadata for a specific subscription.",
         "operationId": "WebhookSubscriptionController_getSubscription",
@@ -17646,7 +16473,7 @@
         ]
       }
     },
-    "/webhooks/subscriptions/{id}/rotate-secret": {
+    "/v1/webhooks/subscriptions/{id}/rotate-secret": {
       "post": {
         "description": "Implements Wave 9 rotation mechanism: generates a new secret version while retaining the previous secret during the configured overlap window (default: 24h). During the overlap window, outbound deliveries include both the new and previous signature headers.",
         "operationId": "WebhookSubscriptionController_rotateSecret",
@@ -17856,7 +16683,7 @@
         ]
       }
     },
-    "/webhooks/subscriptions/{id}/deliveries": {
+    "/v1/webhooks/subscriptions/{id}/deliveries": {
       "get": {
         "description": "Returns paginated delivery history per subscriber, with timestamps, delivery status, and signatures.",
         "operationId": "WebhookSubscriptionController_getDeliveries",
@@ -18058,7 +16885,7 @@
         ]
       }
     },
-    "/webhooks/subscriptions/{id}/deliveries/{deliveryId}": {
+    "/v1/webhooks/subscriptions/{id}/deliveries/{deliveryId}": {
       "get": {
         "description": "Returns complete delivery attempt details including headers, response, and execution duration.",
         "operationId": "WebhookSubscriptionController_getDelivery",
@@ -18221,7 +17048,7 @@
         ]
       }
     },
-    "/webhooks/dead-letter": {
+    "/v1/webhooks/dead-letter": {
       "get": {
         "description": "Retrieve outbound webhook deliveries that have exhausted retry attempts and moved to the dead-letter queue.",
         "operationId": "WebhookDeadLetterController_listDeadLetters",
@@ -18405,7 +17232,7 @@
         ]
       }
     },
-    "/webhooks/dead-letter/{id}": {
+    "/v1/webhooks/dead-letter/{id}": {
       "get": {
         "description": "Inspect detailed error history, failure reasons, and payload for a dead-letter entry.",
         "operationId": "WebhookDeadLetterController_inspectDeadLetter",
@@ -18559,7 +17386,7 @@
         ]
       }
     },
-    "/webhooks/dead-letter/{id}/replay": {
+    "/v1/webhooks/dead-letter/{id}/replay": {
       "post": {
         "description": "Re-attempts delivery to the subscriber endpoint immediately. If successful, updates status to replayed.",
         "operationId": "WebhookDeadLetterController_replayDeadLetter",
@@ -18759,7 +17586,7 @@
         ]
       }
     },
-    "/webhooks/dead-letter/{id}/resolve": {
+    "/v1/webhooks/dead-letter/{id}/resolve": {
       "patch": {
         "description": "Acknowledge and mark a dead-letter item as resolved without re-delivering.",
         "operationId": "WebhookDeadLetterController_resolveDeadLetter",
@@ -18969,7 +17796,7 @@
         ]
       }
     },
-    "/notification-preferences": {
+    "/v1/notification-preferences": {
       "post": {
         "description": "Creates or updates notification preferences for the authenticated user",
         "operationId": "NotificationPreferenceController_createOrUpdate",
@@ -19303,7 +18130,7 @@
         ]
       }
     },
-    "/notification-preferences/{userId}": {
+    "/v1/notification-preferences/{userId}": {
       "get": {
         "description": "Retrieves notification preferences for a specific user (admin only)",
         "operationId": "NotificationPreferenceController_getPreferencesByUserId",
@@ -19457,7 +18284,7 @@
         ]
       }
     },
-    "/notification-preferences/{id}": {
+    "/v1/notification-preferences/{id}": {
       "put": {
         "description": "Updates notification preferences by ID",
         "operationId": "NotificationPreferenceController_update",
@@ -19858,7 +18685,7 @@
         ]
       }
     },
-    "/notification-preferences/{userId}/channels/{eventCategory}": {
+    "/v1/notification-preferences/{userId}/channels/{eventCategory}": {
       "get": {
         "description": "Returns the enabled notification channels for a specific event category",
         "operationId": "NotificationPreferenceController_getEnabledChannelsForEvent",
@@ -20034,7 +18861,7 @@
         ]
       }
     },
-    "/notifications/fanout": {
+    "/v1/notifications/fanout": {
       "post": {
         "description": "Creates notifications for all users whose watchlists match the event, filtered by their notification preferences. Suppressed notifications are logged for debugging.",
         "operationId": "NotificationFanoutController_fanout",
@@ -20217,7 +19044,7 @@
         ]
       }
     },
-    "/notifications/suppression-logs": {
+    "/v1/notifications/suppression-logs": {
       "get": {
         "description": "Retrieves suppression logs for debugging and observability. Shows why notifications were not delivered to specific users.",
         "operationId": "NotificationFanoutController_getSuppressionLogs",
@@ -20374,7 +19201,7 @@
         ]
       }
     },
-    "/notifications/drift-alerts": {
+    "/v1/notifications/drift-alerts": {
       "post": {
         "description": "Accepts model/metadata drift alerts raised by the data-processing alert engine and stores them as backend notifications. Requires HMAC authentication via the x-drift-alert-signature and x-drift-alert-timestamp headers, signed with DRIFT_ALERT_INGEST_SECRET.",
         "operationId": "DriftAlertIngestionController_ingest",
@@ -20584,7 +19411,7 @@
         ]
       }
     },
-    "/notification-devices": {
+    "/v1/notification-devices": {
       "post": {
         "operationId": "PushTokenController_register",
         "parameters": [
@@ -20932,7 +19759,7 @@
         ]
       }
     },
-    "/outbox/dead-letter": {
+    "/v1/outbox/dead-letter": {
       "get": {
         "description": "Retrieve outbox events that have exhausted their dispatch attempts and been moved to the dead-letter queue.",
         "operationId": "OutboxDeadLetterController_listDeadLetters",
@@ -21072,7 +19899,7 @@
         ]
       }
     },
-    "/outbox/dead-letter/{id}": {
+    "/v1/outbox/dead-letter/{id}": {
       "get": {
         "description": "Get the full details of a dead-lettered outbox event, including attempt count and last error.",
         "operationId": "OutboxDeadLetterController_inspectDeadLetter",
@@ -21227,7 +20054,7 @@
         ]
       }
     },
-    "/outbox/dead-letter/{id}/replay": {
+    "/v1/outbox/dead-letter/{id}/replay": {
       "post": {
         "description": "Reset a dead-lettered outbox event and dispatch it again immediately. If the replay exhausts the attempt limit, the event returns to the dead-letter queue.",
         "operationId": "OutboxDeadLetterController_replayDeadLetter",
@@ -21428,7 +20255,7 @@
         ]
       }
     },
-    "/admin/support/sessions": {
+    "/v1/admin/support/sessions": {
       "post": {
         "operationId": "SupportModeController_start",
         "parameters": [
@@ -21614,7 +20441,7 @@
         "parameters": [
           {
             "name": "subjectId",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -21622,7 +20449,7 @@
           },
           {
             "name": "actorId",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -21630,7 +20457,7 @@
           },
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -21761,7 +20588,7 @@
         ]
       }
     },
-    "/admin/support/sessions/{id}/end": {
+    "/v1/admin/support/sessions/{id}/end": {
       "post": {
         "operationId": "SupportModeController_end",
         "parameters": [
@@ -21959,7 +20786,7 @@
         ]
       }
     },
-    "/admin/support/sessions/{id}": {
+    "/v1/admin/support/sessions/{id}": {
       "get": {
         "operationId": "SupportModeController_get",
         "parameters": [
@@ -22111,13 +20938,13 @@
         ]
       }
     },
-    "/health": {
+    "/v1/health": {
       "get": {
-        "operationId": "HealthController_getHealth",
+        "operationId": "HealthController_getHealth[0]",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "The Health Check is successful",
+            "description": "Returns a healthy or degraded response when the API is available.\n\nThe Health Check is successful",
             "content": {
               "application/json": {
                 "schema": {
@@ -22235,7 +21062,7 @@
             }
           },
           "503": {
-            "description": "The Health Check is not successful",
+            "description": "Returns when a critical dependency is unavailable.\n\nThe Health Check is not successful",
             "content": {
               "application/json": {
                 "schema": {
@@ -22259,9 +21086,157 @@
         ]
       }
     },
-    "/health/live": {
+    "/health": {
       "get": {
-        "operationId": "HealthController_getLiveness",
+        "operationId": "HealthController_getHealth[1]",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Returns a healthy or degraded response when the API is available.\n\nThe Health Check is successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {},
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Returns when a critical dependency is unavailable.\n\nThe Health Check is not successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Returns API health and dependency status",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/health/live": {
+      "get": {
+        "operationId": "HealthController_getLiveness[0]",
         "parameters": [],
         "responses": {
           "200": {
@@ -22407,9 +21382,157 @@
         ]
       }
     },
-    "/health/ready": {
+    "/health/live": {
       "get": {
-        "operationId": "HealthController_getReadiness",
+        "operationId": "HealthController_getLiveness[1]",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The Health Check is successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {},
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The Health Check is not successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Liveness probe (returns healthy even during graceful shutdown drain)",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/health/ready": {
+      "get": {
+        "operationId": "HealthController_getReadiness[0]",
         "parameters": [],
         "responses": {
           "200": {
@@ -22555,9 +21678,157 @@
         ]
       }
     },
-    "/health/contracts": {
+    "/health/ready": {
       "get": {
-        "operationId": "HealthController_getContractHealth",
+        "operationId": "HealthController_getReadiness[1]",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The Health Check is successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {},
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The Health Check is not successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Readiness probe (returns unready immediately upon shutdown signal)",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/health/contracts": {
+      "get": {
+        "operationId": "HealthController_getContractHealth[0]",
         "parameters": [],
         "responses": {
           "200": {
@@ -22632,10 +21903,87 @@
         ]
       }
     },
-    "/health/latency": {
+    "/health/contracts": {
+      "get": {
+        "operationId": "HealthController_getContractHealth[1]",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Returns reachable contract status for all configured contract IDs.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Returns when one or more configured contract IDs are missing, invalid, or not callable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reports configured Stellar contract reachability and readiness",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/health/latency": {
       "get": {
         "description": "Probes each testnet dependency and classifies response time against configurable thresholds. Returns HTTP 200 for ok/degraded and HTTP 503 when any dependency exceeds its hard-down threshold. Thresholds are set via HEALTH_HORIZON_LATENCY_* and HEALTH_SOROBAN_RPC_LATENCY_* environment variables.",
-        "operationId": "HealthController_getLatencyHealth",
+        "operationId": "HealthController_getLatencyHealth[0]",
         "parameters": [],
         "responses": {
           "200": {
@@ -22710,10 +22058,88 @@
         ]
       }
     },
-    "/health/smoke": {
+    "/health/latency": {
+      "get": {
+        "description": "Probes each testnet dependency and classifies response time against configurable thresholds. Returns HTTP 200 for ok/degraded and HTTP 503 when any dependency exceeds its hard-down threshold. Thresholds are set via HEALTH_HORIZON_LATENCY_* and HEALTH_SOROBAN_RPC_LATENCY_* environment variables.",
+        "operationId": "HealthController_getLatencyHealth[1]",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "All dependencies are within their latency budgets, or only degraded.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "At least one dependency has exceeded its hard-down latency threshold.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Returns latency budget health signals for Horizon and Soroban RPC",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/health/smoke": {
       "get": {
         "description": "Single endpoint that confirms the backend and its testnet dependencies are ready to serve. Verifies required environment variables are present, core dependencies (database, Redis, Horizon) respond, and every configured Soroban contract ID is reachable. Returns a machine-readable report: `status` is \"pass\", \"warn\" or \"fail\", `ready` is false only when something failed, and every check carries a stable `id` so CI can assert on individual results. Safe to expose publicly — environment variables are reported by name and presence only, contract IDs are redacted, and dependency errors are replaced with fixed messages so no connection detail can leak.",
-        "operationId": "HealthController_getDeploymentSmoke",
+        "operationId": "HealthController_getDeploymentSmoke[0]",
         "parameters": [],
         "responses": {
           "200": {
@@ -22788,7 +22214,85 @@
         ]
       }
     },
-    "/verification/config": {
+    "/health/smoke": {
+      "get": {
+        "description": "Single endpoint that confirms the backend and its testnet dependencies are ready to serve. Verifies required environment variables are present, core dependencies (database, Redis, Horizon) respond, and every configured Soroban contract ID is reachable. Returns a machine-readable report: `status` is \"pass\", \"warn\" or \"fail\", `ready` is false only when something failed, and every check carries a stable `id` so CI can assert on individual results. Safe to expose publicly — environment variables are reported by name and presence only, contract IDs are redacted, and dependency errors are replaced with fixed messages so no connection detail can leak.",
+        "operationId": "HealthController_getDeploymentSmoke[1]",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "All checks passed, or only non-blocking warnings were raised (status \"pass\" or \"warn\").",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "At least one check failed (status \"fail\") — the deployment is not ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Deployment smoke check for CI and Vercel",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/verification/config": {
       "get": {
         "description": "Retrieve current quorum settings and voting weight calculation mode.",
         "operationId": "VerificationController_getConfig",
@@ -23036,7 +22540,7 @@
         ]
       }
     },
-    "/verification/projects": {
+    "/v1/verification/projects": {
       "get": {
         "description": "Retrieve a list of project verification records, optionally filtered by status.",
         "operationId": "VerificationController_listProjects",
@@ -23320,7 +22824,7 @@
         ]
       }
     },
-    "/verification/projects/{id}": {
+    "/v1/verification/projects/{id}": {
       "get": {
         "description": "Retrieves a single project verification record by its ID.",
         "operationId": "VerificationController_getProject",
@@ -23432,7 +22936,7 @@
         ]
       }
     },
-    "/verification/projects/{id}/verified": {
+    "/v1/verification/projects/{id}/verified": {
       "get": {
         "description": "Quick check to determine if a project is fully verified on the platform.",
         "operationId": "VerificationController_isVerified",
@@ -23553,7 +23057,7 @@
         ]
       }
     },
-    "/verification/vote": {
+    "/v1/verification/vote": {
       "post": {
         "description": "Submit a weighted vote for or against a project verification.",
         "operationId": "VerificationController_castVote",
@@ -23582,24 +23086,6 @@
         "responses": {
           "200": {
             "description": "Vote cast and tallied successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VoteResultDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -23713,7 +23199,7 @@
         ]
       }
     },
-    "/verification/override": {
+    "/v1/verification/override": {
       "post": {
         "description": "Directly verify or reject a project (admin override). Requires authentication.",
         "operationId": "VerificationController_override",
@@ -23742,24 +23228,6 @@
         "responses": {
           "200": {
             "description": "Verification status overridden successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProjectVerificationDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -23932,7 +23400,7 @@
         ]
       }
     },
-    "/verification/submissions": {
+    "/v1/verification/submissions": {
       "get": {
         "description": "Returns project submissions across draft/review/approval/publish workflow states.",
         "operationId": "VerificationController_listSubmissions",
@@ -24226,7 +23694,7 @@
         ]
       }
     },
-    "/verification/submissions/{id}": {
+    "/v1/verification/submissions/{id}": {
       "get": {
         "operationId": "VerificationController_getSubmission",
         "parameters": [
@@ -24337,7 +23805,7 @@
         ]
       }
     },
-    "/verification/submissions/{id}/submit": {
+    "/v1/verification/submissions/{id}/submit": {
       "post": {
         "operationId": "VerificationController_submitForReview",
         "parameters": [
@@ -24535,7 +24003,7 @@
         ]
       }
     },
-    "/verification/submissions/{id}/request-changes": {
+    "/v1/verification/submissions/{id}/request-changes": {
       "post": {
         "operationId": "VerificationController_requestChanges",
         "parameters": [
@@ -24743,7 +24211,7 @@
         ]
       }
     },
-    "/verification/submissions/{id}/assign": {
+    "/v1/verification/submissions/{id}/assign": {
       "patch": {
         "operationId": "VerificationController_assignReviewer",
         "parameters": [
@@ -24951,7 +24419,7 @@
         ]
       }
     },
-    "/verification/submissions/{id}/approve": {
+    "/v1/verification/submissions/{id}/approve": {
       "post": {
         "operationId": "VerificationController_approveSubmission",
         "parameters": [
@@ -25159,7 +24627,7 @@
         ]
       }
     },
-    "/verification/submissions/{id}/publish": {
+    "/v1/verification/submissions/{id}/publish": {
       "post": {
         "operationId": "VerificationController_publishSubmission",
         "parameters": [
@@ -25367,7 +24835,7 @@
         ]
       }
     },
-    "/verification-requests": {
+    "/v1/verification-requests": {
       "post": {
         "operationId": "VerificationRequestsController_create",
         "parameters": [
@@ -25712,7 +25180,7 @@
         ]
       }
     },
-    "/verification-requests/mine": {
+    "/v1/verification-requests/mine": {
       "get": {
         "operationId": "VerificationRequestsController_findMine",
         "parameters": [],
@@ -25822,7 +25290,7 @@
         ]
       }
     },
-    "/verification-requests/{id}": {
+    "/v1/verification-requests/{id}": {
       "get": {
         "operationId": "VerificationRequestsController_findOne",
         "parameters": [
@@ -25974,7 +25442,7 @@
         ]
       }
     },
-    "/verification-requests/{id}/status": {
+    "/v1/verification-requests/{id}/status": {
       "patch": {
         "operationId": "VerificationRequestsController_transition",
         "parameters": [
@@ -26182,7 +25650,7 @@
         ]
       }
     },
-    "/verification-requests/{id}/cancel": {
+    "/v1/verification-requests/{id}/cancel": {
       "post": {
         "operationId": "VerificationRequestsController_cancel",
         "parameters": [
@@ -26380,7 +25848,7 @@
         ]
       }
     },
-    "/watchlist": {
+    "/v1/watchlist": {
       "get": {
         "description": "Returns all items in the authenticated user's watchlist, optionally filtered by type",
         "operationId": "WatchlistController_getWatchlist",
@@ -26697,7 +26165,7 @@
         ]
       }
     },
-    "/watchlist/toggle": {
+    "/v1/watchlist/toggle": {
       "post": {
         "description": "Add or remove an item from the watchlist. Returns whether the item was added or removed.",
         "operationId": "WatchlistController_toggleItem",
@@ -26888,7 +26356,7 @@
         ]
       }
     },
-    "/watchlist/{id}": {
+    "/v1/watchlist/{id}": {
       "patch": {
         "description": "Update a watchlist item's notes, image, name, or sort order",
         "operationId": "WatchlistController_updateItem",
@@ -27287,7 +26755,7 @@
         ]
       }
     },
-    "/watchlist/reorder": {
+    "/v1/watchlist/reorder": {
       "patch": {
         "description": "Reorder watchlist items by providing an array of item IDs in the desired order",
         "operationId": "WatchlistController_reorderItems",
@@ -27442,7 +26910,7 @@
         ]
       }
     },
-    "/watchlist/check": {
+    "/v1/watchlist/check": {
       "get": {
         "description": "Check whether a specific symbol is in the authenticated user's watchlist",
         "operationId": "WatchlistController_checkSymbol",
@@ -27590,7 +27058,7 @@
         ]
       }
     },
-    "/exports": {
+    "/v1/exports": {
       "post": {
         "operationId": "ExportController_createJob",
         "parameters": [
@@ -27921,7 +27389,7 @@
         ]
       }
     },
-    "/exports/admin/analytics": {
+    "/v1/exports/admin/analytics": {
       "post": {
         "operationId": "ExportController_createAnalyticsJob",
         "parameters": [
@@ -28103,7 +27571,7 @@
         ]
       }
     },
-    "/exports/{id}": {
+    "/v1/exports/{id}": {
       "get": {
         "operationId": "ExportController_getJob",
         "parameters": [
@@ -28255,7 +27723,7 @@
         ]
       }
     },
-    "/exports/{id}/download": {
+    "/v1/exports/{id}/download": {
       "get": {
         "operationId": "ExportController_downloadJob",
         "parameters": [
@@ -28400,7 +27868,7 @@
         ]
       }
     },
-    "/signals/latest": {
+    "/v1/signals/latest": {
       "get": {
         "operationId": "SignalsController_getLatestSignals",
         "parameters": [],
@@ -28507,7 +27975,7 @@
         ]
       }
     },
-    "/analytics/chart-meta": {
+    "/v1/analytics/chart-meta": {
       "get": {
         "description": "Returns series, axis and time-range labels for the data served by /analytics/chart-data.",
         "operationId": "AnalyticsController_getChartMeta",
@@ -28574,7 +28042,7 @@
         ]
       }
     },
-    "/analytics/chart-data": {
+    "/v1/analytics/chart-data": {
       "get": {
         "description": "Returns sentiment data bucketed by hour or day for time-series charts (e.g., Recharts).",
         "operationId": "AnalyticsController_getChartData",
@@ -28700,7 +28168,7 @@
         ]
       }
     },
-    "/telegram-bot/broadcast": {
+    "/v1/telegram-bot/broadcast": {
       "post": {
         "description": "Broadcasts a price, news, or security alert to all active chats subscribed to that category. Requires admin role.",
         "operationId": "TelegramBotController_broadcast",
@@ -28892,7 +28360,7 @@
         ]
       }
     },
-    "/news": {
+    "/v1/news": {
       "get": {
         "operationId": "NewsController_getLatestArticles",
         "parameters": [
@@ -29026,7 +28494,7 @@
         ]
       }
     },
-    "/news/search": {
+    "/v1/news/search": {
       "get": {
         "operationId": "NewsController_searchArticles",
         "parameters": [
@@ -29147,7 +28615,7 @@
         ]
       }
     },
-    "/news/categories": {
+    "/v1/news/categories": {
       "get": {
         "operationId": "NewsController_getCategories",
         "parameters": [
@@ -29245,7 +28713,7 @@
         ]
       }
     },
-    "/news/sentiment-summary": {
+    "/v1/news/sentiment-summary": {
       "get": {
         "operationId": "NewsController_sentimentSummary",
         "parameters": [],
@@ -29328,7 +28796,7 @@
         ]
       }
     },
-    "/news/article": {
+    "/v1/news/article": {
       "get": {
         "operationId": "NewsController_getArticle",
         "parameters": [
@@ -29430,7 +28898,7 @@
         ]
       }
     },
-    "/news/coin/{symbol}": {
+    "/v1/news/coin/{symbol}": {
       "get": {
         "operationId": "NewsController_getArticlesByCoin",
         "parameters": [
@@ -29562,7 +29030,7 @@
         ]
       }
     },
-    "/search/projects": {
+    "/v1/search/projects": {
       "get": {
         "description": "Search registered projects with basic relevance ranking and optional status/owner filters.",
         "operationId": "SearchController_searchProjects",
@@ -29709,7 +29177,7 @@
         ]
       }
     },
-    "/search/assets": {
+    "/v1/search/assets": {
       "get": {
         "description": "Wraps Stellar asset discovery with basic ranking and extra filters (accounts/auth flags).",
         "operationId": "SearchController_searchAssets",
@@ -29895,7 +29363,7 @@
         ]
       }
     },
-    "/search/ecosystem": {
+    "/v1/search/ecosystem": {
       "get": {
         "description": "Search top tags or categories derived from stored news articles.",
         "operationId": "SearchController_searchEcosystem",
@@ -30030,7 +29498,7 @@
         ]
       }
     },
-    "/search/entity-links": {
+    "/v1/search/entity-links": {
       "get": {
         "description": "Links mentions in free text to known projects, Stellar assets, and ecosystem entries.",
         "operationId": "SearchController_linkEntities",
@@ -30139,7 +29607,7 @@
         ]
       }
     },
-    "/feature-flags": {
+    "/v1/feature-flags": {
       "get": {
         "description": "Retrieve a list of all defined feature flags and their current status.",
         "operationId": "FeatureFlagsController_list",
@@ -30209,7 +29677,7 @@
         ]
       },
       "post": {
-        "description": "Creates a new feature flag or modifies the active state of an existing one, including its rollout percentage and allow/deny lists. Omitting the targeting fields leaves any existing rollout untouched. Requires admin role.",
+        "description": "Creates a new feature flag or modifies the active state of an existing one, including its rollout percentage and allow/deny lists. Omitting the targeting fields leaves any existing rollout untouched. Changing a flag marked sensitive requires `confirm: true`. Requires admin role.",
         "operationId": "FeatureFlagsController_upsert",
         "parameters": [
           {
@@ -30240,24 +29708,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FeatureFlagResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FeatureFlag"
                 }
               }
             },
@@ -30360,6 +29810,24 @@
               }
             }
           },
+          "428": {
+            "description": "Flag is sensitive and the request did not set `confirm: true`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -30408,7 +29876,7 @@
         ]
       }
     },
-    "/feature-flags/check/{key}": {
+    "/v1/feature-flags/check/{key}": {
       "get": {
         "description": "Determine whether a specific feature key is active. Pass `principalId` to have percentage and list targeting applied for that principal; without it the flag's plain on/off state is returned.",
         "operationId": "FeatureFlagsController_check",
@@ -30423,7 +29891,7 @@
           },
           {
             "name": "principalId",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -30537,9 +30005,9 @@
         ]
       }
     },
-    "/feature-flags/{key}/history": {
+    "/v1/feature-flags/{key}/history": {
       "get": {
-        "description": "Retrieve the full ordered audit log for a specific feature flag. Records include actor, previous state, new state, and timestamp.",
+        "description": "Retrieve the full ordered audit log for a specific feature flag. Records include actor, previous state, new state, and timestamp. Requires admin role, since entries identify the operators involved.",
         "operationId": "FeatureFlagsController_history",
         "parameters": [
           {
@@ -30575,6 +30043,42 @@
           },
           "400": {
             "description": "Malformed request or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin only)",
             "content": {
               "application/json": {
                 "schema": {
@@ -30646,13 +30150,18 @@
             }
           }
         },
-        "summary": "Get flag change history (admin)",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Get flag change history (admin only)",
         "tags": [
           "feature-flags"
         ]
       }
     },
-    "/feature-flags/{key}/evaluate": {
+    "/v1/feature-flags/{key}/evaluate": {
       "get": {
         "description": "Resolve a feature flag for a specific principal and report the result, the rule that produced it, and the principal's stable hash bucket. Requires admin role.",
         "operationId": "FeatureFlagsController_evaluate",
@@ -30813,7 +30322,7 @@
         ]
       }
     },
-    "/feature-flags/{key}": {
+    "/v1/feature-flags/{key}": {
       "get": {
         "description": "Retrieves configuration details of a single feature flag.",
         "operationId": "FeatureFlagsController_get",
@@ -30934,6 +30443,15 @@
             "in": "path",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "confirm",
+            "required": false,
+            "in": "query",
+            "description": "Must be `true` to delete a flag marked sensitive",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -31067,6 +30585,24 @@
               }
             }
           },
+          "428": {
+            "description": "Flag is sensitive and the request did not pass `confirm=true`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation id for this request",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -31115,7 +30651,7 @@
         ]
       }
     },
-    "/crowdfund/projects": {
+    "/v1/crowdfund/projects": {
       "get": {
         "description": "Retrieves a list of all active and inactive projects.",
         "operationId": "CrowdfundController_listProjects",
@@ -31366,7 +30902,7 @@
         ]
       }
     },
-    "/crowdfund/projects/{id}": {
+    "/v1/crowdfund/projects/{id}": {
       "get": {
         "description": "Retrieves detailed information of a single project by its ID.",
         "operationId": "CrowdfundController_getProject",
@@ -31478,7 +31014,7 @@
         ]
       }
     },
-    "/crowdfund/contribute": {
+    "/v1/crowdfund/contribute": {
       "post": {
         "description": "Submit a contribution transaction to support a project.",
         "operationId": "CrowdfundController_contribute",
@@ -31507,24 +31043,6 @@
         "responses": {
           "200": {
             "description": "Contribution processed successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContributionResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -31638,7 +31156,7 @@
         ]
       }
     },
-    "/crowdfund/admin/bootstrap-demo-data": {
+    "/v1/crowdfund/admin/bootstrap-demo-data": {
       "post": {
         "description": "Creates a small set of demo projects to help reviewers test the MVP in non-production environments.",
         "operationId": "CrowdfundController_bootstrapDemoData",
@@ -31793,7 +31311,7 @@
         ]
       }
     },
-    "/crowdfund/projects/{id}/contributors": {
+    "/v1/crowdfund/projects/{id}/contributors": {
       "get": {
         "description": "Retrieve a list of contributors and their total contributions for a project.",
         "operationId": "CrowdfundController_getContributors",
@@ -31908,7 +31426,7 @@
         ]
       }
     },
-    "/crowdfund/projects/{id}/balance": {
+    "/v1/crowdfund/projects/{id}/balance": {
       "get": {
         "description": "Retrieve details about the current deposits, withdrawals, and balance.",
         "operationId": "CrowdfundController_getBalance",
@@ -32033,7 +31551,7 @@
         ]
       }
     },
-    "/crowdfund/projects/{id}/my-contributions": {
+    "/v1/crowdfund/projects/{id}/my-contributions": {
       "get": {
         "description": "Retrieve all contributions made by a specific public key belonging to the user.",
         "operationId": "CrowdfundController_getMyContributions",
@@ -32187,7 +31705,7 @@
         ]
       }
     },
-    "/crowdfund-sync/sync": {
+    "/v1/crowdfund-sync/sync": {
       "post": {
         "operationId": "CrowdfundSyncController_syncVault",
         "parameters": [
@@ -32369,7 +31887,7 @@
         ]
       }
     },
-    "/crowdfund-sync/events": {
+    "/v1/crowdfund-sync/events": {
       "get": {
         "operationId": "CrowdfundSyncController_listEvents",
         "parameters": [
@@ -32582,7 +32100,7 @@
         ]
       }
     },
-    "/crowdfund-sync/vaults/{vaultAddress}/stats": {
+    "/v1/crowdfund-sync/vaults/{vaultAddress}/stats": {
       "get": {
         "operationId": "CrowdfundSyncController_getVaultStats",
         "parameters": [
@@ -32734,7 +32252,7 @@
         ]
       }
     },
-    "/crowdfund-sync/vaults": {
+    "/v1/crowdfund-sync/vaults": {
       "post": {
         "operationId": "CrowdfundSyncController_registerVault",
         "parameters": [
@@ -32888,7 +32406,7 @@
         ]
       }
     },
-    "/crowdfund-sync/dead-letter": {
+    "/v1/crowdfund-sync/dead-letter": {
       "get": {
         "operationId": "CrowdfundSyncController_listDeadLetters",
         "parameters": [
@@ -33092,7 +32610,7 @@
         ]
       }
     },
-    "/crowdfund-sync/dead-letter/stats": {
+    "/v1/crowdfund-sync/dead-letter/stats": {
       "get": {
         "operationId": "CrowdfundSyncController_getDeadLetterStats",
         "parameters": [],
@@ -33199,7 +32717,7 @@
         ]
       }
     },
-    "/crowdfund-sync/dead-letter/{id}": {
+    "/v1/crowdfund-sync/dead-letter/{id}": {
       "get": {
         "operationId": "CrowdfundSyncController_inspectDeadLetter",
         "parameters": [
@@ -33351,7 +32869,7 @@
         ]
       }
     },
-    "/crowdfund-sync/dead-letter/{id}/replay": {
+    "/v1/crowdfund-sync/dead-letter/{id}/replay": {
       "post": {
         "operationId": "CrowdfundSyncController_replayDeadLetter",
         "parameters": [
@@ -33559,7 +33077,7 @@
         ]
       }
     },
-    "/crowdfund-sync/dead-letter/{id}/resolve": {
+    "/v1/crowdfund-sync/dead-letter/{id}/resolve": {
       "patch": {
         "operationId": "CrowdfundSyncController_resolveDeadLetter",
         "parameters": [
@@ -33760,7 +33278,7 @@
         ]
       }
     },
-    "/soroban-events/ingest": {
+    "/v1/soroban-events/ingest": {
       "post": {
         "description": "Accepts Soroban events from the indexer or cron service for processing. Events are queued asynchronously and their status can be checked via the returned event ID. This endpoint requires the SOROBAN_INGEST_SECRET header for authentication.",
         "operationId": "SorobanEventsController_ingest",
@@ -33771,7 +33289,8 @@
             "description": "Secret token for authenticating ingest requests (configured via SOROBAN_INGEST_SECRET environment variable)",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "example": "your-secret-ingest-token-here"
             }
           },
           {
@@ -33953,7 +33472,7 @@
         ]
       }
     },
-    "/soroban-events/dead-letter": {
+    "/v1/soroban-events/dead-letter": {
       "get": {
         "description": "Retrieve failed events that have exhausted retry attempts. Supports filtering by status, event type, contract ID, and pagination.",
         "operationId": "SorobanEventsDeadLetterController_listFailedEvents",
@@ -34168,7 +33687,7 @@
         ]
       }
     },
-    "/soroban-events/dead-letter/stats": {
+    "/v1/soroban-events/dead-letter/stats": {
       "get": {
         "description": "Retrieve overview statistics including total count, status breakdown, and common errors.",
         "operationId": "SorobanEventsDeadLetterController_getStats",
@@ -34276,7 +33795,7 @@
         ]
       }
     },
-    "/soroban-events/dead-letter/{id}": {
+    "/v1/soroban-events/dead-letter/{id}": {
       "get": {
         "description": "Get detailed information about a failed event, including full error history and payload.",
         "operationId": "SorobanEventsDeadLetterController_inspectFailure",
@@ -34431,7 +33950,7 @@
         ]
       }
     },
-    "/soroban-events/dead-letter/{id}/replay": {
+    "/v1/soroban-events/dead-letter/{id}/replay": {
       "post": {
         "description": "Queue a failed event for reprocessing. Idempotent: multiple calls for an already-replayed event return success without re-queuing. Includes safeguards against excessive replay attempts.",
         "operationId": "SorobanEventsDeadLetterController_replayEvent",
@@ -34642,7 +34161,7 @@
         ]
       }
     },
-    "/soroban-events/dead-letter/{id}/resolve": {
+    "/v1/soroban-events/dead-letter/{id}/resolve": {
       "patch": {
         "description": "Acknowledge a failed event as resolved. Use when the issue is understood and no further replay is needed. Helps maintainers track which issues have been triaged.",
         "operationId": "SorobanEventsDeadLetterController_resolveFailure",
@@ -34853,7 +34372,7 @@
         ]
       }
     },
-    "/soroban-events/replay": {
+    "/v1/soroban-events/replay": {
       "post": {
         "description": "Reprocesses a specified ledger range for a specific contract (or all contracts). Idempotent: re-running the same range does not duplicate derived records. Runs without stopping live indexing. Set dryRun to true to preview changes.",
         "operationId": "SorobanEventReplayController_replayRange",
@@ -35036,7 +34555,7 @@
         ]
       }
     },
-    "/contributor-registry/register": {
+    "/v1/contributor-registry/register": {
       "post": {
         "description": "In mock mode: immediately stores the contributor and returns a placeholder XDR. In real mode: builds an unsigned Soroban transaction XDR that the contributor must sign with their Stellar wallet and submit independently.",
         "operationId": "ContributorRegistryController_register",
@@ -35219,7 +34738,7 @@
         ]
       }
     },
-    "/contributor-registry/register-with-sig": {
+    "/v1/contributor-registry/register-with-sig": {
       "post": {
         "description": "The contributor signs a SorobanAuthorizationEntry off-chain (no XLM required). The server (relayer) builds the transaction, attaches the signed entry, and submits it — paying the network fees. Obtain the current nonce first via GET /contributor-registry/nonce/:address.",
         "operationId": "ContributorRegistryController_registerWithSig",
@@ -35402,7 +34921,7 @@
         ]
       }
     },
-    "/contributor-registry/wallet/{address}": {
+    "/v1/contributor-registry/wallet/{address}": {
       "get": {
         "description": "Returns contributor profile. Result is cached for 60 seconds.",
         "operationId": "ContributorRegistryController_getByAddress",
@@ -35516,7 +35035,7 @@
         ]
       }
     },
-    "/contributor-registry/github/{handle}": {
+    "/v1/contributor-registry/github/{handle}": {
       "get": {
         "description": "Returns contributor profile. Result is cached for 60 seconds.",
         "operationId": "ContributorRegistryController_getByGithub",
@@ -35630,7 +35149,7 @@
         ]
       }
     },
-    "/contributor-registry/reputation/{address}": {
+    "/v1/contributor-registry/reputation/{address}": {
       "get": {
         "description": "Returns the on-chain reputation score and derived tier. Result is cached for 60 seconds to reduce RPC load.",
         "operationId": "ContributorRegistryController_getReputation",
@@ -35744,7 +35263,7 @@
         ]
       }
     },
-    "/contributor-registry/nonce/{address}": {
+    "/v1/contributor-registry/nonce/{address}": {
       "get": {
         "description": "Returns the current per-address nonce required when building the SorobanAuthorizationEntry for register_contributor_with_sig. Cached for 5 seconds only — always fetch immediately before signing.",
         "operationId": "ContributorRegistryController_getNonce",
@@ -35858,7 +35377,7 @@
         ]
       }
     },
-    "/treasury/streams": {
+    "/v1/treasury/streams": {
       "post": {
         "description": "Builds, signs and submits a Soroban `allocate_budget` transaction to the treasury contract, starting a vesting stream for the beneficiary.",
         "operationId": "TreasuryController_allocateBudget",
@@ -36077,7 +35596,7 @@
         ]
       }
     },
-    "/treasury/streams/{beneficiary}": {
+    "/v1/treasury/streams/{beneficiary}": {
       "get": {
         "description": "Returns the current stream state (total, claimed, unlocked and remaining amounts) for a beneficiary from the treasury contract.",
         "operationId": "TreasuryController_getStream",
@@ -36209,7 +35728,7 @@
         ]
       }
     },
-    "/treasury/streams/{beneficiary}/history": {
+    "/v1/treasury/streams/{beneficiary}/history": {
       "get": {
         "description": "Exposes treasury stream beneficiary changes and audit history with actor context and timestamps.",
         "operationId": "TreasuryController_getStreamHistory",
@@ -36397,7 +35916,7 @@
         ]
       }
     },
-    "/treasury/beneficiary-history": {
+    "/v1/treasury/beneficiary-history": {
       "get": {
         "description": "Exposes treasury stream beneficiary changes, rotation history, and audit-safe logs for admin UIs and ops teams.",
         "operationId": "TreasuryController_getBeneficiaryHistory",
@@ -36567,7 +36086,7 @@
         ]
       }
     },
-    "/treasury/streams/rotate": {
+    "/v1/treasury/streams/rotate": {
       "post": {
         "description": "Builds, signs and submits a Soroban `rotate_beneficiary` transaction to the treasury contract, rotating the beneficiary while preserving accrued claim state.",
         "operationId": "TreasuryController_rotateBeneficiary",
@@ -36804,7 +36323,7 @@
         ]
       }
     },
-    "/treasury/streams/preview": {
+    "/v1/treasury/streams/preview": {
       "get": {
         "description": "Read-only endpoint that computes unlocked, claimed, and remaining stream amounts using the same linear-vesting formula as the on-chain contract. No transaction is submitted. Useful for dashboards and debugging tools.",
         "operationId": "TreasuryController_previewStream",
@@ -36947,7 +36466,7 @@
         ]
       }
     },
-    "/vesting-wallet/vesting": {
+    "/v1/vesting-wallet/vesting": {
       "post": {
         "description": "Builds, signs and submits a Soroban `create_vesting` transaction to the vesting-wallet contract, starting a linear vesting schedule for the beneficiary.",
         "operationId": "VestingWalletController_createVesting",
@@ -37166,7 +36685,7 @@
         ]
       }
     },
-    "/vesting-wallet/vesting/milestone": {
+    "/v1/vesting-wallet/vesting/milestone": {
       "post": {
         "description": "Builds, signs and submits a Soroban `create_vesting_with_milestone` transaction to the vesting-wallet contract, creating a linear vesting schedule gated by an external crowdfund vault milestone for the beneficiary.",
         "operationId": "VestingWalletController_createVestingWithMilestone",
@@ -37385,7 +36904,7 @@
         ]
       }
     },
-    "/vesting-wallet/vesting/{beneficiary}": {
+    "/v1/vesting-wallet/vesting/{beneficiary}": {
       "get": {
         "description": "Returns the current vesting schedule state (total, claimed, claimable and remaining amounts) for a beneficiary from the vesting-wallet contract.",
         "operationId": "VestingWalletController_getVesting",
@@ -37517,7 +37036,7 @@
         ]
       }
     },
-    "/vesting-wallet/vesting/{beneficiary}/claimable": {
+    "/v1/vesting-wallet/vesting/{beneficiary}/claimable": {
       "get": {
         "description": "Returns the current claimable amount for a beneficiary from the vesting-wallet contract without modifying state. Fast read-only endpoint.",
         "operationId": "VestingWalletController_getClaimable",
@@ -38936,7 +38455,7 @@
         ]
       }
     },
-    "/review-metrics/aging": {
+    "/v1/review-metrics/aging": {
       "get": {
         "description": "Returns aging distribution and latency statistics for pending/in-review items across moderation reports and portfolio anomalies. Requires reviewer or admin role.",
         "operationId": "ReviewMetricsController_getAgingMetrics",
@@ -39114,7 +38633,7 @@
         ]
       }
     },
-    "/demo-bootstrap/status": {
+    "/v1/demo-bootstrap/status": {
       "get": {
         "description": "Returns whether demo bootstrap is enabled, the current network, and whether demo data has been seeded. This endpoint is public.",
         "operationId": "DemoBootstrapController_getStatus",
@@ -39181,7 +38700,7 @@
         ]
       }
     },
-    "/demo-bootstrap/seed": {
+    "/v1/demo-bootstrap/seed": {
       "post": {
         "description": "Seeds demo-friendly testnet scenarios for contributor review and MVP walkthroughs. Only available when STELLAR_NETWORK=testnet and BOOTSTRAP_DEMO_DATA_ENABLED=true. Safe to repeat — pass resetBeforeSeed=true (default) to clear previous state first.",
         "operationId": "DemoBootstrapController_seed",
@@ -39382,7 +38901,7 @@
         ]
       }
     },
-    "/demo-bootstrap/reset": {
+    "/v1/demo-bootstrap/reset": {
       "post": {
         "description": "Clears all seeded demo data. Only available when STELLAR_NETWORK=testnet and BOOTSTRAP_DEMO_DATA_ENABLED=true. Safe to call when no data is seeded.",
         "operationId": "DemoBootstrapController_reset",
@@ -39555,7 +39074,7 @@
         ]
       }
     },
-    "/demo-bootstrap/runs": {
+    "/v1/demo-bootstrap/runs": {
       "get": {
         "description": "Returns bootstrap runs newest-first with the identifier to pass to the teardown endpoint. Covers both demo seeds and Friendbot-funded testnet accounts. Resource identifiers are not included — fetch a teardown dry run to see exactly what a given run created.",
         "operationId": "DemoBootstrapController_listRuns",
@@ -39720,7 +39239,7 @@
         ]
       }
     },
-    "/demo-bootstrap/runs/{runId}/teardown": {
+    "/v1/demo-bootstrap/runs/{runId}/teardown": {
       "post": {
         "description": "Removes the data created by a single bootstrap run, identified by its run id. Pass { \"dryRun\": true } to list what would be removed without changing anything. Refused with 403 unless the environment is explicitly marked as testnet (STELLAR_NETWORK=testnet) or development (NODE_ENV=development|test); never permitted in production. Safe to call repeatedly — a run that is already torn down reports so.",
         "operationId": "DemoBootstrapController_teardownRun",
@@ -39930,7 +39449,7 @@
         ]
       }
     },
-    "/contributor-feed": {
+    "/v1/contributor-feed": {
       "get": {
         "description": "Combines contributor registration, grant contribution, and reputation change events into a single paginated feed. Supports filtering by activity type and contributor address. Returns a flag for sparse/first-time contributors.",
         "operationId": "ContributorFeedController_getFeed",
@@ -40082,7 +39601,7 @@
         ]
       }
     },
-    "/api/read-model/rebuild": {
+    "/v1/api/read-model/rebuild": {
       "post": {
         "description": "Admin-only endpoint to rebuild derived datasets when ingestion logic changes",
         "operationId": "ReadModelRebuildController_triggerRebuild",
@@ -40109,24 +39628,6 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RebuildTriggerResponseDto"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation id for this request",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
           "202": {
             "description": "Rebuild job started",
             "content": {
@@ -40283,7 +39784,7 @@
         ]
       }
     },
-    "/api/read-model/jobs/{jobId}": {
+    "/v1/api/read-model/jobs/{jobId}": {
       "get": {
         "description": "Get detailed status of a rebuild job including progress",
         "operationId": "ReadModelRebuildController_getJobStatus",
@@ -40436,14 +39937,14 @@
         ]
       }
     },
-    "/api/read-model/jobs": {
+    "/v1/api/read-model/jobs": {
       "get": {
         "description": "List recent rebuild jobs with optional filters",
         "operationId": "ReadModelRebuildController_listJobs",
         "parameters": [
           {
             "name": "dataset",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -40451,7 +39952,7 @@
           },
           {
             "name": "status",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -40459,7 +39960,7 @@
           },
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -40590,7 +40091,7 @@
         ]
       }
     },
-    "/api/read-model/jobs/{jobId}/cancel": {
+    "/v1/api/read-model/jobs/{jobId}/cancel": {
       "delete": {
         "description": "Cancel a pending or in-progress rebuild job",
         "operationId": "ReadModelRebuildController_cancelJob",
@@ -40782,14 +40283,14 @@
         ]
       }
     },
-    "/api/read-model/jobs/cleanup": {
+    "/v1/api/read-model/jobs/cleanup": {
       "delete": {
         "description": "Delete completed/failed/cancelled jobs older than specified days",
         "operationId": "ReadModelRebuildController_cleanupJobs",
         "parameters": [
           {
             "name": "olderThanDays",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -40956,7 +40457,7 @@
         ]
       }
     },
-    "/api/read-model/datasets": {
+    "/v1/api/read-model/datasets": {
       "get": {
         "description": "Get list of datasets that can be rebuilt",
         "operationId": "ReadModelRebuildController_listDatasets",
@@ -41057,7 +40558,7 @@
         ]
       }
     },
-    "/admin/reconciliation/run": {
+    "/v1/admin/reconciliation/run": {
       "post": {
         "operationId": "ReconciliationController_triggerReconciliation",
         "parameters": [
@@ -41211,7 +40712,7 @@
         ]
       }
     },
-    "/admin/reconciliation/jobs": {
+    "/v1/admin/reconciliation/jobs": {
       "get": {
         "operationId": "ReconciliationController_listJobs",
         "parameters": [
@@ -41349,7 +40850,7 @@
         ]
       }
     },
-    "/admin/reconciliation/jobs/{id}": {
+    "/v1/admin/reconciliation/jobs/{id}": {
       "get": {
         "operationId": "ReconciliationController_getJob",
         "parameters": [
@@ -41501,7 +41002,7 @@
         ]
       }
     },
-    "/price-alerts": {
+    "/v1/price-alerts": {
       "get": {
         "description": "Returns all price alert rules for the authenticated user",
         "operationId": "PriceAlertRuleController_findAll",
@@ -41793,7 +41294,7 @@
         ]
       }
     },
-    "/price-alerts/{id}": {
+    "/v1/price-alerts/{id}": {
       "get": {
         "description": "Returns a single price alert rule owned by the authenticated user",
         "operationId": "PriceAlertRuleController_findOne",
@@ -42343,7 +41844,7 @@
         ]
       }
     },
-    "/dashboard": {
+    "/v1/dashboard": {
       "get": {
         "description": "Loads portfolio, watchlist, signals, and latest news concurrently. Each section degrades independently when its backing service is unavailable. Responses are cached per user for 15 seconds.",
         "operationId": "DashboardController_getDashboard",
@@ -42532,7 +42033,7 @@
         ]
       }
     },
-    "/saved-searches": {
+    "/v1/saved-searches": {
       "post": {
         "description": "Saves the provided discovery query for the authenticated user.  Set `isSubscribed: true` to enrol the search in the notification workflow so the user is alerted when new results appear.",
         "operationId": "SavedSearchesController_create",
@@ -42855,7 +42356,7 @@
         ]
       }
     },
-    "/saved-searches/{id}": {
+    "/v1/saved-searches/{id}": {
       "get": {
         "description": "Returns a single saved search owned by the authenticated user.",
         "operationId": "SavedSearchesController_findOne",
@@ -43408,7 +42909,7 @@
         ]
       }
     },
-    "/projects": {
+    "/v1/projects": {
       "get": {
         "operationId": "ProjectsController_listProjects",
         "parameters": [
@@ -43566,7 +43067,7 @@
         ]
       }
     },
-    "/projects/{projectId}": {
+    "/v1/projects/{projectId}": {
       "get": {
         "operationId": "ProjectsController_getProjectDetail",
         "parameters": [
@@ -43679,7 +43180,7 @@
         ]
       }
     },
-    "/projects/{projectId}/health": {
+    "/v1/projects/{projectId}/health": {
       "get": {
         "operationId": "ProjectsController_healthCheck",
         "parameters": [
@@ -43802,7 +43303,7 @@
         ]
       }
     },
-    "/service-consumers/{consumerId}/api-keys": {
+    "/v1/service-consumers/{consumerId}/api-keys": {
       "get": {
         "operationId": "ServiceApiKeysController_list",
         "parameters": [
@@ -44163,7 +43664,7 @@
         ]
       }
     },
-    "/service-consumers/{consumerId}/api-keys/{id}/rotate": {
+    "/v1/service-consumers/{consumerId}/api-keys/{id}/rotate": {
       "post": {
         "operationId": "ServiceApiKeysController_rotate",
         "parameters": [
@@ -44369,7 +43870,7 @@
         ]
       }
     },
-    "/service-consumers/{consumerId}/api-keys/{id}": {
+    "/v1/service-consumers/{consumerId}/api-keys/{id}": {
       "delete": {
         "operationId": "ServiceApiKeysController_revoke",
         "parameters": [
@@ -44672,265 +44173,6 @@
       }
     },
     "schemas": {
-      "AnalyzeDto": {
-        "type": "object",
-        "properties": {
-          "text": {
-            "type": "string",
-            "description": "The text to run sentiment analysis on",
-            "example": "Lumenpulse is doing great!"
-          }
-        },
-        "required": [
-          "text"
-        ]
-      },
-      "SentimentResponseDto": {
-        "type": "object",
-        "properties": {
-          "sentiment": {
-            "type": "number",
-            "description": "Calculated sentiment polarity score between -1 and 1",
-            "example": 0.85
-          },
-          "label": {
-            "type": "string",
-            "description": "Classification category",
-            "example": "positive"
-          }
-        },
-        "required": [
-          "sentiment",
-          "label"
-        ]
-      },
-      "HealthResponseDto": {
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "string",
-            "description": "Service health status",
-            "example": "healthy"
-          },
-          "timestamp": {
-            "type": "string",
-            "description": "Timestamp of health check",
-            "example": "2026-05-27T20:58:35Z"
-          },
-          "service": {
-            "type": "string",
-            "description": "Service name identifier",
-            "example": "sentiment-analysis-service"
-          }
-        },
-        "required": [
-          "status",
-          "timestamp",
-          "service"
-        ]
-      },
-      "SentimentTestCaseDto": {
-        "type": "object",
-        "properties": {
-          "text": {
-            "type": "string",
-            "description": "Test text analyzed",
-            "example": "I love this product!"
-          },
-          "sentiment": {
-            "type": "number",
-            "description": "Sentiment score returned",
-            "example": 0.85
-          },
-          "expected": {
-            "type": "string",
-            "description": "Expected class",
-            "example": "positive"
-          },
-          "status": {
-            "type": "string",
-            "description": "Test status",
-            "example": "success"
-          },
-          "actual": {
-            "type": "string",
-            "description": "Actual class calculated",
-            "example": "positive"
-          },
-          "match": {
-            "type": "boolean",
-            "description": "Whether actual matches expected",
-            "example": true
-          },
-          "error": {
-            "type": "string",
-            "description": "Error message if failed",
-            "example": ""
-          }
-        },
-        "required": [
-          "text",
-          "sentiment",
-          "expected",
-          "status",
-          "actual",
-          "match",
-          "error"
-        ]
-      },
-      "SentimentTestResultDto": {
-        "type": "object",
-        "properties": {
-          "timestamp": {
-            "type": "string",
-            "description": "ISO timestamp of the run",
-            "example": "2026-05-27T21:00:00Z"
-          },
-          "status": {
-            "type": "string",
-            "description": "Status of testing process",
-            "example": "complete"
-          },
-          "message": {
-            "type": "string",
-            "description": "Status feedback message",
-            "example": "All tests finished"
-          },
-          "totalTests": {
-            "type": "number",
-            "description": "Total count of tests executed",
-            "example": 3
-          },
-          "successful": {
-            "type": "number",
-            "description": "Count of successful requests",
-            "example": 3
-          },
-          "matches": {
-            "type": "number",
-            "description": "Count of matching classifications",
-            "example": 3
-          },
-          "testCases": {
-            "description": "Run details for each test case",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SentimentTestCaseDto"
-            }
-          },
-          "pythonApiUrl": {
-            "type": "string",
-            "description": "Target Python API URL",
-            "example": "http://localhost:8000"
-          },
-          "serviceAvailable": {
-            "type": "boolean",
-            "description": "Availability of Python service",
-            "example": true
-          }
-        },
-        "required": [
-          "timestamp",
-          "status",
-          "message",
-          "totalTests",
-          "successful",
-          "matches",
-          "testCases",
-          "pythonApiUrl",
-          "serviceAvailable"
-        ]
-      },
-      "ExceptionTestResultDto": {
-        "type": "object",
-        "properties": {
-          "endpoint": {
-            "type": "string",
-            "description": "Name of the test endpoint",
-            "example": "http-exception"
-          },
-          "url": {
-            "type": "string",
-            "description": "URL path of endpoint",
-            "example": "test-exception/http-exception"
-          },
-          "status": {
-            "type": "string",
-            "description": "Current availability/status",
-            "example": "available"
-          }
-        },
-        "required": [
-          "endpoint",
-          "url",
-          "status"
-        ]
-      },
-      "AllTestsSummaryDto": {
-        "type": "object",
-        "properties": {
-          "totalExceptionTests": {
-            "type": "number",
-            "description": "Total exception endpoints tested",
-            "example": 3
-          },
-          "sentimentServiceAvailable": {
-            "type": "boolean",
-            "description": "Availability of sentiment service",
-            "example": true
-          },
-          "overallStatus": {
-            "type": "string",
-            "description": "Overall combined status string",
-            "example": "full_service"
-          }
-        },
-        "required": [
-          "totalExceptionTests",
-          "sentimentServiceAvailable",
-          "overallStatus"
-        ]
-      },
-      "AllTestsResultDto": {
-        "type": "object",
-        "properties": {
-          "timestamp": {
-            "type": "string",
-            "description": "Timestamp of run",
-            "example": "2026-05-27T21:00:00Z"
-          },
-          "exceptionTests": {
-            "description": "Results of exception tests",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExceptionTestResultDto"
-            }
-          },
-          "sentimentTests": {
-            "description": "Results of sentiment tests",
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SentimentTestResultDto"
-              }
-            ]
-          },
-          "summary": {
-            "description": "Overall run summary metrics",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AllTestsSummaryDto"
-              }
-            ]
-          }
-        },
-        "required": [
-          "timestamp",
-          "exceptionTests",
-          "sentimentTests",
-          "summary"
-        ]
-      },
       "ForceRefreshDto": {
         "type": "object",
         "properties": {
@@ -45862,6 +45104,7 @@
           },
           "metadata": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Additional metadata about the decision",
             "example": {
               "priority": "high",
@@ -45946,9 +45189,9 @@
           },
           "details": {
             "type": "object",
+            "additionalProperties": true,
             "nullable": true,
-            "description": "Type-specific fields (request metadata, tx hash, ...)",
-            "additionalProperties": true
+            "description": "Type-specific fields (request metadata, tx hash, ...)"
           },
           "createdAt": {
             "type": "string",
@@ -46126,7 +45369,7 @@
         "properties": {
           "publicKey": {
             "type": "string",
-            "pattern": "/^G[A-Z0-9]{55}$/",
+            "pattern": "^G[A-Z0-9]{55}$",
             "description": "Stellar public key (starts with G)",
             "example": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHHF"
           },
@@ -46315,7 +45558,7 @@
         "properties": {
           "publicKey": {
             "type": "string",
-            "pattern": "/^G[A-Z0-9]{55}$/",
+            "pattern": "^G[A-Z0-9]{55}$",
             "description": "Stellar public key",
             "example": "GCZJM35NKGVK47BB4SPBDV25477PZYIYPVVG453LPYFNXLS3FGHDXOCM"
           },
@@ -46432,7 +45675,7 @@
         "properties": {
           "token": {
             "type": "string",
-            "pattern": "/^\\d{6}$/",
+            "pattern": "^\\d{6}$",
             "description": "TOTP code from authenticator app",
             "example": "123456"
           }
@@ -46456,7 +45699,7 @@
           },
           "token": {
             "type": "string",
-            "pattern": "/^\\d{6}$/",
+            "pattern": "^\\d{6}$",
             "description": "TOTP code from authenticator app",
             "example": "123456"
           }
@@ -46472,7 +45715,7 @@
         "properties": {
           "token": {
             "type": "string",
-            "pattern": "/^\\d{6}$/",
+            "pattern": "^\\d{6}$",
             "description": "TOTP code to disable 2FA",
             "example": "123456"
           }
@@ -46558,11 +45801,11 @@
             "type": "string"
           },
           "action": {
-            "type": "string",
             "enum": [
               "create",
               "update"
-            ]
+            ],
+            "type": "string"
           },
           "previousVersion": {
             "type": "number"
@@ -46603,6 +45846,7 @@
         "properties": {
           "variables": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Variable values for preview. When omitted, the template sampleVariables are used.",
             "example": {
               "symbol": "XLM",
@@ -46668,6 +45912,9 @@
           },
           "sampleVariables": {
             "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
             "description": "Default sample data used by the preview endpoint"
           }
         }
@@ -46895,7 +46142,14 @@
             "example": "9b3b4a07-5b35-4f8c-9f26-8f3ac77e5b41"
           },
           "status": {
-            "type": "object",
+            "enum": [
+              "failed",
+              "running",
+              "completed",
+              "queued",
+              "completed_with_errors"
+            ],
+            "type": "string",
             "description": "Current status of the batch job",
             "example": "queued"
           },
@@ -46939,7 +46193,14 @@
             "example": "9b3b4a07-5b35-4f8c-9f26-8f3ac77e5b41"
           },
           "status": {
-            "type": "object",
+            "enum": [
+              "failed",
+              "running",
+              "completed",
+              "queued",
+              "completed_with_errors"
+            ],
+            "type": "string",
             "description": "Current status of the snapshot batch job",
             "example": "running"
           },
@@ -46964,7 +46225,12 @@
             "example": 48
           },
           "triggeredBy": {
-            "type": "object",
+            "enum": [
+              "unknown",
+              "manual",
+              "cron"
+            ],
+            "type": "string",
             "description": "Trigger source",
             "example": "manual"
           },
@@ -47004,13 +46270,13 @@
         "type": "object",
         "properties": {
           "window": {
-            "type": "string",
-            "description": "The time window identifier",
             "enum": [
               "24h",
               "7d",
               "30d"
             ],
+            "type": "string",
+            "description": "The time window identifier",
             "example": "24h"
           },
           "hasData": {
@@ -47841,12 +47107,12 @@
         "type": "object",
         "properties": {
           "network": {
-            "type": "string",
-            "description": "Stellar network name - indicates whether this is testnet or mainnet configuration",
             "enum": [
               "testnet",
               "mainnet"
             ],
+            "type": "string",
+            "description": "Stellar network name - indicates whether this is testnet or mainnet configuration",
             "example": "testnet"
           },
           "horizonUrl": {
@@ -48128,6 +47394,7 @@
           },
           "metadata": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Optional metadata key-value pairs",
             "example": {
               "environment": "production"
@@ -48203,6 +47470,7 @@
           },
           "metadata": {
             "type": "object",
+            "additionalProperties": true,
             "nullable": true
           },
           "createdAt": {
@@ -48266,6 +47534,7 @@
           },
           "metadata": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Optional metadata key-value pairs"
           }
         }
@@ -48354,6 +47623,7 @@
           },
           "payload": {
             "type": "object",
+            "additionalProperties": true,
             "example": {
               "roundId": 1,
               "totalPool": "1000000"
@@ -48388,6 +47658,9 @@
           },
           "requestHeaders": {
             "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
             "nullable": true,
             "example": {
               "X-Webhook-Signature": "sha256=..."
@@ -48474,6 +47747,7 @@
           },
           "payload": {
             "type": "object",
+            "additionalProperties": true,
             "example": {
               "milestoneId": "m-1"
             }
@@ -48650,7 +47924,6 @@
           },
           "eventPreferences": {
             "type": "object",
-            "description": "Event category preferences",
             "additionalProperties": {
               "type": "object",
               "properties": {
@@ -48670,7 +47943,8 @@
                   }
                 }
               }
-            }
+            },
+            "description": "Event category preferences"
           },
           "quietHours": {
             "description": "Quiet hours configuration",
@@ -48732,6 +48006,7 @@
           },
           "quietHours": {
             "nullable": true,
+            "type": "object",
             "allOf": [
               {
                 "$ref": "#/components/schemas/QuietHoursConfigDto"
@@ -48791,6 +48066,7 @@
           },
           "eventPreferences": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Event category preferences"
           },
           "quietHours": {
@@ -48879,6 +48155,7 @@
           },
           "metadata": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Metadata context for the event (e.g., projectId, symbol, poolId)"
           }
         },
@@ -48937,8 +48214,8 @@
           },
           "suppressionBreakdown": {
             "type": "object",
-            "description": "Breakdown of suppression reasons",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "description": "Breakdown of suppression reasons"
           },
           "notificationIds": {
             "description": "IDs of created notifications",
@@ -48978,8 +48255,8 @@
           },
           "metadata": {
             "type": "object",
-            "nullable": true,
-            "additionalProperties": true
+            "additionalProperties": true,
+            "nullable": true
           },
           "createdAt": {
             "format": "date-time",
@@ -49066,6 +48343,7 @@
           },
           "metadata": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Metadata context for the alert (drift findings, run id, ...)"
           },
           "targetUserIds": {
@@ -49162,6 +48440,7 @@
           },
           "payload": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Serialised event payload"
           },
           "correlationId": {
@@ -49764,6 +49043,7 @@
           },
           "reviewer": {
             "nullable": true,
+            "type": "object",
             "allOf": [
               {
                 "$ref": "#/components/schemas/User"
@@ -50565,6 +49845,7 @@
           "article": {
             "nullable": true,
             "description": "Article details",
+            "type": "object",
             "allOf": [
               {
                 "$ref": "#/components/schemas/NewsArticleDto"
@@ -50688,11 +49969,11 @@
         "type": "object",
         "properties": {
           "kind": {
-            "type": "string",
             "enum": [
               "tag",
               "category"
             ],
+            "type": "string",
             "example": "tag"
           },
           "value": {
@@ -50771,11 +50052,11 @@
         "type": "object",
         "properties": {
           "kind": {
-            "type": "string",
             "enum": [
               "tag",
               "category"
             ],
+            "type": "string",
             "example": "tag"
           },
           "value": {
@@ -50864,6 +50145,7 @@
           },
           "conditions": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Optional conditions",
             "example": {
               "roles": [
@@ -50871,16 +50153,36 @@
               ]
             }
           },
+          "sensitive": {
+            "type": "boolean",
+            "description": "Whether changes to this flag require an explicit confirmation",
+            "example": false
+          },
           "changedBy": {
             "type": "string",
             "nullable": true,
             "description": "Identifier of the user who last changed this flag",
             "example": "admin@lumenpulse.com"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "When the flag was created",
+            "example": "2024-06-01T12:00:00.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "When the flag was last changed",
+            "example": "2024-06-01T12:00:00.000Z"
           }
         },
         "required": [
           "key",
-          "enabled"
+          "enabled",
+          "sensitive",
+          "createdAt",
+          "updatedAt"
         ]
       },
       "FlagAuditLogResponseDto": {
@@ -50896,7 +50198,11 @@
             "example": "new-onboarding-flow"
           },
           "action": {
-            "type": "object",
+            "enum": [
+              "remove",
+              "upsert"
+            ],
+            "type": "string",
             "description": "Action performed: 'upsert' | 'remove'",
             "example": "upsert"
           },
@@ -50914,6 +50220,7 @@
           },
           "previousTargeting": {
             "type": "object",
+            "additionalProperties": true,
             "nullable": true,
             "description": "Targeting (rollout percentage, allow/deny lists) before this mutation; null if the flag did not exist",
             "example": {
@@ -50924,6 +50231,7 @@
           },
           "newTargeting": {
             "type": "object",
+            "additionalProperties": true,
             "nullable": true,
             "description": "Targeting (rollout percentage, allow/deny lists) after this mutation; null for removals",
             "example": {
@@ -51073,6 +50381,7 @@
           },
           "conditions": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Optional conditions (e.g. user roles, specific user IDs)",
             "example": {
               "roles": [
@@ -51080,78 +50389,25 @@
               ]
             }
           },
+          "sensitive": {
+            "type": "boolean",
+            "description": "Marks the flag as sensitive. Changes to a sensitive flag (including clearing this marker) are rejected with 428 unless `confirm` is true. Omit to leave the current marker unchanged.",
+            "example": false
+          },
+          "confirm": {
+            "type": "boolean",
+            "description": "Explicit confirmation for changing a flag marked sensitive. Ignored for non-sensitive flags.",
+            "example": true
+          },
           "changedBy": {
             "type": "string",
-            "description": "Identifier of the user who changed this flag",
+            "description": "Identifier of the user who changed this flag. Only used when the request has no authenticated user; otherwise the JWT identity is recorded so the audit trail cannot be spoofed.",
             "example": "admin@lumenpulse.com"
           }
         },
         "required": [
           "key",
           "enabled"
-        ]
-      },
-      "FeatureFlag": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "rolloutPercentage": {
-            "type": "number",
-            "nullable": true,
-            "description": "Percentage of principals (0-100) the flag targets, or null for no rollout.\n\nWhen set, this value alone determines the evaluation result — `enabled` is\nnot consulted — so a rollout can serve a fraction of users and later be\nwidened. 0 is a real value meaning \"serve nobody\", which makes it the\nsingle-field kill switch. Null leaves the flag on plain on/off."
-          },
-          "allowList": {
-            "nullable": true,
-            "description": "Principal IDs always granted the flag, regardless of the rollout percentage.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "denyList": {
-            "nullable": true,
-            "description": "Principal IDs always denied the flag; takes precedence over `allowList`.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "conditions": {
-            "type": "object",
-            "nullable": true
-          },
-          "changedBy": {
-            "type": "string",
-            "nullable": true
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "key",
-          "enabled",
-          "rolloutPercentage",
-          "allowList",
-          "denyList",
-          "conditions",
-          "changedBy",
-          "createdAt",
-          "updatedAt"
         ]
       },
       "RoadmapItemDto": {
@@ -51413,7 +50669,12 @@
             "example": "a1b2c3d4..."
           },
           "status": {
-            "type": "object",
+            "enum": [
+              "SUCCESS",
+              "PENDING",
+              "FAILED"
+            ],
+            "type": "string",
             "description": "Status of the contribution on ledger",
             "example": "SUCCESS"
           },
@@ -51527,7 +50788,12 @@
             "type": "number"
           },
           "status": {
-            "type": "object"
+            "type": "string",
+            "enum": [
+              "success",
+              "failed",
+              "partial"
+            ]
           },
           "error": {
             "type": "string"
@@ -51653,7 +50919,10 @@
             "type": "string"
           },
           "byVault": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
           }
         },
         "required": [
@@ -51696,7 +50965,8 @@
             "type": "number"
           },
           "rawPayload": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": true
           },
           "failureCount": {
             "type": "number"
@@ -51844,6 +51114,7 @@
           },
           "rawPayload": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Raw event payload as emitted by the Soroban contract (event data)",
             "example": {
               "from": "GBUQWP3BOUZX34ULNQG23RQ6F4BWFIREXOWJ2GY2FOLGABIDESX56JP2",
@@ -51889,13 +51160,13 @@
             "example": "transfer"
           },
           "status": {
-            "type": "string",
-            "description": "Current processing status of the event",
             "enum": [
               "PENDING",
               "PROCESSED",
               "FAILED"
             ],
+            "type": "string",
+            "description": "Current processing status of the event",
             "example": "PENDING"
           },
           "createdAt": {
@@ -52352,7 +51623,6 @@
           },
           "githubHandle": {
             "type": "string",
-            "pattern": "GITHUB_HANDLE_PATTERN",
             "example": "octocat",
             "description": "GitHub username of the contributor"
           }
@@ -52391,7 +51661,6 @@
           },
           "githubHandle": {
             "type": "string",
-            "pattern": "GITHUB_HANDLE_PATTERN",
             "example": "octocat",
             "description": "GitHub username of the contributor"
           },
@@ -52693,6 +51962,7 @@
           },
           "metadata": {
             "type": "object",
+            "additionalProperties": true,
             "nullable": true
           }
         },
@@ -53189,6 +52459,7 @@
           },
           "contracts": {
             "type": "object",
+            "additionalProperties": true,
             "example": {
               "contributor_registry": {
                 "id": "CCOVDGHF3XQ5RAFY6DJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLDGXQJSB"
@@ -53197,6 +52468,7 @@
           },
           "metadata": {
             "type": "object",
+            "additionalProperties": true,
             "nullable": true
           },
           "isActive": {
@@ -53273,6 +52545,7 @@
           },
           "contracts": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Contract deployment records keyed by contract name",
             "example": {
               "contributor_registry": {
@@ -53283,6 +52556,7 @@
           },
           "metadata": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Environment metadata (RPC URL, admin addresses, deployment notes)",
             "example": {
               "rpc_url": "https://soroban-testnet.stellar.org:443"
@@ -53314,10 +52588,12 @@
           },
           "contracts": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Contract deployment records"
           },
           "metadata": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Environment metadata"
           },
           "isActive": {
@@ -53454,6 +52730,7 @@
           },
           "seededData": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Summary of currently seeded data"
           }
         },
@@ -53504,6 +52781,7 @@
           },
           "details": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Details about seeded entities"
           }
         },
@@ -53538,12 +52816,20 @@
             "description": "Run identifier — pass this to the teardown endpoint"
           },
           "kind": {
-            "type": "object",
+            "enum": [
+              "demo_seed",
+              "testnet_account"
+            ],
+            "type": "string",
             "description": "What produced the run",
             "example": "demo_seed"
           },
           "status": {
-            "type": "object",
+            "enum": [
+              "active",
+              "torn_down"
+            ],
+            "type": "string",
             "description": "Run status",
             "example": "active"
           },
@@ -53611,7 +52897,12 @@
         "type": "object",
         "properties": {
           "type": {
-            "type": "object",
+            "enum": [
+              "testnet_account",
+              "demo_contributor",
+              "demo_grant_round"
+            ],
+            "type": "string",
             "description": "Resource type",
             "example": "demo_contributor"
           },
@@ -53626,14 +52917,14 @@
             "example": "Demo contributor demo-alice"
           },
           "action": {
-            "type": "string",
-            "description": "What happened, or would happen in a dry run",
             "enum": [
               "removed",
               "would_remove",
               "not_found",
               "skipped"
             ],
+            "type": "string",
+            "description": "What happened, or would happen in a dry run",
             "example": "removed"
           },
           "reason": {
@@ -53769,6 +53060,7 @@
           },
           "metadata": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Additional metadata for profile or moderation UIs"
           }
         },
@@ -53946,6 +53238,7 @@
           },
           "progressDetails": {
             "type": "object",
+            "additionalProperties": true,
             "nullable": true
           },
           "errorMessage": {
@@ -54059,6 +53352,7 @@
           },
           "progressDetails": {
             "type": "object",
+            "additionalProperties": true,
             "nullable": true
           },
           "errorMessage": {
@@ -54318,12 +53612,12 @@
           },
           "filters": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Domain-specific filter parameters as a JSON object.  These mirror the query parameters accepted by the corresponding discovery endpoint (e.g. GET /grants/rounds, GET /search/projects, GET /news).",
             "example": {
               "status": "active",
               "keyword": "DeFi"
-            },
-            "additionalProperties": true
+            }
           },
           "isSubscribed": {
             "type": "boolean",
@@ -54430,12 +53724,12 @@
           },
           "filters": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Domain-specific filter parameters as a JSON object.  These mirror the query parameters accepted by the corresponding discovery endpoint (e.g. GET /grants/rounds, GET /search/projects, GET /news).",
             "example": {
               "status": "active",
               "keyword": "DeFi"
-            },
-            "additionalProperties": true
+            }
           },
           "isSubscribed": {
             "type": "boolean",
@@ -54513,6 +53807,9 @@
           },
           "socialLinks": {
             "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
             "description": "Social media links"
           }
         },
@@ -54735,13 +54032,16 @@
             "maxLength": 120
           },
           "scopes": {
-            "type": "string",
-            "enum": [
-              "data:read",
-              "data:write",
-              "admin"
-            ],
-            "minItems": 1
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "data:read",
+                "data:write",
+                "admin"
+              ]
+            }
           },
           "expiresAt": {
             "type": "string"

@@ -440,6 +440,10 @@
         "title": "崩溃报告",
         "description": "自动报告崩溃和错误。发送报告前始终会移除钱包地址。"
       },
+      "background_refresh": {
+        "title": "后台刷新",
+        "description": "在应用关闭时更新您的关注列表和投资组合，打开应用时即为最新。电量低、低电量模式或按流量计费的网络下会跳过。"
+      },
       "categories": {
         "cached_content": {
           "title": "缓存内容",

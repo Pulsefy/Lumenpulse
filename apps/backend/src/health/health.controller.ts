@@ -3,6 +3,7 @@ import {
   Get,
   Res,
   ServiceUnavailableException,
+  VERSION_NEUTRAL,
 } from '@nestjs/common';
 import { HealthCheck } from '@nestjs/terminus';
 import {
@@ -18,7 +19,7 @@ import { HealthService } from './health.service';
 import { ShutdownService } from './shutdown.service';
 
 @ApiTags('health')
-@Controller()
+@Controller({ version: ['1', VERSION_NEUTRAL] })
 export class HealthController {
   constructor(
     private readonly healthService: HealthService,

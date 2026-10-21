@@ -48,9 +48,11 @@
 //! `contracts/feature_flags/src/test.rs` and
 //! `contracts/matching_pool/src/tests/matching_math.rs`.
 
+mod faulty_token;
 mod ledger;
 mod token;
 
+pub use faulty_token::{FaultyToken, FaultyTokenClient};
 pub use ledger::{advance_sequence, advance_time, set_sequence, set_time, timestamp};
 pub use token::{create_token, mint};
 

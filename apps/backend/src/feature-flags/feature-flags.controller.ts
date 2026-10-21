@@ -13,6 +13,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { FeatureFlagsService } from './feature-flags.service';
 import {
@@ -23,8 +24,20 @@ import {
 } from './dto/feature-flag.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/decorators/auth.decorators';
-import { UserRole } from '../users/entities/user.entity';
+import { GetUser, Roles } from '../auth/decorators/auth.decorators';
+import { User, UserRole } from '../users/entities/user.entity';
+
+/**
+ * The identity recorded on the audit log. The authenticated user always wins
+ * over a client-supplied `changedBy`, so an admin cannot attribute their
+ * change to someone else.
+ */
+function resolveActor(
+  user: Pick<User, 'email' | 'id'> | undefined,
+  fallback?: string,
+): string | undefined {
+  return user?.email || user?.id || fallback;
+}
 
 @ApiTags('feature-flags')
 @Controller('feature-flags')
@@ -84,17 +97,23 @@ export class FeatureFlagsController {
    * enabled state, and the timestamp.
    */
   @Get(':key/history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({
-    summary: 'Get flag change history (admin)',
+    summary: 'Get flag change history (admin only)',
     description:
       'Retrieve the full ordered audit log for a specific feature flag. ' +
-      'Records include actor, previous state, new state, and timestamp.',
+      'Records include actor, previous state, new state, and timestamp. ' +
+      'Requires admin role, since entries identify the operators involved.',
   })
   @ApiResponse({
     status: 200,
     description: 'Flag audit history retrieved successfully',
     type: [FlagAuditLogResponseDto],
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   history(@Param('key') key: string) {
     return this.flags.getFlagHistory(key);
   }
@@ -156,7 +175,8 @@ export class FeatureFlagsController {
     description:
       'Creates a new feature flag or modifies the active state of an existing one, ' +
       'including its rollout percentage and allow/deny lists. Omitting the ' +
-      'targeting fields leaves any existing rollout untouched. Requires admin role.',
+      'targeting fields leaves any existing rollout untouched. Changing a flag ' +
+      'marked sensitive requires `confirm: true`. Requires admin role.',
   })
   @ApiResponse({
     status: 200,
@@ -165,7 +185,12 @@ export class FeatureFlagsController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
-  upsert(@Body() body: UpsertFeatureFlagDto) {
+  @ApiResponse({
+    status: 428,
+    description:
+      'Flag is sensitive and the request did not set `confirm: true`',
+  })
+  upsert(@Body() body: UpsertFeatureFlagDto, @GetUser() user?: User) {
     // Only forward targeting when at least one field was supplied, so an
     // on/off-only update cannot silently clear a live rollout.
     const targeting =
@@ -183,8 +208,9 @@ export class FeatureFlagsController {
       body.key,
       body.enabled,
       body.conditions ?? undefined,
-      body.changedBy,
+      resolveActor(user, body.changedBy),
       targeting,
+      { sensitive: body.sensitive, confirm: body.confirm },
     );
   }
 
@@ -204,7 +230,24 @@ export class FeatureFlagsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden (admin only)' })
   @ApiResponse({ status: 404, description: 'Feature flag not found' })
-  remove(@Param('key') key: string) {
-    return this.flags.remove(key);
+  @ApiResponse({
+    status: 428,
+    description:
+      'Flag is sensitive and the request did not pass `confirm=true`',
+  })
+  @ApiQuery({
+    name: 'confirm',
+    required: false,
+    type: Boolean,
+    description: 'Must be `true` to delete a flag marked sensitive',
+  })
+  remove(
+    @Param('key') key: string,
+    @Query('confirm') confirm?: string,
+    @GetUser() user?: User,
+  ) {
+    return this.flags.remove(key, resolveActor(user) ?? null, {
+      confirm: confirm === 'true',
+    });
   }
 }
