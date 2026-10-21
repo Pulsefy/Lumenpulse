@@ -5,11 +5,21 @@ import {
   IsBoolean,
   IsObject,
   IsInt,
+  IsIn,
   Min,
   Max,
   IsNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
+export const CONTRACT_LIFECYCLE_STATES = [
+  'active',
+  'deprecated',
+  'sunset',
+] as const;
+
+export type ContractLifecycleState =
+  (typeof CONTRACT_LIFECYCLE_STATES)[number];
 
 export class CreateDeploymentManifestDto {
   @ApiProperty({
@@ -33,7 +43,7 @@ export class CreateDeploymentManifestDto {
     description: 'Contract deployment records keyed by contract name',
     example: {
       contributor_registry: {
-        id: 'CCOVDGHF3XQ5RAFY6DJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLDGXQJSB',
+        id: 'CCOVDGHF3XQ5RAFYFDJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLGXQJB',
         wasm_hash:
           '4a25619b8fea02f3447e7b700e2f2b0ed575f62679006ddc981009b26d9d5e71',
       },
@@ -50,6 +60,14 @@ export class CreateDeploymentManifestDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, any>;
+
+  @ApiPropertyOptional({
+    description: 'Per-contract lifecycle state keyed by contract key',
+    type: 'object',
+  })
+  @IsOptional()
+  @IsObject()
+  lifecycle?: Record<string, ContractLifecycleRecordDto>;
 
   @ApiPropertyOptional({
     description: 'Mark this manifest as active for the specified environment',
@@ -86,6 +104,11 @@ export class UpdateDeploymentManifestDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, any>;
+
+  @ApiPropertyOptional({ description: 'Per-contract lifecycle state' })
+  @IsOptional()
+  @IsObject()
+  lifecycle?: Record<string, ContractLifecycleRecordDto>;
 
   @ApiPropertyOptional({ description: 'Mark this manifest as active' })
   @IsOptional()
@@ -127,6 +150,103 @@ export class QueryDeploymentManifestDto {
   limit?: number = 20;
 }
 
+export class ContractLifecycleAuditEntryDto {
+  @ApiProperty({ example: 'treasury' })
+  contractKey: string;
+
+  @ApiProperty({ example: 'active' })
+  from: ContractLifecycleState;
+
+  @ApiProperty({ example: 'deprecated' })
+  to: ContractLifecycleState;
+
+  @ApiPropertyOptional({ example: 'admin-uuid', nullable: true })
+  actorId: string | null;
+
+  @ApiPropertyOptional({ example: 'Replaced by v2', nullable: true })
+  reason: string | null;
+
+  @ApiProperty({ example: '2026-07-26T05:00:00.000Z' })
+  at: string;
+}
+
+export class ContractLifecycleRecordDto {
+  @ApiProperty({ example: 'active', enum: CONTRACT_LIFECYCLE_STATES })
+  state: ContractLifecycleState;
+
+  @ApiPropertyOptional({ example: '2026-07-26T05:00:00.000Z', nullable: true })
+  deprecatedAt?: string | null;
+
+  @ApiPropertyOptional({ example: 'admin-uuid', nullable: true })
+  deprecatedBy?: string | null;
+
+  @ApiPropertyOptional({ example: 'Replaced by v2', nullable: true })
+  deprecationReason?: string | null;
+
+  @ApiPropertyOptional({ example: '2026-07-26T05:00:00.000Z', nullable: true })
+  sunsetAt?: string | null;
+
+  @ApiPropertyOptional({ example: 'admin-uuid', nullable: true })
+  sunsetBy?: string | null;
+
+  @ApiPropertyOptional({ type: [ContractLifecycleAuditEntryDto] })
+  audit?: ContractLifecycleAuditEntryDto[];
+}
+
+export class DeprecateContractDto {
+  @ApiProperty({
+    description: 'Contract key within the manifest to deprecate',
+    example: 'treasury',
+  })
+  @IsString()
+  @IsNotEmpty()
+  contractKey: string;
+
+  @ApiPropertyOptional({
+    description: 'Human-readable reason for deprecation',
+    example: 'Replaced by treasury_v2',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class SunsetContractDto {
+  @ApiProperty({
+    description: 'Contract key within the manifest to sunset',
+    example: 'treasury',
+  })
+  @IsString()
+  @IsNotEmpty()
+  contractKey: string;
+
+  @ApiPropertyOptional({
+    description: 'Human-readable reason for sunsetting',
+    example: 'Replaced by treasury_v2',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class RestoreContractDto {
+  @ApiProperty({
+    description: 'Contract key within the manifest to restore',
+    example: 'treasury',
+  })
+  @IsString()
+  @IsNotEmpty()
+  contractKey: string;
+
+  @ApiPropertyOptional({
+    description: 'Human-readable reason for restoring',
+    example: 'Reverted deprecation decision',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
 export class DeploymentManifestResponseDto {
   @ApiProperty({ example: '3a2b1c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d' })
   id: string;
@@ -140,7 +260,7 @@ export class DeploymentManifestResponseDto {
   @ApiProperty({
     example: {
       contributor_registry: {
-        id: 'CCOVDGHF3XQ5RAFY6DJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLDGXQJSB',
+        id: 'CCOVDGHF3XQ5RAFY6DJ36G6CHQJF44QCOBZXCC3LBMKNEWQJLDGXQJB',
       },
     },
   })
@@ -148,6 +268,14 @@ export class DeploymentManifestResponseDto {
 
   @ApiPropertyOptional({ nullable: true })
   metadata: Record<string, any> | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Per-contract lifecycle state (active | deprecated | sunset) keyed by contract key',
+    type: 'object',
+    additionalProperties: { $ref: '#/components/schemas/ContractLifecycleRecordDto' },
+  })
+  lifecycle: Record<string, ContractLifecycleRecordDto> | null;
 
   @ApiProperty({ example: true })
   isActive: boolean;
@@ -174,4 +302,70 @@ export class DeploymentManifestListResponseDto {
 
   @ApiProperty({ example: 20 })
   limit: number;
+}
+
+export class ContractLifecycleStateDto {
+  @ApiProperty({
+    description: 'Current lifecycle state of the contract',
+    enum: CONTRACT_LIFECYCLE_STATES,
+    example: 'active',
+  })
+  @IsIn(CONTRACT_LIFECYCLE_STATES)
+  state: ContractLifecycleState;
+
+  @ApiPropertyOptional({
+    description: 'Whether new writes are blocked for this contract',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  writesBlocked?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Whether exits (withdrawals) are permitted',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  exitsAllowed?: boolean;
+}
+
+export class TransitionContractLifecycleDto {
+  @ApiProperty({
+    description: 'Contract key within the manifest',
+    example: 'treasury',
+  })
+  @IsString()
+  @IsNotEmpty()
+  contractKey: string;
+
+  @ApiProperty({
+    description: 'Target lifecycle state',
+    enum: CONTRACT_LIFECYCLE_STATES,
+    example: 'deprecated',
+  })
+  @IsIn(CONTRACT_LIFECYCLE_STATES)
+  state: ContractLifecycleState;
+
+  @ApiPropertyOptional({
+    description: 'Human-readable reason for the transition',
+    example: 'Replaced by treasury_v2',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class ContractLifecycleResponseDto {
+  @ApiProperty({ example: 'treasury' })
+  contractKey: string;
+
+  @ApiProperty({ type: ContractLifecycleRecordDto })
+  lifecycle: ContractLifecycleRecordDto;
+
+  @ApiProperty({ example: true })
+  writesBlocked: boolean;
+
+  @ApiProperty({ example: true })
+  exitsAllowed: boolean;
 }

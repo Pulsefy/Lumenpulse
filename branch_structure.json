@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-1618-contracts-add-a-contract-deprecation-and-sunset",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-1618-contracts-add-a-contract-deprecation-and-sunset": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-1618-contracts-add-a-contract-deprecation-and-sunset",
+    "origin"
+  ]
+}
