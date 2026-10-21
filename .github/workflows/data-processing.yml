@@ -39,18 +39,15 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Start timeout guard
         uses: ./.github/actions/job-timeout-guard
         with:
           phase: start
-          job-id: data-processing-checks
-          budget-minutes: '15'
-          note: Hash-pinned pip install (torch CPU wheel) + flake8 + pytest.
 
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-app
         with:
           working-directory: apps/data-processing
 
