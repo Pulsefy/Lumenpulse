@@ -199,29 +199,60 @@ mod tests {
         }
     }
 
+    /// AC-4 cont.: Key expiry behavior within TTL window.
+    #[test]
+    fn key_expiry_behavior_within_ttl() {
+        with_contract_env(|env| {
+            let id = make_id(env, 0xD1);
+            claim_request(env, &id).unwrap();
+            assert!(has_receipt(env, &id));
+            env.ledger().with_mut(|li| li.sequence_number += LEDGER_THRESHOLD);
+            assert!(has_receipt(env, &id));
+        });
+    }
+
+    /// AC-4 cont.: Storage growth scales with unique operations.
+    #[test]
+    fn storage_growth_scales_with_unique_ops() {
+        with_contract_env(|env| {
+            for i in 0..5 {
+                let id = make_id(env, 0xE0 + i);
+                assert!(!has_receipt(env, &id));
+                claim_request(env, &id).unwrap();
+                assert!(has_receipt(env, &id));
+            }
+        });
+    }
+
     /// AC-4 cont.: Storage cost per guarded operation is a single persistent key.
-    ///
-    /// This test verifies that claim_request writes exactly one persistent entry
-    /// per unique key by inspecting receipt presence before and after.
     #[test]
     fn storage_cost_is_one_persistent_entry_per_operation() {
         with_contract_env(|env| {
             let id = make_id(env, 0xC0);
             assert!(!has_receipt(env, &id));
             claim_request(env, &id).unwrap();
-            // Exactly one receipt entry now exists.
             assert!(has_receipt(env, &id));
-            // A second claim must not create a second entry (rejected before write).
             let _ = claim_request(env, &id);
-            // Receipt still singular and present.
             assert!(has_receipt(env, &id));
         });
     }
 
-    // ── Error-code stability ──────────────────────────────────────────────────
+    /// AC-5: Concurrent submission resolves to exactly one execution.
+    #[test]
+    fn concurrent_submission_single_execution() {
+        with_contract_env(|env| {
+            let id = make_id(env, 0xF0);
+            let r1 = claim_request(env, &id);
+            let r2 = claim_request(env, &id);
+            let r3 = claim_request(env, &id);
+            assert_eq!(r1, Ok(()));
+            assert_eq!(r2, Err(IdempotencyError::AlreadyExecuted));
+            assert_eq!(r3, Err(IdempotencyError::AlreadyExecuted));
+            assert!(has_receipt(env, &id));
+        });
+    }
 
-    /// The discriminant value for AlreadyExecuted is fixed at 100.
-    /// Changing it would be a breaking on-chain ABI change.
+    /// Error-code stability: discriminant is fixed at 100.
     #[test]
     fn already_executed_discriminant_is_100() {
         assert_eq!(IdempotencyError::AlreadyExecuted as u32, 100);
