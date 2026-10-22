@@ -662,3 +662,47 @@ fn test_round_lifecycle_accounting_no_double_count() {
 
     assert_eq!(final_sum, initial_supply, "Funds must never be created or destroyed");
 }
+
+// ── Idempotency Guard Integration Tests ──────────────────────────────────────
+
+/// AC-6: Integration test - crowdfund_vault deposit duplicate reverts
+#[test]
+fn test_idempotency_integration_vault_deposit_duplicate() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let owner = Address::generate(&env);
+    let contributor = Address::generate(&env);
+
+    let (token, token_admin) = create_token(&env, &admin);
+    let token_id = token.address;
+
+    let vault_id = env.register(CrowdfundVaultContract, ());
+    let vault = VaultClient::new(&env, &vault_id);
+    vault.initialize(&admin);
+
+    token_admin.mint(&contributor, &10_000i128);
+
+    let project_id = vault.create_project(&owner, &Symbol::new(&env, "P"), &5_000i128, &token_id);
+
+    let request_id = soroban_sdk::BytesN::from_array(&env, &[0x42; 32]);
+
+    // First deposit succeeds
+    vault.deposit(&contributor, &project_id, &3_000i128, &request_id);
+    assert_eq!(token.balance(&contributor), 7_000i128);
+    assert_eq!(vault.get_balance(&project_id), 3_000i128);
+
+    // Duplicate deposit with same request_id reverts
+    let result = vault.try_deposit(&contributor, &project_id, &3_000i128, &request_id);
+    assert!(result.is_err(), "Duplicate must revert");
+
+    // Balances unchanged
+    assert_eq!(token.balance(&contributor), 7_000i128);
+    assert_eq!(vault.get_balance(&project_id), 3_000i128);
+
+    // New request_id succeeds
+    let new_id = soroban_sdk::BytesN::from_array(&env, &[0x99; 32]);
+    vault.deposit(&contributor, &project_id, &2_000i128, &new_id);
+    assert_eq!(vault.get_balance(&project_id), 5_000i128);
+}
