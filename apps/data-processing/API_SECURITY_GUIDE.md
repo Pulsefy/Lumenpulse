@@ -5,7 +5,7 @@
 The Data Processing FastAPI server is now secured with:
 1. **API Key Authentication** - Middleware validates `X-API-Key` credentials
 2. **Per-consumer keys and scopes** - Managed in the backend and verified against the shared PostgreSQL database
-3. **Rate Limiting** - Per-client rate limiting using SlowAPI
+3. **Per-key rate limiting and concurrency caps** - Each consumer is limited by a token bucket and a max in-flight count, with `Retry-After` rejection hints
 4. **Configurable Security** - Legacy keys and rate limits remain configurable via environment variables
 
 ## Managed service-consumer keys
@@ -39,6 +39,12 @@ read-only operations use `data:read`; state-changing operations use
 admin-token decorator. The generated secret is returned only by issue/rotate;
 the database stores only its SHA-256 verifier. Listing keys exposes metadata
 and a short prefix, never the secret.
+
+The same key metadata also drives the rate-limit policy: every key is tracked by
+its consumer identifier, and limit rejections carry a `Retry-After` header and a
+Prometheus label set keyed by that consumer. A consumer with a high-cost endpoint
+such as `/analyze-batch` consumes more tokens per request than a simple read call,
+so retries are predictable and enforce the least-privilege contract.
 
 Rotation creates a second active key with the same scopes and expiry. Deploy
 the newly returned value to the consumer, verify its traffic, then revoke the
@@ -87,19 +93,37 @@ All endpoints except `/health`, `/metrics`, and `/` require a valid API key in t
 - `GET /metrics` - Prometheus metrics
 - `GET /` - API information
 
-### 2. Rate Limiting
+### 2. Per-key Rate Limiting and Concurrency
 
-Rate limiting is applied per client IP address using SlowAPI.
+Rate limiting is enforced per API-key identity rather than per client IP. Each consumer has a token bucket derived from the key's scope and the endpoint cost, and each key is also capped at a maximum number of concurrent in-flight requests.
+
+**Endpoint cost model:**
+- Default read endpoints cost 1 token
+- Heavy analysis routes cost 2–5 tokens depending on workload
+- Writes and expensive recompute jobs use the stricter limit bucket
 
 **Default Limits:**
-- Root endpoint (`/`): 20 requests/minute
-- Health check (`/health`): 30 requests/minute
-- Analyze endpoint (`/analyze`): 50 requests/minute
-- Batch analyze (`/analyze-batch`): 10 requests/minute
+- Read access: `100/minute` by default
+- Write access: `10/minute` by default
+- Concurrent in-flight requests: `4` per API key by default (`API_KEY_MAX_CONCURRENT_REQUESTS`)
+
+**Retry behaviour:**
+- Rejections return `429 Too Many Requests`
+- The response includes `Retry-After` in seconds so the backend client can back off correctly
+- Rejections are exported as the Prometheus counter `service_api_key_rate_limit_rejections_total` with labels for `consumer`, `method`, `scope`, and `endpoint`
 
 **Configuration:**
-- Default rate: `100/minute` (general fallback)
-- Strict rate: `10/minute` (for sensitive endpoints)
+- Default rate: `RATE_LIMIT_DEFAULT` (for example `100/minute`)
+- Strict rate: `RATE_LIMIT_STRICT` (for example `10/minute`)
+- Concurrency cap: `API_KEY_MAX_CONCURRENT_REQUESTS` (default `4`)
+
+**Scope-specific limits:**
+
+| Scope | Typical operations | Effective bucket |
+|---|---|---|
+| `data:read` | article/news lookups, lineage reads, KPI reads | `RATE_LIMIT_DEFAULT` adjusted by endpoint cost |
+| `data:write` | mutation jobs, retraining, ingestion, analysis writes | `RATE_LIMIT_STRICT` adjusted by endpoint cost |
+| `admin` | admin-only routes | same as write bucket plus admin-only access checks |
 
 ## 📋 Configuration
 
