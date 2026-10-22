@@ -79,7 +79,16 @@ export class ContractAdminGuard implements CanActivate {
         `No roles specified for contract admin route: ${request.path}. ` +
           `This should be fixed to ensure proper authorization.`,
       );
-      return true;
+      const endpoint = `${request.method} ${request.path}`;
+      await this.auditService.logUnauthorizedAttempt(
+        user.id,
+        endpoint,
+        request as Request,
+        'No roles configured for privileged contract admin route',
+      );
+      throw new ForbiddenException(
+        'Access denied. No roles configured for this contract admin route.',
+      );
     }
 
     // Check if user has required role

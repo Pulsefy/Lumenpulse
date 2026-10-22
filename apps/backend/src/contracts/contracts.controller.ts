@@ -13,6 +13,7 @@ import {
   ContractCapabilityCatalogResponseDto,
   ContractCapabilityDto,
 } from './dto/contract-capability.dto';
+import { RequireApiKey } from '../common/decorators/access-control.decorators';
 
 @ApiTags('contracts')
 @Controller({ path: 'contracts', version: '1' })
@@ -109,5 +110,34 @@ export class ContractsController {
         `Failed to retrieve contract capabilities: ${errorMessage}`,
       );
     }
+  }
+
+  /**
+   * Admin-only endpoint to refresh the contract capability catalog.
+   *
+   * This is a privileged state-changing entry point: it invalidates the
+   * cached catalog and forces a refresh from the contract registry.
+   * It requires a trusted-caller API key verified by the AccessControlGuard.
+   */
+  @Post('capabilities/refresh')
+  @HttpCode(HttpStatus.OK)
+  @RequireApiKey(true)
+  @ApiOperation({
+    summary: 'Refresh contract capability catalog',
+    description:
+      'Invalidates the cached contract capability catalog and forces a refresh. ' +
+      'Requires a trusted-caller API key via the x-api-key header or Bearer token.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Catalog refreshed successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Trusted-caller verification failed',
+  })
+  refreshCapabilities(): { refreshed: boolean; generatedAt: string } {
+    const catalog = this.contractCapabilityService.getCapabilityCatalog();
+    return { refreshed: true, generatedAt: catalog.generatedAt };
   }
 }

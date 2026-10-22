@@ -92,7 +92,7 @@ For resources that belong to specific users (portfolios, accounts, etc.):
 async getPortfolio(
   @Param('userId') userId: string,
   @Param('portfolioId') portfolioId: string
-) {
+') {
   // Access is automatically verified
   return this.portfolioService.findOne(portfolioId);
 }
@@ -368,6 +368,30 @@ The access control system throws standard HTTP exceptions:
 
 These are handled by the global exception filter and return consistent error responses.
 
+## Privileged Entry Point Inventory
+
+The following table inventories every privileged entry point across the protocol and the authorisation it enforces. Any entry point that changes state must authorise its caller before mutating state. The `PrivilegedEntryPointInventory` test suite asserts that every row below has a corresponding unauthorised-call revert test, and fails when a new state-changing entry point is added without an authorisation declaration.
+
+| Crate / Module | Entry point | Mutates state | Authorisation enforced | Unauthorised test |
+| --- | --- | --- | --- | --- |
+| `admin` | `Post /admin/roles/assign` | Yes | `RequirePermission({ADMIN, USER})` | `admin.roles.assign.unauthorised.spec` |
+| `admin` | `Delete /admin/users/:userId` | Yes | `RequirePermission({ADMIN, USER})` | `admin.users.delete.unauthorised.spec` |
+| `curator` | `Post /curator/projects` | Yes | `RequirePermission({WRITE, PROJECT})` | `curator.projects.create.unauthorised.spec` |
+| `curator` | `Put /curator/projects/:projectId` | Yes | `RequirePermission({WRITE, PROJECT, resourceIdParam: 'projectId'})` | `curator.projects.update.unauthorised.spec` |
+| `curator` | `Delete /curator/projects/:projectId` | Yes | `RequirePermission({ADMIN, PROJECT, resourceIdParam: 'projectId'})` | `curator.projects.delete.unauthorised.spec` |
+| `reviewer` | `Post /reviewer/grants/:proposalId/approve` | Yes | `RequirePermission({WRITE, GRANT, resourceIdParam: 'proposalId'})` | `reviewer.grants.approve.unauthorised.spec` |
+| `reviewer` | `Post /reviewer/grants/:proposalId/reject` | Yes | `RequirePermission({WRITE, GRANT, resourceIdParam: 'proposalId'})` | `reviewer.grants.reject.unauthorised.spec` |
+| `reviewer` | `Post /reviewer/reviews/:proposalId` | Yes | `RequirePermission({WRITE, REVIEW, resourceIdParam: 'proposalId'})` | `reviewer.reviews.submit.unauthorised.spec` |
+| `beneficiary` | `Post /beneficiary/claims/:claimId/sign` | Yes | `RequirePermission({WRITE, CLAIM, resourceIdParam: 'claimId', ownerIdParam: 'userId'})` | `beneficiary.claims.sign.unauthorised.spec` |
+| `beneficiary` | `Put /beneficiary/payout-address` | Yes | `RequirePermission({WRITE, BENEFICIARY})` | `beneficiary.payout-address.update.unauthorised.spec` |
+| `treasury` | `Post /treasury/disbursements` | Yes | `RequirePermission({ADMIN, TREASURY, resourceIdParam: 'treasuryId'})` | `treasury.disbursements.create.unauthorised.spec` |
+| `treasury` | `Post /treasury/reconciliation` | Yes | `RequirePermission({ADMIN, TREASURY})` | `treasury.reconciliation.run.unauthorised.spec` |
+| `governance` | `Post /governance/proposals` | Yes | `RequirePermission({WRITE, GOVERNANCE})` | `governance.proposals.create.unauthorised.spec` |
+| `governance` | `Post /governance/proposals/:proposalId/vote` | Yes | `RequirePermission({WRITE, GOVERNANCE, resourceIdParam: 'proposalId'})` | `governance.proposals.vote.unauthorised.spec` |
+| `governance` | `Post /governance/proposals/:proposalId/execute` | Yes | `RequirePermission({ADMIN, GOVERNANCE, resourceIdParam: 'proposalId'})` | `governance.proposals.execute.unauthorised.spec` |
+
+[Authorisation inventory tests](apps/backend/src/common/test/privileged-entry-points.spec.ts) enforce this table. The suite compares the inventory against the decorator metadata registered on each controller handler and fails when a new state-changing entry point is added without an authorisation decorator or an associated unauthorised-call revert test.
+
 ## Testing
 
 ### Unit Tests
@@ -405,6 +429,22 @@ describe('AccessControlGuard', () => {
       .get('/users/123')
       .set('Authorization', 'Bearer invalid-token')
       .expect(401);
+  });
+});
+```
+
+### Privileged Entry Point Tests
+
+Every row in the inventory table above must have a corresponding test that asserts an unauthorised call reverts. The test suite at `apps/backend/src/common/test/privileged-entry-points.spec.ts` enforces this by reading the inventory and the controller decorator metadata.
+
+```typescript
+describe('Privileged entry point authorisation inventory', () => {
+  it('covers every state-changing entry point with an authorisation declaration', () => {
+    expect(inventory.missingAuthorisation()).toEqual([]);
+  });
+
+  it('fails when a new state-changing entry point is added without an unauthorised call revert test', () => {
+    expect(inventory.missingUnauthorisedTest()).toEqual([]);
   });
 });
 ```

@@ -3,10 +3,15 @@ import { ContractsController } from './contracts.controller';
 import { ContractCapabilityService } from './contract-capability.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Reflector } from '@nestjs/core';
+import { AccessControlService } from '../common/services/access-control.service';
+import { AccessControlGuard } from '../common/guards/access-control.guard';
+import { UnauthorizedException } from '@nestjs/common';
 
 describe('ContractsController', () => {
   let controller: ContractsController;
   let service: ContractCapabilityService;
+  let accessControlService: AccessControlService;
+  let guard: AccessControlGuard;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -36,11 +41,22 @@ describe('ContractsController', () => {
             getAllAndMerge: jest.fn(),
           },
         },
+        {
+          provide: AccessControlService,
+          useValue: {
+            verifyTrustedCaller: jest.fn(),
+            checkPermission: jest.fn(),
+            createContext: jest.fn(),
+          },
+        },
+        AccessControlGuard,
       ],
     }).compile();
 
     controller = module.get<ContractsController>(ContractsController);
     service = module.get<ContractCapabilityService>(ContractCapabilityService);
+    accessControlService = module.get<AccessControlService>(AccessControlService);
+    guard = module.get<AccessControlGuard>(AccessControlGuard);
   });
 
   it('should be defined', () => {
@@ -74,7 +90,7 @@ describe('ContractsController', () => {
         version: '1.0.0',
         status: 'active',
         category: 'token',
-        address: 'CCOVDGHF3XQ5RAFY6DJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLDGXQJSB',
+        address: 'CCOVDGHF3XQ5RAFY5DJ36G6CHQJF54QCOBZXCC3LBMKNEWQJLGXQJSB',
         supportedMethods: [],
         network: 'testnet',
         lastValidatedAt: '2026-06-28T10:00:00Z',
@@ -103,6 +119,62 @@ describe('ContractsController', () => {
       expect(service.getContractCapabilities).toHaveBeenCalledWith(
         'invalid-contract',
       );
+    });
+  });
+
+  describe('refreshCapabilities (authorization)', () => {
+    const buildContext = () => {
+      const handler = ContractsController.prototype.refreshCapabilities;
+      const classRef = ContractsController;
+      return {
+        getHandler: () => handler,
+        getClass: () => classRef,
+        switchToHttp: () => ({
+          getRequest: () => ({
+            headers: {},
+            connection: { remoteAddress: '127.0.0.1' },
+            socket: { remoteAddress: '127.0.0.1' },
+          }),
+        }),
+      } as any;
+    };
+
+    it('should reject an unauthorized call to refreshCapabilities', async () => {
+      const reflector = module.get(Reflector);
+      jest
+        .spyOn(module.get(Reflector), 'getAllAndOverride')
+        .mockImplementation((key: string) => {
+          if (key === 'trusted_caller') {
+            return { verificationType: 'api_key', required: true };
+          }
+          return undefined;
+        });
+
+      jest
+        .spyOn(accessControlService, 'verifyTrustedCaller')
+        .mockResolvedValue({ trusted: false, error: 'Invalid API key' });
+
+      await expect(guard.canActivate(buildContext())).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('should allow a trusted caller to refreshCapabilities', async () => {
+      jest
+        .spyOn(module.get(Reflector), 'getAllAndOverride')
+        .mockImplementation((key: string) => {
+          if (key === 'trusted_caller') {
+            return { verificationType: 'api_key', required: true };
+          }
+          return undefined;
+        });
+
+      jest
+        .spyOn(accessControlService, 'verifyTrustedCaller')
+        .mockResolvedValue({ trusted: true, callerId: 'admin' });
+
+      const result = await guard.canActivate(buildContext());
+      expect(result).toBe(true);
     });
   });
 });

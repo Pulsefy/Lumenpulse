@@ -23,6 +23,13 @@ export const RESOURCE_TYPE_KEY = 'resource_type';
 export const TRUSTED_CALLER_KEY = 'trusted_caller';
 
 /**
+ * Metadata key used to mark an entry point as privileged / auth-requiring.
+ * This is the canonical marker consumed by the audit tooling and the
+ * authorisation guard to ensure every privileged entry point enforces auth.
+ */
+export const REQUIRE_AUTH_KEY = 'require_auth';
+
+/**
  * Interface for permission metadata
  */
 export interface PermissionMetadata {
@@ -38,6 +45,16 @@ export interface PermissionMetadata {
 export interface TrustedCallerMetadata {
   verificationType: string;
   required?: boolean; // If true, request fails if verification fails
+}
+
+/**
+ * Interface for require_auth metadata.
+ */
+export interface RequireAuthMetadata {
+  /** The role(s) that are authorised to invoke the entry point. */
+  roles?: string[];
+  /** Human-readable label for the inventory table. */
+  label?: string;
 }
 
 /**
@@ -65,7 +82,7 @@ export const ResourceTypeDecorator = (type: ResourceTypeEnum | string) =>
 
 /**
  * Decorator to require trusted caller verification
- *
+
  * @example
  * @RequireTrustedCaller({
  *   verificationType: 'webhook_signature',
@@ -76,6 +93,25 @@ export const ResourceTypeDecorator = (type: ResourceTypeEnum | string) =>
  */
 export const RequireTrustedCaller = (metadata: TrustedCallerMetadata) =>
   SetMetadata(TRUSTED_CALLER_KEY, metadata);
+
+/**
+ * Decorator to mark a privileged entry point as requiring authorisation.
+ *
+ * This is the canonical marker for the audit inventory. Any public entry
+ * point that mutates state must be annotated with `u@RequireAuth()` and the
+ * authorisation guard will reject callers that do not carry a valid
+ * authorised caller context.
+ *
+ * @example
+ * @RequireAuth({ roles: ['admin'], label: 'Admin operation' })
+ * @Post('admin/operation')
+ * performAdminOperation() { ... }
+ */
+export const RequireAuth = (metadata: RequireAuthMetadata = {}) =>
+  SetMetadata(REQUIRE_AUTH_KEY, {
+    roles: metadata.roles ?? [],
+    label: metadata.label ?? 'privileged entry point',
+  });
 
 /**
  * Decorator to get the access control context from the request
@@ -193,7 +229,7 @@ export const RequireIpAllowlist = (required = true) =>
  * performAdminOperation() { ... }
  */
 export const RequireApiKey = (required = true) =>
-  RequireTrustedCaller({
+  RequireTrustedCaller( {
     verificationType: 'api_key',
     required,
   });

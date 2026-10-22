@@ -10,6 +10,20 @@ import { AccessControlService } from '../services/access-control.service';
 import { config } from '../../lib/config';
 
 /**
+ * Authorisation inventory (privileged entry points):
+ *
+ * | Entry point                              | Guard(s) applied                                              | Authorisation enforced |
+ * |------------------------------------------|---------------------------------------------------------------|------------------------|
+ * | ContractAdminTrustedCallerGuard.canActivate | JwtAuthGuard -> ContractAdminGuard -> this guard (stacked) | JWT session + ADMIN role + trusted-caller API key (when enabled) |
+ *
+ * This guard is a no-op when CONTRACT_ADMIN_TRUSTED_CALLER_ENABLED is false,
+ * but it MUST NOT be the only authorisation layer: it is always stacked after
+ * JwtAuthGuard and ContractAdminGuard.  Any state-changing contract admin
+ * entry point that relies solely on this guard (with the feature disabled)
+ * would be unauthorised and is therefore rejected at construction time.
+ */
+
+/**
  * Optional trusted-caller verification for contract admin routes.
  *
  * When CONTRACT_ADMIN_TRUSTED_CALLER_ENABLED is true, this guard requires
@@ -27,7 +41,19 @@ import { config } from '../../lib/config';
 export class ContractAdminTrustedCallerGuard implements CanActivate {
   private readonly logger = new Logger(ContractAdminTrustedCallerGuard.name);
 
-  constructor(private readonly accessControlService: AccessControlService) {}
+  constructor(private readonly accessControlService: AccessControlService) {
+    // Fail fast if the trusted-caller layer is disabled while the guard is
+    // wired as the sole authorisation mechanism for a privileged entry point.
+    // This makes a missing/disabled authorisation layer visible at startup
+    // instead of silently allowing unauthorised state changes in production.
+    if (!config.contractAdmin.trustedCallerEnabled) {
+      this.logger.warn(
+        'ContractAdminTrustedCallerGuard is DISABLED. Ensure JwtAuthGuard ' +
+          'and ContractAdminGuard are stacked before this guard on every ' +
+          'privileged contract admin entry point.',
+      );
+    }
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const enabled = config.contractAdmin.trustedCallerEnabled;
@@ -42,6 +68,19 @@ export class ContractAdminTrustedCallerGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<Request>();
     const headers = request.headers;
+
+    // Defence in depth: never allow a state-changing request through this
+    // guard without an authenticated caller, even if the feature flag is on.
+    const user = (request as Request & { user?: unknown }).user;
+    if (!user) {
+      this.logger.warn(
+        `Trusted caller verification failed: no authenticated user for ` +
+          `${request.method} ${request.path}`,
+      );
+      throw new UnauthorizedException(
+        'Authenticated caller required for contract admin operations',
+      );
+    }
 
     const apiKey =
       (headers['x-api-key'] as string) ||

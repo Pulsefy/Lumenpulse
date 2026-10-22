@@ -237,7 +237,7 @@ export class AccessControlGuard implements CanActivate {
     request: ExtendedRequest,
   ): AccessControlResource {
     const params = (request as any).params || {};
-    const query = (request as any).query || {};
+    const query = (request as any) .query || {};
     const body = (request as any).body || {};
 
     // Extract resource ID from parameters
