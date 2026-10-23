@@ -1,0 +1,111 @@
+# One-command local stack for the data-processing service (issue #1645).
+#
+#   docker compose -f docker-compose.local.yml up -d --build
+#   python scripts/local_smoke.py
+#   docker compose -f docker-compose.local.yml down -v
+#
+# Starts Postgres + Redis, runs a one-shot `bootstrap` (schema, seed labels,
+# trained + promoted models), then starts the inference API on localhost:8000.
+# No external API keys are needed. See LOCAL_STACK.md.
+
+name: lumenpulse-local
+
+x-build: &build
+  context: .
+  dockerfile: Dockerfile.inference
+
+x-env: &env
+  DATABASE_URL: postgresql://lumenpulse:lumenpulse@postgres:5432/lumenpulse
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: lumenpulse
+  DB_USER: lumenpulse
+  DB_PASSWORD: lumenpulse
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  API_KEY: "${API_KEY:-local-dev-key}"
+  LOG_LEVEL: "${LOG_LEVEL:-info}"
+  NETWORK: "${NETWORK:-mainnet}"
+  MODEL_REGISTRY_PATH: /app/models
+
+x-volumes: &volumes
+  - model-registry:/app/models
+  - training-data:/app/data
+  - logs:/app/logs
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lumenpulse
+      POSTGRES_PASSWORD: lumenpulse
+      POSTGRES_DB: lumenpulse
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumenpulse -d lumenpulse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot provisioning: exits 0 when the stack is ready to serve.
+  bootstrap:
+    build: *build
+    image: lumenpulse-inference:latest
+    command: ["python", "scripts/bootstrap_local.py"]
+    environment: *env
+    volumes: *volumes
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  inference:
+    build: *build
+    image: lumenpulse-inference:latest
+    environment:
+      <<: *env
+      SERVICE_MODE: inference
+      SERVICE_PORT: "8000"
+      SERVICE_HOST: "0.0.0.0"
+    volumes: *volumes
+    ports:
+      - "127.0.0.1:${SERVICE_PORT:-8000}:8000"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 5s
+      timeout: 10s
+      start_period: 30s
+      retries: 20
+
+  # Optional: `docker compose -f docker-compose.local.yml run --rm smoke`
+  smoke:
+    build: *build
+    image: lumenpulse-inference:latest
+    profiles: ["smoke"]
+    command: ["python", "scripts/local_smoke.py", "--url", "http://inference:8000"]
+    environment:
+      API_KEY: "${API_KEY:-local-dev-key}"
+    depends_on:
+      inference:
+        condition: service_healthy
+
+volumes:
+  model-registry:
+  training-data:
+  logs:
+  postgres-data:

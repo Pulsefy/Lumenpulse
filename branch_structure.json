@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-1645-data-processing-provide-a-one-command-local",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-1645-data-processing-provide-a-one-command-local": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-1645-data-processing-provide-a-one-command-local",
+    "origin"
+  ]
+}
