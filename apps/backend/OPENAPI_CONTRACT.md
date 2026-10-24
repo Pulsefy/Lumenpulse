@@ -97,6 +97,35 @@ from global infrastructure rather than individual controllers:
 | Standard errors | validation pipe, guards, rate limiter | `400` if the operation takes input, `401`/`403` if it is secured, `404` for path parameters, and `429`/`500` everywhere. |
 | Idempotency | `IdempotencyInterceptor` (global) | Optional `Idempotency-Key` header on every `POST`/`PUT`/`PATCH`/`DELETE`, plus `409` (still in progress) and `422` (key reused with a different body). |
 | Correlation id | `RequestIdMiddleware` | `X-Request-Id` response header on every response. |
+| Response envelope (opt-in) | `ResponseEnvelopeInterceptor` + `GlobalExceptionFilter` | `ApiSuccessEnvelopeDto`, `ApiPaginatedEnvelopeDto`, `ApiErrorEnvelopeDto` and their meta models under `components.schemas`; documented in the API description. Per-operation schemas keep describing the default (unwrapped) shape. |
+
+## Response envelope
+
+Clients opt in per request with `X-Response-Envelope: v1`. Without the header
+every endpoint returns exactly what it returns today.
+
+| Outcome | Body when opted in |
+| --- | --- |
+| Success | `{ "success": true, "data": <original body>, "meta": { "requestId", "timestamp" } }` |
+| Paginated list (handler returns `{ items, total, page, limit }`) | `{ "success": true, "data": [...items], "meta": { "requestId", "timestamp", "page", "limit", "total", "totalPages", "hasNext", "hasPrevious" } }` |
+| Error | `{ "success": false, "error": <ErrorResponseDto> }`, the same payload un-enveloped clients get |
+
+Enveloped responses echo `X-Response-Envelope: v1`. The interceptor is
+registered once, as the outermost global interceptor, so idempotent replays
+are wrapped the same way as live responses.
+
+Never enveloped, even when opted in:
+
+- Controllers or handlers marked `@SkipEnvelope()`: `HealthController` and
+  `MetricsController` (orchestrator probes and Prometheus scraping).
+- Non-JSON responses: `text/plain`, `text/csv`, `text/event-stream`,
+  `application/octet-stream`, `application/pdf`, `StreamableFile`, streams
+  and buffers.
+- Handlers that write the response themselves with `@Res()`.
+- WebSocket and other non-HTTP contexts.
+
+New endpoints need no envelope code. Return the resource, or
+`{ items, total, page, limit }` for a list.
 
 ## Security schemes
 
