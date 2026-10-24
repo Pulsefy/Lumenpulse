@@ -8,8 +8,8 @@
     "lint:mobile": "npm run lint --prefix apps/mobile",
     "install:apps": "npm install --prefix apps/backend && npm install --prefix apps/webapp && npm install --prefix apps/mobile",
     "test": "npm run test --prefix apps/backend && npm run test --prefix apps/webapp",
-    "dev:backend": "npm run start:dev --prefix apps/backend",
-    "dev:webapp": "npm run dev --prefix apps/webapp"
+    "dev:backend": "node init && npm run start:dev --prefix apps/backend",
+    "dev:webapp": "node init && npm run dev --prefix apps/webapp"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",

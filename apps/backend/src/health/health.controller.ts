@@ -12,6 +12,7 @@ import {
   ApiServiceUnavailableResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { SkipEnvelope } from '../common/envelope';
 import type { Response } from 'express';
 import { ContractHealthService } from './contract-health.service';
 import { DeploymentSmokeService } from './deployment-smoke.service';
@@ -19,6 +20,7 @@ import { HealthService } from './health.service';
 import { ShutdownService } from './shutdown.service';
 
 @ApiTags('health')
+@SkipEnvelope()
 @Controller({ version: ['1', VERSION_NEUTRAL] })
 export class HealthController {
   constructor(

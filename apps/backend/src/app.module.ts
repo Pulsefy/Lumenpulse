@@ -87,6 +87,7 @@ import { QueryCountMiddleware } from './common/profiling/query-count.middleware'
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SavedSearchesModule } from './saved-searches/saved-searches.module';
 import { ServiceApiKeysModule } from './service-api-keys/service-api-keys.module';
+import { ResponseEnvelopeInterceptor } from './common/envelope';
 import { config } from './lib/config';
 
 const isMainnet = config.stellar.network === 'mainnet';
@@ -250,6 +251,12 @@ const isMainnet = config.stellar.network === 'mainnet';
     {
       provide: APP_GUARD,
       useClass: RateLimitGuard,
+    },
+    // Registered first so it is the outermost interceptor and also wraps
+    // idempotent replays. Opt-in via the X-Response-Envelope header.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ResponseEnvelopeInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,

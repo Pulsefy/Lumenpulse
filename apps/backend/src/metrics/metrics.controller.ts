@@ -12,6 +12,7 @@ import type { Response } from 'express';
 import { MetricsService } from './metrics.service';
 import { IpAllowlistGuard } from './ip-allowlist.guard';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { SkipEnvelope } from '../common/envelope';
 import { ErrorCode } from '../common/enums/error-code.enum';
 
 /**
@@ -19,6 +20,7 @@ import { ErrorCode } from '../common/enums/error-code.enum';
  * Provides Prometheus-compatible metrics endpoint
  */
 @ApiTags('metrics')
+@SkipEnvelope()
 @Controller({ path: 'metrics', version: ['1', VERSION_NEUTRAL] })
 @UseGuards(IpAllowlistGuard)
 export class MetricsController {
