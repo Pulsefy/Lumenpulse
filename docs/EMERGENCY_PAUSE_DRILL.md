@@ -124,3 +124,20 @@ Repeat the pause / verify / unpause sequence for `Payout` and `Governance`. Use 
 ## Evidence to attach to an incident or release ticket
 
 Record the testnet contract ID, UTC start/end time, transaction hashes for each pause/unpause call, the observed contract error code, screenshots from web/mobile, and the successful post-unpause contribution hash.
+
+## Automation
+
+The drill is automated by `scripts/run-emergency-pause-drill.mjs`, which replays the pause / verify / unpause sequence for each scope against testnet using the `stellar` CLI, asserts the blocked operations fail with their scope-specific error code (`#19`/`#20`/`#21`), asserts operations outside the scope still succeed, always unpauses in a cleanup step, and writes a dated evidence record to `drill-evidence/`.
+
+```bash
+# Prepare a disposable testnet round, then fill in scripts/drill-state.json
+# (see scripts/drill-state.example.json).
+npm --prefix scripts run drill:emergency-pause -- \
+  --state scripts/drill-state.json \
+  [--contract <id>] [--admin-key <name>] [--network <name>] [--evidence <path>]
+
+# Validate a produced evidence record.
+npm --prefix scripts run validate:emergency-pause-drill <evidence.json>
+```
+
+Use `--dry-run` to verify prerequisites (stellar CLI, `testnet` network, admin key matching the manifest admin) without changing pause state. The drill never leaves a testnet contract paused: `unpause_scope` runs in a `finally` block even when an earlier verification fails. Failures name the scope and operation that behaved unexpectedly.
