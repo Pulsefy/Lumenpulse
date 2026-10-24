@@ -44079,7 +44079,7 @@
   },
   "info": {
     "title": "LumenPulse API",
-    "description": "Comprehensive API documentation for LumenPulse - A decentralized crypto news aggregator and portfolio management platform built on Stellar blockchain.\n\n## Authentication\n- **JWT-auth**: `Authorization: Bearer <jwt>` obtained from `POST /auth/login`. Required on every operation that lists it under *security*.\n- **api-key**: `X-API-Key: <key>` for trusted service callers (contract admin operations).\n- **webhook-signature**: HMAC signature headers on inbound webhook deliveries; see the individual operations for the timestamp and nonce headers they also require.\n\n## Idempotency\nEvery `POST`, `PUT`, `PATCH` and `DELETE` accepts an optional `Idempotency-Key` header. A repeated key with the same body replays the stored response for 24h; the same key with a different body returns **422**; a key still executing after the wait window returns **409**.\n\n## Errors\nEvery non-2xx response uses the `ErrorResponseDto` envelope (`code`, `message`, optional `details`, `requestId`).\n\n## Correlation\nSend `X-Request-Id` to propagate your own correlation id; otherwise one is generated. It is echoed on every response.",
+    "description": "Comprehensive API documentation for LumenPulse - A decentralized crypto news aggregator and portfolio management platform built on Stellar blockchain.\n\n## Authentication\n- **JWT-auth**: `Authorization: Bearer <jwt>` obtained from `POST /auth/login`. Required on every operation that lists it under *security*.\n- **api-key**: `X-API-Key: <key>` for trusted service callers (contract admin operations).\n- **webhook-signature**: HMAC signature headers on inbound webhook deliveries; see the individual operations for the timestamp and nonce headers they also require.\n\n## Idempotency\nEvery `POST`, `PUT`, `PATCH` and `DELETE` accepts an optional `Idempotency-Key` header. A repeated key with the same body replays the stored response for 24h; the same key with a different body returns **422**; a key still executing after the wait window returns **409**.\n\n## Errors\nEvery non-2xx response uses the `ErrorResponseDto` envelope (`code`, `message`, optional `details`, `requestId`).\n\n## Response envelope (opt-in)\nSend `X-Response-Envelope: v1` to receive every JSON response in the standard envelope: success as `ApiSuccessEnvelopeDto` (`{ success: true, data, meta }`), paginated lists as `ApiPaginatedEnvelopeDto` (`meta` adds `page`, `limit`, `total`, `totalPages`, `hasNext`, `hasPrevious`), and errors as `ApiErrorEnvelopeDto` (`{ success: false, error }`). Without the header, the response schemas documented on each operation apply unchanged. Health and metrics endpoints are never enveloped.\n\n## Correlation\nSend `X-Request-Id` to propagate your own correlation id; otherwise one is generated. It is echoed on every response.",
     "version": "1.0",
     "contact": {}
   },
@@ -54129,6 +54129,149 @@
         },
         "required": [
           "message"
+        ]
+      },
+      "ApiEnvelopeMetaDto": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "description": "Correlation id for this request (same as `X-Request-Id`).",
+            "example": "4b7c7a8e-3f0e-4c7a-9d0b-2a1f7e2c9b11"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "ISO-8601 time the response was built.",
+            "example": "2026-10-24T05:30:00.000Z"
+          }
+        },
+        "required": [
+          "requestId",
+          "timestamp"
+        ]
+      },
+      "ApiPaginationMetaDto": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "description": "Correlation id for this request (same as `X-Request-Id`).",
+            "example": "4b7c7a8e-3f0e-4c7a-9d0b-2a1f7e2c9b11"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "ISO-8601 time the response was built.",
+            "example": "2026-10-24T05:30:00.000Z"
+          },
+          "page": {
+            "type": "number",
+            "description": "Current page (1-based).",
+            "example": 1
+          },
+          "limit": {
+            "type": "number",
+            "description": "Items per page.",
+            "example": 20
+          },
+          "total": {
+            "type": "number",
+            "description": "Total items across all pages.",
+            "example": 123
+          },
+          "totalPages": {
+            "type": "number",
+            "description": "Total number of pages.",
+            "example": 7
+          },
+          "hasNext": {
+            "type": "boolean",
+            "description": "True when a later page exists.",
+            "example": true
+          },
+          "hasPrevious": {
+            "type": "boolean",
+            "description": "True when an earlier page exists.",
+            "example": false
+          }
+        },
+        "required": [
+          "requestId",
+          "timestamp",
+          "page",
+          "limit",
+          "total",
+          "totalPages",
+          "hasNext",
+          "hasPrevious"
+        ]
+      },
+      "ApiSuccessEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "example": true
+          },
+          "data": {
+            "type": "object",
+            "description": "The handler's original response body.",
+            "nullable": true
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiEnvelopeMetaDto"
+          }
+        },
+        "required": [
+          "success",
+          "data",
+          "meta"
+        ]
+      },
+      "ApiPaginatedEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "example": true
+          },
+          "data": {
+            "type": "array",
+            "description": "The page of items (lifted from `items`).",
+            "items": {}
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiPaginationMetaDto"
+          }
+        },
+        "required": [
+          "success",
+          "data",
+          "meta"
+        ]
+      },
+      "ApiErrorEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              false
+            ],
+            "example": false
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorResponseDto"
+          }
+        },
+        "required": [
+          "success",
+          "error"
         ]
       }
     }

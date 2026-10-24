@@ -10,6 +10,8 @@ import {
   WEBHOOK_SIGNATURE_SECURITY_SCHEME,
 } from './openapi.constants';
 import { ErrorDetailDto, ErrorResponseDto } from './error-response.dto';
+import { ENVELOPE_MODELS } from './envelope.dto';
+import { RESPONSE_ENVELOPE_HEADER } from '../common/envelope/envelope.constants';
 
 type OperationObject = OpenAPIObject['paths'][string]['get'] & object;
 type ResponsesObject = OperationObject['responses'];
@@ -41,6 +43,9 @@ Every \`POST\`, \`PUT\`, \`PATCH\` and \`DELETE\` accepts an optional \`${IDEMPO
 
 ## Errors
 Every non-2xx response uses the \`${ERROR_RESPONSE_SCHEMA}\` envelope (\`code\`, \`message\`, optional \`details\`, \`requestId\`).
+
+## Response envelope (opt-in)
+Send \`${RESPONSE_ENVELOPE_HEADER}: v1\` to receive every JSON response in the standard envelope: success as \`ApiSuccessEnvelopeDto\` (\`{ success: true, data, meta }\`), paginated lists as \`ApiPaginatedEnvelopeDto\` (\`meta\` adds \`page\`, \`limit\`, \`total\`, \`totalPages\`, \`hasNext\`, \`hasPrevious\`), and errors as \`ApiErrorEnvelopeDto\` (\`{ success: false, error }\`). Without the header, the response schemas documented on each operation apply unchanged. Health and metrics endpoints are never enveloped.
 
 ## Correlation
 Send \`${REQUEST_ID_RESPONSE_HEADER}\` to propagate your own correlation id; otherwise one is generated. It is echoed on every response.`;
@@ -113,7 +118,7 @@ export function buildSwaggerConfig(): Omit<OpenAPIObject, 'paths'> {
  */
 export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
   const document = SwaggerModule.createDocument(app, buildSwaggerConfig(), {
-    extraModels: [ErrorResponseDto, ErrorDetailDto],
+    extraModels: [ErrorResponseDto, ErrorDetailDto, ...ENVELOPE_MODELS],
     operationIdFactory: (controllerKey, methodKey) =>
       `${controllerKey}_${methodKey}`,
   });

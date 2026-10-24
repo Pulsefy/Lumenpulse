@@ -239,3 +239,61 @@ describe('GlobalExceptionFilter', () => {
     );
   });
 });
+
+describe('GlobalExceptionFilter response envelope opt-in', () => {
+  const makeHost = (headers: Record<string, string>) => {
+    const response = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis(),
+      setHeader: jest.fn().mockReturnThis(),
+    };
+    const request = {
+      method: 'GET',
+      url: '/v1/things/1',
+      headers,
+      correlationId: 'corr-9',
+    };
+    const host = {
+      switchToHttp: () => ({
+        getResponse: () => response,
+        getRequest: () => request,
+      }),
+    } as unknown as ArgumentsHost;
+    return { host, response };
+  };
+
+  it('keeps the flat error shape when the client has not opted in', () => {
+    const { host, response } = makeHost({});
+    new GlobalExceptionFilter().catch(
+      new HttpException('Not Found', HttpStatus.NOT_FOUND),
+      host,
+    );
+    expect(response.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: ErrorCode.SYS_NOT_FOUND }),
+    );
+    expect(response.json.mock.calls[0][0]).not.toHaveProperty('success');
+  });
+
+  it('wraps the same error payload when X-Response-Envelope: v1 is sent', () => {
+    const { host, response } = makeHost({ 'x-response-envelope': 'v1' });
+    new GlobalExceptionFilter().catch(
+      new HttpException('Not Found', HttpStatus.NOT_FOUND),
+      host,
+    );
+    expect(response.status).toHaveBeenCalledWith(HttpStatus.NOT_FOUND);
+    expect(response.setHeader).toHaveBeenCalledWith(
+      'X-Response-Envelope',
+      'v1',
+    );
+    expect(response.json).toHaveBeenCalledWith({
+      success: false,
+      error: {
+        code: ErrorCode.SYS_NOT_FOUND,
+        message: 'Not Found',
+        details: undefined,
+        requestId: 'corr-9',
+        correlationId: 'corr-9',
+      },
+    });
+  });
+});

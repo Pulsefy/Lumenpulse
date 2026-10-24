@@ -13,6 +13,12 @@ import {
 } from '../common/constants/request.constants';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import { ErrorResponse } from '../interfaces/error-response.interface';
+import {
+  ApiErrorEnvelope,
+  RESPONSE_ENVELOPE_HEADER,
+  RESPONSE_ENVELOPE_VERSION,
+  wantsEnvelope,
+} from '../common/envelope';
 import { resolveNodeEnv } from '../lib/config';
 import { mapSorobanRpcErrorToApi } from '../stellar/utils/soroban-error.mapper';
 import { SorobanRpcError } from '../stellar/services/soroban-rpc-client.service';
@@ -72,6 +78,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           timestamp: new Date().toISOString(),
         }),
       );
+    }
+
+    if (wantsEnvelope(request)) {
+      // Opted-in clients get the standard envelope; the error payload itself
+      // is the same `ErrorResponse` everyone else receives.
+      const envelope: ApiErrorEnvelope = {
+        success: false,
+        error: errorResponse,
+      };
+      response.setHeader(RESPONSE_ENVELOPE_HEADER, RESPONSE_ENVELOPE_VERSION);
+      response.status(status).json(envelope);
+      return;
     }
 
     response.status(status).json(errorResponse);
