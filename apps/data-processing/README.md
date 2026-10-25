@@ -83,6 +83,46 @@ The data processing service runs background jobs when started in `serve` mode.
 - Control the snapshot size with `REPUTATION_SNAPSHOT_TOP_N` in `.env` (default: `100`).
 - Feature drift automatically queues evaluation-gated retraining by default; set `FEATURE_DRIFT_AUTO_RETRAIN_ENABLED=false` to disable it. `FEATURE_DRIFT_RETRAIN_COOLDOWN_SECONDS` controls the per-drift cooldown (default: `86400` seconds).
 
+### Feature-store serving cache
+
+Online `FeatureStore.get_features_for_asset(asset, window=...)` lookups cache
+the three source views separately in Redis. Historical lookups with explicit
+`start_time`/`end_time` always read the database directly, keeping training
+features on the same uncached computation path. Defaults reflect the update
+cadence of the source data and can be overridden with
+`FEATURE_CACHE_SENTIMENT_TTL_SECONDS` (60), `FEATURE_CACHE_VOLUME_TTL_SECONDS`
+(300), and `FEATURE_CACHE_VOLATILITY_TTL_SECONDS` (900). Set `CACHE_ENABLED=false`
+to bypass Redis.
+
+Article/social sentiment writes invalidate the sentiment cache namespace;
+contract and raw Soroban event writes invalidate the volume namespace. Cache
+hit rate uses `lumenpulse_cache_hit_rate` with the `feature_store_<feature>`
+namespace. `lumenpulse_feature_store_cache_staleness_seconds` reports the age
+of cached feature data returned, while
+`lumenpulse_feature_store_lookup_seconds` records source lookup latency by
+feature and cache outcome (`hit`, `miss`, or `bypass`) for measuring cache
+latency improvement.
+
+### Feature-store serving cache
+
+Online `FeatureStore.get_features_for_asset(asset, window=...)` lookups cache
+the three source views separately in Redis. Historical lookups with explicit
+`start_time`/`end_time` always read the database directly, keeping training
+features on the same uncached computation path. Defaults reflect the update
+cadence of the source data and can be overridden with
+`FEATURE_CACHE_SENTIMENT_TTL_SECONDS` (60), `FEATURE_CACHE_VOLUME_TTL_SECONDS`
+(300), and `FEATURE_CACHE_VOLATILITY_TTL_SECONDS` (900). Set `CACHE_ENABLED=false`
+to bypass Redis.
+
+Article/social sentiment writes invalidate the sentiment cache namespace;
+contract and raw Soroban event writes invalidate the volume namespace. Cache
+hit rate uses `lumenpulse_cache_hit_rate` with the `feature_store_<feature>`
+namespace. `lumenpulse_feature_store_cache_staleness_seconds` reports the age
+of cached feature data returned, while
+`lumenpulse_feature_store_lookup_seconds` records source lookup latency by
+feature and cache outcome (`hit`, `miss`, or `bypass`) for measuring cache
+latency improvement.
+
 ## API Documentation & Contracts
 
 The FastAPI server exposes an OpenAPI document (Swagger UI) at `/docs` when running.
