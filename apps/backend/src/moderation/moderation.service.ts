@@ -189,6 +189,7 @@ export class ModerationService {
     id: string,
     reviewerId: string,
     dto: UpdateReportDto,
+    bulkOperationId?: string,
   ): Promise<ContentReport> {
     const report = await this.getReportById(id);
 
@@ -216,6 +217,12 @@ export class ModerationService {
     }
 
     const updatedReport = await this.reportsRepository.save(report);
+    await this.auditService.log('update_moderation_report', reviewerId, null, {
+      reportId: id,
+      previousStatus,
+      status: updatedReport.status,
+      bulkOperationId: bulkOperationId ?? null,
+    });
     this.logger.log(
       `Report ${id} updated by ${reviewerId}. Status: ${updatedReport.status}`,
     );
@@ -260,6 +267,7 @@ export class ModerationService {
     id: string,
     assignerId: string,
     reviewerId?: string,
+    bulkOperationId?: string,
   ): Promise<ContentReport> {
     const report = await this.getReportById(id);
     const previousReviewerId = report.reviewerId;
@@ -284,10 +292,32 @@ export class ModerationService {
       'assign_moderation_report_reviewer',
       assignerId,
       null,
-      { reportId: id, previousReviewerId, newReviewerId: reviewerId || null },
+      {
+        reportId: id,
+        previousReviewerId,
+        newReviewerId: reviewerId || null,
+        bulkOperationId: bulkOperationId ?? null,
+      },
     );
 
     return updatedReport;
+  }
+
+  async recordBulkItemFailure(
+    actorId: string,
+    bulkOperationId: string,
+    itemId: string,
+    error: string,
+  ): Promise<void> {
+    try {
+      await this.auditService.log('bulk_admin_operation_item_failed', actorId, null, {
+        bulkOperationId,
+        itemId,
+        error,
+      });
+    } catch (auditError) {
+      this.logger.error('Failed to audit unsuccessful bulk moderation item', auditError);
+    }
   }
 
   /**

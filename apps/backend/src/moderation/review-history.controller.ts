@@ -11,6 +11,7 @@ import {
   HttpStatus,
   UsePipes,
   ValidationPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,6 +28,9 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
+import { DecisionType } from './entities/review-decision-history.entity';
+import { randomUUID } from 'crypto';
+import { AuditService } from '../audit/audit.service';
 
 interface RequestWithUser extends Request {
   user: {
@@ -41,7 +45,10 @@ interface RequestWithUser extends Request {
 @Controller('review-history')
 @UseGuards(JwtAuthGuard)
 export class ReviewHistoryController {
-  constructor(private readonly reviewHistoryService: ReviewHistoryService) {}
+  constructor(
+    private readonly reviewHistoryService: ReviewHistoryService,
+    private readonly auditService: AuditService,
+  ) {}
 
   @Post('comments')
   @UsePipes(new ValidationPipe())
@@ -80,6 +87,52 @@ export class ReviewHistoryController {
       req.user.role as UserRole,
       createDecisionDto,
     );
+  }
+
+  @Post('decisions/bulk')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Record independent review decisions in bulk' })
+  async createDecisionsBulk(
+    @Req() req: RequestWithUser,
+    @Body() body: { items: CreateReviewDecisionDto[] },
+  ) {
+    const items = body?.items;
+    if (!Array.isArray(items) || items.length < 1 || items.length > 50) {
+      throw new BadRequestException('items must contain between 1 and 50 decisions');
+    }
+    if (items.some((item) => !item || typeof item.targetId !== 'string' || !item.targetId ||
+      typeof item.targetType !== 'string' || !item.targetType ||
+      !Object.values(DecisionType).includes(item.decisionType) ||
+      (item.rationale !== undefined && (typeof item.rationale !== 'string' || item.rationale.length > 5000)))) {
+      throw new BadRequestException('Each decision must include a target, supported decision type, and valid rationale');
+    }
+    const bulkOperationId = randomUUID();
+    const results = await Promise.all(items.map(async (item, index) => {
+      try {
+        const value = await this.reviewHistoryService.createDecision(
+          req.user.id, req.user.role as UserRole, item,
+        );
+        await this.auditService.log('create_review_decision', req.user.id, null, {
+          decisionId: value.id,
+          targetId: item.targetId,
+          targetType: item.targetType,
+          bulkOperationId,
+        }).catch(() => undefined);
+        return { index, success: true, value };
+      } catch (error) {
+        await this.auditService.log('create_review_decision_failed', req.user.id, null, {
+          targetId: item.targetId,
+          targetType: item.targetType,
+          bulkOperationId,
+          error: error instanceof Error ? error.message : 'Decision failed',
+        }).catch(() => undefined);
+        return { index, success: false, error: error instanceof Error ? error.message : 'Decision failed' };
+      }
+    }));
+    return { bulkOperationId, results };
   }
 
   @Get()
