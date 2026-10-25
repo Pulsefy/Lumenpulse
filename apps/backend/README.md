@@ -24,6 +24,19 @@ npm run test
 npm run test:e2e
 ```
 
+## Request and upload limits
+
+- JSON and URL-encoded request bodies are limited to **1 MiB**. Oversized bodies
+  receive HTTP `413` with the `SYS_011` error code.
+- Arrays in request bodies, query parameters, and path parameters may contain
+  at most **100 items** each.
+- Request objects and arrays may be nested at most **20 levels** deep.
+- Avatar uploads accept at most **one file**, limited to **5 MiB**.
+- Verification evidence is text (not a file upload) and is limited to **10,000
+  characters**.
+
+Array length and nesting limits are enforced by the global validation pipe.
+
 ## Container image
 
 [`Dockerfile`](Dockerfile) builds a minimal production image:

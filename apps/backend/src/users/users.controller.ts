@@ -43,6 +43,7 @@ import { UserRole } from './entities/user.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SharpPipe } from '../common/pipes/sharp.pipe';
 import { AuditLogAction } from '../audit/decorators/audit-log.decorator';
+import { MAX_UPLOAD_FILE_SIZE_BYTES } from '../common/constants/request.constants';
 
 // Unified Authenticated Request Interface
 interface RequestWithUser extends Request {
@@ -237,7 +238,16 @@ export class UsersController {
   @Patch('me/avatar')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Upload user profile image' })
-  @UseInterceptors(FileInterceptor('avatar'))
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      limits: {
+        fileSize: MAX_UPLOAD_FILE_SIZE_BYTES,
+        files: 1,
+        fields: 0,
+        parts: 1,
+      },
+    }),
+  )
   async uploadAvatar(
     @Param('id') accountId: string,
     @UploadedFile(

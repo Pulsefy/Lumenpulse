@@ -11,6 +11,7 @@ import {
   VerificationRequestStatus,
   VerificationRequestTargetType,
 } from '../entities/verification-request.entity';
+import { MAX_EVIDENCE_LENGTH } from '../../common/constants/request.constants';
 
 export class CreateVerificationRequestDto {
   @ApiProperty({ enum: VerificationRequestTargetType })
@@ -25,10 +26,11 @@ export class CreateVerificationRequestDto {
 
   @ApiProperty({
     description: 'Links or other evidence supporting the request',
+    maxLength: MAX_EVIDENCE_LENGTH,
   })
   @IsString()
   @MinLength(1)
-  @MaxLength(10000)
+  @MaxLength(MAX_EVIDENCE_LENGTH)
   evidence: string;
 
   @ApiPropertyOptional({ description: 'Optional context for reviewers' })
