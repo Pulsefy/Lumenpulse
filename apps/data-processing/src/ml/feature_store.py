@@ -68,7 +68,15 @@ class FeatureStore:
             df[expected_col] = pd.Series(dtype='float64')
         return df
 
-    def get_features_for_asset(self, asset: str, window: Optional[str] = None, start_time: Optional[datetime] = None, end_time: Optional[datetime] = None) -> pd.DataFrame:
+    def get_features_for_asset(
+        self,
+        asset: str,
+        window: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        context_start_time: Optional[datetime] = None,
+        raise_on_error: bool = False,
+    ) -> pd.DataFrame:
         """
         Retrieves and combines features for a specific asset over a given time window.
         Combines: Sentiment stats, Volume metrics, and Volatility indicators.
@@ -77,33 +85,59 @@ class FeatureStore:
             if window is None:
                 raise ValueError("Must provide either window or start_time")
             start_time = self._parse_window_to_datetime(window)
-            
+        if context_start_time is not None and context_start_time > start_time:
+            raise ValueError("context_start_time must not be later than start_time")
+
         end_clause = "AND timestamp <= :end_time" if end_time else ""
-        
-        sentiment_query = text(f"""
-            SELECT timestamp, sentiment_score FROM asset_sentiment_view
-            WHERE asset = :asset AND timestamp >= :start_time {end_clause}
-        """)
-        
-        volume_query = text(f"""
-            SELECT timestamp, volume FROM asset_volume_view
-            WHERE asset = :asset AND timestamp >= :start_time {end_clause}
-        """)
-        
-        volatility_query = text(f"""
-            SELECT timestamp, volatility FROM asset_volatility_view
-            WHERE asset = :asset AND timestamp >= :start_time {end_clause}
-        """)
+        context_clause = ""
+        if context_start_time is not None and context_start_time < start_time:
+            context_clause = """
+                AND (
+                    timestamp >= :start_time
+                    OR timestamp = (
+                        SELECT MAX(previous.timestamp)
+                        FROM {view_name} AS previous
+                        WHERE previous.asset = :asset
+                            AND previous.timestamp >= :context_start_time
+                            AND previous.timestamp < :start_time
+                    )
+                )
+            """
+
+        def _feature_query(view_name: str, feature_name: str):
+            time_clause = (
+                context_clause.format(view_name=view_name)
+                if context_clause
+                else "AND timestamp >= :start_time"
+            )
+            return text(
+                f"""
+                    SELECT timestamp, {feature_name} FROM {view_name}
+                    WHERE asset = :asset
+                    {time_clause}
+                    {end_clause}
+                """
+            )
+
+        sentiment_query = _feature_query(
+            "asset_sentiment_view", "sentiment_score"
+        )
+        volume_query = _feature_query("asset_volume_view", "volume")
+        volatility_query = _feature_query("asset_volatility_view", "volatility")
 
         conn = self.db.connection()
         try:
             params = {"asset": asset, "start_time": start_time}
+            if context_clause:
+                params["context_start_time"] = context_start_time
             if end_time:
                 params["end_time"] = end_time
             sentiment_df = pd.read_sql(sentiment_query, conn, params=params)
             volume_df = pd.read_sql(volume_query, conn, params=params)
             volatility_df = pd.read_sql(volatility_query, conn, params=params)
         except Exception:
+            if raise_on_error:
+                raise
             sentiment_df = pd.DataFrame()
             volume_df = pd.DataFrame()
             volatility_df = pd.DataFrame()
@@ -125,5 +159,7 @@ class FeatureStore:
         features_df.sort_values('timestamp', inplace=True)
         features_df.ffill(inplace=True)
         features_df.fillna(0, inplace=True) # Fill remaining NaNs with 0
+        if context_start_time is not None:
+            features_df = features_df.loc[features_df["timestamp"] >= start_time]
 
         return self._stamp_schema(features_df)
